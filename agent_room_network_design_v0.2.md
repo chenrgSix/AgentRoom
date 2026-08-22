@@ -1,0 +1,467 @@
+# Agent Room Network
+
+中央 Web Team Hub · 轻量 Bridge · MCP 协作接入
+
+版本：产品与系统设计方案 v0.2
+
+| 项目 | 内容 |
+| --- | --- |
+| 文档状态 | Implementation-ready Architecture Baseline |
+| 日期 | 2026-08-22 |
+| 核心目标 | 在不修改 Codex、WorkBuddy 等客户端源码的前提下，将现有 Agent 组成类似 Hermes Studio Group Chat 的 Team |
+| 核心形态 | 中央 Web Team Hub + Remote MCP Server + 每台机器一个可选的无界面 Bridge |
+| 非目标 | 不开发独立桌面客户端，不替代现有 Agent Runtime，不建设完整分布式 Agent 平台 |
+
+声明：本文中的许可证分析用于工程风险判断，不构成法律意见。
+
+## 1. 执行摘要
+
+Agent Room 是现有 AI 客户端之上的轻量 Team Layer。用户在中央 Web 项目的 Room 中组织 Member 和 Agent，通过结构化 `@mention` 发起协作；中央服务保存消息、路由 Mention，并将任务推送到目标机器上的 AgentRoom Bridge。Bridge 使用目标 Runtime 已有的机器接口启动或恢复一次 Team Session，再把状态和回复送回 Room。
+
+MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Room、发送消息和 handoff。MCP Server 不能可靠地凭空启动 Codex Turn，因此主动唤醒由中央服务与 Bridge 之间的 WebSocket 通道承担。
+
+最终边界：
+
+- 中央 Web 是唯一 Team 对话入口和协作状态权威。
+- 现有 Codex、WorkBuddy、Claude Code 等继续负责模型、工作区、工具、权限和审批。
+- Bridge 是轻量 Runtime Bridge，不是新的 Agent 平台或远程管理 Gateway。
+- 客户端接入以配置、Skill、MCP 或已有机器协议为主，不 fork 客户端源码。
+- 没有可编程启动接口的 Runtime 仍可作为 manual participant 加入 Team。
+
+## 2. 产品目标与非目标
+
+### 2.1 目标
+
+1. 在中央 Web Room 中创建由人和 Agent 组成的 Team。
+2. 使用 `@Alice/Coder`、`@Bob/Reviewer` 等稳定身份路由消息。
+3. 让已连接 Bridge 的 Agent 收到 Mention 后自动运行并回复。
+4. 让运行中的 Agent 通过 MCP读取 Room 上下文、回复和 handoff。
+5. 保持 Agent 的认证、工作目录、工具和审批留在原 Runtime。
+6. 安装成本控制为一个 Bridge 二进制和一份可选 MCP/Skill 配置。
+
+### 2.2 非目标
+
+- 不开发 Agent Room 桌面 GUI。
+- 不远程暴露 Codex App Server、CLI 或用户文件系统。
+- 不统一不同 Runtime 的内部工具协议。
+- MVP 不实现 A2A、CRDT、P2P 历史同步或跨站点 Federation。
+- 不接管 Git worktree、Patch、Commit 或 Artifact 生命周期。
+- 不承诺把 Team 任务注入用户当前正在浏览的任意客户端会话。
+- 不允许 Agent 无限制递归唤醒其他 Agent。
+
+## 3. 核心架构
+
+```text
+Browser
+  │
+  ▼
+Central Agent Room Web
+├── Team / Room UI
+├── Member / Agent Registry
+├── Message / Mention Router
+├── Scheduling / Handoff Guardrails
+├── Remote MCP Server
+├── Bridge WebSocket Server
+└── SQLite
+       │
+       │ outbound WebSocket connection
+       ▼
+AgentRoom Bridge on each machine
+├── Runtime Registry
+├── Codex Adapter
+├── MCP-native Adapter
+└── Generic CLI Adapter
+       │ loopback / stdio / local process
+       ▼
+Existing Runtime
+Codex / WorkBuddy / Claude Code / other CLI
+```
+
+### 3.1 中央 Web
+
+中央 Web 是协作状态权威，负责：
+
+- Team、Room、Member 和 Agent 管理；
+- Room 历史和结构化 Mention；
+- Agent Presence 与能力展示；
+- 将 Mention 放入目标 Agent inbox；
+- 通过已认证 WebSocket 推送给目标 Bridge；
+- Agent 回复、状态和 handoff 的持久化与广播；
+- 最大接力深度、并发和运行时间限制；
+- Remote MCP tools 和 resources。
+
+中央服务不直接访问成员机器的 Runtime、Token、工作目录或命令执行环境。
+
+### 3.2 AgentRoom Bridge
+
+每台需要自动接收 Team 任务的机器运行一个 Bridge。Bridge 只负责：
+
+1. 以设备身份连接中央服务；
+2. 注册本机可发布的 Runtime/Agent；
+3. 接收已路由到本机 Agent 的 Mention；
+4. 通过本机 Adapter 启动或恢复 Team Session；
+5. 将状态、文本回复和结构化 handoff 回传中央服务。
+
+Bridge 不保存 Room 权威历史，不提供 GUI，不接受其他成员的直接连接，也不自行路由跨机器任务。
+
+### 3.3 MCP 的边界
+
+中央 Web 暴露 Remote MCP Server。MCP tools 用于 Agent 主动操作 Team：
+
+```text
+team.get_context
+team.get_messages
+team.get_mentions
+team.send_message
+team.reply
+team.handoff
+team.get_run
+```
+
+MCP resources：
+
+```text
+team://{teamId}/room/{roomId}
+team://{teamId}/room/{roomId}/thread/{threadId}
+team://{teamId}/agent/{agentId}/inbox
+```
+
+MCP 不负责主动唤醒。通知或订阅只能作为能力增强，不能作为启动新 Agent Turn 的可靠契约。
+
+## 4. 身份与能力模型
+
+### 4.1 对象
+
+| 对象 | 说明 | 关键字段 |
+| --- | --- | --- |
+| Team | 协作组织 | teamId, name |
+| Room | 中央对话空间 | roomId, teamId, name, policy |
+| Member | 人类成员 | memberId, displayName, role |
+| Device | 运行 Bridge 的机器 | deviceId, ownerMemberId, name, publicKey, status |
+| Agent | Team 中可寻址的角色 | agentId, ownerMemberId, deviceId, name, role, mode, capabilities |
+| Message | Room 消息 | messageId, roomId, senderRef, content, mentions, parentId |
+| Run | Agent 对一次 Mention 的处理 | runId, triggerMessageId, targetAgentId, status, replyMessageId |
+| Handoff | Agent 发起的下游委派 | handoffId, parentRunId, targetAgentId, depth |
+
+协议始终使用不可变 ID；`Alice/Coder` 只是可修改的显示名。
+
+### 4.2 Integration Mode
+
+| 模式 | 行为 |
+| --- | --- |
+| managed | Bridge 可通过本机机器接口自动启动或恢复 Runtime |
+| manual | Agent 可通过 MCP读取和回复，但需要用户主动打开或领取任务 |
+
+Presence：
+
+- `ready`：Bridge 在线且 Adapter 可接受任务；
+- `busy`：正在处理 Team Run；
+- `degraded`：Bridge 在线但 Runtime 不可用或能力下降；
+- `manual`：只能主动领取；
+- `offline`：没有可用 Bridge 或活动连接。
+
+“配置过 MCP”不等于在线。
+
+### 4.3 Runtime Capabilities
+
+```json
+{
+  "invocationMode": "managed",
+  "supportsStart": true,
+  "supportsResume": true,
+  "supportsStreaming": true,
+  "supportsInterrupt": true,
+  "supportsHandoff": true
+}
+```
+
+中央服务只能展示和调用 Agent 已声明的能力，不为低能力 Adapter 模拟不存在的行为。
+
+## 5. 关键流程
+
+### 5.1 发布 Agent
+
+1. 用户在中央 Web 创建 Team 并生成一次性设备邀请码。
+2. 本机运行 `agentroom-bridge pair <server-url> <invite-code>`。
+3. Bridge 生成设备密钥，交换短期邀请码并取得设备凭据。
+4. Bridge 检测或由用户配置本机 Runtime。
+5. 用户选择 Agent 名称、角色和 integration mode 后发布。
+6. 中央 Registry 将 Agent 绑定到 Member、Device 和 Bridge connection。
+
+### 5.2 用户 Mention Agent
+
+```text
+Alice in Web Room
+  → sends message mentioning Bob/Backend
+  → server stores Message
+  → router creates Run
+  → inbox stores delivery
+  → WebSocket pushes run.requested
+  → Bob Bridge accepts
+  → Codex Adapter starts Team Session
+  → streaming status/reply returns to Room
+```
+
+中央服务必须先持久化再推送。Bridge 使用 `runId` 幂等接受；重复推送返回已有状态，不重复启动 Runtime。
+
+### 5.3 Agent 回复与 Handoff
+
+Runtime 输出普通回复时，Bridge 将其作为 `run.reply` 回传。若 Runtime 通过 MCP调用 `team.handoff`：
+
+1. 中央服务校验目标 Agent；
+2. 校验 parentRun、Room、最大深度和剩余预算；
+3. 创建 child Run；
+4. 由中央 Router 推送到目标 Bridge。
+
+Agent 不直接连接其他 Bridge。默认最大 handoff depth 为 4，最大 unique agents 为 5，单次 Run 最长 20 分钟。
+
+### 5.4 离线行为
+
+目标 Agent 离线时：
+
+- Message 正常保存在 Room；
+- Run 状态为 `queued`；
+- Web UI 显示“等待目标 Agent 上线”；
+- Bridge 重连后中央服务重新投递；
+- 用户可以取消 queued Run。
+
+## 6. Run 状态与可靠投递
+
+Run 状态：
+
+```text
+queued
+  → delivered
+  → working
+      ├── input_required
+      ├── completed
+      ├── failed
+      ├── canceled
+      └── outcome_unknown
+```
+
+规则：
+
+- 中央服务拥有 Run 状态权威。
+- Bridge 接受任务后必须回传 `run.accepted`。
+- 中央服务在未收到 ACK 时允许重发同一 `runId`。
+- Bridge 必须持久化最近处理的 `runId`，保证重复投递不重复执行。
+- Runtime 已启动但 Bridge 无法确认结果时使用 `outcome_unknown`，不自动重跑。
+- 取消请求和完成事件竞态时，以 Bridge 已持久化的第一个终态为准。
+- 每个 Run 事件包含单调递增的 `sequence`；中央服务忽略旧 sequence。
+
+## 7. Runtime Adapter
+
+### 7.1 统一接口
+
+```text
+discover() -> RuntimeInfo[]
+capabilities() -> RuntimeCapabilities
+start(runContext) -> SessionRef
+resume(sessionRef, runContext) -> SessionRef
+events(sessionRef) -> stream RuntimeEvent
+interrupt(sessionRef) -> Result
+dispose(sessionRef) -> Result
+```
+
+### 7.2 Codex Adapter
+
+- 优先使用 Codex 已提供的本机机器协议。
+- 仅通过 loopback、stdio 或本地 IPC访问 Runtime。
+- Codex 登录态和认证材料不发送到中央服务。
+- Team Run 使用由 Bridge 管理的 Session；MVP 不保证附着到用户当前可见会话。
+- Adapter 固定兼容版本并提供 contract tests。
+- Native 能力不可用时可降级为 Generic CLI，但 UI 必须展示能力下降。
+
+### 7.3 MCP-native Runtime
+
+MCP-native 客户端通过 Agent Room MCP Tools 主动加入和操作 Team。若客户端没有被外部启动或恢复的接口，则注册为 `manual`，不能宣称自动唤醒。
+
+### 7.4 Generic CLI
+
+Generic CLI Adapter 使用用户明确配置的命令模板启动进程，可收集 stdout、退出码和超时。它不提供结构化 session resume、tool telemetry 或 approval。
+
+## 8. 安全边界
+
+MVP 安全原则：
+
+- Bridge 只建立到中央服务的 outbound connection。
+- 中央服务不能直接访问 Runtime 端口或本机文件。
+- 设备通过一次性邀请码注册，后续使用独立设备凭据。
+- Member 移除、Device revoke 或 Agent disable 后立即停止新任务投递。
+- 每次 Run 明确记录 requester、target Agent、trigger Message、Bridge 和结果。
+- Room Context 仅向目标 Agent传递完成任务所需的最小消息窗口。
+- 日志和消息进入中央服务前过滤 token、credential 和明显的本机敏感路径。
+- Bridge 只允许启动 Owner 显式发布的 Runtime 配置。
+
+现有 Runtime 的命令、网络、文件与审批策略继续由 Runtime 和 Owner 控制。Bridge 不绕过本机审批。
+
+## 9. 技术选型
+
+### 9.1 中央 Web
+
+| 领域 | 选择 |
+| --- | --- |
+| Runtime | Node.js 22 + TypeScript |
+| HTTP/MCP | Fastify + MCP TypeScript SDK |
+| Realtime | WebSocket |
+| Frontend | React + Vite |
+| State | SQLite（MVP） |
+| Validation | JSON Schema |
+| Tests | Vitest + Playwright |
+
+选择 Node.js/TypeScript 是因为中央服务是 Web 产品，Room UI、Realtime、MCP Server 和共享契约可以保持在同一类型系统中。
+
+### 9.2 Bridge
+
+| 领域 | 选择 |
+| --- | --- |
+| Language | Go |
+| Distribution | 单一无界面二进制 |
+| Transport | WebSocket client + HTTPS |
+| Runtime control | stdio / local process / loopback |
+| Local state | 小型 SQLite 或原子状态文件 |
+| Tests | Go test |
+
+选择 Go 是因为 Bridge 的职责是网络连接、进程生命周期和协议转换；单文件分发能降低客户端接入成本。Rust 和 Python 不进入 MVP 主运行链路。
+
+### 9.3 Repository Layout
+
+```text
+apps/
+  web/                 # React UI
+  server/              # Fastify, Room, MCP, Bridge WS
+packages/
+  contracts/           # JSON Schema and generated TypeScript types
+bridge/
+  cmd/agentroom-bridge/
+  internal/runtime/
+  internal/transport/
+  internal/state/
+tests/
+  e2e/
+```
+
+## 10. 中央服务接口
+
+### 10.1 Web APIs
+
+```text
+POST /api/teams
+POST /api/teams/:teamId/rooms
+GET  /api/rooms/:roomId
+POST /api/rooms/:roomId/messages
+GET  /api/rooms/:roomId/messages
+GET  /api/rooms/:roomId/agents
+POST /api/runs/:runId/cancel
+POST /api/devices/invitations
+POST /api/devices/:deviceId/revoke
+```
+
+### 10.2 Realtime
+
+```text
+WS /ws/rooms
+WS /ws/bridge
+POST /mcp
+```
+
+Bridge 消息最小集合：
+
+```text
+bridge.hello
+bridge.heartbeat
+agent.publish
+agent.status
+run.requested
+run.accepted
+run.status
+run.reply
+run.handoff_requested
+```
+
+所有消息包含 `protocolVersion`、`messageId`、`timestamp` 和相关实体 ID。
+
+## 11. MVP 路线
+
+| 阶段 | 交付 | 完成定义 |
+| --- | --- | --- |
+| P0 | Contracts + Fake Bridge | Web 中可创建 Room 并模拟两个 Agent |
+| P1 | Room + Mention Router | `@agent` 创建可观察 Run |
+| P2 | Go Bridge + Pairing | 远端 Bridge 可发布 Agent 并保持 Presence |
+| P3 | Codex Adapter | Mention 可启动一个受 Bridge 管理的 Codex Team Session |
+| P4 | Streaming + Reply | Web 实时展示 Agent 状态和回复 |
+| P5 | MCP Server + Skill | 运行中的 Agent 可读取 Room、回复和 handoff |
+| P6 | Recovery | Bridge 重连、重复投递和中央服务重启可恢复 |
+| P7 | Multi-Agent Handoff | 三个 Agent 在深度限制内完成接力 |
+| P8 | Additional Runtime | 接入一个 MCP-native 或 Generic CLI Runtime |
+
+## 12. 测试与验收
+
+### 12.1 测试矩阵
+
+- Room：并发消息、结构化 Mention、同名 Agent、消息回复。
+- Routing：Agent offline、disabled、manual、busy、重复 Mention。
+- Bridge：断线重连、心跳过期、设备 revoke、协议版本不兼容。
+- Delivery：ACK 丢失、重复推送、旧 sequence、取消与完成竞态。
+- Runtime：启动失败、进程退出、超时、无法 resume、输出过大。
+- MCP：未授权访问、错误 Room、缺失能力、manual participant。
+- Handoff：未知目标、循环、深度超限、unique agents 超限。
+- Security：伪造 Bridge、重放消息、越权 Room、敏感信息过滤。
+
+### 12.2 MVP 验收
+
+1. 中央 Web 可创建 Team、Room、Member 和 Agent。
+2. 两台机器的 Bridge 可通过邀请码连接并发布 Agent。
+3. Alice 在 Web Room 中 `@Bob/Backend` 后，Bob Bridge 收到唯一 Run。
+4. Bob Bridge 启动一个受管理的 Codex Team Session。
+5. Alice 在 Web 中实时看到 queued、working 和 completed 状态及回复。
+6. Bob 离线时 Run 排队，重连后只执行一次。
+7. Codex 可通过 MCP读取 Room Context 并发送回复。
+8. Bob Agent 可 handoff 给 Carol Agent，且中央服务执行深度与循环限制。
+9. Device revoke 后不能接收新 Run。
+10. 中央服务重启后 Room、Message、Run 和 pending delivery 可恢复。
+
+## 13. 后续演进
+
+只有在 MVP 证明 Team 协作有效后才考虑：
+
+- 独立 Team Coordinator 集群与 PostgreSQL；
+- Slack、飞书、Discord 等额外人类消息入口；
+- A2A interoperability；
+- Artifact、Patch 和结构化结果；
+- Team policy 与更细粒度的数据出站控制；
+- 对用户当前可见 Runtime Session 的稳定附着；
+- WAN relay 和企业身份提供方。
+
+## 14. Clean-room 策略
+
+- 不复制 Hermes Studio 的 BSL 源码、UI、资源或内部实现。
+- 仅依据公开产品行为、开放协议与本文契约独立实现。
+- 新增第三方依赖记录许可证和版本。
+- Mention routing、handoff 和 recovery 使用自有 schema 与测试。
+- 商业发布前执行代码 provenance 和依赖许可证审计。
+
+## 15. 架构决策
+
+| 编号 | 决策 |
+| --- | --- |
+| ADR-001 | 中央 Web 是唯一 Team 对话和协作状态权威 |
+| ADR-002 | 不开发独立客户端 GUI |
+| ADR-003 | MCP 负责 Agent 主动使用 Team 能力，不承担唤醒 |
+| ADR-004 | WebSocket + Bridge 负责中央服务主动唤醒 |
+| ADR-005 | Bridge 是轻量 Runtime Bridge，不是完整 Gateway |
+| ADR-006 | 所有跨 Agent handoff 由中央 Router 调度 |
+| ADR-007 | managed 与 manual participant 明确区分 |
+| ADR-008 | MVP 不使用 A2A，不接管 Workspace 和 Artifact |
+| ADR-009 | 中央 Web 使用 Node.js/TypeScript，Bridge 使用 Go |
+| ADR-010 | Hermes Studio 仅作行为参考，采用 clean-room 自研 |
+
+## 16. 参考资料
+
+- [Hermes Studio Group Chat 运行链路](https://github.com/EKKOLearnAI/hermes-studio/blob/main/docs/cli-chat-sessions.md)
+- [Hermes Studio Repository and License](https://github.com/EKKOLearnAI/hermes-studio)
+- [Model Context Protocol 2026-07-28](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
+- [OpenAI API MCP Tools](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)
+
+一句话定义：**Agent Room 是中央 Web 上的轻量 Team 协作层；MCP 让 Agent 使用 Team，Bridge 让 Team 唤醒 Agent。**
