@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
 interface Team {
   teamId: string;
@@ -124,6 +124,7 @@ export function App() {
   const [mentionAgentId, setMentionAgentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const connectionSetupRef = useRef<HTMLDetailsElement>(null);
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.teamId === selectedTeamId) ?? null,
@@ -440,6 +441,13 @@ export function App() {
     }
   }
 
+  function revealConnectionSetup() {
+    const details = connectionSetupRef.current;
+    if (!details) return;
+    details.open = true;
+    details.querySelector<HTMLInputElement>("input")?.focus();
+  }
+
   return (
     <div className="app-shell">
       <aside className="team-rail" aria-label="Teams">
@@ -461,9 +469,14 @@ export function App() {
             aria-label="New Team name"
             onChange={(event) => setTeamName(event.target.value)}
             placeholder="New Team"
+            required
             value={teamName}
           />
-          <button disabled={busy || !teamName.trim()} title="Create Team">+</button>
+          <button
+            aria-label="Create Team"
+            disabled={busy}
+            title={busy ? "Creating Team" : "Create Team"}
+          >+</button>
         </form>
       </aside>
 
@@ -490,9 +503,10 @@ export function App() {
               aria-label="New Room name"
               onChange={(event) => setRoomName(event.target.value)}
               placeholder="Add a Room"
+              required
               value={roomName}
             />
-            <button disabled={busy || !roomName.trim()}>Create</button>
+            <button disabled={busy}>{busy ? "Creating…" : "Create"}</button>
           </form>
         )}
         {selectedTeam && (
@@ -501,31 +515,34 @@ export function App() {
               aria-label="New Fake Agent name"
               onChange={(event) => setAgentName(event.target.value)}
               placeholder="Add a Fake Agent"
+              required
               value={agentName}
             />
-            <button disabled={busy || !agentName.trim()}>Add Agent</button>
+            <button disabled={busy}>{busy ? "Adding…" : "Add Agent"}</button>
           </form>
         )}
         {selectedTeam && (
-          <details className="connection-setup">
+          <details className="connection-setup" ref={connectionSetupRef}>
             <summary>Connect an Agent</summary>
             <form className="room-create" onSubmit={createManualAgent}>
               <input
                 aria-label="Manual Agent name"
                 onChange={(event) => setManualAgentName(event.target.value)}
                 placeholder="Codex via MCP"
+                required
                 value={manualAgentName}
               />
-              <button disabled={busy || !manualAgentName.trim()}>Create MCP token</button>
+              <button disabled={busy}>Create MCP token</button>
             </form>
             <form className="room-create" onSubmit={createBridgeInvite}>
               <input
                 aria-label="Bridge Device name"
                 onChange={(event) => setDeviceName(event.target.value)}
                 placeholder="Bob's Mac"
+                required
                 value={deviceName}
               />
-              <button disabled={busy || !deviceName.trim()}>Create pairing code</button>
+              <button disabled={busy}>Create pairing code</button>
             </form>
             {setupOutput && (
               <div className="setup-output">
@@ -579,15 +596,88 @@ export function App() {
             {agents.length} Agent{agents.length === 1 ? "" : "s"}
           </div>
         </header>
-        {messages.length === 0 ? (
+        {!selectedTeam ? (
+          <section className="empty-stage onboarding-stage">
+            <div className="orb"><span>✦</span></div>
+            <p className="eyebrow">STEP 1 OF 3</p>
+            <h3>Create your first Team</h3>
+            <p>
+              A Team is the shared home for Rooms, people, and connected Agents.
+            </p>
+            <form className="onboarding-form" onSubmit={createTeam}>
+              <label htmlFor="onboarding-team-name">Team name</label>
+              <div>
+                <input
+                  autoComplete="off"
+                  id="onboarding-team-name"
+                  onChange={(event) => setTeamName(event.target.value)}
+                  placeholder="Platform Team"
+                  required
+                  value={teamName}
+                />
+                <button disabled={busy}>{busy ? "Creating…" : "Create Team"}</button>
+              </div>
+              <small>Next, you will create a Room and connect an Agent.</small>
+            </form>
+          </section>
+        ) : !selectedRoom ? (
+          <section className="empty-stage onboarding-stage">
+            <div className="step-badge">2</div>
+            <p className="eyebrow">STEP 2 OF 3 · {selectedTeam.name}</p>
+            <h3>Create a conversation Room</h3>
+            <p>Rooms keep Team conversations and Agent Runs in one durable timeline.</p>
+            <form className="onboarding-form" onSubmit={createRoom}>
+              <label htmlFor="onboarding-room-name">Room name</label>
+              <div>
+                <input
+                  autoComplete="off"
+                  id="onboarding-room-name"
+                  onChange={(event) => setRoomName(event.target.value)}
+                  placeholder="general"
+                  required
+                  value={roomName}
+                />
+                <button disabled={busy}>{busy ? "Creating…" : "Create Room"}</button>
+              </div>
+              <small>You can add more Rooms later from the sidebar.</small>
+            </form>
+          </section>
+        ) : messages.length === 0 ? (
           <section className="empty-stage">
             <div className="orb"><span>✦</span></div>
-            <p className="eyebrow">CENTRAL TEAM READY</p>
-            <h3>{selectedRoom ? `Start the conversation in #${selectedRoom.name}` : "Create a Team and Room"}</h3>
+            <p className="eyebrow">{agents.length === 0 ? "STEP 3 OF 3" : "CENTRAL TEAM READY"}</p>
+            <h3>
+              {agents.length === 0
+                ? "Add an Agent or start the conversation"
+                : `Start the conversation in #${selectedRoom.name}`}
+            </h3>
             <p>
               Messages, structured Agent mentions, Runs, and replies will appear
               here as one durable Team timeline.
             </p>
+            {agents.length === 0 && (
+              <div className="onboarding-actions">
+                <form className="action-card" onSubmit={createFakeAgent}>
+                  <span className="action-kicker">TRY IT NOW</span>
+                  <strong>Add a demo Agent</strong>
+                  <p>Use the in-process runtime to explore mentions and replies.</p>
+                  <input
+                    aria-label="Demo Agent name"
+                    onChange={(event) => setAgentName(event.target.value)}
+                    placeholder="Review Bot"
+                    required
+                    value={agentName}
+                  />
+                  <button disabled={busy}>{busy ? "Adding…" : "Add demo Agent"}</button>
+                </form>
+                <div className="action-card">
+                  <span className="action-kicker">USE YOUR RUNTIME</span>
+                  <strong>Connect a real Agent</strong>
+                  <p>Create an MCP token or pair the Go Bridge with local Codex.</p>
+                  <button onClick={revealConnectionSetup} type="button">Open connection setup</button>
+                </div>
+              </div>
+            )}
           </section>
         ) : (
           <section className="timeline" aria-label="Room messages">
@@ -643,10 +733,11 @@ export function App() {
               aria-label="Message"
               onChange={(event) => setMessageContent(event.target.value)}
               placeholder={`Message #${selectedRoom.name}`}
+              required
               rows={2}
               value={messageContent}
             />
-            <button disabled={busy || !messageContent.trim()}>Send</button>
+            <button disabled={busy}>{busy ? "Sending…" : "Send"}</button>
           </form>
         )}
         {error && <div className="error-banner" role="alert">{error}</div>}

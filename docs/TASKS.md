@@ -99,6 +99,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | WEB-004 | DONE | Implement Agent presence panel | WEB-001, REG-003 | all integration modes render accurately |
 | WEB-005 | DONE | Implement Run card and live updates | WEB-002, RUN-003 | queued through terminal states are visible |
 | WEB-006 | DONE | Implement pairing and revoke screens | WEB-001, BRG-002 | user can pair and revoke a Device |
+| WEB-007 | DONE | Add guided Team onboarding and actionable empty states | WEB-001, WEB-006 | component interaction test and live browser flow reach Room setup |
 
 ## Workstream F4: MCP Team Participation
 

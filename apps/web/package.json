@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite",
-    "test": "tsc --noEmit"
+    "test": "tsx --test test/**/*.test.tsx && tsc --noEmit"
   },
   "dependencies": {
     "react": "19.2.8",
@@ -17,6 +17,9 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "@vitejs/plugin-react": "6.1.0",
+    "@testing-library/react": "16.3.2",
+    "jsdom": "30.0.1",
+    "tsx": "4.23.12",
     "typescript": "7.0.2",
     "vite": "8.2.2"
   }

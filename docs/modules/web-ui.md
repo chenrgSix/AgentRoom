@@ -38,6 +38,10 @@ durable message history, stable-ID Agent selection, live Run status, Agent
 presence, one-time MCP setup output, and Bridge pairing/revoke controls. Secrets
 are shown only in the immediate setup result and are never returned by list APIs.
 
+An empty installation presents a three-step Team, Room, and Agent onboarding
+flow in the main workspace. Required fields use native browser validation;
+actions remain visibly available unless a request is already in progress.
+
 ## Interaction and Security Rules
 
 - Mentions select a registered Agent identity, not free-form `@text` parsing.
@@ -48,9 +52,10 @@ are shown only in the immediate setup result and are never returned by list APIs
 
 ## Verification and Tasks
 
-Component tests cover states and capability gating. Browser E2E covers message,
-mention, reconnect, Run progress, reply, and cancellation flows. Work is tracked
-by `WEB-001` through `WEB-006` in `docs/TASKS.md`.
+Component tests cover onboarding state transitions and capability gating.
+Browser acceptance covers message, mention, reconnect, Run progress, reply, and
+cancellation flows. Work is tracked by `WEB-001` through `WEB-007` in
+`docs/TASKS.md`.
 
 ## Dependencies
 

@@ -7,7 +7,11 @@ Agents through the Fastify API.
 ```bash
 npm run dev:server
 npm run dev:web
+npm run test --workspace @agent-room/web
 ```
 
 Vite runs on port 5173 and proxies `/api` to the central server on port 3000.
 Production assets are emitted to `apps/web/dist/`.
+
+The Web test renders the onboarding flow in JSDOM and verifies that creating a
+Team calls the API and advances the interface to Room setup.
