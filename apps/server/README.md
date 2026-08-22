@@ -1,7 +1,8 @@
 # Agent Room Server
 
-This workspace will host the central Team service. Only the SQLite migration
-foundation exists in `DATA-001`; HTTP, MCP, WebSocket, and domain services are
+This workspace hosts the central Team service. The SQLite layer contains the
+core Team, Room, Member, Device, Agent, Message, and structured Mention tables
+plus transactional repositories. HTTP, MCP, WebSocket, and domain services are
 introduced by their own tasks.
 
 ## Database Location

@@ -1,0 +1,354 @@
+import type Database from "better-sqlite3";
+
+export interface WebUserRecord {
+  userId: string;
+  displayName: string;
+  createdAt: string;
+}
+
+export interface TeamRecord {
+  teamId: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface MemberRecord {
+  memberId: string;
+  teamId: string;
+  userId: string | null;
+  displayName: string;
+  role: "owner" | "member";
+  createdAt: string;
+}
+
+export interface RoomRecord {
+  roomId: string;
+  teamId: string;
+  name: string;
+  createdAt: string;
+}
+
+export interface DeviceRecord {
+  deviceId: string;
+  teamId: string;
+  ownerMemberId: string;
+  name: string;
+  status: "active" | "revoked";
+  createdAt: string;
+  revokedAt: string | null;
+}
+
+export interface AgentCapabilities {
+  supportsHandoff: boolean;
+  supportsInterrupt: boolean;
+  supportsResume: boolean;
+  supportsStart: boolean;
+  supportsStreaming: boolean;
+}
+
+export interface AgentRecord {
+  agentId: string;
+  teamId: string;
+  ownerMemberId: string;
+  deviceId: string | null;
+  name: string;
+  role: string;
+  integrationMode: "managed" | "manual" | "fake";
+  capabilities: AgentCapabilities;
+  enabled: boolean;
+  presence: "ready" | "busy" | "degraded" | "manual" | "offline";
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MentionRecord {
+  targetType: "agent";
+  targetAgentId: string;
+  displayLabel: string;
+}
+
+export interface MessageRecord {
+  messageId: string;
+  roomId: string;
+  sequence: number;
+  senderType: "member" | "agent" | "system";
+  senderId: string;
+  content: string;
+  mentions: MentionRecord[];
+  parentMessageId: string | null;
+  createdAt: string;
+}
+
+interface AgentRow {
+  agent_id: string;
+  team_id: string;
+  owner_member_id: string;
+  device_id: string | null;
+  name: string;
+  role: string;
+  integration_mode: AgentRecord["integrationMode"];
+  capabilities_json: string;
+  enabled: number;
+  presence: AgentRecord["presence"];
+  created_at: string;
+  updated_at: string;
+}
+
+interface MessageRow {
+  message_id: string;
+  room_id: string;
+  sequence: number;
+  sender_type: MessageRecord["senderType"];
+  sender_id: string;
+  content: string;
+  parent_message_id: string | null;
+  created_at: string;
+}
+
+function mapAgent(row: AgentRow): AgentRecord {
+  return {
+    agentId: row.agent_id,
+    teamId: row.team_id,
+    ownerMemberId: row.owner_member_id,
+    deviceId: row.device_id,
+    name: row.name,
+    role: row.role,
+    integrationMode: row.integration_mode,
+    capabilities: JSON.parse(row.capabilities_json) as AgentCapabilities,
+    enabled: row.enabled === 1,
+    presence: row.presence,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at
+  };
+}
+
+export class CoreRepository {
+  public constructor(private readonly database: Database.Database) {}
+
+  public createUser(user: WebUserRecord): void {
+    this.database.prepare(`
+      INSERT INTO web_users (user_id, display_name, created_at)
+      VALUES (@userId, @displayName, @createdAt)
+    `).run(user);
+  }
+
+  public createTeamWithOwner(team: TeamRecord, owner: MemberRecord): void {
+    this.database.transaction(() => {
+      this.database.prepare(`
+        INSERT INTO teams (team_id, name, created_at)
+        VALUES (@teamId, @name, @createdAt)
+      `).run(team);
+      this.database.prepare(`
+        INSERT INTO team_members (
+          member_id, team_id, user_id, display_name, role, created_at
+        ) VALUES (
+          @memberId, @teamId, @userId, @displayName, @role, @createdAt
+        )
+      `).run(owner);
+    }).immediate();
+  }
+
+  public createRoom(room: RoomRecord): void {
+    this.database.prepare(`
+      INSERT INTO rooms (room_id, team_id, name, created_at)
+      VALUES (@roomId, @teamId, @name, @createdAt)
+    `).run(room);
+  }
+
+  public createDevice(device: DeviceRecord): void {
+    this.database.prepare(`
+      INSERT INTO devices (
+        device_id, team_id, owner_member_id, name, status, created_at, revoked_at
+      ) VALUES (
+        @deviceId, @teamId, @ownerMemberId, @name, @status, @createdAt, @revokedAt
+      )
+    `).run(device);
+  }
+
+  public createAgent(agent: AgentRecord): void {
+    this.database.prepare(`
+      INSERT INTO agents (
+        agent_id, team_id, owner_member_id, device_id, name, role,
+        integration_mode, capabilities_json, enabled, presence, created_at,
+        updated_at
+      ) VALUES (
+        @agentId, @teamId, @ownerMemberId, @deviceId, @name, @role,
+        @integrationMode, @capabilitiesJson, @enabled, @presence, @createdAt,
+        @updatedAt
+      )
+    `).run({
+      ...agent,
+      capabilitiesJson: JSON.stringify(agent.capabilities),
+      enabled: agent.enabled ? 1 : 0
+    });
+  }
+
+  public appendMessage(message: Omit<MessageRecord, "sequence">): MessageRecord {
+    return this.database.transaction(() => {
+      const room = this.database.prepare(`
+        SELECT team_id FROM rooms WHERE room_id = ?
+      `).get(message.roomId) as { team_id: string } | undefined;
+      if (!room) {
+        throw new Error(`Room not found: ${message.roomId}`);
+      }
+
+      const findAgent = this.database.prepare(`
+        SELECT team_id, enabled FROM agents WHERE agent_id = ?
+      `);
+      for (const mention of message.mentions) {
+        const agent = findAgent.get(mention.targetAgentId) as
+          | { team_id: string; enabled: number }
+          | undefined;
+        if (!agent || agent.team_id !== room.team_id || agent.enabled !== 1) {
+          throw new Error(`Mention target is unavailable: ${mention.targetAgentId}`);
+        }
+      }
+
+      const sequenceRow = this.database.prepare(`
+        UPDATE rooms
+        SET next_message_sequence = next_message_sequence + 1
+        WHERE room_id = ?
+        RETURNING next_message_sequence AS sequence
+      `).get(message.roomId) as { sequence: number };
+
+      this.database.prepare(`
+        INSERT INTO messages (
+          message_id, room_id, sequence, sender_type, sender_id, content,
+          parent_message_id, created_at
+        ) VALUES (
+          @messageId, @roomId, @sequence, @senderType, @senderId, @content,
+          @parentMessageId, @createdAt
+        )
+      `).run({ ...message, sequence: sequenceRow.sequence });
+
+      const insertMention = this.database.prepare(`
+        INSERT INTO message_mentions (
+          message_id, ordinal, target_type, target_agent_id, display_label
+        ) VALUES (?, ?, 'agent', ?, ?)
+      `);
+      for (const [ordinal, mention] of message.mentions.entries()) {
+        insertMention.run(
+          message.messageId,
+          ordinal,
+          mention.targetAgentId,
+          mention.displayLabel
+        );
+      }
+
+      return { ...message, sequence: sequenceRow.sequence };
+    }).immediate();
+  }
+
+  public getTeam(teamId: string): TeamRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT team_id, name, created_at FROM teams WHERE team_id = ?
+    `).get(teamId) as
+      | { team_id: string; name: string; created_at: string }
+      | undefined;
+    return row && { teamId: row.team_id, name: row.name, createdAt: row.created_at };
+  }
+
+  public getMember(memberId: string): MemberRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT member_id, team_id, user_id, display_name, role, created_at
+      FROM team_members WHERE member_id = ?
+    `).get(memberId) as
+      | {
+          member_id: string;
+          team_id: string;
+          user_id: string | null;
+          display_name: string;
+          role: MemberRecord["role"];
+          created_at: string;
+        }
+      | undefined;
+    return row && {
+      memberId: row.member_id,
+      teamId: row.team_id,
+      userId: row.user_id,
+      displayName: row.display_name,
+      role: row.role,
+      createdAt: row.created_at
+    };
+  }
+
+  public getRoom(roomId: string): RoomRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT room_id, team_id, name, created_at FROM rooms WHERE room_id = ?
+    `).get(roomId) as
+      | { room_id: string; team_id: string; name: string; created_at: string }
+      | undefined;
+    return row && {
+      roomId: row.room_id,
+      teamId: row.team_id,
+      name: row.name,
+      createdAt: row.created_at
+    };
+  }
+
+  public getDevice(deviceId: string): DeviceRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT device_id, team_id, owner_member_id, name, status, created_at,
+             revoked_at
+      FROM devices WHERE device_id = ?
+    `).get(deviceId) as
+      | {
+          device_id: string;
+          team_id: string;
+          owner_member_id: string;
+          name: string;
+          status: DeviceRecord["status"];
+          created_at: string;
+          revoked_at: string | null;
+        }
+      | undefined;
+    return row && {
+      deviceId: row.device_id,
+      teamId: row.team_id,
+      ownerMemberId: row.owner_member_id,
+      name: row.name,
+      status: row.status,
+      createdAt: row.created_at,
+      revokedAt: row.revoked_at
+    };
+  }
+
+  public getAgent(agentId: string): AgentRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM agents WHERE agent_id = ?
+    `).get(agentId) as AgentRow | undefined;
+    return row && mapAgent(row);
+  }
+
+  public getMessage(messageId: string): MessageRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM messages WHERE message_id = ?
+    `).get(messageId) as MessageRow | undefined;
+    if (!row) {
+      return undefined;
+    }
+    const mentions = this.database.prepare(`
+      SELECT target_type, target_agent_id, display_label
+      FROM message_mentions WHERE message_id = ? ORDER BY ordinal
+    `).all(messageId) as Array<{
+      target_type: "agent";
+      target_agent_id: string;
+      display_label: string;
+    }>;
+    return {
+      messageId: row.message_id,
+      roomId: row.room_id,
+      sequence: row.sequence,
+      senderType: row.sender_type,
+      senderId: row.sender_id,
+      content: row.content,
+      mentions: mentions.map((mention) => ({
+        targetType: mention.target_type,
+        targetAgentId: mention.target_agent_id,
+        displayLabel: mention.display_label
+      })),
+      parentMessageId: row.parent_message_id,
+      createdAt: row.created_at
+    };
+  }
+}
