@@ -31,6 +31,8 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run build` — build every implemented workspace.
 - `npm test` — run implemented workspace tests.
 - `npm run db:migrate` — migrate the configured central SQLite database.
+- `npm run dev:server` — run the Fastify API on port 3000.
+- `npm run dev:web` — run the Vite browser UI with an API proxy.
 - `npm run generate --workspace @agent-room/contracts` — regenerate wire types.
 - `rg '^#' agent_room_network_design_v0.2.md` — review heading hierarchy.
 - `npm run lint:docs` — lint maintained Markdown.

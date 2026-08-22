@@ -14,6 +14,8 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "db:migrate": "npm run db:migrate --workspace @agent-room/server --",
+    "dev:server": "npm run dev --workspace @agent-room/server",
+    "dev:web": "npm run dev --workspace @agent-room/web",
     "test": "npm run test --workspaces --if-present",
     "validate": "npm run validate --workspaces --if-present",
     "lint:docs": "markdownlint-cli2 \"**/*.md\""

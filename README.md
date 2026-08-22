@@ -10,8 +10,9 @@ the Team wake a managed Agent.
 
 ## Status
 
-The project has contract and central SQLite migration foundations. HTTP/MCP,
-the Web UI, and the Bridge have not been scaffolded yet.
+The project has a central Fastify API, SQLite domain model, and browser Team
+shell. Message/Run presentation, MCP, and the production Bridge remain under
+implementation.
 
 - Current baseline:
   [agent_room_network_design_v0.2.md](agent_room_network_design_v0.2.md)
@@ -65,6 +66,8 @@ npm run validate
 npm run build
 npm test
 npm run db:migrate
+npm run dev:server
+npm run dev:web
 ```
 
 The migration command uses `AGENT_ROOM_DATABASE_PATH`,

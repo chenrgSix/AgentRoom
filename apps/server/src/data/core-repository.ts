@@ -176,6 +176,19 @@ export class CoreRepository {
     `).run(user);
   }
 
+  public getUser(userId: string): WebUserRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT user_id, display_name, created_at FROM web_users WHERE user_id = ?
+    `).get(userId) as
+      | { user_id: string; display_name: string; created_at: string }
+      | undefined;
+    return row && {
+      userId: row.user_id,
+      displayName: row.display_name,
+      createdAt: row.created_at
+    };
+  }
+
   public createTeamWithOwner(team: TeamRecord, owner: MemberRecord): void {
     this.database.transaction(() => {
       this.database.prepare(`

@@ -2,8 +2,9 @@
 
 This workspace hosts the central Team service. The SQLite layer contains the
 core Team, Room, Member, Device, Agent, Message, and structured Mention tables
-plus transactional repositories. HTTP, MCP, WebSocket, and domain services are
-introduced by their own tasks.
+plus transactional repositories. The Fastify API supports local session
+bootstrap and basic Team, Room, Member, and Fake Agent management. MCP,
+WebSocket, and production delivery are introduced by their own tasks.
 
 ## Database Location
 
@@ -21,6 +22,7 @@ existing database.
 
 ```bash
 npm run db:migrate --workspace @agent-room/server
+npm run dev --workspace @agent-room/server
 npm run build --workspace @agent-room/server
 npm test --workspace @agent-room/server
 ```
