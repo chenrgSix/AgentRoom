@@ -2,6 +2,8 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
 
+import { type Locale, type TranslationKey, translate } from "./i18n.js";
+
 interface Team {
   teamId: string;
   name: string;
@@ -59,23 +61,81 @@ interface LocalSession {
 }
 
 const userKey = "agent-room.local-user";
+const localeKey = "agent-room.locale";
 
 type WorkspaceView = "room" | "agents";
 type ConnectionMode = "managed" | "mcp" | "demo";
 
-function integrationLabel(mode: Agent["integrationMode"]): string {
-  if (mode === "managed") return "Managed Bridge";
-  if (mode === "manual") return "MCP participant";
-  return "Demo runtime";
+function integrationLabel(mode: Agent["integrationMode"], locale: Locale): string {
+  if (mode === "managed") return translate(locale, "managedBridge");
+  if (mode === "manual") return translate(locale, "mcpParticipant");
+  return translate(locale, "demoRuntime");
 }
 
-function presenceHelp(agent: Agent): string {
-  if (agent.integrationMode === "fake") return "Simulation only; does not call a model";
-  if (agent.presence === "ready") return "Ready to receive Team tasks";
-  if (agent.presence === "busy") return "Working on a Team task";
-  if (agent.presence === "degraded") return "Connected with limited capability";
-  if (agent.presence === "manual") return "Pulls work through MCP when the client is active";
-  return "Start its Bridge or MCP client to make it available";
+function presenceHelp(agent: Agent, locale: Locale): string {
+  if (locale === "en") {
+    if (agent.integrationMode === "fake") return "Simulation only; does not call a model";
+    if (agent.presence === "ready") return "Ready to receive Team tasks";
+    if (agent.presence === "busy") return "Working on a Team task";
+    if (agent.presence === "degraded") return "Connected with limited capability";
+    if (agent.presence === "manual") return "Pulls work through MCP when the client is active";
+    return "Start its Bridge or MCP client to make it available";
+  }
+  if (agent.integrationMode === "fake") return "仅用于模拟，不会调用模型";
+  if (agent.presence === "ready") return "已就绪，可以接收 Team 任务";
+  if (agent.presence === "busy") return "正在执行 Team 任务";
+  if (agent.presence === "degraded") return "已连接，但部分能力不可用";
+  if (agent.presence === "manual") return "MCP 客户端运行时会主动拉取任务";
+  return "请启动对应的 Bridge 或 MCP 客户端";
+}
+
+function presenceLabel(presence: string, locale: Locale): string {
+  if (locale === "en") return presence.replace("_", " ");
+  const labels: Record<string, string> = {
+    active: "活跃",
+    busy: "忙碌",
+    degraded: "受限",
+    manual: "手动",
+    offline: "离线",
+    ready: "就绪",
+    revoked: "已撤销"
+  };
+  return labels[presence] ?? presence;
+}
+
+function runStateLabel(state: Run["state"], locale: Locale): string {
+  if (locale === "en") return state.replace("_", " ");
+  const labels: Record<Run["state"], string> = {
+    canceled: "已取消",
+    completed: "已完成",
+    delivered: "已投递",
+    expired: "已过期",
+    failed: "失败",
+    input_required: "等待输入",
+    outcome_unknown: "结果未知",
+    queued: "排队中",
+    working: "执行中"
+  };
+  return labels[state];
+}
+
+function roleLabel(role: string, locale: Locale): string {
+  if (locale === "en") return role;
+  const labels: Record<string, string> = {
+    "Codex implementer": "Codex 执行者",
+    "MCP participant": "MCP 参与者",
+    Teammate: "Team 成员"
+  };
+  return labels[role] ?? role;
+}
+
+function errorLabel(error: string, locale: Locale): string {
+  if (locale === "en") return error;
+  if (error.includes("Failed to fetch")) return "无法连接到主服务，请检查服务是否正在运行。";
+  if (error.includes("Unexpected end of JSON input")) return "主服务返回了无效响应，请稍后重试。";
+  const requestFailure = /Request failed \((\d+)\)/u.exec(error);
+  if (requestFailure) return `请求失败（HTTP ${requestFailure[1]}）`;
+  return `操作失败：${error}`;
 }
 
 function bridgeServerURL(): string {
@@ -134,6 +194,9 @@ async function bootstrap(): Promise<LocalSession> {
 }
 
 export function App() {
+  const [locale, setLocale] = useState<Locale>(() =>
+    localStorage.getItem(localeKey) === "en" ? "en" : "zh-CN"
+  );
   const [session, setSession] = useState<LocalSession | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
@@ -172,6 +235,12 @@ export function App() {
   const readyAgents = agents.filter((agent) => agent.presence === "ready").length;
   const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
   const activeDevices = devices.filter((device) => device.status === "active").length;
+  const t = (key: TranslationKey) => translate(locale, key);
+
+  useEffect(() => {
+    localStorage.setItem(localeKey, locale);
+    document.documentElement.lang = locale;
+  }, [locale]);
 
   async function loadTeams(activeSession: LocalSession) {
     const next = await jsonRequest<Team[]>("/api/teams", {}, activeSession.token);
@@ -392,7 +461,9 @@ export function App() {
       }, session.token);
       setDeviceName("");
       setSetupOutput([
-        `# Pairing code expires at ${invite.expiresAt}`,
+        locale === "zh-CN"
+          ? `# 配对码将在 ${invite.expiresAt} 过期`
+          : `# Pairing code expires at ${invite.expiresAt}`,
         `agentroom-bridge pair --config bridge.json --code '${invite.code}'`
       ].join("\n"));
     } catch (reason) {
@@ -418,8 +489,10 @@ export function App() {
       );
       setJoinCode("");
       setSetupOutput(
-        `Approved ${approved.agentName} on ${approved.deviceName}. ` +
-        "The client will finish registration and come online automatically."
+        locale === "zh-CN"
+          ? `已批准 ${approved.deviceName} 上的 ${approved.agentName}。客户端将自动完成注册并上线。`
+          : `Approved ${approved.agentName} on ${approved.deviceName}. ` +
+            "The client will finish registration and come online automatically."
       );
     } catch (reason) {
       setError(String(reason));
@@ -508,7 +581,7 @@ export function App() {
 
   return (
     <div className="app-shell">
-      <aside className="team-rail" aria-label="Teams">
+      <aside className="team-rail" aria-label={t("teamSpace")}>
         <div className="brand-mark" aria-label="Agent Room">AR</div>
         <div className="team-list">
           {teams.map((team) => (
@@ -524,36 +597,36 @@ export function App() {
         </div>
         <form className="quick-create" onSubmit={createTeam}>
           <input
-            aria-label="New Team name"
+            aria-label={t("newTeamName")}
             onChange={(event) => setTeamName(event.target.value)}
-            placeholder="New Team"
+            placeholder={locale === "zh-CN" ? "新 Team" : "New Team"}
             required
             value={teamName}
           />
           <button
-            aria-label="Create Team"
+            aria-label={t("createTeam")}
             disabled={busy}
-            title={busy ? "Creating Team" : "Create Team"}
+            title={busy ? t("creating") : t("createTeam")}
           >+</button>
         </form>
       </aside>
 
       <aside className="room-sidebar">
         <header>
-          <p className="eyebrow">TEAM SPACE</p>
+          <p className="eyebrow">{t("teamSpace")}</p>
           <h1>{selectedTeam?.name ?? "Agent Room"}</h1>
         </header>
         {selectedTeam && (
           <>
-            <div className="section-label">Workspace</div>
-            <nav className="space-nav" aria-label="Team workspace">
+            <div className="section-label">{t("workspace")}</div>
+            <nav className="space-nav" aria-label={t("workspace")}>
               <button
                 className={activeView === "room" ? "space-nav-button active" : "space-nav-button"}
                 onClick={() => setActiveView("room")}
                 type="button"
               >
                 <span className="nav-icon">⌁</span>
-                <span><strong>Chat</strong><small>Rooms and Team Runs</small></span>
+                <span><strong>{t("chat")}</strong><small>{t("chatHelp")}</small></span>
               </button>
               <button
                 className={activeView === "agents" ? "space-nav-button active" : "space-nav-button"}
@@ -561,14 +634,14 @@ export function App() {
                 type="button"
               >
                 <span className="nav-icon">✦</span>
-                <span><strong>Agents</strong><small>Connections and devices</small></span>
+                <span><strong>{t("agents")}</strong><small>{t("agentsHelp")}</small></span>
                 <span className="nav-count">{readyAgents}/{agents.length}</span>
               </button>
             </nav>
           </>
         )}
-        <div className="section-label">Rooms</div>
-        <nav className="room-list" aria-label="Rooms">
+        <div className="section-label">{t("rooms")}</div>
+        <nav className="room-list" aria-label={t("rooms")}>
           {rooms.map((room) => (
             <button
               className={room.roomId === selectedRoomId ? "room-link active" : "room-link"}
@@ -585,99 +658,118 @@ export function App() {
         {selectedTeam && (
           <form className="room-create" onSubmit={createRoom}>
             <input
-              aria-label="New Room name"
+              aria-label={t("newRoomName")}
               onChange={(event) => setRoomName(event.target.value)}
-              placeholder="Add a Room"
+              placeholder={t("addRoom")}
               required
               value={roomName}
             />
-            <button disabled={busy}>{busy ? "Creating…" : "Create"}</button>
+            <button disabled={busy}>{busy ? t("creating") : t("create")}</button>
           </form>
         )}
         {selectedTeam && (
           <button className="sidebar-manage" onClick={revealConnectionSetup} type="button">
-            <span>Manage Agent connections</span>
+            <span>{t("manageConnections")}</span>
             <span>→</span>
           </button>
         )}
         <footer>
           <span className="avatar">{session?.displayName.slice(0, 1) ?? "…"}</span>
-          <div><strong>{session?.displayName ?? "Connecting"}</strong><small>Local session</small></div>
+          <div><strong>{session?.displayName ?? t("connecting")}</strong><small>{t("localSession")}</small></div>
+          <button
+            aria-label={t("language")}
+            className="locale-switch"
+            onClick={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")}
+            title={t("language")}
+            type="button"
+          >{locale === "zh-CN" ? "EN" : "中"}</button>
         </footer>
       </aside>
 
       <main className="workspace">
+        <nav className="mobile-nav" aria-label={t("workspace")}>
+          <strong>{selectedTeam?.name ?? "Agent Room"}</strong>
+          <div>
+            {selectedTeam && (
+              <>
+                <button className={activeView === "room" ? "active" : ""} onClick={() => setActiveView("room")} type="button">{t("chat")}</button>
+                <button className={activeView === "agents" ? "active" : ""} onClick={() => setActiveView("agents")} type="button">{t("agents")}</button>
+              </>
+            )}
+            <button aria-label={locale === "zh-CN" ? "移动端界面语言" : "Mobile interface language"} onClick={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")} type="button">{locale === "zh-CN" ? "EN" : "中"}</button>
+          </div>
+        </nav>
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">{activeView === "agents" && selectedTeam ? "CONTROL PLANE" : "ROOM"}</p>
+            <p className="eyebrow">{activeView === "agents" && selectedTeam ? t("controlPlane") : t("room")}</p>
             <h2>
               {activeView === "agents" && selectedTeam
-                ? "Agents & devices"
-                : selectedRoom ? `# ${selectedRoom.name}` : "Choose a Room"}
+                ? t("agentsDevices")
+                : selectedRoom ? `# ${selectedRoom.name}` : t("chooseRoom")}
             </h2>
           </div>
           <div className="agent-summary">
             <span className={`presence-dot ${readyAgents === 0 ? "offline" : ""}`} />
-            {readyAgents} ready · {agents.length} total
+            {locale === "zh-CN"
+              ? `${readyAgents} 个就绪 · 共 ${agents.length} 个`
+              : `${readyAgents} ready · ${agents.length} total`}
           </div>
         </header>
         {!selectedTeam ? (
           <section className="empty-stage onboarding-stage">
             <div className="orb"><span>✦</span></div>
-            <p className="eyebrow">STEP 1 OF 3</p>
-            <h3>Create your first Team</h3>
-            <p>
-              A Team is the shared home for Rooms, people, and connected Agents.
-            </p>
+            <p className="eyebrow">{locale === "zh-CN" ? "第 1 步，共 3 步" : "STEP 1 OF 3"}</p>
+            <h3>{t("createFirstTeam")}</h3>
+            <p>{t("teamIntro")}</p>
             <form className="onboarding-form" onSubmit={createTeam}>
-              <label htmlFor="onboarding-team-name">Team name</label>
+              <label htmlFor="onboarding-team-name">{t("teamName")}</label>
               <div>
                 <input
                   autoComplete="off"
                   id="onboarding-team-name"
                   onChange={(event) => setTeamName(event.target.value)}
-                  placeholder="Platform Team"
+                  placeholder={locale === "zh-CN" ? "研发 Team" : "Platform Team"}
                   required
                   value={teamName}
                 />
-                <button disabled={busy}>{busy ? "Creating…" : "Create Team"}</button>
+                <button disabled={busy}>{busy ? t("creating") : t("createTeam")}</button>
               </div>
-              <small>Next, you will create a Room and connect an Agent.</small>
+              <small>{t("nextRoomAgent")}</small>
             </form>
           </section>
         ) : activeView === "agents" ? (
-          <section className="management-workspace" aria-label="Agent management">
+          <section className="management-workspace" aria-label={t("agentManagement")}>
             <div className="management-intro">
               <div>
-                <p className="eyebrow">TEAM CONTROL PLANE</p>
-                <h3>Manage the runtimes behind your Team</h3>
-                <p>Connect Codex, issue MCP credentials, inspect availability, and revoke devices without leaving the web service.</p>
+                <p className="eyebrow">{t("teamControlPlane")}</p>
+                <h3>{t("manageRuntimes")}</h3>
+                <p>{t("manageDescription")}</p>
               </div>
               <button
                 className="primary-action"
                 onClick={() => setConnectionMode("managed")}
                 type="button"
-              >Connect Agent</button>
+              >{t("connectAgent")}</button>
             </div>
 
-            <div className="metric-grid" aria-label="Agent status summary">
-              <article className="metric-card"><strong>{agents.length}</strong><span>Total Agents</span></article>
-              <article className="metric-card"><strong>{readyAgents}</strong><span>Ready now</span></article>
-              <article className="metric-card"><strong>{managedAgents}</strong><span>Managed Bridges</span></article>
-              <article className="metric-card"><strong>{activeDevices}</strong><span>Active devices</span></article>
+            <div className="metric-grid" aria-label={t("agentStatusSummary")}>
+              <article className="metric-card"><strong>{agents.length}</strong><span>{t("totalAgents")}</span></article>
+              <article className="metric-card"><strong>{readyAgents}</strong><span>{t("readyNow")}</span></article>
+              <article className="metric-card"><strong>{managedAgents}</strong><span>{t("managedBridgeCount")}</span></article>
+              <article className="metric-card"><strong>{activeDevices}</strong><span>{t("activeDevices")}</span></article>
             </div>
 
             <div className="management-grid">
               <section className="control-panel agent-library" aria-labelledby="agent-library-title">
                 <div className="panel-header">
-                  <div><p className="eyebrow">AGENT LIBRARY</p><h3 id="agent-library-title">Team Agents</h3></div>
-                  <span>{agents.length} registered</span>
+                  <div><p className="eyebrow">{t("agentLibrary")}</p><h3 id="agent-library-title">{t("teamAgents")}</h3></div>
+                  <span>{locale === "zh-CN" ? `已注册 ${agents.length} 个` : `${agents.length} ${t("registered")}`}</span>
                 </div>
                 {agents.length === 0 ? (
                   <div className="panel-empty">
                     <span>✦</span>
-                    <strong>No Agents connected</strong>
-                    <p>Use the connection center to add a managed Codex runtime or MCP participant.</p>
+                    <strong>{t("noAgents")}</strong>
+                    <p>{t("noAgentsHelp")}</p>
                   </div>
                 ) : (
                   <div className="agent-card-grid">
@@ -686,17 +778,17 @@ export function App() {
                         <div className="agent-card-top">
                           <span className="agent-avatar">{agent.name.slice(0, 2).toUpperCase()}</span>
                           <span className={`status-badge ${agent.presence}`}>
-                            <span className={`presence-dot ${agent.presence}`} />{agent.presence}
+                            <span className={`presence-dot ${agent.presence}`} />{presenceLabel(agent.presence, locale)}
                           </span>
                         </div>
                         <div className="agent-card-copy">
                           <h4>{agent.name}</h4>
-                          <p>{agent.role}</p>
+                          <p>{roleLabel(agent.role, locale)}</p>
                         </div>
                         <span className={`integration-badge ${agent.integrationMode}`}>
-                          {integrationLabel(agent.integrationMode)}
+                          {integrationLabel(agent.integrationMode, locale)}
                         </span>
-                        <small>{presenceHelp(agent)}</small>
+                        <small>{presenceHelp(agent, locale)}</small>
                       </article>
                     ))}
                   </div>
@@ -705,29 +797,29 @@ export function App() {
 
               <section className="control-panel connection-center" aria-labelledby="connection-center-title">
                 <div className="panel-header">
-                  <div><p className="eyebrow">CONNECTION CENTER</p><h3 id="connection-center-title">Add an Agent</h3></div>
+                  <div><p className="eyebrow">{t("connectionCenter")}</p><h3 id="connection-center-title">{t("addAgent")}</h3></div>
                 </div>
-                <div className="connection-tabs" role="tablist" aria-label="Agent connection methods">
-                  <button aria-selected={connectionMode === "managed"} onClick={() => setConnectionMode("managed")} role="tab" type="button">Managed Codex</button>
-                  <button aria-selected={connectionMode === "mcp"} onClick={() => setConnectionMode("mcp")} role="tab" type="button">MCP client</button>
-                  <button aria-selected={connectionMode === "demo"} onClick={() => setConnectionMode("demo")} role="tab" type="button">Demo Agent</button>
+                <div className="connection-tabs" role="tablist" aria-label={t("connectionMethods")}>
+                  <button aria-selected={connectionMode === "managed"} onClick={() => setConnectionMode("managed")} role="tab" type="button">{t("managedCodex")}</button>
+                  <button aria-selected={connectionMode === "mcp"} onClick={() => setConnectionMode("mcp")} role="tab" type="button">{t("mcpClient")}</button>
+                  <button aria-selected={connectionMode === "demo"} onClick={() => setConnectionMode("demo")} role="tab" type="button">{t("demoAgent")}</button>
                 </div>
 
                 {connectionMode === "managed" && (
                   <div className="connection-content" role="tabpanel">
-                    <div className="method-heading"><span className="method-icon">⌘</span><div><strong>Managed local Codex</strong><p>The Go Bridge keeps Codex available for Team messages.</p></div></div>
+                    <div className="method-heading"><span className="method-icon">⌘</span><div><strong>{t("managedLocalCodex")}</strong><p>{t("managedCodexHelp")}</p></div></div>
                     <ol className="setup-steps">
-                      <li><span>1</span><div><strong>Start the Bridge on the Codex machine</strong><p>Run this command in a terminal on the machine that owns Codex.</p></div></li>
+                      <li><span>1</span><div><strong>{t("startBridge")}</strong><p>{t("startBridgeHelp")}</p></div></li>
                     </ol>
-                    <div className="command-box"><code>agentroom-bridge join --server {bridgeServerURL()}</code><button onClick={() => void navigator.clipboard.writeText(`agentroom-bridge join --server ${bridgeServerURL()}`)} type="button">Copy</button></div>
+                    <div className="command-box"><code>agentroom-bridge join --server {bridgeServerURL()}</code><button onClick={() => void navigator.clipboard.writeText(`agentroom-bridge join --server ${bridgeServerURL()}`)} type="button">{t("copy")}</button></div>
                     <ol className="setup-steps" start={2}>
-                      <li><span>2</span><div><strong>Approve the code shown by the Bridge</strong><p>This is not an Agent name. Enter the one-time code printed in the client terminal.</p></div></li>
+                      <li><span>2</span><div><strong>{t("approveCodeTitle")}</strong><p>{t("approveCodeHelp")}</p></div></li>
                     </ol>
                     <form className="approval-form" onSubmit={approveBridgeJoin}>
-                      <label htmlFor="bridge-approval-code">Bridge approval code</label>
+                      <label htmlFor="bridge-approval-code">{t("bridgeApprovalCode")}</label>
                       <div>
                         <input
-                          aria-label="Client join code"
+                          aria-label={t("bridgeApprovalCode")}
                           autoCapitalize="characters"
                           autoComplete="off"
                           id="bridge-approval-code"
@@ -736,16 +828,16 @@ export function App() {
                           required
                           value={joinCode}
                         />
-                        <button disabled={busy}>{busy ? "Approving…" : "Approve Bridge"}</button>
+                        <button disabled={busy}>{busy ? t("approving") : t("approveBridge")}</button>
                       </div>
                     </form>
                     <details className="legacy-pairing">
-                      <summary>Legacy server-issued pairing</summary>
+                      <summary>{t("legacyPairing")}</summary>
                       <form className="approval-form compact" onSubmit={createBridgeInvite}>
-                        <label htmlFor="legacy-device-name">Device name</label>
+                        <label htmlFor="legacy-device-name">{t("deviceName")}</label>
                         <div>
-                          <input id="legacy-device-name" aria-label="Bridge Device name" onChange={(event) => setDeviceName(event.target.value)} placeholder="Bob's Mac" required value={deviceName} />
-                          <button disabled={busy}>Create code</button>
+                          <input id="legacy-device-name" aria-label={t("bridgeDeviceName")} onChange={(event) => setDeviceName(event.target.value)} placeholder={locale === "zh-CN" ? "小陈的 Mac" : "Bob's Mac"} required value={deviceName} />
+                          <button disabled={busy}>{t("createCode")}</button>
                         </div>
                       </form>
                     </details>
@@ -754,12 +846,12 @@ export function App() {
 
                 {connectionMode === "mcp" && (
                   <div className="connection-content" role="tabpanel">
-                    <div className="method-heading"><span className="method-icon">M</span><div><strong>MCP participant</strong><p>For clients that pull Team work through MCP; this does not remotely wake the client.</p></div></div>
+                    <div className="method-heading"><span className="method-icon">M</span><div><strong>{t("mcpParticipant")}</strong><p>{t("mcpHelp")}</p></div></div>
                     <form className="approval-form" onSubmit={createManualAgent}>
-                      <label htmlFor="manual-agent-name">Agent display name</label>
+                      <label htmlFor="manual-agent-name">{t("agentDisplayName")}</label>
                       <div>
-                        <input id="manual-agent-name" aria-label="Manual Agent name" onChange={(event) => setManualAgentName(event.target.value)} placeholder="Codex via MCP" required value={manualAgentName} />
-                        <button disabled={busy}>Create MCP token</button>
+                        <input id="manual-agent-name" aria-label={t("manualAgentName")} onChange={(event) => setManualAgentName(event.target.value)} placeholder="Codex via MCP" required value={manualAgentName} />
+                        <button disabled={busy}>{t("createMcpToken")}</button>
                       </div>
                     </form>
                   </div>
@@ -767,12 +859,12 @@ export function App() {
 
                 {connectionMode === "demo" && (
                   <div className="connection-content" role="tabpanel">
-                    <div className="demo-warning"><strong>Simulation only</strong><p>A Demo Agent echoes messages in process. It does not call Codex or another model.</p></div>
+                    <div className="demo-warning"><strong>{t("simulationOnly")}</strong><p>{t("demoAgentHelp")}</p></div>
                     <form className="approval-form" onSubmit={createFakeAgent}>
-                      <label htmlFor="demo-agent-name">Demo Agent name</label>
+                      <label htmlFor="demo-agent-name">{t("demoAgentName")}</label>
                       <div>
-                        <input id="demo-agent-name" aria-label="Demo Agent name" onChange={(event) => setAgentName(event.target.value)} placeholder="Review Bot" required value={agentName} />
-                        <button disabled={busy}>Add demo Agent</button>
+                        <input id="demo-agent-name" aria-label={t("demoAgentName")} onChange={(event) => setAgentName(event.target.value)} placeholder={locale === "zh-CN" ? "评审助手" : "Review Bot"} required value={agentName} />
+                        <button disabled={busy}>{t("addDemoAgent")}</button>
                       </div>
                     </form>
                   </div>
@@ -780,7 +872,7 @@ export function App() {
 
                 {setupOutput && (
                   <div className="setup-output management-output" aria-live="polite">
-                    <div><strong>Setup result</strong><button type="button" onClick={() => void navigator.clipboard.writeText(setupOutput)}>Copy</button></div>
+                    <div><strong>{t("setupResult")}</strong><button type="button" onClick={() => void navigator.clipboard.writeText(setupOutput)}>{t("copy")}</button></div>
                     <pre>{setupOutput}</pre>
                   </div>
                 )}
@@ -789,19 +881,19 @@ export function App() {
 
             <section className="control-panel device-panel" aria-labelledby="device-panel-title">
               <div className="panel-header">
-                <div><p className="eyebrow">TRUSTED DEVICES</p><h3 id="device-panel-title">Bridge devices</h3></div>
-                <span>{activeDevices} active</span>
+                <div><p className="eyebrow">{t("trustedDevices")}</p><h3 id="device-panel-title">{t("bridgeDevices")}</h3></div>
+                <span>{locale === "zh-CN" ? `${activeDevices} 台活跃` : `${activeDevices} active`}</span>
               </div>
               {devices.length === 0 ? (
-                <p className="device-empty">No Bridge devices have been approved for this Team.</p>
+                <p className="device-empty">{t("noDevices")}</p>
               ) : (
                 <div className="device-grid">
                   {devices.map((device) => (
                     <article className="device-card" key={device.deviceId}>
                       <span className="device-icon">▣</span>
                       <div><strong>{device.name}</strong><small>{device.deviceId}</small></div>
-                      <span className={`status-badge ${device.status}`}>{device.status}</span>
-                      <button disabled={device.status !== "active"} onClick={() => void revokeDevice(device)} type="button">{device.status === "active" ? "Revoke" : "Revoked"}</button>
+                      <span className={`status-badge ${device.status}`}>{presenceLabel(device.status, locale)}</span>
+                      <button disabled={device.status !== "active"} onClick={() => void revokeDevice(device)} type="button">{device.status === "active" ? t("revoke") : t("revoked")}</button>
                     </article>
                   ))}
                 </div>
@@ -811,11 +903,11 @@ export function App() {
         ) : !selectedRoom ? (
           <section className="empty-stage onboarding-stage">
             <div className="step-badge">2</div>
-            <p className="eyebrow">STEP 2 OF 3 · {selectedTeam.name}</p>
-            <h3>Create a conversation Room</h3>
-            <p>Rooms keep Team conversations and Agent Runs in one durable timeline.</p>
+            <p className="eyebrow">{locale === "zh-CN" ? `第 2 步，共 3 步 · ${selectedTeam.name}` : `STEP 2 OF 3 · ${selectedTeam.name}`}</p>
+            <h3>{t("createConversationRoom")}</h3>
+            <p>{t("roomHelp")}</p>
             <form className="onboarding-form" onSubmit={createRoom}>
-              <label htmlFor="onboarding-room-name">Room name</label>
+              <label htmlFor="onboarding-room-name">{locale === "zh-CN" ? "房间名称" : "Room name"}</label>
               <div>
                 <input
                   autoComplete="off"
@@ -825,56 +917,53 @@ export function App() {
                   required
                   value={roomName}
                 />
-                <button disabled={busy}>{busy ? "Creating…" : "Create Room"}</button>
+                <button disabled={busy}>{busy ? t("creating") : t("createRoom")}</button>
               </div>
-              <small>You can add more Rooms later from the sidebar.</small>
+              <small>{t("addMoreRooms")}</small>
             </form>
           </section>
         ) : messages.length === 0 ? (
           <section className="empty-stage">
             <div className="orb"><span>✦</span></div>
-            <p className="eyebrow">{agents.length === 0 ? "STEP 3 OF 3" : "CENTRAL TEAM READY"}</p>
+            <p className="eyebrow">{agents.length === 0 ? (locale === "zh-CN" ? "第 3 步，共 3 步" : "STEP 3 OF 3") : t("centralTeamReady")}</p>
             <h3>
               {agents.length === 0
-                ? "Add an Agent or start the conversation"
-                : `Start the conversation in #${selectedRoom.name}`}
+                ? t("addAgentOrStart")
+                : `${t("startConversation")} #${selectedRoom.name}`}
             </h3>
-            <p>
-              Messages, structured Agent mentions, Runs, and replies will appear
-              here as one durable Team timeline.
-            </p>
+            <p>{t("timelineHelp")}</p>
             {agents.length === 0 && (
               <div className="onboarding-actions">
                 <form className="action-card" onSubmit={createFakeAgent}>
-                  <span className="action-kicker">TRY IT NOW</span>
-                  <strong>Add a demo Agent</strong>
-                  <p>Use the in-process runtime to explore mentions and replies.</p>
+                  <span className="action-kicker">{t("tryNow")}</span>
+                  <strong>{t("addDemoAgent")}</strong>
+                  <p>{locale === "zh-CN" ? "使用进程内运行时体验提及与回复流程。" : "Use the in-process runtime to explore mentions and replies."}</p>
                   <input
-                    aria-label="Demo Agent name"
+                    aria-label={t("demoAgentName")}
                     onChange={(event) => setAgentName(event.target.value)}
-                    placeholder="Review Bot"
+                    placeholder={locale === "zh-CN" ? "评审助手" : "Review Bot"}
                     required
                     value={agentName}
                   />
-                  <button disabled={busy}>{busy ? "Adding…" : "Add demo Agent"}</button>
+                  <button disabled={busy}>{busy ? t("creating") : t("addDemoAgent")}</button>
                 </form>
                 <div className="action-card">
-                  <span className="action-kicker">USE YOUR RUNTIME</span>
-                  <strong>Connect a real Agent</strong>
-                  <p>Create an MCP token or pair the Go Bridge with local Codex.</p>
-                  <button onClick={revealConnectionSetup} type="button">Open connection setup</button>
+                  <span className="action-kicker">{t("useRuntime")}</span>
+                  <strong>{t("connectRealAgent")}</strong>
+                  <p>{t("connectRealAgentHelp")}</p>
+                  <button onClick={revealConnectionSetup} type="button">{t("openConnectionSetup")}</button>
                 </div>
               </div>
             )}
           </section>
         ) : (
-          <section className="timeline" aria-label="Room messages">
+          <section className="timeline" aria-label={t("roomMessages")}>
             {messages.map((message) => (
               <article className="message" key={message.messageId}>
                 <span className={`avatar ${message.senderType}`}>{message.senderType === "agent" ? "A" : "U"}</span>
                 <div>
                   <header>
-                    <strong>{message.senderType === "agent" ? "Agent" : session?.displayName}</strong>
+                    <strong>{message.senderType === "agent" ? t("agent") : session?.displayName}</strong>
                     <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                   </header>
                   <p>{message.content}</p>
@@ -887,12 +976,12 @@ export function App() {
                       ))}
                       {runs.filter((run) => run.triggerMessageId === message.messageId).map((run) => (
                         <span className="run-card" key={run.runId} title={run.runId}>
-                          <strong>{agentsById.get(run.targetAgentId)?.name ?? "Agent"}</strong>
+                          <strong>{agentsById.get(run.targetAgentId)?.name ?? t("agent")}</strong>
                           <span className={`run-state ${run.state}`}>
-                            {run.state.replace("_", " ")}
+                            {runStateLabel(run.state, locale)}
                           </span>
                           {["queued", "delivered", "working", "input_required"].includes(run.state) && (
-                            <button type="button" onClick={() => void cancelRun(run.runId)}>Cancel</button>
+                            <button type="button" onClick={() => void cancelRun(run.runId)}>{t("cancel")}</button>
                           )}
                         </span>
                       ))}
@@ -906,29 +995,29 @@ export function App() {
         {selectedRoom && activeView === "room" && (
           <form className="composer" onSubmit={sendMessage}>
             <select
-              aria-label="Mention an Agent"
+              aria-label={t("mentionAgent")}
               onChange={(event) => setMentionAgentId(event.target.value)}
               value={mentionAgentId}
             >
-              <option value="">No Agent mention</option>
+              <option value="">{t("noAgentMention")}</option>
               {agents.map((agent) => (
                 <option key={agent.agentId} value={agent.agentId}>
-                  @{agent.name} · {agent.role}
+                  @{agent.name} · {roleLabel(agent.role, locale)}
                 </option>
               ))}
             </select>
             <textarea
-              aria-label="Message"
+              aria-label={t("message")}
               onChange={(event) => setMessageContent(event.target.value)}
-              placeholder={`Message #${selectedRoom.name}`}
+              placeholder={locale === "zh-CN" ? `发送消息到 #${selectedRoom.name}` : `Message #${selectedRoom.name}`}
               required
               rows={2}
               value={messageContent}
             />
-            <button disabled={busy}>{busy ? "Sending…" : "Send"}</button>
+            <button disabled={busy}>{busy ? t("sending") : t("send")}</button>
           </form>
         )}
-        {error && <div className="error-banner" role="alert">{error}</div>}
+        {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
       </main>
     </div>
   );

@@ -102,6 +102,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | WEB-006 | DONE | Implement pairing and revoke screens | WEB-001, BRG-002 | user can pair and revoke a Device |
 | WEB-007 | DONE | Add guided Team onboarding and actionable empty states | WEB-001, WEB-006 | component interaction test and live browser flow reach Room setup |
 | WEB-008 | DONE | Add dedicated Agent management control plane | WEB-004, WEB-006, BRG-006 | Agent roster, connection approval, integration setup, and Device controls are discoverable and component-tested |
+| WEB-009 | DONE | Add Chinese-first Web localization | WEB-008 | Simplified Chinese is the default, English remains selectable, and locale persistence is component-tested |
 
 ## Workstream F4: MCP Team Participation
 

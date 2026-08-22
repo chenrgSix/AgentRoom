@@ -19,7 +19,7 @@ function jsonResponse(value: unknown): Response {
   });
 }
 
-test("onboarding creates the first Team and reveals the Room step", async () => {
+test("Chinese-first onboarding persists locale and reaches Bridge approval", async () => {
   const dom = new JSDOM("<!doctype html><html><body></body></html>", {
     url: "http://localhost/"
   });
@@ -99,53 +99,62 @@ test("onboarding creates the first Team and reveals the Room step", async () => 
   const { cleanup, fireEvent, render, screen, waitFor, within } = await import("@testing-library/react");
   try {
     render(<App />);
-    const teamHeading = await screen.findByRole("heading", { name: "Create your first Team" });
+    const teamHeading = await screen.findByRole("heading", { name: "创建你的第一个 Team" });
     const teamStep = teamHeading.closest("section");
     assert.ok(teamStep);
+    assert.equal(dom.window.document.documentElement.lang, "zh-CN");
 
-    const nameInput = within(teamStep).getByLabelText("Team name") as HTMLInputElement;
-    const createButton = within(teamStep).getByRole("button", { name: "Create Team" });
+    fireEvent.click(screen.getByRole("button", { name: "界面语言" }));
+    await screen.findByRole("heading", { name: "Create your first Team" });
+    assert.equal(localStorage.getItem("agent-room.locale"), "en");
+    assert.equal(dom.window.document.documentElement.lang, "en");
+    fireEvent.click(screen.getByRole("button", { name: "Interface language" }));
+    await screen.findByRole("heading", { name: "创建你的第一个 Team" });
+    assert.equal(localStorage.getItem("agent-room.locale"), "zh-CN");
+
+    const nameInput = within(teamStep).getByLabelText("Team 名称") as HTMLInputElement;
+    const createButton = within(teamStep).getByRole("button", { name: "创建 Team" });
     assert.equal(nameInput.required, true);
     assert.equal((createButton as HTMLButtonElement).disabled, false);
 
     fireEvent.change(nameInput, { target: { value: "Platform Team" } });
     fireEvent.click(createButton);
 
-    await screen.findByRole("heading", { name: "Create a conversation Room" });
+    await screen.findByRole("heading", { name: "创建一个对话房间" });
     await waitFor(() => {
       const request = requests.find((candidate) =>
         candidate.path === "/api/teams" && candidate.method === "POST"
       );
       assert.deepEqual(JSON.parse(request?.body ?? "{}"), { name: "Platform Team" });
     });
-    const roomInput = screen.getByLabelText("Room name") as HTMLInputElement;
+    const roomInput = screen.getByLabelText("房间名称") as HTMLInputElement;
     assert.equal(roomInput.required, true);
     assert.equal(
-      (screen.getByRole("button", { name: "Create Room" }) as HTMLButtonElement).disabled,
+      (screen.getByRole("button", { name: "创建房间" }) as HTMLButtonElement).disabled,
       false
     );
 
     fireEvent.change(roomInput, { target: { value: "general" } });
-    fireEvent.click(screen.getByRole("button", { name: "Create Room" }));
-    await screen.findByRole("heading", { name: "Add an Agent or start the conversation" });
-    assert.equal(screen.queryByLabelText("New Fake Agent name"), null);
-    fireEvent.click(screen.getByRole("button", { name: "Open connection setup" }));
+    fireEvent.click(screen.getByRole("button", { name: "创建房间" }));
+    await screen.findByRole("heading", { name: "添加智能体，或直接开始对话" });
+    assert.equal(screen.queryByLabelText("新建假智能体名称"), null);
+    fireEvent.click(screen.getByRole("button", { name: "打开连接设置" }));
 
-    await screen.findByRole("heading", { name: "Agents & devices" });
-    screen.getByRole("heading", { name: "Team Agents" });
-    screen.getByText("Managed local Codex");
-    screen.getByText(/This is not an Agent name/u);
+    await screen.findByRole("heading", { name: "智能体与设备" });
+    screen.getByRole("heading", { name: "Team 智能体" });
+    screen.getByText("托管本地 Codex");
+    screen.getByText(/这不是智能体名称/u);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Demo Agent" }));
-    screen.getByText("Simulation only");
-    screen.getByText(/does not call Codex or another model/u);
-    fireEvent.click(screen.getByRole("tab", { name: "Managed Codex" }));
+    fireEvent.click(screen.getByRole("tab", { name: "演示智能体" }));
+    screen.getByText("仅用于模拟");
+    screen.getByText(/不会调用 Codex 或其他模型/u);
+    fireEvent.click(screen.getByRole("tab", { name: "托管 Codex" }));
 
-    const joinCode = screen.getByLabelText("Client join code");
+    const joinCode = screen.getByLabelText("Bridge 审批码");
     fireEvent.change(joinCode, { target: { value: "ABCD-1234" } });
-    fireEvent.click(screen.getByRole("button", { name: "Approve Bridge" }));
+    fireEvent.click(screen.getByRole("button", { name: "批准 Bridge" }));
 
-    await screen.findByText(/Approved Local Codex on Alice Mac/u);
+    await screen.findByText(/已批准 Alice Mac 上的 Local Codex/u);
     await waitFor(() => {
       const request = requests.find((candidate) =>
         candidate.path === `/api/teams/${team.teamId}/bridge-join-requests/approve`

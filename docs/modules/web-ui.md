@@ -10,6 +10,11 @@ The browser client is the primary Team conversation surface. It renders
 authoritative server state and sends user intents; it does not contain routing,
 authorization, or Run state-machine logic.
 
+Simplified Chinese is the default presentation language. English remains
+available through an in-product switch, and the selected locale is persisted
+only in browser-local preferences. Protocol identifiers, commands, user data,
+and server-owned payloads are never translated.
+
 ## Primary Surfaces
 
 - Authenticated Team and Room shell.
@@ -19,6 +24,7 @@ authorization, or Run state-machine logic.
 - Run cards with live status, replies, cancellation, and failure details.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
+- Narrow-screen navigation for Chat, Agent management, and locale selection.
 
 There is no native desktop GUI in the MVP. Runtime access is provided by the
 optional headless Bridge, keeping existing agent clients unchanged.
@@ -55,10 +61,11 @@ actions remain visibly available unless a request is already in progress.
 
 ## Verification and Tasks
 
-Component tests cover onboarding state transitions, Agent management
-navigation, enrollment approval, and capability gating.
+Component tests cover onboarding state transitions, Chinese-default locale
+persistence, Agent management navigation, enrollment approval, and capability
+gating.
 Browser acceptance covers message, mention, reconnect, Run progress, reply, and
-cancellation flows. Work is tracked by `WEB-001` through `WEB-008` in
+cancellation flows. Work is tracked by `WEB-001` through `WEB-009` in
 `docs/TASKS.md`.
 
 ## Dependencies
