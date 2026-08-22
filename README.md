@@ -18,6 +18,8 @@ has been scaffolded yet.
 - Historical baseline:
   [agent_room_network_design_v0.1.md](agent_room_network_design_v0.1.md)
 - Contributor rules: [CONTRIBUTING.md](CONTRIBUTING.md)
+- Module architecture: [docs/modules/README.md](docs/modules/README.md)
+- Authoritative task register: [docs/TASKS.md](docs/TASKS.md)
 - Architecture decisions: [docs/adr/README.md](docs/adr/README.md)
 
 ## Technology Baseline
@@ -44,12 +46,21 @@ apps/
 packages/
   contracts/    JSON Schema and generated TypeScript types
 bridge/         Go Bridge and runtime adapters
+docs/modules/   Module ownership, contracts, and acceptance boundaries
 docs/adr/       Architecture decision records
+docs/TASKS.md   Authoritative milestones and delivery state
 tests/e2e/      Cross-process acceptance scenarios
 ```
 
 Do not create these directories until the corresponding implementation
 milestone starts.
+
+## Delivery Workflow
+
+Start work from a stable task ID in `docs/TASKS.md`. Update its state and
+completion evidence in the same commit as the implementation. If a change
+alters module ownership, interfaces, or acceptance criteria, update the owning
+document under `docs/modules/` as well.
 
 ## Documentation Checks
 

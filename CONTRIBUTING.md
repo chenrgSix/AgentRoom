@@ -10,6 +10,19 @@ require an ADR before implementation.
 Do not copy Hermes Studio source, assets, schemas, or tests. Public behavior
 and open standards may inform an independently designed implementation.
 
+## Task Register
+
+`docs/TASKS.md` is the only delivery checklist. Before implementation, select
+an existing task whose dependencies are satisfied or add a new stable ID under
+the owning module prefix. A change that starts or completes work updates the
+task state in the same commit. `DONE` requires the listed completion evidence
+and successful relevant checks.
+
+If work changes module scope, ownership, public contracts, or acceptance
+criteria, update the corresponding file in `docs/modules/`. Architectural
+decisions that change trust, state authority, or protocol compatibility still
+require an ADR.
+
 ## Repository Ownership
 
 - `apps/server/`: Team state, Room APIs, MCP, routing, and Bridge connections.
@@ -17,6 +30,9 @@ and open standards may inform an independently designed implementation.
 - `packages/contracts/`: authoritative JSON Schema for cross-language messages.
 - `bridge/`: local runtime discovery, invocation, and server transport.
 - `tests/e2e/`: black-box scenarios spanning server and Bridge.
+
+The complete ownership and dependency map is maintained in
+`docs/modules/README.md`.
 
 The server owns Team, Room, Message, and Run state. The Bridge owns local
 runtime process state. Do not duplicate either authority.
