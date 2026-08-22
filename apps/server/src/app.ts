@@ -14,6 +14,8 @@ import { createOpaqueId } from "./domain/identifiers.js";
 import { AgentService } from "./registry/agent-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
+import { RunRepository } from "./run/run-repository.js";
+import { RunService } from "./run/run-service.js";
 import {
   AuthService,
   AuthorizationError,
@@ -68,6 +70,7 @@ export async function createServerApp(
   const agents = new AgentService(core, auth);
   const presence = new PresenceService(core, auth);
   const messages = new MessageService(core, auth);
+  const runs = new RunService(core, new RunRepository(database), auth);
   const clock = options.clock ?? (() => new Date().toISOString());
   const app = Fastify({ logger: options.logger ?? false });
   const principal = (request: FastifyRequest): WebPrincipal =>
@@ -224,13 +227,37 @@ export async function createServerApp(
   app.post<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/messages",
     async (request) => {
+      const actor = principal(request);
       const body = bodyObject(request);
-      return messages.createMemberMessage(principal(request), {
+      const mentionAgentId = body.mentionAgentId === undefined
+        ? undefined
+        : requiredString(body.mentionAgentId, "mentionAgentId", 140);
+      const target = mentionAgentId ? core.getAgent(mentionAgentId) : undefined;
+      const message = messages.createMemberMessage(actor, {
         roomId: request.params.roomId,
         content: requiredString(body.content, "content", 20_000),
+        ...(mentionAgentId
+          ? {
+              mentions: [{
+                targetType: "agent" as const,
+                targetAgentId: mentionAgentId,
+                displayLabel: target
+                  ? `${target.name} / ${target.role}`
+                  : mentionAgentId
+              }]
+            }
+          : {}),
         now: clock()
       });
+      return {
+        message,
+        runs: runs.createRunsForMessage(actor, message.messageId, clock())
+      };
     }
+  );
+  app.get<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/runs",
+    async (request) => runs.listRoomRuns(principal(request), request.params.roomId)
   );
 
   if (options.webRoot) {

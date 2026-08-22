@@ -35,6 +35,13 @@ interface Message {
   createdAt: string;
 }
 
+interface Run {
+  runId: string;
+  triggerMessageId: string;
+  targetAgentId: string;
+  state: "queued" | "delivered" | "working" | "input_required" | "completed" | "failed" | "canceled" | "outcome_unknown";
+}
+
 interface LocalSession {
   userId: string;
   displayName: string;
@@ -95,12 +102,14 @@ export function App() {
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [runs, setRuns] = useState<Run[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
   const [messageContent, setMessageContent] = useState("");
+  const [mentionAgentId, setMentionAgentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -149,6 +158,9 @@ export function App() {
     ]).then(([nextRooms, nextAgents]) => {
       setRooms(nextRooms);
       setAgents(nextAgents);
+      setMentionAgentId((current) =>
+        nextAgents.some((agent) => agent.agentId === current) ? current : ""
+      );
       setSelectedRoomId((current) =>
         nextRooms.some((room) => room.roomId === current)
           ? current
@@ -160,13 +172,24 @@ export function App() {
   useEffect(() => {
     if (!session || !selectedRoomId) {
       setMessages([]);
+      setRuns([]);
       return;
     }
-    void jsonRequest<{ items: Message[] }>(
-      `/api/rooms/${selectedRoomId}/messages?limit=100`,
-      {},
-      session.token
-    ).then((page) => setMessages(page.items))
+    void Promise.all([
+      jsonRequest<{ items: Message[] }>(
+        `/api/rooms/${selectedRoomId}/messages?limit=100`,
+        {},
+        session.token
+      ),
+      jsonRequest<Run[]>(
+        `/api/rooms/${selectedRoomId}/runs`,
+        {},
+        session.token
+      )
+    ]).then(([page, nextRuns]) => {
+      setMessages(page.items);
+      setRuns(nextRuns);
+    })
       .catch((reason: unknown) => setError(String(reason)));
   }, [selectedRoomId, session]);
 
@@ -240,16 +263,21 @@ export function App() {
     setBusy(true);
     setError(null);
     try {
-      const message = await jsonRequest<Message>(
+      const result = await jsonRequest<{ message: Message; runs: Run[] }>(
         `/api/rooms/${selectedRoomId}/messages`,
         {
           method: "POST",
-          body: JSON.stringify({ content: messageContent })
+          body: JSON.stringify({
+            content: messageContent,
+            ...(mentionAgentId ? { mentionAgentId } : {})
+          })
         },
         session.token
       );
       setMessageContent("");
-      setMessages((current) => [...current, message]);
+      setMentionAgentId("");
+      setMessages((current) => [...current, result.message]);
+      setRuns((current) => [...current, ...result.runs]);
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -361,6 +389,20 @@ export function App() {
                     <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                   </header>
                   <p>{message.content}</p>
+                  {(message.mentions.length > 0 || runs.some((run) => run.triggerMessageId === message.messageId)) && (
+                    <div className="message-routing">
+                      {message.mentions.map((mention) => (
+                        <span className="mention-pill" key={mention.targetAgentId}>
+                          @{mention.displayLabel}
+                        </span>
+                      ))}
+                      {runs.filter((run) => run.triggerMessageId === message.messageId).map((run) => (
+                        <span className={`run-state ${run.state}`} key={run.runId}>
+                          {run.state.replace("_", " ")}
+                        </span>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </article>
             ))}
@@ -368,6 +410,18 @@ export function App() {
         )}
         {selectedRoom && (
           <form className="composer" onSubmit={sendMessage}>
+            <select
+              aria-label="Mention an Agent"
+              onChange={(event) => setMentionAgentId(event.target.value)}
+              value={mentionAgentId}
+            >
+              <option value="">No Agent mention</option>
+              {agents.map((agent) => (
+                <option key={agent.agentId} value={agent.agentId}>
+                  @{agent.name} · {agent.role}
+                </option>
+              ))}
+            </select>
             <textarea
               aria-label="Message"
               onChange={(event) => setMessageContent(event.target.value)}

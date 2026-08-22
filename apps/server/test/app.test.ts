@@ -55,6 +55,7 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
     });
     assert.equal(createAgent.statusCode, 200);
     assert.equal(createAgent.json().presence, "ready");
+    const agent = createAgent.json() as { agentId: string };
 
     const teams = await app.inject({
       method: "GET",
@@ -84,16 +85,32 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       method: "POST",
       url: `/api/rooms/${room.roomId}/messages`,
       headers: { authorization },
-      payload: { content: "Hello Team" }
+      payload: {
+        content: "Hello Team",
+        mentionAgentId: agent.agentId
+      }
     });
     assert.equal(createMessage.statusCode, 200);
-    assert.equal(createMessage.json().sequence, 1);
+    const routed = createMessage.json() as {
+      message: { sequence: number };
+      runs: Array<{ targetAgentId: string; state: string }>;
+    };
+    assert.equal(routed.message.sequence, 1);
+    assert.equal(routed.runs[0]?.targetAgentId, agent.agentId);
+    assert.equal(routed.runs[0]?.state, "queued");
     const timeline = await app.inject({
       method: "GET",
       url: `/api/rooms/${room.roomId}/messages`,
       headers: { authorization }
     });
     assert.equal(timeline.json().items[0].content, "Hello Team");
+    const roomRuns = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${room.roomId}/runs`,
+      headers: { authorization }
+    });
+    assert.equal(roomRuns.statusCode, 200);
+    assert.equal(roomRuns.json()[0].state, "queued");
   } finally {
     await app.close();
   }
