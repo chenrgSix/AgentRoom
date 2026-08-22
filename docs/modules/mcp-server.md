@@ -37,6 +37,11 @@ Names remain lowercase and namespaced:
 - `team.get_run` reads projected Run state.
 - `team.wait` waits for the next relevant Team event from a supplied cursor.
 
+`team.get_context`, `team.get_messages`, `team.send_message`, and `team.reply`
+are implemented against the same Room authorization and persistence services as
+the Web API. Writes are attributed to the authenticated manual Agent, never to
+its owning Web user.
+
 Read-only resources may represent Room history, a thread, or an Agent inbox.
 Tool schemas must be imported from `packages/contracts/`.
 

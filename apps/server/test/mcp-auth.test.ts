@@ -44,6 +44,13 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       payload: { name: "Core Team" }
     });
     const teamId = team.json().team.teamId as string;
+    const room = await app.inject({
+      method: "POST",
+      url: `/api/teams/${teamId}/rooms`,
+      headers: { authorization: `Bearer ${webToken}` },
+      payload: { name: "general" }
+    });
+    const roomId = room.json().roomId as string;
     const manual = await app.inject({
       method: "POST",
       url: `/api/teams/${teamId}/manual-agents`,
@@ -91,6 +98,74 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
     });
     assert.equal(whoami.statusCode, 200);
     assert.equal(whoami.json().result.structuredContent.teamId, teamId);
+
+    const sent = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 3,
+        method: "tools/call",
+        params: {
+          name: "team.send_message",
+          arguments: { roomId, content: "MCP Agent online" }
+        }
+      }
+    });
+    assert.equal(sent.statusCode, 200);
+    const sentMessageId = sent.json().result.structuredContent.message.messageId as string;
+    assert.equal(sent.json().result.structuredContent.message.senderType, "agent");
+
+    const replied = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 4,
+        method: "tools/call",
+        params: {
+          name: "team.reply",
+          arguments: {
+            roomId,
+            parentMessageId: sentMessageId,
+            content: "Reply from MCP"
+          }
+        }
+      }
+    });
+    assert.equal(replied.statusCode, 200);
+    assert.equal(
+      replied.json().result.structuredContent.message.parentMessageId,
+      sentMessageId
+    );
+
+    const context = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 5,
+        method: "tools/call",
+        params: {
+          name: "team.get_context",
+          arguments: { roomId, limit: 20 }
+        }
+      }
+    });
+    assert.equal(context.statusCode, 200);
+    assert.equal(context.json().result.structuredContent.messages.length, 2);
   } finally {
     await app.close();
   }

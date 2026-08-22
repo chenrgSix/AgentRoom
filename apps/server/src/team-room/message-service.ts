@@ -4,7 +4,11 @@ import type {
   MessageRecord
 } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
-import type { AuthService, WebPrincipal } from "../security/auth-service.js";
+import type {
+  AuthService,
+  McpPrincipal,
+  WebPrincipal
+} from "../security/auth-service.js";
 
 interface MessageCursor {
   roomId: string;
@@ -90,6 +94,46 @@ export class MessageService {
       senderId: member.memberId,
       content: input.content,
       mentions,
+      parentMessageId: input.parentMessageId ?? null,
+      createdAt: input.now
+    });
+  }
+
+  public createAgentMessage(
+    principal: McpPrincipal,
+    input: {
+      roomId: string;
+      content: string;
+      parentMessageId?: string | null;
+      now: string;
+    }
+  ): MessageRecord {
+    const member = this.auth.requireRoomMember(principal, input.roomId);
+    const agent = this.repository.getAgent(principal.agentId);
+    if (
+      !agent ||
+      !agent.enabled ||
+      agent.teamId !== member.teamId ||
+      agent.ownerMemberId !== member.memberId
+    ) {
+      throw new Error("Authenticated MCP Agent is unavailable in this Room");
+    }
+    if (input.content.trim().length === 0 || input.content.length > 20_000) {
+      throw new Error("Message content must contain 1 to 20000 characters");
+    }
+    if (input.parentMessageId) {
+      const parent = this.repository.getMessage(input.parentMessageId);
+      if (!parent || parent.roomId !== input.roomId) {
+        throw new Error("Parent Message must belong to the same Room");
+      }
+    }
+    return this.repository.appendMessage({
+      messageId: createOpaqueId("msg"),
+      roomId: input.roomId,
+      senderType: "agent",
+      senderId: agent.agentId,
+      content: input.content,
+      mentions: [],
       parentMessageId: input.parentMessageId ?? null,
       createdAt: input.now
     });

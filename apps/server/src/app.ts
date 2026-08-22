@@ -344,7 +344,11 @@ export async function createServerApp(
 
   app.post("/mcp", async (request, reply) => {
     const mcpPrincipal = auth.authenticateMcp(bearerToken(request), clock());
-    const server = createTeamMcpServer(mcpPrincipal);
+    const server = createTeamMcpServer(mcpPrincipal, {
+      clock,
+      core,
+      messages
+    });
     const transportOptions = {
       sessionIdGenerator: undefined,
       enableJsonResponse: true
