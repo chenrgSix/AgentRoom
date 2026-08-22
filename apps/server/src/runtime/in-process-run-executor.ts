@@ -14,6 +14,7 @@ const terminalStates = new Set([
   "completed",
   "failed",
   "canceled",
+  "expired",
   "outcome_unknown"
 ]);
 

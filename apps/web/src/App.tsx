@@ -46,7 +46,7 @@ interface Run {
   runId: string;
   triggerMessageId: string;
   targetAgentId: string;
-  state: "queued" | "delivered" | "working" | "input_required" | "completed" | "failed" | "canceled" | "outcome_unknown";
+  state: "queued" | "delivered" | "working" | "input_required" | "completed" | "failed" | "canceled" | "expired" | "outcome_unknown";
   updatedAt: string;
 }
 

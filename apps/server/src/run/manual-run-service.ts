@@ -3,7 +3,9 @@ import type { McpPrincipal } from "../security/auth-service.js";
 import type { MessageService } from "../team-room/message-service.js";
 import type { RunRecord, RunRepository } from "./run-repository.js";
 
-const terminalStates = new Set(["completed", "failed", "canceled", "outcome_unknown"]);
+const terminalStates = new Set([
+  "completed", "failed", "canceled", "expired", "outcome_unknown"
+]);
 
 export class ManualRunService {
   public constructor(

@@ -31,12 +31,17 @@ queued
       ├── completed
       ├── failed
       ├── canceled
+      ├── expired
       └── outcome_unknown
 ```
 
 `transport_lost` is connection metadata, not a Run state. Terminal states do
 not transition. A Runtime that may have executed but lacks a trustworthy
 outcome becomes `outcome_unknown` and is never automatically rerun.
+
+Offline managed Runs remain `queued` and are delivered when the target Device
+publishes or heartbeats. A queued Run that reaches its persisted deadline moves
+to terminal `expired` and is never delivered on a later reconnect.
 
 ## Delivery Contract
 

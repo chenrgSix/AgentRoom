@@ -5,6 +5,7 @@ export type RuntimeStatus =
   | "completed"
   | "failed"
   | "canceled"
+  | "expired"
   | "outcome_unknown";
 
 export interface RuntimeRequest {

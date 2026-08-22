@@ -51,9 +51,13 @@ export class RunService {
 
   public listRoomRuns(
     principal: WebPrincipal,
-    roomId: string
+    roomId: string,
+    now?: string
   ): RunRecord[] {
     this.auth.requireRoomMember(principal, roomId);
+    if (now) {
+      this.runs.expireQueued(roomId, now);
+    }
     return this.runs.listRoomRuns(roomId);
   }
 }

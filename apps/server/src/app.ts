@@ -573,7 +573,9 @@ export async function createServerApp(
   );
   app.get<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/runs",
-    async (request) => runs.listRoomRuns(principal(request), request.params.roomId)
+    async (request) => runs.listRoomRuns(
+      principal(request), request.params.roomId, clock()
+    )
   );
   app.get<{ Params: { runId: string } }>(
     "/api/runs/:runId/events",

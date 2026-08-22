@@ -80,6 +80,11 @@ export class DeliveryService {
   ) {}
 
   public dispatch(runId: string): DeliveryRecord | undefined {
+    const run = this.runs.getRun(runId);
+    if (run?.state === "queued" && Date.parse(run.deadlineAt) <= Date.parse(this.clock())) {
+      this.runs.expireQueued(run.roomId, this.clock());
+      return undefined;
+    }
     const delivery = this.ensure(runId);
     if (!delivery || delivery.state === "accepted") {
       return delivery;

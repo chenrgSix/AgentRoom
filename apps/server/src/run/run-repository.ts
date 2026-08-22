@@ -10,6 +10,7 @@ export type RunState =
   | "completed"
   | "failed"
   | "canceled"
+  | "expired"
   | "outcome_unknown";
 
 export interface RunRecord {
@@ -70,6 +71,7 @@ const terminalStates = new Set<RunState>([
   "completed",
   "failed",
   "canceled",
+  "expired",
   "outcome_unknown"
 ]);
 
@@ -169,6 +171,24 @@ export class RunRepository {
       ORDER BY created_at, run_id
     `).all(agentId) as RunRow[];
     return rows.map(mapRun);
+  }
+
+  public expireQueued(roomId: string, now: string): RunRecord[] {
+    const due = this.database.prepare(`
+      SELECT run_id FROM runs
+      WHERE room_id = ? AND state = 'queued' AND deadline_at <= ?
+      ORDER BY created_at, run_id
+    `).all(roomId, now) as Array<{ run_id: string }>;
+    return due.map(({ run_id: runId }) => this.applyEvent(runId, {
+      type: "status",
+      sequence: (this.getRun(runId)?.lastSequence ?? 0) + 1,
+      status: "expired",
+      error: {
+        code: "RUN_EXPIRED",
+        message: "Run expired before its target Agent accepted delivery.",
+        retryable: false
+      }
+    }, now).run);
   }
 
   public applyEvent(

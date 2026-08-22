@@ -85,15 +85,21 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
     assert.ok(run);
     const connections = new BridgeConnectionRegistry();
     const socket = new CapturingSocket();
-    connections.register(device.deviceId, 1, socket);
+    let currentTime = now;
     const delivery = new DeliveryService(
       database,
       core,
       runRepository,
       connections,
-      () => now
+      () => currentTime
     );
-    const first = delivery.dispatch(run.runId);
+    const offline = delivery.dispatch(run.runId);
+    assert.equal(offline?.sendCount, 0);
+    assert.equal(socket.messages.length, 0);
+    connections.register(device.deviceId, 1, socket);
+    delivery.dispatchQueuedForDevice(device.deviceId);
+    assert.equal(socket.messages.length, 1);
+    const first = delivery.getByRun(run.runId);
     const repeated = delivery.dispatch(run.runId);
     assert.equal(socket.messages.length, 2);
     assert.equal(first?.deliveryAttemptId, repeated?.deliveryAttemptId);
@@ -111,6 +117,24 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       "delivered"
     );
     assert.equal(delivery.getByRun(run.runId)?.state, "accepted");
+
+    const expiringMessage = messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "Expire offline",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: agent.agentId,
+        displayLabel: "Builder / Managed"
+      }],
+      now
+    });
+    const expiringRun = runs.createRunsForMessage(
+      principal, expiringMessage.messageId, now
+    )[0];
+    assert.ok(expiringRun);
+    currentTime = "2026-08-22T10:21:00.000Z";
+    assert.equal(delivery.dispatch(expiringRun.runId), undefined);
+    assert.equal(runRepository.getRun(expiringRun.runId)?.state, "expired");
   } finally {
     database.close();
   }
