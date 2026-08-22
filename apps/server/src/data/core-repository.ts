@@ -451,6 +451,13 @@ export class CoreRepository {
     return row && mapAgent(row);
   }
 
+  public listAgents(teamId: string): AgentRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM agents WHERE team_id = ? ORDER BY created_at, agent_id
+    `).all(teamId) as AgentRow[];
+    return rows.map(mapAgent);
+  }
+
   public getMessage(messageId: string): MessageRecord | undefined {
     const row = this.database.prepare(`
       SELECT * FROM messages WHERE message_id = ?
