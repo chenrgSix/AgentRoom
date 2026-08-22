@@ -71,6 +71,12 @@ Run acceptance, status, and replies require an exact Team, Device owner, and
 target Agent binding. Cross-Team and same-Team cross-owner events are rejected
 before they can advance sequence state or append a Room reply.
 
+Runtime and MCP Agent replies are filtered for common bearer, API-key, access
+key, password, secret, and token patterns before durable event or Message
+persistence. Adapter failures publish fixed safe summaries rather than raw
+stderr. This filter is defense in depth, not a substitute for credential
+isolation and owner-controlled environment allowlists.
+
 ## Dependencies
 
 Contracts. Every transport and domain service depends on Security decisions.

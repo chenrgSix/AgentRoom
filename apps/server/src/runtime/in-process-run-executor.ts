@@ -1,5 +1,6 @@
 import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
+import { redactSensitiveText } from "../security/redaction.js";
 import type {
   RunRecord,
   RunRepository
@@ -61,9 +62,12 @@ export class InProcessRunExecutor {
 
     try {
       for await (const event of adapter.execute(request)) {
-        const applied = this.runs.applyEvent(runId, event, this.clock());
-        if (applied.applied && event.type === "reply") {
-          this.appendReply(applied.run, event);
+        const safeEvent = event.type === "reply"
+          ? { ...event, content: redactSensitiveText(event.content) }
+          : event;
+        const applied = this.runs.applyEvent(runId, safeEvent, this.clock());
+        if (applied.applied && safeEvent.type === "reply") {
+          this.appendReply(applied.run, safeEvent);
         }
       }
       const completed = this.runs.getRun(runId);

@@ -63,15 +63,28 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       runId: run.runId, agentId: agent.agentId, sequence: 2, status: "working"
     }, now).run.state, "working");
     assert.equal(service.applyReply(devicePrincipal, {
-      runId: run.runId, agentId: agent.agentId, sequence: 3, content: "Implemented."
+      runId: run.runId, agentId: agent.agentId, sequence: 3,
+      content: "Implemented. token=very-sensitive-value"
     }, now).applied, true);
     assert.equal(service.applyReply(devicePrincipal, {
-      runId: run.runId, agentId: agent.agentId, sequence: 3, content: "Implemented."
+      runId: run.runId, agentId: agent.agentId, sequence: 3,
+      content: "Implemented. token=very-sensitive-value"
     }, now).applied, false);
     assert.equal(service.applyStatus(devicePrincipal, {
       runId: run.runId, agentId: agent.agentId, sequence: 4, status: "completed"
     }, now).run.state, "completed");
     assert.equal(core.listMessagesAfter(room.roomId, 0, 20).length, 2);
+    assert.equal(
+      core.listMessagesAfter(room.roomId, 0, 20).at(-1)?.content.includes("very-sensitive"),
+      false
+    );
+    const replyEvent = runRepository.listEvents(run.runId).find(
+      (event) => event.event.type === "reply"
+    );
+    assert.equal(
+      replyEvent?.event.type === "reply" && replyEvent.event.content.includes("very-sensitive"),
+      false
+    );
     assert.equal(core.getAgent(agent.agentId)?.presence, "ready");
     assert.throws(() => service.applyStatus(devicePrincipal, {
       runId: run.runId, agentId: "agent_wrong_identity", sequence: 5, status: "failed"

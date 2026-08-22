@@ -1,5 +1,6 @@
 import type { CoreRepository } from "../data/core-repository.js";
 import type { McpPrincipal } from "../security/auth-service.js";
+import { redactSensitiveText } from "../security/redaction.js";
 import type { MessageService } from "../team-room/message-service.js";
 import type { RunRecord, RunRepository } from "./run-repository.js";
 
@@ -54,18 +55,19 @@ export class ManualRunService {
     if (normalized.length === 0 || content.length > 20_000) {
       throw new Error("Run reply must contain 1 to 20000 characters");
     }
+    const safeContent = redactSensitiveText(content);
     let run = this.claim(principal, runId, now);
     if (terminalStates.has(run.state)) {
       return run;
     }
     const reply = this.runs.applyEvent(run.runId, {
-      type: "reply", sequence: run.lastSequence + 1, content
+      type: "reply", sequence: run.lastSequence + 1, content: safeContent
     }, now);
     if (reply.applied) {
       this.messages.createAgentMessage(principal, {
         roomId: run.roomId,
         parentMessageId: run.triggerMessageId,
-        content,
+        content: safeContent,
         now
       });
     }
@@ -95,7 +97,7 @@ export class ManualRunService {
       status: "failed",
       error: {
         code: "MANUAL_AGENT_FAILED",
-        message,
+        message: redactSensitiveText(message),
         retryable: false
       }
     }, now).run;

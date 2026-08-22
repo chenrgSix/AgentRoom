@@ -9,6 +9,7 @@ import type {
   McpPrincipal,
   WebPrincipal
 } from "../security/auth-service.js";
+import { redactSensitiveText } from "../security/redaction.js";
 
 interface MessageCursor {
   roomId: string;
@@ -132,7 +133,7 @@ export class MessageService {
       roomId: input.roomId,
       senderType: "agent",
       senderId: agent.agentId,
-      content: input.content,
+      content: redactSensitiveText(input.content),
       mentions: [],
       parentMessageId: input.parentMessageId ?? null,
       createdAt: input.now

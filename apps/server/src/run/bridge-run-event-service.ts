@@ -1,6 +1,7 @@
 import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
+import { redactSensitiveText } from "../security/redaction.js";
 import type { RuntimeStatus } from "../runtime/runtime-adapter.js";
 import type {
   AppliedRunEvent,
@@ -88,10 +89,11 @@ export class BridgeRunEventService {
     if (input.content.trim().length === 0 || input.content.length > 20_000) {
       throw new Error("Runtime reply must contain 1 to 20000 characters");
     }
+    const safeContent = redactSensitiveText(input.content);
     const applied = this.runs.applyEvent(run.runId, {
       type: "reply",
       sequence: input.sequence,
-      content: input.content
+      content: safeContent
     }, now);
     if (applied.applied) {
       this.core.appendMessage({
@@ -99,7 +101,7 @@ export class BridgeRunEventService {
         roomId: run.roomId,
         senderType: "agent",
         senderId: run.targetAgentId,
-        content: input.content,
+        content: safeContent,
         mentions: [],
         parentMessageId: run.triggerMessageId,
         createdAt: now

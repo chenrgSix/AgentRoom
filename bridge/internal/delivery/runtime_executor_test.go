@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -27,7 +28,7 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	completed := contracts.Completed
 	adapter := &bridgeruntime.FakeAdapter{}
 	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
-		{Status: &working}, {Reply: "done"}, {Status: &completed},
+		{Status: &working}, {Reply: "done token=very-sensitive-value"}, {Status: &completed},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -51,6 +52,11 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}
 	if latest.State != StateCompleted || latest.LastSequence != 4 {
 		t.Fatalf("unexpected persisted record: %#v", latest)
+	}
+	for _, event := range latest.Events {
+		if strings.Contains(string(event), "very-sensitive") {
+			t.Fatalf("secret persisted in durable Bridge event: %s", event)
+		}
 	}
 }
 

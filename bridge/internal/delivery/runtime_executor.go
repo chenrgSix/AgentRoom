@@ -56,12 +56,13 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		if event.Reply == "" {
 			return fmt.Errorf("Runtime emitted an empty event")
 		}
+		content := bridgeruntime.RedactSensitiveText(event.Reply)
 		message := contracts.RunReplyMessage{
 			ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
 			Type: contracts.RunReply,
 			Payload: contracts.RunReplyPayload{
 				RunID: record.RunID, AgentID: record.Request.TargetAgentID,
-				Sequence: sequence, Content: event.Reply,
+				Sequence: sequence, Content: content,
 			},
 		}
 		if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
