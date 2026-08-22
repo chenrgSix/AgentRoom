@@ -25,6 +25,8 @@ import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
 import { DeliveryService } from "./run/delivery-service.js";
 import { BridgeRunEventService } from "./run/bridge-run-event-service.js";
+import { HandoffService } from "./run/handoff-service.js";
+import { ManualRunService } from "./run/manual-run-service.js";
 import { RunRepository } from "./run/run-repository.js";
 import { RunService } from "./run/run-service.js";
 import { FakeRuntimeAdapter } from "./runtime/fake-runtime-adapter.js";
@@ -100,6 +102,8 @@ export async function createServerApp(
     clock
   );
   const bridgeRunEvents = new BridgeRunEventService(core, runRepository);
+  const handoffs = new HandoffService(core, runRepository);
+  const manualRuns = new ManualRunService(core, runRepository, messages);
   const app = Fastify({ logger: options.logger ?? false });
   await app.register(fastifyWebsocket, {
     options: { maxPayload: 1024 * 1024 }
@@ -568,6 +572,9 @@ export async function createServerApp(
     const server = createTeamMcpServer(mcpPrincipal, {
       clock,
       core,
+      delivery,
+      handoffs,
+      manualRuns,
       messages,
       wait: teamWait
     });

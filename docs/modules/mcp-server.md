@@ -72,6 +72,12 @@ Contract tests cover every tool and resource, while integration tests cover
 authorization, long polling, retries, and capability downgrade. Delivery work
 is tracked by `MCP-001` through `MCP-005` in `docs/TASKS.md`.
 
+Manual Agents use `team.get_mentions` and `team.get_run` to inspect assigned
+Runs, `team.claim_run` before longer work, and `team.complete_run` or
+`team.fail_run` to publish a terminal result. `team.handoff` asks the central
+service to create a guarded child Run; the MCP client never contacts another
+Agent directly.
+
 ## Dependencies
 
 Contracts, Team/Room, Run Orchestration, Registry, and Security.

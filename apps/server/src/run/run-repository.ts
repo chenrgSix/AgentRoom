@@ -162,6 +162,15 @@ export class RunRepository {
     return rows.map(mapRun);
   }
 
+  public listAgentRuns(agentId: string): RunRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM runs
+      WHERE target_agent_id = ?
+      ORDER BY created_at, run_id
+    `).all(agentId) as RunRow[];
+    return rows.map(mapRun);
+  }
+
   public applyEvent(
     runId: string,
     event: RuntimeEvent,

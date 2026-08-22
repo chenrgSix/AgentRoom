@@ -59,6 +59,7 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
     });
     assert.equal(manual.statusCode, 200);
     assert.equal(manual.json().agent.integrationMode, "manual");
+    const manualAgentId = manual.json().agent.agentId as string;
     const mcpToken = manual.json().credential.token as string;
 
     const initialized = await app.inject({
@@ -236,6 +237,63 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       }
     });
     assert.equal(timedOut.json().result.structuredContent.timedOut, true);
+
+    const mentioned = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${roomId}/messages`,
+      headers: { authorization: `Bearer ${webToken}` },
+      payload: {
+        content: "Complete this through MCP",
+        mentionAgentId: manualAgentId
+      }
+    });
+    assert.equal(mentioned.statusCode, 200);
+
+    const mentions = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 9,
+        method: "tools/call",
+        params: { name: "team.get_mentions", arguments: {} }
+      }
+    });
+    const assignedRun = mentions.json().result.structuredContent.mentions[0].run;
+    assert.equal(assignedRun.targetAgentId, manualAgentId);
+    assert.equal(assignedRun.state, "queued");
+
+    const completed = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 10,
+        method: "tools/call",
+        params: {
+          name: "team.complete_run",
+          arguments: { runId: assignedRun.runId, content: "Completed through MCP." }
+        }
+      }
+    });
+    assert.equal(completed.json().result.structuredContent.run.state, "completed");
+    const timeline = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${roomId}/messages?limit=100`,
+      headers: { authorization: `Bearer ${webToken}` }
+    });
+    assert.equal(
+      timeline.json().items.at(-1).content,
+      "Completed through MCP."
+    );
   } finally {
     await app.close();
   }

@@ -2,6 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import * as z from "zod/v4";
 
 import type { CoreRepository } from "../data/core-repository.js";
+import type { DeliveryService } from "../run/delivery-service.js";
+import type { HandoffService } from "../run/handoff-service.js";
+import type { ManualRunService } from "../run/manual-run-service.js";
 import type { McpPrincipal } from "../security/auth-service.js";
 import type { MessageService } from "../team-room/message-service.js";
 import type { TeamWaitService } from "./team-wait-service.js";
@@ -9,6 +12,9 @@ import type { TeamWaitService } from "./team-wait-service.js";
 interface TeamMcpDependencies {
   clock: () => string;
   core: CoreRepository;
+  delivery: DeliveryService;
+  handoffs: HandoffService;
+  manualRuns: ManualRunService;
   messages: MessageService;
   wait: TeamWaitService;
 }
@@ -110,5 +116,54 @@ export function createTeamMcpServer(
       ...(cursor ? { cursor } : {})
     }) as unknown as Record<string, unknown>
   ));
+  server.registerTool("team.get_mentions", {
+    description: "List active Team Runs that mention the authenticated manual Agent."
+  }, async () => toolResult({
+    mentions: dependencies.manualRuns.listMentions(principal)
+  }));
+  server.registerTool("team.get_run", {
+    description: "Read one Run assigned to the authenticated manual Agent.",
+    inputSchema: { runId: z.string().min(1) }
+  }, async ({ runId }) => toolResult({
+    run: dependencies.manualRuns.get(principal, runId)
+  }));
+  server.registerTool("team.claim_run", {
+    description: "Mark one queued manual Agent Run as working.",
+    inputSchema: { runId: z.string().min(1) }
+  }, async ({ runId }) => toolResult({
+    run: dependencies.manualRuns.claim(principal, runId, dependencies.clock())
+  }));
+  server.registerTool("team.complete_run", {
+    description: "Reply to and complete one assigned manual Agent Run.",
+    inputSchema: {
+      runId: z.string().min(1),
+      content: z.string().min(1).max(20_000)
+    }
+  }, async ({ runId, content }) => toolResult({
+    run: dependencies.manualRuns.complete(principal, runId, content, dependencies.clock())
+  }));
+  server.registerTool("team.fail_run", {
+    description: "Fail one assigned manual Agent Run with a safe summary.",
+    inputSchema: {
+      runId: z.string().min(1),
+      message: z.string().min(1).max(2_000)
+    }
+  }, async ({ runId, message }) => toolResult({
+    run: dependencies.manualRuns.fail(principal, runId, message, dependencies.clock())
+  }));
+  server.registerTool("team.handoff", {
+    description: "Create a bounded child Run for another Agent.",
+    inputSchema: {
+      parentRunId: z.string().min(1),
+      targetAgentId: z.string().min(1),
+      instruction: z.string().min(1).max(20_000)
+    }
+  }, async ({ parentRunId, targetAgentId, instruction }) => {
+    const run = dependencies.handoffs.create(principal, {
+      parentRunId, targetAgentId, instruction
+    }, dependencies.clock());
+    dependencies.delivery.dispatch(run.runId);
+    return toolResult({ run });
+  });
   return server;
 }
