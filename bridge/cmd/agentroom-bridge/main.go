@@ -110,9 +110,14 @@ func run(args []string) error {
 			}
 		}
 		executor := delivery.RuntimeExecutor{Inbox: inbox, Adapters: adapters}
-		runHandler := delivery.Handler{Inbox: inbox, OnNew: executor.Execute}
+		runHandler := delivery.Handler{
+			Inbox: inbox, OnNew: executor.Execute, OnDuplicate: executor.Replay,
+		}
 		return (connection.Client{
 			Config: loaded, Credential: credential, BridgeVersion: version,
+			RecoverRuns: func(ctx context.Context, send func(context.Context, any) error) error {
+				return executor.Recover(ctx, delivery.Sender(send))
+			},
 			HandleRun: func(ctx context.Context, message contracts.RunRequestedMessage, send func(context.Context, any) error) error {
 				return runHandler.Handle(ctx, message, delivery.Sender(send))
 			},

@@ -53,3 +53,45 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 		t.Fatalf("unexpected persisted record: %#v", latest)
 	}
 }
+
+func TestRuntimeExecutorRecoversUnfinishedRunAsUnknown(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	request := contracts.RunRequestedPayload{
+		RunID: "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W7", TargetAgentID: "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
+		DeliveryAttemptID: "delivery_01K4Z6J7Y8N9P0Q1R2S3T4V5W7", IdempotencyKey: "idem_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
+	}
+	record, _, err := inbox.Accept(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	working := contracts.RunStatusMessage{
+		ProtocolVersion: "1.0", Type: contracts.RunStatus,
+		Payload: contracts.RunStatusPayload{RunID: record.RunID, AgentID: request.TargetAgentID, Sequence: 2, Status: contracts.Working},
+	}
+	if _, err := inbox.AppendEvent(record.RunID, StateWorking, 2, working, now); err != nil {
+		t.Fatal(err)
+	}
+	reopened, err := Open(inbox.directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	executor := RuntimeExecutor{Inbox: reopened, Now: func() time.Time { return now }}
+	var replayed []any
+	if err := executor.Recover(context.Background(), func(_ context.Context, value any) error {
+		replayed = append(replayed, value)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	latest, err := reopened.Get(record.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.State != StateOutcomeUnknown || latest.LastSequence != 3 || len(replayed) != 3 {
+		t.Fatalf("unexpected recovery: record=%#v replayed=%d", latest, len(replayed))
+	}
+}

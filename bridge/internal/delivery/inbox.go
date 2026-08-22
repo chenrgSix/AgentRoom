@@ -33,6 +33,62 @@ type Record struct {
 	LastSequence   int64                         `json:"lastSequence"`
 	AcceptedAt     time.Time                     `json:"acceptedAt"`
 	UpdatedAt      time.Time                     `json:"updatedAt"`
+	Events         []json.RawMessage             `json:"events,omitempty"`
+}
+
+func (i *Inbox) AppendEvent(
+	runID string,
+	state State,
+	sequence int64,
+	value any,
+	now time.Time,
+) (Record, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	path := i.path(runID)
+	record, err := i.load(path)
+	if err != nil {
+		return Record{}, err
+	}
+	if sequence <= record.LastSequence {
+		return record, nil
+	}
+	if sequence != record.LastSequence+1 {
+		return Record{}, fmt.Errorf("Run event sequence gap: %d", sequence)
+	}
+	source, err := json.Marshal(value)
+	if err != nil {
+		return Record{}, err
+	}
+	record.State = state
+	record.LastSequence = sequence
+	record.UpdatedAt = now.UTC()
+	record.Events = append(record.Events, json.RawMessage(source))
+	if err := replace(path, record); err != nil {
+		return Record{}, err
+	}
+	return record, nil
+}
+
+func (i *Inbox) List() ([]Record, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	entries, err := os.ReadDir(i.directory)
+	if err != nil {
+		return nil, err
+	}
+	records := make([]Record, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		record, err := i.load(filepath.Join(i.directory, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		records = append(records, record)
+	}
+	return records, nil
 }
 
 type Inbox struct {

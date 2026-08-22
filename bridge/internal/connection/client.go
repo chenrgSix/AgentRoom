@@ -27,6 +27,7 @@ type Client struct {
 	BridgeVersion     string
 	HeartbeatInterval time.Duration
 	HandleRun         func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
+	RecoverRuns       func(context.Context, func(context.Context, any) error) error
 }
 
 func (c Client) Run(ctx context.Context) error {
@@ -121,6 +122,13 @@ func (c Client) connectOnce(ctx context.Context) error {
 			},
 		}
 		if err := writeJSON(ctx, socket, publication); err != nil {
+			return err
+		}
+	}
+	if c.RecoverRuns != nil {
+		if err := c.RecoverRuns(ctx, func(sendContext context.Context, value any) error {
+			return writeJSON(sendContext, socket, value)
+		}); err != nil {
 			return err
 		}
 	}

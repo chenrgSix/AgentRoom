@@ -32,32 +32,34 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		}
 		if event.Status != nil {
 			currentState = stateForStatus(*event.Status)
-			if _, err := e.Inbox.Update(record.RunID, currentState, sequence, now); err != nil {
-				return err
-			}
-			return send(eventContext, contracts.RunStatusMessage{
+			message := contracts.RunStatusMessage{
 				ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
 				Type: contracts.RunStatus,
 				Payload: contracts.RunStatusPayload{
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 					Sequence: sequence, Status: *event.Status, Error: event.Error,
 				},
-			})
+			}
+			if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
+				return err
+			}
+			return send(eventContext, message)
 		}
 		if event.Reply == "" {
 			return fmt.Errorf("Runtime emitted an empty event")
 		}
-		if _, err := e.Inbox.Update(record.RunID, currentState, sequence, now); err != nil {
-			return err
-		}
-		return send(eventContext, contracts.RunReplyMessage{
+		message := contracts.RunReplyMessage{
 			ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
 			Type: contracts.RunReply,
 			Payload: contracts.RunReplyPayload{
 				RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 				Sequence: sequence, Content: event.Reply,
 			},
-		})
+		}
+		if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
+			return err
+		}
+		return send(eventContext, message)
 	})
 	if err != nil {
 		latest, loadErr := e.Inbox.Get(record.RunID)
@@ -75,10 +77,7 @@ func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Se
 		now = e.Now().UTC()
 	}
 	sequence := record.LastSequence + 1
-	if _, err := e.Inbox.Update(record.RunID, StateOutcomeUnknown, sequence, now); err != nil {
-		return err
-	}
-	return send(ctx, contracts.RunStatusMessage{
+	message := contracts.RunStatusMessage{
 		ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
 		Type: contracts.RunStatus,
 		Payload: contracts.RunStatusPayload{
@@ -88,7 +87,70 @@ func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Se
 				Code: code, Message: "Runtime outcome could not be determined.", Retryable: false,
 			},
 		},
-	})
+	}
+	if _, err := e.Inbox.AppendEvent(record.RunID, StateOutcomeUnknown, sequence, message, now); err != nil {
+		return err
+	}
+	return send(ctx, message)
+}
+
+func (e RuntimeExecutor) Replay(ctx context.Context, record Record, send Sender) error {
+	latest, err := e.Inbox.Get(record.RunID)
+	if err != nil {
+		return err
+	}
+	for _, event := range latest.Events {
+		if err := send(ctx, event); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
+	records, err := e.Inbox.List()
+	if err != nil {
+		return err
+	}
+	for _, record := range records {
+		now := time.Now().UTC()
+		if e.Now != nil {
+			now = e.Now().UTC()
+		}
+		accepted := contracts.RunAcceptedMessage{
+			ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
+			Type: contracts.RunAccepted,
+			Payload: contracts.RunAcceptedPayload{
+				RunID: record.RunID, AgentID: record.Request.TargetAgentID, Sequence: 1,
+			},
+		}
+		if err := send(ctx, accepted); err != nil {
+			return err
+		}
+		if record.State == StateAccepted || record.State == StateWorking {
+			sequence := record.LastSequence + 1
+			message := contracts.RunStatusMessage{
+				ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
+				Type: contracts.RunStatus,
+				Payload: contracts.RunStatusPayload{
+					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
+					Sequence: sequence, Status: contracts.OutcomeUnknown,
+					Error: &contracts.AgentRoomError{
+						Code:      "RUNTIME_PROCESS_RESTARTED",
+						Message:   "Bridge restarted before the Runtime terminal outcome was persisted.",
+						Retryable: false,
+					},
+				},
+			}
+			if _, err := e.Inbox.AppendEvent(record.RunID, StateOutcomeUnknown, sequence, message, now); err != nil {
+				return err
+			}
+		}
+		if err := e.Replay(ctx, record, send); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func stateForStatus(status contracts.RunExecutionStatus) State {

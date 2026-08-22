@@ -13,9 +13,10 @@ type Sender func(context.Context, any) error
 type NewRunFunc func(context.Context, Record, Sender) error
 
 type Handler struct {
-	Inbox *Inbox
-	OnNew NewRunFunc
-	Now   func() time.Time
+	Inbox       *Inbox
+	OnNew       NewRunFunc
+	OnDuplicate NewRunFunc
+	Now         func() time.Time
 }
 
 func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessage, send Sender) error {
@@ -40,6 +41,9 @@ func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessa
 	}
 	if err := send(ctx, accepted); err != nil {
 		return err
+	}
+	if duplicate && h.OnDuplicate != nil {
+		return h.OnDuplicate(ctx, record, send)
 	}
 	if !duplicate && h.OnNew != nil {
 		return h.OnNew(ctx, record, send)

@@ -66,6 +66,11 @@ reply also appends one Agent-authored Room Message linked to its trigger.
 Duplicate events do not create duplicate replies, and the first terminal state
 remains authoritative.
 
+The Bridge also stores emitted event envelopes in its durable inbox before
+network send. Reconnect replays these envelopes idempotently; a Bridge process
+restart converts any unfinished local execution to `outcome_unknown` before
+replay, so the central projection cannot remain falsely `working`.
+
 ## Handoff
 
 A handoff request contains parent Run, target Agent, summary, and optional
