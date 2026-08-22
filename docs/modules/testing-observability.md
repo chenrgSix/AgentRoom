@@ -32,6 +32,11 @@ asserts the durable terminal Run and Agent reply. It proves the local
 cross-process transport while keeping physical two-machine Codex acceptance as
 a separate release check.
 
+The recovery matrix combines server restart persistence for Run, Delivery, and
+event sequence; Bridge durable inbox restart to `outcome_unknown`; duplicate
+ACK and event idempotency; offline reconnect delivery; expiry; and a real
+cross-process cancellation. Each case has a deterministic regression test.
+
 ## Required Scenarios
 
 The release suite covers offline queueing, ACK loss, duplicate delivery,
