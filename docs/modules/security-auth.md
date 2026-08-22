@@ -21,6 +21,12 @@ session to issue a short-lived, single-use code. The Bridge exchanges it for a
 device credential over TLS, verifies the server fingerprint, and stores the
 credential locally. Discovery alone never grants trust.
 
+Web sessions and device credentials use random bearer secrets whose SHA-256
+hashes are persisted; plaintext secrets are returned only when issued. Session
+expiry, credential rotation, and revocation are checked before resolving the
+principal. The initial local Web bootstrap may issue a session directly, but
+all domain services still authorize through stable User and Member IDs.
+
 ## Authorization Rules
 
 - Team membership gates Room and Agent visibility.
