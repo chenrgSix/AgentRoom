@@ -36,6 +36,12 @@ interface Message {
   createdAt: string;
 }
 
+interface Device {
+  deviceId: string;
+  name: string;
+  status: "active" | "revoked";
+}
+
 interface Run {
   runId: string;
   triggerMessageId: string;
@@ -103,6 +109,7 @@ export function App() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [devices, setDevices] = useState<Device[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
@@ -110,6 +117,9 @@ export function App() {
   const [teamName, setTeamName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
+  const [manualAgentName, setManualAgentName] = useState("");
+  const [deviceName, setDeviceName] = useState("");
+  const [setupOutput, setSetupOutput] = useState<string | null>(null);
   const [messageContent, setMessageContent] = useState("");
   const [mentionAgentId, setMentionAgentId] = useState("");
   const [busy, setBusy] = useState(false);
@@ -160,10 +170,16 @@ export function App() {
         `/api/teams/${selectedTeamId}/agents`,
         {},
         session.token
+      ),
+      jsonRequest<Device[]>(
+        `/api/teams/${selectedTeamId}/devices`,
+        {},
+        session.token
       )
-    ]).then(([nextRooms, nextAgents]) => {
+    ]).then(([nextRooms, nextAgents, nextDevices]) => {
       setRooms(nextRooms);
       setAgents(nextAgents);
+      setDevices(nextDevices);
       setMentionAgentId((current) =>
         nextAgents.some((agent) => agent.agentId === current) ? current : ""
       );
@@ -204,9 +220,12 @@ export function App() {
     let stopped = false;
     const refresh = async () => {
       try {
-        const [nextAgents, page, nextRuns] = await Promise.all([
+        const [nextAgents, nextDevices, page, nextRuns] = await Promise.all([
           jsonRequest<Agent[]>(
             `/api/teams/${selectedTeamId}/agents`, {}, session.token
+          ),
+          jsonRequest<Device[]>(
+            `/api/teams/${selectedTeamId}/devices`, {}, session.token
           ),
           jsonRequest<{ items: Message[] }>(
             `/api/rooms/${selectedRoomId}/messages?limit=100`, {}, session.token
@@ -217,6 +236,7 @@ export function App() {
         ]);
         if (!stopped) {
           setAgents(nextAgents);
+          setDevices(nextDevices);
           setMessages(page.items);
           setRuns(nextRuns);
         }
@@ -292,6 +312,75 @@ export function App() {
       setError(String(reason));
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function createManualAgent(event: FormEvent) {
+    event.preventDefault();
+    if (!session || !selectedTeamId || !manualAgentName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await jsonRequest<{
+        agent: Agent;
+        credential: { token: string };
+      }>(`/api/teams/${selectedTeamId}/manual-agents`, {
+        method: "POST",
+        body: JSON.stringify({ name: manualAgentName, role: "MCP participant" })
+      }, session.token);
+      setAgents((current) => [...current, result.agent]);
+      setManualAgentName("");
+      setSetupOutput([
+        `export AGENT_ROOM_MCP_TOKEN='${result.credential.token}'`,
+        `codex mcp add agent-room --url ${window.location.origin}/mcp --bearer-token-env-var AGENT_ROOM_MCP_TOKEN`
+      ].join("\n"));
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createBridgeInvite(event: FormEvent) {
+    event.preventDefault();
+    if (!session || !selectedTeamId || !deviceName.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const invite = await jsonRequest<{
+        code: string;
+        deviceName: string;
+        expiresAt: string;
+      }>(`/api/teams/${selectedTeamId}/bridge-invites`, {
+        method: "POST",
+        body: JSON.stringify({ deviceName })
+      }, session.token);
+      setDeviceName("");
+      setSetupOutput([
+        `# Pairing code expires at ${invite.expiresAt}`,
+        `agentroom-bridge pair --config bridge.json --code '${invite.code}'`
+      ].join("\n"));
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function revokeDevice(device: Device) {
+    if (!session || !selectedTeamId || device.status !== "active") return;
+    setError(null);
+    try {
+      const revoked = await jsonRequest<Device>(
+        `/api/teams/${selectedTeamId}/devices/${device.deviceId}`,
+        { method: "DELETE" },
+        session.token
+      );
+      setDevices((current) => current.map((item) =>
+        item.deviceId === revoked.deviceId ? revoked : item
+      ));
+    } catch (reason) {
+      setError(String(reason));
     }
   }
 
@@ -400,6 +489,45 @@ export function App() {
             />
             <button disabled={busy || !agentName.trim()}>Add Agent</button>
           </form>
+        )}
+        {selectedTeam && (
+          <details className="connection-setup">
+            <summary>Connect an Agent</summary>
+            <form className="room-create" onSubmit={createManualAgent}>
+              <input
+                aria-label="Manual Agent name"
+                onChange={(event) => setManualAgentName(event.target.value)}
+                placeholder="Codex via MCP"
+                value={manualAgentName}
+              />
+              <button disabled={busy || !manualAgentName.trim()}>Create MCP token</button>
+            </form>
+            <form className="room-create" onSubmit={createBridgeInvite}>
+              <input
+                aria-label="Bridge Device name"
+                onChange={(event) => setDeviceName(event.target.value)}
+                placeholder="Bob's Mac"
+                value={deviceName}
+              />
+              <button disabled={busy || !deviceName.trim()}>Create pairing code</button>
+            </form>
+            {setupOutput && (
+              <div className="setup-output">
+                <pre>{setupOutput}</pre>
+                <button type="button" onClick={() => void navigator.clipboard.writeText(setupOutput)}>Copy</button>
+              </div>
+            )}
+            {devices.map((device) => (
+              <div className="device-row" key={device.deviceId}>
+                <span>{device.name}</span>
+                <button
+                  disabled={device.status !== "active"}
+                  onClick={() => void revokeDevice(device)}
+                  type="button"
+                >{device.status === "active" ? "Revoke" : "Revoked"}</button>
+              </div>
+            ))}
+          </details>
         )}
         {selectedTeam && (
           <section className="agent-panel" aria-label="Team Agents">

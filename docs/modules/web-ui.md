@@ -34,9 +34,9 @@ flags control whether start, resume, interrupt, handoff, or managed execution
 controls are shown.
 
 The current MVP provides Team and Room creation, Fake Agent registration,
-durable message history, stable-ID Agent selection, and inline Run status.
-After a mentioned Fake Agent completes, the UI reconciles the authoritative
-timeline so its persisted reply appears without client-side routing logic.
+durable message history, stable-ID Agent selection, live Run status, Agent
+presence, one-time MCP setup output, and Bridge pairing/revoke controls. Secrets
+are shown only in the immediate setup result and are never returned by list APIs.
 
 ## Interaction and Security Rules
 

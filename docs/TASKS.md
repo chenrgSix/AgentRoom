@@ -98,7 +98,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | WEB-003 | DONE | Implement structured Mention composer | WEB-002, ROOM-003 | display labels resolve to stable Agent IDs |
 | WEB-004 | DONE | Implement Agent presence panel | WEB-001, REG-003 | all integration modes render accurately |
 | WEB-005 | DONE | Implement Run card and live updates | WEB-002, RUN-003 | queued through terminal states are visible |
-| WEB-006 | PLANNED | Implement pairing and revoke screens | WEB-001, BRG-002 | user can pair and revoke a Device |
+| WEB-006 | DONE | Implement pairing and revoke screens | WEB-001, BRG-002 | user can pair and revoke a Device |
 
 ## Workstream F4: MCP Team Participation
 
