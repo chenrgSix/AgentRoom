@@ -1,0 +1,39 @@
+# Operating systems and editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Node.js
+node_modules/
+.npm/
+.pnpm-store/
+dist/
+coverage/
+*.tsbuildinfo
+
+# Go
+bin/
+*.test
+*.out
+
+# Runtime data
+data/
+var/
+*.log
+*.db-shm
+*.db-wal
+
+# Test and tool caches
+.cache/
+.playwright/
+test-results/
+playwright-report/
