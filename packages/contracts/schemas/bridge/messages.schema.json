@@ -1,0 +1,604 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+  "title": "Agent Room Bridge Message",
+  "description": "Versioned messages exchanged over the authenticated Bridge WebSocket.",
+  "allOf": [
+    {
+      "$ref": "https://agentroom.dev/schemas/common/message-envelope.schema.json"
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "enum": [
+            "bridge.hello",
+            "bridge.heartbeat",
+            "agent.publish",
+            "agent.status",
+            "run.requested",
+            "run.accepted",
+            "run.status",
+            "run.reply",
+            "run.cancel_requested",
+            "run.handoff_requested"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "bridge.hello"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/bridgeHelloPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "bridge.heartbeat"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/bridgeHeartbeatPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "agent.publish"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/agentPublishPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "agent.status"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/agentStatusPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.requested"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/runRequestedPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.accepted"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/runAcceptedPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.status"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/runStatusPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.reply"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/runReplyPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.cancel_requested"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/runCancelRequestedPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.handoff_requested"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/runHandoffRequestedPayload"
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "$defs": {
+    "connectionEpoch": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "runtimeCapabilities": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "invocationMode",
+        "supportsStart",
+        "supportsResume",
+        "supportsStreaming",
+        "supportsInterrupt",
+        "supportsHandoff"
+      ],
+      "properties": {
+        "invocationMode": {
+          "enum": [
+            "managed",
+            "manual"
+          ]
+        },
+        "supportsStart": {
+          "type": "boolean"
+        },
+        "supportsResume": {
+          "type": "boolean"
+        },
+        "supportsStreaming": {
+          "type": "boolean"
+        },
+        "supportsInterrupt": {
+          "type": "boolean"
+        },
+        "supportsHandoff": {
+          "type": "boolean"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "invocationMode": {
+                "const": "manual"
+              }
+            },
+            "required": [
+              "invocationMode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "supportsStart": {
+                "const": false
+              },
+              "supportsResume": {
+                "const": false
+              },
+              "supportsInterrupt": {
+                "const": false
+              }
+            }
+          }
+        }
+      ]
+    },
+    "bridgeHelloPayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "deviceId",
+        "connectionEpoch",
+        "bridgeVersion",
+        "supportedProtocolVersions"
+      ],
+      "properties": {
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "connectionEpoch": {
+          "$ref": "#/$defs/connectionEpoch"
+        },
+        "bridgeVersion": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+        },
+        "supportedProtocolVersions": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/common/protocol-version.schema.json"
+          }
+        }
+      }
+    },
+    "bridgeHeartbeatPayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "deviceId",
+        "connectionEpoch"
+      ],
+      "properties": {
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "connectionEpoch": {
+          "$ref": "#/$defs/connectionEpoch"
+        }
+      }
+    },
+    "agentPublishPayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "teamId",
+        "agentId",
+        "ownerMemberId",
+        "deviceId",
+        "name",
+        "role",
+        "capabilities"
+      ],
+      "properties": {
+        "teamId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/teamId"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "ownerMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "capabilities": {
+          "$ref": "#/$defs/runtimeCapabilities"
+        }
+      }
+    },
+    "agentStatusPayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "agentId",
+        "deviceId",
+        "connectionEpoch",
+        "status"
+      ],
+      "properties": {
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "connectionEpoch": {
+          "$ref": "#/$defs/connectionEpoch"
+        },
+        "status": {
+          "enum": [
+            "ready",
+            "busy",
+            "degraded"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "contextMessage": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "messageId",
+        "senderId",
+        "content"
+      ],
+      "properties": {
+        "messageId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
+        },
+        "senderId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json"
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 32768
+        }
+      }
+    },
+    "runRequestedPayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "runId",
+        "roomId",
+        "triggerMessageId",
+        "requesterMemberId",
+        "targetAgentId",
+        "instruction",
+        "contextMessages",
+        "deadline"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "triggerMessageId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
+        },
+        "requesterMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "targetAgentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "parentRunId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "instruction": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 32768
+        },
+        "contextMessages": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/contextMessage"
+          }
+        },
+        "deadline": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "runEventBase": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "runId",
+        "agentId",
+        "sequence"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "sequence": {
+          "$ref": "#/$defs/sequence"
+        }
+      }
+    },
+    "runAcceptedPayload": {
+      "$ref": "#/$defs/runEventBase"
+    },
+    "runStatusPayload": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/runEventBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "status"
+          ],
+          "properties": {
+            "status": {
+              "enum": [
+                "working",
+                "input_required",
+                "completed",
+                "failed",
+                "canceled",
+                "outcome_unknown"
+              ]
+            },
+            "error": {
+              "$ref": "https://agentroom.dev/schemas/common/error.schema.json"
+            }
+          }
+        }
+      ]
+    },
+    "runReplyPayload": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/runEventBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "content"
+          ],
+          "properties": {
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 65536
+            }
+          }
+        }
+      ]
+    },
+    "runCancelRequestedPayload": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "runId",
+        "agentId",
+        "reason"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
+    },
+    "runHandoffRequestedPayload": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/runEventBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "handoffId",
+            "targetAgentId",
+            "summary"
+          ],
+          "properties": {
+            "handoffId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/handoffId"
+            },
+            "targetAgentId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+            },
+            "summary": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32768
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -50,12 +50,16 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | --- | --- | --- | --- | --- |
 | CON-001 | DONE | Scaffold JSON Schema contract package | GOV-004 | package builds and validates schemas |
 | CON-002 | DONE | Define IDs, timestamps, versions, and error envelope | CON-001 | common schemas and positive/negative fixtures pass |
-| CON-003 | READY | Define Bridge message schemas | CON-002 | hello, heartbeat, publish, and run schemas validate |
-| CON-004 | PLANNED | Generate TypeScript and Go contract types | CON-003 | generation is deterministic and both languages agree on fixtures |
+| CON-003 | DONE | Define Bridge message schemas | CON-002 | hello, heartbeat, publish, and run schemas validate |
+| CON-004 | BLOCKED | Generate TypeScript and Go contract types | CON-003, Go toolchain | generation is deterministic and both languages agree on fixtures |
 | DATA-001 | READY | Add SQLite migration runner and database location | GOV-004 | empty database migrates from zero |
 | DATA-002 | PLANNED | Add Team, Room, Message, and registry tables | DATA-001, CON-002 | repository tests persist and reload entities |
 | ADP-001 | READY | Implement deterministic Fake Runtime Adapter | CON-002 | scripted events exercise success and failure |
 | QA-001 | PLANNED | Build in-process Fake Bridge and acceptance harness | CON-004, ADP-001, WEB-001 | Web Room simulates two Agents end to end |
+
+`CON-004` is blocked because the current development shell has no `go`
+executable. Installing or selecting a system Go toolchain requires an explicit
+maintainer decision; TypeScript-only output is not sufficient completion.
 
 ## Workstream F1: Team, Room, and Registry
 

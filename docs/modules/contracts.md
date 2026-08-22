@@ -73,6 +73,14 @@ must be normalized to an uppercase `Z` UTC suffix. Protocol versions use
 owning message schema. Unknown optional fields are ignored and preserved only
 when the owning module explicitly supports round trips.
 
+## Bridge Message Contract
+
+`schemas/bridge/messages.schema.json` defines `bridge.hello`, heartbeat, Agent
+publication/status, and the Run request, acceptance, status, reply, cancel, and
+handoff messages. Payloads carry immutable entity IDs, and every Bridge Run
+event starts with sequence 1. `run.cancel_requested` is the server-to-Bridge
+interrupt command required by the documented cancellation flow.
+
 ## Versioning Rules
 
 - Additive optional fields are backward compatible within a major version.
