@@ -60,10 +60,11 @@ Each accepted Run has a Bridge-generated monotonic `sequence`. The server
 persists an event only when its sequence is greater than the last accepted
 value. Duplicate and stale events are acknowledged but do not alter state.
 
-The in-process acceptance path persists contiguous Fake Runtime events in
-`run_events`. A reply event appends an Agent-authored Room Message linked to its
-trigger Message. This validates projection semantics but does not replace the
-planned durable Bridge delivery and acceptance protocol.
+The server accepts contiguous `run.status` and `run.reply` events only from the
+Device that owns the target Agent. Events persist in `run_events`; an applied
+reply also appends one Agent-authored Room Message linked to its trigger.
+Duplicate events do not create duplicate replies, and the first terminal state
+remains authoritative.
 
 ## Handoff
 

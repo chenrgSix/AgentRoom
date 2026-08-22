@@ -24,6 +24,7 @@ import { AgentService } from "./registry/agent-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
 import { DeliveryService } from "./run/delivery-service.js";
+import { BridgeRunEventService } from "./run/bridge-run-event-service.js";
 import { RunRepository } from "./run/run-repository.js";
 import { RunService } from "./run/run-service.js";
 import { FakeRuntimeAdapter } from "./runtime/fake-runtime-adapter.js";
@@ -98,6 +99,7 @@ export async function createServerApp(
     bridgeConnections,
     clock
   );
+  const bridgeRunEvents = new BridgeRunEventService(core, runRepository);
   const app = Fastify({ logger: options.logger ?? false });
   await app.register(fastifyWebsocket, {
     options: { maxPayload: 1024 * 1024 }
@@ -239,6 +241,56 @@ export async function createServerApp(
             1,
             clock()
           );
+          return;
+        }
+        if (message.type === "run.status" && registeredEpoch !== undefined) {
+          const error = message.payload.error;
+          if (
+            typeof message.payload.runId !== "string" ||
+            typeof message.payload.agentId !== "string" ||
+            !Number.isSafeInteger(message.payload.sequence) ||
+            typeof message.payload.status !== "string" ||
+            (error !== undefined && (typeof error !== "object" || error === null))
+          ) {
+            socket.close(4_003, "Invalid Run status");
+            return;
+          }
+          const runtimeError = error as Record<string, unknown> | undefined;
+          bridgeRunEvents.applyStatus(devicePrincipal, {
+            runId: message.payload.runId,
+            agentId: message.payload.agentId,
+            sequence: message.payload.sequence as number,
+            status: message.payload.status as Parameters<
+              BridgeRunEventService["applyStatus"]
+            >[1]["status"],
+            ...(runtimeError
+              ? {
+                  error: {
+                    code: String(runtimeError.code ?? ""),
+                    message: String(runtimeError.message ?? ""),
+                    retryable: runtimeError.retryable === true
+                  }
+                }
+              : {})
+          }, clock());
+          return;
+        }
+        if (message.type === "run.reply" && registeredEpoch !== undefined) {
+          if (
+            typeof message.payload.runId !== "string" ||
+            typeof message.payload.agentId !== "string" ||
+            !Number.isSafeInteger(message.payload.sequence) ||
+            typeof message.payload.content !== "string"
+          ) {
+            socket.close(4_003, "Invalid Run reply");
+            return;
+          }
+          bridgeRunEvents.applyReply(devicePrincipal, {
+            runId: message.payload.runId,
+            agentId: message.payload.agentId,
+            sequence: message.payload.sequence as number,
+            content: message.payload.content
+          }, clock());
           return;
         }
         socket.close(4_003, "Bridge hello required before messages");
