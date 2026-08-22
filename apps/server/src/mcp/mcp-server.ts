@@ -4,11 +4,13 @@ import * as z from "zod/v4";
 import type { CoreRepository } from "../data/core-repository.js";
 import type { McpPrincipal } from "../security/auth-service.js";
 import type { MessageService } from "../team-room/message-service.js";
+import type { TeamWaitService } from "./team-wait-service.js";
 
 interface TeamMcpDependencies {
   clock: () => string;
   core: CoreRepository;
   messages: MessageService;
+  wait: TeamWaitService;
 }
 
 function toolResult(value: Record<string, unknown>) {
@@ -94,5 +96,19 @@ export function createTeamMcpServer(
       now: dependencies.clock()
     })
   }));
+  server.registerTool("team.wait", {
+    description: "Wait briefly for new Room messages and return a resumable cursor.",
+    inputSchema: {
+      roomId: z.string().min(1),
+      cursor: z.string().min(1).optional(),
+      timeoutMs: z.number().int().min(100).max(30_000).default(20_000)
+    }
+  }, async ({ roomId, cursor, timeoutMs }) => toolResult(
+    await dependencies.wait.wait(principal, {
+      roomId,
+      timeoutMs,
+      ...(cursor ? { cursor } : {})
+    }) as unknown as Record<string, unknown>
+  ));
   return server;
 }

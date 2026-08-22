@@ -566,4 +566,14 @@ export class CoreRepository {
     `).all(roomId, sequence, limit) as MessageRow[];
     return rows.map((row) => mapMessage(this.database, row));
   }
+
+  public latestMessageSequence(roomId: string): number {
+    const row = this.database.prepare(`
+      SELECT next_message_sequence AS sequence FROM rooms WHERE room_id = ?
+    `).get(roomId) as { sequence: number } | undefined;
+    if (!row) {
+      throw new Error(`Room not found: ${roomId}`);
+    }
+    return row.sequence;
+  }
 }

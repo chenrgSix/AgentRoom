@@ -166,6 +166,76 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
     });
     assert.equal(context.statusCode, 200);
     assert.equal(context.json().result.structuredContent.messages.length, 2);
+
+    const waitStart = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 6,
+        method: "tools/call",
+        params: {
+          name: "team.wait",
+          arguments: { roomId, timeoutMs: 100 }
+        }
+      }
+    });
+    const cursor = waitStart.json().result.structuredContent.cursor as string;
+    const waiting = app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 7,
+        method: "tools/call",
+        params: {
+          name: "team.wait",
+          arguments: { roomId, cursor, timeoutMs: 1_000 }
+        }
+      }
+    });
+    const webMessage = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${roomId}/messages`,
+      headers: { authorization: `Bearer ${webToken}` },
+      payload: { content: "Wake waiting MCP participant" }
+    });
+    assert.equal(webMessage.statusCode, 200);
+    const resumed = await waiting;
+    assert.equal(resumed.statusCode, 200);
+    assert.equal(resumed.json().result.structuredContent.timedOut, false);
+    assert.equal(resumed.json().result.structuredContent.events.length, 1);
+
+    const timedOut = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 8,
+        method: "tools/call",
+        params: {
+          name: "team.wait",
+          arguments: {
+            roomId,
+            cursor: resumed.json().result.structuredContent.cursor,
+            timeoutMs: 100
+          }
+        }
+      }
+    });
+    assert.equal(timedOut.json().result.structuredContent.timedOut, true);
   } finally {
     await app.close();
   }

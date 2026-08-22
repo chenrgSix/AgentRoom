@@ -54,6 +54,10 @@ Skill invokes it again; no conversation remains permanently blocked. In managed
 mode, the server routes accepted work to an online Bridge. An MCP connection
 alone does not provide remote wake-up and must never be advertised as doing so.
 
+The implemented wait is bounded to 100 milliseconds through 30 seconds. A call
+without a cursor establishes the current Room position; later calls return up
+to 100 newer messages or a timeout carrying the unchanged cursor.
+
 ## Failure and Security Rules
 
 - Authorize every tool against Team membership and Agent ownership.

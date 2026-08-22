@@ -17,6 +17,7 @@ import { prepareDatabaseDirectory } from "./data/database-location.js";
 import { migrateDatabase } from "./data/migration-runner.js";
 import { createOpaqueId } from "./domain/identifiers.js";
 import { createTeamMcpServer } from "./mcp/mcp-server.js";
+import { TeamWaitService } from "./mcp/team-wait-service.js";
 import { AgentService } from "./registry/agent-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
@@ -78,6 +79,7 @@ export async function createServerApp(
   const agents = new AgentService(core, auth);
   const presence = new PresenceService(core, auth);
   const messages = new MessageService(core, auth);
+  const teamWait = new TeamWaitService(core, auth);
   const clock = options.clock ?? (() => new Date().toISOString());
   const runRepository = new RunRepository(database);
   const runs = new RunService(core, runRepository, auth);
@@ -347,7 +349,8 @@ export async function createServerApp(
     const server = createTeamMcpServer(mcpPrincipal, {
       clock,
       core,
-      messages
+      messages,
+      wait: teamWait
     });
     const transportOptions = {
       sessionIdGenerator: undefined,
