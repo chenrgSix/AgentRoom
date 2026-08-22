@@ -41,6 +41,7 @@ interface Run {
   triggerMessageId: string;
   targetAgentId: string;
   state: "queued" | "delivered" | "working" | "input_required" | "completed" | "failed" | "canceled" | "outcome_unknown";
+  updatedAt: string;
 }
 
 interface LocalSession {
@@ -122,6 +123,10 @@ export function App() {
     () => rooms.find((room) => room.roomId === selectedRoomId) ?? null,
     [rooms, selectedRoomId]
   );
+  const agentsById = useMemo(
+    () => new Map(agents.map((agent) => [agent.agentId, agent])),
+    [agents]
+  );
 
   async function loadTeams(activeSession: LocalSession) {
     const next = await jsonRequest<Team[]>("/api/teams", {}, activeSession.token);
@@ -193,6 +198,38 @@ export function App() {
     })
       .catch((reason: unknown) => setError(String(reason)));
   }, [selectedRoomId, session]);
+
+  useEffect(() => {
+    if (!session || !selectedTeamId || !selectedRoomId) return;
+    let stopped = false;
+    const refresh = async () => {
+      try {
+        const [nextAgents, page, nextRuns] = await Promise.all([
+          jsonRequest<Agent[]>(
+            `/api/teams/${selectedTeamId}/agents`, {}, session.token
+          ),
+          jsonRequest<{ items: Message[] }>(
+            `/api/rooms/${selectedRoomId}/messages?limit=100`, {}, session.token
+          ),
+          jsonRequest<Run[]>(
+            `/api/rooms/${selectedRoomId}/runs`, {}, session.token
+          )
+        ]);
+        if (!stopped) {
+          setAgents(nextAgents);
+          setMessages(page.items);
+          setRuns(nextRuns);
+        }
+      } catch (reason) {
+        if (!stopped) setError(String(reason));
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 2_000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedRoomId, selectedTeamId, session]);
 
   async function createTeam(event: FormEvent) {
     event.preventDefault();
@@ -427,8 +464,11 @@ export function App() {
                         </span>
                       ))}
                       {runs.filter((run) => run.triggerMessageId === message.messageId).map((run) => (
-                        <span className={`run-state ${run.state}`} key={run.runId}>
-                          {run.state.replace("_", " ")}
+                        <span className="run-card" key={run.runId} title={run.runId}>
+                          <strong>{agentsById.get(run.targetAgentId)?.name ?? "Agent"}</strong>
+                          <span className={`run-state ${run.state}`}>
+                            {run.state.replace("_", " ")}
+                          </span>
                         </span>
                       ))}
                     </div>

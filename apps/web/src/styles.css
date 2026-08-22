@@ -123,10 +123,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .message-routing { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
 .mention-pill, .run-state { padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
 .mention-pill { border: 1px solid #526333; background: #222a19; color: #d3ea91; }
+.run-card { display: inline-flex; align-items: center; gap: 5px; padding-left: 7px; border: 1px solid #343a30; border-radius: 999px; background: #1c1f1a; color: #aab0a4; font-size: 10px; }
+.run-card > strong { font-weight: 600; }
 .run-state { border: 1px solid #41463b; background: #252822; color: #aeb5a7; text-transform: capitalize; }
 .run-state.working, .run-state.delivered { border-color: #69783f; color: #d5e99b; }
 .run-state.completed { border-color: #4c7450; color: #9bdd9e; }
 .run-state.failed, .run-state.outcome_unknown { border-color: #83514a; color: #f0aaa1; }
+.run-state.queued { border-color: #4a5045; color: #aeb5a7; }
 .composer { position: absolute; right: 30px; bottom: 24px; left: 30px; display: grid; grid-template-columns: 180px minmax(0, 1fr) auto; gap: 10px; padding: 12px; border: 1px solid #3a4033; border-radius: 15px; background: rgb(24 27 22 / 96%); box-shadow: 0 18px 55px rgb(0 0 0 / 30%); }
 .composer select { align-self: center; min-width: 0; padding: 9px; border: 1px solid #3e4635; border-radius: 9px; outline: none; background: #151812; color: #bbc3ae; }
 .composer textarea { resize: none; padding: 8px; border: 0; outline: none; background: transparent; color: #edf0e4; line-height: 1.4; }
