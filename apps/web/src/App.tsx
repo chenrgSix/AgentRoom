@@ -1,4 +1,4 @@
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useState } from "react";
 
 import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
 
@@ -59,6 +59,24 @@ interface LocalSession {
 }
 
 const userKey = "agent-room.local-user";
+
+type WorkspaceView = "room" | "agents";
+type ConnectionMode = "managed" | "mcp" | "demo";
+
+function integrationLabel(mode: Agent["integrationMode"]): string {
+  if (mode === "managed") return "Managed Bridge";
+  if (mode === "manual") return "MCP participant";
+  return "Demo runtime";
+}
+
+function presenceHelp(agent: Agent): string {
+  if (agent.integrationMode === "fake") return "Simulation only; does not call a model";
+  if (agent.presence === "ready") return "Ready to receive Team tasks";
+  if (agent.presence === "busy") return "Working on a Team task";
+  if (agent.presence === "degraded") return "Connected with limited capability";
+  if (agent.presence === "manual") return "Pulls work through MCP when the client is active";
+  return "Start its Bridge or MCP client to make it available";
+}
 
 function bridgeServerURL(): string {
   const configured = import.meta.env?.VITE_AGENT_ROOM_SERVER_URL?.trim();
@@ -125,6 +143,8 @@ export function App() {
   const [runs, setRuns] = useState<Run[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [activeView, setActiveView] = useState<WorkspaceView>("room");
+  const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
   const [teamName, setTeamName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
@@ -136,7 +156,6 @@ export function App() {
   const [mentionAgentId, setMentionAgentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const connectionSetupRef = useRef<HTMLDetailsElement>(null);
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.teamId === selectedTeamId) ?? null,
@@ -150,6 +169,9 @@ export function App() {
     () => new Map(agents.map((agent) => [agent.agentId, agent])),
     [agents]
   );
+  const readyAgents = agents.filter((agent) => agent.presence === "ready").length;
+  const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
+  const activeDevices = devices.filter((device) => device.status === "active").length;
 
   async function loadTeams(activeSession: LocalSession) {
     const next = await jsonRequest<Team[]>("/api/teams", {}, activeSession.token);
@@ -480,10 +502,8 @@ export function App() {
   }
 
   function revealConnectionSetup() {
-    const details = connectionSetupRef.current;
-    if (!details) return;
-    details.open = true;
-    details.querySelector<HTMLInputElement>("input")?.focus();
+    setConnectionMode("managed");
+    setActiveView("agents");
   }
 
   return (
@@ -523,13 +543,40 @@ export function App() {
           <p className="eyebrow">TEAM SPACE</p>
           <h1>{selectedTeam?.name ?? "Agent Room"}</h1>
         </header>
+        {selectedTeam && (
+          <>
+            <div className="section-label">Workspace</div>
+            <nav className="space-nav" aria-label="Team workspace">
+              <button
+                className={activeView === "room" ? "space-nav-button active" : "space-nav-button"}
+                onClick={() => setActiveView("room")}
+                type="button"
+              >
+                <span className="nav-icon">⌁</span>
+                <span><strong>Chat</strong><small>Rooms and Team Runs</small></span>
+              </button>
+              <button
+                className={activeView === "agents" ? "space-nav-button active" : "space-nav-button"}
+                onClick={() => setActiveView("agents")}
+                type="button"
+              >
+                <span className="nav-icon">✦</span>
+                <span><strong>Agents</strong><small>Connections and devices</small></span>
+                <span className="nav-count">{readyAgents}/{agents.length}</span>
+              </button>
+            </nav>
+          </>
+        )}
         <div className="section-label">Rooms</div>
         <nav className="room-list" aria-label="Rooms">
           {rooms.map((room) => (
             <button
               className={room.roomId === selectedRoomId ? "room-link active" : "room-link"}
               key={room.roomId}
-              onClick={() => setSelectedRoomId(room.roomId)}
+              onClick={() => {
+                setSelectedRoomId(room.roomId);
+                setActiveView("room");
+              }}
             >
               <span>#</span>{room.name}
             </button>
@@ -548,93 +595,10 @@ export function App() {
           </form>
         )}
         {selectedTeam && (
-          <form className="room-create agent-create" onSubmit={createFakeAgent}>
-            <input
-              aria-label="New Fake Agent name"
-              onChange={(event) => setAgentName(event.target.value)}
-              placeholder="Add a Fake Agent"
-              required
-              value={agentName}
-            />
-            <button disabled={busy}>{busy ? "Adding…" : "Add Agent"}</button>
-          </form>
-        )}
-        {selectedTeam && (
-          <details className="connection-setup" ref={connectionSetupRef}>
-            <summary>Connect an Agent</summary>
-            <div className="managed-join">
-              <strong>Managed local Codex</strong>
-              <p>Run this on the Codex machine, then approve the code it displays.</p>
-              <code>agentroom-bridge join --server {bridgeServerURL()}</code>
-              <form className="room-create" onSubmit={approveBridgeJoin}>
-                <input
-                  aria-label="Client join code"
-                  autoCapitalize="characters"
-                  onChange={(event) => setJoinCode(event.target.value)}
-                  placeholder="ABCD-1234"
-                  required
-                  value={joinCode}
-                />
-                <button disabled={busy}>Approve Bridge</button>
-              </form>
-            </div>
-            <form className="room-create" onSubmit={createManualAgent}>
-              <input
-                aria-label="Manual Agent name"
-                onChange={(event) => setManualAgentName(event.target.value)}
-                placeholder="Codex via MCP"
-                required
-                value={manualAgentName}
-              />
-              <button disabled={busy}>Create MCP token</button>
-            </form>
-            <details className="legacy-pairing">
-              <summary>Legacy server-issued pairing</summary>
-              <form className="room-create" onSubmit={createBridgeInvite}>
-                <input
-                  aria-label="Bridge Device name"
-                  onChange={(event) => setDeviceName(event.target.value)}
-                  placeholder="Bob's Mac"
-                  required
-                  value={deviceName}
-                />
-                <button disabled={busy}>Create pairing code</button>
-              </form>
-            </details>
-            {setupOutput && (
-              <div className="setup-output">
-                <pre>{setupOutput}</pre>
-                <button type="button" onClick={() => void navigator.clipboard.writeText(setupOutput)}>Copy</button>
-              </div>
-            )}
-            {devices.map((device) => (
-              <div className="device-row" key={device.deviceId}>
-                <span>{device.name}</span>
-                <button
-                  disabled={device.status !== "active"}
-                  onClick={() => void revokeDevice(device)}
-                  type="button"
-                >{device.status === "active" ? "Revoke" : "Revoked"}</button>
-              </div>
-            ))}
-          </details>
-        )}
-        {selectedTeam && (
-          <section className="agent-panel" aria-label="Team Agents">
-            <div className="section-label">Agents</div>
-            {agents.length === 0 ? (
-              <p className="agent-empty">No Agents have joined.</p>
-            ) : agents.map((agent) => (
-              <div className="agent-row" key={agent.agentId}>
-                <span className={`presence-dot ${agent.presence}`} />
-                <div>
-                  <strong>{agent.name}</strong>
-                  <small>{agent.role} · {agent.integrationMode}</small>
-                </div>
-                <span className="presence-label">{agent.presence}</span>
-              </div>
-            ))}
-          </section>
+          <button className="sidebar-manage" onClick={revealConnectionSetup} type="button">
+            <span>Manage Agent connections</span>
+            <span>→</span>
+          </button>
         )}
         <footer>
           <span className="avatar">{session?.displayName.slice(0, 1) ?? "…"}</span>
@@ -645,12 +609,16 @@ export function App() {
       <main className="workspace">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">ROOM</p>
-            <h2>{selectedRoom ? `# ${selectedRoom.name}` : "Choose a Room"}</h2>
+            <p className="eyebrow">{activeView === "agents" && selectedTeam ? "CONTROL PLANE" : "ROOM"}</p>
+            <h2>
+              {activeView === "agents" && selectedTeam
+                ? "Agents & devices"
+                : selectedRoom ? `# ${selectedRoom.name}` : "Choose a Room"}
+            </h2>
           </div>
           <div className="agent-summary">
-            <span className="presence-dot" />
-            {agents.length} Agent{agents.length === 1 ? "" : "s"}
+            <span className={`presence-dot ${readyAgents === 0 ? "offline" : ""}`} />
+            {readyAgents} ready · {agents.length} total
           </div>
         </header>
         {!selectedTeam ? (
@@ -676,6 +644,169 @@ export function App() {
               </div>
               <small>Next, you will create a Room and connect an Agent.</small>
             </form>
+          </section>
+        ) : activeView === "agents" ? (
+          <section className="management-workspace" aria-label="Agent management">
+            <div className="management-intro">
+              <div>
+                <p className="eyebrow">TEAM CONTROL PLANE</p>
+                <h3>Manage the runtimes behind your Team</h3>
+                <p>Connect Codex, issue MCP credentials, inspect availability, and revoke devices without leaving the web service.</p>
+              </div>
+              <button
+                className="primary-action"
+                onClick={() => setConnectionMode("managed")}
+                type="button"
+              >Connect Agent</button>
+            </div>
+
+            <div className="metric-grid" aria-label="Agent status summary">
+              <article className="metric-card"><strong>{agents.length}</strong><span>Total Agents</span></article>
+              <article className="metric-card"><strong>{readyAgents}</strong><span>Ready now</span></article>
+              <article className="metric-card"><strong>{managedAgents}</strong><span>Managed Bridges</span></article>
+              <article className="metric-card"><strong>{activeDevices}</strong><span>Active devices</span></article>
+            </div>
+
+            <div className="management-grid">
+              <section className="control-panel agent-library" aria-labelledby="agent-library-title">
+                <div className="panel-header">
+                  <div><p className="eyebrow">AGENT LIBRARY</p><h3 id="agent-library-title">Team Agents</h3></div>
+                  <span>{agents.length} registered</span>
+                </div>
+                {agents.length === 0 ? (
+                  <div className="panel-empty">
+                    <span>✦</span>
+                    <strong>No Agents connected</strong>
+                    <p>Use the connection center to add a managed Codex runtime or MCP participant.</p>
+                  </div>
+                ) : (
+                  <div className="agent-card-grid">
+                    {agents.map((agent) => (
+                      <article className="agent-card" key={agent.agentId}>
+                        <div className="agent-card-top">
+                          <span className="agent-avatar">{agent.name.slice(0, 2).toUpperCase()}</span>
+                          <span className={`status-badge ${agent.presence}`}>
+                            <span className={`presence-dot ${agent.presence}`} />{agent.presence}
+                          </span>
+                        </div>
+                        <div className="agent-card-copy">
+                          <h4>{agent.name}</h4>
+                          <p>{agent.role}</p>
+                        </div>
+                        <span className={`integration-badge ${agent.integrationMode}`}>
+                          {integrationLabel(agent.integrationMode)}
+                        </span>
+                        <small>{presenceHelp(agent)}</small>
+                      </article>
+                    ))}
+                  </div>
+                )}
+              </section>
+
+              <section className="control-panel connection-center" aria-labelledby="connection-center-title">
+                <div className="panel-header">
+                  <div><p className="eyebrow">CONNECTION CENTER</p><h3 id="connection-center-title">Add an Agent</h3></div>
+                </div>
+                <div className="connection-tabs" role="tablist" aria-label="Agent connection methods">
+                  <button aria-selected={connectionMode === "managed"} onClick={() => setConnectionMode("managed")} role="tab" type="button">Managed Codex</button>
+                  <button aria-selected={connectionMode === "mcp"} onClick={() => setConnectionMode("mcp")} role="tab" type="button">MCP client</button>
+                  <button aria-selected={connectionMode === "demo"} onClick={() => setConnectionMode("demo")} role="tab" type="button">Demo Agent</button>
+                </div>
+
+                {connectionMode === "managed" && (
+                  <div className="connection-content" role="tabpanel">
+                    <div className="method-heading"><span className="method-icon">⌘</span><div><strong>Managed local Codex</strong><p>The Go Bridge keeps Codex available for Team messages.</p></div></div>
+                    <ol className="setup-steps">
+                      <li><span>1</span><div><strong>Start the Bridge on the Codex machine</strong><p>Run this command in a terminal on the machine that owns Codex.</p></div></li>
+                    </ol>
+                    <div className="command-box"><code>agentroom-bridge join --server {bridgeServerURL()}</code><button onClick={() => void navigator.clipboard.writeText(`agentroom-bridge join --server ${bridgeServerURL()}`)} type="button">Copy</button></div>
+                    <ol className="setup-steps" start={2}>
+                      <li><span>2</span><div><strong>Approve the code shown by the Bridge</strong><p>This is not an Agent name. Enter the one-time code printed in the client terminal.</p></div></li>
+                    </ol>
+                    <form className="approval-form" onSubmit={approveBridgeJoin}>
+                      <label htmlFor="bridge-approval-code">Bridge approval code</label>
+                      <div>
+                        <input
+                          aria-label="Client join code"
+                          autoCapitalize="characters"
+                          autoComplete="off"
+                          id="bridge-approval-code"
+                          onChange={(event) => setJoinCode(event.target.value.toUpperCase())}
+                          placeholder="ABCD-1234"
+                          required
+                          value={joinCode}
+                        />
+                        <button disabled={busy}>{busy ? "Approving…" : "Approve Bridge"}</button>
+                      </div>
+                    </form>
+                    <details className="legacy-pairing">
+                      <summary>Legacy server-issued pairing</summary>
+                      <form className="approval-form compact" onSubmit={createBridgeInvite}>
+                        <label htmlFor="legacy-device-name">Device name</label>
+                        <div>
+                          <input id="legacy-device-name" aria-label="Bridge Device name" onChange={(event) => setDeviceName(event.target.value)} placeholder="Bob's Mac" required value={deviceName} />
+                          <button disabled={busy}>Create code</button>
+                        </div>
+                      </form>
+                    </details>
+                  </div>
+                )}
+
+                {connectionMode === "mcp" && (
+                  <div className="connection-content" role="tabpanel">
+                    <div className="method-heading"><span className="method-icon">M</span><div><strong>MCP participant</strong><p>For clients that pull Team work through MCP; this does not remotely wake the client.</p></div></div>
+                    <form className="approval-form" onSubmit={createManualAgent}>
+                      <label htmlFor="manual-agent-name">Agent display name</label>
+                      <div>
+                        <input id="manual-agent-name" aria-label="Manual Agent name" onChange={(event) => setManualAgentName(event.target.value)} placeholder="Codex via MCP" required value={manualAgentName} />
+                        <button disabled={busy}>Create MCP token</button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {connectionMode === "demo" && (
+                  <div className="connection-content" role="tabpanel">
+                    <div className="demo-warning"><strong>Simulation only</strong><p>A Demo Agent echoes messages in process. It does not call Codex or another model.</p></div>
+                    <form className="approval-form" onSubmit={createFakeAgent}>
+                      <label htmlFor="demo-agent-name">Demo Agent name</label>
+                      <div>
+                        <input id="demo-agent-name" aria-label="Demo Agent name" onChange={(event) => setAgentName(event.target.value)} placeholder="Review Bot" required value={agentName} />
+                        <button disabled={busy}>Add demo Agent</button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+
+                {setupOutput && (
+                  <div className="setup-output management-output" aria-live="polite">
+                    <div><strong>Setup result</strong><button type="button" onClick={() => void navigator.clipboard.writeText(setupOutput)}>Copy</button></div>
+                    <pre>{setupOutput}</pre>
+                  </div>
+                )}
+              </section>
+            </div>
+
+            <section className="control-panel device-panel" aria-labelledby="device-panel-title">
+              <div className="panel-header">
+                <div><p className="eyebrow">TRUSTED DEVICES</p><h3 id="device-panel-title">Bridge devices</h3></div>
+                <span>{activeDevices} active</span>
+              </div>
+              {devices.length === 0 ? (
+                <p className="device-empty">No Bridge devices have been approved for this Team.</p>
+              ) : (
+                <div className="device-grid">
+                  {devices.map((device) => (
+                    <article className="device-card" key={device.deviceId}>
+                      <span className="device-icon">▣</span>
+                      <div><strong>{device.name}</strong><small>{device.deviceId}</small></div>
+                      <span className={`status-badge ${device.status}`}>{device.status}</span>
+                      <button disabled={device.status !== "active"} onClick={() => void revokeDevice(device)} type="button">{device.status === "active" ? "Revoke" : "Revoked"}</button>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
           </section>
         ) : !selectedRoom ? (
           <section className="empty-stage onboarding-stage">
@@ -772,7 +903,7 @@ export function App() {
             ))}
           </section>
         )}
-        {selectedRoom && (
+        {selectedRoom && activeView === "room" && (
           <form className="composer" onSubmit={sendMessage}>
             <select
               aria-label="Mention an Agent"

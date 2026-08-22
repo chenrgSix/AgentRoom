@@ -128,7 +128,18 @@ test("onboarding creates the first Team and reveals the Room step", async () => 
     fireEvent.change(roomInput, { target: { value: "general" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Room" }));
     await screen.findByRole("heading", { name: "Add an Agent or start the conversation" });
+    assert.equal(screen.queryByLabelText("New Fake Agent name"), null);
     fireEvent.click(screen.getByRole("button", { name: "Open connection setup" }));
+
+    await screen.findByRole("heading", { name: "Agents & devices" });
+    screen.getByRole("heading", { name: "Team Agents" });
+    screen.getByText("Managed local Codex");
+    screen.getByText(/This is not an Agent name/u);
+
+    fireEvent.click(screen.getByRole("tab", { name: "Demo Agent" }));
+    screen.getByText("Simulation only");
+    screen.getByText(/does not call Codex or another model/u);
+    fireEvent.click(screen.getByRole("tab", { name: "Managed Codex" }));
 
     const joinCode = screen.getByLabelText("Client join code");
     fireEvent.change(joinCode, { target: { value: "ABCD-1234" } });
