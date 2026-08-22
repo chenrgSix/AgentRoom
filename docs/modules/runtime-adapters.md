@@ -64,6 +64,8 @@ tracked by `ADP-001` through `ADP-005` in `docs/TASKS.md`.
 The production Go boundary is `runtime.Adapter`: capability discovery plus one
 context-cancelable `Execute` method that emits ordered semantic status or reply
 events. The deterministic Go Fake Adapter is the first contract implementation.
+The pinned Codex JSONL event subset and lifecycle limits are documented in
+`docs/codex-runtime-contract.md` and guarded by Go parser fixtures.
 
 ## Dependencies
 

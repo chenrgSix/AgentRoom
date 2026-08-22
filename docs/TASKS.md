@@ -80,7 +80,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | BRG-004 | DONE | Publish local Agents and capabilities | BRG-003, REG-002 | server registry converges after reconnect |
 | BRG-005 | DONE | Add durable run inbox and deduplication | BRG-003, DATA-001 | repeated run ID executes at most once |
 | ADP-002 | DONE | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |
-| ADP-003 | PLANNED | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
+| ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | PLANNED | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |
 | ADP-005 | DONE | Implement Generic CLI fallback | ADP-002 | stdout, exit, timeout, and cancel verified |
 
