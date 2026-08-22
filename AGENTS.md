@@ -24,10 +24,14 @@ checklist.
 
 ## Build, Test, and Development Commands
 
-No application build exists yet. For documentation changes, run:
+Node.js 22 is required. Current repository commands are:
 
+- `npm install` — install locked workspace dependencies.
+- `npm run validate` — validate all registered JSON Schemas.
+- `npm run build` — build every implemented workspace.
+- `npm test` — run implemented workspace tests.
 - `rg '^#' agent_room_network_design_v0.2.md` — review heading hierarchy.
-- `npx markdownlint-cli2 "**/*.md"` — lint maintained Markdown.
+- `npm run lint:docs` — lint maintained Markdown.
 - `rg '^\| [A-Z]+-[0-9]+' docs/TASKS.md` — review registered task IDs.
 
 When adding a module, document its build, run, format, and test commands here in

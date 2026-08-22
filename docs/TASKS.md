@@ -48,20 +48,20 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
-| CON-001 | READY | Scaffold JSON Schema contract package | GOV-004 | package builds and validates schemas |
-| CON-002 | PLANNED | Define IDs, timestamps, versions, and error envelope | CON-001 | TS and Go fixtures agree |
+| CON-001 | DONE | Scaffold JSON Schema contract package | GOV-004 | package builds and validates schemas |
+| CON-002 | READY | Define IDs, timestamps, versions, and error envelope | CON-001 | TS and Go fixtures agree |
 | CON-003 | PLANNED | Define Bridge message schemas | CON-002 | hello, heartbeat, publish, and run schemas validate |
 | CON-004 | PLANNED | Generate TypeScript and Go contract types | CON-003 | generation is deterministic in CI |
 | DATA-001 | READY | Add SQLite migration runner and database location | GOV-004 | empty database migrates from zero |
 | DATA-002 | PLANNED | Add Team, Room, Message, and registry tables | DATA-001, CON-002 | repository tests persist and reload entities |
-| ADP-001 | READY | Implement deterministic Fake Runtime Adapter | CON-002 | scripted events exercise success and failure |
+| ADP-001 | PLANNED | Implement deterministic Fake Runtime Adapter | CON-002 | scripted events exercise success and failure |
 | QA-001 | PLANNED | Build in-process Fake Bridge and acceptance harness | CON-004, ADP-001, WEB-001 | Web Room simulates two Agents end to end |
 
 ## Workstream F1: Team, Room, and Registry
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
-| SEC-001 | READY | Define Web user, member, and device credential model | CON-002 | threat cases and auth contract tests pass |
+| SEC-001 | PLANNED | Define Web user, member, and device credential model | CON-002 | threat cases and auth contract tests pass |
 | ROOM-001 | PLANNED | Implement Team and Room repositories and services | DATA-002, SEC-001 | create, read, and authorization tests pass |
 | ROOM-002 | PLANNED | Implement Message persistence and pagination | ROOM-001 | stable cursor ordering survives restart |
 | ROOM-003 | PLANNED | Validate structured Mention references | ROOM-002, REG-002 | invalid or unauthorized mentions are rejected |

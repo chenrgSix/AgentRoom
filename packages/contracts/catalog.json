@@ -1,0 +1,10 @@
+{
+  "catalogVersion": "0.1.0",
+  "schemas": [
+    {
+      "id": "https://agentroom.dev/schemas/catalog.schema.json",
+      "kind": "meta",
+      "path": "schemas/catalog.schema.json"
+    }
+  ]
+}

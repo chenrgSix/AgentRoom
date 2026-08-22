@@ -31,6 +31,7 @@ are build artifacts.
 
 ```text
 packages/contracts/
+  catalog.json
   schemas/
     common/
     bridge/
@@ -40,7 +41,14 @@ packages/contracts/
   fixtures/
   generated/typescript/
   generated/go/
+  scripts/
+  src/
+  test/
 ```
+
+Only `catalog.json`, the schema validator, and the catalog meta-schema exist in
+`CON-001`. Domain folders, fixtures, and generated types are added by their
+own tasks rather than scaffolded speculatively.
 
 ## Common Envelope
 

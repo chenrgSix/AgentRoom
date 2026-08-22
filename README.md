@@ -10,8 +10,8 @@ the Team wake a managed Agent.
 
 ## Status
 
-The project is in the architecture-baseline phase. No executable application
-has been scaffolded yet.
+The project has started its contract foundation. The central server, Web UI,
+and Bridge have not been scaffolded yet.
 
 - Current baseline:
   [agent_room_network_design_v0.2.md](agent_room_network_design_v0.2.md)
@@ -52,8 +52,22 @@ docs/TASKS.md   Authoritative milestones and delivery state
 tests/e2e/      Cross-process acceptance scenarios
 ```
 
-Do not create these directories until the corresponding implementation
-milestone starts.
+Do not create an unstarted directory until its corresponding task becomes
+active. `packages/contracts/` is the first active implementation module.
+
+## Build and Test
+
+Node.js 22 is required. From the repository root:
+
+```bash
+npm install
+npm run validate
+npm run build
+npm test
+```
+
+These commands currently validate, build, and test the contract workspace.
+Additional module commands must be added when those modules are scaffolded.
 
 ## Delivery Workflow
 

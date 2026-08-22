@@ -4,6 +4,10 @@
     "MD013": false
   },
   "ignores": [
-    "agent_room_network_design_v0.1.md"
+    "agent_room_network_design_v0.1.md",
+    "node_modules/**",
+    "**/node_modules/**",
+    "dist/**",
+    "**/dist/**"
   ]
 }

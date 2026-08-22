@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/catalog.schema.json",
+  "title": "Agent Room Contract Catalog",
+  "description": "Manifest for the versioned schemas published by the contracts package.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "catalogVersion",
+    "schemas"
+  ],
+  "properties": {
+    "catalogVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "schemas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "kind",
+          "path"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uri"
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "pattern": "^schemas/.+\\.schema\\.json$"
+          }
+        }
+      }
+    }
+  }
+}
