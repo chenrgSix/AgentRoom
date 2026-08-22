@@ -78,6 +78,10 @@ context references. The server validates Room access, target availability,
 lineage, maximum depth 4, maximum unique Agents 5, and maximum Run duration
 20 minutes before creating a child Run.
 
+The MCP caller must be the parent Run's target Agent. Child Runs inherit the
+root trigger and deadline, use a new durable Run ID, and cannot revisit an Agent
+already present in their lineage.
+
 ## Cancellation Races
 
 - A queued Run cancels without delivery.
