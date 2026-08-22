@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -40,9 +41,10 @@ func TestLoadValidConfig(t *testing.T) {
 
 func TestRejectsUnsafeOrAmbiguousConfig(t *testing.T) {
 	valid := Config{
-		ServerURL:  "https://team.example.com",
-		DeviceName: "Alice Mac",
-		DataDir:    t.TempDir(),
+		ServerURL:               "https://team.example.com",
+		ServerCertificateSHA256: strings.Repeat("a", 64),
+		DeviceName:              "Alice Mac",
+		DataDir:                 t.TempDir(),
 		Agents: []AgentConfig{{
 			Name: "Builder", Role: "Implementation", Adapter: "generic",
 			Command: []string{"agent"}, Workspace: t.TempDir(),

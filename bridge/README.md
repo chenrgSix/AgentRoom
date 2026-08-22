@@ -6,6 +6,7 @@ explicit JSON configuration and never accepts shell command strings.
 ```bash
 go run ./cmd/agentroom-bridge version
 go run ./cmd/agentroom-bridge validate-config --config ./bridge.json
+go run ./cmd/agentroom-bridge pair --config ./bridge.json --code ONE_TIME_CODE
 go test ./...
 go build ./cmd/agentroom-bridge
 ```
@@ -14,3 +15,7 @@ go build ./cmd/agentroom-bridge
 an adapter, argument-array command, absolute workspace, and environment variable
 allowlist. Credentials and delivery state are stored under `dataDir` by later
 Bridge lifecycle tasks.
+
+For HTTPS, `serverCertificateSha256` is mandatory and pins the manually verified
+server certificate. Pairing stores `device-credential.json` under `dataDir`
+with owner-only permissions and refuses to overwrite an existing identity.

@@ -22,13 +22,13 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   await prepareDatabaseDirectory(databasePath);
 
   const first = await migrateDatabase(databasePath);
-  assert.deepEqual(first.appliedVersions, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(first.appliedVersions, [1, 2, 3, 4, 5, 6, 7]);
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 6);
+  assert.equal(first.currentVersion, 7);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
-  assert.deepEqual(second.skippedVersions, [1, 2, 3, 4, 5, 6]);
+  assert.deepEqual(second.skippedVersions, [1, 2, 3, 4, 5, 6, 7]);
 
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -42,7 +42,7 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       )
       .get() as { count: number };
 
-    assert.equal(migrationCount.count, 6);
+    assert.equal(migrationCount.count, 7);
     assert.equal(metadataTable.count, 1);
   } finally {
     database.close();

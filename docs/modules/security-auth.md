@@ -27,6 +27,10 @@ expiry, credential rotation, and revocation are checked before resolving the
 principal. The initial local Web bootstrap may issue a session directly, but
 all domain services still authorize through stable User and Member IDs.
 
+Bridge invitations expire after ten minutes and bind the expected Device name,
+Team, and Member. Exchanging one invitation atomically consumes it, creates the
+Device, and stores only the SHA-256 hash of the new Device credential.
+
 ## Authorization Rules
 
 - Team membership gates Room and Agent visibility.

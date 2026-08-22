@@ -10,10 +10,11 @@ import (
 )
 
 type Config struct {
-	ServerURL  string        `json:"serverUrl"`
-	DeviceName string        `json:"deviceName"`
-	DataDir    string        `json:"dataDir"`
-	Agents     []AgentConfig `json:"agents"`
+	ServerURL               string        `json:"serverUrl"`
+	ServerCertificateSHA256 string        `json:"serverCertificateSha256,omitempty"`
+	DeviceName              string        `json:"deviceName"`
+	DataDir                 string        `json:"dataDir"`
+	Agents                  []AgentConfig `json:"agents"`
 }
 
 type AgentConfig struct {
@@ -60,6 +61,17 @@ func (c Config) Validate() error {
 	}
 	if parsed.Scheme != "https" && !(parsed.Scheme == "http" && isLoopback(parsed.Hostname())) {
 		return fmt.Errorf("serverUrl must use HTTPS except on loopback")
+	}
+	if parsed.Scheme == "https" {
+		fingerprint := strings.ToLower(strings.ReplaceAll(c.ServerCertificateSHA256, ":", ""))
+		if len(fingerprint) != 64 {
+			return fmt.Errorf("serverCertificateSha256 must contain a SHA-256 fingerprint")
+		}
+		for _, character := range fingerprint {
+			if !strings.ContainsRune("0123456789abcdef", character) {
+				return fmt.Errorf("serverCertificateSha256 must be hexadecimal")
+			}
+		}
 	}
 	if strings.TrimSpace(c.DeviceName) == "" || len(c.DeviceName) > 80 {
 		return fmt.Errorf("deviceName must contain 1 to 80 characters")

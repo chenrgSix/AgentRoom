@@ -30,6 +30,7 @@ import {
   AuthorizationError,
   type WebPrincipal
 } from "./security/auth-service.js";
+import { BridgePairingService } from "./security/bridge-pairing-service.js";
 import { TeamRoomService } from "./team-room/team-room-service.js";
 import { MessageService } from "./team-room/message-service.js";
 
@@ -80,6 +81,7 @@ export async function createServerApp(
   const presence = new PresenceService(core, auth);
   const messages = new MessageService(core, auth);
   const teamWait = new TeamWaitService(core, auth);
+  const pairing = new BridgePairingService(database, core, auth);
   const clock = options.clock ?? (() => new Date().toISOString());
   const runRepository = new RunRepository(database);
   const runs = new RunService(core, runRepository, auth);
@@ -261,6 +263,33 @@ export async function createServerApp(
       };
     }
   );
+  app.post<{ Params: { teamId: string } }>(
+    "/api/teams/:teamId/bridge-invites",
+    async (request) => {
+      const body = bodyObject(request);
+      return pairing.createInvite(
+        principal(request),
+        request.params.teamId,
+        requiredString(body.deviceName, "deviceName"),
+        clock()
+      );
+    }
+  );
+  app.post("/api/bridge/pair", async (request) => {
+    const body = bodyObject(request);
+    const result = pairing.exchange(
+      requiredString(body.code, "code", 128),
+      requiredString(body.deviceName, "deviceName"),
+      clock()
+    );
+    return {
+      device: result.device,
+      credential: {
+        token: result.credential.secret,
+        expiresAt: result.credential.expiresAt
+      }
+    };
+  });
   app.get<{
     Params: { roomId: string };
     Querystring: { cursor?: string; limit?: string };
