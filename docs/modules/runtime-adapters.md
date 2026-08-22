@@ -56,6 +56,10 @@ Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, streaming, cancellation, crash, and recovery. Work is
 tracked by `ADP-001` through `ADP-005` in `docs/TASKS.md`.
 
+The production Go boundary is `runtime.Adapter`: capability discovery plus one
+context-cancelable `Execute` method that emits ordered semantic status or reply
+events. The deterministic Go Fake Adapter is the first contract implementation.
+
 ## Dependencies
 
 Contracts and the Bridge invocation boundary. Adapters never call Team services
