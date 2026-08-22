@@ -104,7 +104,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
-| MCP-001 | PLANNED | Expose authenticated Remote MCP endpoint | SEC-001, CON-004 | unauthorized clients receive no Team data |
+| MCP-001 | DONE | Expose authenticated Remote MCP endpoint | SEC-001, CON-004 | unauthorized clients receive no Team data |
 | MCP-002 | PLANNED | Implement context, messages, send, and reply tools | MCP-001, ROOM-002 | tool contract and authorization tests pass |
 | MCP-003 | PLANNED | Implement mentions, Run, and handoff tools | MCP-002, RUN-006 | manual Agent can complete a Team Run |
 | MCP-004 | PLANNED | Implement `team.wait`, Room, and inbox resources | MCP-001, ROOM-002 | bounded wait resumes by cursor and respects membership |

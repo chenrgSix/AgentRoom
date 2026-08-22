@@ -21,6 +21,11 @@ The module does not own Room data, routing decisions, Runtime processes, or
 device credentials. Those belong to Team/Room, Run Orchestration, Runtime
 Adapters, and Security respectively.
 
+The initial transport is stateless Streamable HTTP at `POST /mcp`, implemented
+with the production v1 TypeScript SDK. Each manual Agent receives a separately
+revocable bearer credential; only its SHA-256 hash is persisted. MCP credentials
+are not Web sessions and cannot be used on browser APIs.
+
 ## Initial Surface
 
 Names remain lowercase and namespaced:

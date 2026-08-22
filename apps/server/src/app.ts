@@ -1,6 +1,11 @@
 import path from "node:path";
 
 import fastifyStatic from "@fastify/static";
+import {
+  StreamableHTTPServerTransport,
+  type StreamableHTTPServerTransportOptions
+} from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import Fastify, {
   type FastifyInstance,
   type FastifyRequest
@@ -11,6 +16,7 @@ import { openDatabase } from "./data/database.js";
 import { prepareDatabaseDirectory } from "./data/database-location.js";
 import { migrateDatabase } from "./data/migration-runner.js";
 import { createOpaqueId } from "./domain/identifiers.js";
+import { createTeamMcpServer } from "./mcp/mcp-server.js";
 import { AgentService } from "./registry/agent-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
@@ -217,6 +223,42 @@ export async function createServerApp(
       return core.getAgent(agent.agentId);
     }
   );
+  app.post<{ Params: { teamId: string } }>(
+    "/api/teams/:teamId/manual-agents",
+    async (request) => {
+      const actor = principal(request);
+      const body = bodyObject(request);
+      const now = clock();
+      const agent = agents.publishAgent(actor, {
+        teamId: request.params.teamId,
+        deviceId: null,
+        name: requiredString(body.name, "name"),
+        role: requiredString(body.role, "role"),
+        integrationMode: "manual",
+        capabilities: {
+          supportsHandoff: true,
+          supportsInterrupt: false,
+          supportsResume: false,
+          supportsStart: false,
+          supportsStreaming: false
+        },
+        now
+      });
+      const expiresAt = new Date(
+        Date.parse(now) + 90 * 24 * 60 * 60 * 1000
+      ).toISOString();
+      const credential = auth.issueMcpCredential(
+        actor,
+        agent.agentId,
+        now,
+        expiresAt
+      );
+      return {
+        agent,
+        credential: { token: credential.secret, expiresAt }
+      };
+    }
+  );
   app.get<{
     Params: { roomId: string };
     Querystring: { cursor?: string; limit?: string };
@@ -299,6 +341,34 @@ export async function createServerApp(
       return runRepository.listEvents(run.runId);
     }
   );
+
+  app.post("/mcp", async (request, reply) => {
+    const mcpPrincipal = auth.authenticateMcp(bearerToken(request), clock());
+    const server = createTeamMcpServer(mcpPrincipal);
+    const transportOptions = {
+      sessionIdGenerator: undefined,
+      enableJsonResponse: true
+    } as unknown as StreamableHTTPServerTransportOptions;
+    const transport = new StreamableHTTPServerTransport(transportOptions);
+    await server.connect(transport as unknown as Transport);
+    reply.hijack();
+    try {
+      await transport.handleRequest(request.raw, reply.raw, request.body);
+    } finally {
+      await transport.close();
+      await server.close();
+    }
+  });
+  app.get("/mcp", async (_request, reply) => reply.code(405).send({
+    jsonrpc: "2.0",
+    error: { code: -32_000, message: "Method not allowed" },
+    id: null
+  }));
+  app.delete("/mcp", async (_request, reply) => reply.code(405).send({
+    jsonrpc: "2.0",
+    error: { code: -32_000, message: "Method not allowed" },
+    id: null
+  }));
 
   if (options.webRoot) {
     await app.register(fastifyStatic, {
