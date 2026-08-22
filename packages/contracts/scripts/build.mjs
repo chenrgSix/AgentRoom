@@ -28,6 +28,11 @@ await cp(
   path.join(outputRoot, "fixtures"),
   { recursive: true }
 );
+await cp(
+  path.join(packageRoot, "generated"),
+  path.join(outputRoot, "generated"),
+  { recursive: true }
+);
 
 console.log(
   `Built ${result.schemaCount} schema(s) and ` +

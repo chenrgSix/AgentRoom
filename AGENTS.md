@@ -24,19 +24,21 @@ checklist.
 
 ## Build, Test, and Development Commands
 
-Node.js 22 is required. Repository commands are:
+Node.js 22 and Go 1.26.7 are required. Repository commands are:
 
 - `npm install` — install locked workspace dependencies.
 - `npm run validate` — validate all registered JSON Schemas.
 - `npm run build` — build every implemented workspace.
 - `npm test` — run implemented workspace tests.
 - `npm run db:migrate` — migrate the configured central SQLite database.
+- `npm run generate --workspace @agent-room/contracts` — regenerate wire types.
 - `rg '^#' agent_room_network_design_v0.2.md` — review heading hierarchy.
 - `npm run lint:docs` — lint maintained Markdown.
 - `rg '^\| [A-Z]+-[0-9]+' docs/TASKS.md` — review registered task IDs.
 
 When adding a module, document its build, run, format, and test commands here in
-the same commit. Use `nvm use22` when Node 22 is not active.
+the same commit. Use `nvm use22` when Node 22 is not active. The contracts Go
+module pins the selected Go toolchain.
 
 ## Coding Style & Naming Conventions
 

@@ -182,7 +182,8 @@ export async function validateContractFixtures(packageRoot) {
       );
     }
 
-    const actual = validate(fixture.instance);
+    const roundTripped = JSON.parse(JSON.stringify(fixture.instance));
+    const actual = validate(roundTripped);
     if (actual !== fixture.valid) {
       const errors = actual
         ? "expected rejection but validation passed"

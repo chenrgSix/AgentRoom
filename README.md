@@ -29,7 +29,7 @@ the Web UI, and the Bridge have not been scaffolded yet.
 | Central Web | Node.js 22, TypeScript, Fastify, React, Vite |
 | Team integration | Remote MCP Server |
 | Push channel | Authenticated WebSocket |
-| Local Bridge | Go, distributed as a headless binary |
+| Local Bridge | Go 1.26.7, distributed as a headless binary |
 | MVP persistence | SQLite |
 | Web tests | Vitest and Playwright |
 | Bridge tests | Go test |
@@ -44,7 +44,7 @@ apps/
   server/       Central APIs, MCP endpoint, routing, and Bridge WebSocket
   web/          Team and Room browser UI
 packages/
-  contracts/    JSON Schema and generated TypeScript types
+  contracts/    JSON Schema and generated TypeScript/Go types
 bridge/         Go Bridge and runtime adapters
 docs/modules/   Module ownership, contracts, and acceptance boundaries
 docs/adr/       Architecture decision records
@@ -57,7 +57,7 @@ active. The contracts package and server data layer are currently implemented.
 
 ## Build and Test
 
-Node.js 22 is required. From the repository root:
+Node.js 22 and Go 1.26.7 are required. From the repository root:
 
 ```bash
 npm install

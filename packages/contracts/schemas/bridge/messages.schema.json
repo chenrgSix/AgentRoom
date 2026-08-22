@@ -396,6 +396,7 @@
           "$ref": "#/$defs/connectionEpoch"
         },
         "status": {
+          "title": "Agent Presence Status",
           "enum": [
             "ready",
             "busy",
@@ -514,6 +515,7 @@
           ],
           "properties": {
             "status": {
+              "title": "Run Execution Status",
               "enum": [
                 "working",
                 "input_required",

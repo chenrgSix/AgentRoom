@@ -46,13 +46,10 @@ packages/contracts/
   test/
 ```
 
-Only `catalog.json`, the schema validator, and the catalog meta-schema exist in
-`CON-001`. Domain folders, fixtures, and generated types are added by their
-own tasks rather than scaffolded speculatively.
-
-`CON-002` establishes language-neutral common schemas and golden fixtures.
-Cross-language parity becomes a `CON-004` gate after generated TypeScript and
-Go types exist; an unexecuted language harness is not accepted as evidence.
+`CON-001` established the catalog and validator, `CON-002` added common schemas
+and fixtures, and `CON-003` added Bridge messages. `CON-004` checks in generated
+TypeScript and Go types, rejects generation drift, and runs the same fixture
+suite through Ajv and the Go Draft 2020-12 validator.
 
 ## Common Envelope
 
@@ -101,7 +98,7 @@ traces, or internal database errors.
 
 - Validate every golden fixture against JSON Schema.
 - Generate TypeScript and Go types twice and require no diff.
-- Round-trip fixtures through both languages.
+- Round-trip fixtures through both language validators.
 - Reject malformed IDs, timestamps, envelopes, and incompatible versions.
 - Fuzz Bridge envelope decoding at the trust boundary.
 

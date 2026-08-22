@@ -8,12 +8,19 @@
     "dist"
   ],
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "test": "node --test",
+    "build": "npm run check:generated && node scripts/build.mjs",
+    "check:generated": "node scripts/check-generated.mjs",
+    "check:types": "tsc --noEmit --strict --skipLibCheck --target ES2022 generated/typescript/bridge-messages.ts",
+    "generate": "node scripts/generate.mjs",
+    "test": "node --test && npm run check:generated && npm run check:types && go test ./generated/go ./test/go",
     "validate": "node scripts/validate.mjs"
   },
   "dependencies": {
     "ajv": "8.17.1",
     "ajv-formats": "3.0.1"
+  },
+  "devDependencies": {
+    "quicktype-core": "26.0.0",
+    "typescript": "7.0.2"
   }
 }
