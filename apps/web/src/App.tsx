@@ -20,6 +20,21 @@ interface Agent {
   presence: string;
 }
 
+interface Message {
+  messageId: string;
+  roomId: string;
+  sequence: number;
+  senderType: "member" | "agent" | "system";
+  senderId: string;
+  content: string;
+  mentions: Array<{
+    targetType: "agent";
+    targetAgentId: string;
+    displayLabel: string;
+  }>;
+  createdAt: string;
+}
+
 interface LocalSession {
   userId: string;
   displayName: string;
@@ -79,11 +94,13 @@ export function App() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [teamName, setTeamName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
+  const [messageContent, setMessageContent] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -139,6 +156,19 @@ export function App() {
       );
     }).catch((reason: unknown) => setError(String(reason)));
   }, [selectedTeamId, session]);
+
+  useEffect(() => {
+    if (!session || !selectedRoomId) {
+      setMessages([]);
+      return;
+    }
+    void jsonRequest<{ items: Message[] }>(
+      `/api/rooms/${selectedRoomId}/messages?limit=100`,
+      {},
+      session.token
+    ).then((page) => setMessages(page.items))
+      .catch((reason: unknown) => setError(String(reason)));
+  }, [selectedRoomId, session]);
 
   async function createTeam(event: FormEvent) {
     event.preventDefault();
@@ -197,6 +227,29 @@ export function App() {
       );
       setAgentName("");
       setAgents((current) => [...current, agent]);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function sendMessage(event: FormEvent) {
+    event.preventDefault();
+    if (!session || !selectedRoomId || !messageContent.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const message = await jsonRequest<Message>(
+        `/api/rooms/${selectedRoomId}/messages`,
+        {
+          method: "POST",
+          body: JSON.stringify({ content: messageContent })
+        },
+        session.token
+      );
+      setMessageContent("");
+      setMessages((current) => [...current, message]);
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -287,15 +340,44 @@ export function App() {
             {agents.length} Agent{agents.length === 1 ? "" : "s"}
           </div>
         </header>
-        <section className="empty-stage">
-          <div className="orb"><span>✦</span></div>
-          <p className="eyebrow">CENTRAL TEAM READY</p>
-          <h3>{selectedRoom ? `Start the conversation in #${selectedRoom.name}` : "Create a Team and Room"}</h3>
-          <p>
-            Messages, structured Agent mentions, Runs, and replies will appear
-            here as one durable Team timeline.
-          </p>
-        </section>
+        {messages.length === 0 ? (
+          <section className="empty-stage">
+            <div className="orb"><span>✦</span></div>
+            <p className="eyebrow">CENTRAL TEAM READY</p>
+            <h3>{selectedRoom ? `Start the conversation in #${selectedRoom.name}` : "Create a Team and Room"}</h3>
+            <p>
+              Messages, structured Agent mentions, Runs, and replies will appear
+              here as one durable Team timeline.
+            </p>
+          </section>
+        ) : (
+          <section className="timeline" aria-label="Room messages">
+            {messages.map((message) => (
+              <article className="message" key={message.messageId}>
+                <span className={`avatar ${message.senderType}`}>{message.senderType === "agent" ? "A" : "U"}</span>
+                <div>
+                  <header>
+                    <strong>{message.senderType === "agent" ? "Agent" : session?.displayName}</strong>
+                    <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+                  </header>
+                  <p>{message.content}</p>
+                </div>
+              </article>
+            ))}
+          </section>
+        )}
+        {selectedRoom && (
+          <form className="composer" onSubmit={sendMessage}>
+            <textarea
+              aria-label="Message"
+              onChange={(event) => setMessageContent(event.target.value)}
+              placeholder={`Message #${selectedRoom.name}`}
+              rows={2}
+              value={messageContent}
+            />
+            <button disabled={busy || !messageContent.trim()}>Send</button>
+          </form>
+        )}
         {error && <div className="error-banner" role="alert">{error}</div>}
       </main>
     </div>

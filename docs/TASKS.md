@@ -94,7 +94,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | RUN-004 | PLANNED | Implement cancellation and terminal-state races | RUN-003 | first persisted terminal state wins |
 | RUN-005 | PLANNED | Implement offline queue and expiry | RUN-002, REG-003 | reconnect delivers queued work once |
 | RUN-006 | PLANNED | Implement guarded handoff | RUN-003 | depth, loop, and unique-agent limits pass |
-| WEB-002 | PLANNED | Implement Team Room message timeline | WEB-001, ROOM-002 | reload preserves ordered history |
+| WEB-002 | DONE | Implement Team Room message timeline | WEB-001, ROOM-002 | reload preserves ordered history |
 | WEB-003 | PLANNED | Implement structured Mention composer | WEB-002, ROOM-003 | display labels resolve to stable Agent IDs |
 | WEB-004 | PLANNED | Implement Agent presence panel | WEB-001, REG-003 | all integration modes render accurately |
 | WEB-005 | PLANNED | Implement Run card and live updates | WEB-002, RUN-003 | queued through terminal states are visible |

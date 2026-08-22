@@ -46,6 +46,7 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       payload: { name: "general" }
     });
     assert.equal(createRoom.statusCode, 200);
+    const room = createRoom.json() as { roomId: string };
     const createAgent = await app.inject({
       method: "POST",
       url: `/api/teams/${team.team.teamId}/fake-agents`,
@@ -79,6 +80,20 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       headers: { authorization }
     });
     assert.equal(agents.json()[0].name, "Builder");
+    const createMessage = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${room.roomId}/messages`,
+      headers: { authorization },
+      payload: { content: "Hello Team" }
+    });
+    assert.equal(createMessage.statusCode, 200);
+    assert.equal(createMessage.json().sequence, 1);
+    const timeline = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${room.roomId}/messages`,
+      headers: { authorization }
+    });
+    assert.equal(timeline.json().items[0].content, "Hello Team");
   } finally {
     await app.close();
   }

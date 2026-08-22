@@ -20,6 +20,7 @@ import {
   type WebPrincipal
 } from "./security/auth-service.js";
 import { TeamRoomService } from "./team-room/team-room-service.js";
+import { MessageService } from "./team-room/message-service.js";
 
 export interface ServerAppOptions {
   databasePath: string;
@@ -66,6 +67,7 @@ export async function createServerApp(
   const registry = new MemberDeviceService(core, auth);
   const agents = new AgentService(core, auth);
   const presence = new PresenceService(core, auth);
+  const messages = new MessageService(core, auth);
   const clock = options.clock ?? (() => new Date().toISOString());
   const app = Fastify({ logger: options.logger ?? false });
   const principal = (request: FastifyRequest): WebPrincipal =>
@@ -204,6 +206,30 @@ export async function createServerApp(
         now
       });
       return core.getAgent(agent.agentId);
+    }
+  );
+  app.get<{
+    Params: { roomId: string };
+    Querystring: { cursor?: string; limit?: string };
+  }>("/api/rooms/:roomId/messages", async (request) => {
+    const parsedLimit = request.query.limit === undefined
+      ? 100
+      : Number.parseInt(request.query.limit, 10);
+    return messages.listMessages(principal(request), {
+      roomId: request.params.roomId,
+      limit: parsedLimit,
+      ...(request.query.cursor ? { cursor: request.query.cursor } : {})
+    });
+  });
+  app.post<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/messages",
+    async (request) => {
+      const body = bodyObject(request);
+      return messages.createMemberMessage(principal(request), {
+        roomId: request.params.roomId,
+        content: requiredString(body.content, "content", 20_000),
+        now: clock()
+      });
     }
   );
 
