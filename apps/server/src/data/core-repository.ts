@@ -79,6 +79,13 @@ export interface MessageRecord {
   createdAt: string;
 }
 
+export interface DevicePresenceRecord {
+  deviceId: string;
+  connectionEpoch: number;
+  adapterAvailable: boolean;
+  lastHeartbeatAt: string;
+}
+
 interface AgentRow {
   agent_id: string;
   team_id: string;
@@ -456,6 +463,55 @@ export class CoreRepository {
       SELECT * FROM agents WHERE team_id = ? ORDER BY created_at, agent_id
     `).all(teamId) as AgentRow[];
     return rows.map(mapAgent);
+  }
+
+  public recordDevicePresence(record: DevicePresenceRecord): void {
+    const existing = this.getDevicePresence(record.deviceId);
+    if (existing && record.connectionEpoch < existing.connectionEpoch) {
+      throw new Error("Stale Device connection epoch");
+    }
+    this.database.prepare(`
+      INSERT INTO device_presence (
+        device_id, connection_epoch, adapter_available, last_heartbeat_at
+      ) VALUES (@deviceId, @connectionEpoch, @adapterAvailable, @lastHeartbeatAt)
+      ON CONFLICT (device_id) DO UPDATE SET
+        connection_epoch = excluded.connection_epoch,
+        adapter_available = excluded.adapter_available,
+        last_heartbeat_at = excluded.last_heartbeat_at
+    `).run({
+      ...record,
+      adapterAvailable: record.adapterAvailable ? 1 : 0
+    });
+  }
+
+  public getDevicePresence(deviceId: string): DevicePresenceRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT device_id, connection_epoch, adapter_available, last_heartbeat_at
+      FROM device_presence WHERE device_id = ?
+    `).get(deviceId) as
+      | {
+          device_id: string;
+          connection_epoch: number;
+          adapter_available: number;
+          last_heartbeat_at: string;
+        }
+      | undefined;
+    return row && {
+      deviceId: row.device_id,
+      connectionEpoch: row.connection_epoch,
+      adapterAvailable: row.adapter_available === 1,
+      lastHeartbeatAt: row.last_heartbeat_at
+    };
+  }
+
+  public updateAgentPresence(
+    agentId: string,
+    presence: AgentRecord["presence"],
+    now: string
+  ): void {
+    this.database.prepare(`
+      UPDATE agents SET presence = ?, updated_at = ? WHERE agent_id = ?
+    `).run(presence, now, agentId);
   }
 
   public getMessage(messageId: string): MessageRecord | undefined {
