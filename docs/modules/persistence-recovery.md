@@ -21,31 +21,30 @@ The Node.js server uses `better-sqlite3`. The database location resolves from
 `var/agent-room.sqlite` default. Applied migration filenames and SHA-256 values
 are immutable; startup rejects missing, reordered, or changed history.
 
-Important state transitions append versioned events containing
-`schemaVersion`, `aggregateId`, `aggregateVersion`, `causationId`, `traceId`,
-and idempotency fields. Query projections may be rebuilt from durable records;
-the append log is not a substitute for explicit domain constraints.
+Run transitions append contiguous `run_events`; deliveries persist their stable
+attempt ID, idempotency key, payload hash, payload bytes, send count, and ACK.
+Schema constraints remain authoritative even when a projection is rebuilt.
 
 ## Transaction Boundaries
 
-Creating a message and its routing intent is atomic. Creating a Run and its
-first delivery is atomic. ACK, retry scheduling, cancellation, and terminal Run
-updates use compare-and-set conditions so stale writers cannot overwrite newer
-state.
+Message append, Run batch creation, Delivery creation, ACK, and each event
+application have explicit SQLite transactions. Sequence and terminal guards
+prevent stale writers from overwriting newer Run state; Bridge inbox writes are
+fsynced before acceptance or event send.
 
 The local Bridge inbox is owned by the Bridge module, although its recovery
 contract is tested jointly with server delivery records.
 
 ## Recovery Policy
 
-On startup, the server validates migrations, resumes expired leases, reconciles
-unacknowledged deliveries, and preserves terminal outcomes. Unknown Runtime
-execution is surfaced as `outcome_unknown`. Projection sequence numbers never
-move backward.
+On startup, the server validates migrations and preserves queued deliveries and
+terminal outcomes. Bridge reconnect dispatches queued work, while Bridge
+restart replays durable events or reports an unfinished Runtime as
+`outcome_unknown`. Projection sequence numbers never move backward.
 
-Backups use SQLite-safe snapshot procedures and include schema metadata.
-Restore verification checks integrity, migration compatibility, and a sample
-projection rebuild before serving traffic.
+Backups use the SQLite backup API, include schema metadata, refuse overwrite,
+and pass `quick_check`. Restore and forward-only migration rollback procedure is
+documented in `docs/backup-and-restore.md` and tested with an acceptance marker.
 
 ## Verification and Tasks
 

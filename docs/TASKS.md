@@ -115,7 +115,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
 | DATA-003 | DONE | Persist Run, delivery, and event sequence state | RUN-003 | restart resumes without state regression |
-| DATA-004 | PLANNED | Add backup, restore, and migration rollback procedure | DATA-003 | tested backup restores acceptance fixture |
+| DATA-004 | DONE | Add backup, restore, and migration rollback procedure | DATA-003 | tested backup restores acceptance fixture |
 | SEC-002 | DONE | Enforce Team, Room, Agent, and Run authorization | ROOM-003, RUN-002 | cross-Team and cross-Owner negative tests pass |
 | SEC-003 | DONE | Add credential rotation and Device revoke propagation | BRG-003, SEC-002 | revoked Bridge cannot reconnect or receive Runs |
 | SEC-004 | DONE | Add message and log redaction boundary | MCP-002, BRG-004 | seeded secrets never enter persisted output |
