@@ -156,6 +156,16 @@ export class CoreRepository {
     }).immediate();
   }
 
+  public createMember(member: MemberRecord): void {
+    this.database.prepare(`
+      INSERT INTO team_members (
+        member_id, team_id, user_id, display_name, role, created_at
+      ) VALUES (
+        @memberId, @teamId, @userId, @displayName, @role, @createdAt
+      )
+    `).run(member);
+  }
+
   public createRoom(room: RoomRecord): void {
     this.database.prepare(`
       INSERT INTO rooms (room_id, team_id, name, created_at)
@@ -299,6 +309,28 @@ export class CoreRepository {
     };
   }
 
+  public listMembers(teamId: string): MemberRecord[] {
+    const rows = this.database.prepare(`
+      SELECT member_id, team_id, user_id, display_name, role, created_at
+      FROM team_members WHERE team_id = ? ORDER BY created_at, member_id
+    `).all(teamId) as Array<{
+      member_id: string;
+      team_id: string;
+      user_id: string | null;
+      display_name: string;
+      role: MemberRecord["role"];
+      created_at: string;
+    }>;
+    return rows.map((row) => ({
+      memberId: row.member_id,
+      teamId: row.team_id,
+      userId: row.user_id,
+      displayName: row.display_name,
+      role: row.role,
+      createdAt: row.created_at
+    }));
+  }
+
   public getRoom(roomId: string): RoomRecord | undefined {
     const row = this.database.prepare(`
       SELECT room_id, team_id, name, created_at FROM rooms WHERE room_id = ?
@@ -356,6 +388,31 @@ export class CoreRepository {
       createdAt: row.created_at,
       revokedAt: row.revoked_at
     };
+  }
+
+  public listDevices(teamId: string): DeviceRecord[] {
+    const rows = this.database.prepare(`
+      SELECT device_id, team_id, owner_member_id, name, status, created_at,
+             revoked_at
+      FROM devices WHERE team_id = ? ORDER BY created_at, device_id
+    `).all(teamId) as Array<{
+      device_id: string;
+      team_id: string;
+      owner_member_id: string;
+      name: string;
+      status: DeviceRecord["status"];
+      created_at: string;
+      revoked_at: string | null;
+    }>;
+    return rows.map((row) => ({
+      deviceId: row.device_id,
+      teamId: row.team_id,
+      ownerMemberId: row.owner_member_id,
+      name: row.name,
+      status: row.status,
+      createdAt: row.created_at,
+      revokedAt: row.revoked_at
+    }));
   }
 
   public getAgent(agentId: string): AgentRecord | undefined {
