@@ -37,6 +37,11 @@ Only the newest authenticated epoch may deliver work. Reconnect uses capped
 exponential backoff with jitter, republishes capabilities, and resumes from the
 last acknowledged server cursor.
 
+`GET /ws/bridge` authenticates the Device bearer credential before upgrade.
+Every connection must start with protocol `1.0` `bridge.hello`; a newer epoch
+closes the old socket, while stale epochs and identity-mismatched heartbeats are
+closed without updating Presence.
+
 ## Durable Inbox and ACK
 
 The Bridge writes `deliveryAttemptId`, `idempotencyKey`, payload hash, and local

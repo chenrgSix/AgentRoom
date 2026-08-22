@@ -5,8 +5,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"agentroom.dev/bridge/internal/config"
+	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/pairing"
 )
 
@@ -21,7 +24,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("expected one of: version, validate-config, pair")
+		return fmt.Errorf("expected one of: version, validate-config, pair, run")
 	}
 	switch args[0] {
 	case "version":
@@ -67,6 +70,29 @@ func run(args []string) error {
 		}
 		fmt.Printf("paired device %s with Team %s\n", credential.DeviceID, credential.TeamID)
 		return nil
+	case "run":
+		command := flag.NewFlagSet("run", flag.ContinueOnError)
+		path := command.String("config", "", "path to bridge JSON configuration")
+		if err := command.Parse(args[1:]); err != nil {
+			return err
+		}
+		resolved := *path
+		if resolved == "" {
+			resolved = config.DefaultPath()
+		}
+		loaded, err := config.Load(resolved)
+		if err != nil {
+			return err
+		}
+		credential, err := pairing.Load(loaded.DataDir)
+		if err != nil {
+			return err
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		return (connection.Client{
+			Config: loaded, Credential: credential, BridgeVersion: version,
+		}).Run(ctx)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}

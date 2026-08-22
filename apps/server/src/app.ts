@@ -1,6 +1,7 @@
 import path from "node:path";
 
 import fastifyStatic from "@fastify/static";
+import fastifyWebsocket from "@fastify/websocket";
 import {
   StreamableHTTPServerTransport,
   type StreamableHTTPServerTransportOptions
@@ -12,6 +13,7 @@ import Fastify, {
 } from "fastify";
 
 import { CoreRepository } from "./data/core-repository.js";
+import { BridgeConnectionRegistry } from "./bridge/bridge-connection-registry.js";
 import { openDatabase } from "./data/database.js";
 import { prepareDatabaseDirectory } from "./data/database-location.js";
 import { migrateDatabase } from "./data/migration-runner.js";
@@ -87,7 +89,11 @@ export async function createServerApp(
   const runs = new RunService(core, runRepository, auth);
   const executor = new InProcessRunExecutor(core, runRepository, clock);
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
+  const bridgeConnections = new BridgeConnectionRegistry();
   const app = Fastify({ logger: options.logger ?? false });
+  await app.register(fastifyWebsocket, {
+    options: { maxPayload: 1024 * 1024 }
+  });
   const principal = (request: FastifyRequest): WebPrincipal =>
     auth.authenticateWebSession(bearerToken(request), clock());
 
@@ -113,6 +119,77 @@ export async function createServerApp(
   });
 
   app.get("/api/health", async () => ({ status: "ok" }));
+  app.get("/ws/bridge", {
+    websocket: true,
+    preValidation: async (request) => {
+      auth.authenticateDevice(bearerToken(request), clock());
+    }
+  }, (socket, request) => {
+    const devicePrincipal = auth.authenticateDevice(bearerToken(request), clock());
+    let registeredEpoch: number | undefined;
+    socket.on("message", (source: { toString(): string }) => {
+      try {
+        const message = JSON.parse(source.toString()) as {
+          protocolVersion?: string;
+          type?: string;
+          payload?: Record<string, unknown>;
+        };
+        if (message.protocolVersion !== "1.0" || !message.payload) {
+          socket.close(4_002, "Unsupported Bridge protocol");
+          return;
+        }
+        if (message.type === "bridge.hello") {
+          const deviceId = message.payload.deviceId;
+          const epoch = message.payload.connectionEpoch;
+          const supported = message.payload.supportedProtocolVersions;
+          if (
+            deviceId !== devicePrincipal.deviceId ||
+            !Number.isSafeInteger(epoch) ||
+            (epoch as number) < 1 ||
+            !Array.isArray(supported) ||
+            !supported.includes("1.0")
+          ) {
+            socket.close(4_003, "Invalid Bridge hello");
+            return;
+          }
+          if (!bridgeConnections.register(devicePrincipal.deviceId, epoch as number, socket)) {
+            socket.close(4_009, "Stale Bridge connection epoch");
+            return;
+          }
+          registeredEpoch = epoch as number;
+          presence.recordHeartbeat(devicePrincipal, {
+            deviceId: devicePrincipal.deviceId,
+            connectionEpoch: registeredEpoch,
+            adapterAvailable: true,
+            now: clock()
+          });
+          return;
+        }
+        if (message.type === "bridge.heartbeat" && registeredEpoch !== undefined) {
+          if (
+            message.payload.deviceId !== devicePrincipal.deviceId ||
+            message.payload.connectionEpoch !== registeredEpoch
+          ) {
+            socket.close(4_003, "Heartbeat identity mismatch");
+            return;
+          }
+          presence.recordHeartbeat(devicePrincipal, {
+            deviceId: devicePrincipal.deviceId,
+            connectionEpoch: registeredEpoch,
+            adapterAvailable: true,
+            now: clock()
+          });
+          return;
+        }
+        socket.close(4_003, "Bridge hello required before messages");
+      } catch {
+        socket.close(4_007, "Malformed Bridge message");
+      }
+    });
+    socket.on("close", () => {
+      bridgeConnections.remove(devicePrincipal.deviceId, socket);
+    });
+  });
   app.post("/api/bootstrap", async (request) => {
     const body = bodyObject(request);
     const displayName = requiredString(body.displayName, "displayName");

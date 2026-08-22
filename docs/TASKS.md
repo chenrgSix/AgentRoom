@@ -76,7 +76,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | --- | --- | --- | --- | --- |
 | BRG-001 | DONE | Scaffold Go Bridge process and configuration | CON-004, SEC-001 | binary starts with validated config |
 | BRG-002 | DONE | Implement invitation pairing and credential storage | BRG-001, REG-001 | one-time invitation cannot be replayed |
-| BRG-003 | PLANNED | Implement authenticated WebSocket and heartbeat | BRG-002, CON-003 | reconnect and TTL tests pass |
+| BRG-003 | DONE | Implement authenticated WebSocket and heartbeat | BRG-002, CON-003 | reconnect and TTL tests pass |
 | BRG-004 | PLANNED | Publish local Agents and capabilities | BRG-003, REG-002 | server registry converges after reconnect |
 | BRG-005 | PLANNED | Add durable run inbox and deduplication | BRG-003, DATA-001 | repeated run ID executes at most once |
 | ADP-002 | PLANNED | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |

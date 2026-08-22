@@ -55,7 +55,7 @@ func Exchange(ctx context.Context, cfg config.Config, code string) (Credential, 
 		return Credential{}, err
 	}
 	request.Header.Set("content-type", "application/json")
-	response, err := httpClient(cfg).Do(request)
+	response, err := HTTPClient(cfg).Do(request)
 	if err != nil {
 		return Credential{}, fmt.Errorf("pair request: %w", err)
 	}
@@ -144,7 +144,7 @@ func Load(dataDir string) (Credential, error) {
 	return credential, nil
 }
 
-func httpClient(cfg config.Config) *http.Client {
+func HTTPClient(cfg config.Config) *http.Client {
 	parsed, _ := url.Parse(cfg.ServerURL)
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	if parsed != nil && parsed.Scheme == "https" {

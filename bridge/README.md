@@ -7,6 +7,7 @@ explicit JSON configuration and never accepts shell command strings.
 go run ./cmd/agentroom-bridge version
 go run ./cmd/agentroom-bridge validate-config --config ./bridge.json
 go run ./cmd/agentroom-bridge pair --config ./bridge.json --code ONE_TIME_CODE
+go run ./cmd/agentroom-bridge run --config ./bridge.json
 go test ./...
 go build ./cmd/agentroom-bridge
 ```
