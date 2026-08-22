@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/common/identifiers.schema.json",
+  "title": "Agent Room Opaque Identifier",
+  "description": "Opaque identifier with a lowercase type prefix and non-semantic suffix.",
+  "$ref": "#/$defs/opaqueId",
+  "$defs": {
+    "opaqueId": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9]*_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "teamId": {
+      "type": "string",
+      "pattern": "^team_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "roomId": {
+      "type": "string",
+      "pattern": "^room_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "memberId": {
+      "type": "string",
+      "pattern": "^member_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "deviceId": {
+      "type": "string",
+      "pattern": "^device_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "agentId": {
+      "type": "string",
+      "pattern": "^agent_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "messageId": {
+      "type": "string",
+      "pattern": "^msg_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "runId": {
+      "type": "string",
+      "pattern": "^run_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
+    "sessionId": {
+      "type": "string",
+      "pattern": "^session_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    }
+  }
+}

@@ -12,9 +12,10 @@ npm run build --workspace @agent-room/contracts
 npm test --workspace @agent-room/contracts
 ```
 
-`validate` checks every schema against JSON Schema 2020-12 and verifies that
-`catalog.json` lists the exact schema set. `build` copies the validated catalog
-and schemas to `dist/`.
+`validate` checks every schema against JSON Schema 2020-12, verifies that
+`catalog.json` lists the exact schema set, and runs every positive and negative
+golden fixture. `build` copies the validated catalog, schemas, and fixtures to
+`dist/`.
 
 ## Adding a Schema
 

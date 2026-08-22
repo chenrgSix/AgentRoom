@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/common/message-envelope.schema.json",
+  "title": "Agent Room Message Envelope",
+  "description": "Fields shared by versioned cross-process messages.",
+  "type": "object",
+  "required": [
+    "protocolVersion",
+    "messageId",
+    "timestamp",
+    "type",
+    "payload"
+  ],
+  "properties": {
+    "protocolVersion": {
+      "$ref": "https://agentroom.dev/schemas/common/protocol-version.schema.json"
+    },
+    "messageId": {
+      "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
+    },
+    "timestamp": {
+      "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "additionalProperties": true
+}

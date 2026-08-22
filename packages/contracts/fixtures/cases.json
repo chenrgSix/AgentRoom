@@ -1,0 +1,102 @@
+{
+  "fixtureVersion": "1.0",
+  "cases": [
+    {
+      "name": "valid opaque identifier",
+      "schemaId": "https://agentroom.dev/schemas/common/identifiers.schema.json",
+      "instance": "custom_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      "valid": true
+    },
+    {
+      "name": "identifier suffix is too short",
+      "schemaId": "https://agentroom.dev/schemas/common/identifiers.schema.json",
+      "instance": "agent_short",
+      "valid": false
+    },
+    {
+      "name": "valid typed Agent identifier",
+      "schemaId": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId",
+      "instance": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      "valid": true
+    },
+    {
+      "name": "Agent identifier rejects a Device prefix",
+      "schemaId": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId",
+      "instance": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      "valid": false
+    },
+    {
+      "name": "valid protocol version",
+      "schemaId": "https://agentroom.dev/schemas/common/protocol-version.schema.json",
+      "instance": "1.0",
+      "valid": true
+    },
+    {
+      "name": "protocol version has an unsupported prefix",
+      "schemaId": "https://agentroom.dev/schemas/common/protocol-version.schema.json",
+      "instance": "v1.0",
+      "valid": false
+    },
+    {
+      "name": "valid UTC timestamp",
+      "schemaId": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json",
+      "instance": "2026-08-22T10:00:00.123Z",
+      "valid": true
+    },
+    {
+      "name": "timestamp offset is not normalized to UTC",
+      "schemaId": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json",
+      "instance": "2026-08-22T18:00:00+08:00",
+      "valid": false
+    },
+    {
+      "name": "valid message envelope",
+      "schemaId": "https://agentroom.dev/schemas/common/message-envelope.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "timestamp": "2026-08-22T10:00:00Z",
+        "type": "message.created",
+        "payload": {
+          "roomId": "room_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "message envelope rejects an uppercase event type",
+      "schemaId": "https://agentroom.dev/schemas/common/message-envelope.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "timestamp": "2026-08-22T10:00:00Z",
+        "type": "Message.Created",
+        "payload": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "valid retryable error",
+      "schemaId": "https://agentroom.dev/schemas/common/error.schema.json",
+      "instance": {
+        "code": "BRIDGE_OFFLINE",
+        "message": "The target Agent is offline.",
+        "retryable": true,
+        "details": {
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "error rejects an unstable lowercase code",
+      "schemaId": "https://agentroom.dev/schemas/common/error.schema.json",
+      "instance": {
+        "code": "bridge_offline",
+        "message": "The target Agent is offline.",
+        "retryable": true
+      },
+      "valid": false
+    }
+  ]
+}

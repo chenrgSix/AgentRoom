@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import test from "node:test";
 
 import {
+  validateContractFixtures,
   validateContractPackage,
   validateSchemaDocument
 } from "../src/validation.mjs";
@@ -14,7 +15,18 @@ test("the checked-in contract package is internally consistent", async () => {
 
   assert.deepEqual(result, {
     catalogVersion: "0.1.0",
-    schemaCount: 1
+    schemaCount: 6
+  });
+});
+
+test("positive and negative golden fixtures match their schemas", async () => {
+  const result = await validateContractFixtures(packageRoot);
+
+  assert.deepEqual(result, {
+    fixtureCount: 12,
+    fixtureVersion: "1.0",
+    invalidCount: 6,
+    validCount: 6
   });
 });
 

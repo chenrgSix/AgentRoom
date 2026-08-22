@@ -50,6 +50,10 @@ Only `catalog.json`, the schema validator, and the catalog meta-schema exist in
 `CON-001`. Domain folders, fixtures, and generated types are added by their
 own tasks rather than scaffolded speculatively.
 
+`CON-002` establishes language-neutral common schemas and golden fixtures.
+Cross-language parity becomes a `CON-004` gate after generated TypeScript and
+Go types exist; an unexecuted language harness is not accepted as evidence.
+
 ## Common Envelope
 
 ```json
@@ -62,9 +66,12 @@ own tasks rather than scaffolded speculatively.
 }
 ```
 
-IDs are opaque strings. Timestamps use RFC 3339 UTC. Unknown message types are
-rejected. Unknown optional fields are ignored and preserved only when the
-owning module explicitly supports round trips.
+IDs are opaque strings with a lowercase type prefix such as `team_`, `agent_`,
+or `run_`; the suffix carries no business meaning. Timestamps use RFC 3339 and
+must be normalized to an uppercase `Z` UTC suffix. Protocol versions use
+`major.minor` without a `v` prefix. Unknown message types are rejected by the
+owning message schema. Unknown optional fields are ignored and preserved only
+when the owning module explicitly supports round trips.
 
 ## Versioning Rules
 

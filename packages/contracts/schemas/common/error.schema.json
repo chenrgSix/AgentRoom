@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/common/error.schema.json",
+  "title": "Agent Room Error",
+  "description": "Stable, client-safe error returned at a protocol boundary.",
+  "type": "object",
+  "required": [
+    "code",
+    "message",
+    "retryable"
+  ],
+  "properties": {
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "details": {
+      "type": "object"
+    },
+    "retryable": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": true
+}

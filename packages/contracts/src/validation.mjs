@@ -63,7 +63,7 @@ export function validateSchemaDocument(schema, source = "schema") {
   }
 }
 
-export async function validateContractPackage(packageRoot) {
+async function loadContractPackage(packageRoot) {
   const schemasRoot = path.join(packageRoot, "schemas");
   const schemaFiles = await collectSchemaFiles(schemasRoot);
 
@@ -89,6 +89,16 @@ export async function validateContractPackage(packageRoot) {
       id: schema.$id,
       path: path.relative(packageRoot, schemaFile).split(path.sep).join("/")
     });
+  }
+
+  for (const schema of schemas) {
+    try {
+      validator.getSchema(schema.id);
+    } catch (error) {
+      throw new Error(`Cannot compile JSON Schema ${schema.id}: ${error.message}`, {
+        cause: error
+      });
+    }
   }
 
   const catalog = await readJson(path.join(packageRoot, "catalog.json"));
@@ -119,7 +129,78 @@ export async function validateContractPackage(packageRoot) {
   }
 
   return {
+    catalog,
+    schemas,
+    validator
+  };
+}
+
+export async function validateContractPackage(packageRoot) {
+  const { catalog, schemas } = await loadContractPackage(packageRoot);
+
+  return {
     catalogVersion: catalog.catalogVersion,
     schemaCount: schemas.length
+  };
+}
+
+export async function validateContractFixtures(packageRoot) {
+  const { validator } = await loadContractPackage(packageRoot);
+  const fixturePath = path.join(packageRoot, "fixtures", "cases.json");
+  const fixtureSuite = await readJson(fixturePath);
+
+  if (
+    typeof fixtureSuite.fixtureVersion !== "string" ||
+    !Array.isArray(fixtureSuite.cases)
+  ) {
+    throw new Error(`${fixturePath} must contain fixtureVersion and cases`);
+  }
+
+  const names = new Set();
+  let validCount = 0;
+  let invalidCount = 0;
+
+  for (const fixture of fixtureSuite.cases) {
+    if (
+      typeof fixture?.name !== "string" ||
+      typeof fixture.schemaId !== "string" ||
+      typeof fixture.valid !== "boolean" ||
+      !("instance" in fixture)
+    ) {
+      throw new Error(`Malformed fixture entry in ${fixturePath}`);
+    }
+
+    if (names.has(fixture.name)) {
+      throw new Error(`Duplicate fixture name: ${fixture.name}`);
+    }
+    names.add(fixture.name);
+
+    const validate = validator.getSchema(fixture.schemaId);
+    if (!validate) {
+      throw new Error(
+        `Fixture ${fixture.name} references unknown schema ${fixture.schemaId}`
+      );
+    }
+
+    const actual = validate(fixture.instance);
+    if (actual !== fixture.valid) {
+      const errors = actual
+        ? "expected rejection but validation passed"
+        : validator.errorsText(validate.errors);
+      throw new Error(`Fixture ${fixture.name} disagrees: ${errors}`);
+    }
+
+    if (fixture.valid) {
+      validCount += 1;
+    } else {
+      invalidCount += 1;
+    }
+  }
+
+  return {
+    fixtureCount: fixtureSuite.cases.length,
+    fixtureVersion: fixtureSuite.fixtureVersion,
+    invalidCount,
+    validCount
   };
 }

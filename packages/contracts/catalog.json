@@ -5,6 +5,31 @@
       "id": "https://agentroom.dev/schemas/catalog.schema.json",
       "kind": "meta",
       "path": "schemas/catalog.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/common/error.schema.json",
+      "kind": "common",
+      "path": "schemas/common/error.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/common/identifiers.schema.json",
+      "kind": "common",
+      "path": "schemas/common/identifiers.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/common/message-envelope.schema.json",
+      "kind": "common",
+      "path": "schemas/common/message-envelope.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/common/protocol-version.schema.json",
+      "kind": "common",
+      "path": "schemas/common/protocol-version.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json",
+      "kind": "common",
+      "path": "schemas/common/utc-timestamp.schema.json"
     }
   ]
 }

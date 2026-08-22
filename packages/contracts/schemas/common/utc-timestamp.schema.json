@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json",
+  "title": "Agent Room UTC Timestamp",
+  "description": "RFC 3339 date-time normalized to the UTC Z suffix.",
+  "type": "string",
+  "format": "date-time",
+  "pattern": "Z$"
+}
