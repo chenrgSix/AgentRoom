@@ -16,6 +16,8 @@ import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
 import { RunRepository } from "./run/run-repository.js";
 import { RunService } from "./run/run-service.js";
+import { FakeRuntimeAdapter } from "./runtime/fake-runtime-adapter.js";
+import { InProcessRunExecutor } from "./runtime/in-process-run-executor.js";
 import {
   AuthService,
   AuthorizationError,
@@ -70,8 +72,11 @@ export async function createServerApp(
   const agents = new AgentService(core, auth);
   const presence = new PresenceService(core, auth);
   const messages = new MessageService(core, auth);
-  const runs = new RunService(core, new RunRepository(database), auth);
   const clock = options.clock ?? (() => new Date().toISOString());
+  const runRepository = new RunRepository(database);
+  const runs = new RunService(core, runRepository, auth);
+  const executor = new InProcessRunExecutor(core, runRepository, clock);
+  const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
   const app = Fastify({ logger: options.logger ?? false });
   const principal = (request: FastifyRequest): WebPrincipal =>
     auth.authenticateWebSession(bearerToken(request), clock());
@@ -190,7 +195,7 @@ export async function createServerApp(
         deviceId: device.deviceId,
         name,
         role: requiredString(body.role, "role"),
-        integrationMode: "managed",
+        integrationMode: "fake",
         capabilities: {
           supportsHandoff: true,
           supportsInterrupt: true,
@@ -208,6 +213,7 @@ export async function createServerApp(
         adapterAvailable: true,
         now
       });
+      fakeAdapters.set(agent.agentId, new FakeRuntimeAdapter());
       return core.getAgent(agent.agentId);
     }
   );
@@ -249,15 +255,49 @@ export async function createServerApp(
           : {}),
         now: clock()
       });
+      const createdRuns = runs.createRunsForMessage(actor, message.messageId, clock());
+      const executedRuns = [];
+      for (const run of createdRuns) {
+        const adapter = fakeAdapters.get(run.targetAgentId);
+        if (!adapter) {
+          executedRuns.push(run);
+          continue;
+        }
+        adapter.enqueue({
+          expectedInstruction: message.content,
+          events: [
+            { type: "status", sequence: 1, status: "working" },
+            {
+              type: "reply",
+              sequence: 2,
+              content: `${target?.name ?? "Agent"} completed: ${message.content}`
+            },
+            { type: "status", sequence: 3, status: "completed" }
+          ]
+        });
+        executedRuns.push(await executor.execute(run.runId, adapter));
+      }
       return {
         message,
-        runs: runs.createRunsForMessage(actor, message.messageId, clock())
+        runs: executedRuns
       };
     }
   );
   app.get<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/runs",
     async (request) => runs.listRoomRuns(principal(request), request.params.roomId)
+  );
+  app.get<{ Params: { runId: string } }>(
+    "/api/runs/:runId/events",
+    async (request) => {
+      const actor = principal(request);
+      const run = runRepository.getRun(request.params.runId);
+      if (!run) {
+        throw new Error(`Run not found: ${request.params.runId}`);
+      }
+      runs.listRoomRuns(actor, run.roomId);
+      return runRepository.listEvents(run.runId);
+    }
   );
 
   if (options.webRoot) {

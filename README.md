@@ -10,9 +10,10 @@ the Team wake a managed Agent.
 
 ## Status
 
-The project has a central Fastify API, SQLite domain model, and browser Team
-shell. Message/Run presentation, MCP, and the production Bridge remain under
-implementation.
+The central Team MVP is runnable: the Fastify API and React UI persist Teams,
+Rooms, Agents, messages, structured mentions, Runs, ordered Run events, and
+Agent replies in SQLite. An in-process Fake Runtime closes the browser-to-Agent
+acceptance loop. Remote MCP and the production Go Bridge remain planned.
 
 - Current baseline:
   [agent_room_network_design_v0.2.md](agent_room_network_design_v0.2.md)
@@ -69,6 +70,10 @@ npm run db:migrate
 npm run dev:server
 npm run dev:web
 ```
+
+Run the two development commands in separate terminals, then open
+`http://127.0.0.1:5173`. Create a Team, Room, and one or more Fake Agents;
+select an Agent in the composer to create and execute a structured Run.
 
 The migration command uses `AGENT_ROOM_DATABASE_PATH`,
 `AGENT_ROOM_DATA_DIR`, or the server workspace's local `var/` directory.

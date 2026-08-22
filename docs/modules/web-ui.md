@@ -33,6 +33,11 @@ The UI uses schemas and generated types from `packages/contracts/`. Capability
 flags control whether start, resume, interrupt, handoff, or managed execution
 controls are shown.
 
+The current MVP provides Team and Room creation, Fake Agent registration,
+durable message history, stable-ID Agent selection, and inline Run status.
+After a mentioned Fake Agent completes, the UI reconciles the authoritative
+timeline so its persisted reply appears without client-side routing logic.
+
 ## Interaction and Security Rules
 
 - Mentions select a registered Agent identity, not free-form `@text` parsing.

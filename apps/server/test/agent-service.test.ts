@@ -14,7 +14,7 @@ import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
 const now = "2026-08-22T10:00:00.000Z";
 
-test("managed and manual Agent publications enforce capability ownership", async () => {
+test("managed, fake, and manual Agent publications enforce capability ownership", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-agent-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
@@ -73,14 +73,30 @@ test("managed and manual Agent publications enforce capability ownership", async
       },
       now
     });
+    const fake = agents.publishAgent(principal, {
+      teamId: created.team.teamId,
+      deviceId: device.deviceId,
+      name: "Test Double",
+      role: "Acceptance",
+      integrationMode: "fake",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      now
+    });
 
     assert.equal(managed.presence, "offline");
     assert.equal(manual.presence, "manual");
+    assert.equal(fake.integrationMode, "fake");
     assert.deepEqual(
       agents.listAgents(principal, created.team.teamId)
         .map((agent) => agent.name)
         .sort(),
-      ["Builder", "Reviewer"]
+      ["Builder", "Reviewer", "Test Double"]
     );
     assert.throws(() => agents.publishAgent(principal, {
       teamId: created.team.teamId,

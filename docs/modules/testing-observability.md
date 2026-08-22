@@ -21,6 +21,11 @@ Every behavioral fix adds a focused regression. Protocol changes require
 cross-language compatibility tests. The deterministic FakeAdapter is the
 default for races, disconnects, duplicate delivery, and timeout scenarios.
 
+The `QA-001` integration test exercises one authenticated user, one Team and
+Room, two Fake Agents, stable-ID mentions, ordered Run events, Agent replies,
+and SQLite reload through the public HTTP API. It is the central MVP gate; it
+does not claim production Bridge, WebSocket, or browser automation coverage.
+
 ## Required Scenarios
 
 The release suite covers offline queueing, ACK loss, duplicate delivery,

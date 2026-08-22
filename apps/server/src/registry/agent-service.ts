@@ -15,7 +15,7 @@ export interface PublishAgentInput {
   deviceId: string | null;
   name: string;
   role: string;
-  integrationMode: "managed" | "manual";
+  integrationMode: "managed" | "manual" | "fake";
   capabilities: AgentCapabilities;
   now: string;
 }
@@ -29,9 +29,9 @@ function normalizedLabel(value: string, label: string): string {
 }
 
 function validateCapabilities(input: PublishAgentInput): void {
-  if (input.integrationMode === "managed") {
+  if (input.integrationMode === "managed" || input.integrationMode === "fake") {
     if (!input.deviceId || !input.capabilities.supportsStart) {
-      throw new Error("Managed Agents require a Device and start capability");
+      throw new Error("Managed and Fake Agents require a Device and start capability");
     }
     return;
   }

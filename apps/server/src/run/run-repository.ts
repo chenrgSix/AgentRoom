@@ -1,5 +1,7 @@
 import type Database from "better-sqlite3";
 
+import type { RuntimeEvent } from "../runtime/runtime-adapter.js";
+
 export type RunState =
   | "queued"
   | "delivered"
@@ -26,6 +28,18 @@ export interface RunRecord {
   terminalAt: string | null;
 }
 
+export interface RunEventRecord {
+  runId: string;
+  sequence: number;
+  event: RuntimeEvent;
+  createdAt: string;
+}
+
+export interface AppliedRunEvent {
+  applied: boolean;
+  run: RunRecord;
+}
+
 interface RunRow {
   run_id: string;
   room_id: string;
@@ -42,6 +56,23 @@ interface RunRow {
   terminal_at: string | null;
 }
 
+interface RunEventRow {
+  run_id: string;
+  sequence: number;
+  event_type: RuntimeEvent["type"];
+  status: RunState | null;
+  content: string | null;
+  error_json: string | null;
+  created_at: string;
+}
+
+const terminalStates = new Set<RunState>([
+  "completed",
+  "failed",
+  "canceled",
+  "outcome_unknown"
+]);
+
 function mapRun(row: RunRow): RunRecord {
   return {
     runId: row.run_id,
@@ -57,6 +88,33 @@ function mapRun(row: RunRow): RunRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     terminalAt: row.terminal_at
+  };
+}
+
+function mapRunEvent(row: RunEventRow): RunEventRecord {
+  const event: RuntimeEvent = row.event_type === "reply"
+    ? {
+        type: "reply",
+        sequence: row.sequence,
+        content: row.content ?? ""
+      }
+    : {
+        type: "status",
+        sequence: row.sequence,
+        status: row.status as Extract<RuntimeEvent, { type: "status" }>["status"],
+        ...(row.error_json
+          ? { error: JSON.parse(row.error_json) as {
+              code: string;
+              message: string;
+              retryable: boolean;
+            } }
+          : {})
+      };
+  return {
+    runId: row.run_id,
+    sequence: row.sequence,
+    event,
+    createdAt: row.created_at
   };
 }
 
@@ -102,5 +160,59 @@ export class RunRepository {
       SELECT * FROM runs WHERE room_id = ? ORDER BY created_at, run_id
     `).all(roomId) as RunRow[];
     return rows.map(mapRun);
+  }
+
+  public applyEvent(
+    runId: string,
+    event: RuntimeEvent,
+    now: string
+  ): AppliedRunEvent {
+    return this.database.transaction(() => {
+      const current = this.getRun(runId);
+      if (!current) {
+        throw new Error(`Run not found: ${runId}`);
+      }
+      if (event.sequence <= current.lastSequence || terminalStates.has(current.state)) {
+        return { applied: false, run: current };
+      }
+      if (event.sequence !== current.lastSequence + 1) {
+        throw new Error(`Run event sequence gap: ${event.sequence}`);
+      }
+
+      const nextState = event.type === "status" ? event.status : current.state;
+      const terminalAt = terminalStates.has(nextState) ? now : null;
+      this.database.prepare(`
+        INSERT INTO run_events (
+          run_id, sequence, event_type, status, content, error_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        runId,
+        event.sequence,
+        event.type,
+        event.type === "status" ? event.status : null,
+        event.type === "reply" ? event.content : null,
+        event.type === "status" && event.error
+          ? JSON.stringify(event.error)
+          : null,
+        now
+      );
+      this.database.prepare(`
+        UPDATE runs
+        SET state = ?, last_sequence = ?, updated_at = ?, terminal_at = ?
+        WHERE run_id = ?
+      `).run(nextState, event.sequence, now, terminalAt, runId);
+      const updated = this.getRun(runId);
+      if (!updated) {
+        throw new Error(`Run disappeared after event: ${runId}`);
+      }
+      return { applied: true, run: updated };
+    }).immediate();
+  }
+
+  public listEvents(runId: string): RunEventRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM run_events WHERE run_id = ? ORDER BY sequence
+    `).all(runId) as RunEventRow[];
+    return rows.map(mapRunEvent);
   }
 }

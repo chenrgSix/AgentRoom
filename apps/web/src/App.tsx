@@ -263,7 +263,7 @@ export function App() {
     setBusy(true);
     setError(null);
     try {
-      const result = await jsonRequest<{ message: Message; runs: Run[] }>(
+      await jsonRequest<{ message: Message; runs: Run[] }>(
         `/api/rooms/${selectedRoomId}/messages`,
         {
           method: "POST",
@@ -276,8 +276,20 @@ export function App() {
       );
       setMessageContent("");
       setMentionAgentId("");
-      setMessages((current) => [...current, result.message]);
-      setRuns((current) => [...current, ...result.runs]);
+      const [page, nextRuns] = await Promise.all([
+        jsonRequest<{ items: Message[] }>(
+          `/api/rooms/${selectedRoomId}/messages?limit=100`,
+          {},
+          session.token
+        ),
+        jsonRequest<Run[]>(
+          `/api/rooms/${selectedRoomId}/runs`,
+          {},
+          session.token
+        )
+      ]);
+      setMessages(page.items);
+      setRuns(nextRuns);
     } catch (reason) {
       setError(String(reason));
     } finally {

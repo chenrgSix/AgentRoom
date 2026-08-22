@@ -550,4 +550,20 @@ export class CoreRepository {
     `).all(roomId, sequence, limit) as MessageRow[];
     return rows.map((row) => mapMessage(this.database, row));
   }
+
+  public listMessagesThrough(
+    roomId: string,
+    sequence: number,
+    limit: number
+  ): MessageRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM (
+        SELECT * FROM messages
+        WHERE room_id = ? AND sequence <= ?
+        ORDER BY sequence DESC
+        LIMIT ?
+      ) ORDER BY sequence
+    `).all(roomId, sequence, limit) as MessageRow[];
+    return rows.map((row) => mapMessage(this.database, row));
+  }
 }

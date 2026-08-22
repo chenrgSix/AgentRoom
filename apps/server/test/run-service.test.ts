@@ -29,7 +29,8 @@ test("one idempotent queued Run is created per structured Agent Mention", async 
     const registry = new MemberDeviceService(core, auth);
     const agents = new AgentService(core, auth);
     const messages = new MessageService(core, auth);
-    const runService = new RunService(core, new RunRepository(database), auth);
+    const runRepository = new RunRepository(database);
+    const runService = new RunService(core, runRepository, auth);
     const created = teams.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
       userDisplayName: "Alice",
@@ -88,6 +89,37 @@ test("one idempotent queued Run is created per structured Agent Mention", async 
     assert.equal(first[0]?.targetAgentId, agent.agentId);
     assert.deepEqual(repeated, first);
     assert.deepEqual(runService.listRoomRuns(principal, room.roomId), first);
+
+    const runId = first[0]?.runId ?? "";
+    assert.equal(runRepository.applyEvent(runId, {
+      type: "status",
+      sequence: 1,
+      status: "working"
+    }, now).run.state, "working");
+    assert.equal(runRepository.applyEvent(runId, {
+      type: "reply",
+      sequence: 1,
+      content: "stale"
+    }, now).applied, false);
+    assert.equal(runRepository.applyEvent(runId, {
+      type: "reply",
+      sequence: 2,
+      content: "done"
+    }, now).applied, true);
+    assert.equal(runRepository.applyEvent(runId, {
+      type: "status",
+      sequence: 3,
+      status: "completed"
+    }, now).run.state, "completed");
+    assert.equal(runRepository.applyEvent(runId, {
+      type: "status",
+      sequence: 4,
+      status: "failed"
+    }, now).applied, false);
+    assert.deepEqual(
+      runRepository.listEvents(runId).map((event) => event.sequence),
+      [1, 2, 3]
+    );
   } finally {
     database.close();
   }
