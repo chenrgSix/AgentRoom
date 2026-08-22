@@ -63,7 +63,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | --- | --- | --- | --- | --- |
 | SEC-001 | DONE | Define Web user, member, and device credential model | CON-002 | threat cases and auth contract tests pass |
 | ROOM-001 | DONE | Implement Team and Room repositories and services | DATA-002, SEC-001 | create, read, and authorization tests pass |
-| ROOM-002 | PLANNED | Implement Message persistence and pagination | ROOM-001 | stable cursor ordering survives restart |
+| ROOM-002 | DONE | Implement Message persistence and pagination | ROOM-001 | stable cursor ordering survives restart |
 | ROOM-003 | PLANNED | Validate structured Mention references | ROOM-002, REG-002 | invalid or unauthorized mentions are rejected |
 | REG-001 | DONE | Implement Member and Device registry | DATA-002, SEC-001 | membership and device ownership persist |
 | REG-002 | PLANNED | Implement Agent publication and capability validation | REG-001, CON-003 | managed/manual agents publish correctly |

@@ -105,6 +105,35 @@ interface MessageRow {
   created_at: string;
 }
 
+function mapMessage(
+  database: Database.Database,
+  row: MessageRow
+): MessageRecord {
+  const mentions = database.prepare(`
+    SELECT target_type, target_agent_id, display_label
+    FROM message_mentions WHERE message_id = ? ORDER BY ordinal
+  `).all(row.message_id) as Array<{
+    target_type: "agent";
+    target_agent_id: string;
+    display_label: string;
+  }>;
+  return {
+    messageId: row.message_id,
+    roomId: row.room_id,
+    sequence: row.sequence,
+    senderType: row.sender_type,
+    senderId: row.sender_id,
+    content: row.content,
+    mentions: mentions.map((mention) => ({
+      targetType: mention.target_type,
+      targetAgentId: mention.target_agent_id,
+      displayLabel: mention.display_label
+    })),
+    parentMessageId: row.parent_message_id,
+    createdAt: row.created_at
+  };
+}
+
 function mapAgent(row: AgentRow): AgentRecord {
   return {
     agentId: row.agent_id,
@@ -429,28 +458,20 @@ export class CoreRepository {
     if (!row) {
       return undefined;
     }
-    const mentions = this.database.prepare(`
-      SELECT target_type, target_agent_id, display_label
-      FROM message_mentions WHERE message_id = ? ORDER BY ordinal
-    `).all(messageId) as Array<{
-      target_type: "agent";
-      target_agent_id: string;
-      display_label: string;
-    }>;
-    return {
-      messageId: row.message_id,
-      roomId: row.room_id,
-      sequence: row.sequence,
-      senderType: row.sender_type,
-      senderId: row.sender_id,
-      content: row.content,
-      mentions: mentions.map((mention) => ({
-        targetType: mention.target_type,
-        targetAgentId: mention.target_agent_id,
-        displayLabel: mention.display_label
-      })),
-      parentMessageId: row.parent_message_id,
-      createdAt: row.created_at
-    };
+    return mapMessage(this.database, row);
+  }
+
+  public listMessagesAfter(
+    roomId: string,
+    sequence: number,
+    limit: number
+  ): MessageRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM messages
+      WHERE room_id = ? AND sequence > ?
+      ORDER BY sequence
+      LIMIT ?
+    `).all(roomId, sequence, limit) as MessageRow[];
+    return rows.map((row) => mapMessage(this.database, row));
   }
 }
