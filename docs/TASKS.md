@@ -125,6 +125,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | QA-003 | PLANNED | Verify three-Agent guarded handoff | MCP-003, RUN-006 | Alice, Bob, Carol chain completes |
 | QA-004 | PLANNED | Verify restart, reconnect, duplicate, and cancellation | DATA-003, RUN-005 | recovery matrix passes repeatedly |
 | QA-005 | PLANNED | Run security and clean-room release audit | SEC-004, QA-004 | audit report has no open critical finding |
+| QA-006 | DONE | Verify local cross-process managed flow | BRG-005, ADP-005, RUN-003 | real server, Go Bridge, and Generic Runtime reply passes |
 
 ## Deferred Beyond MVP
 

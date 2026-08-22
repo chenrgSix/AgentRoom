@@ -17,6 +17,7 @@
     "dev:server": "npm run dev --workspace @agent-room/server",
     "dev:web": "npm run dev --workspace @agent-room/web",
     "test": "npm run test --workspaces --if-present",
+    "test:e2e": "tsx --test tests/e2e/**/*.test.ts",
     "validate": "npm run validate --workspaces --if-present",
     "lint:docs": "markdownlint-cli2 \"**/*.md\""
   },

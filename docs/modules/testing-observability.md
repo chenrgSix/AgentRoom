@@ -14,7 +14,7 @@ release evidence.
 - Unit tests verify domain transitions, validation, and policy decisions.
 - Contract tests verify JSON Schema in TypeScript, Go, and each adapter.
 - Integration tests exercise SQLite, WebSocket, MCP, Bridge, and recovery seams.
-- E2E tests run browser-to-server-to-FakeAdapter workflows.
+- E2E tests run public API-to-server-to-real Bridge process workflows.
 - Security tests prove unauthorized and unsafe operations are rejected.
 
 Every behavioral fix adds a focused regression. Protocol changes require
@@ -25,6 +25,12 @@ The `QA-001` integration test exercises one authenticated user, one Team and
 Room, two Fake Agents, stable-ID mentions, ordered Run events, Agent replies,
 and SQLite reload through the public HTTP API. It is the central MVP gate; it
 does not claim production Bridge, WebSocket, or browser automation coverage.
+
+`QA-006` starts a real TCP server, builds and pairs the Go Bridge, publishes a
+managed Generic CLI Agent, sends a structured Mention through the Web API, and
+asserts the durable terminal Run and Agent reply. It proves the local
+cross-process transport while keeping physical two-machine Codex acceptance as
+a separate release check.
 
 ## Required Scenarios
 
@@ -47,7 +53,7 @@ degraded optional capabilities. Audit records are durable and access-controlled.
 
 A task is `DONE` only when its completion evidence in `docs/TASKS.md` exists.
 Release notes name migrations, compatibility changes, security impact, and the
-exact checks run. Work is tracked by `QA-001` through `QA-005` and `OPS-001`
+exact checks run. Work is tracked by `QA-001` through `QA-006` and `OPS-001`
 through `OPS-002`.
 
 ## Dependencies
