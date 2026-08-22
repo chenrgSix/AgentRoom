@@ -63,6 +63,10 @@ revocation, unpublished Runtime launch, credential leakage, and attempts to
 bypass local policy. Work is tracked by `SEC-001` through `SEC-004`, with pairing
 transport under `BRG-002`, in `docs/TASKS.md`.
 
+Revoking a Device atomically marks it revoked, revokes all of its credentials,
+disables its managed Agents, and projects them offline. The active Bridge socket
+is closed immediately, and later reconnects fail authentication.
+
 ## Dependencies
 
 Contracts. Every transport and domain service depends on Security decisions.

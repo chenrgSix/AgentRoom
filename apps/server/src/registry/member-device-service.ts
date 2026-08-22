@@ -90,4 +90,22 @@ export class MemberDeviceService {
     this.auth.requireTeamMember(principal, teamId);
     return this.repository.listDevices(teamId);
   }
+
+  public revokeDevice(
+    principal: WebPrincipal,
+    teamId: string,
+    deviceId: string,
+    now: string
+  ): DeviceRecord {
+    const actor = this.auth.requireTeamMember(principal, teamId);
+    const device = this.repository.getDevice(deviceId);
+    if (
+      !device ||
+      device.teamId !== teamId ||
+      (actor.role !== "owner" && device.ownerMemberId !== actor.memberId)
+    ) {
+      throw new AuthorizationError("FORBIDDEN", "Device revoke denied");
+    }
+    return this.repository.revokeDevice(deviceId, now) ?? device;
+  }
 }

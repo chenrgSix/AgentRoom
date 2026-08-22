@@ -57,6 +57,16 @@ test("an owner adds a Member and each Member owns their registered Device", asyn
     assert.equal(device.ownerMemberId, bob.memberId);
     assert.equal(registry.listMembers(owner, created.team.teamId).length, 2);
     assert.deepEqual(registry.listDevices(owner, created.team.teamId), [device]);
+    const deviceCredential = auth.issueDeviceCredential(device.deviceId, now);
+    assert.equal(
+      registry.revokeDevice(owner, created.team.teamId, device.deviceId, now).status,
+      "revoked"
+    );
+    assert.throws(
+      () => auth.authenticateDevice(deviceCredential.secret, now),
+      (error: unknown) =>
+        error instanceof AuthorizationError && error.code === "UNAUTHENTICATED"
+    );
     assert.throws(
       () => registry.addMember(bobPrincipal, {
         teamId: created.team.teamId,

@@ -361,6 +361,23 @@ export async function createServerApp(
     }
   );
   app.get<{ Params: { teamId: string } }>(
+    "/api/teams/:teamId/devices",
+    async (request) => registry.listDevices(principal(request), request.params.teamId)
+  );
+  app.delete<{ Params: { teamId: string; deviceId: string } }>(
+    "/api/teams/:teamId/devices/:deviceId",
+    async (request) => {
+      const device = registry.revokeDevice(
+        principal(request),
+        request.params.teamId,
+        request.params.deviceId,
+        clock()
+      );
+      bridgeConnections.revoke(device.deviceId);
+      return device;
+    }
+  );
+  app.get<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/members",
     async (request) => registry.listMembers(principal(request), request.params.teamId)
   );

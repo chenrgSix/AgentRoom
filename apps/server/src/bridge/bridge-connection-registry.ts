@@ -42,4 +42,11 @@ export class BridgeConnectionRegistry {
   public activeEpoch(deviceId: string): number | undefined {
     return this.connections.get(deviceId)?.epoch;
   }
+
+  public revoke(deviceId: string): void {
+    const connection = this.connections.get(deviceId);
+    if (!connection) return;
+    this.connections.delete(deviceId);
+    connection.socket.close(4_004, "Device revoked");
+  }
 }

@@ -477,6 +477,24 @@ export class CoreRepository {
     }));
   }
 
+  public revokeDevice(deviceId: string, now: string): DeviceRecord | undefined {
+    return this.database.transaction(() => {
+      this.database.prepare(`
+        UPDATE devices SET status = 'revoked', revoked_at = ?
+        WHERE device_id = ? AND status = 'active'
+      `).run(now, deviceId);
+      this.database.prepare(`
+        UPDATE device_credentials SET revoked_at = ?
+        WHERE device_id = ? AND revoked_at IS NULL
+      `).run(now, deviceId);
+      this.database.prepare(`
+        UPDATE agents SET presence = 'offline', enabled = 0, updated_at = ?
+        WHERE device_id = ?
+      `).run(now, deviceId);
+      return this.getDevice(deviceId);
+    }).immediate();
+  }
+
   public getAgent(agentId: string): AgentRecord | undefined {
     const row = this.database.prepare(`
       SELECT * FROM agents WHERE agent_id = ?
