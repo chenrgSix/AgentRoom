@@ -1,4 +1,5 @@
 export type RuntimeStatus =
+  | "delivered"
   | "working"
   | "input_required"
   | "completed"

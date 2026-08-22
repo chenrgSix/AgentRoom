@@ -23,6 +23,7 @@ import { TeamWaitService } from "./mcp/team-wait-service.js";
 import { AgentService } from "./registry/agent-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
+import { DeliveryService } from "./run/delivery-service.js";
 import { RunRepository } from "./run/run-repository.js";
 import { RunService } from "./run/run-service.js";
 import { FakeRuntimeAdapter } from "./runtime/fake-runtime-adapter.js";
@@ -90,6 +91,13 @@ export async function createServerApp(
   const executor = new InProcessRunExecutor(core, runRepository, clock);
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
   const bridgeConnections = new BridgeConnectionRegistry();
+  const delivery = new DeliveryService(
+    database,
+    core,
+    runRepository,
+    bridgeConnections,
+    clock
+  );
   const app = Fastify({ logger: options.logger ?? false });
   await app.register(fastifyWebsocket, {
     options: { maxPayload: 1024 * 1024 }
@@ -163,6 +171,7 @@ export async function createServerApp(
             adapterAvailable: true,
             now: clock()
           });
+          delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
           return;
         }
         if (message.type === "bridge.heartbeat" && registeredEpoch !== undefined) {
@@ -179,6 +188,7 @@ export async function createServerApp(
             adapterAvailable: true,
             now: clock()
           });
+          delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
           return;
         }
         if (message.type === "agent.publish" && registeredEpoch !== undefined) {
@@ -210,6 +220,25 @@ export async function createServerApp(
             },
             now: clock()
           });
+          delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
+          return;
+        }
+        if (message.type === "run.accepted" && registeredEpoch !== undefined) {
+          if (
+            typeof message.payload.runId !== "string" ||
+            typeof message.payload.agentId !== "string" ||
+            message.payload.sequence !== 1
+          ) {
+            socket.close(4_003, "Invalid Run acceptance");
+            return;
+          }
+          delivery.accept(
+            devicePrincipal,
+            message.payload.runId,
+            message.payload.agentId,
+            1,
+            clock()
+          );
           return;
         }
         socket.close(4_003, "Bridge hello required before messages");
@@ -441,7 +470,8 @@ export async function createServerApp(
       for (const run of createdRuns) {
         const adapter = fakeAdapters.get(run.targetAgentId);
         if (!adapter) {
-          executedRuns.push(run);
+          delivery.dispatch(run.runId);
+          executedRuns.push(runRepository.getRun(run.runId) ?? run);
           continue;
         }
         adapter.enqueue({

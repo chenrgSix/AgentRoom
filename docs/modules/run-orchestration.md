@@ -49,6 +49,11 @@ outcome becomes `outcome_unknown` and is never automatically rerun.
 
 Delivery is at least once; execution is idempotent through the Bridge inbox.
 
+The server persists one Delivery payload per managed Run before the first send.
+Retries increment `sendCount` but preserve the attempt ID, idempotency key, and
+payload bytes. A valid `run.accepted` sequence 1 moves the Run to `delivered`;
+duplicate ACKs are idempotent.
+
 ## Event Ordering
 
 Each accepted Run has a Bridge-generated monotonic `sequence`. The server
