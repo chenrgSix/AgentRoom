@@ -76,6 +76,42 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     assert.throws(() => service.applyStatus(devicePrincipal, {
       runId: run.runId, agentId: "agent_wrong_identity", sequence: 5, status: "failed"
     }, now), /identity mismatch/u);
+
+    const bob = registry.addMember(principal, {
+      teamId: created.team.teamId,
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4B0B0",
+      displayName: "Bob",
+      now
+    });
+    const bobSession = auth.issueWebSession(
+      bob.userId ?? "", now, "2026-08-22T11:00:00.000Z"
+    );
+    const bobPrincipal = auth.authenticateWebSession(bobSession.secret, now);
+    const bobDevice = registry.registerOwnDevice(
+      bobPrincipal, created.team.teamId, "Bob Mac", now
+    );
+    const bobCredential = auth.issueDeviceCredential(bobDevice.deviceId, now);
+    assert.throws(() => service.applyStatus(
+      auth.authenticateDevice(bobCredential.secret, now),
+      { runId: run.runId, agentId: agent.agentId, sequence: 5, status: "failed" },
+      now
+    ), /identity mismatch/u);
+
+    const otherTeam = teams.createTeamForUser({
+      userId: created.owner.userId ?? "",
+      userDisplayName: "Alice",
+      teamName: "Other Team",
+      now
+    });
+    const otherDevice = registry.registerOwnDevice(
+      principal, otherTeam.team.teamId, "Other Team Mac", now
+    );
+    const otherCredential = auth.issueDeviceCredential(otherDevice.deviceId, now);
+    assert.throws(() => service.applyStatus(
+      auth.authenticateDevice(otherCredential.secret, now),
+      { runId: run.runId, agentId: agent.agentId, sequence: 5, status: "failed" },
+      now
+    ), /identity mismatch/u);
   } finally {
     database.close();
   }

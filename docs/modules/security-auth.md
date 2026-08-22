@@ -67,6 +67,10 @@ Revoking a Device atomically marks it revoked, revokes all of its credentials,
 disables its managed Agents, and projects them offline. The active Bridge socket
 is closed immediately, and later reconnects fail authentication.
 
+Run acceptance, status, and replies require an exact Team, Device owner, and
+target Agent binding. Cross-Team and same-Team cross-owner events are rejected
+before they can advance sequence state or append a Room reply.
+
 ## Dependencies
 
 Contracts. Every transport and domain service depends on Security decisions.
