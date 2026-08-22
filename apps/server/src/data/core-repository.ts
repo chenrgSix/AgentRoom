@@ -132,6 +132,14 @@ export class CoreRepository {
     `).run(user);
   }
 
+  public ensureUser(user: WebUserRecord): void {
+    this.database.prepare(`
+      INSERT INTO web_users (user_id, display_name, created_at)
+      VALUES (@userId, @displayName, @createdAt)
+      ON CONFLICT (user_id) DO UPDATE SET display_name = excluded.display_name
+    `).run(user);
+  }
+
   public createTeamWithOwner(team: TeamRecord, owner: MemberRecord): void {
     this.database.transaction(() => {
       this.database.prepare(`
@@ -248,6 +256,25 @@ export class CoreRepository {
     return row && { teamId: row.team_id, name: row.name, createdAt: row.created_at };
   }
 
+  public listTeamsForUser(userId: string): TeamRecord[] {
+    const rows = this.database.prepare(`
+      SELECT t.team_id, t.name, t.created_at
+      FROM teams t
+      JOIN team_members tm ON tm.team_id = t.team_id
+      WHERE tm.user_id = ?
+      ORDER BY t.created_at, t.team_id
+    `).all(userId) as Array<{
+      team_id: string;
+      name: string;
+      created_at: string;
+    }>;
+    return rows.map((row) => ({
+      teamId: row.team_id,
+      name: row.name,
+      createdAt: row.created_at
+    }));
+  }
+
   public getMember(memberId: string): MemberRecord | undefined {
     const row = this.database.prepare(`
       SELECT member_id, team_id, user_id, display_name, role, created_at
@@ -284,6 +311,24 @@ export class CoreRepository {
       name: row.name,
       createdAt: row.created_at
     };
+  }
+
+  public listRooms(teamId: string): RoomRecord[] {
+    const rows = this.database.prepare(`
+      SELECT room_id, team_id, name, created_at
+      FROM rooms WHERE team_id = ? ORDER BY created_at, room_id
+    `).all(teamId) as Array<{
+      room_id: string;
+      team_id: string;
+      name: string;
+      created_at: string;
+    }>;
+    return rows.map((row) => ({
+      roomId: row.room_id,
+      teamId: row.team_id,
+      name: row.name,
+      createdAt: row.created_at
+    }));
   }
 
   public getDevice(deviceId: string): DeviceRecord | undefined {
