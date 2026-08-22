@@ -121,6 +121,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | SEC-004 | DONE | Add message and log redaction boundary | MCP-002, BRG-004 | seeded secrets never enter persisted output |
 | OPS-001 | PLANNED | Propagate trace IDs through message, Run, Bridge, runtime | RUN-003 | one query reconstructs the full path |
 | OPS-002 | PLANNED | Add structured logs, metrics, and health endpoints | OPS-001 | failure dashboard signals defined scenarios |
+| OPS-003 | DONE | Document and configure deployable listener topology | BRG-003, MCP-001 | loopback, proxy, and trusted-LAN modes are explicit |
 | QA-002 | PLANNED | Verify two-machine managed Agent flow | ADP-004, WEB-005 | Alice Web to Bob Codex reply passes |
 | QA-003 | PLANNED | Verify three-Agent guarded handoff | MCP-003, RUN-006 | Alice, Bob, Carol chain completes |
 | QA-004 | DONE | Verify restart, reconnect, duplicate, and cancellation | DATA-003, RUN-005 | recovery matrix passes repeatedly |

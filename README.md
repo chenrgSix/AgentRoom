@@ -84,6 +84,10 @@ The migration command uses `AGENT_ROOM_DATABASE_PATH`,
 `AGENT_ROOM_DATA_DIR`, or the server workspace's local `var/` directory.
 Additional module commands must be added when those modules are scaffolded.
 
+For cross-machine use, keep the server on loopback behind an HTTPS reverse
+proxy, or explicitly set `AGENT_ROOM_HOST` for a trusted LAN test. Read
+[docs/deployment.md](docs/deployment.md) before exposing any endpoint.
+
 ## Delivery Workflow
 
 Start work from a stable task ID in `docs/TASKS.md`. Update its state and
