@@ -64,13 +64,32 @@ export class MessageService {
         throw new Error("Parent Message must belong to the same Room");
       }
     }
+    const mentions = input.mentions ?? [];
+    const targets = new Set<string>();
+    for (const mention of mentions) {
+      if (
+        mention.targetType !== "agent" ||
+        mention.displayLabel.trim().length === 0 ||
+        mention.displayLabel.length > 160
+      ) {
+        throw new Error("Malformed structured Agent Mention");
+      }
+      if (targets.has(mention.targetAgentId)) {
+        throw new Error(`Duplicate Agent Mention: ${mention.targetAgentId}`);
+      }
+      targets.add(mention.targetAgentId);
+      const agent = this.repository.getAgent(mention.targetAgentId);
+      if (!agent || agent.teamId !== member.teamId || !agent.enabled) {
+        throw new Error(`Mention target is unavailable: ${mention.targetAgentId}`);
+      }
+    }
     return this.repository.appendMessage({
       messageId: createOpaqueId("msg"),
       roomId: input.roomId,
       senderType: "member",
       senderId: member.memberId,
       content: input.content,
-      mentions: input.mentions ?? [],
+      mentions,
       parentMessageId: input.parentMessageId ?? null,
       createdAt: input.now
     });
