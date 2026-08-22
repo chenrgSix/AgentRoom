@@ -440,6 +440,8 @@
         "triggerMessageId",
         "requesterMemberId",
         "targetAgentId",
+        "deliveryAttemptId",
+        "idempotencyKey",
         "instruction",
         "contextMessages",
         "deadline"
@@ -459,6 +461,15 @@
         },
         "targetAgentId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "deliveryAttemptId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deliveryAttemptId"
+        },
+        "idempotencyKey": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$"
         },
         "parentRunId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"

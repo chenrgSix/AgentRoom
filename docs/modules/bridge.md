@@ -49,6 +49,10 @@ status before ACK. A duplicate returns the existing acceptance and cannot start
 a second Runtime process. If recovery cannot determine whether a process
 finished, the Bridge reports `outcome_unknown` rather than guessing.
 
+The MVP inbox uses one owner-only, fsynced JSON record per Run under `dataDir`.
+Acceptance is serialized, verifies both idempotency key and payload hash, and
+survives process restart before the Bridge sends `run.accepted` sequence 1.
+
 ## Local Safety
 
 Device credentials use OS-protected storage when available. The Bridge starts

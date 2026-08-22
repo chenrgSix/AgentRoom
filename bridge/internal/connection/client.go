@@ -26,6 +26,7 @@ type Client struct {
 	Credential        pairing.Credential
 	BridgeVersion     string
 	HeartbeatInterval time.Duration
+	HandleRun         func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
 }
 
 func (c Client) Run(ctx context.Context) error {
@@ -127,10 +128,30 @@ func (c Client) connectOnce(ctx context.Context) error {
 	readError := make(chan error, 1)
 	go func() {
 		for {
-			_, _, err := socket.Read(ctx)
+			_, source, err := socket.Read(ctx)
 			if err != nil {
 				readError <- err
 				return
+			}
+			var envelope struct {
+				Type string `json:"type"`
+			}
+			if err := json.Unmarshal(source, &envelope); err != nil {
+				readError <- err
+				return
+			}
+			if envelope.Type == "run.requested" && c.HandleRun != nil {
+				var requested contracts.RunRequestedMessage
+				if err := json.Unmarshal(source, &requested); err != nil {
+					readError <- err
+					return
+				}
+				if err := c.HandleRun(ctx, requested, func(sendContext context.Context, value any) error {
+					return writeJSON(sendContext, socket, value)
+				}); err != nil {
+					readError <- err
+					return
+				}
 			}
 		}
 	}()

@@ -152,6 +152,8 @@ export interface RunRequestedPayload {
    * RFC 3339 date-time normalized to the UTC Z suffix.
    */
   deadline:          string;
+  deliveryAttemptId: string;
+  idempotencyKey:    string;
   instruction:       string;
   parentRunId?:      string;
   requesterMemberId: string;

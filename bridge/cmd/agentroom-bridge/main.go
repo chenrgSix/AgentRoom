@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/connection"
+	"agentroom.dev/bridge/internal/delivery"
 	"agentroom.dev/bridge/internal/pairing"
+	contracts "agentroom.dev/contracts/generated/go"
 )
 
 const version = "0.1.0"
@@ -90,8 +93,16 @@ func run(args []string) error {
 		}
 		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 		defer stop()
+		inbox, err := delivery.Open(filepath.Join(loaded.DataDir, "inbox"))
+		if err != nil {
+			return err
+		}
+		runHandler := delivery.Handler{Inbox: inbox}
 		return (connection.Client{
 			Config: loaded, Credential: credential, BridgeVersion: version,
+			HandleRun: func(ctx context.Context, message contracts.RunRequestedMessage, send func(context.Context, any) error) error {
+				return runHandler.Handle(ctx, message, delivery.Sender(send))
+			},
 		}).Run(ctx)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])

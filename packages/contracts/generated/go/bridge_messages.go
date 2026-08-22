@@ -102,6 +102,8 @@ type RunRequestedPayload struct {
 	ContextMessages []ContextMessage `json:"contextMessages"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
 	Deadline          time.Time `json:"deadline"`
+	DeliveryAttemptID string    `json:"deliveryAttemptId"`
+	IdempotencyKey    string    `json:"idempotencyKey"`
 	Instruction       string    `json:"instruction"`
 	ParentRunID       *string   `json:"parentRunId,omitempty"`
 	RequesterMemberID string    `json:"requesterMemberId"`
