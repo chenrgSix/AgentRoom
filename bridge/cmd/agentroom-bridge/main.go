@@ -12,7 +12,9 @@ import (
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/delivery"
+	"agentroom.dev/bridge/internal/identity"
 	"agentroom.dev/bridge/internal/pairing"
+	bridgeruntime "agentroom.dev/bridge/internal/runtime"
 	contracts "agentroom.dev/contracts/generated/go"
 )
 
@@ -97,7 +99,18 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		runHandler := delivery.Handler{Inbox: inbox}
+		identities, err := identity.LoadOrCreate(loaded.DataDir, loaded.Agents)
+		if err != nil {
+			return err
+		}
+		adapters := make(map[string]bridgeruntime.Adapter, len(loaded.Agents))
+		for _, configured := range loaded.Agents {
+			if configured.Adapter == "generic" {
+				adapters[identities[configured.Name]] = bridgeruntime.GenericAdapter{Config: configured}
+			}
+		}
+		executor := delivery.RuntimeExecutor{Inbox: inbox, Adapters: adapters}
+		runHandler := delivery.Handler{Inbox: inbox, OnNew: executor.Execute}
 		return (connection.Client{
 			Config: loaded, Credential: credential, BridgeVersion: version,
 			HandleRun: func(ctx context.Context, message contracts.RunRequestedMessage, send func(context.Context, any) error) error {

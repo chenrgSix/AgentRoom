@@ -1,0 +1,55 @@
+package delivery
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	bridgeruntime "agentroom.dev/bridge/internal/runtime"
+	contracts "agentroom.dev/contracts/generated/go"
+)
+
+func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	request := contracts.RunRequestedPayload{
+		RunID: "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6", TargetAgentID: "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+		DeliveryAttemptID: "delivery_01K4Z6J7Y8N9P0Q1R2S3T4V5W6", IdempotencyKey: "idem_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+	}
+	record, _, err := inbox.Accept(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	working := contracts.Working
+	completed := contracts.Completed
+	adapter := &bridgeruntime.FakeAdapter{}
+	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
+		{Status: &working}, {Reply: "done"}, {Status: &completed},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	executor := RuntimeExecutor{
+		Inbox: inbox, Now: func() time.Time { return now },
+		Adapters: map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+	}
+	var sent []any
+	if err := executor.Execute(context.Background(), record, func(_ context.Context, value any) error {
+		sent = append(sent, value)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(sent) != 3 {
+		t.Fatalf("sent %d events, want 3", len(sent))
+	}
+	latest, err := inbox.Get(request.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.State != StateCompleted || latest.LastSequence != 4 {
+		t.Fatalf("unexpected persisted record: %#v", latest)
+	}
+}

@@ -32,6 +32,11 @@ pinned machine-readable schema/version and requires contract tests. A generic
 CLI adapter is the L2 fallback with reduced lifecycle and resume guarantees.
 Pull-only participants remain MCP clients and are not remote-wake capable.
 
+The Generic CLI Adapter executes only the configured argument array in its
+fixed workspace, sends the Run instruction on stdin, propagates only allowlisted
+environment variables, and caps returned stdout at 20 KB. Exit failure,
+deadline, cancellation, and output overflow become safe terminal Run events.
+
 The first Fake Adapter lives in the central server workspace solely for the
 in-process MVP acceptance harness. It implements the same ordered request/event
 shape without claiming Runtime ownership; production adapters remain in the Go
