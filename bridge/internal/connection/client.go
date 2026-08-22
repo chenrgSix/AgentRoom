@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"agentroom.dev/bridge/internal/config"
+	"agentroom.dev/bridge/internal/identity"
 	"agentroom.dev/bridge/internal/pairing"
 	contracts "agentroom.dev/contracts/generated/go"
 	"github.com/coder/websocket"
@@ -89,6 +90,38 @@ func (c Client) connectOnce(ctx context.Context) error {
 	}
 	if err := writeJSON(ctx, socket, hello); err != nil {
 		return err
+	}
+	identities, err := identity.LoadOrCreate(c.Config.DataDir, c.Config.Agents)
+	if err != nil {
+		return err
+	}
+	for _, configured := range c.Config.Agents {
+		capabilities := contracts.Capabilities{
+			InvocationMode:    contracts.Managed,
+			SupportsHandoff:   configured.Adapter == "codex",
+			SupportsInterrupt: true,
+			SupportsResume:    false,
+			SupportsStart:     true,
+			SupportsStreaming: configured.Adapter == "codex",
+		}
+		publication := contracts.AgentPublishMessage{
+			ProtocolVersion: "1.0",
+			MessageID:       newID("msg"),
+			Timestamp:       time.Now().UTC(),
+			Type:            contracts.AgentPublish,
+			Payload: contracts.AgentPublishPayload{
+				AgentID:       identities[configured.Name],
+				Capabilities:  capabilities,
+				DeviceID:      c.Credential.DeviceID,
+				Name:          configured.Name,
+				OwnerMemberID: c.Credential.OwnerMemberID,
+				Role:          configured.Role,
+				TeamID:        c.Credential.TeamID,
+			},
+		}
+		if err := writeJSON(ctx, socket, publication); err != nil {
+			return err
+		}
 	}
 
 	readError := make(chan error, 1)

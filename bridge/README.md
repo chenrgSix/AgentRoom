@@ -20,3 +20,5 @@ Bridge lifecycle tasks.
 For HTTPS, `serverCertificateSha256` is mandatory and pins the manually verified
 server certificate. Pairing stores `device-credential.json` under `dataDir`
 with owner-only permissions and refuses to overwrite an existing identity.
+Stable Agent IDs are generated once into `agent-identities.json` and reused on
+every reconnect; keep Agent configuration names stable when preserving identity.

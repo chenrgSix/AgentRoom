@@ -70,6 +70,10 @@ transition but must never produce two active Device bindings for one Agent.
 - Capability downgrade is accepted and immediately reflected in routing.
 - Registry responses expose only Agents visible to the authenticated Team.
 
+Managed Bridge publications carry a locally persisted stable Agent ID. The
+server permits create or update only when Device, Owner, and Team match the
+authenticated Device credential; reconnect publication is idempotent.
+
 ## Verification
 
 - Reconnect converges publication without duplicate Agents.

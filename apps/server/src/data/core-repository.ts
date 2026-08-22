@@ -250,6 +250,19 @@ export class CoreRepository {
     });
   }
 
+  public updateAgentPublication(agent: AgentRecord): void {
+    this.database.prepare(`
+      UPDATE agents
+      SET name = @name, role = @role, capabilities_json = @capabilitiesJson,
+          enabled = @enabled, presence = @presence, updated_at = @updatedAt
+      WHERE agent_id = @agentId
+    `).run({
+      ...agent,
+      capabilitiesJson: JSON.stringify(agent.capabilities),
+      enabled: agent.enabled ? 1 : 0
+    });
+  }
+
   public appendMessage(message: Omit<MessageRecord, "sequence">): MessageRecord {
     return this.database.transaction(() => {
       const room = this.database.prepare(`

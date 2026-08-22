@@ -7,6 +7,7 @@ import { createOpaqueId } from "../domain/identifiers.js";
 import {
   AuthorizationError,
   type AuthService,
+  type DevicePrincipal,
   type WebPrincipal
 } from "../security/auth-service.js";
 
@@ -94,5 +95,55 @@ export class AgentService {
   ): AgentRecord[] {
     this.auth.requireTeamMember(principal, teamId);
     return this.repository.listAgents(teamId);
+  }
+
+  public publishDeviceAgent(
+    principal: DevicePrincipal,
+    input: {
+      agentId: string;
+      name: string;
+      role: string;
+      capabilities: AgentCapabilities;
+      now: string;
+    }
+  ): AgentRecord {
+    if (!/^agent_[A-Za-z0-9_-]{8,128}$/u.test(input.agentId)) {
+      throw new Error("Bridge Agent ID is invalid");
+    }
+    if (!input.capabilities.supportsStart) {
+      throw new Error("Managed Bridge Agent must support start");
+    }
+    const existing = this.repository.getAgent(input.agentId);
+    if (
+      existing &&
+      (
+        existing.teamId !== principal.teamId ||
+        existing.ownerMemberId !== principal.ownerMemberId ||
+        existing.deviceId !== principal.deviceId ||
+        existing.integrationMode !== "managed"
+      )
+    ) {
+      throw new AuthorizationError("FORBIDDEN", "Bridge Agent identity ownership denied");
+    }
+    const agent: AgentRecord = {
+      agentId: input.agentId,
+      teamId: principal.teamId,
+      ownerMemberId: principal.ownerMemberId,
+      deviceId: principal.deviceId,
+      name: normalizedLabel(input.name, "Agent name"),
+      role: normalizedLabel(input.role, "Agent role"),
+      integrationMode: "managed",
+      capabilities: input.capabilities,
+      enabled: true,
+      presence: "ready",
+      createdAt: existing?.createdAt ?? input.now,
+      updatedAt: input.now
+    };
+    if (existing) {
+      this.repository.updateAgentPublication(agent);
+    } else {
+      this.repository.createAgent(agent);
+    }
+    return agent;
   }
 }

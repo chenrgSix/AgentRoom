@@ -181,6 +181,37 @@ export async function createServerApp(
           });
           return;
         }
+        if (message.type === "agent.publish" && registeredEpoch !== undefined) {
+          const capabilities = message.payload.capabilities as
+            | Record<string, unknown>
+            | undefined;
+          if (
+            message.payload.deviceId !== devicePrincipal.deviceId ||
+            message.payload.teamId !== devicePrincipal.teamId ||
+            message.payload.ownerMemberId !== devicePrincipal.ownerMemberId ||
+            typeof message.payload.agentId !== "string" ||
+            typeof message.payload.name !== "string" ||
+            typeof message.payload.role !== "string" ||
+            capabilities?.invocationMode !== "managed"
+          ) {
+            socket.close(4_003, "Agent publication identity mismatch");
+            return;
+          }
+          agents.publishDeviceAgent(devicePrincipal, {
+            agentId: message.payload.agentId,
+            name: message.payload.name,
+            role: message.payload.role,
+            capabilities: {
+              supportsHandoff: capabilities.supportsHandoff === true,
+              supportsInterrupt: capabilities.supportsInterrupt === true,
+              supportsResume: capabilities.supportsResume === true,
+              supportsStart: capabilities.supportsStart === true,
+              supportsStreaming: capabilities.supportsStreaming === true
+            },
+            now: clock()
+          });
+          return;
+        }
         socket.close(4_003, "Bridge hello required before messages");
       } catch {
         socket.close(4_007, "Malformed Bridge message");

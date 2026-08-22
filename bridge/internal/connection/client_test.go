@@ -14,7 +14,7 @@ import (
 )
 
 func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
-	messages := make(chan map[string]any, 2)
+	messages := make(chan map[string]any, 3)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("authorization") != "Bearer device-secret" {
 			http.Error(response, "unauthorized", http.StatusUnauthorized)
@@ -25,7 +25,7 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 			return
 		}
 		defer socket.CloseNow()
-		for index := 0; index < 2; index++ {
+		for index := 0; index < 3; index++ {
 			_, source, err := socket.Read(request.Context())
 			if err != nil {
 				return
@@ -40,18 +40,30 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	}))
 	defer server.Close()
 	ctx, cancel := context.WithCancel(context.Background())
+	directory := t.TempDir()
 	client := Client{
-		Config:            config.Config{ServerURL: server.URL, DataDir: t.TempDir()},
-		Credential:        pairing.Credential{DeviceID: "device_test", Token: "device-secret"},
+		Config: config.Config{
+			ServerURL: server.URL,
+			DataDir:   directory,
+			Agents: []config.AgentConfig{{
+				Name: "Builder", Role: "Implementation", Adapter: "generic",
+				Command: []string{"agent"}, Workspace: directory,
+			}},
+		},
+		Credential: pairing.Credential{
+			DeviceID: "device_test", TeamID: "team_test",
+			OwnerMemberID: "member_test", Token: "device-secret",
+		},
 		BridgeVersion:     "test",
 		HeartbeatInterval: 10 * time.Millisecond,
 	}
 	done := make(chan error, 1)
 	go func() { done <- client.Run(ctx) }()
 	hello := <-messages
+	publication := <-messages
 	heartbeat := <-messages
-	if hello["type"] != "bridge.hello" || heartbeat["type"] != "bridge.heartbeat" {
-		t.Fatalf("unexpected messages: %#v %#v", hello, heartbeat)
+	if hello["type"] != "bridge.hello" || publication["type"] != "agent.publish" || heartbeat["type"] != "bridge.heartbeat" {
+		t.Fatalf("unexpected messages: %#v %#v %#v", hello, publication, heartbeat)
 	}
 	cancel()
 	select {
