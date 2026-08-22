@@ -32,6 +32,11 @@ pinned machine-readable schema/version and requires contract tests. A generic
 CLI adapter is the L2 fallback with reduced lifecycle and resume guarantees.
 Pull-only participants remain MCP clients and are not remote-wake capable.
 
+The first Fake Adapter lives in the central server workspace solely for the
+in-process MVP acceptance harness. It implements the same ordered request/event
+shape without claiming Runtime ownership; production adapters remain in the Go
+Bridge once its interface is available.
+
 ## Process and Workspace Safety
 
 Adapters receive an owner-defined Runtime configuration, never an arbitrary

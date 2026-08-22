@@ -54,7 +54,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | CON-004 | DONE | Generate TypeScript and Go contract types | CON-003, Go toolchain | generation is deterministic and both languages agree on fixtures |
 | DATA-001 | DONE | Add SQLite migration runner and database location | GOV-004 | empty database migrates from zero |
 | DATA-002 | DONE | Add Team, Room, Message, and registry tables | DATA-001, CON-002 | repository tests persist and reload entities |
-| ADP-001 | READY | Implement deterministic Fake Runtime Adapter | CON-002 | scripted events exercise success and failure |
+| ADP-001 | DONE | Implement deterministic Fake Runtime Adapter | CON-002 | scripted events exercise success and failure |
 | QA-001 | PLANNED | Build in-process Fake Bridge and acceptance harness | CON-004, ADP-001, WEB-001 | Web Room simulates two Agents end to end |
 
 ## Workstream F1: Team, Room, and Registry
