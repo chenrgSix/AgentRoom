@@ -12,8 +12,8 @@ the Team wake a managed Agent.
 
 The central Team MVP is runnable: the Fastify API and React UI persist Teams,
 Rooms, Agents, messages, structured mentions, Runs, ordered Run events, and
-Agent replies in SQLite. An in-process Fake Runtime closes the browser-to-Agent
-acceptance loop. Remote MCP and the production Go Bridge remain planned.
+Agent replies in SQLite. Remote MCP supports pull participants, while the
+headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 
 - Current baseline:
   [agent_room_network_design_v0.2.md](agent_room_network_design_v0.2.md)
@@ -33,7 +33,7 @@ acceptance loop. Remote MCP and the production Go Bridge remain planned.
 | Push channel | Authenticated WebSocket |
 | Local Bridge | Go 1.26.7, distributed as a headless binary |
 | MVP persistence | SQLite |
-| Web tests | Vitest and Playwright |
+| Server and Web tests | Node test runner and TypeScript build |
 | Bridge tests | Go test |
 
 The central Web service and Bridge exchange versioned JSON messages. JSON
@@ -75,6 +75,10 @@ cd bridge && go test ./... && go build ./cmd/agentroom-bridge
 Run the two development commands in separate terminals, then open
 `http://127.0.0.1:5173`. Create a Team, Room, and one or more Fake Agents;
 select an Agent in the composer to create and execute a structured Run.
+
+Use the Web **Connect an Agent** panel for a one-time MCP token or Bridge pairing
+code. See [docs/mcp-client-setup.md](docs/mcp-client-setup.md) and
+[bridge/README.md](bridge/README.md) for client and headless Bridge setup.
 
 The migration command uses `AGENT_ROOM_DATABASE_PATH`,
 `AGENT_ROOM_DATA_DIR`, or the server workspace's local `var/` directory.

@@ -14,8 +14,8 @@ go build ./cmd/agentroom-bridge
 
 `serverUrl` must use HTTPS except for loopback development. Each Agent declares
 an adapter, argument-array command, absolute workspace, and environment variable
-allowlist. Credentials and delivery state are stored under `dataDir` by later
-Bridge lifecycle tasks.
+allowlist. Credentials, stable Agent identities, the durable Run inbox, and
+replayable Runtime events are stored under `dataDir` with owner-only file modes.
 
 For HTTPS, `serverCertificateSha256` is mandatory and pins the manually verified
 server certificate. Pairing stores `device-credential.json` under `dataDir`
