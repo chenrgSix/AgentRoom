@@ -26,9 +26,14 @@ bin/
 *.out
 
 # Runtime data
-data/
-var/
+/data/
+/var/
+/apps/*/var/
+/bridge/var/
 *.log
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
 *.db-shm
 *.db-wal
 

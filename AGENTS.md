@@ -24,12 +24,13 @@ checklist.
 
 ## Build, Test, and Development Commands
 
-Node.js 22 is required. Current repository commands are:
+Node.js 22 is required. Repository commands are:
 
 - `npm install` — install locked workspace dependencies.
 - `npm run validate` — validate all registered JSON Schemas.
 - `npm run build` — build every implemented workspace.
 - `npm test` — run implemented workspace tests.
+- `npm run db:migrate` — migrate the configured central SQLite database.
 - `rg '^#' agent_room_network_design_v0.2.md` — review heading hierarchy.
 - `npm run lint:docs` — lint maintained Markdown.
 - `rg '^\| [A-Z]+-[0-9]+' docs/TASKS.md` — review registered task IDs.

@@ -10,8 +10,8 @@ the Team wake a managed Agent.
 
 ## Status
 
-The project has started its contract foundation. The central server, Web UI,
-and Bridge have not been scaffolded yet.
+The project has contract and central SQLite migration foundations. HTTP/MCP,
+the Web UI, and the Bridge have not been scaffolded yet.
 
 - Current baseline:
   [agent_room_network_design_v0.2.md](agent_room_network_design_v0.2.md)
@@ -53,7 +53,7 @@ tests/e2e/      Cross-process acceptance scenarios
 ```
 
 Do not create an unstarted directory until its corresponding task becomes
-active. `packages/contracts/` is the first active implementation module.
+active. The contracts package and server data layer are currently implemented.
 
 ## Build and Test
 
@@ -64,9 +64,11 @@ npm install
 npm run validate
 npm run build
 npm test
+npm run db:migrate
 ```
 
-These commands currently validate, build, and test the contract workspace.
+The migration command uses `AGENT_ROOM_DATABASE_PATH`,
+`AGENT_ROOM_DATA_DIR`, or the server workspace's local `var/` directory.
 Additional module commands must be added when those modules are scaffolded.
 
 ## Delivery Workflow

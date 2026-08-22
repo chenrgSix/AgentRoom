@@ -16,6 +16,11 @@ Repositories expose domain operations rather than raw SQL to other modules.
 Schema migrations are ordered, transactional where SQLite permits, and tested
 against both an empty database and the previous supported version.
 
+The Node.js server uses `better-sqlite3`. The database location resolves from
+`AGENT_ROOM_DATABASE_PATH`, then `AGENT_ROOM_DATA_DIR`, then the local
+`var/agent-room.sqlite` default. Applied migration filenames and SHA-256 values
+are immutable; startup rejects missing, reordered, or changed history.
+
 Important state transitions append versioned events containing
 `schemaVersion`, `aggregateId`, `aggregateVersion`, `causationId`, `traceId`,
 and idempotency fields. Query projections may be rebuilt from durable records;
