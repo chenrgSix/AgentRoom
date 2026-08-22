@@ -85,6 +85,13 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
         command: ["/usr/bin/tr", "a-z", "A-Z"],
         workspace: directory,
         envAllowlist: []
+      }, {
+        name: "Slow Builder",
+        role: "Cancelable Runtime",
+        adapter: "generic",
+        command: ["/bin/sh", "-c", "sleep 10"],
+        workspace: directory,
+        envAllowlist: []
       }]
     }, null, 2));
     await execFileAsync(bridgeBinary, ["pair", "--config", configPath, "--code", pairingCode]);
@@ -101,10 +108,11 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
       });
       return (response.json() as Array<{
         agentId: string;
+        name: string;
         integrationMode: string;
         presence: string;
       }>).find((candidate) =>
-        candidate.integrationMode === "managed" && candidate.presence === "ready"
+        candidate.name === "Echo Builder" && candidate.presence === "ready"
       );
     });
     const sent = await app.inject({
@@ -127,6 +135,47 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
       method: "GET", url: `/api/rooms/${roomId}/messages?limit=100`, headers: authorization
     });
     assert.equal(timeline.json().items.at(-1).content, "RUN THROUGH REAL BRIDGE");
+
+    const slowAgent = await waitFor(async () => {
+      const response = await app.inject({
+        method: "GET", url: `/api/teams/${teamId}/agents`, headers: authorization
+      });
+      return (response.json() as Array<{
+        agentId: string;
+        name: string;
+        presence: string;
+      }>).find((candidate) =>
+        candidate.name === "Slow Builder" && candidate.presence === "ready"
+      );
+    });
+    const slowSent = await app.inject({
+      method: "POST", url: `/api/rooms/${roomId}/messages`, headers: authorization,
+      payload: { content: "Wait until canceled", mentionAgentId: slowAgent.agentId }
+    });
+    const slowRunId = slowSent.json().runs[0].runId as string;
+    await waitFor(async () => {
+      const response = await app.inject({
+        method: "GET", url: `/api/rooms/${roomId}/runs`, headers: authorization
+      });
+      const run = (response.json() as Array<{ runId: string; state: string }>).find(
+        (candidate) => candidate.runId === slowRunId
+      );
+      return run?.state === "working" ? run : undefined;
+    });
+    const canceled = await app.inject({
+      method: "POST", url: `/api/runs/${slowRunId}/cancel`, headers: authorization,
+      payload: { reason: "E2E cancellation" }
+    });
+    assert.equal(canceled.statusCode, 200);
+    await waitFor(async () => {
+      const response = await app.inject({
+        method: "GET", url: `/api/rooms/${roomId}/runs`, headers: authorization
+      });
+      const run = (response.json() as Array<{ runId: string; state: string }>).find(
+        (candidate) => candidate.runId === slowRunId
+      );
+      return run?.state === "canceled" ? run : undefined;
+    });
   } catch (error) {
     throw new Error(`${String(error)}\nBridge stderr:\n${bridgeStderr}`);
   } finally {

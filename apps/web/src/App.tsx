@@ -424,6 +424,22 @@ export function App() {
     }
   }
 
+  async function cancelRun(runId: string) {
+    if (!session) return;
+    setError(null);
+    try {
+      const updated = await jsonRequest<Run>(`/api/runs/${runId}/cancel`, {
+        method: "POST",
+        body: JSON.stringify({ reason: "Canceled from Team Room" })
+      }, session.token);
+      setRuns((current) => current.map((run) =>
+        run.runId === updated.runId ? updated : run
+      ));
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }
+
   return (
     <div className="app-shell">
       <aside className="team-rail" aria-label="Teams">
@@ -597,6 +613,9 @@ export function App() {
                           <span className={`run-state ${run.state}`}>
                             {run.state.replace("_", " ")}
                           </span>
+                          {["queued", "delivered", "working", "input_required"].includes(run.state) && (
+                            <button type="button" onClick={() => void cancelRun(run.runId)}>Cancel</button>
+                          )}
                         </span>
                       ))}
                     </div>

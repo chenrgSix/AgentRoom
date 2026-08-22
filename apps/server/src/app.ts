@@ -25,6 +25,7 @@ import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
 import { DeliveryService } from "./run/delivery-service.js";
 import { BridgeRunEventService } from "./run/bridge-run-event-service.js";
+import { CancellationService } from "./run/cancellation-service.js";
 import { HandoffService } from "./run/handoff-service.js";
 import { ManualRunService } from "./run/manual-run-service.js";
 import { RunRepository } from "./run/run-repository.js";
@@ -104,6 +105,9 @@ export async function createServerApp(
   const bridgeRunEvents = new BridgeRunEventService(core, runRepository);
   const handoffs = new HandoffService(core, runRepository);
   const manualRuns = new ManualRunService(core, runRepository, messages);
+  const cancellations = new CancellationService(
+    core, runRepository, auth, bridgeConnections, clock
+  );
   const app = Fastify({ logger: options.logger ?? false });
   await app.register(fastifyWebsocket, {
     options: { maxPayload: 1024 * 1024 }
@@ -587,6 +591,17 @@ export async function createServerApp(
       }
       runs.listRoomRuns(actor, run.roomId);
       return runRepository.listEvents(run.runId);
+    }
+  );
+  app.post<{ Params: { runId: string } }>(
+    "/api/runs/:runId/cancel",
+    async (request) => {
+      const body = bodyObject(request);
+      return cancellations.cancel(
+        principal(request),
+        request.params.runId,
+        typeof body.reason === "string" ? body.reason : "Canceled from Web"
+      );
     }
   );
 

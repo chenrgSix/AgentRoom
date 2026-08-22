@@ -91,7 +91,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | RUN-001 | DONE | Create Run from a valid Mention | ROOM-003, REG-003 | one message creates the intended target Run |
 | RUN-002 | DONE | Implement durable delivery and acceptance | RUN-001, BRG-005 | ACK loss retries without duplicate execution |
 | RUN-003 | DONE | Apply sequenced status and reply events | RUN-002 | stale events cannot regress Run state |
-| RUN-004 | PLANNED | Implement cancellation and terminal-state races | RUN-003 | first persisted terminal state wins |
+| RUN-004 | DONE | Implement cancellation and terminal-state races | RUN-003 | first persisted terminal state wins |
 | RUN-005 | DONE | Implement offline queue and expiry | RUN-002, REG-003 | reconnect delivers queued work once |
 | RUN-006 | DONE | Implement guarded handoff | RUN-003 | depth, loop, and unique-agent limits pass |
 | WEB-002 | DONE | Implement Team Room message timeline | WEB-001, ROOM-002 | reload preserves ordered history |

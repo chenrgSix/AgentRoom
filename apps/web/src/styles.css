@@ -133,6 +133,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .mention-pill { border: 1px solid #526333; background: #222a19; color: #d3ea91; }
 .run-card { display: inline-flex; align-items: center; gap: 5px; padding-left: 7px; border: 1px solid #343a30; border-radius: 999px; background: #1c1f1a; color: #aab0a4; font-size: 10px; }
 .run-card > strong { font-weight: 600; }
+.run-card > button { margin-right: 5px; padding: 2px 5px; border: 0; background: transparent; color: #c58d85; font-size: 9px; cursor: pointer; }
 .run-state { border: 1px solid #41463b; background: #252822; color: #aeb5a7; text-transform: capitalize; }
 .run-state.working, .run-state.delivered { border-color: #69783f; color: #d5e99b; }
 .run-state.completed { border-color: #4c7450; color: #9bdd9e; }

@@ -43,7 +43,15 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
 				return err
 			}
-			return send(eventContext, message)
+			sendContext := eventContext
+			cancelSend := func() {}
+			if isTerminalState(currentState) && eventContext.Err() != nil {
+				sendContext, cancelSend = context.WithTimeout(
+					context.WithoutCancel(eventContext), 5*time.Second,
+				)
+			}
+			defer cancelSend()
+			return send(sendContext, message)
 		}
 		if event.Reply == "" {
 			return fmt.Errorf("Runtime emitted an empty event")
@@ -69,6 +77,10 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		return e.emitUnknown(ctx, latest, send, "RUNTIME_EXECUTION_UNKNOWN")
 	}
 	return nil
+}
+
+func isTerminalState(state State) bool {
+	return state == StateCompleted || state == StateFailed || state == StateOutcomeUnknown
 }
 
 func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Sender, code string) error {

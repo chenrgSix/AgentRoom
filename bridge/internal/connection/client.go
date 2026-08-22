@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"agentroom.dev/bridge/internal/config"
@@ -78,6 +79,9 @@ func (c Client) connectOnce(ctx context.Context) error {
 		return fmt.Errorf("bridge WebSocket dial: %w", err)
 	}
 	defer socket.CloseNow()
+	connectionContext, cancelConnection := context.WithCancel(ctx)
+	defer cancelConnection()
+	writer := socketWriter{socket: socket}
 	hello := contracts.BridgeHelloMessage{
 		ProtocolVersion: "1.0",
 		MessageID:       newID("msg"),
@@ -90,7 +94,7 @@ func (c Client) connectOnce(ctx context.Context) error {
 			SupportedProtocolVersions: []string{"1.0"},
 		},
 	}
-	if err := writeJSON(ctx, socket, hello); err != nil {
+	if err := writer.writeJSON(ctx, hello); err != nil {
 		return err
 	}
 	identities, err := identity.LoadOrCreate(c.Config.DataDir, c.Config.Agents)
@@ -121,44 +125,89 @@ func (c Client) connectOnce(ctx context.Context) error {
 				TeamID:        c.Credential.TeamID,
 			},
 		}
-		if err := writeJSON(ctx, socket, publication); err != nil {
+		if err := writer.writeJSON(ctx, publication); err != nil {
 			return err
 		}
 	}
 	if c.RecoverRuns != nil {
 		if err := c.RecoverRuns(ctx, func(sendContext context.Context, value any) error {
-			return writeJSON(sendContext, socket, value)
+			return writer.writeJSON(sendContext, value)
 		}); err != nil {
 			return err
 		}
 	}
 
 	readError := make(chan error, 1)
+	type activeRun struct {
+		agentID string
+		cancel  context.CancelFunc
+		token   *struct{}
+	}
+	active := make(map[string]activeRun)
+	var activeMu sync.Mutex
+	reportReadError := func(err error) {
+		select {
+		case readError <- err:
+		default:
+		}
+	}
 	go func() {
 		for {
 			_, source, err := socket.Read(ctx)
 			if err != nil {
-				readError <- err
+				reportReadError(err)
 				return
 			}
 			var envelope struct {
 				Type string `json:"type"`
 			}
 			if err := json.Unmarshal(source, &envelope); err != nil {
-				readError <- err
+				reportReadError(err)
 				return
 			}
 			if envelope.Type == "run.requested" && c.HandleRun != nil {
 				var requested contracts.RunRequestedMessage
 				if err := json.Unmarshal(source, &requested); err != nil {
-					readError <- err
+					reportReadError(err)
 					return
 				}
-				if err := c.HandleRun(ctx, requested, func(sendContext context.Context, value any) error {
-					return writeJSON(sendContext, socket, value)
-				}); err != nil {
-					readError <- err
+				runContext, cancel := context.WithCancel(connectionContext)
+				token := &struct{}{}
+				activeMu.Lock()
+				_, alreadyActive := active[requested.Payload.RunID]
+				if !alreadyActive {
+					active[requested.Payload.RunID] = activeRun{
+						agentID: requested.Payload.TargetAgentID, cancel: cancel, token: token,
+					}
+				}
+				activeMu.Unlock()
+				go func() {
+					defer cancel()
+					err := c.HandleRun(runContext, requested, func(sendContext context.Context, value any) error {
+						return writer.writeJSON(sendContext, value)
+					})
+					activeMu.Lock()
+					if !alreadyActive && active[requested.Payload.RunID].token == token {
+						delete(active, requested.Payload.RunID)
+					}
+					activeMu.Unlock()
+					if err != nil {
+						reportReadError(err)
+					}
+				}()
+				continue
+			}
+			if envelope.Type == "run.cancel_requested" {
+				var canceled contracts.RunCancelRequestedMessage
+				if err := json.Unmarshal(source, &canceled); err != nil {
+					reportReadError(err)
 					return
+				}
+				activeMu.Lock()
+				running, exists := active[canceled.Payload.RunID]
+				activeMu.Unlock()
+				if exists && running.agentID == canceled.Payload.AgentID {
+					running.cancel()
 				}
 			}
 		}
@@ -186,7 +235,7 @@ func (c Client) connectOnce(ctx context.Context) error {
 					DeviceID:        c.Credential.DeviceID,
 				},
 			}
-			if err := writeJSON(ctx, socket, heartbeat); err != nil {
+			if err := writer.writeJSON(ctx, heartbeat); err != nil {
 				return err
 			}
 		}
@@ -210,12 +259,19 @@ func websocketURL(serverURL string) (string, error) {
 	return parsed.String(), nil
 }
 
-func writeJSON(ctx context.Context, socket *websocket.Conn, value any) error {
+type socketWriter struct {
+	socket *websocket.Conn
+	mu     sync.Mutex
+}
+
+func (w *socketWriter) writeJSON(ctx context.Context, value any) error {
 	source, err := json.Marshal(value)
 	if err != nil {
 		return err
 	}
-	return socket.Write(ctx, websocket.MessageText, source)
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.socket.Write(ctx, websocket.MessageText, source)
 }
 
 func nextEpoch(dataDir string) (int64, error) {
