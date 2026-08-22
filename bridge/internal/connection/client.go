@@ -100,11 +100,11 @@ func (c Client) connectOnce(ctx context.Context) error {
 	for _, configured := range c.Config.Agents {
 		capabilities := contracts.Capabilities{
 			InvocationMode:    contracts.Managed,
-			SupportsHandoff:   configured.Adapter == "codex",
+			SupportsHandoff:   false,
 			SupportsInterrupt: true,
 			SupportsResume:    false,
 			SupportsStart:     true,
-			SupportsStreaming: configured.Adapter == "codex",
+			SupportsStreaming: false,
 		}
 		publication := contracts.AgentPublishMessage{
 			ProtocolVersion: "1.0",

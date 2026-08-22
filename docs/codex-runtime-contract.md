@@ -31,3 +31,16 @@ Context cancellation interrupts the child process. Session resume, interactive
 approval forwarding, structured artifacts, and handoff are not advertised in
 this baseline. If this contract fails against a later Codex version, configure
 the Generic CLI adapter while updating the pinned parser fixtures.
+
+Example Bridge Agent configuration:
+
+```json
+{
+  "name": "Builder",
+  "role": "Codex implementer",
+  "adapter": "codex",
+  "command": ["codex", "exec", "--json", "--sandbox", "workspace-write", "-"],
+  "workspace": "/absolute/path/to/repository",
+  "envAllowlist": ["HOME", "PATH", "CODEX_HOME"]
+}
+```

@@ -105,8 +105,11 @@ func run(args []string) error {
 		}
 		adapters := make(map[string]bridgeruntime.Adapter, len(loaded.Agents))
 		for _, configured := range loaded.Agents {
-			if configured.Adapter == "generic" {
+			switch configured.Adapter {
+			case "generic":
 				adapters[identities[configured.Name]] = bridgeruntime.GenericAdapter{Config: configured}
+			case "codex":
+				adapters[identities[configured.Name]] = bridgeruntime.CodexAdapter{Config: configured}
 			}
 		}
 		executor := delivery.RuntimeExecutor{Inbox: inbox, Adapters: adapters}
