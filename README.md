@@ -69,6 +69,7 @@ npm test
 npm run db:migrate
 npm run dev:server
 npm run dev:web
+cd bridge && go test ./... && go build ./cmd/agentroom-bridge
 ```
 
 Run the two development commands in separate terminals, then open

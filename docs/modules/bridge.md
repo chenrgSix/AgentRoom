@@ -22,6 +22,10 @@ to local Runtime Adapters.
 The Bridge does not store Team history, choose target Agents, authorize
 cross-member actions, or provide a GUI.
 
+The Go 1.26.7 process accepts a strict JSON configuration. Runtime commands are
+argument arrays, workspaces are absolute paths, environment propagation is an
+allowlist, and non-loopback server URLs must use HTTPS.
+
 ## Connection Lifecycle
 
 The initial transport is `/ws/bridge`. After TLS connection, the Bridge sends a

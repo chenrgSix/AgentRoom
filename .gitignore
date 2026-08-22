@@ -30,6 +30,7 @@ bin/
 /var/
 /apps/*/var/
 /bridge/var/
+/bridge/agentroom-bridge
 *.log
 *.sqlite
 *.sqlite-shm
