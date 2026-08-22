@@ -333,6 +333,81 @@ export interface RunHandoffRequestedPayload {
 
 export type RunHandoffRequestedMessageType = "run.handoff_requested";
 
+export interface BridgeJoinRequest {
+  agentName:  string;
+  agentRole:  string;
+  deviceName: string;
+}
+
+export interface BridgeJoinChallenge {
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  expiresAt: string;
+  /**
+   * Opaque identifier with a lowercase type prefix and non-semantic suffix.
+   */
+  joinRequestId:  string;
+  pollIntervalMs: number;
+  pollToken:      string;
+  userCode:       string;
+}
+
+export interface BridgeJoinApprovalRequest {
+  code: string;
+}
+
+export interface BridgeJoinApproval {
+  agentName:  string;
+  agentRole:  string;
+  deviceName: string;
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  expiresAt: string;
+  /**
+   * Opaque identifier with a lowercase type prefix and non-semantic suffix.
+   */
+  joinRequestId: string;
+  status:        BridgeJoinApprovalStatus;
+}
+
+export type BridgeJoinApprovalStatus = "approved";
+
+export interface BridgeJoinClaimRequest {
+  pollToken: string;
+}
+
+export interface BridgeJoinPending {
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  expiresAt: string;
+  status:    BridgeJoinPendingStatus;
+}
+
+export type BridgeJoinPendingStatus = "pending";
+
+export interface BridgeJoinPaired {
+  credential: Credential;
+  device:     Device;
+  status:     BridgeJoinPairedStatus;
+}
+
+export interface Credential {
+  expiresAt: null | string;
+  token:     string;
+}
+
+export interface Device {
+  deviceId:      string;
+  ownerMemberId: string;
+  teamId:        string;
+  [property: string]: unknown;
+}
+
+export type BridgeJoinPairedStatus = "paired";
+
 export type BridgeMessage =
   | BridgeHelloMessage
   | BridgeHeartbeatMessage

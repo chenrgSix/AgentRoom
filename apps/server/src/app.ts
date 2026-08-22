@@ -493,6 +493,49 @@ export async function createServerApp(
       );
     }
   );
+  app.post("/api/bridge/join-requests", async (request) => {
+    const body = bodyObject(request);
+    return pairing.createJoinRequest({
+      deviceName: requiredString(body.deviceName, "deviceName"),
+      agentName: requiredString(body.agentName, "agentName"),
+      agentRole: requiredString(body.agentRole, "agentRole")
+    }, clock());
+  });
+  app.post<{ Params: { teamId: string } }>(
+    "/api/teams/:teamId/bridge-join-requests/approve",
+    async (request) => {
+      const body = bodyObject(request);
+      return pairing.approveJoinRequest(
+        principal(request),
+        request.params.teamId,
+        requiredString(body.code, "code", 20),
+        clock()
+      );
+    }
+  );
+  app.post<{ Params: { joinRequestId: string } }>(
+    "/api/bridge/join-requests/:joinRequestId/claim",
+    async (request, reply) => {
+      const body = bodyObject(request);
+      const result = pairing.claimJoinRequest(
+        request.params.joinRequestId,
+        requiredString(body.pollToken, "pollToken", 128),
+        clock()
+      );
+      if (result.status === "pending") {
+        void reply.code(202);
+        return result;
+      }
+      return {
+        status: result.status,
+        device: result.device,
+        credential: {
+          token: result.credential.secret,
+          expiresAt: result.credential.expiresAt
+        }
+      };
+    }
+  );
   app.post("/api/bridge/pair", async (request) => {
     const body = bodyObject(request);
     const result = pairing.exchange(

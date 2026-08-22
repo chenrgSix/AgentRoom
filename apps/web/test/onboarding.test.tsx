@@ -42,6 +42,12 @@ test("onboarding creates the first Team and reveals the Room step", async () => 
     name: "Platform Team",
     createdAt: "2026-08-23T00:00:00.000Z"
   };
+  const room = {
+    roomId: "room_test",
+    teamId: team.teamId,
+    name: "general",
+    createdAt: "2026-08-23T00:01:00.000Z"
+  };
   globalThis.fetch = async (input, init = {}) => {
     const path = typeof input === "string" ? input : input.url;
     const method = init.method ?? "GET";
@@ -64,6 +70,25 @@ test("onboarding creates the first Team and reveals the Room step", async () => 
         request.path === "/api/teams" && request.method === "POST"
       );
       return jsonResponse(teamWasCreated ? [team] : []);
+    }
+    if (path === `/api/teams/${team.teamId}/rooms` && method === "POST") {
+      return jsonResponse(room);
+    }
+    if (
+      path === `/api/teams/${team.teamId}/bridge-join-requests/approve` &&
+      method === "POST"
+    ) {
+      return jsonResponse({
+        status: "approved",
+        deviceName: "Alice Mac",
+        agentName: "Local Codex"
+      });
+    }
+    if (path === `/api/rooms/${room.roomId}/messages?limit=100`) {
+      return jsonResponse({ items: [] });
+    }
+    if (path === `/api/rooms/${room.roomId}/runs`) {
+      return jsonResponse([]);
     }
     if (path.endsWith("/rooms") || path.endsWith("/agents") || path.endsWith("/devices")) {
       return jsonResponse([]);
@@ -99,6 +124,23 @@ test("onboarding creates the first Team and reveals the Room step", async () => 
       (screen.getByRole("button", { name: "Create Room" }) as HTMLButtonElement).disabled,
       false
     );
+
+    fireEvent.change(roomInput, { target: { value: "general" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Room" }));
+    await screen.findByRole("heading", { name: "Add an Agent or start the conversation" });
+    fireEvent.click(screen.getByRole("button", { name: "Open connection setup" }));
+
+    const joinCode = screen.getByLabelText("Client join code");
+    fireEvent.change(joinCode, { target: { value: "ABCD-1234" } });
+    fireEvent.click(screen.getByRole("button", { name: "Approve Bridge" }));
+
+    await screen.findByText(/Approved Local Codex on Alice Mac/u);
+    await waitFor(() => {
+      const request = requests.find((candidate) =>
+        candidate.path === `/api/teams/${team.teamId}/bridge-join-requests/approve`
+      );
+      assert.deepEqual(JSON.parse(request?.body ?? "{}"), { code: "ABCD-1234" });
+    });
   } finally {
     cleanup();
     dom.window.close();

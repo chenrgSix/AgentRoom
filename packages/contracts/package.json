@@ -4,6 +4,9 @@
   "private": true,
   "description": "Authoritative JSON Schema contracts for Agent Room Network",
   "type": "module",
+  "exports": {
+    "./bridge-messages": "./generated/typescript/bridge-messages.ts"
+  },
   "files": [
     "dist"
   ],

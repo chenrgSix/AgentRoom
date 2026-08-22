@@ -99,6 +99,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .connection-setup { margin-top: 16px; border-top: 1px solid #2b2f27; padding-top: 14px; }
 .connection-setup summary { color: #a9b58a; font-size: 11px; font-weight: 700; cursor: pointer; }
 .connection-setup .room-create { margin-top: 10px; }
+.managed-join { display: grid; gap: 7px; margin-top: 12px; padding: 10px; border: 1px solid #34392f; border-radius: 9px; background: #10130e; }
+.managed-join strong { color: #e3e9d0; font-size: 11px; }
+.managed-join p { margin: 0; color: #8e9586; font-size: 10px; line-height: 1.45; }
+.managed-join code { overflow-x: auto; padding: 8px; border-radius: 7px; background: #090b08; color: #bed47e; font-size: 9px; white-space: nowrap; }
+.legacy-pairing { margin-top: 10px; padding-top: 8px; border-top: 1px solid #252a21; }
+.legacy-pairing summary { color: #777f6d; font-size: 10px; }
 .setup-output { display: grid; gap: 7px; margin-top: 10px; }
 .setup-output pre { overflow-x: auto; margin: 0; padding: 9px; border: 1px solid #34392f; border-radius: 8px; background: #0e100d; color: #b9c99a; font-size: 9px; white-space: pre-wrap; word-break: break-all; }
 .setup-output button, .device-row button { padding: 6px 8px; border: 1px solid #475337; border-radius: 7px; background: #242b1e; color: #bed47e; font-size: 9px; cursor: pointer; }

@@ -13,6 +13,7 @@
     "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {
+    "@agent-room/contracts": "0.1.0",
     "@fastify/static": "10.1.3",
     "@fastify/websocket": "11.3.0",
     "@modelcontextprotocol/sdk": "1.30.0",

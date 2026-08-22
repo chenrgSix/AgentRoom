@@ -228,6 +228,215 @@
       "type": "integer",
       "minimum": 1
     },
+    "bridgeJoinRequest": {
+      "title": "Bridge Join Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "deviceName",
+        "agentName",
+        "agentRole"
+      ],
+      "properties": {
+        "deviceName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "agentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "agentRole": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    },
+    "bridgeJoinChallenge": {
+      "title": "Bridge Join Challenge",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "joinRequestId",
+        "userCode",
+        "pollToken",
+        "expiresAt",
+        "pollIntervalMs"
+      ],
+      "properties": {
+        "joinRequestId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json"
+        },
+        "userCode": {
+          "type": "string",
+          "pattern": "^[0-9A-F]{4}-[0-9A-F]{4}$"
+        },
+        "pollToken": {
+          "type": "string",
+          "minLength": 40,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "pollIntervalMs": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 10000
+        }
+      }
+    },
+    "bridgeJoinApprovalRequest": {
+      "title": "Bridge Join Approval Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^[0-9A-Fa-f]{4}-?[0-9A-Fa-f]{4}$"
+        }
+      }
+    },
+    "bridgeJoinApproval": {
+      "title": "Bridge Join Approval",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "joinRequestId",
+        "status",
+        "deviceName",
+        "agentName",
+        "agentRole",
+        "expiresAt"
+      ],
+      "properties": {
+        "joinRequestId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json"
+        },
+        "status": {
+          "const": "approved"
+        },
+        "deviceName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "agentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "agentRole": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "bridgeJoinClaimRequest": {
+      "title": "Bridge Join Claim Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pollToken"
+      ],
+      "properties": {
+        "pollToken": {
+          "type": "string",
+          "minLength": 40,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_-]+$"
+        }
+      }
+    },
+    "bridgeJoinPending": {
+      "title": "Bridge Join Pending",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "expiresAt"
+      ],
+      "properties": {
+        "status": {
+          "const": "pending"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "bridgeJoinPaired": {
+      "title": "Bridge Join Paired",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "device",
+        "credential"
+      ],
+      "properties": {
+        "status": {
+          "const": "paired"
+        },
+        "device": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "deviceId",
+            "teamId",
+            "ownerMemberId"
+          ],
+          "properties": {
+            "deviceId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+            },
+            "teamId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/teamId"
+            },
+            "ownerMemberId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+            }
+          }
+        },
+        "credential": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "token",
+            "expiresAt"
+          ],
+          "properties": {
+            "token": {
+              "type": "string",
+              "minLength": 40,
+              "maxLength": 128,
+              "pattern": "^[A-Za-z0-9_-]+$"
+            },
+            "expiresAt": {
+              "oneOf": [
+                {
+                  "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
+    },
     "runtimeCapabilities": {
       "type": "object",
       "additionalProperties": true,

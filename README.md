@@ -76,8 +76,10 @@ Run the two development commands in separate terminals, then open
 `http://127.0.0.1:5173`. Create a Team, Room, and one or more Fake Agents;
 select an Agent in the composer to create and execute a structured Run.
 
-Use the Web **Connect an Agent** panel for a one-time MCP token or Bridge pairing
-code. See [docs/mcp-client-setup.md](docs/mcp-client-setup.md) and
+Use the Web **Connect an Agent** panel for a one-time MCP token. For a managed
+local Codex, run `agentroom-bridge join --server http://127.0.0.1:3000` on its
+machine and approve the displayed code in that panel. See
+[docs/mcp-client-setup.md](docs/mcp-client-setup.md) and
 [bridge/README.md](bridge/README.md) for client and headless Bridge setup.
 
 The migration command uses `AGENT_ROOM_DATABASE_PATH`,

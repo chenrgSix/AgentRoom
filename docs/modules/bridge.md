@@ -12,7 +12,8 @@ to local Runtime Adapters.
 
 ## Responsibilities
 
-- Pair the device, store its credential, and establish the outbound channel.
+- Request Team enrollment, store the approved credential, and establish the
+  outbound channel.
 - Publish local Agents and Runtime capabilities.
 - Maintain heartbeat, connection epoch, and reconnect backoff.
 - Persist incoming deliveries before acknowledging them.
@@ -25,6 +26,21 @@ cross-member actions, or provide a GUI.
 The Go 1.26.7 process accepts a strict JSON configuration. Runtime commands are
 argument arrays, workspaces are absolute paths, environment propagation is an
 allowlist, and non-loopback server URLs must use HTTPS.
+
+## Managed Enrollment
+
+The primary setup begins on the client with
+`agentroom-bridge join --server <url>`. The Bridge detects the local Codex
+executable and workspace, submits Device and Agent metadata, and displays a
+ten-minute short code. A Team owner enters that code in Web. The Bridge polls
+with a separate high-entropy token, claims the approved identity, atomically
+writes owner-only configuration and credentials, and immediately connects and
+publishes the Agent.
+
+The client never needs a credential copied from the server. Existing config or
+credential files stop enrollment before a request is created. Server-issued
+single-use invitations remain supported by `pair` for compatibility, but are
+not the normal onboarding flow.
 
 ## Connection Lifecycle
 
@@ -62,9 +78,9 @@ tokens, credentials, sensitive local paths, and full environment snapshots.
 
 ## Verification and Tasks
 
-Tests cover pairing, reconnect, epoch replacement, ACK loss, duplicate
+Tests cover client enrollment, pairing, reconnect, epoch replacement, ACK loss, duplicate
 delivery, restart recovery, and revoked devices. Work is tracked by `BRG-001`
-through `BRG-005` in `docs/TASKS.md`.
+through `BRG-006` in `docs/TASKS.md`.
 
 ## Dependencies
 

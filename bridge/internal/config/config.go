@@ -54,6 +54,61 @@ func Load(path string) (Config, error) {
 	return value, nil
 }
 
+func Save(path string, value Config) error {
+	if err := value.Validate(); err != nil {
+		return err
+	}
+	resolved, err := EnsureAvailable(path)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(resolved), 0o700); err != nil {
+		return fmt.Errorf("create config directory: %w", err)
+	}
+	source, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return fmt.Errorf("encode config: %w", err)
+	}
+	temporary, err := os.CreateTemp(filepath.Dir(resolved), ".bridge-config-*")
+	if err != nil {
+		return fmt.Errorf("create temporary config: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0o600); err != nil {
+		temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(append(source, '\n')); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, resolved); err != nil {
+		return fmt.Errorf("install config: %w", err)
+	}
+	return nil
+}
+
+func EnsureAvailable(path string) (string, error) {
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		return "", fmt.Errorf("resolve config path: %w", err)
+	}
+	if _, err := os.Stat(resolved); err == nil {
+		return "", fmt.Errorf("config already exists at %s", resolved)
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("inspect config path: %w", err)
+	}
+	return resolved, nil
+}
+
 func (c Config) Validate() error {
 	parsed, err := url.Parse(c.ServerURL)
 	if err != nil || parsed.Host == "" {

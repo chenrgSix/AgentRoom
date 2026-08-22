@@ -1,5 +1,7 @@
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
+import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
+
 interface Team {
   teamId: string;
   name: string;
@@ -57,6 +59,15 @@ interface LocalSession {
 }
 
 const userKey = "agent-room.local-user";
+
+function bridgeServerURL(): string {
+  const configured = import.meta.env?.VITE_AGENT_ROOM_SERVER_URL?.trim();
+  if (configured) return configured.replace(/\/$/u, "");
+  if (window.location.port === "5173") {
+    return `${window.location.protocol}//${window.location.hostname}:3000`;
+  }
+  return window.location.origin;
+}
 
 async function jsonRequest<T>(
   path: string,
@@ -119,6 +130,7 @@ export function App() {
   const [agentName, setAgentName] = useState("");
   const [manualAgentName, setManualAgentName] = useState("");
   const [deviceName, setDeviceName] = useState("");
+  const [joinCode, setJoinCode] = useState("");
   const [setupOutput, setSetupOutput] = useState<string | null>(null);
   const [messageContent, setMessageContent] = useState("");
   const [mentionAgentId, setMentionAgentId] = useState("");
@@ -368,6 +380,32 @@ export function App() {
     }
   }
 
+  async function approveBridgeJoin(event: FormEvent) {
+    event.preventDefault();
+    if (!session || !selectedTeamId || !joinCode.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const approved = await jsonRequest<BridgeJoinApproval>(
+        `/api/teams/${selectedTeamId}/bridge-join-requests/approve`,
+        {
+          method: "POST",
+          body: JSON.stringify({ code: joinCode })
+        },
+        session.token
+      );
+      setJoinCode("");
+      setSetupOutput(
+        `Approved ${approved.agentName} on ${approved.deviceName}. ` +
+        "The client will finish registration and come online automatically."
+      );
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function revokeDevice(device: Device) {
     if (!session || !selectedTeamId || device.status !== "active") return;
     setError(null);
@@ -524,6 +562,22 @@ export function App() {
         {selectedTeam && (
           <details className="connection-setup" ref={connectionSetupRef}>
             <summary>Connect an Agent</summary>
+            <div className="managed-join">
+              <strong>Managed local Codex</strong>
+              <p>Run this on the Codex machine, then approve the code it displays.</p>
+              <code>agentroom-bridge join --server {bridgeServerURL()}</code>
+              <form className="room-create" onSubmit={approveBridgeJoin}>
+                <input
+                  aria-label="Client join code"
+                  autoCapitalize="characters"
+                  onChange={(event) => setJoinCode(event.target.value)}
+                  placeholder="ABCD-1234"
+                  required
+                  value={joinCode}
+                />
+                <button disabled={busy}>Approve Bridge</button>
+              </form>
+            </div>
             <form className="room-create" onSubmit={createManualAgent}>
               <input
                 aria-label="Manual Agent name"
@@ -534,16 +588,19 @@ export function App() {
               />
               <button disabled={busy}>Create MCP token</button>
             </form>
-            <form className="room-create" onSubmit={createBridgeInvite}>
-              <input
-                aria-label="Bridge Device name"
-                onChange={(event) => setDeviceName(event.target.value)}
-                placeholder="Bob's Mac"
-                required
-                value={deviceName}
-              />
-              <button disabled={busy}>Create pairing code</button>
-            </form>
+            <details className="legacy-pairing">
+              <summary>Legacy server-issued pairing</summary>
+              <form className="room-create" onSubmit={createBridgeInvite}>
+                <input
+                  aria-label="Bridge Device name"
+                  onChange={(event) => setDeviceName(event.target.value)}
+                  placeholder="Bob's Mac"
+                  required
+                  value={deviceName}
+                />
+                <button disabled={busy}>Create pairing code</button>
+              </form>
+            </details>
             {setupOutput && (
               <div className="setup-output">
                 <pre>{setupOutput}</pre>

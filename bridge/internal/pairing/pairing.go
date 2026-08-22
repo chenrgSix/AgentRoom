@@ -89,14 +89,12 @@ func Exchange(ctx context.Context, cfg config.Config, code string) (Credential, 
 }
 
 func Save(dataDir string, credential Credential) error {
+	path, err := EnsureAvailable(dataDir)
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return fmt.Errorf("create credential directory: %w", err)
-	}
-	path := filepath.Join(dataDir, credentialFilename)
-	if _, err := os.Stat(path); err == nil {
-		return fmt.Errorf("credential already exists at %s", path)
-	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("inspect credential path: %w", err)
 	}
 	source, err := json.MarshalIndent(credential, "", "  ")
 	if err != nil {
@@ -127,6 +125,16 @@ func Save(dataDir string, credential Credential) error {
 		return fmt.Errorf("install credential: %w", err)
 	}
 	return nil
+}
+
+func EnsureAvailable(dataDir string) (string, error) {
+	path := filepath.Join(dataDir, credentialFilename)
+	if _, err := os.Stat(path); err == nil {
+		return "", fmt.Errorf("credential already exists at %s", path)
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("inspect credential path: %w", err)
+	}
+	return path, nil
 }
 
 func Load(dataDir string) (Credential, error) {

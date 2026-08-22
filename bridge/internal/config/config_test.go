@@ -64,3 +64,32 @@ func TestRejectsUnsafeOrAmbiguousConfig(t *testing.T) {
 		t.Fatal("expected duplicate Agent name to be rejected")
 	}
 }
+
+func TestSaveWritesOwnerOnlyConfigAndRefusesOverwrite(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "nested", "bridge.json")
+	value := Config{
+		ServerURL: "http://127.0.0.1:3000", DeviceName: "Alice Mac",
+		DataDir: filepath.Join(directory, "data"),
+		Agents: []AgentConfig{{
+			Name: "Local Codex", Role: "Implementation", Adapter: "codex",
+			Command: []string{"codex", "exec", "--json", "-"}, Workspace: directory,
+		}},
+	}
+	if err := Save(path, value); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("config permissions are %o", info.Mode().Perm())
+	}
+	if _, err := Load(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := Save(path, value); err == nil {
+		t.Fatal("expected existing config to prevent overwrite")
+	}
+}

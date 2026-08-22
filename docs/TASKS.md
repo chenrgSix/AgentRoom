@@ -79,6 +79,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | BRG-003 | DONE | Implement authenticated WebSocket and heartbeat | BRG-002, CON-003 | reconnect and TTL tests pass |
 | BRG-004 | DONE | Publish local Agents and capabilities | BRG-003, REG-002 | server registry converges after reconnect |
 | BRG-005 | DONE | Add durable run inbox and deduplication | BRG-003, DATA-001 | repeated run ID executes at most once |
+| BRG-006 | DONE | Add client-initiated managed Agent enrollment | BRG-002, BRG-004, SEC-002 | client join code, Owner approval, automatic config, and Agent publication pass |
 | ADP-002 | DONE | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |
 | ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |

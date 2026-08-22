@@ -220,6 +220,64 @@ type RunHandoffRequestedPayload struct {
 	TargetAgentID string `json:"targetAgentId"`
 }
 
+type BridgeJoinRequest struct {
+	AgentName  string `json:"agentName"`
+	AgentRole  string `json:"agentRole"`
+	DeviceName string `json:"deviceName"`
+}
+
+type BridgeJoinChallenge struct {
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	ExpiresAt time.Time `json:"expiresAt"`
+	// Opaque identifier with a lowercase type prefix and non-semantic suffix.
+	JoinRequestID  string `json:"joinRequestId"`
+	PollIntervalMS int64  `json:"pollIntervalMs"`
+	PollToken      string `json:"pollToken"`
+	UserCode       string `json:"userCode"`
+}
+
+type BridgeJoinApprovalRequest struct {
+	Code string `json:"code"`
+}
+
+type BridgeJoinApproval struct {
+	AgentName  string `json:"agentName"`
+	AgentRole  string `json:"agentRole"`
+	DeviceName string `json:"deviceName"`
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	ExpiresAt time.Time `json:"expiresAt"`
+	// Opaque identifier with a lowercase type prefix and non-semantic suffix.
+	JoinRequestID string                   `json:"joinRequestId"`
+	Status        BridgeJoinApprovalStatus `json:"status"`
+}
+
+type BridgeJoinClaimRequest struct {
+	PollToken string `json:"pollToken"`
+}
+
+type BridgeJoinPending struct {
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	ExpiresAt time.Time               `json:"expiresAt"`
+	Status    BridgeJoinPendingStatus `json:"status"`
+}
+
+type BridgeJoinPaired struct {
+	Credential Credential             `json:"credential"`
+	Device     Device                 `json:"device"`
+	Status     BridgeJoinPairedStatus `json:"status"`
+}
+
+type Credential struct {
+	ExpiresAt *time.Time `json:"expiresAt"`
+	Token     string     `json:"token"`
+}
+
+type Device struct {
+	DeviceID      string `json:"deviceId"`
+	OwnerMemberID string `json:"ownerMemberId"`
+	TeamID        string `json:"teamId"`
+}
+
 type BridgeHelloMessageType string
 
 const (
@@ -304,4 +362,22 @@ type RunHandoffRequestedMessageType string
 
 const (
 	RunHandoffRequested RunHandoffRequestedMessageType = "run.handoff_requested"
+)
+
+type BridgeJoinApprovalStatus string
+
+const (
+	Approved BridgeJoinApprovalStatus = "approved"
+)
+
+type BridgeJoinPendingStatus string
+
+const (
+	Pending BridgeJoinPendingStatus = "pending"
+)
+
+type BridgeJoinPairedStatus string
+
+const (
+	Paired BridgeJoinPairedStatus = "paired"
 )

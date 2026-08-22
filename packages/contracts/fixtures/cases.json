@@ -344,6 +344,64 @@
         }
       },
       "valid": false
+    },
+    {
+      "name": "valid Bridge join challenge",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/bridgeJoinChallenge",
+      "instance": {
+        "joinRequestId": "joinreq_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "userCode": "ABCD-1234",
+        "pollToken": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+        "expiresAt": "2026-08-22T10:10:00Z",
+        "pollIntervalMs": 1000
+      },
+      "valid": true
+    },
+    {
+      "name": "Bridge join challenge rejects an ambiguous short code",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/bridgeJoinChallenge",
+      "instance": {
+        "joinRequestId": "joinreq_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "userCode": "abcd1234",
+        "pollToken": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+        "expiresAt": "2026-08-22T10:10:00Z",
+        "pollIntervalMs": 1000
+      },
+      "valid": false
+    },
+    {
+      "name": "valid paired Bridge join",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/bridgeJoinPaired",
+      "instance": {
+        "status": "paired",
+        "device": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "name": "Alice Mac"
+        },
+        "credential": {
+          "token": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+          "expiresAt": null
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "paired Bridge join requires a credential token",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/bridgeJoinPaired",
+      "instance": {
+        "status": "paired",
+        "device": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+        },
+        "credential": {
+          "expiresAt": null
+        }
+      },
+      "valid": false
     }
   ]
 }

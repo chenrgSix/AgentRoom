@@ -112,7 +112,7 @@ function createBridgeCodegenSchemas(bridgeSchema) {
     throw new Error("Bridge schema must define its envelope and message conditions");
   }
 
-  return conditions.map((condition) => {
+  const messages = conditions.map((condition) => {
     const messageType = condition.if?.properties?.type?.const;
     const payload = condition.then?.properties?.payload;
 
@@ -142,6 +142,23 @@ function createBridgeCodegenSchemas(bridgeSchema) {
       }
     };
   });
+  const enrollment = [
+    ["BridgeJoinRequest", "bridgeJoinRequest"],
+    ["BridgeJoinChallenge", "bridgeJoinChallenge"],
+    ["BridgeJoinApprovalRequest", "bridgeJoinApprovalRequest"],
+    ["BridgeJoinApproval", "bridgeJoinApproval"],
+    ["BridgeJoinClaimRequest", "bridgeJoinClaimRequest"],
+    ["BridgeJoinPending", "bridgeJoinPending"],
+    ["BridgeJoinPaired", "bridgeJoinPaired"]
+  ].map(([name, definition]) => ({
+    name,
+    schema: {
+      title: name,
+      $ref: `#/$defs/${definition}`
+    }
+  }));
+
+  return { messages, types: [...messages, ...enrollment] };
 }
 
 async function render(sources, language, rendererOptions) {
@@ -210,7 +227,8 @@ export async function generateContractTypes(packageRoot) {
     throw new Error(`Missing code generation schema: ${BRIDGE_SCHEMA_ID}`);
   }
 
-  const codegenSchemas = createBridgeCodegenSchemas(bridgeSchema);
+  const codegen = createBridgeCodegenSchemas(bridgeSchema);
+  const codegenSchemas = codegen.types;
   const bundledSchemas = codegenSchemas.map(({ name, schema }) => ({
     name,
     schema: dereference(schema, bridgeSchema, schemas)
@@ -233,7 +251,7 @@ export async function generateContractTypes(packageRoot) {
     })
   ]);
 
-  const union = codegenSchemas
+  const union = codegen.messages
     .map(({ name }) => `  | ${name}`)
     .join("\n");
   const typescript =
