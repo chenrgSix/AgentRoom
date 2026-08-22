@@ -96,7 +96,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | RUN-006 | DONE | Implement guarded handoff | RUN-003 | depth, loop, and unique-agent limits pass |
 | WEB-002 | DONE | Implement Team Room message timeline | WEB-001, ROOM-002 | reload preserves ordered history |
 | WEB-003 | DONE | Implement structured Mention composer | WEB-002, ROOM-003 | display labels resolve to stable Agent IDs |
-| WEB-004 | PLANNED | Implement Agent presence panel | WEB-001, REG-003 | all integration modes render accurately |
+| WEB-004 | DONE | Implement Agent presence panel | WEB-001, REG-003 | all integration modes render accurately |
 | WEB-005 | PLANNED | Implement Run card and live updates | WEB-002, RUN-003 | queued through terminal states are visible |
 | WEB-006 | PLANNED | Implement pairing and revoke screens | WEB-001, BRG-002 | user can pair and revoke a Device |
 

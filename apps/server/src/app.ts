@@ -378,7 +378,11 @@ export async function createServerApp(
   );
   app.get<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/agents",
-    async (request) => agents.listAgents(principal(request), request.params.teamId)
+    async (request) => presence.listAgents(
+      principal(request),
+      request.params.teamId,
+      clock()
+    )
   );
   app.post<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/fake-agents",

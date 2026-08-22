@@ -17,6 +17,7 @@ interface Agent {
   agentId: string;
   name: string;
   role: string;
+  integrationMode: "managed" | "manual" | "fake";
   presence: string;
 }
 
@@ -362,6 +363,23 @@ export function App() {
             />
             <button disabled={busy || !agentName.trim()}>Add Agent</button>
           </form>
+        )}
+        {selectedTeam && (
+          <section className="agent-panel" aria-label="Team Agents">
+            <div className="section-label">Agents</div>
+            {agents.length === 0 ? (
+              <p className="agent-empty">No Agents have joined.</p>
+            ) : agents.map((agent) => (
+              <div className="agent-row" key={agent.agentId}>
+                <span className={`presence-dot ${agent.presence}`} />
+                <div>
+                  <strong>{agent.name}</strong>
+                  <small>{agent.role} · {agent.integrationMode}</small>
+                </div>
+                <span className="presence-label">{agent.presence}</span>
+              </div>
+            ))}
+          </section>
         )}
         <footer>
           <span className="avatar">{session?.displayName.slice(0, 1) ?? "…"}</span>
