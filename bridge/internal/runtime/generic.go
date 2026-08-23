@@ -66,9 +66,29 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 	}
 	if err != nil {
 		failed := contracts.Failed
+		var exitError *exec.ExitError
+		if !errors.As(err, &exitError) {
+			return emit(ctx, Event{
+				Status: &failed,
+				Error: runtimeErrorWithDetails(
+					"RUNTIME_START_FAILED",
+					"Runtime process could not be started.",
+					map[string]interface{}{"category": "start"},
+				),
+			})
+		}
+		stderrText := stderr.String()
 		return emit(ctx, Event{
 			Status: &failed,
-			Error:  runtimeError("RUNTIME_EXIT_FAILED", "Runtime process exited unsuccessfully."),
+			Error: runtimeErrorWithDetails(
+				"RUNTIME_EXIT_FAILED",
+				"Runtime process exited unsuccessfully.",
+				map[string]interface{}{
+					"category":       classifyRuntimeFailure(stderrText),
+					"exitCode":       exitError.ExitCode(),
+					"stderrCaptured": strings.TrimSpace(stderrText) != "",
+				},
+			),
 		})
 	}
 	reply, assessment := parseAssessmentEnvelope(stdout.String())
@@ -95,6 +115,51 @@ func runtimeError(code, message string) *contracts.AgentRoomError {
 	return &contracts.AgentRoomError{
 		Code: code, Message: message, Retryable: false,
 	}
+}
+
+func runtimeErrorWithDetails(
+	code string,
+	message string,
+	details map[string]interface{},
+) *contracts.AgentRoomError {
+	errorValue := runtimeError(code, message)
+	errorValue.Details = details
+	return errorValue
+}
+
+// classifyRuntimeFailure deliberately returns only a stable category. Runtime
+// stderr can contain prompts, provider responses, credentials, or local paths
+// and must never cross the Bridge protocol boundary.
+func classifyRuntimeFailure(stderr string) string {
+	normalized := strings.ToLower(stderr)
+	groups := []struct {
+		category string
+		markers  []string
+	}{
+		{category: "authentication", markers: []string{
+			"unauthorized", "authentication", "api key", "credential", "login required",
+		}},
+		{category: "rate_limit", markers: []string{
+			"rate limit", "too many requests", "status 429", "status=429", "http 429",
+		}},
+		{category: "network", markers: []string{
+			"network", "econn", "connection reset", "connection refused", "dns", "socket",
+		}},
+		{category: "model", markers: []string{
+			"model not found", "unknown model", "model unavailable", "provider error", "inference",
+		}},
+		{category: "configuration", markers: []string{
+			"configuration", "config error", "extension", "settings", "permission denied",
+		}},
+	}
+	for _, group := range groups {
+		for _, marker := range group.markers {
+			if strings.Contains(normalized, marker) {
+				return group.category
+			}
+		}
+	}
+	return "unknown"
 }
 
 type limitedBuffer struct {

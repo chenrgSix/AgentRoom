@@ -94,6 +94,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | BRG-014 | DONE | Export a redacted Bridge diagnostic bundle | BRG-012 | bounded diagnostic export contains only allowlisted operational fields and seeded secrets, paths, prompts, replies, and stable IDs are absent |
 | BRG-015 | DONE | Add manual Bridge update checks | BRG-011, BRG-012 | explicit user action compares stable versions and opens only the official Release page without downloading, replacing, or executing code |
 | BRG-016 | DONE | Isolate incompatible terminal Bridge inbox records | BRG-005, OPS-001, OPS-002 | terminal records with incompatible trace metadata are isolated without replay; active records fail closed without being discarded; Run events require a matching trace ID; malformed, rejected, and failed processing paths are safely distinguished |
+| BRG-017 | DONE | Classify Generic Runtime process failures safely | ADP-005, BRG-014 | start failures and nonzero exits expose only stable category, exit code, and stderr-presence metadata; seeded stderr content never crosses the Bridge boundary |
 | ADP-002 | DONE | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |
 | ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |

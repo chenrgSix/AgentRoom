@@ -105,6 +105,11 @@ processing begins use separate event names; none logs the raw payload. Metrics
 cover connection health, queue depth, delivery age, retries, Run outcomes, and
 event lag.
 
+Generic Runtime process errors may report a bounded category, numeric exit
+code, and whether stderr was present. Tests seed secret-like stderr and prove
+the original text never reaches the Run event, diagnostic projection, or
+central persistence.
+
 Health endpoints distinguish process liveness, dependency readiness, and
 degraded optional capabilities. Audit records are durable and access-controlled.
 
