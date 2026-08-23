@@ -25,6 +25,8 @@ and server-owned payloads are never translated.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
 - Selected Room participant roster projected from Team members and visible Agents.
+- Context sidebar ending at the selected Room participant roster, without
+  workspace, configuration, or account modules beneath it.
 - Narrow-screen navigation for Chat, Agent management, and locale selection.
 
 There is no native desktop GUI in the MVP. Runtime access is provided by the
@@ -48,6 +50,11 @@ and trusted Devices. Fake Agents are explicitly labeled as simulations and are
 not presented as production connections. Secrets are shown only in the
 immediate setup result and are never returned by list APIs.
 
+The desktop context sidebar contains only the Team identity and selected Room
+participants. Room switching, Room creation, locale selection, and return to
+Chat are compact workspace-header actions. Agent management remains a separate
+global rail destination, so configuration is not stacked below Room members.
+
 An empty installation presents a three-step Team, Room, and Agent onboarding
 flow in the main workspace. Required fields use native browser validation;
 actions remain visibly available unless a request is already in progress.
@@ -67,7 +74,7 @@ Component tests cover onboarding state transitions, Chinese-default locale
 persistence, Agent management navigation, enrollment approval, and capability
 gating.
 Browser acceptance covers message, mention, reconnect, Run progress, reply, and
-cancellation flows. Work is tracked by `WEB-001` through `WEB-009` in
+cancellation flows. Work is tracked by `WEB-001` through `WEB-012` in
 `docs/TASKS.md`.
 
 ## Dependencies

@@ -166,6 +166,13 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const participants = screen.getByRole("region", { name: "房间成员" });
     within(participants).getByText("Local Owner");
     within(participants).getByText("Team 所有者");
+    const roomSidebar = participants.closest("aside");
+    assert.ok(roomSidebar);
+    assert.equal(within(roomSidebar).queryByRole("navigation"), null);
+    assert.equal(within(roomSidebar).queryByRole("contentinfo"), null);
+    assert.equal(within(roomSidebar).queryByLabelText("新房间名称"), null);
+    assert.equal((screen.getByLabelText("选择房间") as HTMLSelectElement).value, room.roomId);
+    screen.getByLabelText("新房间名称");
     fireEvent.click(screen.getByRole("button", { name: "智能体管理" }));
 
     await screen.findByRole("heading", { name: "智能体与设备" });

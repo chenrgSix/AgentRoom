@@ -662,68 +662,6 @@ export function App() {
             </div>
           </section>
         )}
-        {selectedTeam && (
-          <>
-            <div className="section-label">{t("workspace")}</div>
-            <nav className="space-nav" aria-label={t("workspace")}>
-              <button
-                className={activeView === "room" ? "space-nav-button active" : "space-nav-button"}
-                onClick={() => setActiveView("room")}
-                type="button"
-              >
-                <span className="nav-icon">⌁</span>
-                <span><strong>{t("chat")}</strong><small>{t("chatHelp")}</small></span>
-              </button>
-              <button
-                className={activeView === "agents" ? "space-nav-button active" : "space-nav-button"}
-                onClick={() => setActiveView("agents")}
-                type="button"
-              >
-                <span className="nav-icon">✦</span>
-                <span><strong>{t("agents")}</strong><small>{t("agentsHelp")}</small></span>
-                <span className="nav-count">{readyAgents}/{agents.length}</span>
-              </button>
-            </nav>
-          </>
-        )}
-        <div className="section-label">{t("rooms")}</div>
-        <nav className="room-list" aria-label={t("rooms")}>
-          {rooms.map((room) => (
-            <button
-              className={room.roomId === selectedRoomId ? "room-link active" : "room-link"}
-              key={room.roomId}
-              onClick={() => {
-                setSelectedRoomId(room.roomId);
-                setActiveView("room");
-              }}
-            >
-              <span>#</span>{room.name}
-            </button>
-          ))}
-        </nav>
-        {selectedTeam && (
-          <form className="room-create" onSubmit={createRoom}>
-            <input
-              aria-label={t("newRoomName")}
-              onChange={(event) => setRoomName(event.target.value)}
-              placeholder={t("addRoom")}
-              required
-              value={roomName}
-            />
-            <button disabled={busy}>{busy ? t("creating") : t("create")}</button>
-          </form>
-        )}
-        <footer>
-          <span className="avatar">{session?.displayName.slice(0, 1) ?? "…"}</span>
-          <div><strong>{session?.displayName ?? t("connecting")}</strong><small>{t("localSession")}</small></div>
-          <button
-            aria-label={t("language")}
-            className="locale-switch"
-            onClick={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")}
-            title={t("language")}
-            type="button"
-          >{locale === "zh-CN" ? "EN" : "中"}</button>
-        </footer>
       </aside>
 
       <main className="workspace">
@@ -748,11 +686,54 @@ export function App() {
                 : selectedRoom ? `# ${selectedRoom.name}` : t("chooseRoom")}
             </h2>
           </div>
-          <div className="agent-summary">
-            <span className={`presence-dot ${readyAgents === 0 ? "offline" : ""}`} />
-            {locale === "zh-CN"
-              ? `${readyAgents} 个就绪 · 共 ${agents.length} 个`
-              : `${readyAgents} ready · ${agents.length} total`}
+          <div className="workspace-controls">
+            {selectedTeam && selectedRoom && (
+              <>
+                <button
+                  className={activeView === "room" ? "header-chat active" : "header-chat"}
+                  onClick={() => setActiveView("room")}
+                  type="button"
+                >⌁ <span>{t("chat")}</span></button>
+                <select
+                  aria-label={t("selectRoom")}
+                  className="header-room-select"
+                  onChange={(event) => {
+                    setSelectedRoomId(event.target.value);
+                    setActiveView("room");
+                  }}
+                  value={selectedRoomId ?? ""}
+                >
+                  {rooms.map((room) => (
+                    <option key={room.roomId} value={room.roomId}># {room.name}</option>
+                  ))}
+                </select>
+                <form className="header-room-create" onSubmit={createRoom}>
+                  <input
+                    aria-label={t("newRoomName")}
+                    onChange={(event) => setRoomName(event.target.value)}
+                    placeholder={t("addRoom")}
+                    required
+                    value={roomName}
+                  />
+                  <button aria-label={t("createRoom")} disabled={busy} title={t("createRoom")}>+</button>
+                </form>
+              </>
+            )}
+            <button
+              aria-label={t("language")}
+              className="header-locale"
+              onClick={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")}
+              title={t("language")}
+              type="button"
+            >{locale === "zh-CN" ? "EN" : "中"}</button>
+            {selectedTeam && (
+              <div className="agent-summary">
+                <span className={`presence-dot ${readyAgents === 0 ? "offline" : ""}`} />
+                {locale === "zh-CN"
+                  ? `${readyAgents} 个就绪 · 共 ${agents.length} 个`
+                  : `${readyAgents} ready · ${agents.length} total`}
+              </div>
+            )}
           </div>
         </header>
         {!selectedTeam ? (
