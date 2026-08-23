@@ -130,6 +130,19 @@ test("central Orchestrator alternates participants and finalizes a plateau", asy
       mode: "review",
       outputMode: "decision_record"
     });
+    assert.deepEqual(
+      value.core.getMessage(result.discussion.rootMessageId)?.mentions
+        .map(({ targetAgentId }) => targetAgentId),
+      value.agentIds
+    );
+    assert.throws(
+      () => value.orchestrator.create(value.principal, {
+        roomId: value.roomId,
+        goal: "Start a competing Discussion.",
+        participantAgentIds: value.agentIds
+      }),
+      /Room already has an active Discussion/u
+    );
     assert.equal(result.scheduledRun?.targetAgentId, value.agentIds[0]);
 
     for (let ordinal = 1; ordinal <= 3; ordinal += 1) {

@@ -99,10 +99,11 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   };
   let messageWasSent = false;
   let discussionState = "";
+  let discussionGoal = "确定交付恢复规则";
   const discussionView = () => ({
     discussion: {
       discussionId: "discussion_test",
-      goal: "确定交付恢复规则",
+      goal: discussionGoal,
       state: discussionState || "active",
       stateReason: discussionState === "stop_requested" ? "user_requested_finish" : null,
       currentTurn: 1,
@@ -171,6 +172,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       return jsonResponse([]);
     }
     if (path === `/api/rooms/${room.roomId}/discussions` && method === "POST") {
+      discussionGoal = (JSON.parse(String(init.body)) as { goal: string }).goal;
       discussionState = "active";
       return jsonResponse(discussionView());
     }
@@ -266,11 +268,13 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.equal(screen.queryByRole("combobox", { name: "提及智能体" }), null);
     const messageInput = screen.getByLabelText("消息") as HTMLTextAreaElement;
     fireEvent.change(messageInput, { target: { value: "请 @Rev" } });
-    const mentionList = screen.getByRole("listbox", { name: "提及智能体" });
-    const mentionOption = within(mentionList).getByRole("option", { name: /@Review Bot/u });
-    fireEvent.click(mentionOption);
+    within(screen.getByRole("listbox", { name: "提及智能体" }))
+      .getByRole("option", { name: /@Review Bot/u });
+    fireEvent.keyDown(messageInput, { key: "Enter" });
     assert.equal(messageInput.value, "请 @Review Bot ");
-    screen.getByText("已提及 @Review Bot");
+    screen.getByRole("button", { name: "移除提及 Review Bot（Team 成员）" });
+    fireEvent.change(messageInput, { target: { value: "请" } });
+    assert.equal(screen.queryByRole("button", { name: "移除提及 Review Bot（Team 成员）" }), null);
     fireEvent.click(screen.getByRole("button", { name: "智能体管理" }));
 
     await screen.findByRole("heading", { name: "智能体与设备" });
@@ -312,27 +316,47 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const timeline = await screen.findByRole("region", { name: "房间消息" });
     within(timeline).getByText("Review Bot");
     within(timeline).getByText("已经完成");
+    assert.deepEqual(JSON.parse(requests.find((candidate) =>
+      candidate.path === `/api/rooms/${room.roomId}/messages` &&
+      candidate.method === "POST"
+    )?.body ?? "{}"), { content: "请回答" });
 
-    fireEvent.click(screen.getByRole("tab", { name: "发起讨论" }));
-    const discussionParticipants = screen.getByLabelText("讨论参与者");
-    assert.equal(
-      within(discussionParticipants).getAllByRole("button", { pressed: true }).length,
-      2
-    );
-    fireEvent.change(screen.getByLabelText("消息"), {
-      target: { value: "确定交付恢复规则" }
+    assert.equal(screen.queryByRole("tab", { name: "发起讨论" }), null);
+    fireEvent.change(roomMessageInput, { target: { value: "请 @Rev" } });
+    fireEvent.click(within(screen.getByRole("listbox", { name: "提及智能体" }))
+      .getByRole("option", { name: /@Review Bot/u }));
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => {
+      const messageRequests = requests.filter((candidate) =>
+        candidate.path === `/api/rooms/${room.roomId}/messages` &&
+        candidate.method === "POST"
+      );
+      assert.deepEqual(JSON.parse(messageRequests.at(-1)?.body ?? "{}"), {
+        content: "请 @Review Bot ",
+        mentionAgentId: agent.agentId
+      });
     });
-    fireEvent.click(screen.getByRole("button", { name: "开始讨论" }));
+
+    fireEvent.change(roomMessageInput, { target: { value: "确定交付恢复规则 @Rev" } });
+    fireEvent.click(within(screen.getByRole("listbox", { name: "提及智能体" }))
+      .getByRole("option", { name: /@Review Bot/u }));
+    fireEvent.change(roomMessageInput, {
+      target: { value: `${roomMessageInput.value}@Local` }
+    });
+    fireEvent.click(within(screen.getByRole("listbox", { name: "提及智能体" }))
+      .getByRole("option", { name: /@Local Codex/u }));
+    screen.getByText("发送后将发起 2 个智能体的协作讨论");
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
     const discussionPanel = await screen.findByRole("region", { name: "当前智能体讨论" });
     within(discussionPanel).getByText("讨论中 · 第1轮");
-    within(discussionPanel).getByText("确定交付恢复规则");
+    within(discussionPanel).getByText("确定交付恢复规则 @Review Bot @Local Codex");
     await waitFor(() => {
       const request = requests.find((candidate) =>
         candidate.path === `/api/rooms/${room.roomId}/discussions` &&
         candidate.method === "POST"
       );
       assert.deepEqual(JSON.parse(request?.body ?? "{}"), {
-        goal: "确定交付恢复规则",
+        goal: "确定交付恢复规则 @Review Bot @Local Codex ",
         participantAgentIds: [agent.agentId, secondAgent.agentId],
         mode: "round_robin",
         outputMode: "final_answer"

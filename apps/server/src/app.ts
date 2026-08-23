@@ -364,7 +364,10 @@ export async function createServerApp(
       return;
     }
     const message = error instanceof Error ? error.message : "Unexpected error";
-    const statusCode = message.includes("UNIQUE constraint failed") ? 409 : 400;
+    const statusCode = message.includes("UNIQUE constraint failed") ||
+      message.startsWith("Room already has an active Discussion:")
+      ? 409
+      : 400;
     app.log.warn({
       event: "http.request.rejected",
       requestId: request.id,

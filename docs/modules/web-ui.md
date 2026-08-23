@@ -26,12 +26,14 @@ without changing server-owned state.
   logout, and Owner invitation controls without exposing session credentials to
   JavaScript.
 - Ordered message timeline and thread view.
-- Structured Agent mention and handoff composer.
+- Unified Room composer for messages, single-Agent Runs, and adaptive
+  multi-Agent Discussions.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
 - Agent roster with presence and capability summaries.
 - Run cards with live status, replies, cancellation, and failure details.
-- Discussion composer, progress explanation, finalization, extension, pause,
-  and stop controls without presenting a soft budget as a completion target.
+- Discussion progress explanation, goal adjustment, finalization, extension,
+  pause, and stop controls without presenting a soft budget as a completion
+  target.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
 - Selected Room participant roster projected from Team members and visible Agents.
@@ -61,6 +63,14 @@ turn ordinal without a denominator. At a soft boundary it explains resolved and
 unresolved goals and offers semantic actions such as continue solving, adjust
 goal, or finish with a conclusion rather than requiring users to choose an
 internal turn allocation.
+
+The Room composer classifies one submission by its distinct structured Agent
+identities. No Mention stores a Room message, one Mention creates a normal Run,
+and two to five Mentions create an adaptive Discussion whose goal is the message
+body. Free-form `@text` is not routing metadata. Selecting and removing chips
+keeps the visible tokens and stable IDs synchronized; the Server revalidates
+Room membership, Agent availability, Discussion participant policy, and the
+single-open-Discussion Room invariant.
 
 Timeline messages resolve their visible author from the stable `senderId` and
 the current Team roster. Registered Agent and member names are shown directly;
@@ -97,6 +107,13 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 - Mentions select a registered Agent identity, not free-form `@text` parsing.
 - Typing `@` opens the visible Agent suggestion list; selecting a result inserts
   its display name while retaining its stable identity for submission.
+- Mention identities are ordered and unique. Removing a selected token removes
+  its stable identity; complete-token matching prevents one Agent name from
+  matching another name's prefix. Same-name chips retain their role labels for
+  disambiguation. Five participants is the Web submission maximum.
+- The composer has one Send action and no separate Discussion tab. Existing
+  Discussion goal adjustment reuses its status panel without changing a Room
+  message draft.
 - Cancellation actions show their current authoritative outcome.
 - **Finish and generate conclusion** is the primary Discussion stop action;
   stop-after-turn, pause, resume, and immediate cancellation remain explicit.
@@ -107,13 +124,13 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 
 ## Verification and Tasks
 
-Component tests cover onboarding state transitions, Chinese-default locale
-persistence, Agent management navigation, enrollment approval, capability
-gating, Discussion creation, participant identity, and finish controls.
-Browser acceptance covers message, mention, reconnect, Run progress, reply,
-cancellation, and a two-Agent adaptive Discussion that reaches a persisted
-final conclusion. Work is tracked by `WEB-001` through `WEB-018` in
-`docs/TASKS.md`.
+Component tests cover onboarding state transitions, Chinese-default locale,
+Agent management, enrollment approval, the unified no-Mention, one-Mention,
+and multi-Mention submission paths, participant identity, and finish controls.
+They also assert that no separate Discussion entry remains. Browser acceptance
+covers message, mention, reconnect, Run progress, reply, cancellation, and a
+two-Agent adaptive Discussion that reaches a persisted final conclusion. Work
+is tracked by `WEB-001` through `WEB-019` in `docs/TASKS.md`.
 
 ## Dependencies
 

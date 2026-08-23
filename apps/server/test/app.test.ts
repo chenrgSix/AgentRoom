@@ -186,6 +186,47 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
     assert.equal(listDiscussions.statusCode, 200);
     assert.equal(listDiscussions.json()[0].discussion.discussionId,
       discussion.discussion.discussionId);
+
+    const createConflictRoom = await app.inject({
+      method: "POST",
+      url: `/api/teams/${team.team.teamId}/rooms`,
+      headers: { authorization },
+      payload: { name: "discussion-conflict" }
+    });
+    assert.equal(createConflictRoom.statusCode, 200);
+    const conflictRoomId = createConflictRoom.json().roomId as string;
+    const manualAgentIds: string[] = [];
+    for (const name of ["Manual Coder", "Manual Reviewer"]) {
+      const created = await app.inject({
+        method: "POST",
+        url: `/api/teams/${team.team.teamId}/manual-agents`,
+        headers: { authorization },
+        payload: { name, role: "Participant" }
+      });
+      assert.equal(created.statusCode, 200);
+      manualAgentIds.push(created.json().agent.agentId as string);
+    }
+    const openDiscussion = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${conflictRoomId}/discussions`,
+      headers: { authorization },
+      payload: {
+        goal: "Wait for manual participants.",
+        participantAgentIds: manualAgentIds
+      }
+    });
+    assert.equal(openDiscussion.statusCode, 200);
+    const competingDiscussion = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${conflictRoomId}/discussions`,
+      headers: { authorization },
+      payload: {
+        goal: "Do not start a hidden competing Discussion.",
+        participantAgentIds: manualAgentIds
+      }
+    });
+    assert.equal(competingDiscussion.statusCode, 409);
+    assert.equal(competingDiscussion.json().error.code, "CONFLICT");
   } finally {
     await app.close();
   }

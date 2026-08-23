@@ -197,9 +197,13 @@ owned by `FUT-004`.
 
 ## User Experience
 
-The composer distinguishes a one-shot multi-Mention from **Start Discussion**.
-The Room shows `Discussing - turn 7`, never `7 / 12`, because a soft boundary is
-not a completion target.
+The Room uses one composer. A submission with two to five distinct structured
+Agent Mentions creates a Discussion automatically; its body becomes the goal
+and its stable Agent IDs become participants after Coordinator authorization.
+The persisted root Message retains those Mentions, but it does not create one
+independent normal Run per participant. No separate **Start Discussion** mode
+is exposed. The Room shows `Discussing - turn 7`, never `7 / 12`, because a
+soft boundary is not a completion target.
 
 Primary control is **Finish and generate conclusion**. Secondary controls are
 **Stop after this turn**, **Pause**, and an overflow **Stop immediately**.
@@ -211,6 +215,8 @@ Advanced users may inspect or override the next budget lease when policy allows.
 
 - Persist a decision and its next-turn routing intent atomically before
   delivery.
+- A Room has at most one non-terminal Discussion. Competing creation requests
+  receive a conflict instead of starting work that the Room cannot control.
 - Reconciliation may recreate a missing Run from routing intent but cannot
   advance the Discussion twice.
 - Only Room-visible, enabled participants may be scheduled.

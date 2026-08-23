@@ -134,12 +134,19 @@ export class DiscussionOrchestrator {
     if (!room) {
       throw new Error(`Room not found: ${input.roomId}`);
     }
-    for (const agentId of uniqueAgentIds) {
+    const openDiscussion = this.repository.listForRoom(input.roomId).find(
+      ({ state }) => !terminalDiscussionStates.has(state)
+    );
+    if (openDiscussion) {
+      throw new Error(`Room already has an active Discussion: ${openDiscussion.discussionId}`);
+    }
+    const participantAgents = uniqueAgentIds.map((agentId) => {
       const agent = this.core.getAgent(agentId);
       if (!agent || !agent.enabled || agent.teamId !== room.teamId) {
         throw new Error(`Discussion participant is unavailable: ${agentId}`);
       }
-    }
+      return agent;
+    });
     const policy = resolvePolicy(input.policy);
     const mode = input.mode ?? "round_robin";
     const outputMode = input.outputMode ?? "final_answer";
@@ -155,6 +162,11 @@ export class DiscussionOrchestrator {
     const rootMessage = this.messages.createMemberMessage(principal, {
       roomId: input.roomId,
       content: goal,
+      mentions: participantAgents.map((agent) => ({
+        targetType: "agent" as const,
+        targetAgentId: agent.agentId,
+        displayLabel: `${agent.name} / ${agent.role}`
+      })),
       now
     });
     const discussionId = createOpaqueId("discussion");

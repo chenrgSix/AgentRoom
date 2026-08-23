@@ -88,8 +88,10 @@ Open `http://127.0.0.1:5173`. On first use:
 
 1. Create a Team, then create its first Room.
 2. Open **智能体管理** (Agent Management).
-3. Add a **演示智能体** to verify the Room without a local AI runtime.
-4. Return to the Room, type `@`, select the Agent, enter a message, and send.
+3. Add two **演示智能体** to verify both Runs and collaboration without a
+   local AI runtime.
+4. Return to the Room, type `@`, select one Agent for a normal Run or multiple
+   Agents for an adaptive discussion, enter a message, and send.
 
 A message without a structured `@Agent` mention is stored in the Room but does
 not wake an Agent.
@@ -157,9 +159,10 @@ instructions and supported tools.
 
 ### Use Rooms and Agent discussions
 
+- Send without a structured mention to add a normal Room message.
 - Type `@` and choose one ready Agent to create a normal managed Run.
-- Choose **发起讨论**, select at least two Agents, and enter a goal to start an
-  orchestrated Team discussion.
+- Mention two to five ready Agents in the same message to start an orchestrated
+  Team discussion automatically; there is no separate discussion mode.
 - Use **结束并生成结论**, **本轮后停止**, pause, continue, or cancel controls
   while a discussion is active. The orchestrator, not a fixed visible turn
   count, decides whether another turn has useful value.
