@@ -7,8 +7,8 @@
 - Owns: SQLite schema, repositories, transactions, backup and recovery
 
 The server persistence layer owns durable Team, Room, Message, Agent projection,
-Run, delivery, and audit records. SQLite is the MVP database for a single
-central server instance.
+Run, delivery, Discussion Wave, and audit records. SQLite is the MVP database
+for a single central server instance.
 
 ## Storage Model
 
@@ -25,12 +25,34 @@ Run transitions append contiguous `run_events`; deliveries persist their stable
 attempt ID, idempotency key, payload hash, payload bytes, send count, and ACK.
 Schema constraints remain authoritative even when a projection is rebuilt.
 
+Discussion persistence stores one open Wave at most per Discussion. Each Wave
+freezes its phase, input Message, deadline, expected member count, and member
+Turns. Member identity is unique within the Wave. Run `orchestrationKey` is a
+unique nullable recovery key; Discussion member Runs use their `turnId`.
+Existing sequential Turns migrate to singleton Waves before new parallel Waves
+are scheduled.
+
+After an ordinary Wave settles, Discussion Orchestration appends an idempotent
+`wave_result` system Message with an ID derived from the Wave ID. This Message is
+the next Wave's stable input anchor. It is deliberately written before the
+barrier-close transaction; a retry observes the same ID instead of appending a
+second anchor.
+
 ## Transaction Boundaries
 
 Message append, Run batch creation, Delivery creation, ACK, and each event
-application have explicit SQLite transactions. Sequence and terminal guards
-prevent stale writers from overwriting newer Run state; Bridge inbox writes are
-fsynced before acceptance or event send.
+application have explicit SQLite transactions. Opening a Discussion Wave writes
+the decision, Wave, and all planned member Turns atomically before member Runs
+are created. Closing its all-settled barrier atomically fences the Wave state,
+one budget event, one ProgressSnapshot, the authoritative decision, and any
+next Wave by aggregate version.
+
+The separately idempotent `wave_result` Message is not part of that aggregate
+transaction. Its deterministic identity closes the crash window between Message
+append and barrier commit without claiming a cross-aggregate transaction.
+
+Sequence and terminal guards prevent stale writers from overwriting newer Run
+state; Bridge inbox writes are fsynced before acceptance or event send.
 
 The local Bridge inbox is owned by the Bridge module, although its recovery
 contract is tested jointly with server delivery records.
@@ -42,6 +64,23 @@ terminal outcomes. Bridge reconnect dispatches queued work, while Bridge
 restart replays durable events or reports an unfinished Runtime as
 `outcome_unknown`. Projection sequence numbers never move backward.
 
+Discussion reconciliation covers three explicit cut points:
+
+1. a planned Wave before some or all member Runs exist: bind an existing Run by
+   `orchestrationKey`, or create one keyed Run when no identity exists;
+2. an open Wave with only some terminal members: preserve settled members;
+   queued managed work is retried when its Bridge reconnects, while accepted or
+   working members await durable inbox replay or their Wave deadline;
+3. a closed barrier whose next Wave is already committed: dispatch only its
+   missing member Runs and do not repeat projection, budget, or policy writes.
+
+Duplicate terminal callbacks may update no state after the first successful
+barrier close. Partial success remains recoverable because every member outcome
+and terminal reason is durable; all-member failure converges to
+`waiting_human` instead of automatically rerunning unknown work. A persisted
+`input_required` member is represented as a terminal unknown outcome with its
+reason, so it cannot leave the recovered barrier permanently open.
+
 Backups use the SQLite backup API, include schema metadata, refuse overwrite,
 and pass `quick_check`. Restore and forward-only migration rollback procedure is
 documented in `docs/backup-and-restore.md`. The Compose workflow installs host
@@ -51,9 +90,13 @@ selected live database in place.
 
 ## Verification and Tasks
 
-Tests cover constraints, migration rollback behavior, crash points, delivery
-recovery, backup, restore, and corrupted input rejection. Work is tracked by
-`DATA-001` through `DATA-005` in `docs/TASKS.md`.
+Tests cover constraints, migration rollback behavior, Wave backfill,
+atomic planning and closure, callback duplication, ordinary reconciliation,
+delivery recovery, backup, restore, and corrupted input rejection. `QA-010`
+reopens SQLite at planned-member, partially settled barrier, and
+committed-next-Wave cut points, and verifies deterministic-anchor retry.
+Persistence work is tracked by `DATA-001` through `DATA-005`; parallel recovery
+is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
 
 ## Dependencies
 

@@ -9,6 +9,20 @@ import type {
 
 const importanceValues = new Set(["low", "medium", "high"]);
 const disagreementValues = new Set(["none", "low", "medium", "high"]);
+const importanceRank: Record<OpenQuestion["importance"], number> = {
+  low: 0,
+  medium: 1,
+  high: 2
+};
+const disagreementRank: Record<
+  Exclude<ProgressSnapshot["disagreementRemaining"], "unknown">,
+  number
+> = {
+  none: 0,
+  low: 1,
+  medium: 2,
+  high: 3
+};
 
 function stringList(value: unknown, maximum = 100): string[] | undefined {
   if (!Array.isArray(value) || value.length > maximum) {
@@ -110,52 +124,177 @@ export interface ProgressEvaluation {
   newEvidence: number;
 }
 
-export function evaluateProgress(input: {
-  previous: ProgressSnapshot;
+export interface SuccessfulWaveResult {
+  participantOrdinal: number;
   reply: string;
   assessment: unknown;
-  policy: DiscussionPolicy;
   speakerIsReviewer: boolean;
-}): ProgressEvaluation {
-  const assessment = parseAgentAssessment(input.assessment);
-  const replyHash = hashDiscussionReply(input.reply);
-  const replyIsNovel = !input.previous.replyHashes.includes(replyHash);
-  const resolvedIds = new Set(assessment?.resolvedQuestionIds ?? []);
-  const resolvedQuestions = input.previous.openQuestions.filter(({ id }) =>
-    resolvedIds.has(id)
+}
+
+export interface WaveMemberProgressEvaluation {
+  participantOrdinal: number;
+  assessment: AgentAssessment | null;
+  replyHash: string;
+}
+
+export interface WaveProgressEvaluation {
+  snapshot: ProgressSnapshot;
+  members: WaveMemberProgressEvaluation[];
+  resolvedImportantQuestions: number;
+  newEvidence: number;
+}
+
+function mergeOpenQuestion(
+  current: OpenQuestion | undefined,
+  candidate: OpenQuestion
+): OpenQuestion {
+  if (!current) return candidate;
+  const currentImportance = importanceRank[current.importance];
+  const candidateImportance = importanceRank[candidate.importance];
+  if (candidateImportance > currentImportance) return candidate;
+  if (candidateImportance < currentImportance) return current;
+  return candidate.question.localeCompare(current.question, "en-US") < 0
+    ? candidate
+    : current;
+}
+
+function sortSuccessfulResults(
+  results: readonly SuccessfulWaveResult[]
+): SuccessfulWaveResult[] {
+  const ordinals = new Set<number>();
+  const sorted = [...results].sort(
+    (left, right) => left.participantOrdinal - right.participantOrdinal
   );
+  for (const result of sorted) {
+    if (
+      !Number.isSafeInteger(result.participantOrdinal) ||
+      result.participantOrdinal < 0
+    ) {
+      throw new Error("Wave participant ordinal must be a non-negative integer");
+    }
+    if (ordinals.has(result.participantOrdinal)) {
+      throw new Error(`Duplicate Wave participant ordinal: ${result.participantOrdinal}`);
+    }
+    ordinals.add(result.participantOrdinal);
+  }
+  return sorted;
+}
+
+/**
+ * Applies one all-settled Wave to the durable progress projection. Only
+ * successful participant results belong here; failed members are accounted for
+ * by orchestration policy and cannot contribute completion evidence.
+ */
+export function evaluateWaveProgress(input: {
+  previous: ProgressSnapshot;
+  successfulResults: readonly SuccessfulWaveResult[];
+  policy: DiscussionPolicy;
+}): WaveProgressEvaluation {
+  const sortedResults = sortSuccessfulResults(input.successfulResults);
+  const members = sortedResults.map((result) => ({
+    participantOrdinal: result.participantOrdinal,
+    assessment: parseAgentAssessment(result.assessment),
+    replyHash: hashDiscussionReply(result.reply)
+  }));
+
+  const resolvedIds = new Set<string>();
+  for (const member of members) {
+    for (const questionId of member.assessment?.resolvedQuestionIds ?? []) {
+      resolvedIds.add(questionId);
+    }
+  }
+
   const openById = new Map(
     input.previous.openQuestions
       .filter(({ id }) => !resolvedIds.has(id))
       .map((question) => [question.id, question])
   );
-  for (const question of assessment?.openQuestions ?? []) {
-    openById.set(question.id, question);
+  for (const member of members) {
+    for (const question of member.assessment?.openQuestions ?? []) {
+      openById.set(question.id, mergeOpenQuestion(openById.get(question.id), question));
+    }
   }
-  const evidence = new Set(input.previous.evidenceRefs);
-  const evidenceBefore = evidence.size;
-  for (const reference of assessment?.newEvidenceRefs ?? []) {
-    evidence.add(reference);
+  const openQuestions = [...openById.values()].sort((left, right) =>
+    left.id.localeCompare(right.id, "en-US")
+  );
+  const resolvedQuestions = input.previous.openQuestions.filter(
+    ({ id }) => resolvedIds.has(id) && !openById.has(id)
+  );
+
+  const evidenceBefore = new Set(input.previous.evidenceRefs);
+  const evidence = new Set(evidenceBefore);
+  for (const member of members) {
+    for (const reference of member.assessment?.newEvidenceRefs ?? []) {
+      evidence.add(reference);
+    }
   }
-  const disagreement = assessment?.disagreementRemaining ??
-    input.previous.disagreementRemaining;
-  const disagreementChanged = disagreement !== input.previous.disagreementRemaining;
-  const addedInformation = replyIsNovel && assessment?.newInformationAdded !== false;
-  const madeProgress =
-    addedInformation || resolvedQuestions.length > 0 ||
-    evidence.size > evidenceBefore || disagreementChanged;
-  const openQuestions = [...openById.values()];
-  const confidence = assessment?.confidence ?? input.previous.confidence;
-  const reviewerApproved = input.previous.reviewerApproved ||
-    (input.speakerIsReviewer && assessment?.reviewerApproved === true);
+  const evidenceRefs = [...evidence].sort((left, right) =>
+    left.localeCompare(right, "en-US")
+  );
+
+  const reportedDisagreement = members
+    .map(({ assessment }) => assessment?.disagreementRemaining)
+    .filter((value): value is Exclude<
+      ProgressSnapshot["disagreementRemaining"], "unknown"
+    > => value !== undefined);
+  const disagreementRemaining = reportedDisagreement.length === 0
+    ? input.previous.disagreementRemaining
+    : reportedDisagreement.reduce((highest, current) =>
+        disagreementRank[current] > disagreementRank[highest] ? current : highest
+      );
+
+  const reportedConfidences = members
+    .map(({ assessment }) => assessment?.confidence)
+    .filter((value): value is number => value !== undefined);
+  const confidence = reportedConfidences.length === 0
+    ? input.previous.confidence
+    : Math.min(...reportedConfidences);
+  const reviewerApproved = input.previous.reviewerApproved || sortedResults.some(
+    (result, index) => result.speakerIsReviewer &&
+      members[index]?.assessment?.reviewerApproved === true
+  );
+
+  const completionAssessments = members
+    .map(({ assessment }) => assessment)
+    .filter((assessment): assessment is AgentAssessment =>
+      assessment !== null &&
+      (assessment.goalSatisfied !== undefined || assessment.confidence !== undefined)
+    );
   const hasHighPriorityOpenQuestion = openQuestions.some(
     ({ importance }) => importance === "high"
   );
-  const goalSatisfied = assessment?.goalSatisfied === true &&
-    confidence !== null &&
-    confidence >= input.policy.minimumCompletionConfidence &&
+  const goalSatisfied = sortedResults.length > 0 &&
+    completionAssessments.length > 0 &&
+    completionAssessments.every((assessment) =>
+      assessment.goalSatisfied === true &&
+      assessment.confidence !== undefined &&
+      assessment.confidence >= input.policy.minimumCompletionConfidence
+    ) &&
     !hasHighPriorityOpenQuestion;
-  const replyHashes = [...input.previous.replyHashes, replyHash].slice(-50);
+
+  const knownReplyHashes = new Set(input.previous.replyHashes);
+  const replyHashes = [...input.previous.replyHashes];
+  let addedNovelReply = false;
+  for (const [index, member] of members.entries()) {
+    const isNovel = !knownReplyHashes.has(member.replyHash);
+    if (isNovel) {
+      knownReplyHashes.add(member.replyHash);
+      replyHashes.push(member.replyHash);
+    }
+    if (isNovel && member.assessment?.newInformationAdded !== false) {
+      addedNovelReply = true;
+    }
+    // Keep the sorted result and member arrays structurally aligned.
+    if (sortedResults[index]?.participantOrdinal !== member.participantOrdinal) {
+      throw new Error("Wave progress member ordering invariant failed");
+    }
+  }
+
+  const newEvidence = evidence.size - evidenceBefore.size;
+  const disagreementChanged =
+    disagreementRemaining !== input.previous.disagreementRemaining;
+  const madeProgress = addedNovelReply || resolvedQuestions.length > 0 ||
+    newEvidence > 0 || disagreementChanged;
 
   return {
     snapshot: {
@@ -163,18 +302,48 @@ export function evaluateProgress(input: {
       goalSatisfied,
       confidence,
       openQuestions,
-      evidenceRefs: [...evidence],
-      disagreementRemaining: disagreement,
+      evidenceRefs,
+      disagreementRemaining,
       reviewerApproved,
       plateauCount: madeProgress ? 0 : input.previous.plateauCount + 1,
-      replyHashes,
+      replyHashes: replyHashes.slice(-50),
       lastTurnAddedInformation: madeProgress
     },
-    assessment,
-    replyHash,
+    members,
     resolvedImportantQuestions: resolvedQuestions.filter(
       ({ importance }) => importance !== "low"
     ).length,
-    newEvidence: evidence.size - evidenceBefore
+    newEvidence
+  };
+}
+
+export function evaluateProgress(input: {
+  previous: ProgressSnapshot;
+  reply: string;
+  assessment: unknown;
+  policy: DiscussionPolicy;
+  speakerIsReviewer: boolean;
+}): ProgressEvaluation {
+  const wave = evaluateWaveProgress({
+    previous: input.previous,
+    successfulResults: [{
+      participantOrdinal: 0,
+      reply: input.reply,
+      assessment: input.assessment,
+      speakerIsReviewer: input.speakerIsReviewer
+    }],
+    policy: input.policy
+  });
+  const member = wave.members[0];
+  if (!member) {
+    throw new Error("Single-member progress evaluation produced no member result");
+  }
+
+  return {
+    snapshot: wave.snapshot,
+    assessment: member.assessment,
+    replyHash: member.replyHash,
+    resolvedImportantQuestions: wave.resolvedImportantQuestions,
+    newEvidence: wave.newEvidence
   };
 }

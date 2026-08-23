@@ -252,6 +252,8 @@ export async function createServerApp(
     auth,
     clock
   );
+  let discussionSweepTimer: ReturnType<typeof setInterval> | undefined;
+  let discussionSweepInFlight = false;
   const dispatchDiscussionRun = async (run: ReturnType<RunRepository["getRun"]>) => {
     if (!run) return;
     const agent = core.getAgent(run.targetAgentId);
@@ -273,7 +275,11 @@ export async function createServerApp(
         ]
       });
       const completed = await executor.execute(run.runId, adapter);
-      await advanceDiscussion(completed.runId);
+      if (completed.state === "input_required") {
+        await pauseDiscussionForInput(completed.runId);
+      } else {
+        await advanceDiscussion(completed.runId);
+      }
       return;
     }
     if (agent?.integrationMode === "managed") {
@@ -289,10 +295,30 @@ export async function createServerApp(
       }, "Managed Run delivery processed");
     }
   };
+  const dispatchDiscussionRuns = async (
+    runs: NonNullable<ReturnType<RunRepository["getRun"]>>[]
+  ): Promise<void> => {
+    await Promise.all(runs.map((run) => dispatchDiscussionRun(run)));
+  };
   const advanceDiscussion = async (runId: string): Promise<void> => {
     const result = discussions.onRunTerminal(runId);
-    if (result?.scheduledRun) {
-      await dispatchDiscussionRun(result.scheduledRun);
+    if (result?.scheduledRuns.length) {
+      await dispatchDiscussionRuns(result.scheduledRuns);
+    }
+  };
+  const pauseDiscussionForInput = async (runId: string): Promise<void> => {
+    const result = discussions.onRunInputRequired(runId);
+    if (result?.scheduledRuns.length) {
+      await dispatchDiscussionRuns(result.scheduledRuns);
+    }
+  };
+  const sweepDiscussionDeadlines = async (): Promise<void> => {
+    if (discussionSweepInFlight) return;
+    discussionSweepInFlight = true;
+    try {
+      await dispatchDiscussionRuns(discussions.expireDueWaves());
+    } finally {
+      discussionSweepInFlight = false;
     }
   };
   const manualRuns = new ManualRunService(
@@ -380,6 +406,7 @@ export async function createServerApp(
   });
 
   app.addHook("onClose", (_instance, done) => {
+    if (discussionSweepTimer) clearInterval(discussionSweepTimer);
     database.close();
     done();
   });
@@ -704,6 +731,10 @@ export async function createServerApp(
           ) {
             void advanceDiscussion(applied.run.runId).catch((error: unknown) => {
               app.log.error(error, "Discussion advancement failed");
+            });
+          } else if (applied.applied && applied.run.state === "input_required") {
+            void pauseDiscussionForInput(applied.run.runId).catch((error: unknown) => {
+              app.log.error(error, "Discussion input-required transition failed");
             });
           }
           return;
@@ -1229,8 +1260,8 @@ export async function createServerApp(
           ? {}
           : { policy: rawPolicy as Partial<DiscussionPolicy> })
       });
-      if (result.scheduledRun) {
-        await dispatchDiscussionRun(result.scheduledRun);
+      if (result.scheduledRuns.length) {
+        await dispatchDiscussionRuns(result.scheduledRuns);
       }
       return discussions.get(principal(request), result.discussion.discussionId);
     }
@@ -1267,20 +1298,30 @@ export async function createServerApp(
             : { extensionTurns: Number(body.extensionTurns) })
         }
       );
-      let cancelWarning: string | null = null;
-      if (result.cancelRunId) {
+      const cancelWarnings: string[] = [];
+      for (const cancelRunId of result.cancelRunIds) {
         try {
-          cancellations.cancel(actor, result.cancelRunId, "Discussion stopped immediately");
+          const canceledRun = cancellations.cancel(
+            actor,
+            cancelRunId,
+            "Discussion stopped immediately"
+          );
+          if (new Set([
+            "completed", "failed", "canceled", "expired", "outcome_unknown"
+          ]).has(canceledRun.state)) {
+            await advanceDiscussion(canceledRun.runId);
+          }
         } catch (error) {
-          cancelWarning = error instanceof Error ? error.message : "Runtime cancel failed";
+          const message = error instanceof Error ? error.message : "Runtime cancel failed";
+          cancelWarnings.push(`${cancelRunId}: ${message}`);
         }
       }
-      if (result.scheduledRun) {
-        await dispatchDiscussionRun(result.scheduledRun);
+      if (result.scheduledRuns.length) {
+        await dispatchDiscussionRuns(result.scheduledRuns);
       }
       return {
         ...discussions.get(actor, request.params.discussionId),
-        cancelWarning
+        cancelWarning: cancelWarnings.length > 0 ? cancelWarnings.join("; ") : null
       };
     }
   );
@@ -1363,9 +1404,16 @@ export async function createServerApp(
     id: null
   }));
 
-  for (const recoveredRun of discussions.recover()) {
-    await dispatchDiscussionRun(recoveredRun);
-  }
+  await dispatchDiscussionRuns(discussions.recover());
+  discussionSweepTimer = setInterval(() => {
+    void sweepDiscussionDeadlines().catch((error: unknown) => {
+      app.log.error({
+        event: "discussion.wave.deadline_sweep_failed",
+        error: error instanceof Error ? error.message : "Unexpected error"
+      }, "Discussion Wave deadline sweep failed");
+    });
+  }, 1_000);
+  discussionSweepTimer.unref();
 
   if (options.webRoot) {
     await app.register(fastifyStatic, {

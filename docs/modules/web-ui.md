@@ -31,9 +31,9 @@ without changing server-owned state.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
 - Agent roster with presence and capability summaries.
 - Run cards with live status, replies, cancellation, and failure details.
-- Discussion progress explanation, goal adjustment, finalization, extension,
-  pause, and stop controls without presenting a soft budget as a completion
-  target.
+- Discussion Wave progress, member Run outcomes, goal adjustment,
+  finalization, extension, pause, and stop controls without presenting a soft
+  budget as a completion target.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
 - Selected Room participant roster projected from Team members and visible Agents.
@@ -57,12 +57,24 @@ The UI uses schemas and generated types from `packages/contracts/`. Capability
 flags control whether start, resume, interrupt, handoff, or managed execution
 controls are shown.
 
-Discussion views render the central ProgressSnapshot and OrchestrationDecision;
-they do not derive completion from Agent prose. The timeline shows the current
-turn ordinal without a denominator. At a soft boundary it explains resolved and
-unresolved goals and offers semantic actions such as continue solving, adjust
-goal, or finish with a conclusion rather than requiring users to choose an
-internal turn allocation.
+Discussion views render the central ProgressSnapshot, Wave, member Turns, and
+OrchestrationDecision; they do not derive completion from Agent prose. The
+timeline shows one logical round without a hard-limit denominator. While its
+all-settled barrier is open, the status shows progress such as `1/2 已结束`
+and one state chip per Agent Run. Replies appear as they arrive, but the UI does
+not imply that policy advanced before the barrier closed. The Room timeline
+retains durable arrival order. Participant-order normalization belongs to the
+server's progress aggregate and next-Wave bounded instruction; the Web client
+does not reorder or duplicate Agent Messages.
+
+Member jobs in one Wave are never presented as separate rounds. A `partial`
+Wave keeps successful replies visible and identifies failed members; an
+all-failed Wave explains why human action is required. The single-Agent
+finalization Wave has an explicit conclusion-generating state. When a
+Discussion is waiting, paused, or terminal, its status keeps the current or most
+recent closed Wave visible, including each member's terminal reason. At a soft
+boundary the UI offers continue solving, adjust goal, or finish with a
+conclusion rather than exposing internal Wave allocation.
 
 The Room composer classifies one submission by its distinct structured Agent
 identities. No Mention stores a Room message, one Mention creates a normal Run,
@@ -116,7 +128,8 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
   message draft.
 - Cancellation actions show their current authoritative outcome.
 - **Finish and generate conclusion** is the primary Discussion stop action;
-  stop-after-turn, pause, resume, and immediate cancellation remain explicit.
+  stop-after-round, pause, and resume are applied at the Wave boundary, while
+  immediate cancellation explicitly targets every active member Run.
 - Bodyless HTTP requests do not declare a JSON content type.
 - Render messages, Runtime output, and failure details as untrusted content.
 - Never expose device secrets or raw Runtime environment values.
@@ -126,11 +139,13 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 
 Component tests cover onboarding state transitions, Chinese-default locale,
 Agent management, enrollment approval, the unified no-Mention, one-Mention,
-and multi-Mention submission paths, participant identity, and finish controls.
-They also assert that no separate Discussion entry remains. Browser acceptance
-covers message, mention, reconnect, Run progress, reply, cancellation, and a
-two-Agent adaptive Discussion that reaches a persisted final conclusion. Work
-is tracked by `WEB-001` through `WEB-019` in `docs/TASKS.md`.
+and multi-Mention paths, participant identity, Wave barrier progress, member
+failure, finalization, and finish controls. They also assert that no separate
+Discussion entry remains and no duplicate Agent reply is rendered. Existing
+browser acceptance covers message, Mention, reconnect, Run progress, reply, and
+cancellation. A public end-to-end two-Agent parallel Discussion persists its
+conclusion in `QA-010`. Existing UI work is tracked through `WEB-019`; Wave
+presentation and acceptance are completed by `WEB-020` and `QA-010`.
 
 ## Dependencies
 

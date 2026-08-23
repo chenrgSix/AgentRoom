@@ -20,13 +20,28 @@ interface DiscussionView {
     state: string;
     stateReason: string | null;
     currentTurn: number;
-    budget: { extensions: number };
+    currentWave: number;
+    budget: {
+      turnsUsed: number;
+      agentRunsUsed: number;
+      extensions: number;
+    };
   };
+  waves: Array<{
+    waveId: string;
+    ordinal: number;
+    phase: "contribution" | "review" | "finalization";
+    state: "open" | "completed" | "partial" | "failed" | "canceled";
+    expectedMembers: number;
+  }>;
   turns: Array<{
     kind: "discussion" | "finalization";
     speakerAgentId: string;
     state: string;
     assessment: unknown;
+    waveId: string | null;
+    waveMemberOrdinal: number | null;
+    terminalReason?: string | null;
   }>;
 }
 
@@ -196,16 +211,17 @@ test("real Codex and Pi complete one governed Discussion", {
         goal: [
           "用简短中文确定一条 Agent Room 控制原则：Agent 提供结构化判断，",
           "Orchestrator 决定流程，用户保留最终控制。不要调用工具或修改文件。",
-          "Solver 首轮提出具体表述并报告 newInformationAdded=true；",
-          "Reviewer 下一轮检查后报告 reviewerApproved=true。"
+          "每个普通 Wave 中，Solver 与 Reviewer 会并行且独立地提出、审查或改进表述，",
+          "不要等待或假设同一 Wave 的另一方先回答。每轮报告 newInformationAdded=true；",
+          "Reviewer 认可结论时同时报告 reviewerApproved=true。"
         ].join(""),
         participantAgentIds: [agents.codex.agentId, agents.pi.agentId],
         mode: "review",
         outputMode: "decision_record",
         policy: {
           initialLeaseTurns: 1,
-          automaticMaxTurns: 2,
-          hardMaxTurns: 4,
+          automaticMaxTurns: 1,
+          hardMaxTurns: 3,
           maxDurationSeconds: 300,
           plateauWindow: 2,
           minimumCompletionConfidence: 0.8,
@@ -225,16 +241,92 @@ test("real Codex and Pi complete one governed Discussion", {
         headers: authorization
       });
       const view = response.json() as DiscussionView;
+      if (!new Set(["active", "stop_requested", "awaiting_extension"]).has(
+        view.discussion.state
+      )) {
+        const runsResponse = await app.inject({
+          method: "GET",
+          url: `/api/rooms/${roomId}/runs`,
+          headers: authorization
+        });
+        const roomRuns = runsResponse.json() as Array<{
+          runId: string;
+          targetAgentId: string;
+          state: string;
+        }>;
+        const runDiagnostics = await Promise.all(roomRuns.map(async (run) => {
+          const eventsResponse = await app.inject({
+            method: "GET",
+            url: `/api/runs/${run.runId}/events`,
+            headers: authorization
+          });
+          const events = eventsResponse.json() as Array<{
+            event?: {
+              type?: string;
+              status?: string;
+              error?: unknown;
+            };
+          }>;
+          return {
+            runId: run.runId,
+            targetAgentId: run.targetAgentId,
+            state: run.state,
+            statuses: events.flatMap(({ event }) =>
+              event?.type === "status"
+                ? [{ status: event.status, error: event.error ?? null }]
+                : []
+            )
+          };
+        }));
+        throw new Error(`Discussion stopped before its soft boundary: ${JSON.stringify({
+          discussion: view.discussion,
+          waves: view.waves,
+          turns: view.turns,
+          runs: runDiagnostics
+        })}`);
+      }
       return view.discussion.state === "awaiting_extension" ? view : undefined;
     });
     const ordinaryTurns = softBoundary.turns.filter(({ kind }) => kind === "discussion");
-    assert.deepEqual(
-      ordinaryTurns.map(({ speakerAgentId }) => speakerAgentId),
-      [agents.codex.agentId, agents.pi.agentId]
+    const ordinaryWaves = softBoundary.waves.filter(
+      ({ phase }) => phase !== "finalization"
     );
+    assert.equal(softBoundary.discussion.currentWave, 1);
+    assert.equal(softBoundary.discussion.currentTurn, 2);
+    assert.equal(softBoundary.discussion.budget.turnsUsed, 1);
+    assert.equal(softBoundary.discussion.budget.agentRunsUsed, 2);
+    assert.equal(softBoundary.discussion.budget.extensions, 0);
+    assert.deepEqual(
+      ordinaryWaves.map(({ ordinal, phase, state, expectedMembers }) => ({
+        ordinal,
+        phase,
+        state,
+        expectedMembers
+      })),
+      [
+        { ordinal: 1, phase: "contribution", state: "completed", expectedMembers: 2 }
+      ]
+    );
+    for (const wave of ordinaryWaves) {
+      assert.deepEqual(
+        ordinaryTurns
+          .filter(({ waveId }) => waveId === wave.waveId)
+          .sort((left, right) =>
+            (left.waveMemberOrdinal ?? 0) - (right.waveMemberOrdinal ?? 0)
+          )
+          .map(({ speakerAgentId, waveMemberOrdinal }) => ({
+            speakerAgentId,
+            waveMemberOrdinal
+          })),
+        [
+          { speakerAgentId: agents.codex.agentId, waveMemberOrdinal: 0 },
+          { speakerAgentId: agents.pi.agentId, waveMemberOrdinal: 1 }
+        ]
+      );
+    }
+    assert.equal(ordinaryTurns.length, 2);
     assert.ok(ordinaryTurns.every(({ state }) => state === "completed"));
     assert.ok(ordinaryTurns.every(({ assessment }) => assessment !== null));
-    assert.equal(softBoundary.discussion.budget.extensions, 1);
 
     const finish = await app.inject({
       method: "POST",
@@ -253,6 +345,22 @@ test("real Codex and Pi complete one governed Discussion", {
       return view.discussion.state === "completed" ? view : undefined;
     });
     assert.equal(completed.discussion.stateReason, "user_requested_finish");
+    assert.equal(completed.discussion.currentWave, 2);
+    assert.equal(completed.discussion.currentTurn, 3);
+    assert.equal(completed.discussion.budget.turnsUsed, 1);
+    assert.equal(completed.discussion.budget.agentRunsUsed, 3);
+    assert.deepEqual(
+      completed.waves.map(({ ordinal, phase, state, expectedMembers }) => ({
+        ordinal,
+        phase,
+        state,
+        expectedMembers
+      })),
+      [
+        { ordinal: 1, phase: "contribution", state: "completed", expectedMembers: 2 },
+        { ordinal: 2, phase: "finalization", state: "completed", expectedMembers: 1 }
+      ]
+    );
     assert.deepEqual(
       completed.turns.map(({ kind, speakerAgentId }) => [kind, speakerAgentId]),
       [
@@ -270,7 +378,7 @@ test("real Codex and Pi complete one governed Discussion", {
       senderId: string;
       content: string;
     }>;
-    assert.ok(messages.some(({ senderId }) => senderId === agents.codex.agentId));
+    assert.ok(messages.filter(({ senderId }) => senderId === agents.codex.agentId).length >= 1);
     assert.ok(messages.filter(({ senderId }) => senderId === agents.pi.agentId).length >= 2);
     assert.ok(messages.at(-1)?.content.trim());
   } catch (error) {

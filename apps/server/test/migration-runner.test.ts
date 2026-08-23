@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,6 +11,7 @@ import {
   defaultMigrationsDirectory,
   migrateDatabase
 } from "../src/data/migration-runner.js";
+import { DiscussionRepository } from "../src/discussion/discussion-repository.js";
 
 async function temporaryDirectory(name: string): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), `agent-room-${name}-`));
@@ -24,16 +25,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 14);
+  assert.equal(first.currentVersion, 15);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -54,9 +55,119 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       )
       .get() as { count: number };
 
-    assert.equal(migrationCount.count, 14);
+    assert.equal(migrationCount.count, 15);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
+  } finally {
+    database.close();
+  }
+});
+
+test("Discussion Wave migration preserves legacy singleton Turns", async () => {
+  const directory = await temporaryDirectory("wave-migration");
+  const databasePath = path.join(directory, "server.sqlite");
+  const legacyMigrations = path.join(directory, "legacy-migrations");
+  await mkdir(legacyMigrations, { recursive: true });
+  const entries = (await readdir(defaultMigrationsDirectory))
+    .filter((name) => /^[0-9]{4}_.+\.sql$/u.test(name) && name < "0015_")
+    .sort();
+  for (const entry of entries) {
+    await writeFile(
+      path.join(legacyMigrations, entry),
+      await readFile(path.join(defaultMigrationsDirectory, entry), "utf8"),
+      "utf8"
+    );
+  }
+  await migrateDatabase(databasePath, legacyMigrations);
+
+  const legacy = new Database(databasePath);
+  legacy.pragma("foreign_keys = ON");
+  try {
+    legacy.exec(`
+      INSERT INTO web_users VALUES ('user_legacy', 'Legacy', '2026-08-23T00:00:00.000Z');
+      INSERT INTO teams VALUES ('team_legacy', 'Legacy', '2026-08-23T00:00:00.000Z');
+      INSERT INTO team_members VALUES (
+        'member_legacy', 'team_legacy', 'user_legacy', 'Legacy', 'owner',
+        '2026-08-23T00:00:00.000Z'
+      );
+      INSERT INTO rooms VALUES (
+        'room_legacy', 'team_legacy', 'general', 1,
+        '2026-08-23T00:00:00.000Z'
+      );
+      INSERT INTO agents VALUES (
+        'agent_legacy', 'team_legacy', 'member_legacy', NULL, 'Legacy Agent',
+        'Reviewer', 'manual', '{}', 1, 'manual',
+        '2026-08-23T00:00:00.000Z', '2026-08-23T00:00:00.000Z'
+      );
+      INSERT INTO messages (
+        message_id, room_id, sequence, sender_type, sender_id, content,
+        parent_message_id, created_at, trace_id
+      ) VALUES (
+        'msg_legacy', 'room_legacy', 1, 'member', 'member_legacy',
+        'Preserve this turn.', NULL, '2026-08-23T00:00:00.000Z', 'trace_legacy'
+      );
+      INSERT INTO discussions (
+        discussion_id, room_id, root_message_id, requester_member_id, goal,
+        mode, state, state_reason, output_mode, policy_json, progress_json,
+        budget_json, current_turn, next_speaker_index, requested_action,
+        version, deadline_at, created_at, updated_at, terminal_at
+      ) VALUES (
+        'discussion_legacy', 'room_legacy', 'msg_legacy', 'member_legacy',
+        'Preserve this turn.', 'round_robin', 'active', NULL, 'final_answer',
+        '{"initialLeaseTurns":4,"automaticMaxTurns":12,"hardMaxTurns":50,"maxDurationSeconds":1200,"plateauWindow":2,"minimumCompletionConfidence":0.8,"finalizationReserveTurns":1,"requireReviewer":false,"allowAutomaticFinish":true}',
+        '{"version":0,"goalSatisfied":false,"confidence":null,"openQuestions":[],"evidenceRefs":[],"disagreementRemaining":"unknown","reviewerApproved":false,"plateauCount":0,"replyHashes":[],"lastTurnAddedInformation":true}',
+        '{"turnsUsed":1,"tokensUsed":null,"durationSeconds":0,"estimatedCostMicros":null,"leaseEndTurn":4,"extensions":0,"tokenTelemetryKnown":false,"costTelemetryKnown":false}',
+        1, 0, NULL, 2, '2026-08-23T00:20:00.000Z',
+        '2026-08-23T00:00:00.000Z', '2026-08-23T00:00:00.000Z', NULL
+      );
+      INSERT INTO discussion_turns (
+        turn_id, discussion_id, ordinal, kind, speaker_agent_id,
+        input_message_id, run_id, output_message_id, state, assessment_json,
+        reply_hash, created_at, updated_at, completed_at
+      ) VALUES (
+        'turn_legacy', 'discussion_legacy', 1, 'discussion', 'agent_legacy',
+        'msg_legacy', NULL, NULL, 'planned', NULL, NULL,
+        '2026-08-23T00:00:00.000Z', '2026-08-23T00:00:00.000Z', NULL
+      );
+    `);
+  } finally {
+    legacy.close();
+  }
+
+  const migrated = await migrateDatabase(databasePath);
+  assert.deepEqual(migrated.appliedVersions, [15]);
+  const database = new Database(databasePath, { readonly: true });
+  try {
+    const discussion = database.prepare(`
+      SELECT execution_model, current_wave FROM discussions
+      WHERE discussion_id = 'discussion_legacy'
+    `).get() as { execution_model: string; current_wave: number };
+    const turn = database.prepare(`
+      SELECT wave_id, wave_member_ordinal, state FROM discussion_turns
+      WHERE turn_id = 'turn_legacy'
+    `).get() as { wave_id: string; wave_member_ordinal: number; state: string };
+    const wave = database.prepare(`
+      SELECT state, expected_members, input_message_id FROM discussion_waves
+      WHERE wave_id = ?
+    `).get(turn.wave_id) as {
+      state: string;
+      expected_members: number;
+      input_message_id: string;
+    };
+    assert.deepEqual(discussion, {
+      execution_model: "parallel_wave",
+      current_wave: 1
+    });
+    assert.equal(turn.wave_member_ordinal, 0);
+    assert.equal(turn.state, "planned");
+    assert.deepEqual(wave, {
+      state: "open",
+      expected_members: 1,
+      input_message_id: "msg_legacy"
+    });
+    const mapped = new DiscussionRepository(database).get("discussion_legacy");
+    assert.equal(mapped?.policy.waveTimeoutSeconds, 300);
+    assert.equal(mapped?.budget.agentRunsUsed, 1);
   } finally {
     database.close();
   }

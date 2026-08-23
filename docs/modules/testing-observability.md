@@ -58,19 +58,36 @@ cross-process cancellation. Each case has a deterministic regression test.
 Discussion verification uses a deterministic evaluator fixture and fake usage
 telemetry. It covers early completion, multi-dimensional lease renewal,
 plateau detection, policy precedence, reserved finalization, stale decision
-fencing, all user stop modes, restart recovery, optional assessment transport,
-and reply-only Codex/Generic CLI downgrade without calling a model. A browser
-acceptance run proves that two Fake Agents alternate and persist a final
-conclusion through the public HTTP API.
+fencing, user control at Wave boundaries, optional assessment transport, and
+reply-only Codex/Generic CLI downgrade without calling a model. The standalone
+semantic-evaluator contract test normalizes evidence and strips attempted state
+or action authority. It is not an Orchestrator integration test: the MVP
+Orchestrator has no evaluator injection and calls no semantic model.
+
+Parallel Wave tests permute member callback order and assert one identical
+aggregate. They also cover duplicate terminal callbacks, all-success,
+partial-success, all-failed, deadline resolution, `input_required`, cancel-all,
+logical `turnsUsed` versus committed execution-slot `agentRunsUsed`, and a
+single-member finalization Wave. Public API and component acceptance prove that
+two Fake Agents start in one Wave and display independent outcomes. `QA-010`
+also verifies deterministic-anchor retry, participant-ordered bounded context,
+and reopened-SQLite recovery at all three durable cut points.
 
 `QA-007` runs only when explicitly requested with `npm run test:e2e:live`.
 The verified 2026-08-23 run used Codex CLI `0.149.0-alpha.4.1` as a read-only
 Solver and Pi `0.84.2` as a no-tools Generic CLI Reviewer. A temporary server,
 SQLite database, Bridge identity, and inbox proved Codex-to-Pi scheduling,
 structured assessment transport, one useful automatic lease extension, the
-soft boundary, user-requested finish, Pi finalization, and cleanup. Deterministic
-Orchestrator tests remain the stable evidence for early finish, plateau, and
-hard-budget reserved finalization.
+soft boundary, user-requested finish, Pi finalization, and cleanup. This is
+evidence for the earlier sequential path, not the parallel Wave release gate.
+Deterministic Orchestrator tests remain the stable evidence for early finish,
+plateau, and hard-budget reserved finalization.
+
+The verified 2026-08-24 parallel gate used the same local Codex and Pi versions
+through an isolated temporary server, database, Bridge identity, and inbox.
+Both Agents contributed in one concurrent Wave and Pi completed the
+single-member finalization Wave. The non-sandbox run finished in about 91
+seconds; no existing Team, Bridge configuration, or session data was changed.
 
 ## Required Scenarios
 
@@ -79,7 +96,11 @@ out-of-order events, cancellation races, restart recovery, capability
 downgrade, sensitive-output filtering, and the three-member handoff journey
 defined by the architecture baseline. Discussion scenarios additionally cover
 useful continuation, low-value repetition, unresolved high-priority issues,
-missing usage telemetry, and optional Reviewer policies.
+missing usage telemetry, optional Reviewer policies, callback permutations,
+partial and total Wave failure, `input_required`, deadline classification,
+cancel-all, Reviewer same-Wave contribution and finalizer preference,
+deterministic `wave_result` retry, participant-ordered context, and the three
+durable recovery cut points.
 
 ## Observability Contract
 
@@ -104,6 +125,15 @@ envelope rejected by boundary validation, and a failure after authenticated
 processing begins use separate event names; none logs the raw payload. Metrics
 cover connection health, queue depth, delivery age, retries, Run outcomes, and
 event lag.
+
+`QA-010` evidence must distinguish one logical Wave from its committed member
+execution slots and from physical Runs that actually exist. It correlates
+`discussionId`, `waveId`, `turnId`, `runId`, and `orchestrationKey` and asserts
+one barrier-close budget event, without recording prompts or replies.
+`agentRunsUsed` counts persisted expected-member slots, including a slot that
+becomes unavailable before Runtime start; existing Run counters expose actual
+persisted fan-out. This baseline does not claim a new production Wave metric or
+aggregated member token/cost telemetry.
 
 Generic Runtime process errors may report a bounded category, numeric exit
 code, and whether stderr was present. Tests seed secret-like stderr and prove
@@ -147,8 +177,8 @@ messages are never log fields.
 
 A task is `DONE` only when its completion evidence in `docs/TASKS.md` exists.
 Release notes name migrations, compatibility changes, security impact, and the
-exact checks run. Work is tracked by `QA-001` through `QA-009` and `OPS-001`
-through `OPS-004`.
+exact checks run. Evidence is tracked by `QA-001` through `QA-010`. Operations
+work is tracked by `OPS-001` through `OPS-005`.
 
 The current security and exported-tree evidence is recorded in
 `docs/acceptance/qa-005-security-clean-room-audit.md`. Its PASS applies only to

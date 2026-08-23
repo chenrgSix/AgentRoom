@@ -15,6 +15,7 @@ function validUsage(value: number | undefined): value is number {
 export function recordTurnUsage(input: {
   previous: BudgetSnapshot;
   telemetry?: TurnTelemetry;
+  agentRuns?: number;
   discussionStartedAt: string;
   now: string;
 }): BudgetSnapshot {
@@ -25,9 +26,14 @@ export function recordTurnUsage(input: {
   const turnCost = input.telemetry?.estimatedCostMicros;
   const tokenKnown = validUsage(turnTokens);
   const costKnown = validUsage(turnCost);
+  const agentRuns = input.agentRuns ?? 1;
+  if (!Number.isSafeInteger(agentRuns) || agentRuns < 1 || agentRuns > 5) {
+    throw new Error("Discussion Wave Agent Run count must be between 1 and 5");
+  }
   return {
     ...input.previous,
     turnsUsed: input.previous.turnsUsed + 1,
+    agentRunsUsed: input.previous.agentRunsUsed + agentRuns,
     tokensUsed: tokenKnown &&
       (input.previous.turnsUsed === 0 || input.previous.tokenTelemetryKnown)
       ? (input.previous.tokensUsed ?? 0) + turnTokens

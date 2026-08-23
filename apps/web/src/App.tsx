@@ -93,6 +93,7 @@ interface DiscussionView {
     state: DiscussionState;
     stateReason: string | null;
     currentTurn: number;
+    currentWave: number;
     progress: {
       confidence: number | null;
       openQuestions: Array<{
@@ -111,10 +112,22 @@ interface DiscussionView {
     agentId: string;
     role: "participant" | "reviewer";
   }>;
+  waves: Array<{
+    waveId: string;
+    ordinal: number;
+    phase: "contribution" | "review" | "finalization";
+    state: "open" | "completed" | "partial" | "failed" | "canceled";
+    expectedMembers: number;
+  }>;
   turns: Array<{
     turnId: string;
     kind: "discussion" | "finalization";
-    state: string;
+    speakerAgentId: string;
+    runId: string | null;
+    state: "planned" | "queued" | "working" | "completed" | "failed" | "canceled";
+    waveId: string | null;
+    waveMemberOrdinal: number | null;
+    terminalReason: string | null;
   }>;
 }
 
@@ -237,6 +250,115 @@ function discussionStateLabel(state: DiscussionState, locale: Locale): string {
     terminated: "已达到安全上限"
   };
   return labels[state];
+}
+
+type WaveMemberState = "queued" | "working" | "completed" | "failed" | "canceled";
+
+type DiscussionWave = DiscussionView["waves"][number];
+
+function waveMemberState(
+  turn: DiscussionView["turns"][number],
+  run: Run | undefined
+): WaveMemberState {
+  if (turn.state === "completed") return "completed";
+  if (turn.state === "failed") return "failed";
+  if (turn.state === "canceled") return "canceled";
+  if (run) {
+    if (run.state === "completed") return "completed";
+    if (run.state === "canceled") return "canceled";
+    if (["failed", "expired", "outcome_unknown"].includes(run.state)) {
+      return "failed";
+    }
+    if (["working", "input_required"].includes(run.state)) return "working";
+    return "queued";
+  }
+  if (turn.state === "working") return "working";
+  return "queued";
+}
+
+function waveMemberStateLabel(state: WaveMemberState, locale: Locale): string {
+  if (locale === "en") {
+    const labels: Record<WaveMemberState, string> = {
+      canceled: "Canceled",
+      completed: "Completed",
+      failed: "Failed",
+      queued: "Queued",
+      working: "Working"
+    };
+    return labels[state];
+  }
+  const labels: Record<WaveMemberState, string> = {
+    canceled: "已取消",
+    completed: "已完成",
+    failed: "失败",
+    queued: "排队中",
+    working: "执行中"
+  };
+  return labels[state];
+}
+
+function waveStateLabel(state: DiscussionWave["state"], locale: Locale): string {
+  if (locale === "en") {
+    const labels: Record<DiscussionWave["state"], string> = {
+      canceled: "Canceled",
+      completed: "Completed",
+      failed: "Failed",
+      open: "In progress",
+      partial: "Partially completed"
+    };
+    return labels[state];
+  }
+  const labels: Record<DiscussionWave["state"], string> = {
+    canceled: "已取消",
+    completed: "已完成",
+    failed: "失败",
+    open: "进行中",
+    partial: "部分完成"
+  };
+  return labels[state];
+}
+
+function wavePhaseLabel(phase: DiscussionWave["phase"], locale: Locale): string {
+  if (locale === "en") {
+    return phase === "finalization"
+      ? "Conclusion generation"
+      : phase === "review" ? "Parallel review" : "Parallel contribution";
+  }
+  return phase === "finalization"
+    ? "结论生成"
+    : phase === "review" ? "并行复核" : "并行讨论";
+}
+
+function terminalReasonLabel(reason: string, locale: Locale): string {
+  const normalized = reason.replaceAll("_", " ");
+  if (locale === "en") {
+    const labels: Record<string, string> = {
+      completed_without_reply: "Completed without a reply",
+      agent_unavailable: "Agent unavailable",
+      discussion_canceled_before_dispatch: "Discussion canceled before dispatch",
+      input_required: "Human input required",
+      late_duplicate: "Late duplicate result",
+      run_canceled: "Run canceled",
+      run_expired: "Run expired",
+      run_failed: "Run failed",
+      run_outcome_unknown: "Run outcome unknown",
+      runtime_failure: "Runtime failure"
+    };
+    return labels[reason] ?? normalized;
+  }
+  const labels: Record<string, string> = {
+    completed_without_reply: "已结束但没有返回回复",
+    agent_unavailable: "智能体不可用",
+    discussion_canceled_before_dispatch: "投递前讨论已取消",
+    input_required: "需要人工输入",
+    late_duplicate: "收到重复的迟到结果",
+    run_canceled: "执行已取消",
+    run_expired: "执行已过期",
+    run_failed: "执行失败",
+    run_outcome_unknown: "执行结果未知",
+    runtime_failure: "运行时失败"
+  };
+  return labels[reason] ?? reason;
 }
 
 function roleLabel(role: string, locale: Locale): string {
@@ -497,6 +619,10 @@ export function App() {
     () => new Map(members.map((member) => [member.memberId, member])),
     [members]
   );
+  const runsById = useMemo(
+    () => new Map(runs.map((run) => [run.runId, run])),
+    [runs]
+  );
   const mentionOptions = useMemo(() => {
     if (!mentionSearch) return [];
     const query = mentionSearch.query.toLocaleLowerCase(locale);
@@ -519,6 +645,39 @@ export function App() {
   const activeDiscussion = [...discussions].reverse().find(({ discussion }) =>
     !["completed", "canceled", "terminated"].includes(discussion.state)
   ) ?? null;
+  const visibleDiscussion = activeDiscussion ?? discussions.at(-1) ?? null;
+  const activeWave = visibleDiscussion?.waves.find(({ ordinal, state }) =>
+    state === "open" && ordinal === visibleDiscussion.discussion.currentWave
+  ) ?? visibleDiscussion?.waves.findLast(({ state }) => state === "open")
+    ?? visibleDiscussion?.waves.findLast(({ ordinal }) =>
+      ordinal === visibleDiscussion.discussion.currentWave
+    )
+    ?? visibleDiscussion?.waves.at(-1)
+    ?? null;
+  const activeWaveMembers = visibleDiscussion && activeWave
+    ? visibleDiscussion.turns
+      .filter(({ waveId }) => waveId === activeWave.waveId)
+      .sort((left, right) =>
+        (left.waveMemberOrdinal ?? Number.MAX_SAFE_INTEGER) -
+        (right.waveMemberOrdinal ?? Number.MAX_SAFE_INTEGER)
+      )
+      .map((turn) => ({
+        agent: agentsById.get(turn.speakerAgentId),
+        state: waveMemberState(turn, turn.runId ? runsById.get(turn.runId) : undefined),
+        turn
+      }))
+    : [];
+  const activeWaveExpectedMembers = activeWave
+    ? Math.max(activeWave.expectedMembers, activeWaveMembers.length)
+    : 0;
+  const activeWaveEndedMembers = activeWaveMembers.filter(({ state }) =>
+    state === "completed" || state === "failed" || state === "canceled"
+  ).length;
+  const activeDiscussionWaveNumber = visibleDiscussion && activeWave && activeWave.phase !== "finalization"
+    ? activeWave.ordinal || visibleDiscussion.waves.filter(({ ordinal, phase }) =>
+      phase !== "finalization" && ordinal <= activeWave.ordinal
+    ).length
+    : 0;
 
   useEffect(() => {
     localStorage.setItem(localeKey, locale);
@@ -1809,15 +1968,15 @@ export function App() {
         )}
         {selectedRoom && activeView === "room" && (
           <form className="composer" onSubmit={(event) => void submitComposer(event)}>
-            {activeDiscussion && (
+            {visibleDiscussion && (
               <section className="discussion-status" aria-label={locale === "zh-CN" ? "当前智能体讨论" : "Active Agent Discussion"}>
                 <div className="discussion-status-copy">
-                  <span className={`discussion-state ${activeDiscussion.discussion.state}`}>
-                    {discussionStateLabel(activeDiscussion.discussion.state, locale)}
-                    {activeDiscussion.discussion.state === "active" &&
-                      ` · ${locale === "zh-CN" ? "第" : "turn "}${activeDiscussion.turns.filter(({ kind }) => kind === "discussion").length}${locale === "zh-CN" ? "轮" : ""}`}
+                  <span className={`discussion-state ${visibleDiscussion.discussion.state}`}>
+                    {discussionStateLabel(visibleDiscussion.discussion.state, locale)}
+                    {visibleDiscussion.discussion.state === "active" && activeDiscussionWaveNumber > 0 &&
+                      ` · ${locale === "zh-CN" ? "第" : "wave "}${activeDiscussionWaveNumber}${locale === "zh-CN" ? "轮" : ""}`}
                   </span>
-                  {discussionGoalEditId === activeDiscussion.discussion.discussionId ? (
+                  {discussionGoalEditId === visibleDiscussion.discussion.discussionId ? (
                     <textarea
                       aria-label={locale === "zh-CN" ? "讨论目标" : "Discussion goal"}
                       className="discussion-goal-editor"
@@ -1826,18 +1985,62 @@ export function App() {
                       value={discussionGoalDraft}
                     />
                   ) : (
-                    <strong>{activeDiscussion.discussion.goal}</strong>
+                    <strong>{visibleDiscussion.discussion.goal}</strong>
                   )}
                   <small>
-                    {activeDiscussion.discussion.progress.openQuestions.length > 0
+                    {visibleDiscussion.discussion.progress.openQuestions.length > 0
                       ? (locale === "zh-CN"
-                          ? `还有 ${activeDiscussion.discussion.progress.openQuestions.length} 个未决问题`
-                          : `${activeDiscussion.discussion.progress.openQuestions.length} open questions`)
-                      : (locale === "zh-CN" ? "正在根据进展和边际收益决定下一步" : "The Orchestrator is evaluating progress and marginal gain")}
+                          ? `还有 ${visibleDiscussion.discussion.progress.openQuestions.length} 个未决问题`
+                          : `${visibleDiscussion.discussion.progress.openQuestions.length} open questions`)
+                      : ["completed", "canceled", "terminated"].includes(visibleDiscussion.discussion.state)
+                        ? (locale === "zh-CN" ? "本次讨论已经结束" : "This Discussion has ended")
+                        : (locale === "zh-CN" ? "正在根据进展和边际收益决定下一步" : "The Orchestrator is evaluating progress and marginal gain")}
                   </small>
+                  {activeWave && (
+                    <div className={`discussion-wave ${activeWave.phase} ${activeWave.state}`}>
+                      <div className="discussion-wave-summary">
+                        <span>{wavePhaseLabel(activeWave.phase, locale)}</span>
+                        <span className="discussion-wave-result">
+                          <span className={`discussion-wave-state ${activeWave.state}`}>
+                            {waveStateLabel(activeWave.state, locale)}
+                          </span>
+                          <strong>{locale === "zh-CN"
+                            ? `${activeWaveEndedMembers}/${activeWaveExpectedMembers} 已结束`
+                            : `${activeWaveEndedMembers}/${activeWaveExpectedMembers} finished`}</strong>
+                        </span>
+                      </div>
+                      {activeWave.phase === "finalization" && activeWave.state === "open" && (
+                        <div className="discussion-wave-finalizing" role="status">
+                          <span aria-hidden="true" className="discussion-wave-pulse" />
+                          <span>{locale === "zh-CN" ? "正在汇总各智能体结果" : "Consolidating Agent results"}</span>
+                        </div>
+                      )}
+                      <ul
+                        aria-label={activeWave.phase === "finalization"
+                          ? (locale === "zh-CN" ? "结论生成进度" : "Conclusion generation progress")
+                          : locale === "zh-CN"
+                            ? `第${activeDiscussionWaveNumber}轮并行进度`
+                            : `Wave ${activeDiscussionWaveNumber} parallel progress`}
+                        className="discussion-wave-members"
+                      >
+                        {activeWaveMembers.map(({ agent, state, turn }) => (
+                          <li className={`discussion-wave-member ${state}`} key={turn.turnId}>
+                            <span aria-hidden="true" className="discussion-wave-member-dot" />
+                            <span className="discussion-wave-member-copy">
+                              <strong>{agent?.name ?? (locale === "zh-CN" ? "智能体" : "Agent")}</strong>
+                              {turn.terminalReason && (
+                                <small>{locale === "zh-CN" ? "原因：" : "Reason: "}{terminalReasonLabel(turn.terminalReason, locale)}</small>
+                              )}
+                            </span>
+                            <span>{waveMemberStateLabel(state, locale)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                 </div>
                 <div className="discussion-controls">
-                  {discussionGoalEditId === activeDiscussion.discussion.discussionId ? (
+                  {activeDiscussion && (discussionGoalEditId === activeDiscussion.discussion.discussionId ? (
                     <>
                       <button className="discussion-primary" disabled={busy || !discussionGoalDraft.trim()} onClick={() => void saveDiscussionGoal()} type="button">
                         {locale === "zh-CN" ? "保存目标" : "Save goal"}
@@ -1878,7 +2081,7 @@ export function App() {
                         </button>
                       )}
                     </>
-                  )}
+                  ))}
                 </div>
               </section>
             )}

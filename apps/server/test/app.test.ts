@@ -245,7 +245,7 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       headers: { authorization: `Bearer ${token}` }
     });
     assert.equal(timeline.statusCode, 200);
-    assert.equal(timeline.json().items.length, 10);
+    assert.equal(timeline.json().items.length, 15);
   } finally {
     await reloaded.close();
   }

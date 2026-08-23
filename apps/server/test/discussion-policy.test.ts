@@ -91,14 +91,18 @@ test("budget ledger preserves unknown telemetry and protects finalization reserv
   });
   assert.equal(first.tokensUsed, 120);
   assert.equal(first.durationSeconds, 3);
+  assert.equal(first.agentRunsUsed, 1);
   const second = recordTurnUsage({
     previous: first,
+    agentRuns: 3,
     discussionStartedAt: startedAt,
     now: "2026-08-23T10:00:05.000Z"
   });
   assert.equal(second.tokensUsed, null);
   assert.equal(second.estimatedCostMicros, null);
   assert.equal(second.tokenTelemetryKnown, false);
+  assert.equal(second.turnsUsed, 2);
+  assert.equal(second.agentRunsUsed, 4);
 
   const nearHard = {
     ...second,

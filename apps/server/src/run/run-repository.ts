@@ -28,6 +28,7 @@ export interface RunRecord {
   createdAt: string;
   updatedAt: string;
   terminalAt: string | null;
+  orchestrationKey?: string;
 }
 
 export interface RunEventRecord {
@@ -58,6 +59,7 @@ interface RunRow {
   created_at: string;
   updated_at: string;
   terminal_at: string | null;
+  orchestration_key: string | null;
 }
 
 interface RunEventRow {
@@ -95,7 +97,10 @@ function mapRun(row: RunRow): RunRecord {
     deadlineAt: row.deadline_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    terminalAt: row.terminal_at
+    terminalAt: row.terminal_at,
+    ...(row.orchestration_key
+      ? { orchestrationKey: row.orchestration_key }
+      : {})
   };
 }
 
@@ -138,16 +143,16 @@ export class RunRepository {
       INSERT INTO runs (
         run_id, trace_id, room_id, trigger_message_id, requester_member_id,
         target_agent_id, parent_run_id, instruction, state, last_sequence,
-        deadline_at, created_at, updated_at, terminal_at
+        deadline_at, created_at, updated_at, terminal_at, orchestration_key
       ) VALUES (
         @runId, @traceId, @roomId, @triggerMessageId, @requesterMemberId,
         @targetAgentId, @parentRunId, @instruction, @state, @lastSequence,
-        @deadlineAt, @createdAt, @updatedAt, @terminalAt
+        @deadlineAt, @createdAt, @updatedAt, @terminalAt, @orchestrationKey
       )
     `);
     this.database.transaction(() => {
       for (const run of runs) {
-        insert.run(run);
+        insert.run({ ...run, orchestrationKey: run.orchestrationKey ?? null });
       }
     }).immediate();
     return runs;
@@ -165,6 +170,13 @@ export class RunRepository {
       SELECT * FROM runs WHERE trigger_message_id = ? ORDER BY target_agent_id
     `).all(messageId) as RunRow[];
     return rows.map(mapRun);
+  }
+
+  public findByOrchestrationKey(orchestrationKey: string): RunRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM runs WHERE orchestration_key = ?
+    `).get(orchestrationKey) as RunRow | undefined;
+    return row && mapRun(row);
   }
 
   public listRoomRuns(roomId: string): RunRecord[] {

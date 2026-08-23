@@ -1,5 +1,7 @@
 export type DiscussionMode = "round_robin" | "review";
 
+export type DiscussionExecutionModel = "sequential" | "parallel_wave";
+
 export type DiscussionState =
   | "active"
   | "stop_requested"
@@ -44,6 +46,7 @@ export interface DiscussionPolicy {
   automaticMaxTurns: number;
   hardMaxTurns: number;
   maxDurationSeconds: number;
+  waveTimeoutSeconds: number;
   plateauWindow: number;
   minimumCompletionConfidence: number;
   finalizationReserveTurns: number;
@@ -84,6 +87,7 @@ export interface ProgressSnapshot {
 
 export interface BudgetSnapshot {
   turnsUsed: number;
+  agentRunsUsed: number;
   tokensUsed: number | null;
   durationSeconds: number;
   estimatedCostMicros: number | null;
@@ -106,7 +110,9 @@ export interface DiscussionRecord {
   policy: DiscussionPolicy;
   progress: ProgressSnapshot;
   budget: BudgetSnapshot;
+  executionModel?: DiscussionExecutionModel;
   currentTurn: number;
+  currentWave?: number;
   nextSpeakerIndex: number;
   requestedAction: "finish" | "stop_after_turn" | "pause" | null;
   version: number;
@@ -138,6 +144,33 @@ export interface DiscussionTurn {
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+  waveId?: string | null;
+  waveMemberOrdinal?: number | null;
+  terminalReason?: string | null;
+}
+
+export type DiscussionWavePhase = "contribution" | "review" | "finalization";
+
+export type DiscussionWaveState =
+  | "open"
+  | "completed"
+  | "partial"
+  | "failed"
+  | "canceled";
+
+export interface DiscussionWave {
+  waveId: string;
+  discussionId: string;
+  ordinal: number;
+  phase: DiscussionWavePhase;
+  inputMessageId: string;
+  state: DiscussionWaveState;
+  deadlineAt: string;
+  expectedMembers: number;
+  version: number;
+  createdAt: string;
+  updatedAt: string;
+  closedAt: string | null;
 }
 
 export interface DiscussionDecision {
@@ -174,6 +207,7 @@ export const defaultDiscussionPolicy: DiscussionPolicy = {
   automaticMaxTurns: 12,
   hardMaxTurns: 50,
   maxDurationSeconds: 20 * 60,
+  waveTimeoutSeconds: 5 * 60,
   plateauWindow: 2,
   minimumCompletionConfidence: 0.8,
   finalizationReserveTurns: 1,
@@ -196,6 +230,7 @@ export const emptyProgressSnapshot = (): ProgressSnapshot => ({
 
 export const emptyBudgetSnapshot = (leaseEndTurn: number): BudgetSnapshot => ({
   turnsUsed: 0,
+  agentRunsUsed: 0,
   tokensUsed: null,
   durationSeconds: 0,
   estimatedCostMicros: null,

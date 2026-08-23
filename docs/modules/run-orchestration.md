@@ -11,20 +11,22 @@ Run Orchestration converts an authorized structured Agent Mention into one
 bounded unit of work. It is the only component allowed to route work between
 Agents; Agents and Bridges never route directly to one another.
 
-Run Orchestration executes one bounded unit of work. Repeated multi-Agent
-conversation, adaptive budgets, progress evaluation, and selection of the next
-speaker belong to Discussion Orchestration. A Discussion decision may request
-a Run, but it cannot bypass Run delivery, idempotency, or cancellation rules.
+Run Orchestration executes one bounded unit of work. Multi-Agent progress,
+budgets, Wave barriers, and next-Wave decisions belong to Discussion
+Orchestration. One ordinary Discussion Wave may request one Run per member, but
+it cannot bypass Run delivery, idempotency, or cancellation rules.
 
 ## Responsibilities
 
-- Create one Run per valid target Mention.
+- Create one Run per valid target Mention on the normal message path, or per
+  persisted Discussion member Turn on the Wave path.
 - Persist delivery before pushing to a Bridge.
 - Retry unacknowledged delivery with the same Run ID.
 - Apply sequenced Bridge status and reply events.
 - Manage cancellation, expiry, offline queue, and terminal outcomes.
 - Validate and create child Runs for handoff.
 - Publish Run projections for Web and MCP.
+- Bind an optional `orchestrationKey` to one Run for aggregate-owned recovery.
 
 ## State Machine
 
@@ -68,6 +70,18 @@ Retries increment `sendCount` but preserve the attempt ID, idempotency key, and
 payload bytes. A valid `run.accepted` sequence 1 moves the Run to `delivered`;
 duplicate ACKs are idempotent.
 
+Discussion member Turns use their stable `turnId` as `orchestrationKey`. The
+key is unique independently of `(triggerMessageId, targetAgentId)`, so recovery
+finds the exact Run even when several Wave members share one input Message or a
+later Wave reuses a participant. Creating the same keyed Run returns its
+existing identity instead of starting another Runtime.
+
+An ordinary Discussion Run inherits the Wave deadline, which is the earlier of
+the Discussion deadline and `waveTimeoutSeconds`. At the deadline, a queued Run
+becomes `expired`; a delivered, working, or otherwise accepted Run becomes
+`outcome_unknown` because the Runtime may have executed. Finalization uses its
+separate bounded reserve deadline.
+
 ## Event Ordering
 
 Each accepted Run has a Bridge-generated monotonic `sequence`. The server
@@ -84,6 +98,12 @@ The Bridge also stores emitted event envelopes in its durable inbox before
 network send. Reconnect replays these envelopes idempotently; a Bridge process
 restart converts any unfinished local execution to `outcome_unknown` before
 replay, so the central projection cannot remain falsely `working`.
+
+For a Discussion Wave, `input_required` is an intermediate Run report rather
+than an immediately resumable barrier state. The Orchestrator writes a terminal
+unknown outcome with durable reason `input_required`, waits for the other Wave
+members, and only then applies Discussion policy. This preserves the all-settled
+rule and prevents restart from stranding the barrier.
 
 ## Handoff
 
@@ -109,6 +129,11 @@ separate loop, progress, and budget controls.
 - A later conflicting terminal event is retained as diagnostic evidence but
   cannot replace the result.
 
+Discussion controls operate at the Wave boundary. Stop-after-Wave, finish, and
+pause allow every active member to settle before policy advances. Immediate
+cancellation requests an interrupt for every active member Run; each Run still
+resolves its own first-terminal race under the rules above.
+
 ## Verification
 
 - ACK loss and reconnect never execute a Run twice.
@@ -116,11 +141,19 @@ separate loop, progress, and budget controls.
 - Offline delivery runs once after reconnect.
 - Cancellation and completion races are deterministic.
 - Handoff loop, depth, and unique-Agent limits are enforced.
+- A Discussion Wave fans out all planned member Runs without serial dispatch.
+- `orchestrationKey` recovery recreates neither duplicate Runs nor duplicate
+  Runtime executions.
+- Cancel-all and mixed terminal outcomes preserve each Run independently for
+  the Discussion all-settled barrier.
+- Deadline tests distinguish queued `expired` from accepted
+  `outcome_unknown`; `input_required` does not advance policy before the
+  barrier.
 
 ## Task Mapping
 
-`RUN-001` through `RUN-006`, plus the in-process harness `QA-001` and recovery
-tasks `DATA-003` and `QA-004`.
+`RUN-001` through `RUN-006`, plus the in-process harness `QA-001`, recovery
+tasks `DATA-003` and `QA-004`, and parallel Wave verification `QA-010`.
 
 ## Dependencies
 

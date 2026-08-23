@@ -4,61 +4,73 @@
 
 - Prefix: `DISC`
 - Implementation: `apps/server/src/discussion/`
-- Owns: bounded multi-Agent discussions, progress projection, budget leases,
-  orchestration decisions, and finalization
+- Owns: bounded multi-Agent Discussions, durable Waves, progress projection,
+  budget leases, orchestration decisions, and finalization
 
 ## Purpose
 
 Discussion Orchestration makes Agent-to-Agent conversation visible in a Room
-without allowing Agents or Bridges to route directly to one another. Every turn
-is a normal Agent-authored Room Message backed by one managed or manual Run.
-The central server remains the only authority for scheduling the next turn.
+without allowing Agents or Bridges to route directly to one another. An
+ordinary logical round is a durable bulk-synchronous **Wave**: every eligible
+participant gets one member Turn and one normal managed or manual Run from the
+same frozen input anchor. Replies remain normal Agent-authored Room Messages.
+The central server is the only authority for opening and closing Waves.
 
 A Discussion is not a Handoff. Handoff is a bounded delegation lineage that
-rejects revisiting an Agent. Discussion deliberately permits repeated speakers
-such as `Coder -> Reviewer -> Coder`, under a separate policy and budget.
+rejects revisiting an Agent. Discussion may use the same participants again in
+later Waves. A Reviewer contributes independently in the same ordinary Wave as
+the other participants and cannot inspect peer replies that did not exist when
+the Wave started. Its approval is evidence for a policy that requires review,
+and the role is preferred when selecting the separate finalization member; it
+does not create a serial review Wave.
 
 ## Authority Boundary
 
 The control chain is:
 
 ```text
-Agent Turn Report (untrusted evidence)
-  -> Progress Evaluator (versioned projection)
+Agent Run Reports (untrusted evidence)
+  -> durable all-settled Wave barrier
+  -> Progress Evaluator (one versioned projection per Wave)
   -> Policy Engine (authoritative decision)
-  -> Run Orchestration (durable execution)
+  -> Run Orchestration (durable parallel execution)
   -> Room Message (visible transcript)
 ```
 
-Agents report observations and recommendations. They cannot directly set a
-Discussion state, grant more budget, select an unauthorized participant, or
-declare an authoritative completion. Users may request finish, pause, resume,
-or immediate cancellation at any time.
+Agents report observations and recommendations. They cannot set Discussion
+state, grant budget, select unauthorized participants, or declare authoritative
+completion. Users may request finish, pause, resume, or immediate cancellation.
 
-The Orchestrator is primarily a deterministic state machine. An optional
-semantic evaluator may produce additional evidence for novelty, disagreement,
-or goal coverage, but it cannot bypass policy or mutate state directly.
+The Orchestrator is a deterministic state machine. The current
+`SemanticEvaluator` is a standalone interface and output normalizer with
+contract tests; it is not injected into Discussion Orchestration and no model is
+called. A future integration may add normalized evidence or a recommendation
+for novelty, disagreement, or goal coverage. That output remains evidence only:
+it cannot select the next action, bypass policy, or mutate state.
 
-The current deterministic evaluator normalizes and hashes visible replies,
-combines valid structured question/evidence deltas, and treats missing or
-malformed assessment fields as reply-only evidence. Exact repetition is the
-MVP plateau signal; a semantic evaluator remains an optional later extension.
+The deterministic evaluator sorts successful reports by frozen participant
+ordinal, normalizes and hashes visible replies, combines valid structured
+question and evidence deltas, and treats missing or malformed assessment fields
+as reply-only evidence. Callback arrival order cannot change the projection.
 
 ## Domain Model
 
 | Entity | Required State |
 | --- | --- |
-| Discussion | ID, Room, root Message, goal, mode, participants, policy snapshot, state, reason, version |
-| DiscussionTurn | ID, Discussion, ordinal, speaker, targets, input Messages, Run, output Message, assessment |
+| Discussion | ID, Room, root Message, goal, participants, policy, execution model, current Wave, state, reason, version |
+| DiscussionWave | ID, Discussion, ordinal, phase, frozen input Message, expected members, deadline, state, version |
+| DiscussionTurn | ID, Wave, member ordinal, speaker, input Message, Run, output Message, terminal reason, assessment |
 | ProgressSnapshot | version, goal coverage, open questions, decisions, evidence, disagreement, plateau count |
-| BudgetLedger | limits, current lease, usage, extensions, finalization reserve |
-| OrchestrationDecision | action, reason, next speaker, output mode, input projection version |
+| BudgetLedger | limits, lease, logical Wave usage, committed member-slot usage, extensions, finalization reserve |
+| OrchestrationDecision | action, reason, next Wave or finalizer, output mode, input projection version |
 
-`DiscussionTurn` has a unique `(discussionId, ordinal)` key. A decision records
-the exact Discussion aggregate version and ProgressSnapshot version it used, so
-duplicate workers or stale evaluators cannot schedule two next turns.
+`DiscussionWave` is unique by `(discussionId, ordinal)`, and only one Wave may
+be open for a Discussion. Member Turns are unique by `(waveId, memberOrdinal)`
+and `(waveId, speakerAgentId)`. A decision records the exact Discussion and
+ProgressSnapshot versions it used. This fences duplicate workers and stale
+evaluators from closing a barrier or scheduling the next Wave twice.
 
-## Agent Turn Report
+## Agent Run Report
 
 Runtime output contains a visible reply and optional structured evidence:
 
@@ -78,44 +90,75 @@ Runtime output contains a visible reply and optional structured evidence:
 ```
 
 Self-reported booleans and confidence are never authoritative. Unknown,
-malformed, or unsupported assessment fields degrade to reply-only evidence and
-must not be interpreted as completion.
+malformed, or unsupported fields degrade to reply-only evidence and are not
+interpreted as completion.
 
-## Progress Evaluation
+## Wave Execution and Progress Evaluation
 
-The Progress Evaluator combines:
+Opening an ordinary Wave atomically persists the Wave and one planned member
+Turn per eligible participant. MVP eligibility means the Agent exists, is
+enabled, and belongs to the same Team as the Room. It does not require a ready
+presence, a particular Owner, or remote-wake capability. All members share one
+input Message and deadline, and their Runs may start concurrently. Replies
+appear as they arrive, but no ProgressSnapshot or next action is committed until
+every member is terminal or the deadline resolves missing members.
 
-1. deterministic facts such as tests, Artifacts, resolved question IDs, and
-   authoritative budget usage;
-2. Agent assessments and recommendations;
-3. optional semantic evaluation for novelty, repetition, and disagreement.
+The ordinary Wave deadline is the earlier of the Discussion deadline and
+`waveTimeoutSeconds`. A queued member becomes `expired` when it passes; an
+accepted or working member becomes `outcome_unknown` because execution may have
+started. An `input_required` Run is terminalized as `outcome_unknown` with a
+durable `input_required` reason because the Wave cannot resume it in place. The
+Discussion remains at the open barrier until all other members settle, then
+policy applies that reason under the normal priority rules.
 
-Plateau detection uses a policy window over structured deltas. A typical window
-requires no newly resolved important question, no new evidence, no changed
-decision, and no reduction in disagreement across consecutive turns.
+The all-settled result is deterministic:
+
+- all members succeed: close the Wave as `completed`;
+- at least one member succeeds: close it as `partial` and evaluate only
+  successful reports in participant order;
+- no member succeeds because execution failed or expired: close it as `failed`
+  and enter `waiting_human` rather than inventing progress;
+- every member is canceled by an immediate user stop: close it as `canceled`
+  and keep the Discussion terminally `canceled`.
+
+A finalization Wave contains only the first eligible Reviewer, or the first
+eligible participant when no Reviewer remains. The Reviewer may already have
+contributed in the preceding ordinary parallel Wave; only the finalization Wave
+itself is single-member.
+
+The MVP Progress Evaluator combines deterministic facts and Agent assessments.
+It writes one aggregate version per closed Wave. The standalone semantic
+contract is not consumed on this path. Plateau detection therefore compares
+Wave aggregates, not callback order. A typical plateau has no newly resolved
+important question, new evidence, changed decision, or reduced disagreement
+across consecutive Waves.
 
 A plateau with no important unresolved issue may finalize automatically. A
 plateau with a high-priority unresolved issue moves to `waiting_human` and
-offers a strategy or participant change; it must not silently claim success.
+offers a strategy or participant change; it must not claim success silently.
 
 ## Discussion Budget
 
-Budget is multi-dimensional:
+Budget separates logical coordination from committed execution capacity:
 
 ```text
-turns + input/output tokens + elapsed duration + estimated cost
+logical Waves + committed member execution slots + input/output tokens + elapsed duration + cost
 ```
 
-The server grants a bounded lease instead of promising a fixed number of turns.
-At lease exhaustion it evaluates progress and may renew automatically within
-the policy's automatic boundary. Crossing a soft boundary moves to
-`awaiting_extension`; crossing a hard boundary terminates execution.
+For each ordinary Wave, closure advances the compatibility field `turnsUsed`
+once and `agentRunsUsed` by the persisted expected-member count. The latter is a
+committed execution-slot counter, not proof that every slot started a physical
+Runtime process. Lease and hard boundaries use logical Wave usage. MVP token and
+cost telemetry is not aggregated from Wave members, so missing values remain
+unknown. Two planned members in one Wave are one policy round and two committed
+execution slots.
 
-The BudgetLedger is central and append-only. Agent estimates do not change it.
-Missing Runtime token or cost telemetry is recorded as unknown, never zero, and
-causes the policy to rely on available turn and duration limits.
+The server grants a bounded lease instead of promising a fixed number of Waves.
+At lease exhaustion it may renew within the automatic boundary. Crossing a
+soft boundary moves to `awaiting_extension`; crossing a hard boundary stops new
+ordinary Waves. Missing Runtime token or cost telemetry is unknown, never zero.
 
-Finalization has a separate reserve that ordinary turns cannot consume. This
+Finalization has a separate reserve that ordinary Waves cannot consume. This
 allows a hard-budget stop to still produce the best available conclusion,
 unresolved issues, and evidence references.
 
@@ -131,30 +174,28 @@ Team safety limits
 ```
 
 Templates may define brainstorming, architecture review, debate, or
-implementation completion. Reviewer approval applies only when the resolved
-policy requires it.
+implementation completion. Reviewer approval applies only when required by the
+resolved policy.
 
 The authoritative action is one of:
 
-- `continue` — schedule the next eligible speaker;
+- `continue` — atomically plan the next eligible Wave;
 - `wait_human` — preserve state until required input arrives;
-- `pause` — stop scheduling without canceling the active transcript;
+- `pause` — stop scheduling without canceling the transcript;
 - `finalize` — produce the configured terminal output;
-- `cancel` — interrupt immediately when possible;
+- `cancel` — interrupt all active members when possible;
 - `terminate` — stop because a hard policy boundary was reached.
 
-Final output is an independent dimension: `none`, `summary`, `final_answer`,
-`artifact`, `decision_record`, or `unresolved_issues`.
-
-Decision priority is deterministic: immediate user cancellation; security and
-hard-budget gates; required human input; user finish requests; completion
-policy; plateau policy; soft-budget extension; otherwise continue.
+Final output is independent: `none`, `summary`, `final_answer`, `artifact`,
+`decision_record`, or `unresolved_issues`. Decision priority is deterministic:
+immediate user cancellation; security and hard-budget gates; required human
+input; user finish; completion; plateau; soft-budget extension; continue.
 
 ## State Machine
 
 ```text
 active
-  |-- stop requested ------> stop_requested --+
+  |-- stop after Wave -----> stop_requested --+
   |-- input required ------> waiting_human ----+--> active
   |-- lease not extended --> awaiting_extension+
   |-- operator pause ------> paused -----------+
@@ -169,73 +210,89 @@ State and reason are separate. Reasons include `goal_satisfied`,
 
 ## Runtime Context
 
-Every turn receives a bounded, named context containing the Discussion goal,
+Every Wave member receives a bounded, named context containing the goal,
 speaker identity, participant roster, target audience, progress snapshot,
 important unresolved questions, recent transcript, checkpoint summary, and
-remaining lease. Runtime Adapters must consume this context rather than sending
-only the triggering instruction.
+remaining lease. Members in one ordinary Wave receive the same frozen
+transcript anchor and cannot see peer replies from that Wave.
 
-The server serializes this named context into the Run instruction so existing
-managed and pull adapters participate without a client rewrite. It limits the
-recent transcript to 12 Room Messages and keeps the existing 20,000-character
-Run instruction boundary.
+When an ordinary Wave settles, the server idempotently appends a deterministic
+`wave_result` system Message whose ID is derived from the Wave ID. Its member
+status lines use frozen participant order, and it becomes the next Wave's input
+anchor. The next instruction separately reconstructs successful prior replies
+in Wave/member ordinal order. Room Messages retain durable arrival order, so the
+visible timeline may differ from evaluation and instruction order.
+
+The server serializes this context into the Run instruction so existing managed
+and pull adapters participate without a client rewrite. It limits recent
+transcript to 24 Room Messages and retains the 20,000-character instruction
+boundary.
 
 Managed adapters should emit structured assessments when supported. Generic or
-manual participants may emit reply-only output; the central evaluator and
-policy must continue safely under that capability downgrade.
+manual participants may emit reply-only output; policy remains safe under that
+capability downgrade. Codex and Generic CLI may append a final
+`<agentroom-assessment>{...}</agentroom-assessment>` envelope. The Bridge removes
+a valid envelope from the visible reply and sends it as optional assessment
+data. Invalid or missing envelopes remain reply-only output.
 
-Codex and Generic CLI may append a final
-`<agentroom-assessment>{...}</agentroom-assessment>` envelope. The Go Bridge
-removes a valid envelope from the visible reply and transports it as the
-optional `run.reply.payload.assessment` field. Invalid or missing envelopes are
-kept as reply-only output and cannot authoritatively change state.
-
-MVP finalization persists message outputs for summaries, final answers,
-decision records, and unresolved issues. Selecting `artifact` currently asks
-the finalizer for a message representation; binary Artifact transport remains
-owned by `FUT-004`.
+MVP finalization persists summaries, final answers, decision records, and
+unresolved issues as Messages. Selecting `artifact` asks the finalizer for a
+message representation; binary Artifact transport remains owned by `FUT-004`.
 
 ## User Experience
 
-The Room uses one composer. A submission with two to five distinct structured
-Agent Mentions creates a Discussion automatically; its body becomes the goal
-and its stable Agent IDs become participants after Coordinator authorization.
-The persisted root Message retains those Mentions, but it does not create one
-independent normal Run per participant. No separate **Start Discussion** mode
-is exposed. The Room shows `Discussing - turn 7`, never `7 / 12`, because a
-soft boundary is not a completion target.
+The Room uses one composer. Two to five distinct structured Agent Mentions
+create a Discussion; the body becomes its goal. The root Message retains those
+Mentions, but no independent fan-out bypasses Discussion control. There is no
+separate **Start Discussion** mode.
+
+The Room shows a logical round without a hard-limit denominator. While a Wave
+is active it shows barrier progress such as `1/2 已结束` and one state chip
+per member Run; Agent jobs are not separate rounds. Replies appear immediately,
+and finalization is a separate single-Agent phase.
 
 Primary control is **Finish and generate conclusion**. Secondary controls are
-**Stop after this turn**, **Pause**, and an overflow **Stop immediately**.
-At a soft boundary the UI explains resolved and unresolved goals and offers
-**Continue solving**, **Finish with current conclusion**, or **Adjust goal**.
-Advanced users may inspect or override the next budget lease when policy allows.
+**Stop after this round**, **Pause**, and **Stop immediately**. Finish,
+stop-after-round, and pause take effect after the current Wave barrier;
+immediate stop cancels every active member Run. At a soft boundary the UI
+offers **Continue solving**, **Finish with current conclusion**, or **Adjust
+goal**, without asking users to allocate internal rounds.
 
 ## Recovery and Security
 
-- Persist a decision and its next-turn routing intent atomically before
-  delivery.
+- Persist a decision, Wave, and all member Turn intents atomically before Run
+  creation or delivery.
 - A Room has at most one non-terminal Discussion. Competing creation requests
-  receive a conflict instead of starting work that the Room cannot control.
-- Reconciliation may recreate a missing Run from routing intent but cannot
-  advance the Discussion twice.
-- Only Room-visible, enabled participants may be scheduled.
-- Agent-proposed targets, evidence references, and Artifacts are authorized and
-  validated before projection.
+  receive a conflict.
+- Each member Run uses its member `turnId` as a unique `orchestrationKey`.
+  Reconciliation first binds an existing keyed Run and creates one only when no
+  keyed identity exists, without guessing from Message and Agent identity.
+- Wave closure, one budget event, one progress projection, the authoritative
+  decision, and any next Wave are aggregate-version fenced.
+- The deterministic `wave_result` ID makes a crash after anchor append and
+  before barrier closure idempotently retryable.
+- `QA-010` reopens SQLite and rebuilds repositories at planned-member,
+  partially settled barrier, and committed-next-Wave cut points. Stable
+  `orchestrationKey` identities prevent duplicate execution.
+- Only existing, enabled Agents from the Room's Team may be scheduled. Proposed
+  evidence and Artifacts are authorized and validated before projection.
 - Redaction runs before Discussion context leaves the central service.
-- Immediate stop preserves committed Messages and records whether an active
-  Runtime outcome is unknown.
+- Immediate stop preserves committed Messages and records unknown Runtime
+  outcomes where necessary.
 
 ## Verification and Tasks
 
-Tests cover early completion, useful automatic lease renewal, soft-boundary
-extension, hard-budget termination with reserved finalization, user stop modes,
-stale decisions, duplicate scheduling, plateau with low- and high-priority open
-issues, policy precedence, Reviewer-optional modes, missing usage telemetry,
-restart recovery, and Generic Adapter capability downgrade.
+Deterministic tests cover callback permutations, duplicate terminals,
+all-success, partial-success, all-failed, deadline, `input_required`, cancel-all,
+early completion, lease renewal, boundary-aligned user controls, stale
+decisions, plateau policies, Runtime capability downgrade, deterministic
+anchors, participant-ordered bounded context, and three reopened-SQLite
+recovery cut points. A live Codex-Pi run proves one parallel contribution Wave
+and Reviewer finalization through the Go Bridge.
 
-Implementation is tracked by `DISC-001` through `DISC-006`, `WEB-017`, and
-`QA-007` in `docs/TASKS.md`.
+Sequential orchestration is tracked by `DISC-001` through `DISC-006`; parallel
+Wave delivery, presentation, and acceptance are completed by `DISC-007`,
+`WEB-020`, and `QA-010` in `docs/TASKS.md`.
 
 ## Dependencies
 

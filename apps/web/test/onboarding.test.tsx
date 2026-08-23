@@ -100,13 +100,27 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   let messageWasSent = false;
   let discussionState = "";
   let discussionGoal = "确定交付恢复规则";
+  const discussionRuns = [{
+    runId: "run_review",
+    triggerMessageId: "message_wave_review",
+    targetAgentId: agent.agentId,
+    state: "completed" as const,
+    updatedAt: "2026-08-23T00:04:01.000Z"
+  }, {
+    runId: "run_builder",
+    triggerMessageId: "message_wave_builder",
+    targetAgentId: secondAgent.agentId,
+    state: "working" as const,
+    updatedAt: "2026-08-23T00:04:02.000Z"
+  }];
   const discussionView = () => ({
     discussion: {
       discussionId: "discussion_test",
       goal: discussionGoal,
       state: discussionState || "active",
       stateReason: discussionState === "stop_requested" ? "user_requested_finish" : null,
-      currentTurn: 1,
+      currentTurn: 2,
+      currentWave: 1,
       progress: {
         confidence: null,
         openQuestions: [],
@@ -118,7 +132,32 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       { agentId: agent.agentId, role: "participant" },
       { agentId: secondAgent.agentId, role: "participant" }
     ],
-    turns: [{ turnId: "turn_test", kind: "discussion", state: "working" }]
+    waves: [{
+      waveId: "wave_contribution_1",
+      ordinal: 1,
+      phase: "contribution",
+      state: "open",
+      expectedMembers: 2
+    }],
+    turns: [{
+      turnId: "turn_review",
+      kind: "discussion",
+      speakerAgentId: agent.agentId,
+      runId: "run_review",
+      state: "completed",
+      waveId: "wave_contribution_1",
+      waveMemberOrdinal: 1,
+      terminalReason: null
+    }, {
+      turnId: "turn_builder",
+      kind: "discussion",
+      speakerAgentId: secondAgent.agentId,
+      runId: "run_builder",
+      state: "working",
+      waveId: "wave_contribution_1",
+      waveMemberOrdinal: 2,
+      terminalReason: null
+    }]
   });
   globalThis.fetch = async (input, init = {}) => {
     const path = typeof input === "string" ? input : input.url;
@@ -169,7 +208,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       return jsonResponse({ items: messageWasSent ? [memberMessage, agentMessage] : [] });
     }
     if (path === `/api/rooms/${room.roomId}/runs`) {
-      return jsonResponse([]);
+      return jsonResponse(discussionState ? discussionRuns : []);
     }
     if (path === `/api/rooms/${room.roomId}/discussions` && method === "POST") {
       discussionGoal = (JSON.parse(String(init.body)) as { goal: string }).goal;
@@ -350,6 +389,15 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const discussionPanel = await screen.findByRole("region", { name: "当前智能体讨论" });
     within(discussionPanel).getByText("讨论中 · 第1轮");
     within(discussionPanel).getByText("确定交付恢复规则 @Review Bot @Local Codex");
+    within(discussionPanel).getByText("1/2 已结束");
+    const waveProgress = within(discussionPanel).getByRole("list", { name: "第1轮并行进度" });
+    assert.equal(within(waveProgress).getAllByRole("listitem").length, 2);
+    const reviewProgress = within(waveProgress).getByText("Review Bot").closest("li");
+    const builderProgress = within(waveProgress).getByText("Local Codex").closest("li");
+    assert.ok(reviewProgress);
+    assert.ok(builderProgress);
+    within(reviewProgress).getByText("已完成");
+    within(builderProgress).getByText("执行中");
     await waitFor(() => {
       const request = requests.find((candidate) =>
         candidate.path === `/api/rooms/${room.roomId}/discussions` &&
