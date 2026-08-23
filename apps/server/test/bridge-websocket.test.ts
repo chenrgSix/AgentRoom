@@ -404,6 +404,69 @@ test("Bridge applies accepted, status, and reply messages with the matching trac
   }
 });
 
+test("Bridge persists only allowlisted Runtime failure details", async () => {
+  const fixture = await createFixture();
+  try {
+    await acceptRun(fixture);
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 2,
+      status: "working"
+    }));
+    await waitFor(() => runState(fixture, "working"));
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 3,
+      status: "failed",
+      error: {
+        code: "RUNTIME_EXIT_FAILED",
+        message: "Runtime process exited unsuccessfully.",
+        retryable: false,
+        details: {
+          category: "configuration",
+          exitCode: 7,
+          stderrCaptured: true,
+          rawStderr: "token=must-never-be-persisted",
+          arbitrary: "must-never-be-persisted"
+        }
+      }
+    }));
+    await waitFor(() => runState(fixture, "failed"));
+    const response = await fixture.app.inject({
+      method: "GET",
+      url: `/api/runs/${fixture.runId}/events`,
+      headers: fixture.authorization
+    });
+    assert.equal(response.statusCode, 200);
+    const events = response.json() as Array<{
+      event: { type: string; status?: string; error?: unknown };
+    }>;
+    const terminal = events.find(({ event }) =>
+      event.type === "status" && event.status === "failed"
+    );
+    assert.deepEqual(terminal?.event.error, {
+      code: "RUNTIME_EXIT_FAILED",
+      message: "Runtime process exited unsuccessfully.",
+      retryable: false,
+      details: {
+        category: "configuration",
+        exitCode: 7,
+        stderrCaptured: true
+      }
+    });
+    assert.doesNotMatch(
+      JSON.stringify(events),
+      /must-never-be-persisted|rawStderr|arbitrary/u
+    );
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
 test("Bridge reserves close code 4007 for malformed JSON", async () => {
   const logs: CapturedLog[] = [];
   const fixture = await createFixture(capturingLogger(logs));

@@ -109,8 +109,9 @@ Device credentials use OS-protected storage when available. The Bridge starts
 only Runtime configurations explicitly published by the owner and never
 bypasses the Runtime's command, file, network, or approval policy. Logs exclude
 tokens, credentials, sensitive local paths, and full environment snapshots.
-Generic Runtime failures preserve only a stable category, process exit code,
-and whether bounded stderr existed. Raw stderr remains local because it may
+Codex and Generic Runtime failures preserve only a stable category, process
+exit code, and whether bounded stderr existed. Raw stderr remains local because
+it may
 contain prompts, provider responses, credentials, or absolute paths.
 
 ## Verification and Tasks
@@ -120,7 +121,7 @@ duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
 Browser acceptance covers first setup, Runtime discovery, adding Pi to an
 existing Bridge, and status rendering. Work is tracked by `BRG-001` through
-`BRG-017` in `docs/TASKS.md`.
+`BRG-018` in `docs/TASKS.md`.
 
 ## Desktop Client
 

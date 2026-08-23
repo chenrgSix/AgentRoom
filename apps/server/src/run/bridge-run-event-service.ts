@@ -26,6 +26,34 @@ const terminalStatuses = new Set<RuntimeStatus>([
   "outcome_unknown"
 ]);
 
+const runtimeFailureCategories = new Set([
+  "start",
+  "authentication",
+  "rate_limit",
+  "network",
+  "model",
+  "configuration",
+  "unknown"
+]);
+
+function safeRuntimeFailureDetails(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  const details: Record<string, unknown> = {};
+  if (typeof source.category === "string") {
+    details.category = runtimeFailureCategories.has(source.category)
+      ? source.category
+      : "unknown";
+  }
+  if (typeof source.exitCode === "number" && Number.isSafeInteger(source.exitCode)) {
+    details.exitCode = source.exitCode;
+  }
+  if (typeof source.stderrCaptured === "boolean") {
+    details.stderrCaptured = source.stderrCaptured;
+  }
+  return Object.keys(details).length > 0 ? details : null;
+}
+
 export class BridgeRunEventService {
   public constructor(
     private readonly core: CoreRepository,
@@ -40,7 +68,12 @@ export class BridgeRunEventService {
       agentId: string;
       sequence: number;
       status: RuntimeStatus;
-      error?: { code: string; message: string; retryable: boolean };
+      error?: {
+        code: string;
+        message: string;
+        retryable: boolean;
+        details?: unknown;
+      };
     },
     now: string
   ): AppliedRunEvent {
@@ -62,11 +95,21 @@ export class BridgeRunEventService {
         throw new Error("Invalid Runtime error");
       }
     }
+    const safeDetails = safeRuntimeFailureDetails(input.error?.details);
     const applied = this.runs.applyEvent(run.runId, {
       type: "status",
       sequence: input.sequence,
       status: input.status,
-      ...(input.error ? { error: input.error } : {})
+      ...(input.error
+        ? {
+            error: {
+              code: input.error.code,
+              message: input.error.message,
+              retryable: input.error.retryable,
+              ...(safeDetails ? { details: safeDetails } : {})
+            }
+          }
+        : {})
     }, now);
     if (applied.applied) {
       this.core.updateAgentPresence(

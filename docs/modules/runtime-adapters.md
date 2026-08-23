@@ -37,9 +37,10 @@ fixed workspace, sends the Run instruction on stdin, propagates only allowlisted
 environment variables, and caps returned stdout at 20 KB. Exit failure,
 deadline, cancellation, and output overflow become safe terminal Run events.
 An executable start failure is distinct from a child process nonzero exit.
-Nonzero exits include only a stable local classification, numeric exit code,
-and stderr-presence flag; raw stderr is never transported or persisted by the
-central service.
+Codex and Generic nonzero exits include only a stable local classification,
+numeric exit code, and stderr-presence flag. The central service applies the
+same three-field allowlist before Run-event persistence; raw stderr and unknown
+detail keys never cross that boundary.
 Pi is verified through this fallback using non-interactive `--print`, no-tools,
 no-session operation; it does not gain resume or remote session claims.
 

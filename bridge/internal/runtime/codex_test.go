@@ -2,8 +2,10 @@ package runtime
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"testing"
 
 	"agentroom.dev/bridge/internal/config"
@@ -67,6 +69,35 @@ func TestCodexAdapterRejectsUnsafeConfiguration(t *testing.T) {
 	}
 }
 
+func TestCodexAdapterClassifiesExitWithoutLeakingStderr(t *testing.T) {
+	const seededSecret = "seeded-codex-secret"
+	t.Setenv("AGENTROOM_CODEX_HELPER", "failure:"+seededSecret)
+	adapter := CodexAdapter{Config: config.AgentConfig{
+		Command:   []string{os.Args[0], "-test.run=TestCodexHelperProcess", "--", "exec", "--json"},
+		Workspace: t.TempDir(), EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER"},
+	}}
+	var terminal Event
+	if err := adapter.Execute(context.Background(), Request{}, func(_ context.Context, event Event) error {
+		terminal = event
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Error == nil || terminal.Error.Code != "CODEX_EXIT_FAILED" ||
+		terminal.Error.Details["exitCode"] != 23 ||
+		terminal.Error.Details["category"] != "configuration" ||
+		terminal.Error.Details["stderrCaptured"] != true {
+		t.Fatalf("unexpected safe Codex failure: %#v", terminal)
+	}
+	encoded, err := json.Marshal(terminal.Error)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), seededSecret) {
+		t.Fatalf("Codex stderr leaked through protocol error: %s", encoded)
+	}
+}
+
 func TestCodexHelperProcess(t *testing.T) {
 	switch os.Getenv("AGENTROOM_CODEX_HELPER") {
 	case "success":
@@ -78,5 +109,10 @@ func TestCodexHelperProcess(t *testing.T) {
 	case "malformed":
 		fmt.Println(`not-json`)
 		os.Exit(0)
+	default:
+		if strings.HasPrefix(os.Getenv("AGENTROOM_CODEX_HELPER"), "failure:") {
+			fmt.Fprintln(os.Stderr, "EPERM operation not permitted: "+os.Getenv("AGENTROOM_CODEX_HELPER"))
+			os.Exit(23)
+		}
 	}
 }

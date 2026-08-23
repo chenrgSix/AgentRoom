@@ -24,7 +24,12 @@ export type RuntimeEvent =
       type: "status";
       sequence: number;
       status: RuntimeStatus;
-      error?: { code: string; message: string; retryable: boolean };
+      error?: {
+        code: string;
+        message: string;
+        retryable: boolean;
+        details?: Record<string, unknown>;
+      };
     }
   | {
       type: "reply";

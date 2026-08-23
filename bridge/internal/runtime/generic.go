@@ -150,6 +150,7 @@ func classifyRuntimeFailure(stderr string) string {
 		}},
 		{category: "configuration", markers: []string{
 			"configuration", "config error", "extension", "settings", "permission denied",
+			"operation not permitted", "eperm",
 		}},
 	}
 	for _, group := range groups {

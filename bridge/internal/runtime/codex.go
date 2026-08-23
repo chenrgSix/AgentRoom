@@ -93,7 +93,23 @@ func (c CodexAdapter) Execute(ctx context.Context, request Request, emit EmitFun
 		return emitCodexFailure(ctx, emit, "CODEX_PROTOCOL_INVALID", "Codex emitted incompatible JSONL output.")
 	}
 	if waitError != nil {
-		return emitCodexFailure(ctx, emit, "CODEX_EXIT_FAILED", "Codex process exited unsuccessfully.")
+		exitCode := -1
+		var exitError *exec.ExitError
+		if errors.As(waitError, &exitError) {
+			exitCode = exitError.ExitCode()
+		}
+		stderrText := stderr.String()
+		return emitCodexFailureWithDetails(
+			ctx,
+			emit,
+			"CODEX_EXIT_FAILED",
+			"Codex process exited unsuccessfully.",
+			map[string]interface{}{
+				"category":       classifyRuntimeFailure(stderrText),
+				"exitCode":       exitCode,
+				"stderrCaptured": strings.TrimSpace(stderrText) != "",
+			},
+		)
 	}
 	if parser.Failure != "" {
 		return emitCodexFailure(ctx, emit, "CODEX_TURN_FAILED", "Codex reported an unsuccessful turn.")
@@ -144,4 +160,18 @@ func validateCodexCommand(command []string) error {
 func emitCodexFailure(ctx context.Context, emit EmitFunc, code, message string) error {
 	failed := contracts.Failed
 	return emit(ctx, Event{Status: &failed, Error: runtimeError(code, message)})
+}
+
+func emitCodexFailureWithDetails(
+	ctx context.Context,
+	emit EmitFunc,
+	code string,
+	message string,
+	details map[string]interface{},
+) error {
+	failed := contracts.Failed
+	return emit(ctx, Event{
+		Status: &failed,
+		Error:  runtimeErrorWithDetails(code, message, details),
+	})
 }

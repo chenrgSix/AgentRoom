@@ -163,6 +163,7 @@ func TestRuntimeFailureCategoriesAreStable(t *testing.T) {
 		"ECONNRESET while reading socket": "network",
 		"model unavailable":               "model",
 		"extension initialization failed": "configuration",
+		"EPERM: operation not permitted":  "configuration",
 		"unrecognized failure":            "unknown",
 	}
 	for stderr, expected := range tests {

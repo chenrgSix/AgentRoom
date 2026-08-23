@@ -123,6 +123,7 @@ function mapRunEvent(row: RunEventRow): RunEventRecord {
               code: string;
               message: string;
               retryable: boolean;
+              details?: Record<string, unknown>;
             } }
           : {})
       };

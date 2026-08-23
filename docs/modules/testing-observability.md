@@ -135,10 +135,10 @@ becomes unavailable before Runtime start; existing Run counters expose actual
 persisted fan-out. This baseline does not claim a new production Wave metric or
 aggregated member token/cost telemetry.
 
-Generic Runtime process errors may report a bounded category, numeric exit
-code, and whether stderr was present. Tests seed secret-like stderr and prove
-the original text never reaches the Run event, diagnostic projection, or
-central persistence.
+Codex and Generic Runtime process errors may report a bounded category, numeric
+exit code, and whether stderr was present. Bridge and authenticated WebSocket
+tests seed secret-like stderr and unknown detail keys, then prove only the
+three-field allowlist reaches Run-event persistence.
 
 Health endpoints distinguish process liveness, dependency readiness, and
 degraded optional capabilities. Audit records are durable and access-controlled.

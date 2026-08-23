@@ -710,7 +710,10 @@ export async function createServerApp(
                   error: {
                     code: String(runtimeError.code ?? ""),
                     message: String(runtimeError.message ?? ""),
-                    retryable: runtimeError.retryable === true
+                    retryable: runtimeError.retryable === true,
+                    ...(runtimeError.details === undefined
+                      ? {}
+                      : { details: runtimeError.details })
                   }
                 }
               : {})
