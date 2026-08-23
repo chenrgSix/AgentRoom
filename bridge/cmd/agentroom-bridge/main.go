@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"agentroom.dev/bridge/internal/browserlaunch"
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/console"
@@ -116,6 +117,7 @@ func runConsole(args []string) error {
 	dataDir := command.String("data-dir", "", "directory for Bridge state and credential")
 	workspace := command.String("workspace", "", "default local Runtime workspace")
 	listen := command.String("listen", "127.0.0.1:3210", "loopback Console listen address")
+	noOpen := command.Bool("no-open", false, "do not open the Console in a browser")
 	if err := command.Parse(args); err != nil {
 		return err
 	}
@@ -153,13 +155,19 @@ func runConsole(args []string) error {
 	}
 	consoleURL := "http://" + listener.Addr().String() +
 		"/?token=" + url.QueryEscape(service.Token())
-	fmt.Printf("Bridge Console: %s\n", consoleURL)
-	fmt.Println("The Console accepts connections only from this machine.")
-
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	serveError := make(chan error, 1)
 	go func() { serveError <- server.Serve(listener) }()
+
+	fmt.Printf("Bridge Console: %s\n", consoleURL)
+	fmt.Println("The Console accepts connections only from this machine.")
+	if !*noOpen {
+		if err := browserlaunch.OpenLoopback(consoleURL); err != nil {
+			fmt.Fprintf(os.Stderr, "Open the printed Console URL manually: %v\n", err)
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 		shutdownContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)

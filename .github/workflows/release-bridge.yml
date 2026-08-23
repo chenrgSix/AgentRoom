@@ -52,19 +52,14 @@ jobs:
         include:
           - goos: darwin
             goarch: amd64
-            format: tar.gz
           - goos: darwin
             goarch: arm64
-            format: tar.gz
           - goos: windows
             goarch: amd64
-            format: zip
           - goos: linux
             goarch: amd64
-            format: tar.gz
           - goos: linux
             goarch: arm64
-            format: tar.gz
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -85,42 +80,16 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          ARCHIVE_FORMAT: ${{ matrix.format }}
-        run: |
-          set -euo pipefail
-          version="${RELEASE_TAG#v}"
-          if [[ ! "${version}" =~ ^[0-9A-Za-z._-]+$ ]]; then
-            echo "Release tag must contain only letters, numbers, dots, underscores, and hyphens" >&2
-            exit 1
-          fi
-
-          package="agentroom-bridge_${version}_${GOOS}_${GOARCH}"
-          staging="../dist/${package}"
-          binary="agentroom-bridge"
-          if [[ "${GOOS}" == "windows" ]]; then
-            binary="agentroom-bridge.exe"
-          fi
-
-          mkdir -p "${staging}"
-          CGO_ENABLED=0 go build \
-            -trimpath \
-            -ldflags="-s -w -X main.version=${RELEASE_TAG}" \
-            -o "${staging}/${binary}" \
-            ./cmd/agentroom-bridge
-          cp README.md "${staging}/README.md"
-
-          cd ../dist
-          if [[ "${ARCHIVE_FORMAT}" == "zip" ]]; then
-            zip -qr "${package}.zip" "${package}"
-          else
-            tar -czf "${package}.tar.gz" "${package}"
-          fi
+          OUTPUT_DIR: ${{ github.workspace }}/dist
+        run: ./scripts/package-release.sh
 
       - name: Upload build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: agentroom-bridge-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: dist/*.${{ matrix.format }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
           if-no-files-found: error
           retention-days: 7
 

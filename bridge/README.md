@@ -18,6 +18,11 @@ sha256sum -c SHA256SUMS --ignore-missing
 shasum -a 256 -c SHA256SUMS
 ```
 
+On macOS, double-click **Start AgentRoom Bridge.command**. On Windows,
+double-click **Start AgentRoom Bridge.cmd**. On Linux, run
+`./start-agentroom-bridge.sh`. Each launcher starts the Bridge and opens the
+local configuration Console in the default browser.
+
 The portable binaries are currently unsigned. macOS users may need to approve
 the first launch in system security settings. The `go run` commands below are
 developer alternatives.
@@ -33,8 +38,9 @@ go test ./...
 go build ./cmd/agentroom-bridge
 ```
 
-`console` is the recommended setup path. Open the complete token-bearing URL
-printed in the terminal. The local page detects Codex and Pi, requests Team
+`console` is the recommended setup path. It opens the complete token-bearing
+URL in the default browser and also prints it as a fallback. Pass `--no-open`
+for a headless environment. The local page detects Codex and Pi, requests Team
 enrollment, shows the Owner approval code, and manages Bridge start, stop, and
 Agent configuration. It listens only on `127.0.0.1:3210` by default; static UI
 assets are embedded in the Bridge binary.

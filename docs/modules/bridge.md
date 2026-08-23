@@ -48,9 +48,10 @@ not the normal onboarding flow.
 ## Local Configuration Console
 
 `agentroom-bridge console` starts the recommended client setup surface on
-`127.0.0.1:3210`, prints a one-time random Console URL, and automatically runs
-an existing paired Bridge. Static assets are embedded in the Go binary, so no
-Node.js process or separate UI service is required on the client.
+`127.0.0.1:3210`, opens and prints a one-time random Console URL, and
+automatically runs an existing paired Bridge. `--no-open` supports headless
+environments. Static assets are embedded in the Go binary, so no Node.js
+process or separate UI service is required on the client.
 
 The Console can discover Codex and Pi, create the first enrollment request,
 show the short Owner approval code, start or stop the Bridge, and edit existing
@@ -116,6 +117,11 @@ GitHub Release triggers `.github/workflows/release-bridge.yml`, which tests and
 cross-compiles CGO-free archives for macOS amd64/arm64, Windows amd64, and Linux
 amd64/arm64. The Release tag is injected into `agentroom-bridge version`; all
 archives and one `SHA256SUMS` file are attached to the Release.
+
+Each archive contains the binary, client README, and an OS-specific launcher.
+The macOS `.command` and Windows `.cmd` launchers are directly clickable; Linux
+ships an executable shell launcher. The launchers start `console`, which opens
+the token-authenticated loopback UI without requiring terminal configuration.
 
 The first release artifacts are unsigned portable binaries. Platform signing,
 notarized installers, background-service installation, and signed automatic
