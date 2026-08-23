@@ -151,7 +151,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | OPS-001 | DONE | Propagate trace IDs through message, Run, Bridge, runtime | RUN-003 | one authorized query reconstructs persisted Message, Run, Delivery, and Runtime event entries; cross-process E2E verifies one trace |
 | OPS-002 | DONE | Add structured logs, metrics, and health endpoints | OPS-001 | safe HTTP/Bridge/Run logs, Prometheus metrics, live/ready/degraded health, and tested failure signals |
 | OPS-003 | DONE | Document and configure deployable listener topology | BRG-003, MCP-001 | loopback, proxy, and trusted-LAN modes are explicit |
-| QA-002 | PLANNED | Verify two-machine managed Agent flow | ADP-004, WEB-005 | Alice Web to Bob Codex reply passes |
+| QA-002 | READY | Verify two-machine managed Agent flow | ADP-004, WEB-005 | two-physical-machine HTTPS runbook is executable; DONE requires committed PASS evidence for online and offline/reconnect Codex Runs |
 | QA-003 | DONE | Verify three-Agent guarded handoff | MCP-003, RUN-006 | public Web and Remote MCP E2E completes Alice → Bob → Carol Runs with shared trace and rejects a lineage loop |
 | QA-004 | DONE | Verify restart, reconnect, duplicate, and cancellation | DATA-003, RUN-005 | recovery matrix passes repeatedly |
 | QA-005 | PLANNED | Run security and clean-room release audit | SEC-004, QA-004 | audit report has no open critical finding |

@@ -32,6 +32,13 @@ asserts the durable terminal Run and Agent reply. It proves the local
 cross-process transport while keeping physical two-machine Codex acceptance as
 a separate release check.
 
+The physical `QA-002` procedure is maintained in
+`docs/acceptance/qa-002-two-machine-managed-agent.md`. It requires two real
+machines, HTTPS and fingerprint verification, a released Bridge archive, local
+Codex, online execution, offline queue/reconnect, one trace reconstruction, and
+a sanitized committed PASS record. Local processes and containers cannot close
+this task.
+
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to
 Carol Agent. All three Agents claim and complete their Runs; the test verifies

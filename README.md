@@ -24,6 +24,8 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 - Module architecture: [docs/modules/README.md](docs/modules/README.md)
 - Authoritative task register: [docs/TASKS.md](docs/TASKS.md)
 - Architecture decisions: [docs/adr/README.md](docs/adr/README.md)
+- Two-machine acceptance:
+  [docs/acceptance/qa-002-two-machine-managed-agent.md](docs/acceptance/qa-002-two-machine-managed-agent.md)
 
 ## Technology Baseline
 
