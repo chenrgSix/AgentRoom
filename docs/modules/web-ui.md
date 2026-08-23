@@ -27,6 +27,7 @@ and server-owned payloads are never translated.
 - Selected Room participant roster projected from Team members and visible Agents.
 - Context sidebar ending at the selected Room participant roster, without
   workspace, configuration, or account modules beneath it.
+- Full-height participant column without a nested card or fixed-height roster.
 - Narrow-screen navigation for Chat, Agent management, and locale selection.
 
 There is no native desktop GUI in the MVP. Runtime access is provided by the
@@ -51,9 +52,12 @@ not presented as production connections. Secrets are shown only in the
 immediate setup result and are never returned by list APIs.
 
 The desktop context sidebar contains only the Team identity and selected Room
-participants. Room switching, Room creation, locale selection, and return to
-Chat are compact workspace-header actions. Agent management remains a separate
-global rail destination, so configuration is not stacked below Room members.
+participants. The participant roster fills the column below the Team identity,
+uses the sidebar itself as its surface, and scrolls only when the member list
+exceeds the available height. Room switching, Room creation, locale selection,
+and return to Chat are compact workspace-header actions. Agent management
+remains a separate global rail destination, so configuration is not stacked
+below Room members.
 
 An empty installation presents a three-step Team, Room, and Agent onboarding
 flow in the main workspace. Required fields use native browser validation;
@@ -74,7 +78,7 @@ Component tests cover onboarding state transitions, Chinese-default locale
 persistence, Agent management navigation, enrollment approval, and capability
 gating.
 Browser acceptance covers message, mention, reconnect, Run progress, reply, and
-cancellation flows. Work is tracked by `WEB-001` through `WEB-012` in
+cancellation flows. Work is tracked by `WEB-001` through `WEB-013` in
 `docs/TASKS.md`.
 
 ## Dependencies

@@ -106,6 +106,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | WEB-010 | DONE | Fix bodyless Device revoke requests | WEB-006 | Device DELETE omits JSON content type and the Web state converges to revoked |
 | WEB-011 | DONE | Reorganize Agent management navigation and Room participants | WEB-008, WEB-009 | rail action opens management and sidebar shows Team members plus visible Agents for the selected Room |
 | WEB-012 | DONE | Flatten the Room sidebar after its participant roster | WEB-011 | no modules follow Room participants; Room switching, creation, and locale controls remain available in the workspace header |
+| WEB-013 | DONE | Expand Room participants to the full context sidebar | WEB-012 | participant roster fills the remaining column without a nested card or fixed-height list |
 
 ## Workstream F4: MCP Team Participation
 
