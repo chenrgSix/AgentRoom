@@ -26,6 +26,8 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 - Architecture decisions: [docs/adr/README.md](docs/adr/README.md)
 - Two-machine acceptance:
   [docs/acceptance/qa-002-two-machine-managed-agent.md](docs/acceptance/qa-002-two-machine-managed-agent.md)
+- Security and clean-room audit:
+  [docs/acceptance/qa-005-security-clean-room-audit.md](docs/acceptance/qa-005-security-clean-room-audit.md)
 
 ## Technology Baseline
 

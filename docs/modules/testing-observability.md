@@ -135,6 +135,11 @@ Release notes name migrations, compatibility changes, security impact, and the
 exact checks run. Work is tracked by `QA-001` through `QA-007` and `OPS-001`
 through `OPS-002`.
 
+The current security and exported-tree evidence is recorded in
+`docs/acceptance/qa-005-security-clean-room-audit.md`. Its PASS applies only to
+the documented trusted Owner deployment boundary and lists remaining release
+constraints explicitly.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
