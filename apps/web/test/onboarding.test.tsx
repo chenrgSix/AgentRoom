@@ -49,6 +49,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     name: "general",
     createdAt: "2026-08-23T00:01:00.000Z"
   };
+  const member = {
+    memberId: "member_test",
+    teamId: team.teamId,
+    userId: "user_test",
+    displayName: "Local Owner",
+    role: "owner",
+    createdAt: "2026-08-23T00:00:00.000Z"
+  };
   const device = {
     deviceId: "device_test",
     name: "Alice Mac",
@@ -103,6 +111,9 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/teams/${team.teamId}/devices`) {
       return jsonResponse([device]);
     }
+    if (path === `/api/teams/${team.teamId}/members`) {
+      return jsonResponse([member]);
+    }
     if (path.endsWith("/rooms") || path.endsWith("/agents")) {
       return jsonResponse([]);
     }
@@ -151,7 +162,11 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     fireEvent.click(screen.getByRole("button", { name: "创建房间" }));
     await screen.findByRole("heading", { name: "添加智能体，或直接开始对话" });
     assert.equal(screen.queryByLabelText("新建假智能体名称"), null);
-    fireEvent.click(screen.getByRole("button", { name: "打开连接设置" }));
+    assert.equal(screen.queryByLabelText("新 Team 名称"), null);
+    const participants = screen.getByRole("region", { name: "房间成员" });
+    within(participants).getByText("Local Owner");
+    within(participants).getByText("Team 所有者");
+    fireEvent.click(screen.getByRole("button", { name: "智能体管理" }));
 
     await screen.findByRole("heading", { name: "智能体与设备" });
     screen.getByRole("heading", { name: "Team 智能体" });

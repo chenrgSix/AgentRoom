@@ -24,6 +24,7 @@ and server-owned payloads are never translated.
 - Run cards with live status, replies, cancellation, and failure details.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
+- Selected Room participant roster projected from Team members and visible Agents.
 - Narrow-screen navigation for Chat, Agent management, and locale selection.
 
 There is no native desktop GUI in the MVP. Runtime access is provided by the

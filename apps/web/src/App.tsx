@@ -10,6 +10,15 @@ interface Team {
   createdAt: string;
 }
 
+interface Member {
+  memberId: string;
+  teamId: string;
+  userId: string | null;
+  displayName: string;
+  role: "owner" | "member";
+  createdAt: string;
+}
+
 interface Room {
   roomId: string;
   teamId: string;
@@ -200,6 +209,7 @@ export function App() {
   const [session, setSession] = useState<LocalSession | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -260,6 +270,7 @@ export function App() {
   useEffect(() => {
     if (!session || !selectedTeamId) {
       setRooms([]);
+      setMembers([]);
       setAgents([]);
       return;
     }
@@ -275,14 +286,20 @@ export function App() {
         {},
         session.token
       ),
+      jsonRequest<Member[]>(
+        `/api/teams/${selectedTeamId}/members`,
+        {},
+        session.token
+      ),
       jsonRequest<Device[]>(
         `/api/teams/${selectedTeamId}/devices`,
         {},
         session.token
       )
-    ]).then(([nextRooms, nextAgents, nextDevices]) => {
+    ]).then(([nextRooms, nextAgents, nextMembers, nextDevices]) => {
       setRooms(nextRooms);
       setAgents(nextAgents);
+      setMembers(nextMembers);
       setDevices(nextDevices);
       setMentionAgentId((current) =>
         nextAgents.some((agent) => agent.agentId === current) ? current : ""
@@ -324,9 +341,12 @@ export function App() {
     let stopped = false;
     const refresh = async () => {
       try {
-        const [nextAgents, nextDevices, page, nextRuns] = await Promise.all([
+        const [nextAgents, nextMembers, nextDevices, page, nextRuns] = await Promise.all([
           jsonRequest<Agent[]>(
             `/api/teams/${selectedTeamId}/agents`, {}, session.token
+          ),
+          jsonRequest<Member[]>(
+            `/api/teams/${selectedTeamId}/members`, {}, session.token
           ),
           jsonRequest<Device[]>(
             `/api/teams/${selectedTeamId}/devices`, {}, session.token
@@ -340,6 +360,7 @@ export function App() {
         ]);
         if (!stopped) {
           setAgents(nextAgents);
+          setMembers(nextMembers);
           setDevices(nextDevices);
           setMessages(page.items);
           setRuns(nextRuns);
@@ -595,20 +616,15 @@ export function App() {
             </button>
           ))}
         </div>
-        <form className="quick-create" onSubmit={createTeam}>
-          <input
-            aria-label={t("newTeamName")}
-            onChange={(event) => setTeamName(event.target.value)}
-            placeholder={locale === "zh-CN" ? "新 Team" : "New Team"}
-            required
-            value={teamName}
-          />
+        {selectedTeam && (
           <button
-            aria-label={t("createTeam")}
-            disabled={busy}
-            title={busy ? t("creating") : t("createTeam")}
-          >+</button>
-        </form>
+            aria-label={t("agentManagement")}
+            className={activeView === "agents" ? "rail-manage active" : "rail-manage"}
+            onClick={revealConnectionSetup}
+            title={t("agentManagement")}
+            type="button"
+          >✦</button>
+        )}
       </aside>
 
       <aside className="room-sidebar">
@@ -616,6 +632,36 @@ export function App() {
           <p className="eyebrow">{t("teamSpace")}</p>
           <h1>{selectedTeam?.name ?? "Agent Room"}</h1>
         </header>
+        {selectedTeam && selectedRoom && (
+          <section className="participant-panel" aria-label={t("roomParticipants")}>
+            <div className="participant-heading">
+              <div><strong>{t("roomParticipants")}</strong><small>#{selectedRoom.name}</small></div>
+              <span>{members.length + agents.length}</span>
+            </div>
+            <div className="participant-list">
+              {members.length === 0 && agents.length === 0 ? (
+                <p>{t("noParticipants")}</p>
+              ) : (
+                <>
+                  {members.map((member) => (
+                    <article className="participant-row" key={member.memberId}>
+                      <span className="participant-avatar human">{member.displayName.slice(0, 1).toUpperCase()}</span>
+                      <div><strong>{member.displayName}</strong><small>{member.role === "owner" ? t("teamOwner") : t("teamMember")}</small></div>
+                      <span className="participant-kind">{locale === "zh-CN" ? "成员" : "Human"}</span>
+                    </article>
+                  ))}
+                  {agents.map((agent) => (
+                    <article className="participant-row" key={agent.agentId}>
+                      <span className="participant-avatar agent">{agent.name.slice(0, 1).toUpperCase()}</span>
+                      <div><strong>{agent.name}</strong><small>{roleLabel(agent.role, locale)}</small></div>
+                      <span className={`presence-dot ${agent.presence}`} title={presenceLabel(agent.presence, locale)} />
+                    </article>
+                  ))}
+                </>
+              )}
+            </div>
+          </section>
+        )}
         {selectedTeam && (
           <>
             <div className="section-label">{t("workspace")}</div>
@@ -666,12 +712,6 @@ export function App() {
             />
             <button disabled={busy}>{busy ? t("creating") : t("create")}</button>
           </form>
-        )}
-        {selectedTeam && (
-          <button className="sidebar-manage" onClick={revealConnectionSetup} type="button">
-            <span>{t("manageConnections")}</span>
-            <span>→</span>
-          </button>
         )}
         <footer>
           <span className="avatar">{session?.displayName.slice(0, 1) ?? "…"}</span>
