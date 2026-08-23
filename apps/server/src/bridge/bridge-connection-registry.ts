@@ -43,6 +43,10 @@ export class BridgeConnectionRegistry {
     return this.connections.get(deviceId)?.epoch;
   }
 
+  public activeCount(): number {
+    return this.connections.size;
+  }
+
   public revoke(deviceId: string): void {
     const connection = this.connections.get(deviceId);
     if (!connection) return;

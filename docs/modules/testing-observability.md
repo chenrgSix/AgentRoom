@@ -87,7 +87,33 @@ degraded optional capabilities. Audit records are durable and access-controlled.
 
 `OPS-001` is verified by contract fixtures, migration tests, forged-trace
 negative tests, restart persistence tests, and the real Server-to-Go-Bridge
-Generic Runtime E2E. `OPS-002` owns log, metric, and health instrumentation.
+Generic Runtime E2E.
+
+`OPS-002` exposes the following operational surfaces without prompts, reply
+content, credentials, headers, request bodies, or local paths:
+
+- `GET /api/health/live` proves the process event loop is responding.
+- `GET /api/health/ready` returns `503` when SQLite is unavailable.
+- `GET /api/health` reports `ready`, `degraded`, or `unavailable`; an enabled
+  managed Agent with no active Bridge is degraded, while no managed Agent is
+  `not_configured` rather than unhealthy.
+- `GET /api/metrics` emits Prometheus text for HTTP status classes, active
+  Bridges, enabled managed Agents, queued Runs, pending delivery age, retries,
+  Run outcomes, Agent Presence, and active Run event lag.
+
+HTTP completion/rejection, Bridge connect/disconnect, Delivery ACK, Run state,
+and Run reply processing emit structured JSON fields. Runtime output and error
+messages are never log fields.
+
+| Failure | Dashboard signal | Default interpretation |
+| --- | --- | --- |
+| Database unavailable | readiness `503`, `agentroom_up 0` | page immediately |
+| Managed Bridge absent | health `degraded`, zero Bridge connections | investigate connectivity |
+| Queue not draining | queue depth plus oldest delivery age rising | investigate routing/Bridge |
+| Delivery instability | delivery retry total rising | investigate ACK/network loss |
+| Runtime failures | `failed` or `outcome_unknown` Run totals rising | inspect trace metadata |
+| Active Run stalled | Run event lag rising | inspect Runtime and cancellation |
+| Request rejection burst | HTTP `4xx`/`5xx` counters rising | inspect auth/client/server errors |
 
 ## Release Evidence
 

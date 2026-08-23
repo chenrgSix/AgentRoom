@@ -8,6 +8,17 @@ Fastify API serves Web, MCP, and authenticated Bridge WebSocket traffic.
 `GET /api/traces/{traceId}` returns access-controlled lifecycle metadata for
 one Message-to-Runtime path without returning prompt or reply content.
 
+Operational endpoints are:
+
+- `/api/health/live` for liveness;
+- `/api/health/ready` for SQLite readiness;
+- `/api/health` for aggregate and optional Bridge degradation;
+- `/api/metrics` for secret-free Prometheus text metrics.
+
+The production logger emits structured HTTP, Bridge, Delivery, and Run events
+without request bodies or Runtime content. Restrict metrics access at the
+reverse proxy when the listener is exposed beyond a trusted network.
+
 ## Database Location
 
 The database path is resolved in this order:

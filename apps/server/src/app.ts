@@ -8,6 +8,7 @@ import {
 } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import Fastify, {
+  LogController,
   type FastifyInstance,
   type FastifyRequest
 } from "fastify";
@@ -27,6 +28,7 @@ import type {
 } from "./discussion/discussion-types.js";
 import { createTeamMcpServer } from "./mcp/mcp-server.js";
 import { TeamWaitService } from "./mcp/team-wait-service.js";
+import { OperationalMetrics } from "./observability/operational-metrics.js";
 import { TraceRepository } from "./observability/trace-repository.js";
 import { AgentService } from "./registry/agent-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
@@ -104,6 +106,9 @@ export async function createServerApp(
   const executor = new InProcessRunExecutor(core, runRepository, clock);
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
   const bridgeConnections = new BridgeConnectionRegistry();
+  const operationalMetrics = new OperationalMetrics(
+    database, bridgeConnections, clock
+  );
   const delivery = new DeliveryService(
     database,
     core,
@@ -150,7 +155,16 @@ export async function createServerApp(
       return;
     }
     if (agent?.integrationMode === "managed") {
-      delivery.dispatch(run.runId);
+      const dispatched = delivery.dispatch(run.runId);
+      app.log.info({
+        event: "run.delivery.dispatched",
+        traceId: run.traceId,
+        runId: run.runId,
+        agentId: run.targetAgentId,
+        deviceId: dispatched?.deviceId ?? null,
+        sendCount: dispatched?.sendCount ?? 0,
+        sent: (dispatched?.sendCount ?? 0) > 0
+      }, "Managed Run delivery processed");
     }
   };
   const advanceDiscussion = async (runId: string): Promise<void> => {
@@ -167,26 +181,66 @@ export async function createServerApp(
       void advanceDiscussion(run.runId);
     }
   );
-  const app = Fastify({ logger: options.logger ?? false });
+  const app = Fastify({
+    logger: options.logger ?? false,
+    logController: new LogController({ disableRequestLogging: true })
+  });
+  const requestStartedAt = new WeakMap<FastifyRequest, bigint>();
   await app.register(fastifyWebsocket, {
     options: { maxPayload: 1024 * 1024 }
   });
   const principal = (request: FastifyRequest): WebPrincipal =>
     auth.authenticateWebSession(bearerToken(request), clock());
 
+  app.addHook("onRequest", async (request) => {
+    requestStartedAt.set(request, process.hrtime.bigint());
+  });
+  app.addHook("onResponse", async (request, reply) => {
+    const startedAt = requestStartedAt.get(request);
+    const durationMs = startedAt === undefined
+      ? 0
+      : Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    operationalMetrics.recordHttpRequest(request.method, reply.statusCode);
+    app.log.info({
+      event: "http.request.completed",
+      requestId: request.id,
+      method: request.method,
+      route: request.routeOptions.url,
+      statusCode: reply.statusCode,
+      durationMs: Number(durationMs.toFixed(3))
+    }, "HTTP request completed");
+  });
+
   app.addHook("onClose", (_instance, done) => {
     database.close();
     done();
   });
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
     if (error instanceof AuthorizationError) {
-      void reply.code(error.code === "UNAUTHENTICATED" ? 401 : 403).send({
+      const statusCode = error.code === "UNAUTHENTICATED" ? 401 : 403;
+      app.log.warn({
+        event: "http.request.rejected",
+        requestId: request.id,
+        method: request.method,
+        route: request.routeOptions.url,
+        statusCode,
+        errorCode: error.code
+      }, "HTTP request rejected");
+      void reply.code(statusCode).send({
         error: { code: error.code, message: error.message }
       });
       return;
     }
     const message = error instanceof Error ? error.message : "Unexpected error";
     const statusCode = message.includes("UNIQUE constraint failed") ? 409 : 400;
+    app.log.warn({
+      event: "http.request.rejected",
+      requestId: request.id,
+      method: request.method,
+      route: request.routeOptions.url,
+      statusCode,
+      errorCode: statusCode === 409 ? "CONFLICT" : "INVALID_REQUEST"
+    }, "HTTP request rejected");
     void reply.code(statusCode).send({
       error: {
         code: statusCode === 409 ? "CONFLICT" : "INVALID_REQUEST",
@@ -195,7 +249,36 @@ export async function createServerApp(
     });
   });
 
-  app.get("/api/health", async () => ({ status: "ok" }));
+  app.get("/api/health/live", async () => ({
+    status: "alive",
+    uptimeSeconds: Math.floor(process.uptime())
+  }));
+  app.get("/api/health/ready", async (_request, reply) => {
+    const ready = operationalMetrics.databaseReady();
+    if (!ready) void reply.code(503);
+    return { status: ready ? "ready" : "unavailable" };
+  });
+  app.get("/api/health", async () => {
+    const databaseReady = operationalMetrics.databaseReady();
+    const snapshot = databaseReady ? operationalMetrics.snapshot() : null;
+    const bridgeConfigured = (snapshot?.managedAgents ?? 0) > 0;
+    const bridgeReady = (snapshot?.activeBridgeConnections ?? 0) > 0;
+    return {
+      status: !databaseReady
+        ? "unavailable"
+        : bridgeConfigured && !bridgeReady ? "degraded" : "ready",
+      checks: {
+        database: databaseReady ? "ready" : "unavailable",
+        bridge: !bridgeConfigured
+          ? "not_configured"
+          : bridgeReady ? "ready" : "degraded"
+      }
+    };
+  });
+  app.get("/api/metrics", async (_request, reply) => {
+    void reply.type("text/plain; version=0.0.4; charset=utf-8");
+    return operationalMetrics.renderPrometheus();
+  });
   app.get("/ws/bridge", {
     websocket: true,
     preValidation: async (request) => {
@@ -234,6 +317,11 @@ export async function createServerApp(
             return;
           }
           registeredEpoch = epoch as number;
+          app.log.info({
+            event: "bridge.connection.registered",
+            deviceId: devicePrincipal.deviceId,
+            connectionEpoch: registeredEpoch
+          }, "Bridge connection registered");
           presence.recordHeartbeat(devicePrincipal, {
             deviceId: devicePrincipal.deviceId,
             connectionEpoch: registeredEpoch,
@@ -301,7 +389,7 @@ export async function createServerApp(
             socket.close(4_003, "Invalid Run acceptance");
             return;
           }
-          delivery.accept(
+          const accepted = delivery.accept(
             devicePrincipal,
             message.payload.runId,
             typeof message.payload.traceId === "string"
@@ -311,6 +399,14 @@ export async function createServerApp(
             1,
             clock()
           );
+          app.log.info({
+            event: "run.delivery.accepted",
+            traceId: accepted.traceId,
+            runId: accepted.runId,
+            agentId: accepted.targetAgentId,
+            deviceId: devicePrincipal.deviceId,
+            state: accepted.state
+          }, "Run delivery accepted");
           return;
         }
         if (message.type === "run.status" && registeredEpoch !== undefined) {
@@ -346,6 +442,15 @@ export async function createServerApp(
                 }
               : {})
           }, clock());
+          app.log.info({
+            event: "run.state.applied",
+            traceId: applied.run.traceId,
+            runId: applied.run.runId,
+            agentId: applied.run.targetAgentId,
+            state: applied.run.state,
+            sequence: message.payload.sequence,
+            applied: applied.applied
+          }, "Run state event processed");
           if (
             applied.applied &&
             new Set(["completed", "failed", "canceled", "outcome_unknown"])
@@ -367,7 +472,7 @@ export async function createServerApp(
             socket.close(4_003, "Invalid Run reply");
             return;
           }
-          bridgeRunEvents.applyReply(devicePrincipal, {
+          const applied = bridgeRunEvents.applyReply(devicePrincipal, {
             runId: message.payload.runId,
             ...(typeof message.payload.traceId === "string"
               ? { traceId: message.payload.traceId }
@@ -379,6 +484,14 @@ export async function createServerApp(
               ? {}
               : { assessment: message.payload.assessment })
           }, clock());
+          app.log.info({
+            event: "run.reply.applied",
+            traceId: applied.run.traceId,
+            runId: applied.run.runId,
+            agentId: applied.run.targetAgentId,
+            sequence: message.payload.sequence,
+            applied: applied.applied
+          }, "Run reply event processed");
           return;
         }
         socket.close(4_003, "Bridge hello required before messages");
@@ -388,6 +501,11 @@ export async function createServerApp(
     });
     socket.on("close", () => {
       bridgeConnections.remove(devicePrincipal.deviceId, socket);
+      app.log.info({
+        event: "bridge.connection.closed",
+        deviceId: devicePrincipal.deviceId,
+        connectionEpoch: registeredEpoch ?? null
+      }, "Bridge connection closed");
     });
   });
   app.post("/api/bootstrap", async (request) => {
@@ -674,7 +792,16 @@ export async function createServerApp(
       for (const run of createdRuns) {
         const adapter = fakeAdapters.get(run.targetAgentId);
         if (!adapter) {
-          delivery.dispatch(run.runId);
+          const dispatched = delivery.dispatch(run.runId);
+          app.log.info({
+            event: "run.delivery.dispatched",
+            traceId: run.traceId,
+            runId: run.runId,
+            agentId: run.targetAgentId,
+            deviceId: dispatched?.deviceId ?? null,
+            sendCount: dispatched?.sendCount ?? 0,
+            sent: (dispatched?.sendCount ?? 0) > 0
+          }, "Managed Run delivery processed");
           executedRuns.push(runRepository.getRun(run.runId) ?? run);
           continue;
         }
