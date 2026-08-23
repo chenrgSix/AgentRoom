@@ -3,7 +3,7 @@
 ## Scope
 
 - Prefix: `DISC`
-- Planned location: `apps/server/src/discussion/`
+- Implementation: `apps/server/src/discussion/`
 - Owns: bounded multi-Agent discussions, progress projection, budget leases,
   orchestration decisions, and finalization
 

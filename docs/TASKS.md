@@ -127,7 +127,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
-| DISC-001 | PLANNED | Add Discussion, turn, progress, decision, and budget contracts and persistence | CON-004, ROOM-002, DATA-003 | migration and repository tests preserve aggregate versions and unique turn ordinals |
+| DISC-001 | DONE | Add Discussion, turn, progress, decision, and budget contracts and persistence | CON-004, ROOM-002, DATA-003 | migration and repository tests preserve aggregate versions and unique turn ordinals |
 | DISC-002 | PLANNED | Implement deterministic progress projection and plateau evidence | DISC-001 | structured deltas, priority-aware plateau, and reply-only downgrade tests pass |
 | DISC-003 | PLANNED | Implement budget ledger, leases, telemetry downgrade, and finalization reserve | DISC-001 | turns, tokens, duration, cost, extensions, unknown usage, and reserve invariants pass |
 | DISC-004 | PLANNED | Implement authoritative policy engine and Discussion state machine | DISC-002, DISC-003, RUN-004 | policy precedence, decision priority, stale fencing, and user control races are deterministic |
