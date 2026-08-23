@@ -16,3 +16,17 @@ export function mergeRoomMessages<T extends SequencedRoomMessage>(
     .sort((left, right) => left.sequence - right.sequence)
     .slice(-historyLimit);
 }
+
+export function createSingleFlight(task: () => Promise<void>): () => Promise<boolean> {
+  let running = false;
+  return async () => {
+    if (running) return false;
+    running = true;
+    try {
+      await task();
+      return true;
+    } finally {
+      running = false;
+    }
+  };
+}

@@ -190,6 +190,10 @@ in `docs/acceptance/ops-004-data-005-compose.md`. It separates local TLS smoke
 evidence from public certificate issuance and records the exact negative and
 large-database recovery checks.
 
+Room tail synchronization, failed-Run diagnostic projection, legacy Runtime
+preset migration, and explicit Bridge self-test evidence is recorded in
+`docs/acceptance/qa-012-room-bridge-ux.md`.
+
 The operator-facing Compose lifecycle and static configuration evidence is
 recorded in `docs/acceptance/ops-005-compose-operations.md`. It covers bounded
 container logs, CI rendering, first setup, health, troubleshooting, upgrades,

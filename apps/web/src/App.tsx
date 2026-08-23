@@ -12,7 +12,7 @@ import {
 import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
 
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
-import { mergeRoomMessages } from "./room-sync.js";
+import { createSingleFlight, mergeRoomMessages } from "./room-sync.js";
 import {
   loadRunDiagnostic,
   type RunDiagnostic,
@@ -1009,10 +1009,7 @@ export function App() {
   useEffect(() => {
     if (!session || !selectedTeamId || !selectedRoomId) return;
     let stopped = false;
-    let refreshInFlight = false;
     const refresh = async () => {
-      if (refreshInFlight) return;
-      refreshInFlight = true;
       try {
         const sync = messageSyncRef.current?.roomId === selectedRoomId
           ? messageSyncRef.current
@@ -1077,11 +1074,10 @@ export function App() {
         }
       } catch (reason) {
         if (!stopped) setError(String(reason));
-      } finally {
-        refreshInFlight = false;
       }
     };
-    const timer = window.setInterval(() => void refresh(), 2_000);
+    const refreshSingleFlight = createSingleFlight(refresh);
+    const timer = window.setInterval(() => void refreshSingleFlight(), 2_000);
     return () => {
       stopped = true;
       window.clearInterval(timer);

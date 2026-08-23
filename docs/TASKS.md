@@ -182,7 +182,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-008 | DONE | Add continuous repository quality gates | QA-005 | every main push and pull request validates contracts, Node builds/tests/E2E/docs, Go tests/vet, and native desktop compilation |
 | QA-009 | DONE | Publish and verify the v0.2 release candidate | BRG-011, BRG-015, SEC-005, OPS-004, QA-008 | tag-pinned, no-clobber draft-to-prerelease workflow publishes exactly seven archives, checksums, and license assets; clean downloads pass the same verifier |
 | QA-011 | DONE | Publish and verify v0.2.0-rc.2 | QA-009, QA-010, BRG-018, OPS-005 | exact tagged source passes main CI; the no-clobber workflow uploads and verifies five CLI archives, two macOS desktop archives, checksums, and license assets; the published prerelease passes a clean-download verification |
-| QA-012 | READY | Verify Room and Bridge UX stabilization | WEB-021, WEB-022, BRG-019 | component and cross-process tests cover a 101-plus-message Room, overlapping refreshes, safe failed-Run projection, legacy Pi preset migration, bounded Runtime probe success/failure, and zero diagnostic secret leakage |
+| QA-012 | DONE | Verify Room and Bridge UX stabilization | WEB-021, WEB-022, BRG-019 | `docs/acceptance/qa-012-room-bridge-ux.md` records passing Node, Go, Desktop, E2E, docs, 101-plus-message, safe diagnostic, preset migration, bounded probe, and secret-leakage evidence |
 
 ## Deferred Beyond MVP
 
