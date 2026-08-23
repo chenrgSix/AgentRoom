@@ -10,6 +10,7 @@ import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import Fastify, {
   LogController,
   type FastifyInstance,
+  type FastifyReply,
   type FastifyRequest
 } from "fastify";
 
@@ -45,17 +46,77 @@ import { InProcessRunExecutor } from "./runtime/in-process-run-executor.js";
 import {
   AuthService,
   AuthorizationError,
+  type IssuedCredential,
   type WebPrincipal
 } from "./security/auth-service.js";
+import {
+  AnonymousRateLimiter,
+  AnonymousRateLimitError
+} from "./security/anonymous-rate-limiter.js";
 import { BridgePairingService } from "./security/bridge-pairing-service.js";
+import { TrustedWebAccessService } from "./security/trusted-web-access-service.js";
+import type { WebAuthConfiguration } from "./security/web-auth-config.js";
 import { TeamRoomService } from "./team-room/team-room-service.js";
 import { MessageService } from "./team-room/message-service.js";
 
 export interface ServerAppOptions {
+  anonymousRateLimit?: {
+    maximumAttempts: number;
+    windowMilliseconds: number;
+  };
   databasePath: string;
   clock?: () => string;
   logger?: boolean;
+  trustProxyHops?: number;
+  webAuth?: WebAuthConfiguration;
   webRoot?: string;
+}
+
+const trustedSessionCookie = "__Host-agentroom_session";
+const unsafeHttpMethods = new Set(["DELETE", "PATCH", "POST", "PUT"]);
+
+function isLoopbackHost(host: string | undefined): boolean {
+  if (!host) return false;
+  return /^(?:localhost|127\.0\.0\.1)(?::[0-9]{1,5})?$/iu.test(host) ||
+    /^\[::1\](?::[0-9]{1,5})?$/u.test(host);
+}
+
+function cookieValue(request: FastifyRequest, name: string): string | undefined {
+  for (const part of request.headers.cookie?.split(";") ?? []) {
+    const separator = part.indexOf("=");
+    if (separator < 1 || part.slice(0, separator).trim() !== name) continue;
+    const value = part.slice(separator + 1).trim();
+    return value || undefined;
+  }
+  return undefined;
+}
+
+function sessionCookie(credential: IssuedCredential): string {
+  if (!credential.expiresAt) throw new Error("Web session expiry is required");
+  return [
+    `${trustedSessionCookie}=${credential.secret}`,
+    "Path=/",
+    "HttpOnly",
+    "Secure",
+    "SameSite=Strict",
+    `Expires=${new Date(credential.expiresAt).toUTCString()}`
+  ].join("; ");
+}
+
+function clearSessionCookie(): string {
+  return [
+    `${trustedSessionCookie}=`,
+    "Path=/",
+    "HttpOnly",
+    "Secure",
+    "SameSite=Strict",
+    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+    "Max-Age=0"
+  ].join("; ");
+}
+
+function noStore(reply: FastifyReply): void {
+  void reply.header("cache-control", "no-store");
 }
 
 function bodyObject(request: FastifyRequest): Record<string, unknown> {
@@ -92,6 +153,20 @@ export async function createServerApp(
   const database = openDatabase(options.databasePath);
   const core = new CoreRepository(database);
   const auth = new AuthService(database);
+  const webAuth = options.webAuth ?? { mode: "local" as const };
+  const trustedWeb = webAuth.mode === "trusted-team"
+    ? new TrustedWebAccessService(
+        database,
+        core,
+        auth,
+        webAuth.publicOrigin,
+        webAuth.ownerRecoveryToken
+      )
+    : undefined;
+  const anonymousRateLimit = new AnonymousRateLimiter(
+    options.anonymousRateLimit?.maximumAttempts,
+    options.anonymousRateLimit?.windowMilliseconds
+  );
   const teamRooms = new TeamRoomService(core, auth);
   const registry = new MemberDeviceService(core, auth);
   const agents = new AgentService(core, auth);
@@ -183,17 +258,64 @@ export async function createServerApp(
   );
   const app = Fastify({
     logger: options.logger ?? false,
-    logController: new LogController({ disableRequestLogging: true })
+    logController: new LogController({ disableRequestLogging: true }),
+    ...(options.trustProxyHops === undefined
+      ? {}
+      : {
+          trustProxy: (_address: string, hop: number) =>
+            hop < options.trustProxyHops!
+        })
   });
   const requestStartedAt = new WeakMap<FastifyRequest, bigint>();
   await app.register(fastifyWebsocket, {
     options: { maxPayload: 1024 * 1024 }
   });
-  const principal = (request: FastifyRequest): WebPrincipal =>
-    auth.authenticateWebSession(bearerToken(request), clock());
+  const requireTrustedOrigin = (request: FastifyRequest): void => {
+    if (
+      webAuth.mode !== "trusted-team" ||
+      request.headers.origin !== webAuth.publicOrigin
+    ) {
+      throw new AuthorizationError("FORBIDDEN", "Trusted Web origin required");
+    }
+  };
+  const principal = (request: FastifyRequest): WebPrincipal => {
+    if (request.headers.authorization !== undefined) {
+      return auth.authenticateWebSession(bearerToken(request), clock());
+    }
+    if (webAuth.mode !== "trusted-team") {
+      throw new AuthorizationError("UNAUTHENTICATED", "Bearer session required");
+    }
+    const token = cookieValue(request, trustedSessionCookie);
+    if (!token) {
+      throw new AuthorizationError("UNAUTHENTICATED", "Web session required");
+    }
+    if (unsafeHttpMethods.has(request.method)) requireTrustedOrigin(request);
+    return auth.authenticateWebSession(token, clock());
+  };
+  const optionalPrincipal = (request: FastifyRequest): WebPrincipal | undefined => {
+    try {
+      return principal(request);
+    } catch (error) {
+      if (error instanceof AuthorizationError) return undefined;
+      throw error;
+    }
+  };
+  const limitAnonymous = (request: FastifyRequest, bucket: string): void => {
+    const timestamp = Date.parse(clock());
+    anonymousRateLimit.consume(
+      `${bucket}:${request.ip}`,
+      Number.isFinite(timestamp) ? timestamp : Date.now()
+    );
+  };
 
   app.addHook("onRequest", async (request) => {
     requestStartedAt.set(request, process.hrtime.bigint());
+    if (webAuth.mode === "local" && !isLoopbackHost(request.headers.host)) {
+      throw new AuthorizationError(
+        "FORBIDDEN",
+        "Local Web access requires a loopback Host"
+      );
+    }
   });
   app.addHook("onResponse", async (request, reply) => {
     const startedAt = requestStartedAt.get(request);
@@ -216,6 +338,19 @@ export async function createServerApp(
     done();
   });
   app.setErrorHandler((error, request, reply) => {
+    if (error instanceof AnonymousRateLimitError) {
+      app.log.warn({
+        event: "http.request.rate_limited",
+        requestId: request.id,
+        method: request.method,
+        route: request.routeOptions.url,
+        statusCode: 429
+      }, "Anonymous request rate limited");
+      void reply.code(429).send({
+        error: { code: "RATE_LIMITED", message: error.message }
+      });
+      return;
+    }
     if (error instanceof AuthorizationError) {
       const statusCode = error.code === "UNAUTHENTICATED" ? 401 : 403;
       app.log.warn({
@@ -508,26 +643,119 @@ export async function createServerApp(
       }, "Bridge connection closed");
     });
   });
-  app.post("/api/bootstrap", async (request) => {
-    const body = bodyObject(request);
-    const displayName = requiredString(body.displayName, "displayName");
-    const requestedUserId = body.userId;
-    const userId = requestedUserId === undefined
-      ? createOpaqueId("user")
-      : requiredString(requestedUserId, "userId", 140);
-    if (!/^user_[A-Za-z0-9_-]{8,128}$/u.test(userId)) {
-      throw new Error("userId is not a valid opaque User identifier");
+  app.get("/api/auth/status", async (request, reply) => {
+    noStore(reply);
+    const actor = optionalPrincipal(request);
+    const user = actor ? core.getUser(actor.userId) : undefined;
+    if (actor && user) {
+      return {
+        mode: webAuth.mode,
+        state: "authenticated",
+        user,
+        session: { expiresAt: auth.getWebSessionExpiresAt(actor.sessionId) }
+      };
     }
-    const now = clock();
-    core.ensureUser({ userId, displayName: displayName.trim(), createdAt: now });
-    const expiresAt = new Date(Date.parse(now) + 30 * 24 * 60 * 60 * 1000)
-      .toISOString();
-    const session = auth.issueWebSession(userId, now, expiresAt);
     return {
-      user: core.getUser(userId),
-      session: { token: session.secret, expiresAt }
+      mode: webAuth.mode,
+      state: trustedWeb?.status() ?? "local_bootstrap"
     };
   });
+  app.get("/api/auth/session", async (request, reply) => {
+    noStore(reply);
+    const actor = principal(request);
+    const user = core.getUser(actor.userId);
+    if (!user) {
+      throw new AuthorizationError("UNAUTHENTICATED", "Session User not found");
+    }
+    return {
+      user,
+      session: { expiresAt: auth.getWebSessionExpiresAt(actor.sessionId) }
+    };
+  });
+  app.delete("/api/auth/session", async (request, reply) => {
+    noStore(reply);
+    const actor = principal(request);
+    auth.revokeWebSession(actor.sessionId, clock());
+    if (webAuth.mode === "trusted-team") {
+      void reply.header("set-cookie", clearSessionCookie());
+    }
+    return { status: "signed_out" };
+  });
+
+  if (trustedWeb) {
+    const recoveryToken = (request: FastifyRequest): string =>
+      requiredString(
+        request.headers["x-agent-room-recovery-token"],
+        "x-agent-room-recovery-token",
+        512
+      );
+    const establishSession = (
+      reply: FastifyReply,
+      result: ReturnType<TrustedWebAccessService["recover"]>
+    ) => {
+      noStore(reply);
+      void reply.header("set-cookie", sessionCookie(result.session));
+      return {
+        user: result.user,
+        session: { expiresAt: result.session.expiresAt }
+      };
+    };
+    app.post("/api/auth/setup", async (request, reply) => {
+      limitAnonymous(request, "web-setup");
+      requireTrustedOrigin(request);
+      const body = bodyObject(request);
+      return establishSession(reply, trustedWeb.setup(
+        recoveryToken(request),
+        requiredString(body.displayName, "displayName"),
+        clock()
+      ));
+    });
+    app.post("/api/auth/recover-owner", async (request, reply) => {
+      limitAnonymous(request, "web-recover");
+      requireTrustedOrigin(request);
+      return establishSession(
+        reply,
+        trustedWeb.recover(recoveryToken(request), clock())
+      );
+    });
+    app.post("/api/auth/member-invitations/claim", async (request, reply) => {
+      limitAnonymous(request, "member-invitation-claim");
+      requireTrustedOrigin(request);
+      const body = bodyObject(request);
+      const result = trustedWeb.claimMemberInvitation(
+        requiredString(body.token, "token", 128),
+        clock()
+      );
+      noStore(reply);
+      void reply.header("set-cookie", sessionCookie(result.session));
+      return {
+        member: result.member,
+        user: result.user,
+        session: { expiresAt: result.session.expiresAt }
+      };
+    });
+  } else {
+    app.post("/api/bootstrap", async (request) => {
+      const body = bodyObject(request);
+      const displayName = requiredString(body.displayName, "displayName");
+      const requestedUserId = body.userId;
+      const userId = requestedUserId === undefined
+        ? createOpaqueId("user")
+        : requiredString(requestedUserId, "userId", 140);
+      if (!/^user_[A-Za-z0-9_-]{8,128}$/u.test(userId)) {
+        throw new Error("userId is not a valid opaque User identifier");
+      }
+      const now = clock();
+      core.ensureUser({ userId, displayName: displayName.trim(), createdAt: now });
+      const expiresAt = new Date(Date.parse(now) + 30 * 24 * 60 * 60 * 1000)
+        .toISOString();
+      const session = auth.issueWebSession(userId, now, expiresAt);
+      return {
+        user: core.getUser(userId),
+        session: { token: session.secret, expiresAt }
+      };
+    });
+  }
 
   app.get("/api/teams", async (request) =>
     teamRooms.listTeams(principal(request))
@@ -583,18 +811,35 @@ export async function createServerApp(
     "/api/teams/:teamId/members",
     async (request) => registry.listMembers(principal(request), request.params.teamId)
   );
-  app.post<{ Params: { teamId: string } }>(
-    "/api/teams/:teamId/members",
-    async (request) => {
-      const body = bodyObject(request);
-      return registry.addMember(principal(request), {
-        teamId: request.params.teamId,
-        userId: requiredString(body.userId, "userId", 140),
-        displayName: requiredString(body.displayName, "displayName"),
-        now: clock()
-      });
-    }
-  );
+  if (trustedWeb) {
+    app.post<{ Params: { teamId: string } }>(
+      "/api/teams/:teamId/member-invitations",
+      async (request, reply) => {
+        const body = bodyObject(request);
+        const invitation = trustedWeb.createMemberInvitation(
+          principal(request),
+          request.params.teamId,
+          requiredString(body.displayName, "displayName"),
+          clock()
+        );
+        noStore(reply);
+        return invitation;
+      }
+    );
+  } else {
+    app.post<{ Params: { teamId: string } }>(
+      "/api/teams/:teamId/members",
+      async (request) => {
+        const body = bodyObject(request);
+        return registry.addMember(principal(request), {
+          teamId: request.params.teamId,
+          userId: requiredString(body.userId, "userId", 140),
+          displayName: requiredString(body.displayName, "displayName"),
+          now: clock()
+        });
+      }
+    );
+  }
   app.get<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/agents",
     async (request) => presence.listAgents(
@@ -692,6 +937,7 @@ export async function createServerApp(
     }
   );
   app.post("/api/bridge/join-requests", async (request) => {
+    limitAnonymous(request, "bridge-join-request");
     const body = bodyObject(request);
     return pairing.createJoinRequest({
       deviceName: requiredString(body.deviceName, "deviceName"),
@@ -735,6 +981,7 @@ export async function createServerApp(
     }
   );
   app.post("/api/bridge/pair", async (request) => {
+    limitAnonymous(request, "bridge-pair");
     const body = bodyObject(request);
     const result = pairing.exchange(
       requiredString(body.code, "code", 128),

@@ -24,16 +24,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 13);
+  assert.equal(first.currentVersion, 14);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -47,9 +47,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
         "WHERE type = 'table' AND name = 'system_metadata'"
       )
       .get() as { count: number };
+    const trustedInvitationTable = database
+      .prepare(
+        "SELECT count(*) AS count FROM sqlite_master " +
+        "WHERE type = 'table' AND name = 'web_member_invitations'"
+      )
+      .get() as { count: number };
 
-    assert.equal(migrationCount.count, 13);
+    assert.equal(migrationCount.count, 14);
     assert.equal(metadataTable.count, 1);
+    assert.equal(trustedInvitationTable.count, 1);
   } finally {
     database.close();
   }

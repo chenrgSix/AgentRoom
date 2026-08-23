@@ -162,6 +162,20 @@ export class AuthService {
     `).run(now, sessionId).changes === 1;
   }
 
+  public revokeWebSessionsForUser(userId: string, now: string): number {
+    return this.database.prepare(`
+      UPDATE web_sessions SET revoked_at = ?
+      WHERE user_id = ? AND revoked_at IS NULL
+    `).run(now, userId).changes;
+  }
+
+  public getWebSessionExpiresAt(sessionId: string): string | undefined {
+    return (this.database.prepare(`
+      SELECT expires_at FROM web_sessions
+      WHERE session_id = ? AND revoked_at IS NULL
+    `).get(sessionId) as { expires_at: string } | undefined)?.expires_at;
+  }
+
   public issueDeviceCredential(
     deviceId: string,
     now: string,
