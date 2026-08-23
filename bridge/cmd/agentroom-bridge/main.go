@@ -19,7 +19,9 @@ import (
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/console"
 	"agentroom.dev/bridge/internal/enrollment"
+	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
+	"agentroom.dev/bridge/internal/updatecheck"
 )
 
 var version = "dev"
@@ -125,13 +127,15 @@ func runConsole(args []string) error {
 		ConfigPath: resolvedPath,
 		DataDir:    *dataDir,
 		Workspace:  *workspace,
+		Version:    version,
 	}, console.Dependencies{
 		Enroll:         enrollment.Join,
 		SaveConfig:     config.Save,
 		ReplaceConfig:  config.Replace,
 		SaveCredential: pairing.Save,
-		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential) error {
-			return bridgecore.Run(ctx, loaded, credential, version)
+		UpdateChecker:  updatecheck.New(),
+		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential, observer operations.Observer) error {
+			return bridgecore.RunObserved(ctx, loaded, credential, version, observer)
 		},
 	})
 	if err != nil {
@@ -191,6 +195,7 @@ func join(args []string) error {
 	codex := command.String("codex", "", "path to the Codex executable")
 	sandbox := command.String("sandbox", "workspace-write", "Codex sandbox: read-only or workspace-write")
 	fingerprint := command.String("server-certificate-sha256", "", "HTTPS server certificate SHA-256 fingerprint")
+	trustMode := command.String("server-trust-mode", "", "HTTPS trust: system_ca or pinned_sha256")
 	if err := command.Parse(args); err != nil {
 		return err
 	}
@@ -255,9 +260,17 @@ func join(args []string) error {
 		}
 		resolvedDevice = hostname + " Codex Bridge"
 	}
+	resolvedTrustMode := config.TrustSystemCA
+	if strings.TrimSpace(*fingerprint) != "" {
+		resolvedTrustMode = config.TrustPinnedSHA256
+	}
+	if strings.TrimSpace(*trustMode) != "" {
+		resolvedTrustMode = config.TrustMode(strings.TrimSpace(*trustMode))
+	}
 	loaded := config.Config{
-		ServerURL: *serverURL, ServerCertificateSHA256: *fingerprint,
-		DeviceName: resolvedDevice, DataDir: resolvedDataDir,
+		ServerURL: *serverURL, ServerTrustMode: resolvedTrustMode,
+		ServerCertificateSHA256: *fingerprint,
+		DeviceName:              resolvedDevice, DataDir: resolvedDataDir,
 		Agents: []config.AgentConfig{{
 			Name: *agent, Role: *role, Adapter: "codex",
 			Command:   []string{resolvedCodex, "exec", "--json", "--sandbox", *sandbox, "-"},

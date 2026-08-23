@@ -53,6 +53,20 @@ func TestRejectsUnsafeOrAmbiguousConfig(t *testing.T) {
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	if valid.ResolvedTrustMode() != TrustPinnedSHA256 {
+		t.Fatal("legacy fingerprint-only config must infer pinned_sha256")
+	}
+	systemCA := valid
+	systemCA.ServerTrustMode = TrustSystemCA
+	systemCA.ServerCertificateSHA256 = ""
+	if err := systemCA.Validate(); err != nil {
+		t.Fatalf("system CA HTTPS config should be valid: %v", err)
+	}
+	ambiguous := systemCA
+	ambiguous.ServerCertificateSHA256 = strings.Repeat("b", 64)
+	if err := ambiguous.Validate(); err == nil {
+		t.Fatal("expected system_ca with a fingerprint to be rejected")
+	}
 	invalid := valid
 	invalid.ServerURL = "http://team.example.com"
 	if err := invalid.Validate(); err == nil {

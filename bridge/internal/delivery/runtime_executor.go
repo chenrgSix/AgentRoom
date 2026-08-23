@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"agentroom.dev/bridge/internal/operations"
 	bridgeruntime "agentroom.dev/bridge/internal/runtime"
 	contracts "agentroom.dev/contracts/generated/go"
 )
@@ -15,11 +16,27 @@ type RuntimeExecutor struct {
 	Inbox    *Inbox
 	Adapters map[string]bridgeruntime.Adapter
 	Now      func() time.Time
+	Observer operations.Observer
 }
 
 func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender) error {
+	startedAt := e.now()
+	e.Observer.Runtime(operations.RuntimeEvent{
+		At: startedAt, AgentID: record.Request.TargetAgentID, RunID: record.RunID,
+		State: operations.RuntimeWorking, ActiveDelta: 1, LastStatus: string(contracts.Working),
+	})
+	finished := operations.RuntimeEvent{
+		AgentID: record.Request.TargetAgentID, RunID: record.RunID,
+		State: operations.RuntimeError, ActiveDelta: -1,
+		LastStatus: string(contracts.OutcomeUnknown), ErrorCode: "RUNTIME_EXECUTION_UNKNOWN",
+	}
+	defer func() {
+		finished.At = e.now()
+		e.Observer.Runtime(finished)
+	}()
 	adapter := e.Adapters[record.Request.TargetAgentID]
 	if adapter == nil {
+		finished.ErrorCode = "RUNTIME_ADAPTER_MISSING"
 		return e.emitUnknown(ctx, record, send, "RUNTIME_ADAPTER_MISSING")
 	}
 	sequence := record.LastSequence
@@ -31,6 +48,20 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			now = e.Now().UTC()
 		}
 		if event.Status != nil {
+			finished.LastStatus = string(*event.Status)
+			if event.Error != nil {
+				finished.ErrorCode = event.Error.Code
+			}
+			switch *event.Status {
+			case contracts.Completed:
+				finished.State = operations.RuntimeIdle
+				finished.ErrorCode = ""
+			case contracts.Canceled:
+				finished.State = operations.RuntimeIdle
+				finished.ErrorCode = ""
+			case contracts.Failed, contracts.OutcomeUnknown:
+				finished.State = operations.RuntimeError
+			}
 			currentState = stateForStatus(*event.Status)
 			message := contracts.RunStatusMessage{
 				ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
@@ -73,6 +104,9 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		return send(eventContext, message)
 	})
 	if err != nil {
+		finished.State = operations.RuntimeError
+		finished.LastStatus = string(contracts.OutcomeUnknown)
+		finished.ErrorCode = "RUNTIME_EXECUTION_UNKNOWN"
 		latest, loadErr := e.Inbox.Get(record.RunID)
 		if loadErr != nil {
 			return loadErr
@@ -80,6 +114,13 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		return e.emitUnknown(ctx, latest, send, "RUNTIME_EXECUTION_UNKNOWN")
 	}
 	return nil
+}
+
+func (e RuntimeExecutor) now() time.Time {
+	if e.Now != nil {
+		return e.Now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 func isTerminalState(state State) bool {

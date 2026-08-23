@@ -11,10 +11,30 @@ import (
 
 type Config struct {
 	ServerURL               string        `json:"serverUrl"`
+	ServerTrustMode         TrustMode     `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string        `json:"serverCertificateSha256,omitempty"`
 	DeviceName              string        `json:"deviceName"`
 	DataDir                 string        `json:"dataDir"`
 	Agents                  []AgentConfig `json:"agents"`
+}
+
+type TrustMode string
+
+const (
+	TrustSystemCA     TrustMode = "system_ca"
+	TrustPinnedSHA256 TrustMode = "pinned_sha256"
+)
+
+// ResolvedTrustMode keeps existing fingerprint-only configurations working
+// while making system CA validation the default for new public HTTPS servers.
+func (c Config) ResolvedTrustMode() TrustMode {
+	if c.ServerTrustMode != "" {
+		return c.ServerTrustMode
+	}
+	if strings.TrimSpace(c.ServerCertificateSHA256) != "" {
+		return TrustPinnedSHA256
+	}
+	return TrustSystemCA
 }
 
 type AgentConfig struct {
@@ -139,7 +159,19 @@ func (c Config) Validate() error {
 	if parsed.Scheme != "https" && !(parsed.Scheme == "http" && isLoopback(parsed.Hostname())) {
 		return fmt.Errorf("serverUrl must use HTTPS except on loopback")
 	}
-	if parsed.Scheme == "https" {
+	trustMode := c.ResolvedTrustMode()
+	if trustMode != TrustSystemCA && trustMode != TrustPinnedSHA256 {
+		return fmt.Errorf("serverTrustMode must be system_ca or pinned_sha256")
+	}
+	if parsed.Scheme != "https" {
+		if c.ServerTrustMode == TrustPinnedSHA256 || strings.TrimSpace(c.ServerCertificateSHA256) != "" {
+			return fmt.Errorf("certificate pinning requires HTTPS")
+		}
+	} else if trustMode == TrustSystemCA {
+		if strings.TrimSpace(c.ServerCertificateSHA256) != "" {
+			return fmt.Errorf("system_ca cannot be combined with serverCertificateSha256")
+		}
+	} else {
 		fingerprint := strings.ToLower(strings.ReplaceAll(c.ServerCertificateSHA256, ":", ""))
 		if len(fingerprint) != 64 {
 			return fmt.Errorf("serverCertificateSha256 must contain a SHA-256 fingerprint")

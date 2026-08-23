@@ -17,6 +17,7 @@ import (
 
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/identity"
+	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
 	contracts "agentroom.dev/contracts/generated/go"
 	"github.com/coder/websocket"
@@ -29,42 +30,82 @@ type Client struct {
 	HeartbeatInterval time.Duration
 	HandleRun         func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
 	RecoverRuns       func(context.Context, func(context.Context, any) error) error
+	Observer          operations.Observer
+	RetryInitial      time.Duration
+	RetryMaximum      time.Duration
 }
 
 func (c Client) Run(ctx context.Context) error {
-	backoff := 500 * time.Millisecond
+	initial, maximum := c.retryBounds()
+	backoff := initial
+	attempt := 0
 	for {
-		err := c.connectOnce(ctx)
+		attempt++
+		c.Observer.Connection(operations.ConnectionEvent{
+			At: time.Now().UTC(), State: operations.ConnectionConnecting, Attempt: attempt,
+		})
+		connected, err := c.connectOnce(ctx)
 		if ctx.Err() != nil {
+			c.Observer.Connection(operations.ConnectionEvent{
+				At: time.Now().UTC(), State: operations.ConnectionStopped,
+			})
 			return nil
 		}
+		if connected {
+			backoff = initial
+			attempt = 0
+		}
+		nextRetryAt := time.Now().UTC().Add(backoff)
+		errorMessage := ""
+		if err != nil {
+			errorMessage = err.Error()
+		}
+		c.Observer.Connection(operations.ConnectionEvent{
+			At: time.Now().UTC(), State: operations.ConnectionRetrying, Attempt: attempt,
+			NextRetryAt: &nextRetryAt, Error: errorMessage, ConnectedOnce: connected,
+		})
 		timer := time.NewTimer(backoff)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
+			c.Observer.Connection(operations.ConnectionEvent{
+				At: time.Now().UTC(), State: operations.ConnectionStopped,
+			})
 			return nil
 		case <-timer.C:
 		}
-		if backoff < 30*time.Second {
+		if !connected && backoff < maximum {
 			backoff *= 2
-			if backoff > 30*time.Second {
-				backoff = 30 * time.Second
+			if backoff > maximum {
+				backoff = maximum
 			}
-		}
-		if err == nil {
-			backoff = 500 * time.Millisecond
 		}
 	}
 }
 
-func (c Client) connectOnce(ctx context.Context) error {
+func (c Client) retryBounds() (time.Duration, time.Duration) {
+	initial := c.RetryInitial
+	if initial <= 0 {
+		initial = 500 * time.Millisecond
+	}
+	maximum := c.RetryMaximum
+	if maximum <= 0 {
+		maximum = 30 * time.Second
+	}
+	if maximum < initial {
+		maximum = initial
+	}
+	return initial, maximum
+}
+
+func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	epoch, err := nextEpoch(c.Config.DataDir)
 	if err != nil {
-		return err
+		return false, err
 	}
 	endpoint, err := websocketURL(c.Config.ServerURL)
 	if err != nil {
-		return err
+		return false, err
 	}
 	header := make(http.Header)
 	header.Set("authorization", "Bearer "+c.Credential.Token)
@@ -74,9 +115,9 @@ func (c Client) connectOnce(ctx context.Context) error {
 	})
 	if err != nil {
 		if response != nil {
-			return fmt.Errorf("bridge WebSocket rejected with status %d: %w", response.StatusCode, err)
+			return false, fmt.Errorf("bridge WebSocket rejected with status %d: %w", response.StatusCode, err)
 		}
-		return fmt.Errorf("bridge WebSocket dial: %w", err)
+		return false, fmt.Errorf("bridge WebSocket dial: %w", err)
 	}
 	defer socket.CloseNow()
 	connectionContext, cancelConnection := context.WithCancel(ctx)
@@ -95,11 +136,11 @@ func (c Client) connectOnce(ctx context.Context) error {
 		},
 	}
 	if err := writer.writeJSON(ctx, hello); err != nil {
-		return err
+		return false, err
 	}
 	identities, err := identity.LoadOrCreate(c.Config.DataDir, c.Config.Agents)
 	if err != nil {
-		return err
+		return false, err
 	}
 	for _, configured := range c.Config.Agents {
 		capabilities := contracts.Capabilities{
@@ -126,16 +167,19 @@ func (c Client) connectOnce(ctx context.Context) error {
 			},
 		}
 		if err := writer.writeJSON(ctx, publication); err != nil {
-			return err
+			return false, err
 		}
 	}
 	if c.RecoverRuns != nil {
 		if err := c.RecoverRuns(ctx, func(sendContext context.Context, value any) error {
 			return writer.writeJSON(sendContext, value)
 		}); err != nil {
-			return err
+			return false, err
 		}
 	}
+	c.Observer.Connection(operations.ConnectionEvent{
+		At: time.Now().UTC(), State: operations.ConnectionOnline,
+	})
 
 	readError := make(chan error, 1)
 	type activeRun struct {
@@ -221,9 +265,9 @@ func (c Client) connectOnce(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return socket.Close(websocket.StatusNormalClosure, "Bridge stopped")
+			return true, socket.Close(websocket.StatusNormalClosure, "Bridge stopped")
 		case err := <-readError:
-			return err
+			return true, err
 		case now := <-ticker.C:
 			heartbeat := contracts.BridgeHeartbeatMessage{
 				ProtocolVersion: "1.0",
@@ -236,7 +280,7 @@ func (c Client) connectOnce(ctx context.Context) error {
 				},
 			}
 			if err := writer.writeJSON(ctx, heartbeat); err != nil {
-				return err
+				return true, err
 			}
 		}
 	}

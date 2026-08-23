@@ -26,7 +26,8 @@
     <section class="status-grid" aria-label="Bridge 状态">
       <article><span>本地配置</span><strong id="configured">未创建</strong></article>
       <article><span>Team 配对</span><strong id="paired">未配对</strong></article>
-      <article><span>Bridge</span><strong id="running">未运行</strong></article>
+      <article><span>Bridge 进程</span><strong id="running">未运行</strong></article>
+      <article><span>中央连接</span><strong id="connection-state">已停止</strong></article>
       <article><span>本地智能体</span><strong id="agent-count">0 个</strong></article>
     </section>
 
@@ -55,7 +56,10 @@
         <div><dt>Team</dt><dd id="current-team">—</dd></div>
         <div><dt>Device</dt><dd id="current-device">—</dd></div>
         <div><dt>配置文件</dt><dd id="config-path">—</dd></div>
+        <div><dt>连接详情</dt><dd id="connection-detail">—</dd></div>
+        <div><dt>最后连接</dt><dd id="last-connected">—</dd></div>
       </dl>
+      <p class="inline-error hidden" id="connection-error"></p>
       <div class="agent-list" id="agent-list"></div>
     </section>
 
@@ -69,6 +73,12 @@
           <label>服务地址<input id="server-url" required value="http://127.0.0.1:3000"></label>
           <label>设备名称<input id="device-name" maxlength="80" required></label>
         </div>
+        <label>HTTPS 信任方式
+          <select id="trust-mode">
+            <option value="system_ca">系统 CA（推荐，适合公开证书）</option>
+            <option value="pinned_sha256">固定叶证书 SHA-256（高级）</option>
+          </select>
+        </label>
         <label id="fingerprint-field" class="hidden">HTTPS 证书 SHA-256 指纹
           <input id="fingerprint" autocomplete="off" placeholder="64 位十六进制指纹">
         </label>
@@ -113,6 +123,33 @@
         </div>
       </section>
     </form>
+
+    <section class="panel client-tools">
+      <div class="section-heading">
+        <div><p class="eyebrow">CLIENT SETTINGS</p><h2>客户端维护</h2></div>
+        <p>更新检查仅在你点击时访问 GitHub，不会下载、替换或自动安装。</p>
+      </div>
+      <dl class="details compact">
+        <div><dt>Bridge 版本</dt><dd id="bridge-version">dev</dd></div>
+        <div><dt>更新策略</dt><dd>仅手动检查</dd></div>
+      </dl>
+      <label class="setting-toggle hidden" id="login-startup-row">
+        <input id="login-startup" type="checkbox">
+        <span><strong>登录后自动启动</strong><small>macOS 用户级 LaunchAgent，只启动托盘和已配对 Bridge。</small></span>
+      </label>
+      <p class="inline-error hidden" id="login-startup-warning"></p>
+      <div class="maintenance-actions">
+        <div>
+          <button class="secondary" id="export-diagnostics" type="button">导出脱敏诊断包</button>
+          <p class="tool-result" id="diagnostics-result">不包含凭据、消息、原始 ID 或本机路径。</p>
+        </div>
+        <div>
+          <button class="secondary" id="check-update" type="button">检查更新</button>
+          <p class="tool-result" id="update-result">尚未检查</p>
+          <a class="release-link hidden" id="release-link" target="_blank" rel="noopener noreferrer">打开 GitHub Release 页面</a>
+        </div>
+      </div>
+    </section>
   </main>
   <script src="/app.js" defer></script>
 </body>

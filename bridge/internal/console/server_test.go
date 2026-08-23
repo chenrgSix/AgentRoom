@@ -1,6 +1,7 @@
 package console
 
 import (
+	"archive/zip"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -13,10 +14,39 @@ import (
 	"testing"
 	"time"
 
+	"agentroom.dev/bridge/internal/autostart"
 	"agentroom.dev/bridge/internal/config"
+	"agentroom.dev/bridge/internal/diagnostics"
 	"agentroom.dev/bridge/internal/enrollment"
+	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
+	"agentroom.dev/bridge/internal/updatecheck"
 )
+
+type fakeLoginStartup struct {
+	state autostart.State
+	calls int
+}
+
+func (f *fakeLoginStartup) State() (autostart.State, error) { return f.state, nil }
+
+func (f *fakeLoginStartup) SetEnabled(_ context.Context, enabled bool) (autostart.State, error) {
+	f.calls++
+	f.state = autostart.State{Supported: true, Enabled: enabled, PlistPath: "/safe/LaunchAgent.plist"}
+	return f.state, nil
+}
+
+type countingUpdateChecker struct {
+	calls int
+}
+
+func (c *countingUpdateChecker) Check(_ context.Context, current string) (updatecheck.Result, error) {
+	c.calls++
+	return updatecheck.Result{
+		CurrentVersion: current, LatestVersion: "v0.3.0", CurrentComparable: true,
+		UpdateAvailable: true, ReleaseURL: "https://github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0",
+	}, nil
+}
 
 func newTestService(
 	t *testing.T,
@@ -45,7 +75,7 @@ func inertDependencies() Dependencies {
 		SaveConfig:     config.Save,
 		ReplaceConfig:  config.Replace,
 		SaveCredential: pairing.Save,
-		RunBridge: func(ctx context.Context, _ config.Config, _ pairing.Credential) error {
+		RunBridge: func(ctx context.Context, _ config.Config, _ pairing.Credential, _ operations.Observer) error {
 			<-ctx.Done()
 			return ctx.Err()
 		},
@@ -98,6 +128,28 @@ func TestConsoleServesEmbeddedUIAndRequiresBearerTokenForAPI(t *testing.T) {
 	}
 }
 
+func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
+	html, err := staticFiles.ReadFile("static/index.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{
+		`id="connection-state"`, `id="trust-mode"`, `id="login-startup"`,
+		`id="export-diagnostics"`, `id="check-update"`, `id="bridge-version"`,
+	} {
+		if !bytes.Contains(html, []byte(id)) {
+			t.Fatalf("embedded UI omitted %s", id)
+		}
+	}
+	javascript, err := staticFiles.ReadFile("static/app.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Count(javascript, []byte(`request("/api/update/check"`)) != 1 {
+		t.Fatal("update check must exist only in the explicit click handler")
+	}
+}
+
 func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) {
 	approved := make(chan struct{})
 	bridgeStarted := make(chan struct{}, 1)
@@ -125,7 +177,7 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		SaveConfig:     config.Save,
 		ReplaceConfig:  config.Replace,
 		SaveCredential: pairing.Save,
-		RunBridge: func(ctx context.Context, _ config.Config, _ pairing.Credential) error {
+		RunBridge: func(ctx context.Context, _ config.Config, _ pairing.Credential, _ operations.Observer) error {
 			bridgeStarted <- struct{}{}
 			<-ctx.Done()
 			bridgeStopped <- struct{}{}
@@ -135,8 +187,8 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	service, directory, configPath := newTestService(t, dependencies)
 	server := httptest.NewServer(service.Handler())
 	defer server.Close()
-	executablePath, err := os.Executable()
-	if err != nil {
+	executablePath := filepath.Join(directory, "runtime")
+	if err := os.WriteFile(executablePath, []byte("test runtime"), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	payload := EnrollmentInput{
@@ -290,7 +342,7 @@ func TestLifecycleMethodsShareStartStopStateWithDesktopShell(t *testing.T) {
 	started := make(chan struct{}, 2)
 	stopped := make(chan struct{}, 2)
 	dependencies := inertDependencies()
-	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential) error {
+	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential, _ operations.Observer) error {
 		started <- struct{}{}
 		<-ctx.Done()
 		stopped <- struct{}{}
@@ -331,6 +383,201 @@ func TestLifecycleMethodsShareStartStopStateWithDesktopShell(t *testing.T) {
 	case <-stopped:
 	case <-time.After(time.Second):
 		t.Fatal("desktop lifecycle did not cancel Bridge")
+	}
+}
+
+func TestOperationalObserverProjectsConnectionRuntimeAndFencesOldEpoch(t *testing.T) {
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	executablePath := filepath.Join(directory, "runtime")
+	if err := os.WriteFile(executablePath, []byte("test runtime"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	loaded := config.Config{
+		ServerURL: "http://127.0.0.1:3000", DeviceName: "Projection Bridge", DataDir: dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "Projected Agent", Role: "Test", Adapter: "generic",
+			Command: []string{executablePath}, Workspace: directory,
+		}},
+	}
+	if err := config.Save(configPath, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if err := pairing.Save(dataDir, pairing.Credential{
+		ServerURL: loaded.ServerURL, DeviceID: "device_projection", TeamID: "team_projection",
+		OwnerMemberID: "member_projection", Token: "secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	observers := make(chan operations.Observer, 2)
+	dependencies := inertDependencies()
+	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential, observer operations.Observer) error {
+		observers <- observer
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	service, err := New(Options{ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Version: "v0.2.0"}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+	if _, err := service.StartBridge(); err != nil {
+		t.Fatal(err)
+	}
+	first := <-observers
+	now := time.Date(2026, 8, 23, 12, 0, 0, 0, time.UTC)
+	first.Connection(operations.ConnectionEvent{At: now, State: operations.ConnectionOnline})
+	first.Runtime(operations.RuntimeEvent{
+		At: now, AgentName: "Projected Agent", AgentID: "agent_private_id", RunID: "run_private_id",
+		State: operations.RuntimeWorking, ActiveDelta: 1, LastStatus: "working",
+	})
+	state := service.State()
+	if state.Connection.State != operations.ConnectionOnline || state.Version != "v0.2.0" ||
+		len(state.Agents) != 1 || state.Agents[0].RuntimeState != "working" || state.Agents[0].ActiveRuns != 1 {
+		t.Fatalf("unexpected operational projection: %#v", state)
+	}
+	first.Runtime(operations.RuntimeEvent{
+		At: now.Add(time.Second), AgentName: "Projected Agent",
+		State: operations.RuntimeIdle, ActiveDelta: -1, LastStatus: "completed",
+	})
+	if err := os.Remove(executablePath); err != nil {
+		t.Fatal(err)
+	}
+	if state = service.State(); state.Agents[0].ExecutableReady || state.Agents[0].RuntimeState != "unavailable" {
+		t.Fatalf("moved Runtime executable was not detected: %#v", state.Agents[0])
+	}
+	service.StopBridge()
+	if _, err := service.StartBridge(); err != nil {
+		t.Fatal(err)
+	}
+	second := <-observers
+	first.Connection(operations.ConnectionEvent{At: now.Add(time.Second), State: operations.ConnectionOnline})
+	if state = service.State(); state.Connection.State == operations.ConnectionOnline {
+		t.Fatal("old Bridge epoch changed the new lifecycle projection")
+	}
+	second.Connection(operations.ConnectionEvent{At: now.Add(2 * time.Second), State: operations.ConnectionOnline})
+	if state = service.State(); state.Connection.State != operations.ConnectionOnline {
+		t.Fatalf("current Bridge observer was ignored: %#v", state.Connection)
+	}
+}
+
+func TestLoginStartupDiagnosticsAndUpdateAreExplicitAuthenticatedActions(t *testing.T) {
+	startup := &fakeLoginStartup{state: autostart.State{Supported: true}}
+	checker := &countingUpdateChecker{}
+	diagnosticsDirectory := t.TempDir()
+	directory := t.TempDir()
+	dependencies := inertDependencies()
+	dependencies.LoginStartup = startup
+	dependencies.UpdateChecker = checker
+	service, err := New(Options{
+		ConfigPath: filepath.Join(directory, "bridge.json"), DataDir: filepath.Join(directory, "data"),
+		Workspace: directory, Token: "settings-token", Version: "v0.2.0",
+		DiagnosticsDir: diagnosticsDirectory,
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	stateResponse := consoleRequest(t, server.URL, service.Token(), http.MethodGet, "/api/state", nil)
+	stateResponse.Body.Close()
+	if checker.calls != 0 {
+		t.Fatal("state polling must not perform an update check")
+	}
+	loginResponse := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/login-startup", map[string]bool{"enabled": true})
+	loginResponse.Body.Close()
+	if loginResponse.StatusCode != http.StatusOK || startup.calls != 1 || !service.State().LoginStartup.Enabled {
+		t.Fatalf("login startup action did not converge: status=%d calls=%d state=%#v", loginResponse.StatusCode, startup.calls, service.State().LoginStartup)
+	}
+	updateResponse := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/update/check", nil)
+	updateResponse.Body.Close()
+	if updateResponse.StatusCode != http.StatusOK || checker.calls != 1 {
+		t.Fatalf("manual update check was not exactly once: status=%d calls=%d", updateResponse.StatusCode, checker.calls)
+	}
+
+	service.mu.Lock()
+	service.state.Connection.LastError = "Bearer abcdefghijklmnop /Users/alice/private token=very-secret-value"
+	service.state.TeamID = "team_private_identifier"
+	service.state.DeviceID = "device_private_identifier"
+	service.events = append(service.events, diagnostics.Event{
+		At: time.Now().UTC().Format(time.RFC3339Nano), Type: "connection.retrying",
+		Message: "sk-1234567890abcdefghijkl /Users/alice/private prompt-sensitive reply-sensitive",
+	})
+	service.mu.Unlock()
+	diagnosticsResponse := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/diagnostics/export", nil)
+	var exported diagnostics.Result
+	if err := json.NewDecoder(diagnosticsResponse.Body).Decode(&exported); err != nil {
+		t.Fatal(err)
+	}
+	diagnosticsResponse.Body.Close()
+	if diagnosticsResponse.StatusCode != http.StatusCreated {
+		t.Fatalf("unexpected diagnostics status %d", diagnosticsResponse.StatusCode)
+	}
+	if exported.Path != "" {
+		t.Fatalf("diagnostics API exposed an absolute export path: %#v", exported)
+	}
+	archive, err := zip.OpenReader(filepath.Join(diagnosticsDirectory, exported.Filename))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer archive.Close()
+	var extracted strings.Builder
+	for _, entry := range archive.File {
+		reader, err := entry.Open()
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(&extracted, reader)
+		reader.Close()
+	}
+	for _, forbidden := range []string{"abcdefghijklmnop", "very-secret-value", "sk-", "/Users/alice", "team_private_identifier", "device_private_identifier", "prompt-sensitive", "reply-sensitive"} {
+		if strings.Contains(extracted.String(), forbidden) {
+			t.Fatalf("diagnostics exposed %q: %s", forbidden, extracted.String())
+		}
+	}
+
+	unauthorized, err := http.Post(server.URL+"/api/update/check", "application/json", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	unauthorized.Body.Close()
+	if unauthorized.StatusCode != http.StatusUnauthorized || checker.calls != 1 {
+		t.Fatal("unauthorized update check reached the checker")
+	}
+}
+
+func TestBuildConfigSupportsSystemCAAndLegacyFingerprintInference(t *testing.T) {
+	directory := t.TempDir()
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	base := EnrollmentInput{
+		ServerURL: "https://team.example.com", ServerTrustMode: config.TrustSystemCA,
+		DeviceName: "TLS Bridge",
+		Runtimes: []RuntimeInput{{
+			Kind: "codex", Enabled: true, Name: "Codex", Role: "Builder",
+			ExecutablePath: executablePath, Workspace: directory,
+		}},
+	}
+	systemCA, err := buildConfig(base, filepath.Join(directory, "data"))
+	if err != nil || systemCA.ResolvedTrustMode() != config.TrustSystemCA {
+		t.Fatalf("system CA config failed: %#v, %v", systemCA, err)
+	}
+	legacy := base
+	legacy.ServerTrustMode = ""
+	legacy.ServerCertificateSHA256 = strings.Repeat("a", 64)
+	pinned, err := buildConfig(legacy, filepath.Join(directory, "legacy-data"))
+	if err != nil || pinned.ResolvedTrustMode() != config.TrustPinnedSHA256 {
+		t.Fatalf("legacy pin inference failed: %#v, %v", pinned, err)
+	}
+	ambiguous := base
+	ambiguous.ServerCertificateSHA256 = strings.Repeat("b", 64)
+	if _, err := buildConfig(ambiguous, filepath.Join(directory, "ambiguous-data")); err == nil {
+		t.Fatal("system CA with a fingerprint must be rejected")
 	}
 }
 

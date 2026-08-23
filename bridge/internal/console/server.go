@@ -22,9 +22,13 @@ import (
 	"sync"
 	"time"
 
+	"agentroom.dev/bridge/internal/autostart"
 	"agentroom.dev/bridge/internal/config"
+	"agentroom.dev/bridge/internal/diagnostics"
 	"agentroom.dev/bridge/internal/enrollment"
+	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
+	"agentroom.dev/bridge/internal/updatecheck"
 )
 
 //go:embed static/*
@@ -53,10 +57,11 @@ type RuntimeInput struct {
 }
 
 type EnrollmentInput struct {
-	ServerURL               string         `json:"serverUrl"`
-	ServerCertificateSHA256 string         `json:"serverCertificateSha256,omitempty"`
-	DeviceName              string         `json:"deviceName"`
-	Runtimes                []RuntimeInput `json:"runtimes"`
+	ServerURL               string           `json:"serverUrl"`
+	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
+	ServerCertificateSHA256 string           `json:"serverCertificateSha256,omitempty"`
+	DeviceName              string           `json:"deviceName"`
+	Runtimes                []RuntimeInput   `json:"runtimes"`
 }
 
 type AgentView struct {
@@ -67,26 +72,45 @@ type AgentView struct {
 	Workspace                string `json:"workspace"`
 	Sandbox                  string `json:"sandbox,omitempty"`
 	CredentialEnvironmentVar string `json:"credentialEnvironmentVariable,omitempty"`
+	ExecutableReady          bool   `json:"executableReady"`
+	RuntimeState             string `json:"runtimeState"`
+	ActiveRuns               int    `json:"activeRuns"`
+	LastRunStatus            string `json:"lastRunStatus,omitempty"`
+	LastRuntimeError         string `json:"lastRuntimeError,omitempty"`
+	LastRunAt                string `json:"lastRunAt,omitempty"`
+}
+
+type ConnectionView struct {
+	State              operations.ConnectionState `json:"state"`
+	Attempt            int                        `json:"attempt"`
+	NextRetryAt        string                     `json:"nextRetryAt,omitempty"`
+	LastConnectedAt    string                     `json:"lastConnectedAt,omitempty"`
+	LastDisconnectedAt string                     `json:"lastDisconnectedAt,omitempty"`
+	LastError          string                     `json:"lastError,omitempty"`
 }
 
 type State struct {
-	Phase                   Phase       `json:"phase"`
-	Configured              bool        `json:"configured"`
-	Paired                  bool        `json:"paired"`
-	BridgeRunning           bool        `json:"bridgeRunning"`
-	ConfigPath              string      `json:"configPath"`
-	Workspace               string      `json:"workspace"`
-	ServerURL               string      `json:"serverUrl,omitempty"`
-	ServerCertificateSHA256 string      `json:"serverCertificateSha256,omitempty"`
-	DeviceName              string      `json:"deviceName,omitempty"`
-	TeamID                  string      `json:"teamId,omitempty"`
-	DeviceID                string      `json:"deviceId,omitempty"`
-	JoinCode                string      `json:"joinCode,omitempty"`
-	JoinExpiresAt           string      `json:"joinExpiresAt,omitempty"`
-	LastError               string      `json:"lastError,omitempty"`
-	Agents                  []AgentView `json:"agents"`
-	DetectedCodex           string      `json:"detectedCodex,omitempty"`
-	DetectedPi              string      `json:"detectedPi,omitempty"`
+	Phase                   Phase            `json:"phase"`
+	Configured              bool             `json:"configured"`
+	Paired                  bool             `json:"paired"`
+	BridgeRunning           bool             `json:"bridgeRunning"`
+	Version                 string           `json:"version"`
+	ConfigPath              string           `json:"configPath"`
+	Workspace               string           `json:"workspace"`
+	ServerURL               string           `json:"serverUrl,omitempty"`
+	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
+	ServerCertificateSHA256 string           `json:"serverCertificateSha256,omitempty"`
+	DeviceName              string           `json:"deviceName,omitempty"`
+	TeamID                  string           `json:"teamId,omitempty"`
+	DeviceID                string           `json:"deviceId,omitempty"`
+	JoinCode                string           `json:"joinCode,omitempty"`
+	JoinExpiresAt           string           `json:"joinExpiresAt,omitempty"`
+	LastError               string           `json:"lastError,omitempty"`
+	Agents                  []AgentView      `json:"agents"`
+	DetectedCodex           string           `json:"detectedCodex,omitempty"`
+	DetectedPi              string           `json:"detectedPi,omitempty"`
+	Connection              ConnectionView   `json:"connection"`
+	LoginStartup            autostart.State  `json:"loginStartup"`
 }
 
 type Dependencies struct {
@@ -94,14 +118,18 @@ type Dependencies struct {
 	SaveConfig     func(string, config.Config) error
 	ReplaceConfig  func(string, config.Config) error
 	SaveCredential func(string, pairing.Credential) error
-	RunBridge      func(context.Context, config.Config, pairing.Credential) error
+	RunBridge      func(context.Context, config.Config, pairing.Credential, operations.Observer) error
+	LoginStartup   autostart.Controller
+	UpdateChecker  updatecheck.Service
 }
 
 type Options struct {
-	ConfigPath string
-	DataDir    string
-	Workspace  string
-	Token      string
+	ConfigPath     string
+	DataDir        string
+	Workspace      string
+	Token          string
+	Version        string
+	DiagnosticsDir string
 }
 
 type Service struct {
@@ -116,6 +144,7 @@ type Service struct {
 	joinCancel    context.CancelFunc
 	bridgeCancel  context.CancelFunc
 	bridgeEpoch   uint64
+	events        []diagnostics.Event
 }
 
 var environmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,79}$`)
@@ -146,6 +175,10 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("resolve Console workspace: %w", err)
 	}
+	bridgeVersion := strings.TrimSpace(options.Version)
+	if bridgeVersion == "" {
+		bridgeVersion = "dev"
+	}
 	token := options.Token
 	if token == "" {
 		token, err = randomToken()
@@ -155,10 +188,12 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 	}
 	service := &Service{
 		options: Options{
-			ConfigPath: resolvedConfig,
-			DataDir:    resolvedData,
-			Workspace:  workspace,
-			Token:      token,
+			ConfigPath:     resolvedConfig,
+			DataDir:        resolvedData,
+			Workspace:      workspace,
+			Token:          token,
+			Version:        bridgeVersion,
+			DiagnosticsDir: options.DiagnosticsDir,
 		},
 		dependencies: dependencies,
 		token:        token,
@@ -167,9 +202,11 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 			Phase:         PhaseUnconfigured,
 			ConfigPath:    resolvedConfig,
 			Workspace:     workspace,
+			Version:       bridgeVersion,
 			Agents:        []AgentView{},
 			DetectedCodex: discover("codex"),
 			DetectedPi:    discover("pi"),
+			Connection:    ConnectionView{State: operations.ConnectionStopped},
 		},
 	}
 	if loaded, loadErr := config.Load(resolvedConfig); loadErr == nil {
@@ -186,6 +223,14 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 	} else if !errors.Is(rootError(loadErr), os.ErrNotExist) {
 		return nil, loadErr
 	}
+	if dependencies.LoginStartup != nil {
+		startupState, startupErr := dependencies.LoginStartup.State()
+		if startupErr != nil {
+			service.state.LastError = publicError(startupErr)
+		} else {
+			service.state.LoginStartup = startupState
+		}
+	}
 	return service, nil
 }
 
@@ -194,7 +239,19 @@ func (s *Service) Token() string { return s.token }
 func (s *Service) State() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return cloneState(s.state)
+	snapshot := cloneState(s.state)
+	for index := range snapshot.Agents {
+		agent := &snapshot.Agents[index]
+		agent.ExecutableReady = executableAvailable(agent.ExecutablePath)
+		if agent.ActiveRuns == 0 {
+			if !agent.ExecutableReady {
+				agent.RuntimeState = "unavailable"
+			} else if agent.RuntimeState == "unavailable" {
+				agent.RuntimeState = string(operations.RuntimeIdle)
+			}
+		}
+	}
+	return snapshot
 }
 
 func (s *Service) Handler() http.Handler {
@@ -209,8 +266,64 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("PUT /api/config", s.authorize(s.updateConfig))
 	mux.HandleFunc("POST /api/bridge/start", s.authorize(s.startBridge))
 	mux.HandleFunc("POST /api/bridge/stop", s.authorize(s.stopBridge))
+	mux.HandleFunc("PUT /api/login-startup", s.authorize(s.updateLoginStartup))
+	mux.HandleFunc("POST /api/diagnostics/export", s.authorize(s.exportDiagnostics))
+	mux.HandleFunc("POST /api/update/check", s.authorize(s.checkUpdate))
 	mux.Handle("/", securityHeaders(http.FileServer(http.FS(staticRoot))))
 	return mux
+}
+
+func (s *Service) updateLoginStartup(response http.ResponseWriter, request *http.Request) {
+	if s.dependencies.LoginStartup == nil {
+		writeError(response, http.StatusNotImplemented, "Login startup is not supported by this client")
+		return
+	}
+	var input struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	state, err := s.dependencies.LoginStartup.SetEnabled(request.Context(), input.Enabled)
+	if err != nil {
+		writeError(response, http.StatusConflict, publicError(err))
+		return
+	}
+	s.mu.Lock()
+	s.state.LoginStartup = state
+	s.recordEventLocked("login_startup.changed", fmt.Sprintf("enabled=%t", state.Enabled), "")
+	s.mu.Unlock()
+	writeJSON(response, http.StatusOK, state)
+}
+
+func (s *Service) exportDiagnostics(response http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	input := s.diagnosticInputLocked()
+	directory := s.options.DiagnosticsDir
+	s.mu.Unlock()
+	result, err := diagnostics.Export(directory, input)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, diagnostics.Sanitize(err.Error()))
+		return
+	}
+	writeJSON(response, http.StatusCreated, result)
+}
+
+func (s *Service) checkUpdate(response http.ResponseWriter, request *http.Request) {
+	if s.dependencies.UpdateChecker == nil {
+		writeError(response, http.StatusNotImplemented, "Update checking is not available")
+		return
+	}
+	s.mu.Lock()
+	currentVersion := s.state.Version
+	s.mu.Unlock()
+	result, err := s.dependencies.UpdateChecker.Check(request.Context(), currentVersion)
+	if err != nil {
+		writeError(response, http.StatusBadGateway, diagnostics.Sanitize(err.Error()))
+		return
+	}
+	writeJSON(response, http.StatusOK, result)
 }
 
 func (s *Service) StartConfiguredBridge() error {
@@ -244,6 +357,8 @@ func (s *Service) StopBridge() State {
 	s.bridgeEpoch++
 	s.bridgeCancel = nil
 	s.state.BridgeRunning = false
+	s.state.Connection = ConnectionView{State: operations.ConnectionStopped}
+	s.recordEventLocked("bridge.stopped", "", string(operations.ConnectionStopped))
 	s.state.Phase = phaseFor(s.state.Configured, false)
 	return cloneState(s.state)
 }
@@ -421,10 +536,12 @@ func (s *Service) startBridgeLocked() error {
 	s.state.BridgeRunning = true
 	s.state.Phase = PhaseRunning
 	s.state.LastError = ""
+	s.state.Connection = ConnectionView{State: operations.ConnectionConnecting, Attempt: 1}
+	s.recordEventLocked("bridge.started", "", string(operations.ConnectionConnecting))
 	configuration := *s.configuration
 	credential := *s.credential
 	go func() {
-		err := s.dependencies.RunBridge(ctx, configuration, credential)
+		err := s.dependencies.RunBridge(ctx, configuration, credential, s.operationalObserver(epoch))
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		if s.bridgeEpoch != epoch {
@@ -432,6 +549,7 @@ func (s *Service) startBridgeLocked() error {
 		}
 		s.bridgeCancel = nil
 		s.state.BridgeRunning = false
+		s.state.Connection.State = operations.ConnectionStopped
 		if err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
 			s.state.Phase = PhaseError
 			s.state.LastError = publicError(err)
@@ -491,6 +609,7 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 	configuration := config.Config{
 		ServerURL:               strings.TrimSpace(input.ServerURL),
+		ServerTrustMode:         input.ServerTrustMode,
 		ServerCertificateSHA256: strings.TrimSpace(input.ServerCertificateSHA256),
 		DeviceName:              strings.TrimSpace(input.DeviceName),
 		DataDir:                 dataDir,
@@ -552,6 +671,7 @@ func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 
 func (s *Service) applyConfigView(configuration config.Config) {
 	s.state.ServerURL = configuration.ServerURL
+	s.state.ServerTrustMode = configuration.ResolvedTrustMode()
 	s.state.ServerCertificateSHA256 = configuration.ServerCertificateSHA256
 	s.state.DeviceName = configuration.DeviceName
 	s.state.Agents = make([]AgentView, 0, len(configuration.Agents))
@@ -582,11 +702,127 @@ func (s *Service) applyConfigView(configuration config.Config) {
 				}
 			}
 		}
+		executableReady := executableAvailable(executablePath)
+		runtimeState := "unavailable"
+		if executableReady {
+			runtimeState = string(operations.RuntimeIdle)
+		}
 		s.state.Agents = append(s.state.Agents, AgentView{
 			Kind: kind, Name: agent.Name, Role: agent.Role,
 			ExecutablePath: executablePath, Workspace: agent.Workspace,
 			Sandbox: sandbox, CredentialEnvironmentVar: credentialEnvironmentVar,
+			ExecutableReady: executableReady, RuntimeState: runtimeState,
 		})
+	}
+}
+
+func (s *Service) operationalObserver(epoch uint64) operations.Observer {
+	return operations.Observer{
+		OnConnection: func(event operations.ConnectionEvent) {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if s.bridgeEpoch != epoch {
+				return
+			}
+			s.state.Connection.State = event.State
+			s.state.Connection.Attempt = event.Attempt
+			s.state.Connection.NextRetryAt = formatTime(event.NextRetryAt)
+			s.state.Connection.LastError = redactOperationalText(event.Error)
+			s.recordEventLocked("connection."+string(event.State), event.Error, string(event.State))
+			switch event.State {
+			case operations.ConnectionOnline:
+				s.state.Connection.LastConnectedAt = event.At.Format(time.RFC3339Nano)
+				s.state.Connection.LastError = ""
+			case operations.ConnectionRetrying:
+				s.state.Connection.LastDisconnectedAt = event.At.Format(time.RFC3339Nano)
+			}
+		},
+		OnRuntime: func(event operations.RuntimeEvent) {
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if s.bridgeEpoch != epoch {
+				return
+			}
+			for index := range s.state.Agents {
+				agent := &s.state.Agents[index]
+				if agent.Name != event.AgentName {
+					continue
+				}
+				agent.ActiveRuns += event.ActiveDelta
+				if agent.ActiveRuns < 0 {
+					agent.ActiveRuns = 0
+				}
+				if agent.ActiveRuns > 0 {
+					agent.RuntimeState = string(operations.RuntimeWorking)
+				} else {
+					agent.RuntimeState = string(event.State)
+				}
+				agent.LastRunStatus = event.LastStatus
+				agent.LastRuntimeError = event.ErrorCode
+				agent.LastRunAt = event.At.Format(time.RFC3339Nano)
+				s.recordEventLocked("runtime."+string(event.State), event.ErrorCode, event.LastStatus)
+				break
+			}
+		},
+	}
+}
+
+func formatTime(value *time.Time) string {
+	if value == nil || value.IsZero() {
+		return ""
+	}
+	return value.UTC().Format(time.RFC3339Nano)
+}
+
+func executableAvailable(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0
+}
+
+func redactOperationalText(value string) string {
+	return diagnostics.Sanitize(value)
+}
+
+func (s *Service) recordEventLocked(eventType, message, state string) {
+	event := diagnostics.Event{
+		At: time.Now().UTC().Format(time.RFC3339Nano), Type: diagnostics.Sanitize(eventType),
+		State: diagnostics.Sanitize(state), Message: diagnostics.Sanitize(message),
+	}
+	s.events = append(s.events, event)
+	if len(s.events) > 100 {
+		s.events = append([]diagnostics.Event{}, s.events[len(s.events)-100:]...)
+	}
+}
+
+func (s *Service) diagnosticInputLocked() diagnostics.Input {
+	agents := make([]diagnostics.Agent, 0, len(s.state.Agents))
+	for _, agent := range s.state.Agents {
+		executableReady := executableAvailable(agent.ExecutablePath)
+		runtimeState := agent.RuntimeState
+		if agent.ActiveRuns == 0 && !executableReady {
+			runtimeState = "unavailable"
+		}
+		agents = append(agents, diagnostics.Agent{
+			Kind: agent.Kind, ExecutableReady: executableReady,
+			RuntimeState: runtimeState, ActiveRuns: agent.ActiveRuns,
+			LastRunStatus: agent.LastRunStatus, LastRuntimeError: agent.LastRuntimeError,
+			LastRunAt: agent.LastRunAt,
+		})
+	}
+	return diagnostics.Input{
+		Version: s.state.Version, Configured: s.state.Configured, Paired: s.state.Paired,
+		BridgeRunning: s.state.BridgeRunning,
+		Connection: diagnostics.Connection{
+			State: string(s.state.Connection.State), Attempt: s.state.Connection.Attempt,
+			LastConnectedAt:    s.state.Connection.LastConnectedAt,
+			LastDisconnectedAt: s.state.Connection.LastDisconnectedAt,
+			NextRetryAt:        s.state.Connection.NextRetryAt,
+			LastError:          s.state.Connection.LastError,
+		},
+		Agents:                agents,
+		LoginStartupSupported: s.state.LoginStartup.Supported,
+		LoginStartupEnabled:   s.state.LoginStartup.Enabled,
+		Events:                append([]diagnostics.Event{}, s.events...),
 	}
 }
 

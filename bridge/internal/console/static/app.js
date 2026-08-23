@@ -1,13 +1,15 @@
 const elements = Object.fromEntries([
-  "phase", "configured", "paired", "running", "agent-count", "approval",
+  "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view",
   "device-title", "start-bridge", "stop-bridge", "resume-enrollment", "edit-config", "current-server",
-  "current-team", "current-device", "config-path", "agent-list",
-  "enrollment-form", "server-url", "device-name", "fingerprint-field",
+  "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
+  "enrollment-form", "server-url", "device-name", "trust-mode", "fingerprint-field",
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
   "codex-path", "codex-workspace", "codex-sandbox", "pi-enabled", "pi-fields",
   "pi-name", "pi-role", "pi-path", "pi-workspace", "pi-credential-env",
-  "submit-enrollment", "cancel-edit", "auth-warning", "error"
+  "submit-enrollment", "cancel-edit", "auth-warning", "error", "bridge-version",
+  "login-startup-row", "login-startup", "login-startup-warning", "export-diagnostics",
+  "diagnostics-result", "check-update", "update-result", "release-link"
 ].map((id) => [id, document.getElementById(id)]));
 
 const query = new URLSearchParams(window.location.search);
@@ -27,6 +29,20 @@ const labels = {
   waiting_approval: "等待 Owner 审批",
   running: "Bridge 运行中",
   error: "需要处理"
+};
+
+const connectionLabels = {
+  stopped: "已停止",
+  connecting: "连接中",
+  online: "在线",
+  retrying: "重连中"
+};
+
+const runtimeLabels = {
+  unavailable: "不可用",
+  idle: "空闲",
+  working: "执行中",
+  error: "最近执行异常"
 };
 
 async function request(path, options = {}) {
@@ -60,15 +76,31 @@ function renderAgent(agent) {
   role.textContent = agent.role;
   const workspace = document.createElement("span");
   workspace.textContent = agent.workspace;
-  row.append(title, role, workspace);
+  const status = document.createElement("span");
+  status.className = `runtime-status ${agent.runtimeState || "unavailable"}`;
+  const active = agent.activeRuns ? ` · ${agent.activeRuns} 个运行中` : "";
+  status.textContent = `${runtimeLabels[agent.runtimeState] || agent.runtimeState}${active}`;
+  const readiness = document.createElement("span");
+  readiness.textContent = agent.executableReady ? "可执行文件可用" : "可执行文件不存在或不可执行";
+  row.append(title, role, status, readiness, workspace);
   return row;
+}
+
+function syncTrustFields() {
+  const https = elements["server-url"].value.startsWith("https://");
+  elements["trust-mode"].disabled = !https;
+  elements["fingerprint-field"].classList.toggle(
+    "hidden",
+    !https || elements["trust-mode"].value !== "pinned_sha256"
+  );
 }
 
 function fillConfigurationForm(state) {
   elements["server-url"].value = state.serverUrl || "http://127.0.0.1:3000";
   elements["device-name"].value = state.deviceName || "Local Bridge";
+  elements["trust-mode"].value = state.serverTrustMode || "system_ca";
   elements.fingerprint.value = state.serverCertificateSha256 || "";
-  elements["fingerprint-field"].classList.toggle("hidden", !elements["server-url"].value.startsWith("https://"));
+  syncTrustFields();
   const codex = state.agents.find((agent) => agent.kind === "codex");
   const pi = state.agents.find((agent) => agent.kind === "pi");
   elements["codex-enabled"].checked = Boolean(codex);
@@ -104,7 +136,10 @@ function render(state) {
   elements.configured.textContent = state.configured ? "已创建" : "未创建";
   elements.paired.textContent = state.paired ? "已配对" : "未配对";
   elements.running.textContent = state.bridgeRunning ? "运行中" : "已停止";
+  const connection = state.connection || {state: state.bridgeRunning ? "connecting" : "stopped"};
+  elements["connection-state"].textContent = connectionLabels[connection.state] || connection.state;
   elements["agent-count"].textContent = `${state.agents.length} 个`;
+  elements["bridge-version"].textContent = state.version || "dev";
   elements.error.textContent = state.lastError || "";
   elements.error.classList.toggle("hidden", !state.lastError);
 
@@ -123,6 +158,14 @@ function render(state) {
     elements["current-team"].textContent = state.teamId || "等待配对";
     elements["current-device"].textContent = state.deviceId || "等待配对";
     elements["config-path"].textContent = state.configPath;
+    elements["connection-detail"].textContent = connection.state === "retrying"
+      ? `${connectionLabels[connection.state]} · 第 ${connection.attempt || 1} 次尝试`
+      : (connectionLabels[connection.state] || connection.state);
+    elements["last-connected"].textContent = connection.lastConnectedAt
+      ? new Date(connection.lastConnectedAt).toLocaleString()
+      : "尚未连接";
+    elements["connection-error"].textContent = connection.lastError || "";
+    elements["connection-error"].classList.toggle("hidden", !connection.lastError);
     elements["start-bridge"].disabled = state.bridgeRunning || !state.paired;
     elements["stop-bridge"].disabled = !state.bridgeRunning;
     elements["resume-enrollment"].classList.toggle("hidden", state.paired);
@@ -136,6 +179,12 @@ function render(state) {
       if (!workspace.value) workspace.value = state.workspace || "";
     }
   }
+  const startup = state.loginStartup || {supported: false, enabled: false};
+  elements["login-startup-row"].classList.toggle("hidden", !startup.supported);
+  elements["login-startup"].checked = Boolean(startup.enabled);
+  const startupWarning = startup.pathMismatch ? "应用位置已变化，请关闭后重新开启此选项以修复。" : "";
+  elements["login-startup-warning"].textContent = startupWarning;
+  elements["login-startup-warning"].classList.toggle("hidden", !startupWarning);
   elements["cancel-edit"].classList.toggle("hidden", !editMode);
   elements["submit-enrollment"].textContent = editMode ? "保存并重启 Bridge" : "生成加入码";
 }
@@ -150,8 +199,9 @@ async function refresh() {
 }
 
 elements["server-url"].addEventListener("input", () => {
-  elements["fingerprint-field"].classList.toggle("hidden", !elements["server-url"].value.startsWith("https://"));
+  syncTrustFields();
 });
+elements["trust-mode"].addEventListener("change", syncTrustFields);
 elements["codex-enabled"].addEventListener("change", () => setRuntime("codex", elements["codex-enabled"].checked));
 elements["pi-enabled"].addEventListener("change", () => setRuntime("pi", elements["pi-enabled"].checked));
 elements["join-code"].addEventListener("click", async () => navigator.clipboard.writeText(elements["join-code"].textContent));
@@ -194,7 +244,13 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
       method: editMode ? "PUT" : "POST",
       body: JSON.stringify({
         serverUrl: elements["server-url"].value,
-        serverCertificateSha256: elements.fingerprint.value,
+        serverTrustMode: elements["server-url"].value.startsWith("https://")
+          ? elements["trust-mode"].value
+          : "system_ca",
+        serverCertificateSha256: elements["server-url"].value.startsWith("https://") &&
+          elements["trust-mode"].value === "pinned_sha256"
+          ? elements.fingerprint.value
+          : "",
         deviceName: elements["device-name"].value,
         runtimes
       })
@@ -224,7 +280,61 @@ for (const [id, path] of [
   });
 }
 
+elements["login-startup"].addEventListener("change", async () => {
+  const enabled = elements["login-startup"].checked;
+  elements["login-startup"].disabled = true;
+  try {
+    await request("/api/login-startup", {
+      method: "PUT",
+      body: JSON.stringify({enabled})
+    });
+    await refresh();
+  } catch (error) {
+    elements["login-startup"].checked = !enabled;
+    showError(error);
+  } finally {
+    elements["login-startup"].disabled = false;
+  }
+});
+
+elements["export-diagnostics"].addEventListener("click", async () => {
+  elements["export-diagnostics"].disabled = true;
+  try {
+    const result = await request("/api/diagnostics/export", {method: "POST"});
+    elements["diagnostics-result"].textContent = `已导出 ${result.filename} · SHA-256 ${result.sha256.slice(0, 12)}…`;
+  } catch (error) {
+    showError(error);
+  } finally {
+    elements["export-diagnostics"].disabled = false;
+  }
+});
+
+elements["check-update"].addEventListener("click", async () => {
+  elements["check-update"].disabled = true;
+  elements["release-link"].classList.add("hidden");
+  try {
+    const result = await request("/api/update/check", {method: "POST"});
+    if (!result.currentComparable) {
+      elements["update-result"].textContent = `当前为开发版本；最新稳定版 ${result.latestVersion}`;
+    } else if (result.updateAvailable) {
+      elements["update-result"].textContent = `发现新版本 ${result.latestVersion}，请手动下载并校验。`;
+    } else if (result.currentPrerelease) {
+      elements["update-result"].textContent = `当前为预览版 ${result.currentVersion}；最新稳定版 ${result.latestVersion}`;
+    } else {
+      elements["update-result"].textContent = `已是最新稳定版（${result.latestVersion}）`;
+    }
+    elements["release-link"].href = result.releaseUrl;
+    elements["release-link"].classList.remove("hidden");
+  } catch (error) {
+    elements["update-result"].textContent = "检查失败";
+    showError(error);
+  } finally {
+    elements["check-update"].disabled = false;
+  }
+});
+
 setRuntime("codex", true);
 setRuntime("pi", false);
+syncTrustFields();
 void refresh();
 setInterval(refresh, 1000);

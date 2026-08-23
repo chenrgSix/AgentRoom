@@ -9,14 +9,19 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"os"
+	"path/filepath"
 	"runtime"
 	"time"
 
+	"agentroom.dev/bridge/internal/autostart"
 	"agentroom.dev/bridge/internal/bridgecore"
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/console"
 	"agentroom.dev/bridge/internal/enrollment"
+	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
+	"agentroom.dev/bridge/internal/updatecheck"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/icons"
@@ -35,6 +40,7 @@ func run() error {
 	dataDir := flag.String("data-dir", "", "directory for Bridge state and credential")
 	workspace := flag.String("workspace", "", "default local Runtime workspace")
 	showVersion := flag.Bool("version", false, "print the Bridge version and exit")
+	background := flag.Bool("background", false, "start with only the system tray visible")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println(version)
@@ -43,18 +49,43 @@ func run() error {
 	if *configPath == "" {
 		*configPath = config.DefaultPath()
 	}
+	resolvedConfigPath, err := filepath.Abs(*configPath)
+	if err != nil {
+		return fmt.Errorf("resolve Bridge config path: %w", err)
+	}
+	*configPath = resolvedConfigPath
+	if *dataDir != "" {
+		*dataDir, err = filepath.Abs(*dataDir)
+		if err != nil {
+			return fmt.Errorf("resolve Bridge data directory: %w", err)
+		}
+	}
+	if *workspace != "" {
+		*workspace, err = filepath.Abs(*workspace)
+		if err != nil {
+			return fmt.Errorf("resolve Bridge workspace: %w", err)
+		}
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("resolve desktop executable: %w", err)
+	}
+	loginStartup := autostart.New(executable, loginArguments(*configPath, *dataDir, *workspace))
 
 	service, err := console.New(console.Options{
 		ConfigPath: *configPath,
 		DataDir:    *dataDir,
 		Workspace:  *workspace,
+		Version:    version,
 	}, console.Dependencies{
 		Enroll:         enrollment.Join,
 		SaveConfig:     config.Save,
 		ReplaceConfig:  config.Replace,
 		SaveCredential: pairing.Save,
-		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential) error {
-			return bridgecore.Run(ctx, loaded, credential, version)
+		LoginStartup:   loginStartup,
+		UpdateChecker:  updatecheck.New(),
+		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential, observer operations.Observer) error {
+			return bridgecore.RunObserved(ctx, loaded, credential, version, observer)
 		},
 	})
 	if err != nil {
@@ -107,6 +138,9 @@ func run() error {
 		BackgroundColour: application.NewRGB(12, 17, 13),
 		DevToolsEnabled:  false,
 	})
+	if *background && service.State().Configured {
+		window.Hide()
+	}
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		window.Hide()
 		event.Cancel()
@@ -160,6 +194,17 @@ func run() error {
 	return nil
 }
 
+func loginArguments(configPath, dataDir, workspace string) []string {
+	arguments := []string{"--background", "--config", configPath}
+	if dataDir != "" {
+		arguments = append(arguments, "--data-dir", dataDir)
+	}
+	if workspace != "" {
+		arguments = append(arguments, "--workspace", workspace)
+	}
+	return arguments
+}
+
 func refreshTray(
 	stop <-chan struct{},
 	service *console.Service,
@@ -194,6 +239,16 @@ func setTrayState(
 }
 
 func phaseLabel(state console.State) string {
+	if state.BridgeRunning {
+		switch state.Connection.State {
+		case operations.ConnectionOnline:
+			return "在线"
+		case operations.ConnectionRetrying:
+			return "重连中"
+		case operations.ConnectionConnecting:
+			return "连接中"
+		}
+	}
 	switch state.Phase {
 	case console.PhaseUnconfigured:
 		return "等待配置"
@@ -204,7 +259,7 @@ func phaseLabel(state console.State) string {
 	case console.PhaseApproval:
 		return "等待审批"
 	case console.PhaseRunning:
-		return "运行中"
+		return "连接中"
 	case console.PhaseError:
 		return "需要处理"
 	default:

@@ -155,7 +155,7 @@ func Load(dataDir string) (Credential, error) {
 func HTTPClient(cfg config.Config) *http.Client {
 	parsed, _ := url.Parse(cfg.ServerURL)
 	transport := http.DefaultTransport.(*http.Transport).Clone()
-	if parsed != nil && parsed.Scheme == "https" {
+	if parsed != nil && parsed.Scheme == "https" && cfg.ResolvedTrustMode() == config.TrustPinnedSHA256 {
 		expected, _ := hex.DecodeString(strings.ReplaceAll(cfg.ServerCertificateSHA256, ":", ""))
 		transport.TLSClientConfig = &tls.Config{
 			MinVersion:         tls.VersionTLS13,

@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"agentroom.dev/bridge/internal/operations"
 	bridgeruntime "agentroom.dev/bridge/internal/runtime"
 	contracts "agentroom.dev/contracts/generated/go"
 )
@@ -36,9 +37,13 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}}); err != nil {
 		t.Fatal(err)
 	}
+	var runtimeEvents []operations.RuntimeEvent
 	executor := RuntimeExecutor{
 		Inbox: inbox, Now: func() time.Time { return now },
 		Adapters: map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+		Observer: operations.Observer{OnRuntime: func(event operations.RuntimeEvent) {
+			runtimeEvents = append(runtimeEvents, event)
+		}},
 	}
 	var sent []any
 	if err := executor.Execute(context.Background(), record, func(_ context.Context, value any) error {
@@ -49,6 +54,11 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}
 	if len(sent) != 3 {
 		t.Fatalf("sent %d events, want 3", len(sent))
+	}
+	if len(runtimeEvents) != 2 || runtimeEvents[0].ActiveDelta != 1 ||
+		runtimeEvents[1].ActiveDelta != -1 || runtimeEvents[1].State != operations.RuntimeIdle ||
+		runtimeEvents[1].LastStatus != string(contracts.Completed) || runtimeEvents[1].ErrorCode != "" {
+		t.Fatalf("unexpected local Runtime projection: %#v", runtimeEvents)
 	}
 	reply, ok := sent[1].(contracts.RunReplyMessage)
 	if !ok || reply.Payload.Assessment == nil ||
@@ -67,6 +77,41 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 		if strings.Contains(string(event), "very-sensitive") {
 			t.Fatalf("secret persisted in durable Bridge event: %s", event)
 		}
+	}
+}
+
+func TestRuntimeExecutorCanceledProjectionIsIdleWithoutError(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC)
+	request := contracts.RunRequestedPayload{
+		RunID: "run_01K4Z6J7Y8N9P0Q1R2S3T4V5X1", TargetAgentID: "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5X1",
+		DeliveryAttemptID: "delivery_01K4Z6J7Y8N9P0Q1R2S3T4V5X1", IdempotencyKey: "idem_01K4Z6J7Y8N9P0Q1R2S3T4V5X1",
+	}
+	record, _, err := inbox.Accept(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	canceled := contracts.Canceled
+	adapter := &bridgeruntime.FakeAdapter{}
+	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{{Status: &canceled}}}); err != nil {
+		t.Fatal(err)
+	}
+	var runtimeEvents []operations.RuntimeEvent
+	executor := RuntimeExecutor{
+		Inbox: inbox, Now: func() time.Time { return now },
+		Adapters: map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+		Observer: operations.Observer{OnRuntime: func(event operations.RuntimeEvent) {
+			runtimeEvents = append(runtimeEvents, event)
+		}},
+	}
+	if err := executor.Execute(context.Background(), record, func(context.Context, any) error { return nil }); err != nil {
+		t.Fatal(err)
+	}
+	if len(runtimeEvents) != 2 || runtimeEvents[1].State != operations.RuntimeIdle || runtimeEvents[1].ErrorCode != "" {
+		t.Fatalf("unexpected canceled Runtime projection: %#v", runtimeEvents)
 	}
 }
 

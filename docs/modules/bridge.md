@@ -108,7 +108,7 @@ duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
 Browser acceptance covers first setup, Runtime discovery, adding Pi to an
 existing Bridge, and status rendering. Work is tracked by `BRG-001` through
-`BRG-011` in `docs/TASKS.md`.
+`BRG-015` in `docs/TASKS.md`.
 
 ## Desktop Client
 
@@ -159,8 +159,8 @@ does not contain or require an Apple signature or notarization ticket.
 
 The first release artifacts are unsigned portable binaries. Desktop packages
 remain unsigned by product decision and rely on checksum verification plus
-explicit user trust. Background-service installation and automatic updates
-remain separate work.
+explicit user trust. Login startup remains opt-in, and update checks remain
+manual-only; neither capability installs or executes downloaded code.
 
 `BRG-012` through `BRG-015` close the desktop operations gap. Process state and
 central connection state are separate: a running local goroutine may still be
@@ -173,14 +173,15 @@ normal certificate-chain, hostname, validity, and renewal verification. An old
 configuration with a fingerprint and no explicit mode remains pinned. A
 configuration may not silently provide both a system-CA mode and a fingerprint.
 
-macOS login startup is opt-in and user-scoped. Its LaunchAgent contains only
-the installed executable path and a background flag; it contains no token,
-credential, environment value, or Runtime command. Disabling it does not kill
-the current Bridge. Diagnostic export is allowlist-based and excludes absolute
-home/workspace paths, stable Team/Device/Agent IDs, credentials, prompts, and
-replies. Update checks happen only after an explicit click and may open the
-official GitHub Release page, but never download, replace, execute, or restart
-an unsigned binary.
+macOS login startup is opt-in and user-scoped. Its LaunchAgent contains the
+installed executable path, a background flag, and only the non-secret config,
+data, and workspace path arguments required to reconstruct the same local
+instance; it contains no token, credential, environment value, or Runtime
+command. Disabling it does not kill the current Bridge. Diagnostic export is
+allowlist-based and excludes absolute home/workspace paths, stable
+Team/Device/Agent IDs, credentials, prompts, and replies. Update checks happen
+only after an explicit click and may open the exact official GitHub Release
+page, but never download, replace, execute, or restart an unsigned binary.
 
 Release `v0.1.0` is the BRG-008 CLI acceptance baseline. GitHub Actions run
 `32626555064` passed the Bridge test, all five build jobs, checksum generation,

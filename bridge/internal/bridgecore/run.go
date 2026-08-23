@@ -8,6 +8,7 @@ import (
 	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/delivery"
 	"agentroom.dev/bridge/internal/identity"
+	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
 	bridgeruntime "agentroom.dev/bridge/internal/runtime"
 	contracts "agentroom.dev/contracts/generated/go"
@@ -22,6 +23,18 @@ func Run(
 	credential pairing.Credential,
 	bridgeVersion string,
 ) error {
+	return RunObserved(ctx, loaded, credential, bridgeVersion, operations.Observer{})
+}
+
+// RunObserved starts one managed Bridge connection and reports local-only
+// connection and Runtime lifecycle events to the supplied observer.
+func RunObserved(
+	ctx context.Context,
+	loaded config.Config,
+	credential pairing.Credential,
+	bridgeVersion string,
+	observer operations.Observer,
+) error {
 	inbox, err := delivery.Open(filepath.Join(loaded.DataDir, "inbox"))
 	if err != nil {
 		return err
@@ -31,20 +44,28 @@ func Run(
 		return err
 	}
 	adapters := make(map[string]bridgeruntime.Adapter, len(loaded.Agents))
+	agentNames := make(map[string]string, len(loaded.Agents))
 	for _, configured := range loaded.Agents {
+		agentID := identities[configured.Name]
+		agentNames[agentID] = configured.Name
 		switch configured.Adapter {
 		case "generic":
-			adapters[identities[configured.Name]] = bridgeruntime.GenericAdapter{Config: configured}
+			adapters[agentID] = bridgeruntime.GenericAdapter{Config: configured}
 		case "codex":
-			adapters[identities[configured.Name]] = bridgeruntime.CodexAdapter{Config: configured}
+			adapters[agentID] = bridgeruntime.CodexAdapter{Config: configured}
 		}
 	}
-	executor := delivery.RuntimeExecutor{Inbox: inbox, Adapters: adapters}
+	runtimeObserver := observer
+	runtimeObserver.OnRuntime = func(event operations.RuntimeEvent) {
+		event.AgentName = agentNames[event.AgentID]
+		observer.Runtime(event)
+	}
+	executor := delivery.RuntimeExecutor{Inbox: inbox, Adapters: adapters, Observer: runtimeObserver}
 	runHandler := delivery.Handler{
 		Inbox: inbox, OnNew: executor.Execute, OnDuplicate: executor.Replay,
 	}
 	return (connection.Client{
-		Config: loaded, Credential: credential, BridgeVersion: bridgeVersion,
+		Config: loaded, Credential: credential, BridgeVersion: bridgeVersion, Observer: observer,
 		RecoverRuns: func(ctx context.Context, send func(context.Context, any) error) error {
 			return executor.Recover(ctx, delivery.Sender(send))
 		},

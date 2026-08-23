@@ -18,8 +18,9 @@ terminal session are not required. Verify the archive before extraction:
 # Linux
 sha256sum -c SHA256SUMS --ignore-missing
 
-# macOS
-shasum -a 256 -c SHA256SUMS
+# macOS (set this to the archive you downloaded)
+ARCHIVE=agentroom-bridge-desktop_0.2.0-rc.1_darwin_arm64.zip
+grep "  ${ARCHIVE}$" SHA256SUMS | shasum -a 256 -c -
 ```
 
 The macOS desktop package is intentionally unsigned and not notarized. After
@@ -94,6 +95,22 @@ An existing paired configuration starts automatically. Editing Agent presets
 atomically updates the configuration and restarts the managed connection. The
 Console never returns Device credentials or environment values to the browser.
 
+The status area distinguishes the local process from the central connection:
+`stopped`, `connecting`, `online`, and `retrying` are not interchangeable. It
+also reports bounded retry timing, executable readiness, and active Runtime
+work. macOS users may opt into **登录时启动**; the user-scoped LaunchAgent stores
+only the app path, `--background`, and non-secret config/data/workspace paths.
+It never stores a Device credential, Console token, environment value, or
+Runtime command.
+
+**导出脱敏诊断包** writes an owner-only ZIP to Downloads. Its allowlist contains
+only version, OS/architecture, bounded operational state, timestamps, Runtime
+kind/readiness, and recent state transitions. It excludes credentials, Team /
+Device / Agent IDs, prompts, replies, environment values, and absolute local
+paths. **检查更新** is manual-only: it reads the official GitHub latest Release
+metadata and may open that exact Release page, but never downloads, replaces,
+executes, or restarts the unsigned Bridge.
+
 `join` is the terminal-only managed setup alternative. It detects `codex` and
 the current workspace, displays a short approval code, and waits for a Team
 owner to enter that code in Web **Connect an Agent**. After approval it writes
@@ -107,10 +124,15 @@ an adapter, argument-array command, absolute workspace, and environment variable
 allowlist. Credentials, stable Agent identities, the durable Run inbox, and
 replayable Runtime events are stored under `dataDir` with owner-only file modes.
 
-For HTTPS, `--server-certificate-sha256` is mandatory and pins the manually
-verified server certificate. Enrollment stores `bridge.json` and
-`device-credential.json` with owner-only permissions. The `pair` command remains
-available for legacy server-issued invitations.
+For normal public HTTPS, the default `system_ca` mode validates the certificate
+chain, hostname, validity, and renewal through the operating-system trust store;
+no fingerprint is required. Private deployments may explicitly choose
+`--server-trust-mode pinned_sha256` together with a manually verified
+`--server-certificate-sha256`. Existing fingerprint-only configurations remain
+pinned for compatibility, while `system_ca` rejects a supplied fingerprint.
+Enrollment stores `bridge.json` and `device-credential.json` with owner-only
+permissions. The `pair` command remains available for legacy server-issued
+invitations.
 Stable Agent IDs are generated once into `agent-identities.json` and reused on
 every reconnect; keep Agent configuration names stable when preserving identity.
 
