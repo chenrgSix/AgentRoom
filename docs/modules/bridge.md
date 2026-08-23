@@ -108,7 +108,33 @@ duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
 Browser acceptance covers first setup, Runtime discovery, adding Pi to an
 existing Bridge, and status rendering. Work is tracked by `BRG-001` through
-`BRG-008` in `docs/TASKS.md`.
+`BRG-011` in `docs/TASKS.md`.
+
+## Desktop Client
+
+The browser Console is a compatibility surface, not the final end-user shell.
+`BRG-009` through `BRG-011` replace its launcher-first experience with a
+lightweight Wails desktop application while preserving the Bridge protocol,
+configuration format, credentials, durable inbox, and Runtime adapters.
+
+The desktop application and CLI Console share one lifecycle controller. The
+desktop shell serves the existing embedded HTML/CSS/JavaScript through the
+native WebView rather than opening the system browser. It owns one Bridge
+process, prevents duplicate desktop instances, and starts an already-paired
+Bridge automatically. Closing the window hides it to the system tray; it does
+not disconnect managed Agents. An explicit tray **Quit** action gracefully
+stops enrollment and Bridge work before terminating the process.
+
+The tray exposes status, open, start, stop, and quit actions. Configuration,
+Team enrollment, Codex/Pi discovery, and Owner approval remain available in
+the main window. The `console`, `join`, `run`, and diagnostic CLI commands stay
+supported as a headless fallback and do not depend on desktop libraries.
+
+Desktop preview packages are intentionally unsigned. Release notes must state
+that users verify the published SHA-256 checksum and explicitly trust the app
+on first launch. Apple Developer ID signing and notarization are outside the
+accepted distribution boundary; the GUI must not claim that Apple verified the
+package.
 
 ## Distribution
 
@@ -123,9 +149,10 @@ The macOS `.command` and Windows `.cmd` launchers are directly clickable; Linux
 ships an executable shell launcher. The launchers start `console`, which opens
 the token-authenticated loopback UI without requiring terminal configuration.
 
-The first release artifacts are unsigned portable binaries. Platform signing,
-notarized installers, background-service installation, and signed automatic
-updates remain separate hardening work.
+The first release artifacts are unsigned portable binaries. Desktop packages
+remain unsigned by product decision and rely on checksum verification plus
+explicit user trust. Background-service installation and automatic updates
+remain separate work.
 
 Release `v0.1.0` is the BRG-008 acceptance baseline. GitHub Actions run
 `32626555064` passed the Bridge test, all five build jobs, checksum generation,

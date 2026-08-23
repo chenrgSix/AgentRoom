@@ -86,6 +86,9 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | BRG-006 | DONE | Add client-initiated managed Agent enrollment | BRG-002, BRG-004, SEC-002 | client join code, Owner approval, automatic config, and Agent publication pass |
 | BRG-007 | DONE | Add local Bridge configuration Console | BRG-006, ADP-005 | token-authenticated loopback UI configures enrollment, Codex/Pi presets, status, and fenced restart with Go and browser acceptance |
 | BRG-008 | DONE | Publish standalone Bridge release artifacts | BRG-007 | published GitHub Release builds five CGO-free archives with OS launchers, injected tag version, browser-open Console, and SHA-256 checksums |
+| BRG-009 | ACTIVE | Extract reusable Bridge lifecycle controller | BRG-007 | CLI Console and desktop shell share tested start, stop, restart, configuration, enrollment, and shutdown operations |
+| BRG-010 | PLANNED | Add lightweight Bridge desktop GUI | BRG-009 | one desktop process provides a native window, single-instance behavior, close-to-tray continuity, and tray start/stop/quit controls without a terminal |
+| BRG-011 | PLANNED | Publish unsigned desktop Bridge packages | BRG-010 | release workflow produces native GUI packages plus checksums and documents user-managed macOS trust while retaining CLI archives |
 | ADP-002 | DONE | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |
 | ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |
