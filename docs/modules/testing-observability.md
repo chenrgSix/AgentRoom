@@ -177,7 +177,7 @@ messages are never log fields.
 
 A task is `DONE` only when its completion evidence in `docs/TASKS.md` exists.
 Release notes name migrations, compatibility changes, security impact, and the
-exact checks run. Evidence is tracked by `QA-001` through `QA-010`. Operations
+exact checks run. Evidence is tracked by `QA-001` through `QA-011`. Operations
 work is tracked by `OPS-001` through `OPS-005`.
 
 The current security and exported-tree evidence is recorded in
@@ -207,6 +207,12 @@ The first v0.2 candidate and continuous quality-gate evidence is recorded in
 `docs/acceptance/qa-009-v0.2.0-rc.1.md`. It includes the failed-safe preflight,
 the corrective workflow permission change, successful main CI and Release run
 IDs, the public prerelease, and an independent clean-download verification.
+
+The `v0.2.0-rc.2` plan is recorded in
+`docs/releases/v0.2.0-rc.2.md`. `QA-011` remains `ACTIVE` until the exact tagged
+source passes main CI, the draft workflow verifies all 11 assets, the candidate
+is published as a prerelease, and a clean download passes the committed
+verifier.
 
 ## Dependencies
 
