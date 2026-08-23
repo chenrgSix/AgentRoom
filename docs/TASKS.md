@@ -128,9 +128,9 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
 | DISC-001 | DONE | Add Discussion, turn, progress, decision, and budget contracts and persistence | CON-004, ROOM-002, DATA-003 | migration and repository tests preserve aggregate versions and unique turn ordinals |
-| DISC-002 | PLANNED | Implement deterministic progress projection and plateau evidence | DISC-001 | structured deltas, priority-aware plateau, and reply-only downgrade tests pass |
-| DISC-003 | PLANNED | Implement budget ledger, leases, telemetry downgrade, and finalization reserve | DISC-001 | turns, tokens, duration, cost, extensions, unknown usage, and reserve invariants pass |
-| DISC-004 | PLANNED | Implement authoritative policy engine and Discussion state machine | DISC-002, DISC-003, RUN-004 | policy precedence, decision priority, stale fencing, and user control races are deterministic |
+| DISC-002 | DONE | Implement deterministic progress projection and plateau evidence | DISC-001 | structured deltas, priority-aware plateau, and reply-only downgrade tests pass |
+| DISC-003 | DONE | Implement budget ledger, leases, telemetry downgrade, and finalization reserve | DISC-001 | turns, tokens, duration, cost, extensions, unknown usage, and reserve invariants pass |
+| DISC-004 | DONE | Implement authoritative policy engine and Discussion state machine | DISC-002, DISC-003, RUN-004 | policy precedence, decision priority, stale fencing, and user control races are deterministic |
 | DISC-005 | PLANNED | Build bounded Discussion context and Runtime assessment adapters | DISC-004, ADP-004, ADP-005 | Codex and Generic Runtime receive named context and capability downgrade is explicit |
 | DISC-006 | PLANNED | Implement durable turn scheduling and finalization outputs | DISC-004, DISC-005, RUN-003 | routing intent recovers once and final answer, decision record, and unresolved issues persist |
 | WEB-017 | PLANNED | Add Discussion composer, progress, extension, and stop controls | DISC-004, DISC-006, WEB-016 | users start, inspect, continue, adjust, finish, pause, and cancel without exposed turn targets |

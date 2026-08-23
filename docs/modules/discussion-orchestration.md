@@ -39,6 +39,11 @@ The Orchestrator is primarily a deterministic state machine. An optional
 semantic evaluator may produce additional evidence for novelty, disagreement,
 or goal coverage, but it cannot bypass policy or mutate state directly.
 
+The current deterministic evaluator normalizes and hashes visible replies,
+combines valid structured question/evidence deltas, and treats missing or
+malformed assessment fields as reply-only evidence. Exact repetition is the
+MVP plateau signal; a semantic evaluator remains an optional later extension.
+
 ## Domain Model
 
 | Entity | Required State |
