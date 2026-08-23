@@ -88,11 +88,11 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | BRG-008 | DONE | Publish standalone Bridge release artifacts | BRG-007 | published GitHub Release builds five CGO-free archives with OS launchers, injected tag version, browser-open Console, and SHA-256 checksums |
 | BRG-009 | DONE | Extract reusable Bridge lifecycle controller | BRG-007 | CLI Console and desktop shell share tested start, stop, restart, configuration, enrollment, and shutdown operations |
 | BRG-010 | DONE | Add lightweight Bridge desktop GUI | BRG-009 | native WebView and tagged tests pass; visual acceptance proves one process, close-to-tray continuity, second-launch restore, and tray lifecycle controls without a terminal |
-| BRG-011 | READY | Publish unsigned macOS desktop Bridge packages | BRG-010 | native arm64/amd64 GUI ZIPs pass GitHub-hosted builds, join the release checksum manifest, document app-scoped user trust, and retain all five CLI archives |
+| BRG-011 | DONE | Publish unsigned macOS desktop Bridge packages | BRG-010 | native arm64/amd64 GUI ZIPs pass GitHub-hosted builds, join the release checksum manifest, document app-scoped user trust, and retain all five CLI archives |
 | BRG-012 | DONE | Expose Bridge operational status and renewable HTTPS trust | BRG-010 | GUI distinguishes process and connection states; retry projection and `system_ca`/legacy pin compatibility tests pass |
 | BRG-013 | ACTIVE | Add opt-in macOS login startup | BRG-012 | owner-scoped LaunchAgent tests and a real login restart preserve one desktop instance without credentials in the plist |
 | BRG-014 | DONE | Export a redacted Bridge diagnostic bundle | BRG-012 | bounded diagnostic export contains only allowlisted operational fields and seeded secrets, paths, prompts, replies, and stable IDs are absent |
-| BRG-015 | ACTIVE | Add manual Bridge update checks | BRG-011, BRG-012 | explicit user action compares stable versions and opens only the official Release page without downloading, replacing, or executing code |
+| BRG-015 | DONE | Add manual Bridge update checks | BRG-011, BRG-012 | explicit user action compares stable versions and opens only the official Release page without downloading, replacing, or executing code |
 | ADP-002 | DONE | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |
 | ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |
@@ -168,8 +168,8 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-004 | DONE | Verify restart, reconnect, duplicate, and cancellation | DATA-003, RUN-005 | recovery matrix passes repeatedly |
 | QA-005 | DONE | Run security and clean-room release audit | SEC-004, QA-004 | committed audit records zero open critical findings, remediated npm advisory, zero Go findings, and clean-tree build/test/five-target packaging |
 | QA-006 | DONE | Verify local cross-process managed flow | BRG-005, ADP-005, RUN-003 | real server, Go Bridge, and Generic Runtime reply passes |
-| QA-008 | ACTIVE | Add continuous repository quality gates | QA-005 | every main push and pull request validates contracts, Node builds/tests/E2E/docs, Go tests/vet, and native desktop compilation |
-| QA-009 | ACTIVE | Publish and verify the v0.2 release candidate | BRG-011, BRG-015, SEC-005, OPS-004, QA-008 | immutable draft-to-prerelease workflow publishes exactly seven archives, checksums, and license assets; clean downloads pass the same verifier |
+| QA-008 | DONE | Add continuous repository quality gates | QA-005 | every main push and pull request validates contracts, Node builds/tests/E2E/docs, Go tests/vet, and native desktop compilation |
+| QA-009 | DONE | Publish and verify the v0.2 release candidate | BRG-011, BRG-015, SEC-005, OPS-004, QA-008 | tag-pinned, no-clobber draft-to-prerelease workflow publishes exactly seven archives, checksums, and license assets; clean downloads pass the same verifier |
 
 ## Deferred Beyond MVP
 

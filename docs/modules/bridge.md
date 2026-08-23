@@ -187,8 +187,15 @@ Release `v0.1.0` is the BRG-008 CLI acceptance baseline. GitHub Actions run
 `32626555064` passed the Bridge test, all five build jobs, checksum generation,
 and asset publication. A clean download verified every entry in `SHA256SUMS`,
 both launcher layouts, executable permissions, and the reported `v0.1.0`
-version. `BRG-011` remains a separate gate until both native GUI jobs and a
-clean downloaded v0.2 candidate pass the committed release verifier.
+version.
+
+Release `v0.2.0-rc.1` closes `BRG-011` and `BRG-015`. GitHub Actions run
+`32638769625` passed both native macOS GUI jobs, all five CLI jobs, pre-upload
+verification, publication, and post-upload verification. A second clean
+download independently passed the committed verifier for all 11 assets. The
+candidate remains unsigned, manual-update-only, and subject to the separate
+real-login `BRG-013` gate. Full evidence is recorded in
+`docs/acceptance/qa-009-v0.2.0-rc.1.md`.
 
 ## Dependencies
 

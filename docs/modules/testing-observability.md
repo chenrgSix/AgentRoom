@@ -150,11 +150,17 @@ in `docs/acceptance/ops-004-data-005-compose.md`. It separates local TLS smoke
 evidence from public certificate issuance and records the exact negative and
 large-database recovery checks.
 
-A Bridge release begins as an immutable draft candidate. The workflow requires
-the exact five CLI archives, two native macOS GUI archives, one checksum file,
-and three top-level license files. It verifies names, versions, archive layouts,
-launchers, licenses, and checksums before upload, then downloads the candidate
-and repeats the same verifier. Existing assets are never silently replaced.
+A Bridge release begins as an empty draft candidate and builds from the exact
+requested tag. The workflow requires five CLI archives, two native macOS GUI
+archives, one checksum file, and three top-level license files. It verifies
+names, versions, archive layouts, launchers, licenses, and checksums before
+upload, then downloads the candidate and repeats the same verifier. Existing
+assets are never silently replaced.
+
+The first v0.2 candidate and continuous quality-gate evidence is recorded in
+`docs/acceptance/qa-009-v0.2.0-rc.1.md`. It includes the failed-safe preflight,
+the corrective workflow permission change, successful main CI and Release run
+IDs, the public prerelease, and an independent clean-download verification.
 
 ## Dependencies
 
