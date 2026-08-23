@@ -106,11 +106,27 @@ export class TrustedWebAccessService {
       const userCount = this.database.prepare(`
         SELECT COUNT(*) AS count FROM web_users
       `).get() as { count: number };
+      const membershipCount = this.database.prepare(`
+        SELECT COUNT(*) AS count FROM team_members
+      `).get() as { count: number };
 
       let user: WebUserRecord;
       if (ownerCandidates.length === 1) {
         const existing = this.repository.getUser(ownerCandidates[0]?.user_id ?? "");
         if (!existing) throw new Error("Existing Owner User disappeared");
+        user = existing;
+      } else if (
+        ownerCandidates.length === 0 &&
+        userCount.count === 1 &&
+        membershipCount.count === 0
+      ) {
+        const candidate = this.database.prepare(`
+          SELECT user_id FROM web_users ORDER BY created_at, user_id LIMIT 1
+        `).get() as { user_id: string } | undefined;
+        const existing = candidate
+          ? this.repository.getUser(candidate.user_id)
+          : undefined;
+        if (!existing) throw new Error("Existing bootstrap User disappeared");
         user = existing;
       } else if (ownerCandidates.length === 0 && userCount.count === 0) {
         user = {

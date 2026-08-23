@@ -279,11 +279,8 @@ export async function createServerApp(
     }
   };
   const principal = (request: FastifyRequest): WebPrincipal => {
-    if (request.headers.authorization !== undefined) {
+    if (webAuth.mode === "local") {
       return auth.authenticateWebSession(bearerToken(request), clock());
-    }
-    if (webAuth.mode !== "trusted-team") {
-      throw new AuthorizationError("UNAUTHENTICATED", "Bearer session required");
     }
     const token = cookieValue(request, trustedSessionCookie);
     if (!token) {

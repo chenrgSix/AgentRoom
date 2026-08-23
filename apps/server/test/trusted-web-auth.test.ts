@@ -342,6 +342,7 @@ test("trusted setup adopts one existing local Owner without changing identity", 
   const local = await createServerApp({ databasePath, clock: () => initialNow });
   let existingUserId = "";
   let existingAuthorization = "";
+  let existingMemberAuthorization = "";
   try {
     const bootstrap = await local.inject({
       method: "POST",
@@ -350,11 +351,28 @@ test("trusted setup adopts one existing local Owner without changing identity", 
     });
     existingUserId = bootstrap.json().user.userId as string;
     existingAuthorization = `Bearer ${bootstrap.json().session.token as string}`;
-    assert.equal((await local.inject({
+    const team = await local.inject({
       method: "POST",
       url: "/api/teams",
       headers: { authorization: existingAuthorization },
       payload: { name: "Existing Team" }
+    });
+    assert.equal(team.statusCode, 200);
+    const memberBootstrap = await local.inject({
+      method: "POST",
+      url: "/api/bootstrap",
+      payload: { displayName: "Existing Bob" }
+    });
+    existingMemberAuthorization =
+      `Bearer ${memberBootstrap.json().session.token as string}`;
+    assert.equal((await local.inject({
+      method: "POST",
+      url: `/api/teams/${team.json().team.teamId as string}/members`,
+      headers: { authorization: existingAuthorization },
+      payload: {
+        displayName: "Existing Bob",
+        userId: memberBootstrap.json().user.userId
+      }
     })).statusCode, 200);
   } finally {
     await local.close();
@@ -386,8 +404,53 @@ test("trusted setup adopts one existing local Owner without changing identity", 
     assert.equal((await trusted.inject({
       method: "GET",
       url: "/api/teams",
+      headers: { authorization: existingMemberAuthorization }
+    })).statusCode, 401);
+    assert.equal((await trusted.inject({
+      method: "GET",
+      url: "/api/teams",
       headers: { cookie: responseCookie(adopted) }
     })).statusCode, 200);
+  } finally {
+    await trusted.close();
+  }
+});
+
+test("trusted setup adopts one bootstrap User before any Team exists", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-adopt-bootstrap-"));
+  const databasePath = path.join(directory, "server.sqlite");
+  const local = await createServerApp({ databasePath, clock: () => initialNow });
+  let existingUserId = "";
+  try {
+    const bootstrap = await local.inject({
+      method: "POST",
+      url: "/api/bootstrap",
+      payload: { displayName: "Bootstrap Alice" }
+    });
+    assert.equal(bootstrap.statusCode, 200);
+    existingUserId = bootstrap.json().user.userId as string;
+  } finally {
+    await local.close();
+  }
+
+  const trusted = await createServerApp({
+    databasePath,
+    clock: () => initialNow,
+    webAuth: trustedWeb()
+  });
+  try {
+    const adopted = await trusted.inject({
+      method: "POST",
+      url: "/api/auth/setup",
+      headers: {
+        origin: publicOrigin,
+        "x-agent-room-recovery-token": recoveryToken
+      },
+      payload: { displayName: "Ignored replacement" }
+    });
+    assert.equal(adopted.statusCode, 200);
+    assert.equal(adopted.json().user.userId, existingUserId);
+    assert.equal(adopted.json().user.displayName, "Bootstrap Alice");
   } finally {
     await trusted.close();
   }
