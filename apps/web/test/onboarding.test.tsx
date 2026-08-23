@@ -8,6 +8,7 @@ import { App } from "../src/App.js";
 
 interface RequestRecord {
   body?: string;
+  credentials?: RequestCredentials;
   headers?: HeadersInit;
   method: string;
   path: string;
@@ -123,10 +124,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const method = init.method ?? "GET";
     requests.push({
       ...(typeof init.body === "string" ? { body: init.body } : {}),
+      ...(init.credentials ? { credentials: init.credentials } : {}),
       ...(init.headers ? { headers: init.headers } : {}),
       method,
       path
     });
+    if (path === "/api/auth/status") {
+      return jsonResponse({ mode: "local", state: "local_bootstrap" });
+    }
     if (path === "/api/bootstrap") {
       return jsonResponse({
         user: { userId: "user_test", displayName: "Local Owner" },
@@ -203,6 +208,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.ok(teamStep);
     assert.equal(dom.window.document.documentElement.lang, "zh-CN");
     assert.equal(dom.window.document.documentElement.dataset.theme, "dark");
+    assert.equal(requests[0]?.path, "/api/auth/status");
+    assert.equal(requests.every(({ credentials }) => credentials === "same-origin"), true);
 
     fireEvent.click(screen.getByRole("button", { name: "主题" }));
     await waitFor(() => assert.equal(dom.window.document.documentElement.dataset.theme, "light"));

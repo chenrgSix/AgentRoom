@@ -3,6 +3,7 @@ import {
   type FormEvent,
   type KeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState
 } from "react";
@@ -116,7 +117,37 @@ interface DiscussionView {
 interface LocalSession {
   userId: string;
   displayName: string;
-  token: string;
+  token?: string;
+}
+
+type AuthMode = "local" | "trusted-team";
+type AuthGateState =
+  | "loading"
+  | "local_bootstrap"
+  | "setup_required"
+  | "sign_in_required"
+  | "claim_required"
+  | "authenticated";
+
+interface AuthenticatedUser {
+  userId: string;
+  displayName: string;
+  createdAt?: string;
+}
+
+type AuthStatus = {
+  mode: AuthMode;
+  state: Exclude<AuthGateState, "loading" | "claim_required">;
+  user?: AuthenticatedUser;
+  session?: { expiresAt: string };
+};
+
+interface MemberInvitation {
+  invitationId: string;
+  teamId: string;
+  displayName: string;
+  expiresAt: string;
+  claimUrl: string;
 }
 
 interface MentionSearch {
@@ -129,7 +160,7 @@ const userKey = "agent-room.local-user";
 const localeKey = "agent-room.locale";
 const themeKey = "agent-room.theme";
 
-type WorkspaceView = "room" | "agents";
+type WorkspaceView = "room" | "agents" | "members";
 type ConnectionMode = "managed" | "mcp" | "demo";
 type Theme = "dark" | "light";
 type ComposerMode = "message" | "discussion";
@@ -240,6 +271,7 @@ async function jsonRequest<T>(
 ): Promise<T> {
   const response = await fetch(path, {
     ...options,
+    credentials: "same-origin",
     headers: {
       ...(options.body ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
@@ -255,7 +287,7 @@ async function jsonRequest<T>(
   return body;
 }
 
-async function bootstrap(): Promise<LocalSession> {
+async function localBootstrap(): Promise<LocalSession> {
   const saved = localStorage.getItem(userKey);
   const existing = saved
     ? JSON.parse(saved) as { userId: string; displayName: string }
@@ -279,6 +311,129 @@ async function bootstrap(): Promise<LocalSession> {
   };
 }
 
+function invitationTokenFromFragment(fragment: string): string | null {
+  const match = /^#\/join\/([A-Za-z0-9_-]{16,256})$/u.exec(fragment);
+  return match?.[1] ?? null;
+}
+
+interface AccessGateProps {
+  busy: boolean;
+  error: string | null;
+  locale: Locale;
+  onClaimInvitation: () => Promise<void>;
+  onEnterLocal: () => Promise<void>;
+  onRecoverOwner: (recoveryToken: string) => Promise<void>;
+  onSetupOwner: (displayName: string, recoveryToken: string) => Promise<void>;
+  onToggleLocale: () => void;
+  onToggleTheme: () => void;
+  state: Exclude<AuthGateState, "authenticated">;
+  theme: Theme;
+}
+
+function AccessGate({
+  busy,
+  error,
+  locale,
+  onClaimInvitation,
+  onEnterLocal,
+  onRecoverOwner,
+  onSetupOwner,
+  onToggleLocale,
+  onToggleTheme,
+  state,
+  theme
+}: AccessGateProps) {
+  const [displayName, setDisplayName] = useState("");
+  const [recoveryToken, setRecoveryToken] = useState("");
+  const t = (key: TranslationKey) => translate(locale, key);
+
+  async function setupOwner(event: FormEvent) {
+    event.preventDefault();
+    const submittedRecoveryToken = recoveryToken;
+    setRecoveryToken("");
+    await onSetupOwner(displayName.trim(), submittedRecoveryToken);
+  }
+
+  async function recoverOwner(event: FormEvent) {
+    event.preventDefault();
+    const submittedRecoveryToken = recoveryToken;
+    setRecoveryToken("");
+    await onRecoverOwner(submittedRecoveryToken);
+  }
+
+  return (
+    <main className="access-shell">
+      <div className="access-toolbar">
+        <button aria-label={t("language")} onClick={onToggleLocale} title={t("language")} type="button">
+          {locale === "zh-CN" ? "EN" : "中"}
+        </button>
+        <button aria-label={t("theme")} onClick={onToggleTheme} title={theme === "dark" ? t("switchToLight") : t("switchToDark")} type="button">
+          {theme === "dark" ? "☀" : "☾"}
+        </button>
+      </div>
+      <section className="access-card" aria-live="polite">
+        <div className="brand-mark" aria-label="Agent Room">AR</div>
+        <p className="eyebrow">{t("secureTeamAccess")}</p>
+        {state === "loading" && (
+          <>
+            <h1>{t("accessLoading")}</h1>
+            <p>{t("accessLoadingHelp")}</p>
+          </>
+        )}
+        {state === "local_bootstrap" && (
+          <>
+            <h1>{t("localAccess")}</h1>
+            <p>{t("localAccessHelp")}</p>
+            <button className="access-primary" disabled={busy} onClick={() => void onEnterLocal()} type="button">
+              {t("enterLocalWorkspace")}
+            </button>
+          </>
+        )}
+        {state === "setup_required" && (
+          <>
+            <h1>{t("setupOwner")}</h1>
+            <p>{t("setupOwnerHelp")}</p>
+            <form className="access-form" onSubmit={(event) => void setupOwner(event)}>
+              <label htmlFor="owner-display-name">{t("ownerDisplayName")}</label>
+              <input autoComplete="name" id="owner-display-name" onChange={(event) => setDisplayName(event.target.value)} required value={displayName} />
+              <label htmlFor="setup-recovery-token">{t("recoveryKey")}</label>
+              <input autoComplete="off" id="setup-recovery-token" onChange={(event) => setRecoveryToken(event.target.value)} required type="password" value={recoveryToken} />
+              <small>{t("recoveryKeyHelp")}</small>
+              <button disabled={busy}>{busy ? t("signingIn") : t("finishSetup")}</button>
+            </form>
+          </>
+        )}
+        {state === "sign_in_required" && (
+          <>
+            <h1>{t("ownerSignIn")}</h1>
+            <p>{t("ownerSignInHelp")}</p>
+            <form className="access-form" onSubmit={(event) => void recoverOwner(event)}>
+              <label htmlFor="recover-owner-token">{t("recoveryKey")}</label>
+              <input autoComplete="off" id="recover-owner-token" onChange={(event) => setRecoveryToken(event.target.value)} required type="password" value={recoveryToken} />
+              <small>{t("recoveryKeyHelp")}</small>
+              <button disabled={busy}>{busy ? t("signingIn") : t("recoverAccess")}</button>
+            </form>
+            <aside className="access-note">
+              <strong>{t("memberAccess")}</strong>
+              <p>{t("memberInvitationExplanation")}</p>
+            </aside>
+          </>
+        )}
+        {state === "claim_required" && (
+          <>
+            <h1>{t("invitedToTeam")}</h1>
+            <p>{t("invitationClaimHelp")}</p>
+            <button className="access-primary" disabled={busy} onClick={() => void onClaimInvitation()} type="button">
+              {busy ? t("joiningTeam") : t("joinTeam")}
+            </button>
+          </>
+        )}
+        {error && <div className="access-error" role="alert">{errorLabel(error, locale)}</div>}
+      </section>
+    </main>
+  );
+}
+
 export function App() {
   const [theme, setTheme] = useState<Theme>(() =>
     localStorage.getItem(themeKey) === "light" ? "light" : "dark"
@@ -287,6 +442,11 @@ export function App() {
     localStorage.getItem(localeKey) === "en" ? "en" : "zh-CN"
   );
   const [session, setSession] = useState<LocalSession | null>(null);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  const [authState, setAuthState] = useState<AuthGateState>("loading");
+  const [pendingInvitationToken, setPendingInvitationToken] = useState<string | null>(() =>
+    invitationTokenFromFragment(window.location.hash)
+  );
   const [teams, setTeams] = useState<Team[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -306,6 +466,9 @@ export function App() {
   const [deviceName, setDeviceName] = useState("");
   const [joinCode, setJoinCode] = useState("");
   const [setupOutput, setSetupOutput] = useState<string | null>(null);
+  const [memberInviteName, setMemberInviteName] = useState("");
+  const [memberInvitation, setMemberInvitation] = useState<MemberInvitation | null>(null);
+  const [invitationCopied, setInvitationCopied] = useState(false);
   const [messageContent, setMessageContent] = useState("");
   const [composerMode, setComposerMode] = useState<ComposerMode>("message");
   const [discussionAgentIds, setDiscussionAgentIds] = useState<string[]>([]);
@@ -346,6 +509,7 @@ export function App() {
   const readyAgents = agents.filter((agent) => agent.presence === "ready").length;
   const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
   const activeDevices = devices.filter((device) => device.status === "active").length;
+  const currentMember = members.find((member) => member.userId === session?.userId) ?? null;
   const t = (key: TranslationKey) => translate(locale, key);
   const activeDiscussion = [...discussions].reverse().find(({ discussion }) =>
     !["completed", "canceled", "terminated"].includes(discussion.state)
@@ -361,6 +525,15 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   }, [theme]);
+
+  useLayoutEffect(() => {
+    if (!pendingInvitationToken) return;
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}`
+    );
+  }, []);
 
   useEffect(() => {
     setDiscussionAgentIds((current) => {
@@ -383,13 +556,129 @@ export function App() {
     setSelectedTeamId((current) => current ?? next[0]?.teamId ?? null);
   }
 
+  async function activateSession(
+    user: AuthenticatedUser,
+    mode: AuthMode,
+    token?: string
+  ) {
+    const next: LocalSession = {
+      userId: user.userId,
+      displayName: user.displayName,
+      ...(token ? { token } : {})
+    };
+    setAuthMode(mode);
+    setSession(next);
+    setAuthState("authenticated");
+    await loadTeams(next);
+  }
+
+  async function enterLocalSession() {
+    setBusy(true);
+    setError(null);
+    try {
+      const next = await localBootstrap();
+      setAuthMode("local");
+      setSession(next);
+      setAuthState("authenticated");
+      await loadTeams(next);
+    } catch (reason) {
+      setAuthState("local_bootstrap");
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function setupOwner(displayName: string, recoveryToken: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await jsonRequest<{
+        user: AuthenticatedUser;
+        session: { expiresAt: string };
+      }>("/api/auth/setup", {
+        method: "POST",
+        headers: { "x-agent-room-recovery-token": recoveryToken },
+        body: JSON.stringify({ displayName })
+      });
+      await activateSession(result.user, "trusted-team");
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function recoverOwner(recoveryToken: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await jsonRequest<{
+        user: AuthenticatedUser;
+        session: { expiresAt: string };
+      }>("/api/auth/recover-owner", {
+        method: "POST",
+        headers: { "x-agent-room-recovery-token": recoveryToken }
+      });
+      await activateSession(result.user, "trusted-team");
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function claimInvitation() {
+    if (!pendingInvitationToken) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await jsonRequest<{
+        user: AuthenticatedUser;
+        member: Member;
+        session: { expiresAt: string };
+      }>("/api/auth/member-invitations/claim", {
+        method: "POST",
+        body: JSON.stringify({ token: pendingInvitationToken })
+      });
+      setPendingInvitationToken(null);
+      await activateSession(result.user, "trusted-team");
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
-    void bootstrap()
-      .then(async (next) => {
-        setSession(next);
-        await loadTeams(next);
+    let stopped = false;
+    void jsonRequest<AuthStatus>("/api/auth/status")
+      .then(async (status) => {
+        if (stopped) return;
+        setAuthMode(status.mode);
+        if (pendingInvitationToken && status.mode === "trusted-team") {
+          setAuthState("claim_required");
+          return;
+        }
+        if (pendingInvitationToken) setPendingInvitationToken(null);
+        if (status.state === "authenticated") {
+          if (!status.user) throw new Error("Authenticated status is missing its User");
+          await activateSession(status.user, status.mode);
+          return;
+        }
+        if (status.state === "local_bootstrap") {
+          setAuthState("local_bootstrap");
+          await enterLocalSession();
+          return;
+        }
+        setAuthState(status.state);
       })
-      .catch((reason: unknown) => setError(String(reason)));
+      .catch((reason: unknown) => {
+        if (!stopped) setError(String(reason));
+      });
+    return () => {
+      stopped = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -563,6 +852,76 @@ export function App() {
       setRoomName("");
       setRooms((current) => [...current, room]);
       setSelectedRoomId(room.roomId);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function createMemberInvitation(event: FormEvent) {
+    event.preventDefault();
+    if (
+      !session ||
+      !selectedTeamId ||
+      authMode !== "trusted-team" ||
+      currentMember?.role !== "owner" ||
+      !memberInviteName.trim()
+    ) return;
+    setBusy(true);
+    setError(null);
+    try {
+      const invitation = await jsonRequest<MemberInvitation>(
+        `/api/teams/${selectedTeamId}/member-invitations`,
+        {
+          method: "POST",
+          body: JSON.stringify({ displayName: memberInviteName.trim() })
+        },
+        session.token
+      );
+      setMemberInviteName("");
+      setMemberInvitation(invitation);
+      setInvitationCopied(false);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyMemberInvitation() {
+    if (!memberInvitation) return;
+    try {
+      await navigator.clipboard.writeText(memberInvitation.claimUrl);
+      setInvitationCopied(true);
+    } catch (reason) {
+      setError(String(reason));
+    }
+  }
+
+  async function signOut() {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await jsonRequest<{ status: "signed_out" }>(
+        "/api/auth/session",
+        { method: "DELETE" },
+        session.token
+      );
+      setSession(null);
+      setTeams([]);
+      setRooms([]);
+      setMembers([]);
+      setAgents([]);
+      setDevices([]);
+      setMessages([]);
+      setRuns([]);
+      setDiscussions([]);
+      setSelectedTeamId(null);
+      setSelectedRoomId(null);
+      setMemberInvitation(null);
+      setAuthState(authMode === "local" ? "local_bootstrap" : "sign_in_required");
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -902,6 +1261,30 @@ export function App() {
     setActiveView("agents");
   }
 
+  function revealTeamMembers() {
+    setMemberInvitation(null);
+    setInvitationCopied(false);
+    setActiveView("members");
+  }
+
+  if (authState !== "authenticated") {
+    return (
+      <AccessGate
+        busy={busy}
+        error={error}
+        locale={locale}
+        onClaimInvitation={claimInvitation}
+        onEnterLocal={enterLocalSession}
+        onRecoverOwner={recoverOwner}
+        onSetupOwner={setupOwner}
+        onToggleLocale={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")}
+        onToggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+        state={authState}
+        theme={theme}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
       <aside className="team-rail" aria-label={t("teamSpace")}>
@@ -919,13 +1302,22 @@ export function App() {
           ))}
         </div>
         {selectedTeam && (
-          <button
-            aria-label={t("agentManagement")}
-            className={activeView === "agents" ? "rail-manage active" : "rail-manage"}
-            onClick={revealConnectionSetup}
-            title={t("agentManagement")}
-            type="button"
-          >✦</button>
+          <div className="rail-actions">
+            <button
+              aria-label={t("teamMembers")}
+              className={activeView === "members" ? "rail-manage active" : "rail-manage"}
+              onClick={revealTeamMembers}
+              title={t("teamMembers")}
+              type="button"
+            >♙</button>
+            <button
+              aria-label={t("agentManagement")}
+              className={activeView === "agents" ? "rail-manage active" : "rail-manage"}
+              onClick={revealConnectionSetup}
+              title={t("agentManagement")}
+              type="button"
+            >✦</button>
+          </div>
         )}
       </aside>
 
@@ -973,6 +1365,7 @@ export function App() {
             {selectedTeam && (
               <>
                 <button className={activeView === "room" ? "active" : ""} onClick={() => setActiveView("room")} type="button">{t("chat")}</button>
+                <button className={activeView === "members" ? "active" : ""} onClick={revealTeamMembers} type="button">{t("teamMembers")}</button>
                 <button className={activeView === "agents" ? "active" : ""} onClick={() => setActiveView("agents")} type="button">{t("agents")}</button>
               </>
             )}
@@ -983,14 +1376,21 @@ export function App() {
               title={theme === "dark" ? t("switchToLight") : t("switchToDark")}
               type="button"
             >{theme === "dark" ? "☀" : "☾"}</button>
+            <button className="mobile-sign-out" disabled={busy} onClick={() => void signOut()} type="button">{t("signOut")}</button>
           </div>
         </nav>
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">{activeView === "agents" && selectedTeam ? t("controlPlane") : t("room")}</p>
+            <p className="eyebrow">
+              {activeView === "agents" && selectedTeam
+                ? t("controlPlane")
+                : activeView === "members" && selectedTeam ? t("teamAccess") : t("room")}
+            </p>
             <h2>
               {activeView === "agents" && selectedTeam
                 ? t("agentsDevices")
+                : activeView === "members" && selectedTeam
+                  ? t("teamMembers")
                 : selectedRoom ? `# ${selectedRoom.name}` : t("chooseRoom")}
             </h2>
           </div>
@@ -1041,6 +1441,9 @@ export function App() {
               title={theme === "dark" ? t("switchToLight") : t("switchToDark")}
               type="button"
             >{theme === "dark" ? "☀" : "☾"}</button>
+            <button className="header-sign-out" disabled={busy} onClick={() => void signOut()} type="button">
+              {t("signOut")}
+            </button>
             {selectedTeam && (
               <div className="agent-summary">
                 <span className={`presence-dot ${readyAgents === 0 ? "offline" : ""}`} />
@@ -1072,6 +1475,78 @@ export function App() {
               </div>
               <small>{t("nextRoomAgent")}</small>
             </form>
+          </section>
+        ) : activeView === "members" ? (
+          <section className="management-workspace member-workspace" aria-label={t("teamMembers")}>
+            <div className="management-intro">
+              <div>
+                <p className="eyebrow">{t("teamAccess")}</p>
+                <h3>{t("manageTeamMembers")}</h3>
+                <p>{t("membersDescription")}</p>
+              </div>
+            </div>
+
+            <div className="member-management-grid">
+              <section className="control-panel" aria-labelledby="member-roster-title">
+                <div className="panel-header">
+                  <div><p className="eyebrow">{t("memberRoster")}</p><h3 id="member-roster-title">{selectedTeam.name}</h3></div>
+                  <span>{locale === "zh-CN" ? `${members.length} 位成员` : `${members.length} members`}</span>
+                </div>
+                <div className="member-roster">
+                  {members.map((member) => (
+                    <article className="member-card" key={member.memberId}>
+                      <span className="participant-avatar human">{member.displayName.slice(0, 1).toUpperCase()}</span>
+                      <div>
+                        <strong>{member.displayName}</strong>
+                        <small>{member.role === "owner" ? t("teamOwner") : t("teamMember")}</small>
+                      </div>
+                      {member.userId === session?.userId && <span className="current-user-badge">{t("currentAccount")}</span>}
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <section className="control-panel member-invitation-panel" aria-labelledby="member-invitation-title">
+                <div className="panel-header">
+                  <div><p className="eyebrow">{t("privateInvitation")}</p><h3 id="member-invitation-title">{t("inviteMember")}</h3></div>
+                </div>
+                {authMode !== "trusted-team" ? (
+                  <div className="panel-empty compact">
+                    <strong>{t("trustedModeRequired")}</strong>
+                    <p>{t("trustedModeRequiredHelp")}</p>
+                  </div>
+                ) : currentMember?.role !== "owner" ? (
+                  <div className="panel-empty compact">
+                    <strong>{t("ownerOnlyInvites")}</strong>
+                    <p>{t("ownerOnlyInvitesHelp")}</p>
+                  </div>
+                ) : (
+                  <>
+                    <p className="invitation-help">{t("invitationHelp")}</p>
+                    <form className="approval-form" onSubmit={createMemberInvitation}>
+                      <label htmlFor="member-invite-name">{t("memberDisplayName")}</label>
+                      <div>
+                        <input id="member-invite-name" onChange={(event) => setMemberInviteName(event.target.value)} placeholder={locale === "zh-CN" ? "例如：小李" : "For example: Bob"} required value={memberInviteName} />
+                        <button disabled={busy}>{busy ? t("creating") : t("createInvitation")}</button>
+                      </div>
+                    </form>
+                    {memberInvitation && (
+                      <div className="member-invitation-result" aria-live="polite">
+                        <strong>{t("invitationCreated")}</strong>
+                        <p>{t("invitationSharePrivately")}</p>
+                        <div className="invitation-link">
+                          <input aria-label={t("invitationLink")} readOnly value={memberInvitation.claimUrl} />
+                          <button onClick={() => void copyMemberInvitation()} type="button">
+                            {invitationCopied ? t("copied") : t("copyLink")}
+                          </button>
+                        </div>
+                        <small>{t("invitationExpires")} {new Date(memberInvitation.expiresAt).toLocaleString(locale)}</small>
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            </div>
           </section>
         ) : activeView === "agents" ? (
           <section className="management-workspace" aria-label={t("agentManagement")}>

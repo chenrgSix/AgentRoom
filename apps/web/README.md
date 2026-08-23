@@ -1,8 +1,10 @@
 # Agent Room Web
 
 The browser UI is the central Team surface; it is not a desktop client. It
-bootstraps a local Web session and manages Teams, Rooms, and in-process Fake
-Agents through the Fastify API.
+supports the compatible local bootstrap flow and the `trusted-team` Web flow
+with secure Cookie sessions, Owner recovery, and one-time member invitations.
+After authentication it manages Teams, Rooms, and Agents through the Fastify
+API.
 
 ```bash
 npm run dev:server
@@ -13,5 +15,6 @@ npm run test --workspace @agent-room/web
 Vite runs on port 5173 and proxies `/api` to the central server on port 3000.
 Production assets are emitted to `apps/web/dist/`.
 
-The Web test renders the onboarding flow in JSDOM and verifies that creating a
-Team calls the API and advances the interface to Room setup.
+Web tests render both identity modes in JSDOM. They cover local onboarding,
+trusted Owner setup/recovery, URL-fragment invitation claim, Cookie request
+credentials, member invitation creation, and logout.
