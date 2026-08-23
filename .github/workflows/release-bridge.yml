@@ -23,6 +23,9 @@ jobs:
     name: Validate draft Release
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      # GitHub hides draft Releases from tokens without release write access.
+      contents: write
     steps:
       - name: Require a version tag and empty draft Release
         env:
@@ -214,7 +217,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: read
+      # Draft assets have the same visibility rule as the draft itself.
+      contents: write
     steps:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
