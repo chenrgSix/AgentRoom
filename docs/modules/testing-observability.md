@@ -43,8 +43,16 @@ plateau detection, policy precedence, reserved finalization, stale decision
 fencing, all user stop modes, restart recovery, optional assessment transport,
 and reply-only Codex/Generic CLI downgrade without calling a model. A browser
 acceptance run proves that two Fake Agents alternate and persist a final
-conclusion through the public HTTP API. `QA-007` remains the release-level live
-Codex-Pi acceptance gate rather than being inferred from adapter tests.
+conclusion through the public HTTP API.
+
+`QA-007` runs only when explicitly requested with `npm run test:e2e:live`.
+The verified 2026-08-23 run used Codex CLI `0.149.0-alpha.4.1` as a read-only
+Solver and Pi `0.84.2` as a no-tools Generic CLI Reviewer. A temporary server,
+SQLite database, Bridge identity, and inbox proved Codex-to-Pi scheduling,
+structured assessment transport, one useful automatic lease extension, the
+soft boundary, user-requested finish, Pi finalization, and cleanup. Deterministic
+Orchestrator tests remain the stable evidence for early finish, plateau, and
+hard-budget reserved finalization.
 
 ## Required Scenarios
 

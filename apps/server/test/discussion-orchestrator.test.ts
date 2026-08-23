@@ -253,6 +253,63 @@ test("soft budget waits for semantic continue and user finish stops after the ac
   }
 });
 
+test("hard budget reserves finalization and terminates after the conclusion", async () => {
+  const value = await fixture();
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Stop safely at the hard Discussion boundary.",
+      participantAgentIds: value.agentIds,
+      outputMode: "unresolved_issues",
+      policy: {
+        initialLeaseTurns: 1,
+        automaticMaxTurns: 2,
+        hardMaxTurns: 3,
+        finalizationReserveTurns: 1,
+        plateauWindow: 4
+      }
+    });
+    let run = result.scheduledRun;
+    assert.ok(run);
+    completeRun({
+      core: value.core,
+      runs: value.runs,
+      run,
+      content: "Record the last verified conclusion before stopping."
+    });
+    result = value.orchestrator.onRunTerminal(run.runId) ?? result;
+    run = result.scheduledRun;
+    assert.ok(run);
+    completeRun({
+      core: value.core,
+      runs: value.runs,
+      run,
+      content: "Preserve unresolved questions at the safety boundary."
+    });
+    result = value.orchestrator.onRunTerminal(run.runId) ?? result;
+    assert.equal(result.discussion.state, "finalizing");
+    assert.equal(result.discussion.stateReason, "hard_budget_exhausted");
+    const finalRun = result.scheduledRun;
+    assert.ok(finalRun);
+    assert.match(finalRun.instruction, /Produce the final unresolved issues/);
+    completeRun({
+      core: value.core,
+      runs: value.runs,
+      run: finalRun,
+      content: "Unresolved: validate recovery under a real process restart."
+    });
+    result = value.orchestrator.onRunTerminal(finalRun.runId) ?? result;
+    assert.equal(result.discussion.state, "terminated");
+    assert.equal(
+      value.discussions.listBudgetEvents(result.discussion.discussionId)
+        .filter(({ eventType }) => eventType === "finalization_reserved").length,
+      1
+    );
+  } finally {
+    value.close();
+  }
+});
+
 test("recovery recreates one missing Run from a durable planned turn", async () => {
   const value = await fixture();
   try {

@@ -31,3 +31,30 @@ verified server certificate. Enrollment stores `bridge.json` and
 available for legacy server-issued invitations.
 Stable Agent IDs are generated once into `agent-identities.json` and reused on
 every reconnect; keep Agent configuration names stable when preserving identity.
+
+Pi joins through the Generic CLI adapter in the same Bridge configuration. Use
+the absolute path returned by `command -v pi`; the minimal managed command is:
+
+```json
+{
+  "name": "Local Pi",
+  "role": "Reviewer",
+  "adapter": "generic",
+  "command": [
+    "/absolute/path/to/pi",
+    "--print",
+    "--no-tools",
+    "--no-extensions",
+    "--no-skills",
+    "--no-context-files",
+    "--no-session"
+  ],
+  "workspace": "/absolute/path/to/project",
+  "envAllowlist": ["HOME", "PATH", "PI_CODING_AGENT_DIR"]
+}
+```
+
+This mode receives each bounded turn on stdin and exits after replying. It is
+remotely wakeable through the Bridge but does not claim persistent Pi session
+resume. Add only the credential environment variable actually required by the
+selected Pi provider; do not copy the full parent environment.

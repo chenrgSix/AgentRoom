@@ -36,6 +36,8 @@ The Generic CLI Adapter executes only the configured argument array in its
 fixed workspace, sends the Run instruction on stdin, propagates only allowlisted
 environment variables, and caps returned stdout at 20 KB. Exit failure,
 deadline, cancellation, and output overflow become safe terminal Run events.
+Pi is verified through this fallback using non-interactive `--print`, no-tools,
+no-session operation; it does not gain resume or remote session claims.
 
 The first Fake Adapter lives in the central server workspace solely for the
 in-process MVP acceptance harness. It implements the same ordered request/event

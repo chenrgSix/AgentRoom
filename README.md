@@ -12,8 +12,9 @@ the Team wake a managed Agent.
 
 The central Team MVP is runnable: the Fastify API and React UI persist Teams,
 Rooms, Agents, messages, structured mentions, Runs, ordered Run events, and
-Agent replies in SQLite. Remote MCP supports pull participants, while the
-headless Go Bridge can wake configured Codex or Generic CLI runtimes.
+Agent replies in SQLite. Adaptive Discussions centrally schedule multiple
+Agents under progress and budget policy. Remote MCP supports pull participants,
+while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 
 - Current baseline:
   [agent_room_network_design_v0.2.md](agent_room_network_design_v0.2.md)
@@ -66,11 +67,17 @@ npm install
 npm run validate
 npm run build
 npm test
+npm run test:e2e
 npm run db:migrate
 npm run dev:server
 npm run dev:web
 cd bridge && go test ./... && go build ./cmd/agentroom-bridge
 ```
+
+`npm run test:e2e:live` is an explicit, credential-using acceptance command.
+It invokes local Codex and Pi with bounded read-only/no-tools settings against
+a temporary server and cleans up its database and Bridge state. Ordinary test
+runs skip this live model scenario.
 
 Run the two development commands in separate terminals, then open
 `http://127.0.0.1:5173`. Create a Team, Room, and one or more Fake Agents;
