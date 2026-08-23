@@ -147,9 +147,10 @@ cancellation. A public end-to-end two-Agent parallel Discussion persists its
 conclusion in `QA-010`. Existing UI work is tracked through `WEB-019`; Wave
 presentation and acceptance are completed by `WEB-020` and `QA-010`.
 
-`WEB-021` replaces first-page polling with a newest-page snapshot and resumable
-cursor deltas. Refresh is single-flight so a slow response cannot overwrite a
-newer Room projection. `WEB-022` reads the existing authorized Run-event API
+`WEB-021` replaces first-page polling with a newest-100 snapshot, resumable
+cursor deltas, duplicate suppression, and a 500-message browser history bound.
+Refresh is single-flight and only merges messages, so a slow response cannot
+overwrite a newer Room projection. `WEB-022` reads the existing authorized Run-event API
 only for terminal failures and renders its allowlisted diagnostic fields; raw
 Runtime stderr never enters the browser contract.
 

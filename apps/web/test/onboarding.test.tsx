@@ -204,8 +204,12 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       messageWasSent = true;
       return jsonResponse({ message: memberMessage, runs: [] });
     }
-    if (path === `/api/rooms/${room.roomId}/messages?limit=100`) {
-      return jsonResponse({ items: messageWasSent ? [memberMessage, agentMessage] : [] });
+    if (path === `/api/rooms/${room.roomId}/messages?limit=100&tail=true`) {
+      return jsonResponse({
+        items: messageWasSent ? [memberMessage, agentMessage] : [],
+        nextCursor: null,
+        syncCursor: "cursor-latest"
+      });
     }
     if (path === `/api/rooms/${room.roomId}/runs`) {
       return jsonResponse(discussionState ? discussionRuns : []);

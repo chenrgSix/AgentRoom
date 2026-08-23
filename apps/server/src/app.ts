@@ -1154,15 +1154,23 @@ export async function createServerApp(
   });
   app.get<{
     Params: { roomId: string };
-    Querystring: { cursor?: string; limit?: string };
+    Querystring: { cursor?: string; limit?: string; tail?: string };
   }>("/api/rooms/:roomId/messages", async (request) => {
     const parsedLimit = request.query.limit === undefined
       ? 100
       : Number.parseInt(request.query.limit, 10);
+    if (
+      request.query.tail !== undefined &&
+      request.query.tail !== "true" &&
+      request.query.tail !== "false"
+    ) {
+      throw new Error("Message tail must be true or false");
+    }
     return messages.listMessages(principal(request), {
       roomId: request.params.roomId,
       limit: parsedLimit,
-      ...(request.query.cursor ? { cursor: request.query.cursor } : {})
+      ...(request.query.cursor ? { cursor: request.query.cursor } : {}),
+      ...(request.query.tail === "true" ? { tail: true } : {})
     });
   });
   app.post<{ Params: { roomId: string } }>(

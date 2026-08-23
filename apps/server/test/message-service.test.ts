@@ -60,6 +60,7 @@ test("Room Message pagination remains ordered after a database restart", async (
     });
     assert.deepEqual(pageOne.items, [first]);
     assert.ok(pageOne.nextCursor);
+    assert.ok(pageOne.syncCursor);
     const pageTwo = messages.listMessages(principal, {
       roomId: room.roomId,
       cursor: pageOne.nextCursor ?? undefined,
@@ -73,6 +74,72 @@ test("Room Message pagination remains ordered after a database restart", async (
         cursor: pageOne.nextCursor ?? undefined
       }),
       /Room access denied/
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("Room Message tail snapshot resumes after the newest message", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-tail-"));
+  const databasePath = path.join(directory, "server.sqlite");
+  await migrateDatabase(databasePath);
+  const database = openDatabase(databasePath);
+  try {
+    const repository = new CoreRepository(database);
+    const auth = new AuthService(database);
+    const teams = new TeamRoomService(repository, auth);
+    const created = teams.createTeamForUser({
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
+      userDisplayName: "Alice",
+      teamName: "Long-lived Team",
+      now
+    });
+    const session = auth.issueWebSession(
+      created.owner.userId ?? "",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const principal = auth.authenticateWebSession(session.secret, now);
+    const room = teams.createRoom(principal, created.team.teamId, "general", now);
+    const messages = new MessageService(repository, auth);
+    for (let ordinal = 1; ordinal <= 105; ordinal += 1) {
+      messages.createMemberMessage(principal, {
+        roomId: room.roomId,
+        content: `message-${ordinal}`,
+        now
+      });
+    }
+
+    const snapshot = messages.listMessages(principal, {
+      roomId: room.roomId,
+      limit: 100,
+      tail: true
+    });
+    assert.equal(snapshot.items.length, 100);
+    assert.equal(snapshot.items[0]?.sequence, 6);
+    assert.equal(snapshot.items.at(-1)?.sequence, 105);
+    assert.equal(snapshot.nextCursor, null);
+
+    const newest = messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "message-106",
+      now
+    });
+    const delta = messages.listMessages(principal, {
+      roomId: room.roomId,
+      cursor: snapshot.syncCursor,
+      limit: 100
+    });
+    assert.deepEqual(delta.items, [newest]);
+    assert.equal(delta.nextCursor, null);
+    assert.throws(
+      () => messages.listMessages(principal, {
+        roomId: room.roomId,
+        cursor: snapshot.syncCursor,
+        tail: true
+      }),
+      /cursor and tail mode cannot be combined/
     );
   } finally {
     database.close();

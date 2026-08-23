@@ -19,6 +19,7 @@ interface MessageCursor {
 export interface MessagePage {
   items: MessageRecord[];
   nextCursor: string | null;
+  syncCursor: string;
 }
 
 function encodeCursor(cursor: MessageCursor): string {
@@ -148,12 +149,25 @@ export class MessageService {
 
   public listMessages(
     principal: WebPrincipal,
-    input: { roomId: string; cursor?: string; limit?: number }
+    input: { roomId: string; cursor?: string; limit?: number; tail?: boolean }
   ): MessagePage {
     this.auth.requireRoomMember(principal, input.roomId);
     const limit = input.limit ?? 50;
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
       throw new Error("Message page limit must be between 1 and 100");
+    }
+    if (input.cursor && input.tail) {
+      throw new Error("Message cursor and tail mode cannot be combined");
+    }
+    if (input.tail) {
+      const latest = this.repository.latestMessageSequence(input.roomId);
+      return {
+        items: latest === 0
+          ? []
+          : this.repository.listMessagesThrough(input.roomId, latest, limit),
+        nextCursor: null,
+        syncCursor: encodeCursor({ roomId: input.roomId, sequence: latest })
+      };
     }
     const after = input.cursor
       ? decodeCursor(input.cursor, input.roomId).sequence
@@ -166,7 +180,11 @@ export class MessageService {
       items,
       nextCursor: hasMore && last
         ? encodeCursor({ roomId: input.roomId, sequence: last.sequence })
-        : null
+        : null,
+      syncCursor: encodeCursor({
+        roomId: input.roomId,
+        sequence: last?.sequence ?? after
+      })
     };
   }
 }

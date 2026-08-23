@@ -5,12 +5,14 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
 import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
 
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
+import { mergeRoomMessages } from "./room-sync.js";
 import {
   removeVisibleMentionToken,
   retainVisibleMentionIds
@@ -59,6 +61,12 @@ interface Message {
     displayLabel: string;
   }>;
   createdAt: string;
+}
+
+interface RoomMessagePage {
+  items: Message[];
+  nextCursor: string | null;
+  syncCursor?: string;
 }
 
 interface Device {
@@ -602,6 +610,11 @@ export function App() {
   const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const messageSyncRef = useRef<{
+    roomId: string;
+    cursor: string | null;
+    sequence: number;
+  } | null>(null);
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.teamId === selectedTeamId) ?? null,
@@ -889,11 +902,19 @@ export function App() {
       setMessages([]);
       setRuns([]);
       setDiscussions([]);
+      messageSyncRef.current = null;
       return;
     }
+    let stopped = false;
+    messageSyncRef.current = {
+      roomId: selectedRoomId,
+      cursor: null,
+      sequence: 0
+    };
+    setMessages([]);
     void Promise.all([
-      jsonRequest<{ items: Message[] }>(
-        `/api/rooms/${selectedRoomId}/messages?limit=100`,
+      jsonRequest<RoomMessagePage>(
+        `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`,
         {},
         session.token
       ),
@@ -908,23 +929,54 @@ export function App() {
         session.token
       )
     ]).then(([page, nextRuns, nextDiscussions]) => {
+      if (stopped) return;
       setMessages(page.items);
+      messageSyncRef.current = {
+        roomId: selectedRoomId,
+        cursor: page.syncCursor ?? null,
+        sequence: page.items.at(-1)?.sequence ?? 0
+      };
       setRuns(nextRuns);
       setDiscussions(nextDiscussions);
     })
-      .catch((reason: unknown) => setError(String(reason)));
+      .catch((reason: unknown) => {
+        if (!stopped) setError(String(reason));
+      });
+    return () => {
+      stopped = true;
+    };
   }, [selectedRoomId, session]);
 
   useEffect(() => {
     if (!session || !selectedTeamId || !selectedRoomId) return;
     let stopped = false;
+    let refreshInFlight = false;
     const refresh = async () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
       try {
+        const sync = messageSyncRef.current?.roomId === selectedRoomId
+          ? messageSyncRef.current
+          : null;
+        let cursor = sync?.cursor ?? null;
+        let sequence = sync?.sequence ?? 0;
+        const changedMessages: Message[] = [];
+        for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
+          const messagePath = cursor
+            ? `/api/rooms/${selectedRoomId}/messages?limit=100&cursor=${encodeURIComponent(cursor)}`
+            : `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`;
+          const page = await jsonRequest<RoomMessagePage>(
+            messagePath, {}, session.token
+          );
+          changedMessages.push(...page.items);
+          sequence = Math.max(sequence, page.items.at(-1)?.sequence ?? sequence);
+          cursor = page.nextCursor ?? page.syncCursor ?? cursor;
+          if (!page.nextCursor) break;
+        }
         const [
           nextAgents,
           nextMembers,
           nextDevices,
-          page,
           nextRuns,
           nextDiscussions
         ] = await Promise.all([
@@ -937,9 +989,6 @@ export function App() {
           jsonRequest<Device[]>(
             `/api/teams/${selectedTeamId}/devices`, {}, session.token
           ),
-          jsonRequest<{ items: Message[] }>(
-            `/api/rooms/${selectedRoomId}/messages?limit=100`, {}, session.token
-          ),
           jsonRequest<Run[]>(
             `/api/rooms/${selectedRoomId}/runs`, {}, session.token
           ),
@@ -951,12 +1000,26 @@ export function App() {
           setAgents(nextAgents);
           setMembers(nextMembers);
           setDevices(nextDevices);
-          setMessages(page.items);
+          setMessages((current) => mergeRoomMessages(current, changedMessages));
+          const currentSync = messageSyncRef.current;
+          if (
+            !currentSync ||
+            currentSync.roomId !== selectedRoomId ||
+            sequence >= currentSync.sequence
+          ) {
+            messageSyncRef.current = {
+              roomId: selectedRoomId,
+              cursor,
+              sequence
+            };
+          }
           setRuns(nextRuns);
           setDiscussions(nextDiscussions);
         }
       } catch (reason) {
         if (!stopped) setError(String(reason));
+      } finally {
+        refreshInFlight = false;
       }
     };
     const timer = window.setInterval(() => void refresh(), 2_000);
@@ -1202,8 +1265,8 @@ export function App() {
   async function refreshRoomState() {
     if (!session || !selectedRoomId) return;
     const [page, nextRuns, nextDiscussions] = await Promise.all([
-      jsonRequest<{ items: Message[] }>(
-        `/api/rooms/${selectedRoomId}/messages?limit=100`, {}, session.token
+      jsonRequest<RoomMessagePage>(
+        `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`, {}, session.token
       ),
       jsonRequest<Run[]>(
         `/api/rooms/${selectedRoomId}/runs`, {}, session.token
@@ -1212,7 +1275,20 @@ export function App() {
         `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
       )
     ]);
-    setMessages(page.items);
+    setMessages((current) => mergeRoomMessages(current, page.items));
+    const sequence = page.items.at(-1)?.sequence ?? 0;
+    const currentSync = messageSyncRef.current;
+    if (
+      !currentSync ||
+      currentSync.roomId !== selectedRoomId ||
+      sequence >= currentSync.sequence
+    ) {
+      messageSyncRef.current = {
+        roomId: selectedRoomId,
+        cursor: page.syncCursor ?? currentSync?.cursor ?? null,
+        sequence
+      };
+    }
     setRuns(nextRuns);
     setDiscussions(nextDiscussions);
   }
