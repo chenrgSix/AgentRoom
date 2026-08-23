@@ -94,6 +94,15 @@ The MVP inbox uses one owner-only, fsynced JSON record per Run under `dataDir`.
 Acceptance is serialized, verifies both idempotency key and payload hash, and
 survives process restart before the Bridge sends `run.accepted` sequence 1.
 
+Inbox records created before authoritative trace propagation are not compatible
+with recovery. A terminal record whose request or persisted events lack the
+same valid `traceId` is isolated locally and is never acknowledged or replayed.
+An incompatible `accepted` or `working` record instead fails recovery explicitly
+and remains in place; the Bridge must not silently abandon a possibly active
+central Run. Every recoverable record and every outbound ACK, status, and reply
+must carry the same trace ID supplied by the server; absent, invalid, or
+mismatched values are rejected rather than inferred or migrated.
+
 ## Local Safety
 
 Device credentials use OS-protected storage when available. The Bridge starts
@@ -108,7 +117,7 @@ duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
 Browser acceptance covers first setup, Runtime discovery, adding Pi to an
 existing Bridge, and status rendering. Work is tracked by `BRG-001` through
-`BRG-015` in `docs/TASKS.md`.
+`BRG-016` in `docs/TASKS.md`.
 
 ## Desktop Client
 
@@ -161,6 +170,11 @@ The first release artifacts are unsigned portable binaries. Desktop packages
 remain unsigned by product decision and rely on checksum verification plus
 explicit user trust. Login startup remains opt-in, and update checks remain
 manual-only; neither capability installs or executes downloaded code.
+
+`v0.2.0-rc.1` predates `BRG-016` and cannot repair an incompatible inbox by
+itself. For a strict central-service deployment, replace the Bridge first and
+let it inspect local recovery records before deploying the matching Server;
+mixing the old prerelease Bridge with the strict Server is unsupported.
 
 `BRG-012` through `BRG-015` close the desktop operations gap. Process state and
 central connection state are separate: a running local goroutine may still be

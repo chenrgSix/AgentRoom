@@ -10,7 +10,8 @@ container-only, Fake Runtime, or Generic Runtime run does not satisfy QA-002.
 
 - Machine A serves the current `main` Server and Web build behind HTTPS.
 - Machine B can reach that HTTPS URL and has a working local Codex login.
-- The v0.1.0 or newer Bridge archive matches machine B's OS and architecture.
+- A Bridge release containing `BRG-016` and newer than `v0.2.0-rc.1` matches
+  machine B's OS and architecture.
 - Alice records both host descriptions without publishing private addresses.
 - The HTTPS certificate fingerprint is verified out of band before enrollment.
 

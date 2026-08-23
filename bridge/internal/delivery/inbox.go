@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -23,6 +24,21 @@ const (
 	StateFailed         State = "failed"
 	StateOutcomeUnknown State = "outcome_unknown"
 )
+
+const incompatibleTraceQuarantineDirectory = "quarantine-incompatible-trace"
+
+var (
+	runIDPattern   = regexp.MustCompile(`^run_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$`)
+	traceIDPattern = regexp.MustCompile(`^trace_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$`)
+)
+
+func isContractRunID(value string) bool {
+	return runIDPattern.MatchString(value)
+}
+
+func isContractTraceID(value string) bool {
+	return traceIDPattern.MatchString(value)
+}
 
 type Record struct {
 	RunID          string                        `json:"runId"`
@@ -79,12 +95,25 @@ func (i *Inbox) List() ([]Record, error) {
 	}
 	records := make([]Record, 0, len(entries))
 	for _, entry := range entries {
+		if entry.Type()&os.ModeSymlink != 0 {
+			return nil, fmt.Errorf("inbox contains a symbolic link: %s", entry.Name())
+		}
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			return nil, fmt.Errorf("inspect inbox record: %w", err)
+		}
+		if !info.Mode().IsRegular() {
+			return nil, fmt.Errorf("inbox record is not a regular file: %s", entry.Name())
 		}
 		record, err := i.load(filepath.Join(i.directory, entry.Name()))
 		if err != nil {
 			return nil, err
+		}
+		if !isContractRunID(record.RunID) || entry.Name() != record.RunID+".json" {
+			return nil, fmt.Errorf("inbox filename does not match Run identity: %s", entry.Name())
 		}
 		records = append(records, record)
 	}
@@ -100,14 +129,27 @@ func Open(directory string) (*Inbox, error) {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return nil, fmt.Errorf("create inbox: %w", err)
 	}
+	info, err := os.Lstat(directory)
+	if err != nil {
+		return nil, fmt.Errorf("inspect inbox: %w", err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 || !info.IsDir() {
+		return nil, fmt.Errorf("inbox path must be a directory, not a symbolic link")
+	}
+	if err := os.Chmod(directory, 0o700); err != nil {
+		return nil, fmt.Errorf("protect inbox: %w", err)
+	}
 	return &Inbox{directory: directory}, nil
 }
 
 func (i *Inbox) Accept(request contracts.RunRequestedPayload, now time.Time) (Record, bool, error) {
 	i.mu.Lock()
 	defer i.mu.Unlock()
-	if !strings.HasPrefix(request.RunID, "run_") || strings.ContainsAny(request.RunID, "/\\") {
+	if !isContractRunID(request.RunID) {
 		return Record{}, false, fmt.Errorf("invalid Run ID")
+	}
+	if !isContractTraceID(request.TraceID) {
+		return Record{}, false, fmt.Errorf("invalid Run trace ID")
 	}
 	source, err := json.Marshal(request)
 	if err != nil {
@@ -133,6 +175,50 @@ func (i *Inbox) Accept(request contracts.RunRequestedPayload, now time.Time) (Re
 		return Record{}, false, err
 	}
 	return record, false, nil
+}
+
+// QuarantineIncompatibleTrace atomically removes a terminal record with
+// incompatible trace metadata from the active inbox without deleting it. The
+// dedicated owner-only directory remains available for local audit and is
+// ignored by List.
+func (i *Inbox) QuarantineIncompatibleTrace(runID string) (string, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if !isContractRunID(runID) {
+		return "", fmt.Errorf("invalid Run ID")
+	}
+	source := i.path(runID)
+	quarantineDirectory := filepath.Join(i.directory, incompatibleTraceQuarantineDirectory)
+	if err := os.MkdirAll(quarantineDirectory, 0o700); err != nil {
+		return "", fmt.Errorf("create incompatible trace quarantine: %w", err)
+	}
+	if err := os.Chmod(quarantineDirectory, 0o700); err != nil {
+		return "", fmt.Errorf("protect incompatible trace quarantine: %w", err)
+	}
+	if err := os.Chmod(source, 0o600); err != nil {
+		return "", fmt.Errorf("protect incompatible trace inbox record: %w", err)
+	}
+	name := filepath.Base(source)
+	for suffix := 0; ; suffix++ {
+		destinationName := name
+		if suffix > 0 {
+			destinationName = fmt.Sprintf(
+				"%s-duplicate-%d.json",
+				strings.TrimSuffix(name, filepath.Ext(name)),
+				suffix,
+			)
+		}
+		destination := filepath.Join(quarantineDirectory, destinationName)
+		if _, err := os.Lstat(destination); err == nil {
+			continue
+		} else if !os.IsNotExist(err) {
+			return "", fmt.Errorf("inspect incompatible trace quarantine target: %w", err)
+		}
+		if err := os.Rename(source, destination); err != nil {
+			return "", fmt.Errorf("quarantine incompatible trace inbox record: %w", err)
+		}
+		return destination, nil
+	}
 }
 
 func (i *Inbox) Update(runID string, state State, sequence int64, now time.Time) (Record, error) {

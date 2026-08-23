@@ -709,6 +709,7 @@
       "additionalProperties": true,
       "required": [
         "runId",
+        "traceId",
         "agentId",
         "sequence"
       ],

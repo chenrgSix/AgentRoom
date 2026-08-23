@@ -36,7 +36,7 @@ func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessa
 		Payload: contracts.RunAcceptedPayload{
 			AgentID:  message.Payload.TargetAgentID,
 			RunID:    message.Payload.RunID,
-			TraceID:  traceIDPointer(message.Payload.TraceID),
+			TraceID:  message.Payload.TraceID,
 			Sequence: 1,
 		},
 	}
@@ -58,8 +58,4 @@ func newMessageID() string {
 		panic(err)
 	}
 	return "msg_" + base64.RawURLEncoding.EncodeToString(buffer)
-}
-
-func traceIDPointer(value string) *string {
-	return &value
 }

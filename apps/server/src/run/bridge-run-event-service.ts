@@ -36,7 +36,7 @@ export class BridgeRunEventService {
     principal: DevicePrincipal,
     input: {
       runId: string;
-      traceId?: string;
+      traceId: string;
       agentId: string;
       sequence: number;
       status: RuntimeStatus;
@@ -82,7 +82,7 @@ export class BridgeRunEventService {
     principal: DevicePrincipal,
     input: {
       runId: string;
-      traceId?: string;
+      traceId: string;
       agentId: string;
       sequence: number;
       content: string;
@@ -144,7 +144,7 @@ export class BridgeRunEventService {
   private requireOwnedRun(
     principal: DevicePrincipal,
     runId: string,
-    traceId: string | undefined,
+    traceId: string,
     agentId: string
   ): RunRecord {
     const run = this.runs.getRun(runId);
@@ -152,7 +152,7 @@ export class BridgeRunEventService {
     if (
       !run ||
       !agent ||
-      (traceId !== undefined && run.traceId !== traceId) ||
+      run.traceId !== traceId ||
       run.targetAgentId !== agentId ||
       agent.deviceId !== principal.deviceId ||
       agent.ownerMemberId !== principal.ownerMemberId ||

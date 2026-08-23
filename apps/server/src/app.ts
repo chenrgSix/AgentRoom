@@ -9,6 +9,7 @@ import {
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import Fastify, {
   LogController,
+  type FastifyBaseLogger,
   type FastifyInstance,
   type FastifyReply,
   type FastifyRequest
@@ -67,6 +68,7 @@ export interface ServerAppOptions {
   databasePath: string;
   clock?: () => string;
   logger?: boolean;
+  loggerInstance?: FastifyBaseLogger;
   trustProxyHops?: number;
   webAuth?: WebAuthConfiguration;
   webRoot?: string;
@@ -143,6 +145,51 @@ function bearerToken(request: FastifyRequest): string {
     throw new AuthorizationError("UNAUTHENTICATED", "Bearer session required");
   }
   return authorization.slice(7);
+}
+
+interface BridgeMessageEnvelope {
+  protocolVersion?: string;
+  type?: string;
+  payload?: Record<string, unknown>;
+}
+
+type BridgeRejectionCategory =
+  | "invalid_envelope"
+  | "invalid_hello"
+  | "heartbeat_identity_mismatch"
+  | "agent_publication_rejected"
+  | "invalid_trace_id"
+  | "run_acceptance_rejected"
+  | "run_status_rejected"
+  | "run_reply_rejected"
+  | "hello_required";
+
+const bridgeTraceIdPattern = /^trace_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/u;
+const bridgeLogIdentifierPattern =
+  /^(?:agent|run)_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/u;
+const bridgeLogMessageTypes = new Set([
+  "bridge.hello",
+  "bridge.heartbeat",
+  "agent.publish",
+  "run.accepted",
+  "run.status",
+  "run.reply"
+]);
+
+function isBridgeTraceId(value: unknown): value is string {
+  return typeof value === "string" && bridgeTraceIdPattern.test(value);
+}
+
+function safeBridgeLogIdentifier(value: unknown): string | undefined {
+  return typeof value === "string" && bridgeLogIdentifierPattern.test(value)
+    ? value
+    : undefined;
+}
+
+function safeBridgeLogMessageType(value: unknown): string {
+  return typeof value === "string" && bridgeLogMessageTypes.has(value)
+    ? value
+    : "unknown";
 }
 
 export async function createServerApp(
@@ -257,7 +304,9 @@ export async function createServerApp(
     }
   );
   const app = Fastify({
-    logger: options.logger ?? false,
+    ...(options.loggerInstance
+      ? { loggerInstance: options.loggerInstance }
+      : { logger: options.logger ?? false }),
     logController: new LogController({ disableRequestLogging: true }),
     ...(options.trustProxyHops === undefined
       ? {}
@@ -423,14 +472,72 @@ export async function createServerApp(
     const devicePrincipal = auth.authenticateDevice(bearerToken(request), clock());
     let registeredEpoch: number | undefined;
     socket.on("message", (source: { toString(): string }) => {
+      let parsed: unknown;
       try {
-        const message = JSON.parse(source.toString()) as {
-          protocolVersion?: string;
-          type?: string;
-          payload?: Record<string, unknown>;
-        };
-        if (message.protocolVersion !== "1.0" || !message.payload) {
+        parsed = JSON.parse(source.toString()) as unknown;
+      } catch {
+        app.log.warn({
+          event: "bridge.message.malformed",
+          deviceId: devicePrincipal.deviceId,
+          connectionEpoch: registeredEpoch ?? null
+        }, "Malformed Bridge message");
+        socket.close(4_007, "Malformed Bridge message");
+        return;
+      }
+      const message = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? parsed as BridgeMessageEnvelope
+        : undefined;
+      const rejectMessage = (category: BridgeRejectionCategory): void => {
+        const payload = message?.payload && typeof message.payload === "object" &&
+          !Array.isArray(message.payload)
+          ? message.payload
+          : undefined;
+        const runId = safeBridgeLogIdentifier(payload?.runId);
+        const agentId = safeBridgeLogIdentifier(payload?.agentId);
+        app.log.warn({
+          event: "bridge.message.rejected",
+          deviceId: devicePrincipal.deviceId,
+          connectionEpoch: registeredEpoch ?? null,
+          type: safeBridgeLogMessageType(message?.type),
+          errorCategory: category,
+          ...(runId ? { runId } : {}),
+          ...(agentId ? { agentId } : {})
+        }, "Bridge message rejected");
+        socket.close(4_008, `Bridge message rejected: ${category}`);
+      };
+      const failMessage = (category: BridgeRejectionCategory): void => {
+        const payload = message?.payload && typeof message.payload === "object" &&
+          !Array.isArray(message.payload)
+          ? message.payload
+          : undefined;
+        const runId = safeBridgeLogIdentifier(payload?.runId);
+        const agentId = safeBridgeLogIdentifier(payload?.agentId);
+        app.log.error({
+          event: "bridge.message.processing_failed",
+          deviceId: devicePrincipal.deviceId,
+          connectionEpoch: registeredEpoch ?? null,
+          type: safeBridgeLogMessageType(message?.type),
+          errorCategory: category,
+          ...(runId ? { runId } : {}),
+          ...(agentId ? { agentId } : {})
+        }, "Bridge message processing failed");
+        socket.close(4_008, `Bridge message rejected: ${category}`);
+      };
+      if (!message) {
+        rejectMessage("invalid_envelope");
+        return;
+      }
+      try {
+        if (message.protocolVersion !== "1.0") {
           socket.close(4_002, "Unsupported Bridge protocol");
+          return;
+        }
+        if (
+          !message.payload ||
+          typeof message.payload !== "object" ||
+          Array.isArray(message.payload)
+        ) {
+          rejectMessage("invalid_envelope");
           return;
         }
         if (message.type === "bridge.hello") {
@@ -444,7 +551,7 @@ export async function createServerApp(
             !Array.isArray(supported) ||
             !supported.includes("1.0")
           ) {
-            socket.close(4_003, "Invalid Bridge hello");
+            rejectMessage("invalid_hello");
             return;
           }
           if (!bridgeConnections.register(devicePrincipal.deviceId, epoch as number, socket)) {
@@ -471,7 +578,7 @@ export async function createServerApp(
             message.payload.deviceId !== devicePrincipal.deviceId ||
             message.payload.connectionEpoch !== registeredEpoch
           ) {
-            socket.close(4_003, "Heartbeat identity mismatch");
+            rejectMessage("heartbeat_identity_mismatch");
             return;
           }
           presence.recordHeartbeat(devicePrincipal, {
@@ -496,7 +603,7 @@ export async function createServerApp(
             typeof message.payload.role !== "string" ||
             capabilities?.invocationMode !== "managed"
           ) {
-            socket.close(4_003, "Agent publication identity mismatch");
+            rejectMessage("agent_publication_rejected");
             return;
           }
           agents.publishDeviceAgent(devicePrincipal, {
@@ -521,15 +628,17 @@ export async function createServerApp(
             typeof message.payload.agentId !== "string" ||
             message.payload.sequence !== 1
           ) {
-            socket.close(4_003, "Invalid Run acceptance");
+            rejectMessage("run_acceptance_rejected");
+            return;
+          }
+          if (!isBridgeTraceId(message.payload.traceId)) {
+            rejectMessage("invalid_trace_id");
             return;
           }
           const accepted = delivery.accept(
             devicePrincipal,
             message.payload.runId,
-            typeof message.payload.traceId === "string"
-              ? message.payload.traceId
-              : undefined,
+            message.payload.traceId,
             message.payload.agentId,
             1,
             clock()
@@ -553,15 +662,17 @@ export async function createServerApp(
             typeof message.payload.status !== "string" ||
             (error !== undefined && (typeof error !== "object" || error === null))
           ) {
-            socket.close(4_003, "Invalid Run status");
+            rejectMessage("run_status_rejected");
+            return;
+          }
+          if (!isBridgeTraceId(message.payload.traceId)) {
+            rejectMessage("invalid_trace_id");
             return;
           }
           const runtimeError = error as Record<string, unknown> | undefined;
           const applied = bridgeRunEvents.applyStatus(devicePrincipal, {
             runId: message.payload.runId,
-            ...(typeof message.payload.traceId === "string"
-              ? { traceId: message.payload.traceId }
-              : {}),
+            traceId: message.payload.traceId,
             agentId: message.payload.agentId,
             sequence: message.payload.sequence as number,
             status: message.payload.status as Parameters<
@@ -604,14 +715,16 @@ export async function createServerApp(
             !Number.isSafeInteger(message.payload.sequence) ||
             typeof message.payload.content !== "string"
           ) {
-            socket.close(4_003, "Invalid Run reply");
+            rejectMessage("run_reply_rejected");
+            return;
+          }
+          if (!isBridgeTraceId(message.payload.traceId)) {
+            rejectMessage("invalid_trace_id");
             return;
           }
           const applied = bridgeRunEvents.applyReply(devicePrincipal, {
             runId: message.payload.runId,
-            ...(typeof message.payload.traceId === "string"
-              ? { traceId: message.payload.traceId }
-              : {}),
+            traceId: message.payload.traceId,
             agentId: message.payload.agentId,
             sequence: message.payload.sequence as number,
             content: message.payload.content,
@@ -629,9 +742,18 @@ export async function createServerApp(
           }, "Run reply event processed");
           return;
         }
-        socket.close(4_003, "Bridge hello required before messages");
+        rejectMessage("hello_required");
       } catch {
-        socket.close(4_007, "Malformed Bridge message");
+        const category: BridgeRejectionCategory = message.type === "run.accepted"
+          ? "run_acceptance_rejected"
+          : message.type === "run.status"
+            ? "run_status_rejected"
+            : message.type === "run.reply"
+              ? "run_reply_rejected"
+              : message.type === "agent.publish"
+                ? "agent_publication_rejected"
+                : "invalid_envelope";
+        failMessage(category);
       }
     });
     socket.on("close", () => {

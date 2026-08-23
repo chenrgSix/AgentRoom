@@ -86,10 +86,12 @@ missing usage telemetry, and optional Reviewer policies.
 One `traceId` follows Message, Run, delivery, Bridge, and Runtime events.
 The central service creates the opaque `trace_...` identity when a root Message
 is persisted. Replies, child Runs, durable delivery payloads, and sequenced Run
-events inherit it. New Bridges echo it on ACK, status, reply, and handoff
-events; a mismatched value is rejected. For v0.1 Bridge compatibility, an
-omitted event `traceId` is resolved from the authoritative Run rather than
-breaking an existing connection.
+events inherit it. Bridges must echo a non-empty value on ACK, status, reply,
+and handoff events. The server rejects an absent, invalid, or mismatched value;
+it never infers a missing value from the Run. A terminal local inbox record with
+incompatible trace metadata is isolated before recovery and never replayed. An
+incompatible active record fails closed and remains available for explicit
+operator reconciliation instead of being silently discarded.
 
 `GET /api/traces/{traceId}` executes one ordered SQL query across persisted
 Message, Run, Delivery, and Run Event metadata. The caller must be a member of
@@ -97,8 +99,11 @@ the owning Room, and the response deliberately excludes prompts, replies,
 credentials, and local paths.
 
 Structured logs include stable identifiers, state transitions, latency, and
-error codes but exclude secrets and full prompts. Metrics cover connection
-health, queue depth, delivery age, retries, Run outcomes, and event lag.
+error codes but exclude secrets and full prompts. Malformed JSON, a parsed
+envelope rejected by boundary validation, and a failure after authenticated
+processing begins use separate event names; none logs the raw payload. Metrics
+cover connection health, queue depth, delivery age, retries, Run outcomes, and
+event lag.
 
 Health endpoints distinguish process liveness, dependency readiness, and
 degraded optional capabilities. Audit records are durable and access-controlled.

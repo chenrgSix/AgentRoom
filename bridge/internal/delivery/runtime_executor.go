@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -68,7 +69,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 				Type: contracts.RunStatus,
 				Payload: contracts.RunStatusPayload{
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
-					TraceID:  traceIDPointer(record.Request.TraceID),
+					TraceID:  record.Request.TraceID,
 					Sequence: sequence, Status: *event.Status, Error: event.Error,
 				},
 			}
@@ -94,7 +95,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			Type: contracts.RunReply,
 			Payload: contracts.RunReplyPayload{
 				RunID: record.RunID, AgentID: record.Request.TargetAgentID,
-				TraceID:  traceIDPointer(record.Request.TraceID),
+				TraceID:  record.Request.TraceID,
 				Sequence: sequence, Content: content, Assessment: event.Assessment,
 			},
 		}
@@ -138,7 +139,7 @@ func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Se
 		Type: contracts.RunStatus,
 		Payload: contracts.RunStatusPayload{
 			RunID: record.RunID, AgentID: record.Request.TargetAgentID,
-			TraceID:  traceIDPointer(record.Request.TraceID),
+			TraceID:  record.Request.TraceID,
 			Sequence: sequence, Status: contracts.OutcomeUnknown,
 			Error: &contracts.AgentRoomError{
 				Code: code, Message: "Runtime outcome could not be determined.", Retryable: false,
@@ -156,6 +157,9 @@ func (e RuntimeExecutor) Replay(ctx context.Context, record Record, send Sender)
 	if err != nil {
 		return err
 	}
+	if err := validateRecoveryRecord(latest); err != nil {
+		return err
+	}
 	for _, event := range latest.Events {
 		if err := send(ctx, event); err != nil {
 			return err
@@ -169,7 +173,24 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 	if err != nil {
 		return err
 	}
+	recoverable := make([]Record, 0, len(records))
 	for _, record := range records {
+		if err := validateRecoveryRecord(record); err != nil {
+			if !isTerminalState(record.State) {
+				return fmt.Errorf(
+					"active inbox record has incompatible trace metadata: %s: %w",
+					record.RunID,
+					err,
+				)
+			}
+			if _, quarantineErr := e.Inbox.QuarantineIncompatibleTrace(record.RunID); quarantineErr != nil {
+				return quarantineErr
+			}
+			continue
+		}
+		recoverable = append(recoverable, record)
+	}
+	for _, record := range recoverable {
 		now := time.Now().UTC()
 		if e.Now != nil {
 			now = e.Now().UTC()
@@ -178,7 +199,7 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 			ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
 			Type: contracts.RunAccepted,
 			Payload: contracts.RunAcceptedPayload{
-				RunID: record.RunID, TraceID: traceIDPointer(record.Request.TraceID),
+				RunID: record.RunID, TraceID: record.Request.TraceID,
 				AgentID: record.Request.TargetAgentID, Sequence: 1,
 			},
 		}
@@ -192,7 +213,7 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 				Type: contracts.RunStatus,
 				Payload: contracts.RunStatusPayload{
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
-					TraceID:  traceIDPointer(record.Request.TraceID),
+					TraceID:  record.Request.TraceID,
 					Sequence: sequence, Status: contracts.OutcomeUnknown,
 					Error: &contracts.AgentRoomError{
 						Code:      "RUNTIME_PROCESS_RESTARTED",
@@ -207,6 +228,45 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 		}
 		if err := e.Replay(ctx, record, send); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func validateRecoveryRecord(record Record) error {
+	if !isContractRunID(record.RunID) || record.Request.RunID != record.RunID {
+		return fmt.Errorf("request Run identity does not match inbox record")
+	}
+	if !isContractTraceID(record.Request.TraceID) {
+		return fmt.Errorf("request trace identity is invalid")
+	}
+	for index, source := range record.Events {
+		var envelope struct {
+			Type    string          `json:"type"`
+			Payload json.RawMessage `json:"payload"`
+		}
+		if err := json.Unmarshal(source, &envelope); err != nil {
+			return fmt.Errorf("decode persisted Run event %d: %w", index, err)
+		}
+		switch envelope.Type {
+		case string(contracts.RunStatus),
+			string(contracts.RunReply),
+			string(contracts.RunHandoffRequested):
+		default:
+			return fmt.Errorf("persisted Run event %d has unsupported type", index)
+		}
+		var payload struct {
+			RunID   string `json:"runId"`
+			TraceID string `json:"traceId"`
+		}
+		if err := json.Unmarshal(envelope.Payload, &payload); err != nil {
+			return fmt.Errorf("decode persisted Run event payload %d: %w", index, err)
+		}
+		if payload.RunID != record.RunID {
+			return fmt.Errorf("persisted Run event %d has a mismatched Run identity", index)
+		}
+		if !isContractTraceID(payload.TraceID) || payload.TraceID != record.Request.TraceID {
+			return fmt.Errorf("persisted Run event %d has incompatible trace metadata", index)
 		}
 	}
 	return nil

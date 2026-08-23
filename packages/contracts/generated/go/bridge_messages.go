@@ -133,10 +133,10 @@ type RunAcceptedMessage struct {
 }
 
 type RunAcceptedPayload struct {
-	AgentID  string  `json:"agentId"`
-	RunID    string  `json:"runId"`
-	Sequence int64   `json:"sequence"`
-	TraceID  *string `json:"traceId,omitempty"`
+	AgentID  string `json:"agentId"`
+	RunID    string `json:"runId"`
+	Sequence int64  `json:"sequence"`
+	TraceID  string `json:"traceId"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -151,10 +151,10 @@ type RunStatusMessage struct {
 }
 
 type RunStatusPayload struct {
-	AgentID  string  `json:"agentId"`
-	RunID    string  `json:"runId"`
-	Sequence int64   `json:"sequence"`
-	TraceID  *string `json:"traceId,omitempty"`
+	AgentID  string `json:"agentId"`
+	RunID    string `json:"runId"`
+	Sequence int64  `json:"sequence"`
+	TraceID  string `json:"traceId"`
 	// Stable, client-safe error returned at a protocol boundary.
 	Error  *AgentRoomError    `json:"error,omitempty"`
 	Status RunExecutionStatus `json:"status"`
@@ -183,7 +183,7 @@ type RunReplyPayload struct {
 	AgentID    string      `json:"agentId"`
 	RunID      string      `json:"runId"`
 	Sequence   int64       `json:"sequence"`
-	TraceID    *string     `json:"traceId,omitempty"`
+	TraceID    string      `json:"traceId"`
 	Assessment *Assessment `json:"assessment,omitempty"`
 	Content    string      `json:"content"`
 }
@@ -236,13 +236,13 @@ type RunHandoffRequestedMessage struct {
 }
 
 type RunHandoffRequestedPayload struct {
-	AgentID       string  `json:"agentId"`
-	RunID         string  `json:"runId"`
-	Sequence      int64   `json:"sequence"`
-	TraceID       *string `json:"traceId,omitempty"`
-	HandoffID     string  `json:"handoffId"`
-	Summary       string  `json:"summary"`
-	TargetAgentID string  `json:"targetAgentId"`
+	AgentID       string `json:"agentId"`
+	RunID         string `json:"runId"`
+	Sequence      int64  `json:"sequence"`
+	TraceID       string `json:"traceId"`
+	HandoffID     string `json:"handoffId"`
+	Summary       string `json:"summary"`
+	TargetAgentID string `json:"targetAgentId"`
 }
 
 type BridgeJoinRequest struct {

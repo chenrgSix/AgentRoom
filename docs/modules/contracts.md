@@ -86,10 +86,11 @@ field remain fully compatible and are evaluated as reply-only participants.
 Every `run.requested` carries a stable `deliveryAttemptId` and
 `idempotencyKey`, plus the central `traceId`. Retries preserve these fields so
 the Bridge can compare the persisted payload hash and acknowledge without
-starting a second Runtime. New Bridges echo `traceId` on Run events. It remains
-optional on Bridge-to-server events within protocol 1.0 so released v0.1
-Bridges remain compatible; when present, the server verifies it against the
-authoritative Run.
+starting a second Runtime. Every Bridge-to-server Run event must echo the same
+non-empty `traceId`; the server rejects an absent, invalid, or mismatched value.
+Local inbox data written before trace propagation is not a recoverable protocol
+1.0 record and is handled by the Bridge's incompatible-record policy rather
+than inferred by the server.
 
 ## Versioning Rules
 
@@ -100,6 +101,13 @@ authoritative Run.
   incompatibility error.
 - Rolling upgrades must tolerate one previous minor version.
 - Compatibility behavior requires fixtures and release notes.
+
+The required Run-event `traceId` is an explicitly approved pre-stable contract
+reset after `v0.2.0-rc.1`; that prerelease is not inside the rolling-upgrade
+window and must be replaced rather than mixed with the strict server. The next
+release establishes the protocol 1.0 compatibility baseline. After that
+baseline, the major-version and rolling-upgrade rules above apply without this
+exception.
 
 ## Error Envelope
 

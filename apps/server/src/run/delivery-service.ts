@@ -127,7 +127,7 @@ export class DeliveryService {
   public accept(
     principal: DevicePrincipal,
     runId: string,
-    traceId: string | undefined,
+    traceId: string,
     agentId: string,
     sequence: number,
     now: string
@@ -142,8 +142,8 @@ export class DeliveryService {
       !run ||
       !agent ||
       !delivery ||
-      (traceId !== undefined && run.traceId !== traceId) ||
-      (traceId !== undefined && delivery.traceId !== traceId) ||
+      run.traceId !== traceId ||
+      delivery.traceId !== traceId ||
       run.targetAgentId !== agentId ||
       agent.deviceId !== principal.deviceId ||
       agent.ownerMemberId !== principal.ownerMemberId ||
