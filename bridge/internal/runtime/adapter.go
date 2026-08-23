@@ -18,9 +18,10 @@ type Request struct {
 }
 
 type Event struct {
-	Status *contracts.RunExecutionStatus
-	Reply  string
-	Error  *contracts.AgentRoomError
+	Status     *contracts.RunExecutionStatus
+	Reply      string
+	Assessment *contracts.Assessment
+	Error      *contracts.AgentRoomError
 }
 
 type EmitFunc func(context.Context, Event) error

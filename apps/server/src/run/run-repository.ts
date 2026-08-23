@@ -63,6 +63,7 @@ interface RunEventRow {
   event_type: RuntimeEvent["type"];
   status: RunState | null;
   content: string | null;
+  assessment_json: string | null;
   error_json: string | null;
   created_at: string;
 }
@@ -95,10 +96,13 @@ function mapRun(row: RunRow): RunRecord {
 
 function mapRunEvent(row: RunEventRow): RunEventRecord {
   const event: RuntimeEvent = row.event_type === "reply"
-    ? {
+      ? {
         type: "reply",
         sequence: row.sequence,
-        content: row.content ?? ""
+        content: row.content ?? "",
+        ...(row.assessment_json
+          ? { assessment: JSON.parse(row.assessment_json) as Record<string, unknown> }
+          : {})
       }
     : {
         type: "status",
@@ -212,8 +216,9 @@ export class RunRepository {
       const terminalAt = terminalStates.has(nextState) ? now : null;
       this.database.prepare(`
         INSERT INTO run_events (
-          run_id, sequence, event_type, status, content, error_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          run_id, sequence, event_type, status, content, error_json,
+          assessment_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         runId,
         event.sequence,
@@ -222,6 +227,9 @@ export class RunRepository {
         event.type === "reply" ? event.content : null,
         event.type === "status" && event.error
           ? JSON.stringify(event.error)
+          : null,
+        event.type === "reply" && event.assessment
+          ? JSON.stringify(event.assessment)
           : null,
         now
       );

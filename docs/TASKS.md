@@ -131,8 +131,8 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | DISC-002 | DONE | Implement deterministic progress projection and plateau evidence | DISC-001 | structured deltas, priority-aware plateau, and reply-only downgrade tests pass |
 | DISC-003 | DONE | Implement budget ledger, leases, telemetry downgrade, and finalization reserve | DISC-001 | turns, tokens, duration, cost, extensions, unknown usage, and reserve invariants pass |
 | DISC-004 | DONE | Implement authoritative policy engine and Discussion state machine | DISC-002, DISC-003, RUN-004 | policy precedence, decision priority, stale fencing, and user control races are deterministic |
-| DISC-005 | ACTIVE | Build bounded Discussion context and Runtime assessment adapters | DISC-004, ADP-004, ADP-005 | Codex and Generic Runtime receive named context and capability downgrade is explicit |
-| DISC-006 | PLANNED | Implement durable turn scheduling and finalization outputs | DISC-004, DISC-005, RUN-003 | routing intent recovers once and final answer, decision record, and unresolved issues persist |
+| DISC-005 | DONE | Build bounded Discussion context and Runtime assessment adapters | DISC-004, ADP-004, ADP-005 | Codex and Generic Runtime receive named context and capability downgrade is explicit |
+| DISC-006 | DONE | Implement durable turn scheduling and finalization outputs | DISC-004, DISC-005, RUN-003 | routing intent recovers once and final answer, decision record, and unresolved issues persist |
 | WEB-017 | PLANNED | Add Discussion composer, progress, extension, and stop controls | DISC-004, DISC-006, WEB-016 | users start, inspect, continue, adjust, finish, pause, and cancel without exposed turn targets |
 | QA-007 | PLANNED | Verify adaptive Codex-Pi Discussion end to end | DISC-006, WEB-017, QA-006 | early finish, useful extension, plateau, user finish, and hard-stop finalization pass |
 

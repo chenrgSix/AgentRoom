@@ -177,10 +177,29 @@ type RunReplyMessage struct {
 }
 
 type RunReplyPayload struct {
-	AgentID  string `json:"agentId"`
-	RunID    string `json:"runId"`
-	Sequence int64  `json:"sequence"`
-	Content  string `json:"content"`
+	AgentID    string      `json:"agentId"`
+	RunID      string      `json:"runId"`
+	Sequence   int64       `json:"sequence"`
+	Assessment *Assessment `json:"assessment,omitempty"`
+	Content    string      `json:"content"`
+}
+
+type Assessment struct {
+	Confidence            *float64               `json:"confidence,omitempty"`
+	DisagreementRemaining *DisagreementRemaining `json:"disagreementRemaining,omitempty"`
+	GoalSatisfied         *bool                  `json:"goalSatisfied,omitempty"`
+	NewEvidenceRefs       []string               `json:"newEvidenceRefs,omitempty"`
+	NewInformationAdded   *bool                  `json:"newInformationAdded,omitempty"`
+	OpenQuestions         []OpenQuestion         `json:"openQuestions,omitempty"`
+	Recommendation        *Recommendation        `json:"recommendation,omitempty"`
+	ResolvedQuestionIDS   []string               `json:"resolvedQuestionIds,omitempty"`
+	ReviewerApproved      *bool                  `json:"reviewerApproved,omitempty"`
+}
+
+type OpenQuestion struct {
+	ID         string     `json:"id"`
+	Importance Importance `json:"importance"`
+	Question   string     `json:"question"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -344,6 +363,31 @@ type RunStatusMessageType string
 
 const (
 	RunStatus RunStatusMessageType = "run.status"
+)
+
+type DisagreementRemaining string
+
+const (
+	DisagreementRemainingHigh   DisagreementRemaining = "high"
+	DisagreementRemainingLow    DisagreementRemaining = "low"
+	DisagreementRemainingMedium DisagreementRemaining = "medium"
+	None                        DisagreementRemaining = "none"
+)
+
+type Importance string
+
+const (
+	ImportanceHigh   Importance = "high"
+	ImportanceLow    Importance = "low"
+	ImportanceMedium Importance = "medium"
+)
+
+type Recommendation string
+
+const (
+	Continue  Recommendation = "continue"
+	Finish    Recommendation = "finish"
+	WaitHuman Recommendation = "wait_human"
 )
 
 type RunReplyMessageType string

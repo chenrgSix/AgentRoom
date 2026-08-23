@@ -250,7 +250,14 @@
           "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "sequence": 3,
-          "content": "The boundary is consistent with the current contract."
+          "content": "The boundary is consistent with the current contract.",
+          "assessment": {
+            "goalSatisfied": true,
+            "confidence": 0.91,
+            "newInformationAdded": true,
+            "disagreementRemaining": "none",
+            "recommendation": "finish"
+          }
         }
       },
       "valid": true

@@ -64,7 +64,13 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     }, now).run.state, "working");
     assert.equal(service.applyReply(devicePrincipal, {
       runId: run.runId, agentId: agent.agentId, sequence: 3,
-      content: "Implemented. token=very-sensitive-value"
+      content: "Implemented. token=very-sensitive-value",
+      assessment: {
+        goalSatisfied: true,
+        confidence: 0.92,
+        newEvidenceRefs: ["token=assessment-sensitive-value"],
+        recommendation: "finish"
+      }
     }, now).applied, true);
     assert.equal(service.applyReply(devicePrincipal, {
       runId: run.runId, agentId: agent.agentId, sequence: 3,
@@ -84,6 +90,15 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     assert.equal(
       replyEvent?.event.type === "reply" && replyEvent.event.content.includes("very-sensitive"),
       false
+    );
+    assert.deepEqual(
+      replyEvent?.event.type === "reply" ? replyEvent.event.assessment : null,
+      {
+        goalSatisfied: true,
+        confidence: 0.92,
+        newEvidenceRefs: ["[REDACTED]"],
+        recommendation: "finish"
+      }
     );
     assert.equal(core.getAgent(agent.agentId)?.presence, "ready");
     assert.throws(() => service.applyStatus(devicePrincipal, {

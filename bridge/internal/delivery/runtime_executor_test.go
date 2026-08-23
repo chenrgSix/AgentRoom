@@ -26,9 +26,13 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}
 	working := contracts.Working
 	completed := contracts.Completed
+	goalSatisfied := true
 	adapter := &bridgeruntime.FakeAdapter{}
 	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
-		{Status: &working}, {Reply: "done token=very-sensitive-value"}, {Status: &completed},
+		{Status: &working}, {
+			Reply:      "done token=very-sensitive-value",
+			Assessment: &contracts.Assessment{GoalSatisfied: &goalSatisfied},
+		}, {Status: &completed},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -45,6 +49,12 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}
 	if len(sent) != 3 {
 		t.Fatalf("sent %d events, want 3", len(sent))
+	}
+	reply, ok := sent[1].(contracts.RunReplyMessage)
+	if !ok || reply.Payload.Assessment == nil ||
+		reply.Payload.Assessment.GoalSatisfied == nil ||
+		!*reply.Payload.Assessment.GoalSatisfied {
+		t.Fatalf("assessment was not transported: %#v", sent[1])
 	}
 	latest, err := inbox.Get(request.RunID)
 	if err != nil {

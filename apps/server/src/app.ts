@@ -363,7 +363,10 @@ export async function createServerApp(
             runId: message.payload.runId,
             agentId: message.payload.agentId,
             sequence: message.payload.sequence as number,
-            content: message.payload.content
+            content: message.payload.content,
+            ...(message.payload.assessment === undefined
+              ? {}
+              : { assessment: message.payload.assessment })
           }, clock());
           return;
         }

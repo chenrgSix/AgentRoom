@@ -267,12 +267,37 @@ export interface RunReplyMessage {
 }
 
 export interface RunReplyPayload {
-  agentId:  string;
-  runId:    string;
-  sequence: number;
-  content:  string;
+  agentId:     string;
+  runId:       string;
+  sequence:    number;
+  assessment?: Assessment;
+  content:     string;
   [property: string]: unknown;
 }
+
+export interface Assessment {
+  confidence?:            number;
+  disagreementRemaining?: DisagreementRemaining;
+  goalSatisfied?:         boolean;
+  newEvidenceRefs?:       string[];
+  newInformationAdded?:   boolean;
+  openQuestions?:         OpenQuestion[];
+  recommendation?:        Recommendation;
+  resolvedQuestionIds?:   string[];
+  reviewerApproved?:      boolean;
+}
+
+export type DisagreementRemaining = "none" | "low" | "medium" | "high";
+
+export interface OpenQuestion {
+  id:         string;
+  importance: Importance;
+  question:   string;
+}
+
+export type Importance = "low" | "medium" | "high";
+
+export type Recommendation = "continue" | "finish" | "wait_human";
 
 export type RunReplyMessageType = "run.reply";
 

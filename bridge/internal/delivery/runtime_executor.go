@@ -62,7 +62,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			Type: contracts.RunReply,
 			Payload: contracts.RunReplyPayload{
 				RunID: record.RunID, AgentID: record.Request.TargetAgentID,
-				Sequence: sequence, Content: content,
+				Sequence: sequence, Content: content, Assessment: event.Assessment,
 			},
 		}
 		if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {

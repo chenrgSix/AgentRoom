@@ -25,7 +25,9 @@ func TestCodexAdapterMapsJSONLToRuntimeEvents(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 3 || events[1].Reply != "Implemented." || *events[2].Status != contracts.Completed {
+	if len(events) != 3 || events[1].Reply != "Implemented." ||
+		events[1].Assessment == nil || events[1].Assessment.GoalSatisfied == nil ||
+		!*events[1].Assessment.GoalSatisfied || *events[2].Status != contracts.Completed {
 		t.Fatalf("unexpected events: %#v", events)
 	}
 }
@@ -70,7 +72,7 @@ func TestCodexHelperProcess(t *testing.T) {
 	case "success":
 		fmt.Println(`{"type":"thread.started","thread_id":"019d-thread"}`)
 		fmt.Println(`{"type":"turn.started"}`)
-		fmt.Println(`{"type":"item.completed","item":{"type":"agent_message","text":"Implemented."}}`)
+		fmt.Println(`{"type":"item.completed","item":{"type":"agent_message","text":"Implemented.\n<agentroom-assessment>{\"goalSatisfied\":true,\"confidence\":0.9}</agentroom-assessment>"}}`)
 		fmt.Println(`{"type":"turn.completed"}`)
 		os.Exit(0)
 	case "malformed":

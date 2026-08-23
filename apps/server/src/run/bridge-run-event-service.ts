@@ -3,6 +3,7 @@ import { createOpaqueId } from "../domain/identifiers.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import type { RuntimeStatus } from "../runtime/runtime-adapter.js";
+import { parseAgentAssessment } from "../discussion/progress-evaluator.js";
 import type {
   AppliedRunEvent,
   RunRecord,
@@ -81,6 +82,7 @@ export class BridgeRunEventService {
       agentId: string;
       sequence: number;
       content: string;
+      assessment?: unknown;
     },
     now: string
   ): AppliedRunEvent {
@@ -90,10 +92,32 @@ export class BridgeRunEventService {
       throw new Error("Runtime reply must contain 1 to 20000 characters");
     }
     const safeContent = redactSensitiveText(input.content);
+    const parsedAssessment = parseAgentAssessment(input.assessment);
+    const assessment = parsedAssessment
+      ? {
+          ...parsedAssessment,
+          ...(parsedAssessment.openQuestions
+            ? {
+                openQuestions: parsedAssessment.openQuestions.map((question) => ({
+                  ...question,
+                  question: redactSensitiveText(question.question)
+                }))
+              }
+            : {}),
+          ...(parsedAssessment.newEvidenceRefs
+            ? {
+                newEvidenceRefs: parsedAssessment.newEvidenceRefs.map((reference) =>
+                  redactSensitiveText(reference)
+                )
+              }
+            : {})
+        }
+      : null;
     const applied = this.runs.applyEvent(run.runId, {
       type: "reply",
       sequence: input.sequence,
-      content: safeContent
+      content: safeContent,
+      ...(assessment ? { assessment: { ...assessment } } : {})
     }, now);
     if (applied.applied) {
       this.core.appendMessage({

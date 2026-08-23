@@ -71,9 +71,9 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 			Error:  runtimeError("RUNTIME_EXIT_FAILED", "Runtime process exited unsuccessfully."),
 		})
 	}
-	reply := strings.TrimSpace(stdout.String())
+	reply, assessment := parseAssessmentEnvelope(stdout.String())
 	if reply != "" {
-		if err := emit(ctx, Event{Reply: reply}); err != nil {
+		if err := emit(ctx, Event{Reply: reply, Assessment: assessment}); err != nil {
 			return err
 		}
 	}

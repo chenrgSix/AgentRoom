@@ -30,6 +30,7 @@ export type RuntimeEvent =
       type: "reply";
       sequence: number;
       content: string;
+      assessment?: Record<string, unknown>;
     };
 
 export interface RuntimeAdapter {

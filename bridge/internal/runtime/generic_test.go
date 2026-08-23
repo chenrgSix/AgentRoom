@@ -30,6 +30,28 @@ func TestGenericAdapterPassesInstructionOnStdin(t *testing.T) {
 	}
 }
 
+func TestGenericAdapterExtractsOptionalAssessment(t *testing.T) {
+	adapter := GenericAdapter{Config: config.AgentConfig{
+		Command: []string{"/bin/sh", "-c", "cat"}, Workspace: t.TempDir(),
+	}}
+	var report Event
+	err := adapter.Execute(context.Background(), Request{Run: contracts.RunRequestedPayload{
+		Instruction: "Useful answer.\n<agentroom-assessment>{\"goalSatisfied\":true,\"confidence\":0.9}</agentroom-assessment>",
+	}}, func(_ context.Context, event Event) error {
+		if event.Reply != "" {
+			report = event
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if report.Reply != "Useful answer." || report.Assessment == nil ||
+		report.Assessment.GoalSatisfied == nil || !*report.Assessment.GoalSatisfied {
+		t.Fatalf("unexpected report: %#v", report)
+	}
+}
+
 func TestGenericAdapterMapsDeadline(t *testing.T) {
 	adapter := GenericAdapter{Config: config.AgentConfig{
 		Command: []string{"/bin/sh", "-c", "sleep 2"}, Workspace: t.TempDir(),

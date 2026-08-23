@@ -104,8 +104,9 @@ func (c CodexAdapter) Execute(ctx context.Context, request Request, emit EmitFun
 	if len(parser.Reply) > maxRuntimeOutput {
 		return emitCodexFailure(ctx, emit, "CODEX_REPLY_LIMIT", "Codex reply exceeded 20000 bytes.")
 	}
-	if parser.Reply != "" {
-		if err := emit(ctx, Event{Reply: parser.Reply}); err != nil {
+	reply, assessment := parseAssessmentEnvelope(parser.Reply)
+	if reply != "" {
+		if err := emit(ctx, Event{Reply: reply, Assessment: assessment}); err != nil {
 			return err
 		}
 	}

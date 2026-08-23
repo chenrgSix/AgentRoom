@@ -746,7 +746,12 @@ export class DiscussionOrchestrator {
       "## Your Task",
       task,
       "The Orchestrator, not you, decides whether the Discussion continues. " +
-        "A plain-text reply is always valid when structured assessment is unsupported."
+        "A plain-text reply is always valid when structured assessment is unsupported.",
+      "When supported, append one final line exactly in this form: " +
+        "<agentroom-assessment>{\"goalSatisfied\":false," +
+        "\"confidence\":0.7,\"newInformationAdded\":true," +
+        "\"recommendation\":\"continue\"}</agentroom-assessment>. " +
+        "This is evidence only; it does not control the next action."
     ].join("\n").slice(0, 20_000);
   }
 

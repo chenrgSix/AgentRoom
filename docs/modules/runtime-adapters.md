@@ -55,6 +55,12 @@ Adapter events carry `runId`, `sessionRef`, sequence, timestamp, and schema
 version. Text replies and structured handoff requests are filtered
 for obvious credentials and sensitive local paths before leaving the machine.
 
+Codex and Generic CLI adapters also recognize an optional final
+`agentroom-assessment` XML-style envelope containing JSON. A valid envelope is
+removed from the visible reply and sent as structured evidence; malformed or
+unsupported output remains a normal reply. The Orchestrator, not the Adapter or
+Runtime, owns the resulting continue/finish decision.
+
 ## Verification and Tasks
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover

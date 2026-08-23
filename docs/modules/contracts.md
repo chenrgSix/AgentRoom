@@ -78,6 +78,11 @@ handoff messages. Payloads carry immutable entity IDs, and every Bridge Run
 event starts with sequence 1. `run.cancel_requested` is the server-to-Bridge
 interrupt command required by the documented cancellation flow.
 
+`run.reply` has an additive optional `assessment` object for Discussion
+evidence: goal satisfaction, confidence, question/evidence deltas,
+disagreement, Reviewer approval, and a recommendation. Clients that omit the
+field remain fully compatible and are evaluated as reply-only participants.
+
 Every `run.requested` carries a stable `deliveryAttemptId` and
 `idempotencyKey`. Retries preserve both fields so the Bridge can compare the
 persisted payload hash and acknowledge without starting a second Runtime.

@@ -94,12 +94,16 @@ function completeRun(input: {
   runs: RunRepository;
   run: RunRecord;
   content: string;
+  assessment?: Record<string, unknown>;
 }): void {
   input.runs.applyEvent(input.run.runId, {
     type: "status", sequence: 1, status: "working"
   }, now);
   input.runs.applyEvent(input.run.runId, {
-    type: "reply", sequence: 2, content: input.content
+    type: "reply",
+    sequence: 2,
+    content: input.content,
+    ...(input.assessment ? { assessment: input.assessment } : {})
   }, now);
   input.core.appendMessage({
     messageId: createOpaqueId("msg"),
@@ -165,6 +169,38 @@ test("central Orchestrator alternates participants and finalizes a plateau", asy
         "finalization_reserved"
       ]
     );
+  } finally {
+    value.close();
+  }
+});
+
+test("structured Agent evidence can finish a simple Discussion early", async () => {
+  const value = await fixture();
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Choose one terminal-state rule.",
+      participantAgentIds: value.agentIds
+    });
+    const run = result.scheduledRun;
+    assert.ok(run);
+    completeRun({
+      core: value.core,
+      runs: value.runs,
+      run,
+      content: "The first persisted terminal state wins.",
+      assessment: {
+        goalSatisfied: true,
+        confidence: 0.96,
+        newInformationAdded: true,
+        recommendation: "finish"
+      }
+    });
+    result = value.orchestrator.onRunTerminal(run.runId) ?? result;
+    assert.equal(result.discussion.state, "finalizing");
+    assert.equal(result.discussion.stateReason, "goal_satisfied");
+    assert.equal(result.turns.filter(({ kind }) => kind === "discussion").length, 1);
+    assert.equal(result.scheduledRun !== null, true);
   } finally {
     value.close();
   }

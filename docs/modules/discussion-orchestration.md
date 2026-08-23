@@ -184,6 +184,12 @@ Managed adapters should emit structured assessments when supported. Generic or
 manual participants may emit reply-only output; the central evaluator and
 policy must continue safely under that capability downgrade.
 
+Codex and Generic CLI may append a final
+`<agentroom-assessment>{...}</agentroom-assessment>` envelope. The Go Bridge
+removes a valid envelope from the visible reply and transports it as the
+optional `run.reply.payload.assessment` field. Invalid or missing envelopes are
+kept as reply-only output and cannot authoritatively change state.
+
 MVP finalization persists message outputs for summaries, final answers,
 decision records, and unresolved issues. Selecting `artifact` currently asks
 the finalizer for a message representation; binary Artifact transport remains
