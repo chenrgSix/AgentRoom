@@ -127,6 +127,12 @@ The first release artifacts are unsigned portable binaries. Platform signing,
 notarized installers, background-service installation, and signed automatic
 updates remain separate hardening work.
 
+Release `v0.1.0` is the BRG-008 acceptance baseline. GitHub Actions run
+`32626555064` passed the Bridge test, all five build jobs, checksum generation,
+and asset publication. A clean download verified every entry in `SHA256SUMS`,
+both launcher layouts, executable permissions, and the reported `v0.1.0`
+version.
+
 ## Dependencies
 
 Contracts, Registry publication, Security pairing, and Runtime Adapters.
