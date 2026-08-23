@@ -1,4 +1,11 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  type ChangeEvent,
+  type FormEvent,
+  type KeyboardEvent,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
 
 import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
 
@@ -67,6 +74,12 @@ interface LocalSession {
   userId: string;
   displayName: string;
   token: string;
+}
+
+interface MentionSearch {
+  end: number;
+  query: string;
+  start: number;
 }
 
 const userKey = "agent-room.local-user";
@@ -227,6 +240,8 @@ export function App() {
   const [setupOutput, setSetupOutput] = useState<string | null>(null);
   const [messageContent, setMessageContent] = useState("");
   const [mentionAgentId, setMentionAgentId] = useState("");
+  const [mentionSearch, setMentionSearch] = useState<MentionSearch | null>(null);
+  const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -242,6 +257,17 @@ export function App() {
     () => new Map(agents.map((agent) => [agent.agentId, agent])),
     [agents]
   );
+  const mentionOptions = useMemo(() => {
+    if (!mentionSearch) return [];
+    const query = mentionSearch.query.toLocaleLowerCase(locale);
+    return agents.filter((agent) =>
+      agent.name.toLocaleLowerCase(locale).includes(query) ||
+      roleLabel(agent.role, locale).toLocaleLowerCase(locale).includes(query)
+    ).slice(0, 8);
+  }, [agents, locale, mentionSearch]);
+  const selectedMentionAgent = mentionAgentId
+    ? agentsById.get(mentionAgentId) ?? null
+    : null;
   const readyAgents = agents.filter((agent) => agent.presence === "ready").length;
   const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
   const activeDevices = devices.filter((device) => device.status === "active").length;
@@ -558,6 +584,7 @@ export function App() {
       );
       setMessageContent("");
       setMentionAgentId("");
+      setMentionSearch(null);
       const [page, nextRuns] = await Promise.all([
         jsonRequest<{ items: Message[] }>(
           `/api/rooms/${selectedRoomId}/messages?limit=100`,
@@ -576,6 +603,63 @@ export function App() {
       setError(String(reason));
     } finally {
       setBusy(false);
+    }
+  }
+
+  function handleMessageChange(event: ChangeEvent<HTMLTextAreaElement>) {
+    const nextContent = event.currentTarget.value;
+    const cursor = event.currentTarget.selectionStart ?? nextContent.length;
+    const beforeCursor = nextContent.slice(0, cursor);
+    const match = /(?:^|\s)@([^@\s]*)$/u.exec(beforeCursor);
+
+    setMessageContent(nextContent);
+    if (selectedMentionAgent && !nextContent.includes(`@${selectedMentionAgent.name}`)) {
+      setMentionAgentId("");
+    }
+    if (match) {
+      setMentionSearch({
+        end: cursor,
+        query: match[1] ?? "",
+        start: beforeCursor.lastIndexOf("@")
+      });
+      setMentionOptionIndex(0);
+    } else {
+      setMentionSearch(null);
+    }
+  }
+
+  function selectMention(agent: Agent) {
+    if (!mentionSearch) return;
+    const nextContent = [
+      messageContent.slice(0, mentionSearch.start),
+      `@${agent.name} `,
+      messageContent.slice(mentionSearch.end)
+    ].join("");
+    setMessageContent(nextContent);
+    setMentionAgentId(agent.agentId);
+    setMentionSearch(null);
+    setMentionOptionIndex(0);
+  }
+
+  function handleMessageKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (!mentionSearch) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setMentionSearch(null);
+      return;
+    }
+    if (mentionOptions.length === 0) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setMentionOptionIndex((current) => (current + 1) % mentionOptions.length);
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setMentionOptionIndex((current) =>
+        (current - 1 + mentionOptions.length) % mentionOptions.length
+      );
+    } else if (event.key === "Enter") {
+      event.preventDefault();
+      selectMention(mentionOptions[mentionOptionIndex] ?? mentionOptions[0]!);
     }
   }
 
@@ -1015,27 +1099,44 @@ export function App() {
         )}
         {selectedRoom && activeView === "room" && (
           <form className="composer" onSubmit={sendMessage}>
-            <select
-              aria-label={t("mentionAgent")}
-              onChange={(event) => setMentionAgentId(event.target.value)}
-              value={mentionAgentId}
-            >
-              <option value="">{t("noAgentMention")}</option>
-              {agents.map((agent) => (
-                <option key={agent.agentId} value={agent.agentId}>
-                  @{agent.name} · {roleLabel(agent.role, locale)}
-                </option>
-              ))}
-            </select>
-            <textarea
-              aria-label={t("message")}
-              onChange={(event) => setMessageContent(event.target.value)}
-              placeholder={locale === "zh-CN" ? `发送消息到 #${selectedRoom.name}` : `Message #${selectedRoom.name}`}
-              required
-              rows={2}
-              value={messageContent}
-            />
-            <button disabled={busy}>{busy ? t("sending") : t("send")}</button>
+            <div className="composer-input">
+              {mentionSearch && (
+                <div className="mention-suggestions" aria-label={t("mentionAgent")} role="listbox">
+                  <div className="mention-suggestions-heading">{t("mentionHint")}</div>
+                  {mentionOptions.length === 0 ? (
+                    <p>{t("noMentionMatches")}</p>
+                  ) : mentionOptions.map((agent, index) => (
+                    <button
+                      aria-selected={index === mentionOptionIndex}
+                      className={index === mentionOptionIndex ? "mention-option active" : "mention-option"}
+                      key={agent.agentId}
+                      onClick={() => selectMention(agent)}
+                      role="option"
+                      type="button"
+                    >
+                      <span className="participant-avatar agent">{agent.name.slice(0, 1).toUpperCase()}</span>
+                      <span><strong>@{agent.name}</strong><small>{roleLabel(agent.role, locale)}</small></span>
+                      <span className={`presence-dot ${agent.presence}`} />
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedMentionAgent && (
+                <span className="selected-mention">
+                  {t("mentionSelected")} @{selectedMentionAgent.name}
+                </span>
+              )}
+              <textarea
+                aria-label={t("message")}
+                onChange={handleMessageChange}
+                onKeyDown={handleMessageKeyDown}
+                placeholder={locale === "zh-CN" ? `发送消息到 #${selectedRoom.name}，输入 @ 提及智能体` : `Message #${selectedRoom.name}; type @ to mention an Agent`}
+                required
+                rows={2}
+                value={messageContent}
+              />
+            </div>
+            <button className="composer-send" disabled={busy}>{busy ? t("sending") : t("send")}</button>
           </form>
         )}
         {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}

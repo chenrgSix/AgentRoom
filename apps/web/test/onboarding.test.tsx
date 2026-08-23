@@ -62,6 +62,13 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     name: "Alice Mac",
     status: "active" as const
   };
+  const agent = {
+    agentId: "agent_review",
+    integrationMode: "fake" as const,
+    name: "Review Bot",
+    presence: "ready",
+    role: "Teammate"
+  };
   globalThis.fetch = async (input, init = {}) => {
     const path = typeof input === "string" ? input : input.url;
     const method = init.method ?? "GET";
@@ -114,7 +121,10 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/teams/${team.teamId}/members`) {
       return jsonResponse([member]);
     }
-    if (path.endsWith("/rooms") || path.endsWith("/agents")) {
+    if (path.endsWith("/agents")) {
+      return jsonResponse([agent]);
+    }
+    if (path.endsWith("/rooms")) {
       return jsonResponse([]);
     }
     throw new Error(`Unexpected request: ${method} ${path}`);
@@ -160,7 +170,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
 
     fireEvent.change(roomInput, { target: { value: "general" } });
     fireEvent.click(screen.getByRole("button", { name: "创建房间" }));
-    await screen.findByRole("heading", { name: "添加智能体，或直接开始对话" });
+    await screen.findByRole("heading", { name: "在房间中开始对话 #general" });
     assert.equal(screen.queryByLabelText("新建假智能体名称"), null);
     assert.equal(screen.queryByLabelText("新 Team 名称"), null);
     const participants = screen.getByRole("region", { name: "房间成员" });
@@ -173,6 +183,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.equal(within(roomSidebar).queryByLabelText("新房间名称"), null);
     assert.equal((screen.getByLabelText("选择房间") as HTMLSelectElement).value, room.roomId);
     screen.getByLabelText("新房间名称");
+    assert.equal(screen.queryByRole("combobox", { name: "提及智能体" }), null);
+    const messageInput = screen.getByLabelText("消息") as HTMLTextAreaElement;
+    fireEvent.change(messageInput, { target: { value: "请 @Rev" } });
+    const mentionList = screen.getByRole("listbox", { name: "提及智能体" });
+    const mentionOption = within(mentionList).getByRole("option", { name: /@Review Bot/u });
+    fireEvent.click(mentionOption);
+    assert.equal(messageInput.value, "请 @Review Bot ");
+    screen.getByText("已提及 @Review Bot");
     fireEvent.click(screen.getByRole("button", { name: "智能体管理" }));
 
     await screen.findByRole("heading", { name: "智能体与设备" });

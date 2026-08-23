@@ -20,6 +20,7 @@ and server-owned payloads are never translated.
 - Authenticated Team and Room shell.
 - Ordered message timeline and thread view.
 - Structured Agent mention and handoff composer.
+- Inline `@` suggestions that resolve typed display names to stable Agent IDs.
 - Agent roster with presence and capability summaries.
 - Run cards with live status, replies, cancellation, and failure details.
 - Dedicated Agent management workspace with roster and availability summaries.
@@ -66,6 +67,8 @@ actions remain visibly available unless a request is already in progress.
 ## Interaction and Security Rules
 
 - Mentions select a registered Agent identity, not free-form `@text` parsing.
+- Typing `@` opens the visible Agent suggestion list; selecting a result inserts
+  its display name while retaining its stable identity for submission.
 - Cancellation actions show their current authoritative outcome.
 - Bodyless HTTP requests do not declare a JSON content type.
 - Render messages, Runtime output, and failure details as untrusted content.
@@ -78,7 +81,7 @@ Component tests cover onboarding state transitions, Chinese-default locale
 persistence, Agent management navigation, enrollment approval, and capability
 gating.
 Browser acceptance covers message, mention, reconnect, Run progress, reply, and
-cancellation flows. Work is tracked by `WEB-001` through `WEB-013` in
+cancellation flows. Work is tracked by `WEB-001` through `WEB-014` in
 `docs/TASKS.md`.
 
 ## Dependencies
