@@ -32,6 +32,27 @@ proxy and restrict them to the Team owner. MCP and Bridge routes retain their
 own per-Agent and per-Device bearer authentication. Native multi-user Web login
 is a post-MVP requirement.
 
+## Trusted-Team Container Profile
+
+The v0.2 trusted-team profile runs one non-root Server container behind one
+Caddy HTTPS entry point. Only Caddy publishes host ports; Server port 3000 and
+the SQLite volume remain internal. `/api/metrics` is not exposed by the public
+route. Caddy preserves WebSocket upgrades, MCP authorization headers, and
+request bodies.
+
+Trusted-team mode requires `AGENT_ROOM_PUBLIC_ORIGIN` and an Owner recovery
+token mounted as a read-only secret file. The application refuses to start
+without them. Public-CA domains pair with Bridge `system_ca` mode so normal
+certificate renewal does not require editing every client. An internal CA may
+use `system_ca` only after its root is installed on every client; an explicit
+leaf pin remains a short-lived compatibility choice.
+
+The Compose profile uses restart and graceful-stop policies but does not hide
+backup semantics. Backups call the existing SQLite online backup API, create a
+new UTC-named file, run `quick_check`, and print a SHA-256 digest. They never
+copy a live WAL by hand, overwrite an existing backup, delete retention data,
+or restore over a running database.
+
 Keep SQLite, WAL/SHM files, backups, Bridge configuration, credentials, and
 durable inbox directories readable only by their service accounts. Follow
 `docs/backup-and-restore.md` before upgrades.

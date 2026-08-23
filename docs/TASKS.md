@@ -88,7 +88,11 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | BRG-008 | DONE | Publish standalone Bridge release artifacts | BRG-007 | published GitHub Release builds five CGO-free archives with OS launchers, injected tag version, browser-open Console, and SHA-256 checksums |
 | BRG-009 | DONE | Extract reusable Bridge lifecycle controller | BRG-007 | CLI Console and desktop shell share tested start, stop, restart, configuration, enrollment, and shutdown operations |
 | BRG-010 | DONE | Add lightweight Bridge desktop GUI | BRG-009 | native WebView and tagged tests pass; visual acceptance proves one process, close-to-tray continuity, second-launch restore, and tray lifecycle controls without a terminal |
-| BRG-011 | DONE | Publish unsigned macOS desktop Bridge packages | BRG-010 | native arm64/amd64 GUI ZIPs build with injected versions, join the release checksum manifest, document app-scoped user trust, and retain all five CLI archives |
+| BRG-011 | READY | Publish unsigned macOS desktop Bridge packages | BRG-010 | native arm64/amd64 GUI ZIPs pass GitHub-hosted builds, join the release checksum manifest, document app-scoped user trust, and retain all five CLI archives |
+| BRG-012 | ACTIVE | Expose Bridge operational status and renewable HTTPS trust | BRG-010 | GUI distinguishes process and connection states; retry projection and `system_ca`/legacy pin compatibility tests pass |
+| BRG-013 | PLANNED | Add opt-in macOS login startup | BRG-012 | owner-scoped LaunchAgent tests and a real login restart preserve one desktop instance without credentials in the plist |
+| BRG-014 | PLANNED | Export a redacted Bridge diagnostic bundle | BRG-012 | bounded diagnostic export contains only allowlisted operational fields and seeded secrets, paths, prompts, replies, and stable IDs are absent |
+| BRG-015 | PLANNED | Add manual Bridge update checks | BRG-011, BRG-012 | explicit user action compares stable versions and opens only the official Release page without downloading, replacing, or executing code |
 | ADP-002 | DONE | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |
 | ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |
@@ -119,6 +123,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-014 | DONE | Replace Mention selection with inline `@` suggestions | WEB-003, WEB-013 | typing `@` opens a keyboard-accessible Agent list and selection still submits a stable Agent ID |
 | WEB-015 | DONE | Add persistent light and dark themes | WEB-009, WEB-014 | desktop and mobile theme actions update the full Web shell and persist the local preference |
 | WEB-016 | DONE | Resolve timeline sender display names | WEB-003, WEB-011 | Agent and member messages render the registered sender name resolved from the stable sender ID |
+| WEB-018 | PLANNED | Add trusted-team setup, invitation, and session screens | SEC-005, WEB-009 | Chinese-first setup/recovery, fragment invitation claim, session restore/logout, and Owner invite controls pass component and public API acceptance |
 
 ## Workstream F4: MCP Team Participation
 
@@ -152,14 +157,19 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | SEC-002 | DONE | Enforce Team, Room, Agent, and Run authorization | ROOM-003, RUN-002 | cross-Team and cross-Owner negative tests pass |
 | SEC-003 | DONE | Add credential rotation and Device revoke propagation | BRG-003, SEC-002 | revoked Bridge cannot reconnect or receive Runs |
 | SEC-004 | DONE | Add message and log redaction boundary | MCP-002, BRG-004 | seeded secrets never enter persisted output |
+| SEC-005 | ACTIVE | Add trusted-team Web identity and recovery | SEC-001, OPS-003 | trusted mode disables public bootstrap; secure Cookie setup/recovery, Origin checks, hashed one-time member invitations, expiry, replay, and non-owner tests pass |
 | OPS-001 | DONE | Propagate trace IDs through message, Run, Bridge, runtime | RUN-003 | one authorized query reconstructs persisted Message, Run, Delivery, and Runtime event entries; cross-process E2E verifies one trace |
 | OPS-002 | DONE | Add structured logs, metrics, and health endpoints | OPS-001 | safe HTTP/Bridge/Run logs, Prometheus metrics, live/ready/degraded health, and tested failure signals |
 | OPS-003 | DONE | Document and configure deployable listener topology | BRG-003, MCP-001 | loopback, proxy, and trusted-LAN modes are explicit |
+| OPS-004 | ACTIVE | Package a trusted-team single-host deployment | OPS-003, SEC-005, DATA-004 | non-root Server plus Caddy Compose validates, exposes only HTTPS, hides metrics, preserves WebSocket/MCP headers, and passes graceful health checks |
+| DATA-005 | PLANNED | Add container backup and restore workflow | DATA-004, OPS-004 | timestamped native SQLite backup passes `quick_check` and SHA-256 verification without overwriting or deleting prior backups |
 | QA-002 | READY | Verify two-machine managed Agent flow | ADP-004, WEB-005 | two-physical-machine HTTPS runbook is executable; DONE requires committed PASS evidence for online and offline/reconnect Codex Runs |
 | QA-003 | DONE | Verify three-Agent guarded handoff | MCP-003, RUN-006 | public Web and Remote MCP E2E completes Alice → Bob → Carol Runs with shared trace and rejects a lineage loop |
 | QA-004 | DONE | Verify restart, reconnect, duplicate, and cancellation | DATA-003, RUN-005 | recovery matrix passes repeatedly |
 | QA-005 | DONE | Run security and clean-room release audit | SEC-004, QA-004 | committed audit records zero open critical findings, remediated npm advisory, zero Go findings, and clean-tree build/test/five-target packaging |
 | QA-006 | DONE | Verify local cross-process managed flow | BRG-005, ADP-005, RUN-003 | real server, Go Bridge, and Generic Runtime reply passes |
+| QA-008 | ACTIVE | Add continuous repository quality gates | QA-005 | every main push and pull request validates contracts, Node builds/tests/E2E/docs, Go tests/vet, and native desktop compilation |
+| QA-009 | PLANNED | Publish and verify the v0.2 release candidate | BRG-011, BRG-015, SEC-005, OPS-004, QA-008 | immutable draft-to-prerelease workflow publishes exactly seven archives, checksums, and license assets; clean downloads pass the same verifier |
 
 ## Deferred Beyond MVP
 

@@ -162,11 +162,32 @@ remain unsigned by product decision and rely on checksum verification plus
 explicit user trust. Background-service installation and automatic updates
 remain separate work.
 
-Release `v0.1.0` is the BRG-008 acceptance baseline. GitHub Actions run
+`BRG-012` through `BRG-015` close the desktop operations gap. Process state and
+central connection state are separate: a running local goroutine may still be
+connecting or retrying. The GUI projects bounded retry information, last
+connection time, executable readiness, and active Runtime work without
+including prompts or replies.
+
+HTTPS supports `system_ca` and `pinned_sha256`. New public-CA deployments use
+normal certificate-chain, hostname, validity, and renewal verification. An old
+configuration with a fingerprint and no explicit mode remains pinned. A
+configuration may not silently provide both a system-CA mode and a fingerprint.
+
+macOS login startup is opt-in and user-scoped. Its LaunchAgent contains only
+the installed executable path and a background flag; it contains no token,
+credential, environment value, or Runtime command. Disabling it does not kill
+the current Bridge. Diagnostic export is allowlist-based and excludes absolute
+home/workspace paths, stable Team/Device/Agent IDs, credentials, prompts, and
+replies. Update checks happen only after an explicit click and may open the
+official GitHub Release page, but never download, replace, execute, or restart
+an unsigned binary.
+
+Release `v0.1.0` is the BRG-008 CLI acceptance baseline. GitHub Actions run
 `32626555064` passed the Bridge test, all five build jobs, checksum generation,
 and asset publication. A clean download verified every entry in `SHA256SUMS`,
 both launcher layouts, executable permissions, and the reported `v0.1.0`
-version.
+version. `BRG-011` remains a separate gate until both native GUI jobs and a
+clean downloaded v0.2 candidate pass the committed release verifier.
 
 ## Dependencies
 

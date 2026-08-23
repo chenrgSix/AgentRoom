@@ -22,6 +22,9 @@ without changing server-owned state.
 ## Primary Surfaces
 
 - Authenticated Team and Room shell.
+- Trusted-team Owner setup/recovery, member invitation claim, session restore,
+  logout, and Owner invitation controls without exposing session credentials to
+  JavaScript.
 - Ordered message timeline and thread view.
 - Structured Agent mention and handoff composer.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
@@ -82,6 +85,13 @@ An empty installation presents a three-step Team, Room, and Agent onboarding
 flow in the main workspace. Required fields use native browser validation;
 actions remain visibly available unless a request is already in progress.
 
+In trusted-team mode, an unauthenticated browser never calls the local
+bootstrap route. It renders setup only when the Server reports an empty
+installation, accepts an Owner recovery secret only in component memory, and
+clears it immediately after the request. Member invitation tokens are read
+from the URL fragment, removed before network activity, and exchanged for an
+HttpOnly session Cookie. The UI never reads or stores the Cookie value.
+
 ## Interaction and Security Rules
 
 - Mentions select a registered Agent identity, not free-form `@text` parsing.
@@ -102,7 +112,7 @@ persistence, Agent management navigation, enrollment approval, capability
 gating, Discussion creation, participant identity, and finish controls.
 Browser acceptance covers message, mention, reconnect, Run progress, reply,
 cancellation, and a two-Agent adaptive Discussion that reaches a persisted
-final conclusion. Work is tracked by `WEB-001` through `WEB-017` in
+final conclusion. Work is tracked by `WEB-001` through `WEB-018` in
 `docs/TASKS.md`.
 
 ## Dependencies

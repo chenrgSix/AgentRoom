@@ -21,6 +21,11 @@ Every behavioral fix adds a focused regression. Protocol changes require
 cross-language compatibility tests. The deterministic FakeAdapter is the
 default for races, disconnects, duplicate delivery, and timeout scenarios.
 
+Every push to `main` and every pull request runs schema validation, generated
+contract checks, Node builds and tests, deterministic cross-process E2E,
+Markdown lint, Go tests and vet, plus a native macOS desktop compile. Release
+workflows do not replace this gate.
+
 The `QA-001` integration test exercises one authenticated user, one Team and
 Room, two Fake Agents, stable-ID mentions, ordered Run events, Agent replies,
 and SQLite reload through the public HTTP API. It is the central MVP gate; it
@@ -139,6 +144,12 @@ The current security and exported-tree evidence is recorded in
 `docs/acceptance/qa-005-security-clean-room-audit.md`. Its PASS applies only to
 the documented trusted Owner deployment boundary and lists remaining release
 constraints explicitly.
+
+A Bridge release begins as an immutable draft candidate. The workflow requires
+the exact five CLI archives, two native macOS GUI archives, one checksum file,
+and three top-level license files. It verifies names, versions, archive layouts,
+launchers, licenses, and checksums before upload, then downloads the candidate
+and repeats the same verifier. Existing assets are never silently replaced.
 
 ## Dependencies
 

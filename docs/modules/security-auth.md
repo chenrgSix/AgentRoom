@@ -29,6 +29,21 @@ expiry, credential rotation, and revocation are checked before resolving the
 principal. The initial local Web bootstrap may issue a session directly, but
 all domain services still authorize through stable User and Member IDs.
 
+The local bootstrap exists only in `local` auth mode, whose process must bind
+to loopback. `trusted-team` mode disables `/api/bootstrap` and requires an
+HTTPS public origin plus an Owner recovery secret read from a
+permission-restricted file. The secret is at least 32 bytes, never appears in a
+URL, response, database, browser storage, or log, and is used only for initial
+setup or explicit Owner recovery.
+
+Trusted Web sessions use a `Secure`, `HttpOnly`, `SameSite=Strict`, host-only
+Cookie. Cookie-authenticated mutations must carry the configured same-origin
+`Origin`; Bridge and MCP Bearer authentication remains unchanged. A Team Owner
+may issue a short-lived one-time member invitation. Only its SHA-256 hash is
+stored, and claiming it atomically creates the User, binds the Member, consumes
+the invitation, and issues a Web session. Invitation tokens travel in a URL
+fragment so reverse proxies do not receive them in request logs.
+
 Join requests expire after ten minutes. The database stores only hashes of the
 short code and poll token; the poll token is promoted to the Device credential
 only after owner approval. Claim retries return the same Device and do not
@@ -63,8 +78,9 @@ credentials or full sensitive payloads.
 ## Verification and Tasks
 
 Negative tests cover replay, forged poll tokens, non-owner approval, cross-Team access, expired code,
+recovery-secret failure, invitation replay/expiry, cross-origin Cookie writes,
 revocation, unpublished Runtime launch, credential leakage, and attempts to
-bypass local policy. Work is tracked by `SEC-001` through `SEC-004`, with pairing
+bypass local policy. Work is tracked by `SEC-001` through `SEC-005`, with pairing
 transport under `BRG-002`, in `docs/TASKS.md`.
 
 Revoking a Device atomically marks it revoked, revokes all of its credentials,
