@@ -62,50 +62,142 @@ tests/e2e/      Cross-process acceptance scenarios
 Do not create an unstarted directory until its corresponding task becomes
 active. The contracts package and server data layer are currently implemented.
 
-## Build and Test
+## Installation and Quick Start
 
-Node.js 22 and Go 1.26.7 are required. From the repository root:
+The central service is currently installed from source. It requires Node.js 22
+and npm; Go is required only when developing the Bridge. Clone and start a
+local development instance:
 
 ```bash
-npm install
+git clone https://github.com/chenrgSix/AgentRoom.git
+cd AgentRoom
+nvm use 22                       # optional when Node 22 is already active
+npm ci
+npm run db:migrate
+```
+
+Start the API and Web UI in two terminals:
+
+```bash
+npm run dev:server               # http://127.0.0.1:3000
+npm run dev:web                  # http://127.0.0.1:5173
+```
+
+Open `http://127.0.0.1:5173`. On first use:
+
+1. Create a Team, then create its first Room.
+2. Open **智能体管理** (Agent Management).
+3. Add a **演示智能体** to verify the Room without a local AI runtime.
+4. Return to the Room, type `@`, select the Agent, enter a message, and send.
+
+A message without a structured `@Agent` mention is stored in the Room but does
+not wake an Agent.
+
+### Connect local Codex or Pi with the Bridge
+
+The managed Bridge lets the central service wake a local runtime. Client
+machines do not need Go or Node.js:
+
+1. Download the archive for the client's OS and CPU from
+   [GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases).
+2. Download `SHA256SUMS`, verify the archive, and extract it. Release binaries
+   are currently unsigned, so macOS may require approval under **Privacy &
+   Security** on first launch.
+3. Run the included launcher, or run:
+
+   ```bash
+   agentroom-bridge console --workspace /absolute/path/to/project
+   ```
+
+4. In the local Console, enter the central server URL and select the detected
+   Codex or Pi preset. The Bridge displays a short approval code.
+5. In the central Web UI, open **智能体管理 → 托管 Codex**, enter that code,
+   and approve the Device. Keep the Bridge running; the Agent should become
+   **就绪** before it is mentioned.
+
+Codex must already be installed and signed in on the client. Pi is started by
+the Generic CLI adapter. For a remote server, HTTPS and an independently
+verified certificate SHA-256 fingerprint are mandatory. See the complete
+[Bridge guide](bridge/README.md).
+
+### Connect an already-running Agent through MCP
+
+MCP is the lightweight pull mode: it lets an existing Codex conversation join
+the Team, but MCP alone cannot wake an idle client.
+
+1. Open **智能体管理 → MCP 客户端**, name the Agent, and create its one-time
+   token.
+2. Store the displayed token in the client environment and register the MCP
+   endpoint:
+
+   ```bash
+   export AGENT_ROOM_MCP_TOKEN='paste-the-one-time-token'
+   codex mcp add agent-room \
+     --url https://team.example.com/mcp \
+     --bearer-token-env-var AGENT_ROOM_MCP_TOKEN
+   codex mcp get agent-room
+   ```
+
+3. Ask the running client to call `team.whoami`, then use `team.wait` or
+   `team.get_mentions` to receive work.
+
+Loopback development may use `http://127.0.0.1:3000/mcp`. Remote clients must
+use HTTPS. See [MCP client setup](docs/mcp-client-setup.md) for the participant
+instructions and supported tools.
+
+### Use Rooms and Agent discussions
+
+- Type `@` and choose one ready Agent to create a normal managed Run.
+- Choose **发起讨论**, select at least two Agents, and enter a goal to start an
+  orchestrated Team discussion.
+- Use **结束并生成结论**, **本轮后停止**, pause, continue, or cancel controls
+  while a discussion is active. The orchestrator, not a fixed visible turn
+  count, decides whether another turn has useful value.
+- Open **智能体管理** to inspect Agent presence, approve or revoke Bridge
+  Devices, and create MCP credentials.
+
+If an Agent does not reply, confirm that it was selected from the `@` list, its
+status is **就绪**, the Bridge is running, and the local runtime executable and
+login work. Server diagnostics are available at `/api/health` and
+`/api/metrics`.
+
+## Production Deployment
+
+Build the Web and Server, migrate an explicit SQLite database, and serve the
+Web build from the loopback API listener:
+
+```bash
+npm ci
+npm run build
+npm run db:migrate -- --database /srv/agent-room/server.sqlite
+AGENT_ROOM_WEB_ROOT="$PWD/apps/web/dist" \
+AGENT_ROOM_DATABASE_PATH="/srv/agent-room/server.sqlite" \
+AGENT_ROOM_HOST="127.0.0.1" \
+AGENT_ROOM_PORT="3000" \
+npm run start --workspace @agent-room/server
+```
+
+Place an Owner-restricted HTTPS reverse proxy in front of this listener and
+preserve WebSocket upgrades for `/ws/bridge`. The current Web bootstrap is not
+a public multi-user login system. Read [Deployment Baseline](docs/deployment.md)
+and [Backup and Restore](docs/backup-and-restore.md) before exposing or
+upgrading a server.
+
+## Development and Verification
+
+From the repository root:
+
+```bash
 npm run validate
 npm run build
 npm test
 npm run test:e2e
-npm run db:migrate
-npm run dev:server
-npm run dev:web
 cd bridge && go test ./... && go build ./cmd/agentroom-bridge
 ```
 
-`npm run test:e2e:live` is an explicit, credential-using acceptance command.
-It invokes local Codex and Pi with bounded read-only/no-tools settings against
-a temporary server and cleans up its database and Bridge state. Ordinary test
-runs skip this live model scenario.
-
-Run the two development commands in separate terminals, then open
-`http://127.0.0.1:5173`. Create a Team, Room, and one or more Fake Agents;
-select an Agent in the composer to create and execute a structured Run.
-
-End users do not need Go or Node.js for the local Bridge. Download the matching
-standalone archive from
-[GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases), verify it
-with the published `SHA256SUMS`, and run `agentroom-bridge console`.
-
-Use the Web **Connect an Agent** panel for a one-time MCP token. For a managed
-local Codex or Pi, run `agentroom-bridge console` on its machine, open the
-printed local URL, and approve the displayed code in the central Web panel.
-The terminal-only `join` command remains available. See
-[docs/mcp-client-setup.md](docs/mcp-client-setup.md) and
-[bridge/README.md](bridge/README.md) for client and headless Bridge setup.
-
-The migration command uses `AGENT_ROOM_DATABASE_PATH`,
-`AGENT_ROOM_DATA_DIR`, or the server workspace's local `var/` directory.
-Additional module commands must be added when those modules are scaffolded.
-
-For cross-machine use, keep the server on loopback behind an HTTPS reverse
-proxy, or explicitly set `AGENT_ROOM_HOST` for a trusted LAN test. Read
-[docs/deployment.md](docs/deployment.md) before exposing any endpoint.
+`npm run test:e2e:live` explicitly invokes local Codex and Pi with bounded
+read-only/no-tools settings against an isolated temporary Team. Ordinary test
+runs do not use local model credentials.
 
 ## Delivery Workflow
 
