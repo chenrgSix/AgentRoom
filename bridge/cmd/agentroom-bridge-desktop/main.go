@@ -84,6 +84,7 @@ func run() error {
 		SaveCredential: pairing.Save,
 		LoginStartup:   loginStartup,
 		UpdateChecker:  updatecheck.New(),
+		ProbeRuntime:   console.ProbeRuntime,
 		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential, observer operations.Observer) error {
 			return bridgecore.RunObserved(ctx, loaded, credential, version, observer)
 		},

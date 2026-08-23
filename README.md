@@ -125,6 +125,8 @@ machines do not need Go or Node.js:
 5. In the central Web UI, open **智能体管理 → 托管 Codex**, enter that code,
    and approve the Device. Keep the Bridge running; the Agent should become
    **就绪** before it is mentioned.
+6. In the local Bridge window, click **测试运行** on each Codex or Pi row to
+   verify its login, model access, and managed preset before sending Team work.
 
 Codex must already be installed and signed in on the client. Pi is started by
 the Generic CLI adapter. Remote servers require HTTPS. Public certificates use

@@ -134,6 +134,7 @@ func runConsole(args []string) error {
 		ReplaceConfig:  config.Replace,
 		SaveCredential: pairing.Save,
 		UpdateChecker:  updatecheck.New(),
+		ProbeRuntime:   console.ProbeRuntime,
 		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential, observer operations.Observer) error {
 			return bridgecore.RunObserved(ctx, loaded, credential, version, observer)
 		},

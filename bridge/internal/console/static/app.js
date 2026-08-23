@@ -21,6 +21,7 @@ const token = sessionStorage.getItem("agent-room-console-token") || "";
 if (!token) elements["auth-warning"].classList.remove("hidden");
 let currentState = null;
 let editMode = false;
+const runtimeTestResults = new Map();
 
 const labels = {
   unconfigured: "等待配置",
@@ -71,7 +72,8 @@ function renderAgent(agent) {
   const row = document.createElement("article");
   row.className = "agent-row";
   const title = document.createElement("strong");
-  title.textContent = `${agent.name} · ${agent.kind === "codex" ? "Codex" : "Pi"}`;
+  const kindLabel = agent.kind === "codex" ? "Codex" : agent.kind === "pi" ? "Pi" : "Generic CLI";
+  title.textContent = `${agent.name} · ${kindLabel}`;
   const role = document.createElement("span");
   role.textContent = agent.role;
   const workspace = document.createElement("span");
@@ -82,7 +84,49 @@ function renderAgent(agent) {
   status.textContent = `${runtimeLabels[agent.runtimeState] || agent.runtimeState}${active}`;
   const readiness = document.createElement("span");
   readiness.textContent = agent.executableReady ? "可执行文件可用" : "可执行文件不存在或不可执行";
-  row.append(title, role, status, readiness, workspace);
+  const probe = document.createElement("div");
+  probe.className = "runtime-test";
+  const probeButton = document.createElement("button");
+  probeButton.className = "secondary";
+  probeButton.type = "button";
+  probeButton.textContent = "测试运行";
+  const probeSupported = agent.kind === "codex" || agent.kind === "pi";
+  probeButton.disabled = !probeSupported || !agent.executableReady || agent.activeRuns > 0;
+  const probeResult = document.createElement("span");
+  const latestProbe = runtimeTestResults.get(agent.name);
+  if (latestProbe === "running") {
+    probeButton.disabled = true;
+    probeResult.textContent = "正在执行只读自检…";
+  } else if (latestProbe) {
+    probeResult.className = latestProbe.passed ? "probe-passed" : "probe-failed";
+    const exit = latestProbe.exitCode === undefined ? "" : ` · 退出码 ${latestProbe.exitCode}`;
+    probeResult.textContent = latestProbe.passed
+      ? `自检通过 · ${latestProbe.durationMillis} ms`
+      : `自检失败 · ${latestProbe.code}${latestProbe.category ? ` · ${latestProbe.category}` : ""}${exit}`;
+  } else {
+    probeResult.textContent = !probeSupported
+      ? "Generic CLI 不支持自动自检"
+      : agent.activeRuns > 0
+      ? "任务执行期间不可自检"
+      : "按需启动一次受限本地调用，不会自动执行";
+  }
+  probeButton.addEventListener("click", async () => {
+    runtimeTestResults.set(agent.name, "running");
+    render(currentState);
+    try {
+      const result = await request("/api/runtime-tests", {
+        method: "POST",
+        body: JSON.stringify({agentName: agent.name})
+      });
+      runtimeTestResults.set(agent.name, result);
+    } catch (error) {
+      runtimeTestResults.delete(agent.name);
+      showError(error);
+    }
+    if (currentState) render(currentState);
+  });
+  probe.append(probeButton, probeResult);
+  row.append(title, role, status, readiness, workspace, probe);
   return row;
 }
 

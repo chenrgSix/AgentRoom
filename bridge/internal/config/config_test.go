@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -117,5 +118,83 @@ func TestSaveWritesOwnerOnlyConfigAndRefusesOverwrite(t *testing.T) {
 	}
 	if loaded.DeviceName != "Updated Mac" {
 		t.Fatalf("unexpected replacement config: %#v", loaded)
+	}
+	if loaded.SchemaVersion != CurrentSchemaVersion ||
+		loaded.Agents[0].PresetVersion != CurrentPresetVersion {
+		t.Fatalf("saved config omitted version markers: %#v", loaded)
+	}
+}
+
+func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) {
+	directory := t.TempDir()
+	workspace := filepath.Join(directory, "repo")
+	if err := os.Mkdir(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "bridge.json")
+	source := `{
+  "serverUrl": "http://127.0.0.1:3000",
+  "deviceName": "Owner Mac",
+  "dataDir": "data",
+  "agents": [{
+    "name": "My Codex",
+    "role": "Builder",
+    "adapter": "codex",
+    "command": ["/usr/local/bin/codex", "exec", "--json", "--sandbox", "read-only", "-"],
+    "workspace": "` + workspace + `",
+    "envAllowlist": ["HOME", "PATH", "CODEX_HOME"]
+  }, {
+    "name": "My Pi",
+    "role": "Reviewer",
+    "adapter": "generic",
+    "command": ["/opt/homebrew/bin/pi", "--mode", "text", "--print", "--no-session", "--approve"],
+    "workspace": "` + workspace + `",
+    "envAllowlist": ["HOME", "PATH", "PI_TELEMETRY", "ANTHROPIC_API_KEY"]
+  }]
+}`
+	if err := os.WriteFile(path, []byte(source), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.SchemaVersion != CurrentSchemaVersion {
+		t.Fatalf("legacy schema was not migrated: %#v", loaded)
+	}
+	if loaded.DeviceName != "Owner Mac" || loaded.Agents[0].Name != "My Codex" ||
+		loaded.Agents[0].Role != "Builder" || loaded.Agents[0].Workspace != workspace {
+		t.Fatalf("Codex owner fields changed during migration: %#v", loaded.Agents[0])
+	}
+	if loaded.Agents[0].RuntimeKind != "codex" ||
+		strings.Join(loaded.Agents[0].Command[1:], " ") != "exec --json --sandbox read-only -" {
+		t.Fatalf("unexpected Codex migration: %#v", loaded.Agents[0])
+	}
+	pi := loaded.Agents[1]
+	if pi.Name != "My Pi" || pi.Role != "Reviewer" || pi.Workspace != workspace ||
+		!strings.Contains(strings.Join(pi.EnvAllowlist, " "), "ANTHROPIC_API_KEY") {
+		t.Fatalf("Pi owner fields changed during migration: %#v", pi)
+	}
+	if pi.RuntimeKind != "pi" || pi.PresetVersion != CurrentPresetVersion ||
+		strings.Join(pi.Command[1:], " ") != "--print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
+		t.Fatalf("legacy Pi flags were not replaced: %#v", pi)
+	}
+	onDisk, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(onDisk, []byte(`"schemaVersion"`)) {
+		t.Fatal("Load must not rewrite owner configuration implicitly")
+	}
+}
+
+func TestMigrateRejectsFutureConfigAndPresetVersions(t *testing.T) {
+	if _, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion + 1}); err == nil {
+		t.Fatal("expected a future config schema to fail closed")
+	}
+	if _, err := Migrate(Config{Agents: []AgentConfig{{
+		PresetVersion: CurrentPresetVersion + 1,
+	}}}); err == nil {
+		t.Fatal("expected a future Runtime preset to fail closed")
 	}
 }

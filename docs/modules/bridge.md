@@ -123,12 +123,14 @@ Browser acceptance covers first setup, Runtime discovery, adding Pi to an
 existing Bridge, and status rendering. Work is tracked by `BRG-001` through
 `BRG-019` in `docs/TASKS.md`.
 
-`BRG-019` adds an explicit configuration schema and Runtime preset version.
+`BRG-019` adds configuration schema version 1 and Runtime preset version 1.
 Recognized legacy Codex and Pi presets migrate in memory before validation,
 while owner-controlled names, roles, workspaces, trust, and environment
-allowlists remain intact. The Console exposes a user-triggered, bounded Runtime
-self-test; it never runs automatically and returns only allowlisted status and
-failure metadata.
+allowlists remain intact; unknown future versions fail closed. The Console
+exposes a user-triggered, bounded Runtime self-test only for managed Codex and
+Pi presets. Codex is forced to `read-only`, Pi retains its no-tool preset,
+active Team Runs fence the probe, and only allowlisted status and failure
+metadata return to the UI.
 
 ## Desktop Client
 

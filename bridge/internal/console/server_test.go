@@ -148,6 +148,10 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if bytes.Count(javascript, []byte(`request("/api/update/check"`)) != 1 {
 		t.Fatal("update check must exist only in the explicit click handler")
 	}
+	if bytes.Count(javascript, []byte(`request("/api/runtime-tests"`)) != 1 ||
+		!bytes.Contains(javascript, []byte("测试运行")) {
+		t.Fatal("Runtime self-test must exist only behind an explicit Agent-row action")
+	}
 }
 
 func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) {
@@ -230,6 +234,12 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	if len(loaded.Agents) != 2 {
 		t.Fatalf("expected two configured Agents, got %d", len(loaded.Agents))
 	}
+	if loaded.SchemaVersion != config.CurrentSchemaVersion ||
+		loaded.Agents[0].RuntimeKind != "codex" || loaded.Agents[1].RuntimeKind != "pi" ||
+		loaded.Agents[0].PresetVersion != config.CurrentPresetVersion ||
+		loaded.Agents[1].PresetVersion != config.CurrentPresetVersion {
+		t.Fatalf("Runtime preset versions were not persisted: %#v", loaded)
+	}
 	if strings.Join(loaded.Agents[0].Command[1:], " ") != "exec --json --sandbox read-only -" {
 		t.Fatalf("unexpected Codex command: %#v", loaded.Agents[0].Command)
 	}
@@ -289,6 +299,78 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	case <-bridgeStopped:
 	case <-time.After(time.Second):
 		t.Fatal("Bridge process did not receive Console cancellation")
+	}
+}
+
+func TestRuntimeSelfTestIsExplicitBoundedAndSafelyProjected(t *testing.T) {
+	directory := t.TempDir()
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(directory, "bridge.json")
+	loaded := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "http://127.0.0.1:3000", DeviceName: "Probe Bridge",
+		DataDir: filepath.Join(directory, "data"),
+		Agents: []config.AgentConfig{{
+			Name: "Local Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi",
+			PresetVersion: config.CurrentPresetVersion,
+			Command:       []string{executablePath}, Workspace: directory,
+		}},
+	}
+	if err := config.Save(configPath, loaded); err != nil {
+		t.Fatal(err)
+	}
+	probeCalls := 0
+	dependencies := inertDependencies()
+	dependencies.ProbeRuntime = func(_ context.Context, agent config.AgentConfig) RuntimeProbeResult {
+		probeCalls++
+		if agent.Name != "Local Pi" {
+			t.Fatalf("wrong Runtime selected: %#v", agent)
+		}
+		exitCode := 7
+		return RuntimeProbeResult{
+			Passed: false, Code: "RUNTIME_EXIT_FAILED", Category: "configuration",
+			ExitCode: &exitCode, StderrCaptured: true, DurationMillis: 12,
+		}
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: loaded.DataDir, Workspace: directory,
+		Token: "probe-token",
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	stateResponse := consoleRequest(t, server.URL, service.Token(), http.MethodGet, "/api/state", nil)
+	stateResponse.Body.Close()
+	if probeCalls != 0 {
+		t.Fatal("state polling must never run a Runtime self-test")
+	}
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/runtime-tests", map[string]string{"agentName": "Local Pi"})
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || probeCalls != 1 {
+		t.Fatalf("unexpected Runtime test response: %d %s", response.StatusCode, body)
+	}
+	if !bytes.Contains(body, []byte(`"code":"RUNTIME_EXIT_FAILED"`)) ||
+		!bytes.Contains(body, []byte(`"category":"configuration"`)) ||
+		!bytes.Contains(body, []byte(`"exitCode":7`)) ||
+		bytes.Contains(body, []byte("stderr content")) {
+		t.Fatalf("unsafe or incomplete Runtime test projection: %s", body)
+	}
+
+	service.mu.Lock()
+	service.state.Agents[0].ActiveRuns = 1
+	service.mu.Unlock()
+	conflict := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/runtime-tests", map[string]string{"agentName": "Local Pi"})
+	conflict.Body.Close()
+	if conflict.StatusCode != http.StatusConflict || probeCalls != 1 {
+		t.Fatal("active Team task did not fence Runtime self-test")
 	}
 }
 

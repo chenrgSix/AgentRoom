@@ -98,7 +98,10 @@ Console never returns Device credentials or environment values to the browser.
 The status area distinguishes the local process from the central connection:
 `stopped`, `connecting`, `online`, and `retrying` are not interchangeable. It
 also reports bounded retry timing, executable readiness, and active Runtime
-work. macOS users may opt into **登录时启动**; the user-scoped LaunchAgent stores
+work. Each configured Codex or Pi row has an explicit **测试运行** action. It
+runs one bounded local probe only when clicked, forces Codex to `read-only`,
+keeps Pi in no-tool mode, and is disabled while that Runtime has an active Team
+task. macOS users may opt into **登录时启动**; the user-scoped LaunchAgent stores
 only the app path, `--background`, and non-secret config/data/workspace paths.
 It never stores a Device credential, Console token, environment value, or
 Runtime command.
@@ -144,6 +147,8 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
   "name": "Local Pi",
   "role": "Reviewer",
   "adapter": "generic",
+  "runtimeKind": "pi",
+  "presetVersion": 1,
   "command": [
     "/absolute/path/to/pi",
     "--print",
@@ -157,6 +162,11 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
   "envAllowlist": ["HOME", "PATH", "PI_CODING_AGENT_DIR"]
 }
 ```
+
+The top-level configuration uses `"schemaVersion": 1`. Legacy Console-created
+Codex and Pi presets are migrated in memory when loaded; the next explicit save
+persists the version fields and replaces obsolete Pi flags without changing the
+owner's names, roles, workspace, trust settings, or environment allowlist.
 
 This mode receives each bounded turn on stdin and exits after replying. It is
 remotely wakeable through the Bridge but does not claim persistent Pi session

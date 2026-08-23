@@ -69,6 +69,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .runtime-status.idle { color: #9fe4a8; }
 .runtime-status.working { color: var(--lime); }
 .runtime-status.error, .runtime-status.unavailable { color: var(--danger); }
+.runtime-test { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.runtime-test button { padding: 7px 10px; font-size: 11px; }
+.runtime-test span { margin-top: 0; }
+.runtime-test .probe-passed { color: #9fe4a8; }
+.runtime-test .probe-failed { color: var(--danger); }
 .inline-error { color: var(--danger); font-size: 12px; margin: 12px 0 0; overflow-wrap: anywhere; }
 .details.compact { margin-bottom: 16px; }
 .setting-toggle { grid-template-columns: 22px 1fr; align-items: start; gap: 12px; padding: 17px 0; border-bottom: 1px solid var(--line); cursor: pointer; }

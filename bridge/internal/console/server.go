@@ -121,6 +121,7 @@ type Dependencies struct {
 	RunBridge      func(context.Context, config.Config, pairing.Credential, operations.Observer) error
 	LoginStartup   autostart.Controller
 	UpdateChecker  updatecheck.Service
+	ProbeRuntime   func(context.Context, config.AgentConfig) RuntimeProbeResult
 }
 
 type Options struct {
@@ -145,6 +146,7 @@ type Service struct {
 	bridgeCancel  context.CancelFunc
 	bridgeEpoch   uint64
 	events        []diagnostics.Event
+	runtimeTests  map[string]struct{}
 }
 
 var environmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,79}$`)
@@ -208,6 +210,7 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 			DetectedPi:    discover("pi"),
 			Connection:    ConnectionView{State: operations.ConnectionStopped},
 		},
+		runtimeTests: make(map[string]struct{}),
 	}
 	if loaded, loadErr := config.Load(resolvedConfig); loadErr == nil {
 		service.configuration = &loaded
@@ -264,6 +267,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("POST /api/enrollment/start", s.authorize(s.startEnrollment))
 	mux.HandleFunc("POST /api/enrollment/cancel", s.authorize(s.cancelEnrollment))
 	mux.HandleFunc("PUT /api/config", s.authorize(s.updateConfig))
+	mux.HandleFunc("POST /api/runtime-tests", s.authorize(s.testRuntime))
 	mux.HandleFunc("POST /api/bridge/start", s.authorize(s.startBridge))
 	mux.HandleFunc("POST /api/bridge/stop", s.authorize(s.stopBridge))
 	mux.HandleFunc("PUT /api/login-startup", s.authorize(s.updateLoginStartup))
@@ -271,6 +275,72 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("POST /api/update/check", s.authorize(s.checkUpdate))
 	mux.Handle("/", securityHeaders(http.FileServer(http.FS(staticRoot))))
 	return mux
+}
+
+func (s *Service) testRuntime(response http.ResponseWriter, request *http.Request) {
+	if s.dependencies.ProbeRuntime == nil {
+		writeError(response, http.StatusNotImplemented, "Runtime self-test is not available")
+		return
+	}
+	var input struct {
+		AgentName string `json:"agentName"`
+	}
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	name := strings.TrimSpace(input.AgentName)
+	if name == "" {
+		writeError(response, http.StatusBadRequest, "agentName is required")
+		return
+	}
+	s.mu.Lock()
+	if s.configuration == nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, "Configure the Bridge before testing a Runtime")
+		return
+	}
+	var selected *config.AgentConfig
+	for index, agent := range s.configuration.Agents {
+		if agent.Name != name {
+			continue
+		}
+		if index < len(s.state.Agents) && s.state.Agents[index].ActiveRuns > 0 {
+			s.mu.Unlock()
+			writeError(response, http.StatusConflict, "Runtime has an active Team task")
+			return
+		}
+		if agent.RuntimeKind != "codex" && agent.RuntimeKind != "pi" {
+			s.mu.Unlock()
+			writeError(response, http.StatusConflict, "Runtime self-test requires a managed Codex or Pi preset")
+			return
+		}
+		if _, running := s.runtimeTests[name]; running {
+			s.mu.Unlock()
+			writeError(response, http.StatusConflict, "Runtime self-test is already running")
+			return
+		}
+		copy := agent
+		copy.Command = append([]string{}, agent.Command...)
+		copy.EnvAllowlist = append([]string{}, agent.EnvAllowlist...)
+		selected = &copy
+		s.runtimeTests[name] = struct{}{}
+		break
+	}
+	s.mu.Unlock()
+	if selected == nil {
+		writeError(response, http.StatusNotFound, "Configured Runtime was not found")
+		return
+	}
+	defer func() {
+		s.mu.Lock()
+		delete(s.runtimeTests, name)
+		s.mu.Unlock()
+	}()
+	probeContext, cancel := context.WithTimeout(request.Context(), time.Minute)
+	defer cancel()
+	result := s.dependencies.ProbeRuntime(probeContext, *selected)
+	writeJSON(response, http.StatusOK, result)
 }
 
 func (s *Service) updateLoginStartup(response http.ResponseWriter, request *http.Request) {
@@ -608,6 +678,7 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 
 func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 	configuration := config.Config{
+		SchemaVersion:           config.CurrentSchemaVersion,
 		ServerURL:               strings.TrimSpace(input.ServerURL),
 		ServerTrustMode:         input.ServerTrustMode,
 		ServerCertificateSHA256: strings.TrimSpace(input.ServerCertificateSHA256),
@@ -628,9 +699,11 @@ func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 			return config.Config{}, fmt.Errorf("%s workspace: %w", runtime.Kind, err)
 		}
 		agent := config.AgentConfig{
-			Name:      strings.TrimSpace(runtime.Name),
-			Role:      strings.TrimSpace(runtime.Role),
-			Workspace: workspace,
+			Name:          strings.TrimSpace(runtime.Name),
+			Role:          strings.TrimSpace(runtime.Role),
+			Workspace:     workspace,
+			RuntimeKind:   runtime.Kind,
+			PresetVersion: config.CurrentPresetVersion,
 		}
 		switch runtime.Kind {
 		case "codex":
@@ -642,14 +715,11 @@ func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 				return config.Config{}, fmt.Errorf("Codex sandbox must be read-only or workspace-write")
 			}
 			agent.Adapter = "codex"
-			agent.Command = []string{executablePath, "exec", "--json", "--sandbox", sandbox, "-"}
+			agent.Command = config.CodexPresetCommand(executablePath, sandbox)
 			agent.EnvAllowlist = []string{"HOME", "PATH", "CODEX_HOME"}
 		case "pi":
 			agent.Adapter = "generic"
-			agent.Command = []string{
-				executablePath, "--print", "--no-tools", "--no-extensions", "--no-skills",
-				"--no-context-files", "--no-session",
-			}
+			agent.Command = config.PiPresetCommand(executablePath)
 			agent.EnvAllowlist = []string{"HOME", "PATH", "PI_CODING_AGENT_DIR", "PI_TELEMETRY"}
 			credentialName := strings.TrimSpace(runtime.CredentialEnvironmentVar)
 			if credentialName != "" {
@@ -676,10 +746,12 @@ func (s *Service) applyConfigView(configuration config.Config) {
 	s.state.DeviceName = configuration.DeviceName
 	s.state.Agents = make([]AgentView, 0, len(configuration.Agents))
 	for _, agent := range configuration.Agents {
-		kind := "pi"
+		kind := agent.RuntimeKind
+		if kind == "" {
+			kind = "generic"
+		}
 		sandbox := ""
-		if agent.Adapter == "codex" {
-			kind = "codex"
+		if kind == "codex" {
 			for index, argument := range agent.Command {
 				if argument == "--sandbox" && index+1 < len(agent.Command) {
 					sandbox = agent.Command[index+1]

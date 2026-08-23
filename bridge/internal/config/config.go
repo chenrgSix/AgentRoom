@@ -10,6 +10,7 @@ import (
 )
 
 type Config struct {
+	SchemaVersion           int           `json:"schemaVersion"`
 	ServerURL               string        `json:"serverUrl"`
 	ServerTrustMode         TrustMode     `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string        `json:"serverCertificateSha256,omitempty"`
@@ -38,12 +39,33 @@ func (c Config) ResolvedTrustMode() TrustMode {
 }
 
 type AgentConfig struct {
-	Name         string   `json:"name"`
-	Role         string   `json:"role"`
-	Adapter      string   `json:"adapter"`
-	Command      []string `json:"command"`
-	Workspace    string   `json:"workspace"`
-	EnvAllowlist []string `json:"envAllowlist,omitempty"`
+	Name          string   `json:"name"`
+	Role          string   `json:"role"`
+	Adapter       string   `json:"adapter"`
+	RuntimeKind   string   `json:"runtimeKind"`
+	PresetVersion int      `json:"presetVersion"`
+	Command       []string `json:"command"`
+	Workspace     string   `json:"workspace"`
+	EnvAllowlist  []string `json:"envAllowlist,omitempty"`
+}
+
+const (
+	CurrentSchemaVersion = 1
+	CurrentPresetVersion = 1
+)
+
+func CodexPresetCommand(executable, sandbox string) []string {
+	if sandbox != "read-only" && sandbox != "workspace-write" {
+		sandbox = "workspace-write"
+	}
+	return []string{executable, "exec", "--json", "--sandbox", sandbox, "-"}
+}
+
+func PiPresetCommand(executable string) []string {
+	return []string{
+		executable, "--print", "--no-tools", "--no-extensions", "--no-skills",
+		"--no-context-files", "--no-session",
+	}
 }
 
 func DefaultPath() string {
@@ -65,6 +87,10 @@ func Load(path string) (Config, error) {
 	if err := decoder.Decode(&value); err != nil {
 		return Config{}, fmt.Errorf("decode config: %w", err)
 	}
+	value, err = Migrate(value)
+	if err != nil {
+		return Config{}, err
+	}
 	if !filepath.IsAbs(value.DataDir) {
 		value.DataDir = filepath.Join(filepath.Dir(path), value.DataDir)
 	}
@@ -75,6 +101,11 @@ func Load(path string) (Config, error) {
 }
 
 func Save(path string, value Config) error {
+	var err error
+	value, err = Migrate(value)
+	if err != nil {
+		return err
+	}
 	if err := value.Validate(); err != nil {
 		return err
 	}
@@ -86,6 +117,11 @@ func Save(path string, value Config) error {
 }
 
 func Replace(path string, value Config) error {
+	var err error
+	value, err = Migrate(value)
+	if err != nil {
+		return err
+	}
 	if err := value.Validate(); err != nil {
 		return err
 	}
@@ -101,6 +137,70 @@ func Replace(path string, value Config) error {
 		return fmt.Errorf("config path identifies a directory")
 	}
 	return writeAtomic(resolved, value)
+}
+
+// Migrate upgrades owner-authored configuration in memory. Loading never
+// rewrites the file; the next explicit save persists current version markers.
+func Migrate(value Config) (Config, error) {
+	if value.SchemaVersion < 0 || value.SchemaVersion > CurrentSchemaVersion {
+		return Config{}, fmt.Errorf("unsupported config schemaVersion %d", value.SchemaVersion)
+	}
+	value.SchemaVersion = CurrentSchemaVersion
+	for index := range value.Agents {
+		agent := &value.Agents[index]
+		if agent.PresetVersion < 0 || agent.PresetVersion > CurrentPresetVersion {
+			return Config{}, fmt.Errorf(
+				"agents[%d]: unsupported presetVersion %d", index, agent.PresetVersion,
+			)
+		}
+		if agent.RuntimeKind == "" {
+			switch {
+			case agent.Adapter == "codex":
+				agent.RuntimeKind = "codex"
+			case legacyPiCommand(agent.Command):
+				agent.RuntimeKind = "pi"
+			default:
+				agent.RuntimeKind = "generic"
+			}
+		}
+		if agent.PresetVersion != 0 {
+			continue
+		}
+		switch agent.RuntimeKind {
+		case "codex":
+			if len(agent.Command) > 0 {
+				agent.Command = CodexPresetCommand(agent.Command[0], codexSandbox(agent.Command))
+			}
+			agent.PresetVersion = CurrentPresetVersion
+		case "pi":
+			if len(agent.Command) > 0 {
+				agent.Command = PiPresetCommand(agent.Command[0])
+			}
+			agent.PresetVersion = CurrentPresetVersion
+		case "generic":
+			// Owner-authored Generic commands are not managed presets.
+		default:
+			return Config{}, fmt.Errorf("agents[%d]: unsupported runtimeKind %q", index, agent.RuntimeKind)
+		}
+	}
+	return value, nil
+}
+
+func legacyPiCommand(command []string) bool {
+	if len(command) == 0 {
+		return false
+	}
+	name := strings.ToLower(filepath.Base(command[0]))
+	return name == "pi" || name == "pi.exe" || name == "pi.cmd"
+}
+
+func codexSandbox(command []string) string {
+	for index, argument := range command {
+		if argument == "--sandbox" && index+1 < len(command) {
+			return command[index+1]
+		}
+	}
+	return "workspace-write"
 }
 
 func writeAtomic(resolved string, value Config) error {
@@ -152,6 +252,9 @@ func EnsureAvailable(path string) (string, error) {
 }
 
 func (c Config) Validate() error {
+	if c.SchemaVersion != 0 && c.SchemaVersion != CurrentSchemaVersion {
+		return fmt.Errorf("schemaVersion must be %d", CurrentSchemaVersion)
+	}
 	parsed, err := url.Parse(c.ServerURL)
 	if err != nil || parsed.Host == "" {
 		return fmt.Errorf("serverUrl must be an absolute URL")
@@ -213,6 +316,19 @@ func (a AgentConfig) validate() error {
 	}
 	if a.Adapter != "codex" && a.Adapter != "generic" {
 		return fmt.Errorf("adapter must be codex or generic")
+	}
+	if a.RuntimeKind != "" && a.RuntimeKind != "codex" &&
+		a.RuntimeKind != "pi" && a.RuntimeKind != "generic" {
+		return fmt.Errorf("runtimeKind must be codex, pi, or generic")
+	}
+	if a.RuntimeKind == "codex" && a.Adapter != "codex" {
+		return fmt.Errorf("codex runtimeKind requires the codex adapter")
+	}
+	if (a.RuntimeKind == "pi" || a.RuntimeKind == "generic") && a.Adapter != "generic" {
+		return fmt.Errorf("pi and generic runtimeKind require the generic adapter")
+	}
+	if a.PresetVersion < 0 || a.PresetVersion > CurrentPresetVersion {
+		return fmt.Errorf("presetVersion must be between 0 and %d", CurrentPresetVersion)
 	}
 	if len(a.Command) == 0 || strings.TrimSpace(a.Command[0]) == "" {
 		return fmt.Errorf("command must be a non-empty argument array")
