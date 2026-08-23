@@ -55,6 +55,7 @@ actions remain visibly available unless a request is already in progress.
 
 - Mentions select a registered Agent identity, not free-form `@text` parsing.
 - Cancellation actions show their current authoritative outcome.
+- Bodyless HTTP requests do not declare a JSON content type.
 - Render messages, Runtime output, and failure details as untrusted content.
 - Never expose device secrets or raw Runtime environment values.
 - Meet keyboard navigation and visible focus requirements for core workflows.

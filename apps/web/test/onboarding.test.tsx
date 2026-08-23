@@ -8,6 +8,7 @@ import { App } from "../src/App.js";
 
 interface RequestRecord {
   body?: string;
+  headers?: HeadersInit;
   method: string;
   path: string;
 }
@@ -48,11 +49,17 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     name: "general",
     createdAt: "2026-08-23T00:01:00.000Z"
   };
+  const device = {
+    deviceId: "device_test",
+    name: "Alice Mac",
+    status: "active" as const
+  };
   globalThis.fetch = async (input, init = {}) => {
     const path = typeof input === "string" ? input : input.url;
     const method = init.method ?? "GET";
     requests.push({
       ...(typeof init.body === "string" ? { body: init.body } : {}),
+      ...(init.headers ? { headers: init.headers } : {}),
       method,
       path
     });
@@ -90,7 +97,13 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/rooms/${room.roomId}/runs`) {
       return jsonResponse([]);
     }
-    if (path.endsWith("/rooms") || path.endsWith("/agents") || path.endsWith("/devices")) {
+    if (path === `/api/teams/${team.teamId}/devices/${device.deviceId}` && method === "DELETE") {
+      return jsonResponse({ ...device, status: "revoked" });
+    }
+    if (path === `/api/teams/${team.teamId}/devices`) {
+      return jsonResponse([device]);
+    }
+    if (path.endsWith("/rooms") || path.endsWith("/agents")) {
       return jsonResponse([]);
     }
     throw new Error(`Unexpected request: ${method} ${path}`);
@@ -161,6 +174,16 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       );
       assert.deepEqual(JSON.parse(request?.body ?? "{}"), { code: "ABCD-1234" });
     });
+
+    fireEvent.click(screen.getByRole("button", { name: "撤销" }));
+    await screen.findByRole("button", { name: "已撤销" });
+    const revokeRequest = requests.find((candidate) =>
+      candidate.path === `/api/teams/${team.teamId}/devices/${device.deviceId}` &&
+      candidate.method === "DELETE"
+    );
+    assert.ok(revokeRequest);
+    assert.equal(revokeRequest.body, undefined);
+    assert.equal(new Headers(revokeRequest.headers).has("content-type"), false);
   } finally {
     cleanup();
     dom.window.close();

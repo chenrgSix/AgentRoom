@@ -103,6 +103,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | WEB-007 | DONE | Add guided Team onboarding and actionable empty states | WEB-001, WEB-006 | component interaction test and live browser flow reach Room setup |
 | WEB-008 | DONE | Add dedicated Agent management control plane | WEB-004, WEB-006, BRG-006 | Agent roster, connection approval, integration setup, and Device controls are discoverable and component-tested |
 | WEB-009 | DONE | Add Chinese-first Web localization | WEB-008 | Simplified Chinese is the default, English remains selectable, and locale persistence is component-tested |
+| WEB-010 | DONE | Fix bodyless Device revoke requests | WEB-006 | Device DELETE omits JSON content type and the Web state converges to revoked |
 
 ## Workstream F4: MCP Team Participation
 

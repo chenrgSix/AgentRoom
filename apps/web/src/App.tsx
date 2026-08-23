@@ -155,7 +155,7 @@ async function jsonRequest<T>(
   const response = await fetch(path, {
     ...options,
     headers: {
-      "content-type": "application/json",
+      ...(options.body ? { "content-type": "application/json" } : {}),
       ...(token ? { authorization: `Bearer ${token}` } : {}),
       ...options.headers
     }
