@@ -39,7 +39,8 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `go build -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — build the native Wails Bridge GUI for the current platform.
 - `go test -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — verify desktop-only state mapping and compile its native shell.
 - `RELEASE_TAG=v0.1.0 GOOS=linux GOARCH=amd64 ./scripts/package-release.sh` from `bridge/` — build one portable Bridge archive.
-- Publishing a GitHub Release builds five standalone Bridge archives and attaches `SHA256SUMS`.
+- `RELEASE_TAG=v0.1.0 GOARCH=arm64 ./scripts/package-desktop-darwin.sh` from `bridge/` — build one unsigned native macOS GUI archive.
+- Publishing a GitHub Release builds five CLI archives, two macOS GUI archives, and attaches `SHA256SUMS`.
 - `npm run generate --workspace @agent-room/contracts` — regenerate wire types.
 - `rg '^#' agent_room_network_design_v0.2.md` — review heading hierarchy.
 - `npm run lint:docs` — lint maintained Markdown.

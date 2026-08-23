@@ -34,7 +34,12 @@ func run() error {
 	configPath := flag.String("config", "", "path to Bridge JSON configuration")
 	dataDir := flag.String("data-dir", "", "directory for Bridge state and credential")
 	workspace := flag.String("workspace", "", "default local Runtime workspace")
+	showVersion := flag.Bool("version", false, "print the Bridge version and exit")
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(version)
+		return nil
+	}
 	if *configPath == "" {
 		*configPath = config.DefaultPath()
 	}

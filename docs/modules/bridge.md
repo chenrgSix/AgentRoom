@@ -130,11 +130,11 @@ Team enrollment, Codex/Pi discovery, and Owner approval remain available in
 the main window. The `console`, `join`, `run`, and diagnostic CLI commands stay
 supported as a headless fallback and do not depend on desktop libraries.
 
-Desktop preview packages are intentionally unsigned. Release notes must state
-that users verify the published SHA-256 checksum and explicitly trust the app
-on first launch. Apple Developer ID signing and notarization are outside the
-accepted distribution boundary; the GUI must not claim that Apple verified the
-package.
+macOS desktop packages are intentionally unsigned and unnotarized. Release
+notes state that users verify the published SHA-256 checksum and explicitly
+trust the app on first launch. Apple Developer ID signing and notarization are
+outside the accepted distribution boundary; the GUI must not claim that Apple
+verified the package or recommend disabling Gatekeeper globally.
 
 Wails is pinned to `v3.0.0-beta.12` behind the `desktop` Go build tag. Ordinary
 CGO-free CLI tests and builds do not compile the desktop package. Desktop tests
@@ -145,14 +145,17 @@ native WebView, close-to-tray behavior, and second-instance window restore.
 
 End users install a prebuilt Bridge and do not need Go or Node.js. Publishing a
 GitHub Release triggers `.github/workflows/release-bridge.yml`, which tests and
-cross-compiles CGO-free archives for macOS amd64/arm64, Windows amd64, and Linux
-amd64/arm64. The Release tag is injected into `agentroom-bridge version`; all
-archives and one `SHA256SUMS` file are attached to the Release.
+cross-compiles CGO-free CLI archives for macOS amd64/arm64, Windows amd64, and
+Linux amd64/arm64. Native macOS runners additionally build unsigned Wails GUI
+ZIPs for Apple Silicon and Intel. The Release tag is injected into each binary;
+all archives and one `SHA256SUMS` file are attached to the Release.
 
 Each archive contains the binary, client README, and an OS-specific launcher.
 The macOS `.command` and Windows `.cmd` launchers are directly clickable; Linux
 ships an executable shell launcher. The launchers start `console`, which opens
 the token-authenticated loopback UI without requiring terminal configuration.
+The GUI archive contains **AgentRoom Bridge.app** and its license material; it
+does not contain or require an Apple signature or notarization ticket.
 
 The first release artifacts are unsigned portable binaries. Desktop packages
 remain unsigned by product decision and rely on checksum verification plus

@@ -93,9 +93,55 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  desktop-macos:
+    name: Build desktop macOS/${{ matrix.goarch }}
+    needs: test
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goarch: arm64
+            runner: macos-15
+          - goarch: amd64
+            runner: macos-15-intel
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: |
+            bridge/go.sum
+            packages/contracts/go.sum
+
+      - name: Test desktop shell
+        working-directory: bridge
+        run: go test -tags desktop ./cmd/agentroom-bridge-desktop
+
+      - name: Build unsigned desktop archive
+        shell: bash
+        working-directory: bridge
+        env:
+          GOARCH: ${{ matrix.goarch }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist
+        run: ./scripts/package-desktop-darwin.sh
+
+      - name: Upload desktop artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: agentroom-bridge-desktop-darwin-${{ matrix.goarch }}
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
     name: Attach Bridge binaries
-    needs: build
+    needs: [build, desktop-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -109,7 +155,7 @@ jobs:
 
       - name: Generate checksums
         working-directory: dist
-        run: sha256sum agentroom-bridge_* > SHA256SUMS
+        run: sha256sum agentroom-bridge_* agentroom-bridge-desktop_* > SHA256SUMS
 
       - name: Upload assets to GitHub Release
         env:

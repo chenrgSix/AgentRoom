@@ -8,9 +8,11 @@ for headless environments and diagnostics.
 ## Install
 
 End users download the archive matching their operating system and CPU from
-[GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases), extract it,
-and run the included `agentroom-bridge` binary. Go and Node.js are not required.
-Verify the archive before extraction:
+[GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases). macOS users
+should choose `agentroom-bridge-desktop_*_darwin_arm64.zip` on Apple Silicon or
+`agentroom-bridge-desktop_*_darwin_amd64.zip` on an Intel Mac. Extract it, move
+**AgentRoom Bridge.app** to `/Applications`, and open it. Go, Node.js, and a
+terminal session are not required. Verify the archive before extraction:
 
 ```bash
 # Linux
@@ -20,10 +22,21 @@ sha256sum -c SHA256SUMS --ignore-missing
 shasum -a 256 -c SHA256SUMS
 ```
 
-On macOS, double-click **Start AgentRoom Bridge.command**. On Windows,
-double-click **Start AgentRoom Bridge.cmd**. On Linux, run
-`./start-agentroom-bridge.sh`. Each launcher starts the Bridge and opens the
-local configuration Console in the default browser.
+The macOS desktop package is intentionally unsigned and not notarized. After
+verifying the checksum, either approve the blocked app under **System Settings
+→ Privacy & Security → Open Anyway**, or remove quarantine from this app only:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/AgentRoom Bridge.app"
+```
+
+Do not disable Gatekeeper globally. The project does not claim Apple
+verification; users explicitly choose whether to trust the downloaded build.
+
+The portable CLI archives remain available. On macOS, double-click **Start
+AgentRoom Bridge.command**; on Windows, double-click **Start AgentRoom
+Bridge.cmd**; on Linux, run `./start-agentroom-bridge.sh`. Each launcher starts
+the Bridge and opens the local configuration Console in the default browser.
 
 The portable binaries are currently unsigned. macOS users may need to approve
 the first launch in system security settings. The `go run` commands below are
@@ -60,9 +73,9 @@ window. The desktop binary is built separately from the CGO-free CLI so
 headless builds do not acquire GUI runtime requirements. Wails is pinned to
 `v3.0.0-beta.12`; desktop tests compile with the explicit `desktop` build tag.
 
-Current desktop preview builds are unsigned. Verify the published SHA-256
-checksum before explicitly trusting the app through the operating system. The
-project does not claim Apple verification or notarization.
+Current macOS desktop builds are unsigned and unnotarized by design. Apple
+Silicon and Intel packages are built on native GitHub-hosted macOS runners and
+published with the same `SHA256SUMS` file as the portable CLI archives.
 
 `console` is the headless compatibility setup path. It opens the complete token-bearing
 URL in the default browser and also prints it as a fallback. Pass `--no-open`

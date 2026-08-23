@@ -36,7 +36,7 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 | Central Web | Node.js 22, TypeScript, Fastify, React, Vite |
 | Team integration | Remote MCP Server |
 | Push channel | Authenticated WebSocket |
-| Local Bridge | Go 1.26.7, distributed as a headless binary |
+| Local Bridge | Go 1.26.7, distributed as a macOS GUI or headless binary |
 | MVP persistence | SQLite |
 | Server and Web tests | Node test runner and TypeScript build |
 | Bridge tests | Go test |
@@ -99,11 +99,19 @@ The managed Bridge lets the central service wake a local runtime. Client
 machines do not need Go or Node.js:
 
 1. Download the archive for the client's OS and CPU from
-   [GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases).
-2. Download `SHA256SUMS`, verify the archive, and extract it. Release binaries
-   are currently unsigned, so macOS may require approval under **Privacy &
-   Security** on first launch.
-3. Run the included launcher, or run:
+   [GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases). On macOS,
+   choose the `agentroom-bridge-desktop` ZIP for Apple Silicon (`arm64`) or
+   Intel (`amd64`), then move **AgentRoom Bridge.app** to `/Applications`.
+2. Download `SHA256SUMS`, verify the archive, and extract it. The macOS app is
+   intentionally unsigned and unnotarized. Approve it under **Privacy &
+   Security**, or remove quarantine from that app only after verification:
+
+   ```bash
+   xattr -dr com.apple.quarantine "/Applications/AgentRoom Bridge.app"
+   ```
+
+3. Open the desktop app. For a headless system, use the portable CLI archive
+   and its launcher, or run:
 
    ```bash
    agentroom-bridge console --workspace /absolute/path/to/project
