@@ -69,6 +69,13 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     presence: "ready",
     role: "Teammate"
   };
+  const secondAgent = {
+    agentId: "agent_builder",
+    integrationMode: "managed" as const,
+    name: "Local Codex",
+    presence: "ready",
+    role: "Codex implementer"
+  };
   const memberMessage = {
     messageId: "message_member",
     roomId: room.roomId,
@@ -90,6 +97,27 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     createdAt: "2026-08-23T00:03:00.000Z"
   };
   let messageWasSent = false;
+  let discussionState = "";
+  const discussionView = () => ({
+    discussion: {
+      discussionId: "discussion_test",
+      goal: "确定交付恢复规则",
+      state: discussionState || "active",
+      stateReason: discussionState === "stop_requested" ? "user_requested_finish" : null,
+      currentTurn: 1,
+      progress: {
+        confidence: null,
+        openQuestions: [],
+        plateauCount: 0
+      },
+      budget: { turnsUsed: 1, durationSeconds: 3 }
+    },
+    participants: [
+      { agentId: agent.agentId, role: "participant" },
+      { agentId: secondAgent.agentId, role: "participant" }
+    ],
+    turns: [{ turnId: "turn_test", kind: "discussion", state: "working" }]
+  });
   globalThis.fetch = async (input, init = {}) => {
     const path = typeof input === "string" ? input : input.url;
     const method = init.method ?? "GET";
@@ -137,6 +165,18 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/rooms/${room.roomId}/runs`) {
       return jsonResponse([]);
     }
+    if (path === `/api/rooms/${room.roomId}/discussions` && method === "POST") {
+      discussionState = "active";
+      return jsonResponse(discussionView());
+    }
+    if (path === `/api/rooms/${room.roomId}/discussions`) {
+      return jsonResponse(discussionState ? [discussionView()] : []);
+    }
+    if (path === "/api/discussions/discussion_test/actions" && method === "POST") {
+      const action = JSON.parse(String(init.body)) as { action: string };
+      discussionState = action.action === "finish" ? "stop_requested" : discussionState;
+      return jsonResponse(discussionView());
+    }
     if (path === `/api/teams/${team.teamId}/devices/${device.deviceId}` && method === "DELETE") {
       return jsonResponse({ ...device, status: "revoked" });
     }
@@ -147,7 +187,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       return jsonResponse([member]);
     }
     if (path.endsWith("/agents")) {
-      return jsonResponse([agent]);
+      return jsonResponse([agent, secondAgent]);
     }
     if (path.endsWith("/rooms")) {
       return jsonResponse([]);
@@ -265,6 +305,34 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const timeline = await screen.findByRole("region", { name: "房间消息" });
     within(timeline).getByText("Review Bot");
     within(timeline).getByText("已经完成");
+
+    fireEvent.click(screen.getByRole("tab", { name: "发起讨论" }));
+    const discussionParticipants = screen.getByLabelText("讨论参与者");
+    assert.equal(
+      within(discussionParticipants).getAllByRole("button", { pressed: true }).length,
+      2
+    );
+    fireEvent.change(screen.getByLabelText("消息"), {
+      target: { value: "确定交付恢复规则" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "开始讨论" }));
+    const discussionPanel = await screen.findByRole("region", { name: "当前智能体讨论" });
+    within(discussionPanel).getByText("讨论中 · 第1轮");
+    within(discussionPanel).getByText("确定交付恢复规则");
+    await waitFor(() => {
+      const request = requests.find((candidate) =>
+        candidate.path === `/api/rooms/${room.roomId}/discussions` &&
+        candidate.method === "POST"
+      );
+      assert.deepEqual(JSON.parse(request?.body ?? "{}"), {
+        goal: "确定交付恢复规则",
+        participantAgentIds: [agent.agentId, secondAgent.agentId],
+        mode: "round_robin",
+        outputMode: "final_answer"
+      });
+    });
+    fireEvent.click(within(discussionPanel).getByRole("button", { name: "结束并生成结论" }));
+    await screen.findByText("将在本轮后停止");
   } finally {
     cleanup();
     dom.window.close();

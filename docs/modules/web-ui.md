@@ -98,10 +98,11 @@ actions remain visibly available unless a request is already in progress.
 ## Verification and Tasks
 
 Component tests cover onboarding state transitions, Chinese-default locale
-persistence, Agent management navigation, enrollment approval, and capability
-gating.
-Browser acceptance covers message, mention, reconnect, Run progress, reply, and
-cancellation flows. Work is tracked by `WEB-001` through `WEB-017` in
+persistence, Agent management navigation, enrollment approval, capability
+gating, Discussion creation, participant identity, and finish controls.
+Browser acceptance covers message, mention, reconnect, Run progress, reply,
+cancellation, and a two-Agent adaptive Discussion that reaches a persisted
+final conclusion. Work is tracked by `WEB-001` through `WEB-017` in
 `docs/TASKS.md`.
 
 ## Dependencies

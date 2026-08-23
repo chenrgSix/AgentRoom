@@ -133,8 +133,8 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | DISC-004 | DONE | Implement authoritative policy engine and Discussion state machine | DISC-002, DISC-003, RUN-004 | policy precedence, decision priority, stale fencing, and user control races are deterministic |
 | DISC-005 | DONE | Build bounded Discussion context and Runtime assessment adapters | DISC-004, ADP-004, ADP-005 | Codex and Generic Runtime receive named context and capability downgrade is explicit |
 | DISC-006 | DONE | Implement durable turn scheduling and finalization outputs | DISC-004, DISC-005, RUN-003 | routing intent recovers once and final answer, decision record, and unresolved issues persist |
-| WEB-017 | PLANNED | Add Discussion composer, progress, extension, and stop controls | DISC-004, DISC-006, WEB-016 | users start, inspect, continue, adjust, finish, pause, and cancel without exposed turn targets |
-| QA-007 | PLANNED | Verify adaptive Codex-Pi Discussion end to end | DISC-006, WEB-017, QA-006 | early finish, useful extension, plateau, user finish, and hard-stop finalization pass |
+| WEB-017 | DONE | Add Discussion composer, progress, extension, and stop controls | DISC-004, DISC-006, WEB-016 | component coverage and live browser acceptance prove start, inspect, continue, adjust, finish, pause, and cancel without exposed turn targets |
+| QA-007 | ACTIVE | Verify adaptive Codex-Pi Discussion end to end | DISC-006, WEB-017, QA-006 | early finish, useful extension, plateau, user finish, and hard-stop finalization pass |
 
 ## Workstream F6: Recovery, Security, and Release Evidence
 

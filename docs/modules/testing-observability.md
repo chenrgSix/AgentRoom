@@ -40,7 +40,11 @@ cross-process cancellation. Each case has a deterministic regression test.
 Discussion verification uses a deterministic evaluator fixture and fake usage
 telemetry. It covers early completion, multi-dimensional lease renewal,
 plateau detection, policy precedence, reserved finalization, stale decision
-fencing, all user stop modes, and restart recovery without calling a model.
+fencing, all user stop modes, restart recovery, optional assessment transport,
+and reply-only Codex/Generic CLI downgrade without calling a model. A browser
+acceptance run proves that two Fake Agents alternate and persist a final
+conclusion through the public HTTP API. `QA-007` remains the release-level live
+Codex-Pi acceptance gate rather than being inferred from adapter tests.
 
 ## Required Scenarios
 

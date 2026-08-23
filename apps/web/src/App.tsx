@@ -70,6 +70,49 @@ interface Run {
   updatedAt: string;
 }
 
+type DiscussionState =
+  | "active"
+  | "stop_requested"
+  | "waiting_human"
+  | "awaiting_extension"
+  | "paused"
+  | "finalizing"
+  | "completed"
+  | "canceled"
+  | "terminated";
+
+interface DiscussionView {
+  discussion: {
+    discussionId: string;
+    goal: string;
+    state: DiscussionState;
+    stateReason: string | null;
+    currentTurn: number;
+    progress: {
+      confidence: number | null;
+      openQuestions: Array<{
+        id: string;
+        question: string;
+        importance: "low" | "medium" | "high";
+      }>;
+      plateauCount: number;
+    };
+    budget: {
+      turnsUsed: number;
+      durationSeconds: number;
+    };
+  };
+  participants: Array<{
+    agentId: string;
+    role: "participant" | "reviewer";
+  }>;
+  turns: Array<{
+    turnId: string;
+    kind: "discussion" | "finalization";
+    state: string;
+  }>;
+}
+
 interface LocalSession {
   userId: string;
   displayName: string;
@@ -89,6 +132,7 @@ const themeKey = "agent-room.theme";
 type WorkspaceView = "room" | "agents";
 type ConnectionMode = "managed" | "mcp" | "demo";
 type Theme = "dark" | "light";
+type ComposerMode = "message" | "discussion";
 
 function integrationLabel(mode: Agent["integrationMode"], locale: Locale): string {
   if (mode === "managed") return translate(locale, "managedBridge");
@@ -139,6 +183,24 @@ function runStateLabel(state: Run["state"], locale: Locale): string {
     outcome_unknown: "结果未知",
     queued: "排队中",
     working: "执行中"
+  };
+  return labels[state];
+}
+
+function discussionStateLabel(state: DiscussionState, locale: Locale): string {
+  if (locale === "en") {
+    return state.replaceAll("_", " ");
+  }
+  const labels: Record<DiscussionState, string> = {
+    active: "讨论中",
+    stop_requested: "将在本轮后停止",
+    waiting_human: "等待你的决定",
+    awaiting_extension: "等待继续讨论",
+    paused: "已暂停",
+    finalizing: "正在生成结论",
+    completed: "已完成",
+    canceled: "已立即停止",
+    terminated: "已达到安全上限"
   };
   return labels[state];
 }
@@ -232,6 +294,7 @@ export function App() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [discussions, setDiscussions] = useState<DiscussionView[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<WorkspaceView>("room");
@@ -244,6 +307,9 @@ export function App() {
   const [joinCode, setJoinCode] = useState("");
   const [setupOutput, setSetupOutput] = useState<string | null>(null);
   const [messageContent, setMessageContent] = useState("");
+  const [composerMode, setComposerMode] = useState<ComposerMode>("message");
+  const [discussionAgentIds, setDiscussionAgentIds] = useState<string[]>([]);
+  const [discussionGoalEditId, setDiscussionGoalEditId] = useState<string | null>(null);
   const [mentionAgentId, setMentionAgentId] = useState("");
   const [mentionSearch, setMentionSearch] = useState<MentionSearch | null>(null);
   const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
@@ -281,6 +347,9 @@ export function App() {
   const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
   const activeDevices = devices.filter((device) => device.status === "active").length;
   const t = (key: TranslationKey) => translate(locale, key);
+  const activeDiscussion = [...discussions].reverse().find(({ discussion }) =>
+    !["completed", "canceled", "terminated"].includes(discussion.state)
+  ) ?? null;
 
   useEffect(() => {
     localStorage.setItem(localeKey, locale);
@@ -292,6 +361,21 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    setDiscussionAgentIds((current) => {
+      const retained = current.filter((agentId) =>
+        agents.some((agent) => agent.agentId === agentId)
+      );
+      if (retained.length >= 2 || agents.length < 2) {
+        return retained.length === current.length ? current : retained;
+      }
+      const preferred = agents.filter(({ presence }) => presence === "ready");
+      return (preferred.length >= 2 ? preferred : agents)
+        .slice(0, 2)
+        .map(({ agentId }) => agentId);
+    });
+  }, [agents]);
 
   async function loadTeams(activeSession: LocalSession) {
     const next = await jsonRequest<Team[]>("/api/teams", {}, activeSession.token);
@@ -340,6 +424,16 @@ export function App() {
     ]).then(([nextRooms, nextAgents, nextMembers, nextDevices]) => {
       setRooms(nextRooms);
       setAgents(nextAgents);
+      setDiscussionAgentIds((current) => {
+        const retained = current.filter((agentId) =>
+          nextAgents.some((agent) => agent.agentId === agentId)
+        );
+        if (retained.length >= 2) return retained;
+        const preferred = nextAgents.filter(({ presence }) => presence === "ready");
+        return (preferred.length >= 2 ? preferred : nextAgents)
+          .slice(0, 2)
+          .map(({ agentId }) => agentId);
+      });
       setMembers(nextMembers);
       setDevices(nextDevices);
       setMentionAgentId((current) =>
@@ -357,6 +451,7 @@ export function App() {
     if (!session || !selectedRoomId) {
       setMessages([]);
       setRuns([]);
+      setDiscussions([]);
       return;
     }
     void Promise.all([
@@ -369,10 +464,16 @@ export function App() {
         `/api/rooms/${selectedRoomId}/runs`,
         {},
         session.token
+      ),
+      jsonRequest<DiscussionView[]>(
+        `/api/rooms/${selectedRoomId}/discussions`,
+        {},
+        session.token
       )
-    ]).then(([page, nextRuns]) => {
+    ]).then(([page, nextRuns, nextDiscussions]) => {
       setMessages(page.items);
       setRuns(nextRuns);
+      setDiscussions(nextDiscussions);
     })
       .catch((reason: unknown) => setError(String(reason)));
   }, [selectedRoomId, session]);
@@ -382,7 +483,14 @@ export function App() {
     let stopped = false;
     const refresh = async () => {
       try {
-        const [nextAgents, nextMembers, nextDevices, page, nextRuns] = await Promise.all([
+        const [
+          nextAgents,
+          nextMembers,
+          nextDevices,
+          page,
+          nextRuns,
+          nextDiscussions
+        ] = await Promise.all([
           jsonRequest<Agent[]>(
             `/api/teams/${selectedTeamId}/agents`, {}, session.token
           ),
@@ -397,6 +505,9 @@ export function App() {
           ),
           jsonRequest<Run[]>(
             `/api/rooms/${selectedRoomId}/runs`, {}, session.token
+          ),
+          jsonRequest<DiscussionView[]>(
+            `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
           )
         ]);
         if (!stopped) {
@@ -405,6 +516,7 @@ export function App() {
           setDevices(nextDevices);
           setMessages(page.items);
           setRuns(nextRuns);
+          setDiscussions(nextDiscussions);
         }
       } catch (reason) {
         if (!stopped) setError(String(reason));
@@ -600,25 +712,116 @@ export function App() {
       setMessageContent("");
       setMentionAgentId("");
       setMentionSearch(null);
-      const [page, nextRuns] = await Promise.all([
-        jsonRequest<{ items: Message[] }>(
-          `/api/rooms/${selectedRoomId}/messages?limit=100`,
-          {},
-          session.token
-        ),
-        jsonRequest<Run[]>(
-          `/api/rooms/${selectedRoomId}/runs`,
-          {},
-          session.token
-        )
-      ]);
-      setMessages(page.items);
-      setRuns(nextRuns);
+      await refreshRoomState();
     } catch (reason) {
       setError(String(reason));
     } finally {
       setBusy(false);
     }
+  }
+
+  async function refreshRoomState() {
+    if (!session || !selectedRoomId) return;
+    const [page, nextRuns, nextDiscussions] = await Promise.all([
+      jsonRequest<{ items: Message[] }>(
+        `/api/rooms/${selectedRoomId}/messages?limit=100`, {}, session.token
+      ),
+      jsonRequest<Run[]>(
+        `/api/rooms/${selectedRoomId}/runs`, {}, session.token
+      ),
+      jsonRequest<DiscussionView[]>(
+        `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
+      )
+    ]);
+    setMessages(page.items);
+    setRuns(nextRuns);
+    setDiscussions(nextDiscussions);
+  }
+
+  async function submitComposer(event: FormEvent) {
+    if (composerMode === "message") {
+      await sendMessage(event);
+      return;
+    }
+    event.preventDefault();
+    if (!session || !selectedRoomId || !messageContent.trim()) return;
+    if (!discussionGoalEditId && discussionAgentIds.length < 2) {
+      setError(locale === "zh-CN"
+        ? "发起讨论前请至少选择两个智能体。"
+        : "Select at least two Agents before starting a Discussion.");
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      if (discussionGoalEditId) {
+        await jsonRequest<DiscussionView>(
+          `/api/discussions/${discussionGoalEditId}/actions`,
+          {
+            method: "POST",
+            body: JSON.stringify({ action: "adjust_goal", goal: messageContent })
+          },
+          session.token
+        );
+      } else {
+        await jsonRequest<DiscussionView>(
+          `/api/rooms/${selectedRoomId}/discussions`,
+          {
+            method: "POST",
+            body: JSON.stringify({
+              goal: messageContent,
+              participantAgentIds: discussionAgentIds,
+              mode: "round_robin",
+              outputMode: "final_answer"
+            })
+          },
+          session.token
+        );
+      }
+      setMessageContent("");
+      setDiscussionGoalEditId(null);
+      setComposerMode("message");
+      await refreshRoomState();
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function controlDiscussion(
+    discussionId: string,
+    action: "finish" | "stop_after_turn" | "pause" | "cancel" | "continue"
+  ) {
+    if (!session) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await jsonRequest<DiscussionView>(
+        `/api/discussions/${discussionId}/actions`,
+        { method: "POST", body: JSON.stringify({ action }) },
+        session.token
+      );
+      await refreshRoomState();
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function editDiscussionGoal(view: DiscussionView) {
+    setComposerMode("discussion");
+    setDiscussionGoalEditId(view.discussion.discussionId);
+    setMessageContent(view.discussion.goal);
+    setDiscussionAgentIds(view.participants.map(({ agentId }) => agentId));
+  }
+
+  function toggleDiscussionAgent(agentId: string) {
+    setDiscussionAgentIds((current) => current.includes(agentId)
+      ? current.filter((candidate) => candidate !== agentId)
+      : [...current, agentId]
+    );
   }
 
   function handleMessageChange(event: ChangeEvent<HTMLTextAreaElement>) {
@@ -1135,9 +1338,93 @@ export function App() {
           </section>
         )}
         {selectedRoom && activeView === "room" && (
-          <form className="composer" onSubmit={sendMessage}>
+          <form className="composer" onSubmit={(event) => void submitComposer(event)}>
+            {activeDiscussion && (
+              <section className="discussion-status" aria-label={locale === "zh-CN" ? "当前智能体讨论" : "Active Agent Discussion"}>
+                <div className="discussion-status-copy">
+                  <span className={`discussion-state ${activeDiscussion.discussion.state}`}>
+                    {discussionStateLabel(activeDiscussion.discussion.state, locale)}
+                    {activeDiscussion.discussion.state === "active" &&
+                      ` · ${locale === "zh-CN" ? "第" : "turn "}${activeDiscussion.turns.filter(({ kind }) => kind === "discussion").length}${locale === "zh-CN" ? "轮" : ""}`}
+                  </span>
+                  <strong>{activeDiscussion.discussion.goal}</strong>
+                  <small>
+                    {activeDiscussion.discussion.progress.openQuestions.length > 0
+                      ? (locale === "zh-CN"
+                          ? `还有 ${activeDiscussion.discussion.progress.openQuestions.length} 个未决问题`
+                          : `${activeDiscussion.discussion.progress.openQuestions.length} open questions`)
+                      : (locale === "zh-CN" ? "正在根据进展和边际收益决定下一步" : "The Orchestrator is evaluating progress and marginal gain")}
+                  </small>
+                </div>
+                <div className="discussion-controls">
+                  {["awaiting_extension", "waiting_human", "paused"].includes(activeDiscussion.discussion.state) ? (
+                    <button className="discussion-primary" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "continue")} type="button">
+                      {locale === "zh-CN" ? "继续解决" : "Continue solving"}
+                    </button>
+                  ) : activeDiscussion.discussion.state !== "finalizing" && activeDiscussion.discussion.state !== "stop_requested" ? (
+                    <button className="discussion-primary" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "finish")} type="button">
+                      {locale === "zh-CN" ? "结束并生成结论" : "Finish and generate conclusion"}
+                    </button>
+                  ) : null}
+                  {activeDiscussion.discussion.state === "active" && (
+                    <>
+                      <button disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "stop_after_turn")} type="button">
+                        {locale === "zh-CN" ? "本轮后停止" : "Stop after turn"}
+                      </button>
+                      <button disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "pause")} type="button">
+                        {locale === "zh-CN" ? "暂停" : "Pause"}
+                      </button>
+                    </>
+                  )}
+                  {["awaiting_extension", "waiting_human", "paused"].includes(activeDiscussion.discussion.state) && (
+                    <button disabled={busy} onClick={() => editDiscussionGoal(activeDiscussion)} type="button">
+                      {locale === "zh-CN" ? "调整目标" : "Adjust goal"}
+                    </button>
+                  )}
+                  {activeDiscussion.discussion.state !== "finalizing" && (
+                    <button className="discussion-danger" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "cancel")} type="button">
+                      {locale === "zh-CN" ? "立即停止" : "Stop now"}
+                    </button>
+                  )}
+                </div>
+              </section>
+            )}
+            <div className="composer-modes" role="tablist" aria-label={locale === "zh-CN" ? "输入模式" : "Composer mode"}>
+              <button aria-selected={composerMode === "message"} onClick={() => {
+                setComposerMode("message");
+                setDiscussionGoalEditId(null);
+              }} role="tab" type="button">
+                {locale === "zh-CN" ? "发消息" : "Message"}
+              </button>
+              <button
+                aria-selected={composerMode === "discussion"}
+                disabled={activeDiscussion !== null && discussionGoalEditId === null}
+                onClick={() => setComposerMode("discussion")}
+                role="tab"
+                type="button"
+              >
+                {locale === "zh-CN" ? "发起讨论" : "Start Discussion"}
+              </button>
+            </div>
+            {composerMode === "discussion" && (
+              <div className="discussion-participants" aria-label={locale === "zh-CN" ? "讨论参与者" : "Discussion participants"}>
+                <span>{locale === "zh-CN" ? "参与者" : "Participants"}</span>
+                {agents.map((agent) => (
+                  <button
+                    aria-pressed={discussionAgentIds.includes(agent.agentId)}
+                    className={discussionAgentIds.includes(agent.agentId) ? "selected" : ""}
+                    disabled={discussionGoalEditId !== null}
+                    key={agent.agentId}
+                    onClick={() => toggleDiscussionAgent(agent.agentId)}
+                    type="button"
+                  >
+                    {agent.name}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="composer-input">
-              {mentionSearch && (
+              {composerMode === "message" && mentionSearch && (
                 <div className="mention-suggestions" aria-label={t("mentionAgent")} role="listbox">
                   <div className="mention-suggestions-heading">{t("mentionHint")}</div>
                   {mentionOptions.length === 0 ? (
@@ -1158,22 +1445,34 @@ export function App() {
                   ))}
                 </div>
               )}
-              {selectedMentionAgent && (
+              {composerMode === "message" && selectedMentionAgent && (
                 <span className="selected-mention">
                   {t("mentionSelected")} @{selectedMentionAgent.name}
                 </span>
               )}
               <textarea
                 aria-label={t("message")}
-                onChange={handleMessageChange}
-                onKeyDown={handleMessageKeyDown}
-                placeholder={locale === "zh-CN" ? `发送消息到 #${selectedRoom.name}，输入 @ 提及智能体` : `Message #${selectedRoom.name}; type @ to mention an Agent`}
+                onChange={composerMode === "message"
+                  ? handleMessageChange
+                  : (event) => setMessageContent(event.currentTarget.value)}
+                onKeyDown={composerMode === "message" ? handleMessageKeyDown : undefined}
+                placeholder={composerMode === "message"
+                  ? (locale === "zh-CN" ? `发送消息到 #${selectedRoom.name}，输入 @ 提及智能体` : `Message #${selectedRoom.name}; type @ to mention an Agent`)
+                  : (locale === "zh-CN" ? "输入这次 Team 讨论要解决的目标" : "Describe the goal this Team Discussion should solve")}
                 required
                 rows={2}
                 value={messageContent}
               />
             </div>
-            <button className="composer-send" disabled={busy}>{busy ? t("sending") : t("send")}</button>
+            <button className="composer-send" disabled={busy || (composerMode === "discussion" && !discussionGoalEditId && discussionAgentIds.length < 2)}>
+              {busy
+                ? t("sending")
+                : composerMode === "message"
+                  ? t("send")
+                  : discussionGoalEditId
+                    ? (locale === "zh-CN" ? "保存目标" : "Save goal")
+                    : (locale === "zh-CN" ? "开始讨论" : "Start Discussion")}
+            </button>
           </form>
         )}
         {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
