@@ -14,16 +14,12 @@ import (
 	"syscall"
 	"time"
 
+	"agentroom.dev/bridge/internal/bridgecore"
 	"agentroom.dev/bridge/internal/browserlaunch"
 	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/console"
-	"agentroom.dev/bridge/internal/delivery"
 	"agentroom.dev/bridge/internal/enrollment"
-	"agentroom.dev/bridge/internal/identity"
 	"agentroom.dev/bridge/internal/pairing"
-	bridgeruntime "agentroom.dev/bridge/internal/runtime"
-	contracts "agentroom.dev/contracts/generated/go"
 )
 
 var version = "dev"
@@ -134,7 +130,9 @@ func runConsole(args []string) error {
 		SaveConfig:     config.Save,
 		ReplaceConfig:  config.Replace,
 		SaveCredential: pairing.Save,
-		RunBridge:      runBridge,
+		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential) error {
+			return bridgecore.Run(ctx, loaded, credential, version)
+		},
 	})
 	if err != nil {
 		return err
@@ -285,44 +283,11 @@ func join(args []string) error {
 		return err
 	}
 	fmt.Printf("joined Team %s as device %s; config saved to %s\n", credential.TeamID, credential.DeviceID, resolvedPath)
-	return runBridge(ctx, loaded, credential)
+	return bridgecore.Run(ctx, loaded, credential, version)
 }
 
 func runUntilSignal(loaded config.Config, credential pairing.Credential) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return runBridge(ctx, loaded, credential)
-}
-
-func runBridge(ctx context.Context, loaded config.Config, credential pairing.Credential) error {
-	inbox, err := delivery.Open(filepath.Join(loaded.DataDir, "inbox"))
-	if err != nil {
-		return err
-	}
-	identities, err := identity.LoadOrCreate(loaded.DataDir, loaded.Agents)
-	if err != nil {
-		return err
-	}
-	adapters := make(map[string]bridgeruntime.Adapter, len(loaded.Agents))
-	for _, configured := range loaded.Agents {
-		switch configured.Adapter {
-		case "generic":
-			adapters[identities[configured.Name]] = bridgeruntime.GenericAdapter{Config: configured}
-		case "codex":
-			adapters[identities[configured.Name]] = bridgeruntime.CodexAdapter{Config: configured}
-		}
-	}
-	executor := delivery.RuntimeExecutor{Inbox: inbox, Adapters: adapters}
-	runHandler := delivery.Handler{
-		Inbox: inbox, OnNew: executor.Execute, OnDuplicate: executor.Replay,
-	}
-	return (connection.Client{
-		Config: loaded, Credential: credential, BridgeVersion: version,
-		RecoverRuns: func(ctx context.Context, send func(context.Context, any) error) error {
-			return executor.Recover(ctx, delivery.Sender(send))
-		},
-		HandleRun: func(ctx context.Context, message contracts.RunRequestedMessage, send func(context.Context, any) error) error {
-			return runHandler.Handle(ctx, message, delivery.Sender(send))
-		},
-	}).Run(ctx)
+	return bridgecore.Run(ctx, loaded, credential, version)
 }

@@ -261,6 +261,79 @@ func TestConsoleRejectsNonLoopbackListenerAndUnsafeRuntimeInput(t *testing.T) {
 	}
 }
 
+func TestLifecycleMethodsShareStartStopStateWithDesktopShell(t *testing.T) {
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := config.Config{
+		ServerURL:  "http://127.0.0.1:3000",
+		DeviceName: "Desktop Test Bridge",
+		DataDir:    dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "Desktop Agent", Role: "Test", Adapter: "generic",
+			Command: []string{executablePath}, Workspace: directory,
+		}},
+	}
+	if err := config.Save(configPath, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if err := pairing.Save(dataDir, pairing.Credential{
+		ServerURL: loaded.ServerURL, DeviceID: "device_desktop",
+		TeamID: "team_desktop", OwnerMemberID: "member_desktop", Token: "secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{}, 2)
+	stopped := make(chan struct{}, 2)
+	dependencies := inertDependencies()
+	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential) error {
+		started <- struct{}{}
+		<-ctx.Done()
+		stopped <- struct{}{}
+		return ctx.Err()
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory,
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+
+	state, err := service.StartBridge()
+	if err != nil || !state.BridgeRunning || state.Phase != PhaseRunning {
+		t.Fatalf("unexpected started state: %#v, %v", state, err)
+	}
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("desktop lifecycle did not start Bridge")
+	}
+	state, err = service.StartBridge()
+	if err != nil || !state.BridgeRunning {
+		t.Fatalf("duplicate start must be idempotent: %#v, %v", state, err)
+	}
+	select {
+	case <-started:
+		t.Fatal("duplicate start launched a second Bridge")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	state = service.StopBridge()
+	if state.BridgeRunning || state.Phase != PhaseReady {
+		t.Fatalf("unexpected stopped state: %#v", state)
+	}
+	select {
+	case <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("desktop lifecycle did not cancel Bridge")
+	}
+}
+
 func consoleRequest(
 	t *testing.T,
 	serverURL string,

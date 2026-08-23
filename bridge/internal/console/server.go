@@ -222,6 +222,32 @@ func (s *Service) StartConfiguredBridge() error {
 	return s.startBridgeLocked()
 }
 
+// StartBridge starts an enrolled Bridge and returns a snapshot of its new
+// state. It is shared by the HTTP Console and native desktop controls.
+func (s *Service) StartBridge() (State, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.startBridgeLocked(); err != nil {
+		return cloneState(s.state), err
+	}
+	return cloneState(s.state), nil
+}
+
+// StopBridge stops the current managed connection without closing the local
+// configuration surface. Starting it again reuses the stored identity.
+func (s *Service) StopBridge() State {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.bridgeCancel != nil {
+		s.bridgeCancel()
+	}
+	s.bridgeEpoch++
+	s.bridgeCancel = nil
+	s.state.BridgeRunning = false
+	s.state.Phase = phaseFor(s.state.Configured, false)
+	return cloneState(s.state)
+}
+
 func (s *Service) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -373,13 +399,12 @@ func (s *Service) cancelEnrollment(response http.ResponseWriter, _ *http.Request
 }
 
 func (s *Service) startBridge(response http.ResponseWriter, _ *http.Request) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.startBridgeLocked(); err != nil {
+	state, err := s.StartBridge()
+	if err != nil {
 		writeError(response, http.StatusConflict, err.Error())
 		return
 	}
-	writeJSON(response, http.StatusAccepted, s.state)
+	writeJSON(response, http.StatusAccepted, state)
 }
 
 func (s *Service) startBridgeLocked() error {
@@ -418,17 +443,7 @@ func (s *Service) startBridgeLocked() error {
 }
 
 func (s *Service) stopBridge(response http.ResponseWriter, _ *http.Request) {
-	s.mu.Lock()
-	if s.bridgeCancel != nil {
-		s.bridgeCancel()
-	}
-	s.bridgeEpoch++
-	s.bridgeCancel = nil
-	s.state.BridgeRunning = false
-	s.state.Phase = phaseFor(s.state.Configured, false)
-	state := cloneState(s.state)
-	s.mu.Unlock()
-	writeJSON(response, http.StatusOK, state)
+	writeJSON(response, http.StatusOK, s.StopBridge())
 }
 
 func (s *Service) updateConfig(response http.ResponseWriter, request *http.Request) {
