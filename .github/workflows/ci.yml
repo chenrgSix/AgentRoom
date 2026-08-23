@@ -1,0 +1,115 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository:
+    name: Repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.23.1
+          cache: npm
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: |
+            bridge/go.sum
+            packages/contracts/go.sum
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate contracts
+        run: npm run validate
+
+      - name: Build workspaces
+        run: npm run build
+
+      - name: Run workspace tests
+        run: npm test
+
+      - name: Run deterministic end-to-end tests
+        run: npm run test:e2e
+
+      - name: Lint documentation
+        run: npm run lint:docs
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+  go:
+    name: Go
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: |
+            bridge/go.sum
+            packages/contracts/go.sum
+
+      - name: Test and vet Go contracts
+        working-directory: packages/contracts
+        run: |
+          go test ./...
+          go vet ./...
+
+      - name: Test and vet Bridge
+        working-directory: bridge
+        run: |
+          go test ./...
+          go vet ./...
+
+      - name: Check Bridge release scripts
+        run: |
+          bash -n bridge/scripts/package-release.sh
+          bash -n bridge/scripts/package-desktop-darwin.sh
+          bash -n bridge/scripts/verify-release-assets.sh
+
+  desktop-macos:
+    name: Desktop macOS
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: |
+            bridge/go.sum
+            packages/contracts/go.sum
+
+      - name: Test, vet, and build desktop shell
+        working-directory: bridge
+        run: |
+          go test -tags desktop ./cmd/agentroom-bridge-desktop
+          go vet -tags desktop ./cmd/agentroom-bridge-desktop
+          go build -tags desktop ./cmd/agentroom-bridge-desktop

@@ -169,7 +169,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-005 | DONE | Run security and clean-room release audit | SEC-004, QA-004 | committed audit records zero open critical findings, remediated npm advisory, zero Go findings, and clean-tree build/test/five-target packaging |
 | QA-006 | DONE | Verify local cross-process managed flow | BRG-005, ADP-005, RUN-003 | real server, Go Bridge, and Generic Runtime reply passes |
 | QA-008 | ACTIVE | Add continuous repository quality gates | QA-005 | every main push and pull request validates contracts, Node builds/tests/E2E/docs, Go tests/vet, and native desktop compilation |
-| QA-009 | PLANNED | Publish and verify the v0.2 release candidate | BRG-011, BRG-015, SEC-005, OPS-004, QA-008 | immutable draft-to-prerelease workflow publishes exactly seven archives, checksums, and license assets; clean downloads pass the same verifier |
+| QA-009 | ACTIVE | Publish and verify the v0.2 release candidate | BRG-011, BRG-015, SEC-005, OPS-004, QA-008 | immutable draft-to-prerelease workflow publishes exactly seven archives, checksums, and license assets; clean downloads pass the same verifier |
 
 ## Deferred Beyond MVP
 

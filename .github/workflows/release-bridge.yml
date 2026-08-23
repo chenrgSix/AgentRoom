@@ -1,12 +1,10 @@
 name: Release Bridge
 
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Existing GitHub Release tag to rebuild
+        description: Existing tag with an empty draft GitHub Release
         required: true
         type: string
 
@@ -14,21 +12,36 @@ permissions:
   contents: read
 
 concurrency:
-  group: bridge-release-${{ github.event.release.tag_name || inputs.release_tag }}
+  group: bridge-release-${{ inputs.release_tag }}
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: ${{ github.event.release.tag_name || inputs.release_tag }}
+  RELEASE_TAG: ${{ inputs.release_tag }}
 
 jobs:
+  validate-release:
+    name: Validate draft Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require a version tag and empty draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          test "$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq .isDraft)" = true
+          test "$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets | length')" = 0
+
   test:
     name: Test Bridge
+    needs: validate-release
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+          ref: refs/tags/${{ inputs.release_tag }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -46,6 +59,7 @@ jobs:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -64,7 +78,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+          ref: refs/tags/${{ inputs.release_tag }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -97,6 +111,7 @@ jobs:
     name: Build desktop macOS/${{ matrix.goarch }}
     needs: test
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
@@ -109,7 +124,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: ${{ github.event.release.tag_name || inputs.release_tag }}
+          ref: refs/tags/${{ inputs.release_tag }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -143,9 +158,22 @@ jobs:
     name: Attach Bridge binaries
     needs: [build, desktop-macos]
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
       contents: write
     steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+
+      - name: Require an empty draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          test "$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq .isDraft)" = true
+          test "$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets | length')" = 0
+
       - name: Download build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -155,9 +183,54 @@ jobs:
 
       - name: Generate checksums
         working-directory: dist
-        run: sha256sum agentroom-bridge_* agentroom-bridge-desktop_* > SHA256SUMS
+        run: |
+          version=${RELEASE_TAG#v}
+          sha256sum \
+            "agentroom-bridge_${version}_darwin_amd64.tar.gz" \
+            "agentroom-bridge_${version}_darwin_arm64.tar.gz" \
+            "agentroom-bridge_${version}_linux_amd64.tar.gz" \
+            "agentroom-bridge_${version}_linux_arm64.tar.gz" \
+            "agentroom-bridge_${version}_windows_amd64.zip" \
+            "agentroom-bridge-desktop_${version}_darwin_amd64.zip" \
+            "agentroom-bridge-desktop_${version}_darwin_arm64.zip" \
+            > SHA256SUMS
+
+      - name: Add top-level license assets
+        run: cp LICENSE NOTICE COMMERCIAL-LICENSE.md dist/
+
+      - name: Verify release assets before upload
+        env:
+          ASSET_DIR: ${{ github.workspace }}/dist
+        run: ./bridge/scripts/verify-release-assets.sh
 
       - name: Upload assets to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "${RELEASE_TAG}" dist/* --clobber --repo "${GITHUB_REPOSITORY}"
+        run: gh release upload "${RELEASE_TAG}" dist/* --repo "${GITHUB_REPOSITORY}"
+
+  verify-release:
+    name: Verify uploaded Release
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+
+      - name: Download draft Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir release-assets
+          gh release download "${RELEASE_TAG}" \
+            --dir release-assets \
+            --repo "${GITHUB_REPOSITORY}"
+
+      - name: Verify uploaded Release assets
+        env:
+          ASSET_DIR: ${{ github.workspace }}/release-assets
+        run: ./bridge/scripts/verify-release-assets.sh
