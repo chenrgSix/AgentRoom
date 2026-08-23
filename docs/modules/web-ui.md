@@ -27,6 +27,8 @@ without changing server-owned state.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
 - Agent roster with presence and capability summaries.
 - Run cards with live status, replies, cancellation, and failure details.
+- Discussion composer, progress explanation, finalization, extension, pause,
+  and stop controls without presenting a soft budget as a completion target.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
 - Selected Room participant roster projected from Team members and visible Agents.
@@ -49,6 +51,13 @@ server-assigned identity.
 The UI uses schemas and generated types from `packages/contracts/`. Capability
 flags control whether start, resume, interrupt, handoff, or managed execution
 controls are shown.
+
+Discussion views render the central ProgressSnapshot and OrchestrationDecision;
+they do not derive completion from Agent prose. The timeline shows the current
+turn ordinal without a denominator. At a soft boundary it explains resolved and
+unresolved goals and offers semantic actions such as continue solving, adjust
+goal, or finish with a conclusion rather than requiring users to choose an
+internal turn allocation.
 
 Timeline messages resolve their visible author from the stable `senderId` and
 the current Team roster. Registered Agent and member names are shown directly;
@@ -79,6 +88,8 @@ actions remain visibly available unless a request is already in progress.
 - Typing `@` opens the visible Agent suggestion list; selecting a result inserts
   its display name while retaining its stable identity for submission.
 - Cancellation actions show their current authoritative outcome.
+- **Finish and generate conclusion** is the primary Discussion stop action;
+  stop-after-turn, pause, resume, and immediate cancellation remain explicit.
 - Bodyless HTTP requests do not declare a JSON content type.
 - Render messages, Runtime output, and failure details as untrusted content.
 - Never expose device secrets or raw Runtime environment values.
@@ -90,7 +101,7 @@ Component tests cover onboarding state transitions, Chinese-default locale
 persistence, Agent management navigation, enrollment approval, and capability
 gating.
 Browser acceptance covers message, mention, reconnect, Run progress, reply, and
-cancellation flows. Work is tracked by `WEB-001` through `WEB-016` in
+cancellation flows. Work is tracked by `WEB-001` through `WEB-017` in
 `docs/TASKS.md`.
 
 ## Dependencies

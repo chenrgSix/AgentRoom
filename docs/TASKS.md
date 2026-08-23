@@ -21,7 +21,7 @@ behavior; this file records what is planned, ready, active, or complete.
 ## Architecture Roadmap Traceability
 
 Task dependencies, not table order, control implementation. These exit tasks
-preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
+preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 
 | Phase | Baseline Outcome | Exit Tasks |
 | --- | --- | --- |
@@ -34,6 +34,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | P6 | Reconnect, redelivery, and server restart recover | DATA-003, QA-004 |
 | P7 | Three Agents complete a guarded handoff | RUN-006, QA-003 |
 | P8 | A second Runtime mode joins the Team | ADP-005 |
+| P9 | Adaptive Agent Discussion reaches a governed conclusion | DISC-006, WEB-017, QA-007 |
 
 ## Milestone G0: Governance and Architecture
 
@@ -43,6 +44,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | GOV-002 | DONE | Establish v0.2 architecture baseline | GOV-001 | v0.2 document committed |
 | GOV-003 | DONE | Define repository standards | GOV-002 | README, contributing, lint, ADR rules |
 | GOV-004 | DONE | Split architecture into module documents | GOV-003 | module index and task register committed |
+| GOV-005 | DONE | Define adaptive Discussion orchestration baseline | GOV-004 | accepted ADR, module boundary, state machine, budget, and verification matrix agree |
 
 ## Workstream F0: Contracts and Fake System
 
@@ -121,7 +123,20 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | MCP-004 | DONE | Implement `team.wait`, Room, and inbox resources | MCP-001, ROOM-002 | bounded wait resumes by cursor and respects membership |
 | MCP-005 | DONE | Publish client-neutral setup and Skill guidance | MCP-003 | fresh client can join without source changes |
 
-## Workstream F5: Recovery, Security, and Release Evidence
+## Workstream F5: Adaptive Agent Discussion
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| DISC-001 | PLANNED | Add Discussion, turn, progress, decision, and budget contracts and persistence | CON-004, ROOM-002, DATA-003 | migration and repository tests preserve aggregate versions and unique turn ordinals |
+| DISC-002 | PLANNED | Implement deterministic progress projection and plateau evidence | DISC-001 | structured deltas, priority-aware plateau, and reply-only downgrade tests pass |
+| DISC-003 | PLANNED | Implement budget ledger, leases, telemetry downgrade, and finalization reserve | DISC-001 | turns, tokens, duration, cost, extensions, unknown usage, and reserve invariants pass |
+| DISC-004 | PLANNED | Implement authoritative policy engine and Discussion state machine | DISC-002, DISC-003, RUN-004 | policy precedence, decision priority, stale fencing, and user control races are deterministic |
+| DISC-005 | PLANNED | Build bounded Discussion context and Runtime assessment adapters | DISC-004, ADP-004, ADP-005 | Codex and Generic Runtime receive named context and capability downgrade is explicit |
+| DISC-006 | PLANNED | Implement durable turn scheduling and finalization outputs | DISC-004, DISC-005, RUN-003 | routing intent recovers once and final answer, decision record, and unresolved issues persist |
+| WEB-017 | PLANNED | Add Discussion composer, progress, extension, and stop controls | DISC-004, DISC-006, WEB-016 | users start, inspect, continue, adjust, finish, pause, and cancel without exposed turn targets |
+| QA-007 | PLANNED | Verify adaptive Codex-Pi Discussion end to end | DISC-006, WEB-017, QA-006 | early finish, useful extension, plateau, user finish, and hard-stop finalization pass |
+
+## Workstream F6: Recovery, Security, and Release Evidence
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |

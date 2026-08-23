@@ -7,7 +7,7 @@
 | 项目 | 内容 |
 | --- | --- |
 | 文档状态 | Implementation-ready Architecture Baseline |
-| 日期 | 2026-08-22 |
+| 日期 | 2026-08-23 |
 | 核心目标 | 在不修改 Codex、WorkBuddy 等客户端源码的前提下，将现有 Agent 组成类似 Hermes Studio Group Chat 的 Team |
 | 核心形态 | 中央 Web Team Hub + Remote MCP Server + 每台机器一个可选的无界面 Bridge |
 | 非目标 | 不开发独立桌面客户端，不替代现有 Agent Runtime，不建设完整分布式 Agent 平台 |
@@ -16,7 +16,7 @@
 
 ## 1. 执行摘要
 
-Agent Room 是现有 AI 客户端之上的轻量 Team Layer。用户在中央 Web 项目的 Room 中组织 Member 和 Agent，通过结构化 `@mention` 发起协作；中央服务保存消息、路由 Mention，并将任务推送到目标机器上的 AgentRoom Bridge。Bridge 使用目标 Runtime 已有的机器接口启动或恢复一次 Team Session，再把状态和回复送回 Room。
+Agent Room 是现有 AI 客户端之上的轻量 Team Layer。用户在中央 Web 项目的 Room 中组织 Member 和 Agent，通过结构化 `@mention` 发起协作；中央服务保存消息、路由 Mention，并将任务推送到目标机器上的 AgentRoom Bridge。Bridge 使用目标 Runtime 已有的机器接口启动或恢复一次 Team Session，再把状态和回复送回 Room。多 Agent Discussion 在 Room 中表现为 Agent 直接对话，但由中央 Orchestrator 根据进展、预算和策略决定下一轮，不建立 Bridge 间直连。
 
 MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Room、发送消息和 handoff。MCP Server 不能可靠地凭空启动 Codex Turn，因此主动唤醒由中央服务与 Bridge 之间的 WebSocket 通道承担。
 
@@ -27,6 +27,7 @@ MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Ro
 - Bridge 是轻量 Runtime Bridge，不是新的 Agent 平台或远程管理 Gateway。
 - 客户端接入以配置、Skill、MCP 或已有机器协议为主，不 fork 客户端源码。
 - 没有可编程启动接口的 Runtime 仍可作为 manual participant 加入 Team。
+- Agent 只提交评估和建议；中央 Orchestrator 拥有 Discussion 流程决策权，用户拥有最终控制权。
 
 ## 2. 产品目标与非目标
 
@@ -38,6 +39,7 @@ MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Ro
 4. 让运行中的 Agent 通过 MCP读取 Room 上下文、回复和 handoff。
 5. 保持 Agent 的认证、工作目录、工具和审批留在原 Runtime。
 6. 安装成本控制为一个 Bridge 二进制和一份可选 MCP/Skill 配置。
+7. 支持具有自适应结束、进展停滞检测和人工控制的 Agent-to-Agent Discussion。
 
 ### 2.2 非目标
 
@@ -60,6 +62,7 @@ Central Agent Room Web
 ├── Member / Agent Registry
 ├── Message / Mention Router
 ├── Scheduling / Handoff Guardrails
+├── Discussion Progress / Budget / Policy
 ├── Remote MCP Server
 ├── Bridge WebSocket Server
 └── SQLite
@@ -88,6 +91,7 @@ Codex / WorkBuddy / Claude Code / other CLI
 - 通过已认证 WebSocket 推送给目标 Bridge；
 - Agent 回复、状态和 handoff 的持久化与广播；
 - 最大接力深度、并发和运行时间限制；
+- Discussion 进展投影、预算租约、下一轮决策与 finalization；
 - Remote MCP tools 和 resources。
 
 中央服务不直接访问成员机器的 Runtime、Token、工作目录或命令执行环境。
@@ -142,6 +146,10 @@ MCP 不负责主动唤醒。通知或订阅只能作为能力增强，不能作�
 | Message | Room 消息 | messageId, roomId, senderRef, content, mentions, parentId |
 | Run | Agent 对一次 Mention 的处理 | runId, triggerMessageId, targetAgentId, status, replyMessageId |
 | Handoff | Agent 发起的下游委派 | handoffId, parentRunId, targetAgentId, depth |
+| Discussion | 中央编排的多 Agent 对话 | discussionId, goal, participants, policy, state, reason |
+| DiscussionTurn | Discussion 中一次 Agent 执行 | turnId, ordinal, speakerAgentId, runId, outputMessageId |
+| ProgressSnapshot | 服务端权威进展投影 | goalCoverage, openQuestions, evidence, plateauCount, version |
+| BudgetLedger | 多维预算与租约账本 | turns, tokens, duration, cost, lease, finalizationReserve |
 
 协议始终使用不可变 ID；`Alice/Coder` 只是可修改的显示名。
 
@@ -215,7 +223,29 @@ Runtime 输出普通回复时，Bridge 将其作为 `run.reply` 回传。若 Run
 
 Agent 不直接连接其他 Bridge。默认最大 handoff depth 为 4，最大 unique agents 为 5，单次 Run 最长 20 分钟。
 
-### 5.4 离线行为
+### 5.4 Agent-to-Agent Discussion
+
+Discussion 与 Handoff 分开建模。Handoff 是禁止重复 Agent 的委派 DAG；Discussion 允许 `Coder → Reviewer → Coder`，但每轮仍由中央服务创建一个普通 Run，并把回复持久化为 Room Message。
+
+控制链固定为：
+
+```text
+Agent Turn Report（非权威证据）
+→ Progress Evaluator（版本化投影）
+→ Policy Engine（权威决策）
+→ Run Orchestration（可靠执行）
+→ Room Message（可见对话）
+```
+
+Agent 可报告目标满足度、置信度、解决或新增的问题、证据和建议，但不能直接设置下一状态或增加预算。中央服务综合系统事实、Agent Assessment 和可选语义评估，决定 `continue`、`wait_human`、`pause`、`finalize`、`cancel` 或 `terminate`。
+
+Discussion Budget 同时约束 turns、tokens、elapsed duration 和 estimated cost，并以短租约分段授权。软边界要求解释当前进展并等待扩展；硬边界停止新普通 Turn。Finalization 使用普通 Turn 不可消费的独立 reserve，确保预算耗尽后仍能输出结论、Artifact、Decision Record 或 unresolved issues。
+
+连续多轮没有解决重要问题、增加有效证据、改变决策或降低分歧时形成 plateau。若没有高优先级未决问题，可自动 finalizing；否则进入 `waiting_human`，不能错误宣称完成。
+
+详细契约见 [Discussion Orchestration Module](docs/modules/discussion-orchestration.md) 与 [ADR-0011](docs/adr/0011-central-orchestrator-controls-discussion.md)。
+
+### 5.5 离线行为
 
 目标 Agent 离线时：
 
@@ -249,6 +279,21 @@ queued
 - Runtime 已启动但 Bridge 无法确认结果时使用 `outcome_unknown`，不自动重跑。
 - 取消请求和完成事件竞态时，以 Bridge 已持久化的第一个终态为准。
 - 每个 Run 事件包含单调递增的 `sequence`；中央服务忽略旧 sequence。
+
+Discussion 使用独立状态机，不向 Run 状态添加讨论语义：
+
+```text
+active
+├── stop_requested
+├── waiting_human
+├── awaiting_extension
+├── paused
+├── finalizing → completed
+├── canceled
+└── finalizing → terminated
+```
+
+状态与原因分离。`goal_satisfied`、`user_requested_finish`、`discussion_plateau`、`soft_budget_exhausted`、`hard_budget_exhausted`、`policy_violation` 和 `runtime_failure` 是原因，不是状态。
 
 ## 7. Runtime Adapter
 
@@ -353,6 +398,9 @@ GET  /api/rooms/:roomId
 POST /api/rooms/:roomId/messages
 GET  /api/rooms/:roomId/messages
 GET  /api/rooms/:roomId/agents
+POST /api/rooms/:roomId/discussions
+GET  /api/discussions/:discussionId
+POST /api/discussions/:discussionId/actions
 POST /api/runs/:runId/cancel
 POST /api/devices/invitations
 POST /api/devices/:deviceId/revoke
@@ -378,6 +426,9 @@ run.accepted
 run.status
 run.reply
 run.handoff_requested
+discussion.progressed
+discussion.decision_made
+discussion.state_changed
 ```
 
 所有消息包含 `protocolVersion`、`messageId`、`timestamp` 和相关实体 ID。
@@ -395,6 +446,7 @@ run.handoff_requested
 | P6 | Recovery | Bridge 重连、重复投递和中央服务重启可恢复 |
 | P7 | Multi-Agent Handoff | 三个 Agent 在深度限制内完成接力 |
 | P8 | Additional Runtime | 接入一个 MCP-native 或 Generic CLI Runtime |
+| P9 | Adaptive Agent Discussion | Codex 与 Pi 在中央策略下讨论、收敛、扩展并完成 finalization |
 
 ## 12. 测试与验收
 
@@ -407,6 +459,8 @@ run.handoff_requested
 - Runtime：启动失败、进程退出、超时、无法 resume、输出过大。
 - MCP：未授权访问、错误 Room、缺失能力、manual participant。
 - Handoff：未知目标、循环、深度超限、unique agents 超限。
+- Discussion：提前完成、有效续租、低收益 plateau、高优先级未决问题、软预算扩展、硬预算与 finalization reserve。
+- Discussion Control：Agent 伪造完成、过期决策、重复调度、用户结束与 Run 完成竞态、Reviewer 可选策略。
 - Security：伪造 Bridge、重放消息、越权 Room、敏感信息过滤。
 
 ### 12.2 MVP 验收
@@ -421,6 +475,7 @@ run.handoff_requested
 8. Bob Agent 可 handoff 给 Carol Agent，且中央服务执行深度与循环限制。
 9. Device revoke 后不能接收新 Run。
 10. 中央服务重启后 Room、Message、Run 和 pending delivery 可恢复。
+11. 用户可发起 Codex 与 Pi Discussion；简单目标提前结束，复杂目标在有进展时续租，plateau 或用户请求进入 finalization，且不会重复创建下一轮。
 
 ## 13. 后续演进
 
@@ -456,6 +511,7 @@ run.handoff_requested
 | ADR-008 | MVP 不使用 A2A，不接管 Workspace 和 Artifact |
 | ADR-009 | 中央 Web 使用 Node.js/TypeScript，Bridge 使用 Go |
 | ADR-010 | Hermes Studio 仅作行为参考，采用 clean-room 自研 |
+| ADR-011 | Agent 提供评估，中央 Orchestrator 依据进展、预算和策略控制 Discussion |
 
 ## 16. 参考资料
 

@@ -25,6 +25,7 @@ document and the task list in the same commit.
 | ROOM | [Team and Room](team-room.md) | Team, Room, Message | `apps/server/` | CON, DATA, SEC, REG |
 | REG | [Registry and Presence](agent-registry.md) | Member, Device, Agent, Presence | `apps/server/` | CON, DATA, SEC |
 | RUN | [Run Orchestration](run-orchestration.md) | Run, delivery, handoff | `apps/server/` | CON, ROOM, REG, BRG, DATA |
+| DISC | [Discussion Orchestration](discussion-orchestration.md) | Discussion, progress, budget, policy | `apps/server/src/discussion/` | CON, ROOM, RUN, ADP, DATA, SEC |
 | MCP | [MCP Server](mcp-server.md) | MCP auth and Team tools | `apps/server/` | CON, ROOM, RUN, SEC |
 | BRG | [Bridge](bridge.md) | Connection and local delivery state | `bridge/`, `apps/server/` | CON, REG, SEC |
 | ADP | [Runtime Adapters](runtime-adapters.md) | Runtime process and Team Session | `bridge/internal/runtime/` | CON, BRG |
@@ -47,6 +48,8 @@ CON
 ROOM + REG + BRG + DATA
           └── RUN
               ├── MCP
+              ├── DISC
+              │   └── WEB
               └── WEB
 
 QA/OPS verifies every layer.

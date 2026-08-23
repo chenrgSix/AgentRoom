@@ -37,12 +37,19 @@ event sequence; Bridge durable inbox restart to `outcome_unknown`; duplicate
 ACK and event idempotency; offline reconnect delivery; expiry; and a real
 cross-process cancellation. Each case has a deterministic regression test.
 
+Discussion verification uses a deterministic evaluator fixture and fake usage
+telemetry. It covers early completion, multi-dimensional lease renewal,
+plateau detection, policy precedence, reserved finalization, stale decision
+fencing, all user stop modes, and restart recovery without calling a model.
+
 ## Required Scenarios
 
 The release suite covers offline queueing, ACK loss, duplicate delivery,
 out-of-order events, cancellation races, restart recovery, capability
 downgrade, sensitive-output filtering, and the three-member handoff journey
-defined by the architecture baseline.
+defined by the architecture baseline. Discussion scenarios additionally cover
+useful continuation, low-value repetition, unresolved high-priority issues,
+missing usage telemetry, and optional Reviewer policies.
 
 ## Observability Contract
 
@@ -58,7 +65,7 @@ degraded optional capabilities. Audit records are durable and access-controlled.
 
 A task is `DONE` only when its completion evidence in `docs/TASKS.md` exists.
 Release notes name migrations, compatibility changes, security impact, and the
-exact checks run. Work is tracked by `QA-001` through `QA-006` and `OPS-001`
+exact checks run. Work is tracked by `QA-001` through `QA-007` and `OPS-001`
 through `OPS-002`.
 
 ## Dependencies

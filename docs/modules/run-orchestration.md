@@ -11,6 +11,11 @@ Run Orchestration converts an authorized structured Agent Mention into one
 bounded unit of work. It is the only component allowed to route work between
 Agents; Agents and Bridges never route directly to one another.
 
+Run Orchestration executes one bounded unit of work. Repeated multi-Agent
+conversation, adaptive budgets, progress evaluation, and selection of the next
+speaker belong to Discussion Orchestration. A Discussion decision may request
+a Run, but it cannot bypass Run delivery, idempotency, or cancellation rules.
+
 ## Responsibilities
 
 - Create one Run per valid target Mention.
@@ -87,6 +92,10 @@ The MCP caller must be the parent Run's target Agent. Child Runs inherit the
 root trigger and deadline, use a new durable Run ID, and cannot revisit an Agent
 already present in their lineage.
 
+Handoff remains a delegation DAG. Its no-revisit rule must not be relaxed to
+model `Agent A -> Agent B -> Agent A`; that interaction is a Discussion with
+separate loop, progress, and budget controls.
+
 ## Cancellation Races
 
 - A queued Run cancels without delivery.
@@ -112,3 +121,4 @@ tasks `DATA-003` and `QA-004`.
 ## Dependencies
 
 Contracts, Team/Room, Registry, Bridge delivery, Persistence, and Security.
+Discussion Orchestration consumes Runs through this public boundary.
