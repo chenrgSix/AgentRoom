@@ -32,6 +32,12 @@ asserts the durable terminal Run and Agent reply. It proves the local
 cross-process transport while keeping physical two-machine Codex acceptance as
 a separate release check.
 
+`QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
+root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to
+Carol Agent. All three Agents claim and complete their Runs; the test verifies
+parent lineage, one shared trace, ordered Room replies, and rejection when
+Carol attempts to revisit Alice.
+
 The recovery matrix combines server restart persistence for Run, Delivery, and
 event sequence; Bridge durable inbox restart to `outcome_unknown`; duplicate
 ACK and event idempotency; offline reconnect delivery; expiry; and a real
