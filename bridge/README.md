@@ -1,7 +1,9 @@
 # Agent Room Bridge
 
-The Bridge is an optional headless Go companion for managed Agents. It reads an
-explicit JSON configuration and never accepts shell command strings.
+The Bridge is an optional local Go companion for managed Agents. It reads an
+explicit JSON configuration and never accepts shell command strings. The
+desktop GUI is the primary interactive client; CLI commands remain available
+for headless environments and diagnostics.
 
 ## Install
 
@@ -41,9 +43,28 @@ go run ./cmd/agentroom-bridge pair --config ./bridge.json --code ONE_TIME_CODE
 go run ./cmd/agentroom-bridge run --config ./bridge.json
 go test ./...
 go build ./cmd/agentroom-bridge
+go test -tags desktop ./cmd/agentroom-bridge-desktop
+go build -tags desktop ./cmd/agentroom-bridge-desktop
 ```
 
-`console` is the recommended setup path. It opens the complete token-bearing
+## Desktop GUI
+
+The Wails desktop entry point uses the operating system WebView and the same
+embedded configuration UI as `console`; it does not bundle Chromium or require
+a browser tab. An existing paired Bridge starts automatically. Closing the
+window hides it to the tray and keeps managed Agents online. The tray shows the
+current phase and provides open, start, stop, and explicit quit actions.
+
+Only one desktop instance may run. Launching the app again raises the existing
+window. The desktop binary is built separately from the CGO-free CLI so
+headless builds do not acquire GUI runtime requirements. Wails is pinned to
+`v3.0.0-beta.12`; desktop tests compile with the explicit `desktop` build tag.
+
+Current desktop preview builds are unsigned. Verify the published SHA-256
+checksum before explicitly trusting the app through the operating system. The
+project does not claim Apple verification or notarization.
+
+`console` is the headless compatibility setup path. It opens the complete token-bearing
 URL in the default browser and also prints it as a fallback. Pass `--no-open`
 for a headless environment. The local page detects Codex and Pi, requests Team
 enrollment, shows the Owner approval code, and manages Bridge start, stop, and

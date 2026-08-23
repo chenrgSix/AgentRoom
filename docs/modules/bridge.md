@@ -114,7 +114,7 @@ existing Bridge, and status rendering. Work is tracked by `BRG-001` through
 
 The browser Console is a compatibility surface, not the final end-user shell.
 `BRG-009` through `BRG-011` replace its launcher-first experience with a
-lightweight Wails desktop application while preserving the Bridge protocol,
+lightweight Wails v3 desktop application while preserving the Bridge protocol,
 configuration format, credentials, durable inbox, and Runtime adapters.
 
 The desktop application and CLI Console share one lifecycle controller. The
@@ -135,6 +135,11 @@ that users verify the published SHA-256 checksum and explicitly trust the app
 on first launch. Apple Developer ID signing and notarization are outside the
 accepted distribution boundary; the GUI must not claim that Apple verified the
 package.
+
+Wails is pinned to `v3.0.0-beta.12` behind the `desktop` Go build tag. Ordinary
+CGO-free CLI tests and builds do not compile the desktop package. Desktop tests
+compile the native shell explicitly, while visual acceptance verifies the
+native WebView, close-to-tray behavior, and second-instance window restore.
 
 ## Distribution
 
