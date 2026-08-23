@@ -177,7 +177,7 @@ messages are never log fields.
 
 A task is `DONE` only when its completion evidence in `docs/TASKS.md` exists.
 Release notes name migrations, compatibility changes, security impact, and the
-exact checks run. Evidence is tracked by `QA-001` through `QA-011`. Operations
+exact checks run. Evidence is tracked by `QA-001` through `QA-012`. Operations
 work is tracked by `OPS-001` through `OPS-005`.
 
 The current security and exported-tree evidence is recorded in

@@ -121,7 +121,14 @@ duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
 Browser acceptance covers first setup, Runtime discovery, adding Pi to an
 existing Bridge, and status rendering. Work is tracked by `BRG-001` through
-`BRG-018` in `docs/TASKS.md`.
+`BRG-019` in `docs/TASKS.md`.
+
+`BRG-019` adds an explicit configuration schema and Runtime preset version.
+Recognized legacy Codex and Pi presets migrate in memory before validation,
+while owner-controlled names, roles, workspaces, trust, and environment
+allowlists remain intact. The Console exposes a user-triggered, bounded Runtime
+self-test; it never runs automatically and returns only allowlisted status and
+failure metadata.
 
 ## Desktop Client
 
