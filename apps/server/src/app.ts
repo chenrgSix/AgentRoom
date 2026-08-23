@@ -27,6 +27,7 @@ import type {
 } from "./discussion/discussion-types.js";
 import { createTeamMcpServer } from "./mcp/mcp-server.js";
 import { TeamWaitService } from "./mcp/team-wait-service.js";
+import { TraceRepository } from "./observability/trace-repository.js";
 import { AgentService } from "./registry/agent-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
@@ -98,6 +99,7 @@ export async function createServerApp(
   const pairing = new BridgePairingService(database, core, auth);
   const clock = options.clock ?? (() => new Date().toISOString());
   const runRepository = new RunRepository(database);
+  const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth);
   const executor = new InProcessRunExecutor(core, runRepository, clock);
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
@@ -302,6 +304,9 @@ export async function createServerApp(
           delivery.accept(
             devicePrincipal,
             message.payload.runId,
+            typeof message.payload.traceId === "string"
+              ? message.payload.traceId
+              : undefined,
             message.payload.agentId,
             1,
             clock()
@@ -323,6 +328,9 @@ export async function createServerApp(
           const runtimeError = error as Record<string, unknown> | undefined;
           const applied = bridgeRunEvents.applyStatus(devicePrincipal, {
             runId: message.payload.runId,
+            ...(typeof message.payload.traceId === "string"
+              ? { traceId: message.payload.traceId }
+              : {}),
             agentId: message.payload.agentId,
             sequence: message.payload.sequence as number,
             status: message.payload.status as Parameters<
@@ -361,6 +369,9 @@ export async function createServerApp(
           }
           bridgeRunEvents.applyReply(devicePrincipal, {
             runId: message.payload.runId,
+            ...(typeof message.payload.traceId === "string"
+              ? { traceId: message.payload.traceId }
+              : {}),
             agentId: message.payload.agentId,
             sequence: message.payload.sequence as number,
             content: message.payload.content,
@@ -793,6 +804,19 @@ export async function createServerApp(
       }
       runs.listRoomRuns(actor, run.roomId);
       return runRepository.listEvents(run.runId);
+    }
+  );
+  app.get<{ Params: { traceId: string } }>(
+    "/api/traces/:traceId",
+    async (request) => {
+      const actor = principal(request);
+      const entries = traces.list(request.params.traceId);
+      const roomId = entries[0]?.roomId;
+      if (!roomId) {
+        throw new Error(`Trace not found: ${request.params.traceId}`);
+      }
+      auth.requireRoomMember(actor, roomId);
+      return { traceId: request.params.traceId, entries };
     }
   );
   app.post<{ Params: { runId: string } }>(

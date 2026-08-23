@@ -1,5 +1,7 @@
 import type Database from "better-sqlite3";
 
+import { createOpaqueId } from "../domain/identifiers.js";
+
 export interface WebUserRecord {
   userId: string;
   displayName: string;
@@ -69,6 +71,7 @@ export interface MentionRecord {
 
 export interface MessageRecord {
   messageId: string;
+  traceId: string;
   roomId: string;
   sequence: number;
   senderType: "member" | "agent" | "system";
@@ -103,6 +106,7 @@ interface AgentRow {
 
 interface MessageRow {
   message_id: string;
+  trace_id: string;
   room_id: string;
   sequence: number;
   sender_type: MessageRecord["senderType"];
@@ -126,6 +130,7 @@ function mapMessage(
   }>;
   return {
     messageId: row.message_id,
+    traceId: row.trace_id,
     roomId: row.room_id,
     sequence: row.sequence,
     senderType: row.sender_type,
@@ -263,19 +268,25 @@ export class CoreRepository {
     });
   }
 
-  public appendMessage(message: Omit<MessageRecord, "sequence">): MessageRecord {
+  public appendMessage(
+    message: Omit<MessageRecord, "sequence" | "traceId"> & { traceId?: string }
+  ): MessageRecord {
+    const persistedMessage = {
+      ...message,
+      traceId: message.traceId ?? createOpaqueId("trace")
+    };
     return this.database.transaction(() => {
       const room = this.database.prepare(`
         SELECT team_id FROM rooms WHERE room_id = ?
-      `).get(message.roomId) as { team_id: string } | undefined;
+      `).get(persistedMessage.roomId) as { team_id: string } | undefined;
       if (!room) {
-        throw new Error(`Room not found: ${message.roomId}`);
+        throw new Error(`Room not found: ${persistedMessage.roomId}`);
       }
 
       const findAgent = this.database.prepare(`
         SELECT team_id, enabled FROM agents WHERE agent_id = ?
       `);
-      for (const mention of message.mentions) {
+      for (const mention of persistedMessage.mentions) {
         const agent = findAgent.get(mention.targetAgentId) as
           | { team_id: string; enabled: number }
           | undefined;
@@ -289,33 +300,33 @@ export class CoreRepository {
         SET next_message_sequence = next_message_sequence + 1
         WHERE room_id = ?
         RETURNING next_message_sequence AS sequence
-      `).get(message.roomId) as { sequence: number };
+      `).get(persistedMessage.roomId) as { sequence: number };
 
       this.database.prepare(`
         INSERT INTO messages (
-          message_id, room_id, sequence, sender_type, sender_id, content,
+          message_id, trace_id, room_id, sequence, sender_type, sender_id, content,
           parent_message_id, created_at
         ) VALUES (
-          @messageId, @roomId, @sequence, @senderType, @senderId, @content,
+          @messageId, @traceId, @roomId, @sequence, @senderType, @senderId, @content,
           @parentMessageId, @createdAt
         )
-      `).run({ ...message, sequence: sequenceRow.sequence });
+      `).run({ ...persistedMessage, sequence: sequenceRow.sequence });
 
       const insertMention = this.database.prepare(`
         INSERT INTO message_mentions (
           message_id, ordinal, target_type, target_agent_id, display_label
         ) VALUES (?, ?, 'agent', ?, ?)
       `);
-      for (const [ordinal, mention] of message.mentions.entries()) {
+      for (const [ordinal, mention] of persistedMessage.mentions.entries()) {
         insertMention.run(
-          message.messageId,
+          persistedMessage.messageId,
           ordinal,
           mention.targetAgentId,
           mention.displayLabel
         );
       }
 
-      return { ...message, sequence: sequenceRow.sequence };
+      return { ...persistedMessage, sequence: sequenceRow.sequence };
     }).immediate();
   }
 

@@ -34,6 +34,7 @@ export class RunService {
     ).toISOString();
     return this.runs.createRuns(message.mentions.map((mention) => ({
       runId: createOpaqueId("run"),
+      traceId: message.traceId,
       roomId: message.roomId,
       triggerMessageId: message.messageId,
       requesterMemberId: member.memberId,

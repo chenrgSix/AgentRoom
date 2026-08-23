@@ -48,6 +48,7 @@ export class CancellationService {
       type: "run.cancel_requested",
       payload: {
         runId: run.runId,
+        traceId: run.traceId,
         agentId: run.targetAgentId,
         reason: reason.trim().slice(0, 512) || "Canceled by requester"
       }

@@ -66,12 +66,28 @@ missing usage telemetry, and optional Reviewer policies.
 ## Observability Contract
 
 One `traceId` follows Message, Run, delivery, Bridge, and Runtime events.
+The central service creates the opaque `trace_...` identity when a root Message
+is persisted. Replies, child Runs, durable delivery payloads, and sequenced Run
+events inherit it. New Bridges echo it on ACK, status, reply, and handoff
+events; a mismatched value is rejected. For v0.1 Bridge compatibility, an
+omitted event `traceId` is resolved from the authoritative Run rather than
+breaking an existing connection.
+
+`GET /api/traces/{traceId}` executes one ordered SQL query across persisted
+Message, Run, Delivery, and Run Event metadata. The caller must be a member of
+the owning Room, and the response deliberately excludes prompts, replies,
+credentials, and local paths.
+
 Structured logs include stable identifiers, state transitions, latency, and
 error codes but exclude secrets and full prompts. Metrics cover connection
 health, queue depth, delivery age, retries, Run outcomes, and event lag.
 
 Health endpoints distinguish process liveness, dependency readiness, and
 degraded optional capabilities. Audit records are durable and access-controlled.
+
+`OPS-001` is verified by contract fixtures, migration tests, forged-trace
+negative tests, restart persistence tests, and the real Server-to-Go-Bridge
+Generic Runtime E2E. `OPS-002` owns log, metric, and health instrumentation.
 
 ## Release Evidence
 

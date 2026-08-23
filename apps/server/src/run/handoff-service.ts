@@ -63,6 +63,7 @@ export class HandoffService {
       : parent.deadlineAt;
     return this.runs.createRuns([{
       runId: createOpaqueId("run"),
+      traceId: parent.traceId,
       roomId: parent.roomId,
       triggerMessageId: parent.triggerMessageId,
       requesterMemberId: parent.requesterMemberId,

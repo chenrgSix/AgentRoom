@@ -37,6 +37,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 				Type: contracts.RunStatus,
 				Payload: contracts.RunStatusPayload{
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
+					TraceID:  traceIDPointer(record.Request.TraceID),
 					Sequence: sequence, Status: *event.Status, Error: event.Error,
 				},
 			}
@@ -62,6 +63,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			Type: contracts.RunReply,
 			Payload: contracts.RunReplyPayload{
 				RunID: record.RunID, AgentID: record.Request.TargetAgentID,
+				TraceID:  traceIDPointer(record.Request.TraceID),
 				Sequence: sequence, Content: content, Assessment: event.Assessment,
 			},
 		}
@@ -95,6 +97,7 @@ func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Se
 		Type: contracts.RunStatus,
 		Payload: contracts.RunStatusPayload{
 			RunID: record.RunID, AgentID: record.Request.TargetAgentID,
+			TraceID:  traceIDPointer(record.Request.TraceID),
 			Sequence: sequence, Status: contracts.OutcomeUnknown,
 			Error: &contracts.AgentRoomError{
 				Code: code, Message: "Runtime outcome could not be determined.", Retryable: false,
@@ -134,7 +137,8 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 			ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
 			Type: contracts.RunAccepted,
 			Payload: contracts.RunAcceptedPayload{
-				RunID: record.RunID, AgentID: record.Request.TargetAgentID, Sequence: 1,
+				RunID: record.RunID, TraceID: traceIDPointer(record.Request.TraceID),
+				AgentID: record.Request.TargetAgentID, Sequence: 1,
 			},
 		}
 		if err := send(ctx, accepted); err != nil {
@@ -147,6 +151,7 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 				Type: contracts.RunStatus,
 				Payload: contracts.RunStatusPayload{
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
+					TraceID:  traceIDPointer(record.Request.TraceID),
 					Sequence: sequence, Status: contracts.OutcomeUnknown,
 					Error: &contracts.AgentRoomError{
 						Code:      "RUNTIME_PROCESS_RESTARTED",

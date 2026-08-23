@@ -84,8 +84,12 @@ disagreement, Reviewer approval, and a recommendation. Clients that omit the
 field remain fully compatible and are evaluated as reply-only participants.
 
 Every `run.requested` carries a stable `deliveryAttemptId` and
-`idempotencyKey`. Retries preserve both fields so the Bridge can compare the
-persisted payload hash and acknowledge without starting a second Runtime.
+`idempotencyKey`, plus the central `traceId`. Retries preserve these fields so
+the Bridge can compare the persisted payload hash and acknowledge without
+starting a second Runtime. New Bridges echo `traceId` on Run events. It remains
+optional on Bridge-to-server events within protocol 1.0 so released v0.1
+Bridges remain compatible; when present, the server verifies it against the
+authoritative Run.
 
 ## Versioning Rules
 

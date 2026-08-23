@@ -121,6 +121,8 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
     });
     assert.equal(sent.statusCode, 200);
     const runId = sent.json().runs[0].runId as string;
+    const traceId = sent.json().message.traceId as string;
+    assert.equal(sent.json().runs[0].traceId, traceId);
 
     await waitFor(async () => {
       const response = await app.inject({
@@ -135,6 +137,28 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
       method: "GET", url: `/api/rooms/${roomId}/messages?limit=100`, headers: authorization
     });
     assert.equal(timeline.json().items.at(-1).content, "RUN THROUGH REAL BRIDGE");
+    assert.equal(timeline.json().items.at(-1).traceId, traceId);
+    const traceResponse = await app.inject({
+      method: "GET", url: `/api/traces/${traceId}`, headers: authorization
+    });
+    assert.equal(traceResponse.statusCode, 200);
+    const traceEntries = traceResponse.json().entries as Array<{ kind: string }>;
+    assert.deepEqual(
+      new Set(traceEntries.map(({ kind }) => kind)),
+      new Set(["message", "run", "delivery", "run_event"])
+    );
+    const outsider = await app.inject({
+      method: "POST", url: "/api/bootstrap",
+      payload: { displayName: "Mallory" }
+    });
+    const deniedTrace = await app.inject({
+      method: "GET",
+      url: `/api/traces/${traceId}`,
+      headers: {
+        authorization: `Bearer ${outsider.json().session.token as string}`
+      }
+    });
+    assert.equal(deniedTrace.statusCode, 403);
 
     const slowAgent = await waitFor(async () => {
       const response = await app.inject({

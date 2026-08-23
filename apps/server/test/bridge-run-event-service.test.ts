@@ -60,10 +60,12 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     const service = new BridgeRunEventService(core, runRepository);
 
     assert.equal(service.applyStatus(devicePrincipal, {
-      runId: run.runId, agentId: agent.agentId, sequence: 2, status: "working"
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 2, status: "working"
     }, now).run.state, "working");
     assert.equal(service.applyReply(devicePrincipal, {
-      runId: run.runId, agentId: agent.agentId, sequence: 3,
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 3,
       content: "Implemented. token=very-sensitive-value",
       assessment: {
         goalSatisfied: true,
@@ -73,11 +75,13 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       }
     }, now).applied, true);
     assert.equal(service.applyReply(devicePrincipal, {
-      runId: run.runId, agentId: agent.agentId, sequence: 3,
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 3,
       content: "Implemented. token=very-sensitive-value"
     }, now).applied, false);
     assert.equal(service.applyStatus(devicePrincipal, {
-      runId: run.runId, agentId: agent.agentId, sequence: 4, status: "completed"
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 4, status: "completed"
     }, now).run.state, "completed");
     assert.equal(core.listMessagesAfter(room.roomId, 0, 20).length, 2);
     assert.equal(
@@ -102,7 +106,12 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     );
     assert.equal(core.getAgent(agent.agentId)?.presence, "ready");
     assert.throws(() => service.applyStatus(devicePrincipal, {
-      runId: run.runId, agentId: "agent_wrong_identity", sequence: 5, status: "failed"
+      runId: run.runId, traceId: run.traceId,
+      agentId: "agent_wrong_identity", sequence: 5, status: "failed"
+    }, now), /identity mismatch/u);
+    assert.throws(() => service.applyStatus(devicePrincipal, {
+      runId: run.runId, traceId: "trace_wrong_identity",
+      agentId: agent.agentId, sequence: 5, status: "failed"
     }, now), /identity mismatch/u);
 
     const bob = registry.addMember(principal, {
@@ -121,7 +130,8 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     const bobCredential = auth.issueDeviceCredential(bobDevice.deviceId, now);
     assert.throws(() => service.applyStatus(
       auth.authenticateDevice(bobCredential.secret, now),
-      { runId: run.runId, agentId: agent.agentId, sequence: 5, status: "failed" },
+      { runId: run.runId, traceId: run.traceId,
+        agentId: agent.agentId, sequence: 5, status: "failed" },
       now
     ), /identity mismatch/u);
 
@@ -137,7 +147,8 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     const otherCredential = auth.issueDeviceCredential(otherDevice.deviceId, now);
     assert.throws(() => service.applyStatus(
       auth.authenticateDevice(otherCredential.secret, now),
-      { runId: run.runId, agentId: agent.agentId, sequence: 5, status: "failed" },
+      { runId: run.runId, traceId: run.traceId,
+        agentId: agent.agentId, sequence: 5, status: "failed" },
       now
     ), /identity mismatch/u);
   } finally {

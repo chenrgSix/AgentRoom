@@ -667,9 +667,14 @@ export class DiscussionOrchestrator {
     const previousRun = this.repository.listTurns(turn.discussionId)
       .filter(({ ordinal }) => ordinal < turn.ordinal)
       .at(-1)?.runId ?? null;
+    const inputMessage = this.core.getMessage(turn.inputMessageId);
+    if (!inputMessage) {
+      throw new Error(`Discussion input Message not found: ${turn.inputMessageId}`);
+    }
     const now = this.clock();
     const run: RunRecord = {
       runId: createOpaqueId("run"),
+      traceId: inputMessage.traceId,
       roomId: discussion.roomId,
       triggerMessageId: turn.inputMessageId,
       requesterMemberId: discussion.requesterMemberId,
@@ -769,6 +774,7 @@ export class DiscussionOrchestrator {
     discussion: DiscussionRecord,
     parentMessageId: string
   ): void {
+    const parent = this.core.getMessage(parentMessageId);
     const unresolved = discussion.progress.openQuestions.length === 0
       ? "暂无记录的未决问题。"
       : discussion.progress.openQuestions
@@ -782,6 +788,7 @@ export class DiscussionOrchestrator {
       content: `讨论已停止，最终生成器未能完成。\n\n未决问题：\n${unresolved}`,
       mentions: [],
       parentMessageId,
+      ...(parent ? { traceId: parent.traceId } : {}),
       createdAt: this.clock()
     });
   }

@@ -645,6 +645,7 @@
       "additionalProperties": true,
       "required": [
         "runId",
+        "traceId",
         "roomId",
         "triggerMessageId",
         "requesterMemberId",
@@ -658,6 +659,9 @@
       "properties": {
         "runId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "traceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/traceId"
         },
         "roomId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
@@ -711,6 +715,9 @@
       "properties": {
         "runId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "traceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/traceId"
         },
         "agentId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
@@ -868,12 +875,16 @@
       "additionalProperties": true,
       "required": [
         "runId",
+        "traceId",
         "agentId",
         "reason"
       ],
       "properties": {
         "runId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "traceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/traceId"
         },
         "agentId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"

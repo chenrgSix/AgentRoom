@@ -64,9 +64,10 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
   const persistedDelivery = delivery.dispatch(run.runId);
   assert.ok(persistedDelivery);
   const devicePrincipal = auth.authenticateDevice(credential.secret, now);
-  delivery.accept(devicePrincipal, run.runId, agent.agentId, 1, now);
+  delivery.accept(devicePrincipal, run.runId, run.traceId, agent.agentId, 1, now);
   new BridgeRunEventService(core, runRepository).applyStatus(devicePrincipal, {
-    runId: run.runId, agentId: agent.agentId, sequence: 2, status: "working"
+    runId: run.runId, traceId: run.traceId,
+    agentId: agent.agentId, sequence: 2, status: "working"
   }, now);
   database.close();
 
@@ -87,7 +88,8 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
     );
     new BridgeRunEventService(recoveredCore, recoveredRuns).applyReply(
       recoveredAuth.authenticateDevice(credential.secret, now),
-      { runId: run.runId, agentId: agent.agentId, sequence: 3, content: "Recovered." },
+      { runId: run.runId, traceId: run.traceId,
+        agentId: agent.agentId, sequence: 3, content: "Recovered." },
       now
     );
     assert.equal(recoveredRuns.getRun(run.runId)?.lastSequence, 3);

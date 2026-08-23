@@ -110,6 +110,7 @@ type RunRequestedPayload struct {
 	RoomID            string    `json:"roomId"`
 	RunID             string    `json:"runId"`
 	TargetAgentID     string    `json:"targetAgentId"`
+	TraceID           string    `json:"traceId"`
 	TriggerMessageID  string    `json:"triggerMessageId"`
 }
 
@@ -132,9 +133,10 @@ type RunAcceptedMessage struct {
 }
 
 type RunAcceptedPayload struct {
-	AgentID  string `json:"agentId"`
-	RunID    string `json:"runId"`
-	Sequence int64  `json:"sequence"`
+	AgentID  string  `json:"agentId"`
+	RunID    string  `json:"runId"`
+	Sequence int64   `json:"sequence"`
+	TraceID  *string `json:"traceId,omitempty"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -149,9 +151,10 @@ type RunStatusMessage struct {
 }
 
 type RunStatusPayload struct {
-	AgentID  string `json:"agentId"`
-	RunID    string `json:"runId"`
-	Sequence int64  `json:"sequence"`
+	AgentID  string  `json:"agentId"`
+	RunID    string  `json:"runId"`
+	Sequence int64   `json:"sequence"`
+	TraceID  *string `json:"traceId,omitempty"`
 	// Stable, client-safe error returned at a protocol boundary.
 	Error  *AgentRoomError    `json:"error,omitempty"`
 	Status RunExecutionStatus `json:"status"`
@@ -180,6 +183,7 @@ type RunReplyPayload struct {
 	AgentID    string      `json:"agentId"`
 	RunID      string      `json:"runId"`
 	Sequence   int64       `json:"sequence"`
+	TraceID    *string     `json:"traceId,omitempty"`
 	Assessment *Assessment `json:"assessment,omitempty"`
 	Content    string      `json:"content"`
 }
@@ -217,6 +221,7 @@ type RunCancelRequestedPayload struct {
 	AgentID string `json:"agentId"`
 	Reason  string `json:"reason"`
 	RunID   string `json:"runId"`
+	TraceID string `json:"traceId"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -231,12 +236,13 @@ type RunHandoffRequestedMessage struct {
 }
 
 type RunHandoffRequestedPayload struct {
-	AgentID       string `json:"agentId"`
-	RunID         string `json:"runId"`
-	Sequence      int64  `json:"sequence"`
-	HandoffID     string `json:"handoffId"`
-	Summary       string `json:"summary"`
-	TargetAgentID string `json:"targetAgentId"`
+	AgentID       string  `json:"agentId"`
+	RunID         string  `json:"runId"`
+	Sequence      int64   `json:"sequence"`
+	TraceID       *string `json:"traceId,omitempty"`
+	HandoffID     string  `json:"handoffId"`
+	Summary       string  `json:"summary"`
+	TargetAgentID string  `json:"targetAgentId"`
 }
 
 type BridgeJoinRequest struct {

@@ -36,6 +36,7 @@ export class BridgeRunEventService {
     principal: DevicePrincipal,
     input: {
       runId: string;
+      traceId?: string;
       agentId: string;
       sequence: number;
       status: RuntimeStatus;
@@ -43,7 +44,9 @@ export class BridgeRunEventService {
     },
     now: string
   ): AppliedRunEvent {
-    const run = this.requireOwnedRun(principal, input.runId, input.agentId);
+    const run = this.requireOwnedRun(
+      principal, input.runId, input.traceId, input.agentId
+    );
     this.validateSequence(input.sequence);
     if (!bridgeStatuses.has(input.status)) {
       throw new Error(`Bridge cannot emit Run status: ${input.status}`);
@@ -79,6 +82,7 @@ export class BridgeRunEventService {
     principal: DevicePrincipal,
     input: {
       runId: string;
+      traceId?: string;
       agentId: string;
       sequence: number;
       content: string;
@@ -86,7 +90,9 @@ export class BridgeRunEventService {
     },
     now: string
   ): AppliedRunEvent {
-    const run = this.requireOwnedRun(principal, input.runId, input.agentId);
+    const run = this.requireOwnedRun(
+      principal, input.runId, input.traceId, input.agentId
+    );
     this.validateSequence(input.sequence);
     if (input.content.trim().length === 0 || input.content.length > 20_000) {
       throw new Error("Runtime reply must contain 1 to 20000 characters");
@@ -128,6 +134,7 @@ export class BridgeRunEventService {
         content: safeContent,
         mentions: [],
         parentMessageId: run.triggerMessageId,
+        traceId: run.traceId,
         createdAt: now
       });
     }
@@ -137,6 +144,7 @@ export class BridgeRunEventService {
   private requireOwnedRun(
     principal: DevicePrincipal,
     runId: string,
+    traceId: string | undefined,
     agentId: string
   ): RunRecord {
     const run = this.runs.getRun(runId);
@@ -144,6 +152,7 @@ export class BridgeRunEventService {
     if (
       !run ||
       !agent ||
+      (traceId !== undefined && run.traceId !== traceId) ||
       run.targetAgentId !== agentId ||
       agent.deviceId !== principal.deviceId ||
       agent.ownerMemberId !== principal.ownerMemberId ||

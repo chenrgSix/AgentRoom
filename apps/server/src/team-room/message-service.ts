@@ -63,8 +63,10 @@ export class MessageService {
     if (input.content.trim().length === 0 || input.content.length > 20_000) {
       throw new Error("Message content must contain 1 to 20000 characters");
     }
+    const parent = input.parentMessageId
+      ? this.repository.getMessage(input.parentMessageId)
+      : undefined;
     if (input.parentMessageId) {
-      const parent = this.repository.getMessage(input.parentMessageId);
       if (!parent || parent.roomId !== input.roomId) {
         throw new Error("Parent Message must belong to the same Room");
       }
@@ -96,6 +98,7 @@ export class MessageService {
       content: input.content,
       mentions,
       parentMessageId: input.parentMessageId ?? null,
+      ...(parent ? { traceId: parent.traceId } : {}),
       createdAt: input.now
     });
   }
@@ -122,8 +125,10 @@ export class MessageService {
     if (input.content.trim().length === 0 || input.content.length > 20_000) {
       throw new Error("Message content must contain 1 to 20000 characters");
     }
+    const parent = input.parentMessageId
+      ? this.repository.getMessage(input.parentMessageId)
+      : undefined;
     if (input.parentMessageId) {
-      const parent = this.repository.getMessage(input.parentMessageId);
       if (!parent || parent.roomId !== input.roomId) {
         throw new Error("Parent Message must belong to the same Room");
       }
@@ -136,6 +141,7 @@ export class MessageService {
       content: redactSensitiveText(input.content),
       mentions: [],
       parentMessageId: input.parentMessageId ?? null,
+      ...(parent ? { traceId: parent.traceId } : {}),
       createdAt: input.now
     });
   }

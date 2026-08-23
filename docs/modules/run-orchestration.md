@@ -59,6 +59,10 @@ to terminal `expired` and is never delivered on a later reconnect.
 
 Delivery is at least once; execution is idempotent through the Bridge inbox.
 
+The triggering Message creates the authoritative `traceId`. The Run, Delivery,
+Bridge request, Runtime events, projected Agent reply, and any child handoff
+Run inherit it. Bridge-supplied trace values cannot replace this authority.
+
 The server persists one Delivery payload per managed Run before the first send.
 Retries increment `sendCount` but preserve the attempt ID, idempotency key, and
 payload bytes. A valid `run.accepted` sequence 1 moves the Run to `delivered`;

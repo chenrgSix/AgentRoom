@@ -160,6 +160,7 @@ export interface RunRequestedPayload {
   roomId:            string;
   runId:             string;
   targetAgentId:     string;
+  traceId:           string;
   triggerMessageId:  string;
   [property: string]: unknown;
 }
@@ -198,6 +199,7 @@ export interface RunAcceptedPayload {
   agentId:  string;
   runId:    string;
   sequence: number;
+  traceId?: string;
   [property: string]: unknown;
 }
 
@@ -225,6 +227,7 @@ export interface RunStatusPayload {
   agentId:  string;
   runId:    string;
   sequence: number;
+  traceId?: string;
   /**
    * Stable, client-safe error returned at a protocol boundary.
    */
@@ -270,6 +273,7 @@ export interface RunReplyPayload {
   agentId:     string;
   runId:       string;
   sequence:    number;
+  traceId?:    string;
   assessment?: Assessment;
   content:     string;
   [property: string]: unknown;
@@ -323,6 +327,7 @@ export interface RunCancelRequestedPayload {
   agentId: string;
   reason:  string;
   runId:   string;
+  traceId: string;
   [property: string]: unknown;
 }
 
@@ -350,6 +355,7 @@ export interface RunHandoffRequestedPayload {
   agentId:       string;
   runId:         string;
   sequence:      number;
+  traceId?:      string;
   handoffId:     string;
   summary:       string;
   targetAgentId: string;

@@ -1,10 +1,12 @@
 # Agent Room Server
 
 This workspace hosts the central Team service. The SQLite layer contains the
-core Team, Room, Member, Device, Agent, Message, and structured Mention tables
-plus transactional repositories. The Fastify API supports local session
-bootstrap and basic Team, Room, Member, and Fake Agent management. MCP,
-WebSocket, and production delivery are introduced by their own tasks.
+core Team, Room, Member, Device, Agent, Message, structured Mention, Run,
+Delivery, and Discussion tables plus transactional trace columns. The
+Fastify API serves Web, MCP, and authenticated Bridge WebSocket traffic.
+
+`GET /api/traces/{traceId}` returns access-controlled lifecycle metadata for
+one Message-to-Runtime path without returning prompt or reply content.
 
 ## Database Location
 

@@ -108,12 +108,19 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
 
     const credential = auth.issueDeviceCredential(device.deviceId, now);
     const devicePrincipal = auth.authenticateDevice(credential.secret, now);
+    assert.throws(() => delivery.accept(
+      devicePrincipal, run.runId, "trace_wrong_identity", agent.agentId, 1, now
+    ), /identity mismatch/u);
     assert.equal(
-      delivery.accept(devicePrincipal, run.runId, agent.agentId, 1, now).state,
+      delivery.accept(
+        devicePrincipal, run.runId, run.traceId, agent.agentId, 1, now
+      ).state,
       "delivered"
     );
     assert.equal(
-      delivery.accept(devicePrincipal, run.runId, agent.agentId, 1, now).state,
+      delivery.accept(
+        devicePrincipal, run.runId, run.traceId, agent.agentId, 1, now
+      ).state,
       "delivered"
     );
     assert.equal(delivery.getByRun(run.runId)?.state, "accepted");

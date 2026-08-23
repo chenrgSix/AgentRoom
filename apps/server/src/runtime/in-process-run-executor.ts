@@ -101,6 +101,7 @@ export class InProcessRunExecutor {
       content: event.content,
       mentions: [],
       parentMessageId: run.triggerMessageId,
+      traceId: run.traceId,
       createdAt: this.clock()
     });
   }

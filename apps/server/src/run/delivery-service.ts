@@ -10,6 +10,7 @@ import type { RunRecord, RunRepository } from "./run-repository.js";
 
 interface DeliveryPayload {
   runId: string;
+  traceId: string;
   roomId: string;
   triggerMessageId: string;
   requesterMemberId: string;
@@ -28,6 +29,7 @@ interface DeliveryPayload {
 
 interface DeliveryRow {
   delivery_attempt_id: string;
+  trace_id: string;
   run_id: string;
   device_id: string;
   idempotency_key: string;
@@ -42,6 +44,7 @@ interface DeliveryRow {
 
 export interface DeliveryRecord {
   deliveryAttemptId: string;
+  traceId: string;
   runId: string;
   deviceId: string;
   idempotencyKey: string;
@@ -57,6 +60,7 @@ export interface DeliveryRecord {
 function mapDelivery(row: DeliveryRow): DeliveryRecord {
   return {
     deliveryAttemptId: row.delivery_attempt_id,
+    traceId: row.trace_id,
     runId: row.run_id,
     deviceId: row.device_id,
     idempotencyKey: row.idempotency_key,
@@ -123,6 +127,7 @@ export class DeliveryService {
   public accept(
     principal: DevicePrincipal,
     runId: string,
+    traceId: string | undefined,
     agentId: string,
     sequence: number,
     now: string
@@ -137,6 +142,8 @@ export class DeliveryService {
       !run ||
       !agent ||
       !delivery ||
+      (traceId !== undefined && run.traceId !== traceId) ||
+      (traceId !== undefined && delivery.traceId !== traceId) ||
       run.targetAgentId !== agentId ||
       agent.deviceId !== principal.deviceId ||
       agent.ownerMemberId !== principal.ownerMemberId ||
@@ -185,6 +192,7 @@ export class DeliveryService {
     const idempotencyKey = createOpaqueId("idem");
     const payload: DeliveryPayload = {
       runId: run.runId,
+      traceId: run.traceId,
       roomId: run.roomId,
       triggerMessageId: run.triggerMessageId,
       requesterMemberId: run.requesterMemberId,
@@ -206,11 +214,12 @@ export class DeliveryService {
     const payloadHash = createHash("sha256").update(payloadJson).digest("hex");
     this.database.prepare(`
       INSERT INTO run_deliveries (
-        delivery_attempt_id, run_id, device_id, idempotency_key, payload_hash,
-        payload_json, state, send_count, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?)
+        delivery_attempt_id, trace_id, run_id, device_id, idempotency_key,
+        payload_hash, payload_json, state, send_count, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', 0, ?)
     `).run(
       deliveryAttemptId,
+      run.traceId,
       run.runId,
       agent.deviceId,
       idempotencyKey,

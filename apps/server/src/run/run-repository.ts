@@ -15,6 +15,7 @@ export type RunState =
 
 export interface RunRecord {
   runId: string;
+  traceId: string;
   roomId: string;
   triggerMessageId: string;
   requesterMemberId: string;
@@ -31,6 +32,7 @@ export interface RunRecord {
 
 export interface RunEventRecord {
   runId: string;
+  traceId: string;
   sequence: number;
   event: RuntimeEvent;
   createdAt: string;
@@ -43,6 +45,7 @@ export interface AppliedRunEvent {
 
 interface RunRow {
   run_id: string;
+  trace_id: string;
   room_id: string;
   trigger_message_id: string;
   requester_member_id: string;
@@ -59,6 +62,7 @@ interface RunRow {
 
 interface RunEventRow {
   run_id: string;
+  trace_id: string;
   sequence: number;
   event_type: RuntimeEvent["type"];
   status: RunState | null;
@@ -79,6 +83,7 @@ const terminalStates = new Set<RunState>([
 function mapRun(row: RunRow): RunRecord {
   return {
     runId: row.run_id,
+    traceId: row.trace_id,
     roomId: row.room_id,
     triggerMessageId: row.trigger_message_id,
     requesterMemberId: row.requester_member_id,
@@ -118,6 +123,7 @@ function mapRunEvent(row: RunEventRow): RunEventRecord {
       };
   return {
     runId: row.run_id,
+    traceId: row.trace_id,
     sequence: row.sequence,
     event,
     createdAt: row.created_at
@@ -130,11 +136,11 @@ export class RunRepository {
   public createRuns(runs: RunRecord[]): RunRecord[] {
     const insert = this.database.prepare(`
       INSERT INTO runs (
-        run_id, room_id, trigger_message_id, requester_member_id,
+        run_id, trace_id, room_id, trigger_message_id, requester_member_id,
         target_agent_id, parent_run_id, instruction, state, last_sequence,
         deadline_at, created_at, updated_at, terminal_at
       ) VALUES (
-        @runId, @roomId, @triggerMessageId, @requesterMemberId,
+        @runId, @traceId, @roomId, @triggerMessageId, @requesterMemberId,
         @targetAgentId, @parentRunId, @instruction, @state, @lastSequence,
         @deadlineAt, @createdAt, @updatedAt, @terminalAt
       )
@@ -216,11 +222,12 @@ export class RunRepository {
       const terminalAt = terminalStates.has(nextState) ? now : null;
       this.database.prepare(`
         INSERT INTO run_events (
-          run_id, sequence, event_type, status, content, error_json,
+          run_id, trace_id, sequence, event_type, status, content, error_json,
           assessment_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         runId,
+        current.traceId,
         event.sequence,
         event.type,
         event.type === "status" ? event.status : null,
