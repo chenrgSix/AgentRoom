@@ -69,6 +69,27 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     presence: "ready",
     role: "Teammate"
   };
+  const memberMessage = {
+    messageId: "message_member",
+    roomId: room.roomId,
+    sequence: 1,
+    senderType: "member" as const,
+    senderId: member.memberId,
+    content: "请回答",
+    mentions: [],
+    createdAt: "2026-08-23T00:02:00.000Z"
+  };
+  const agentMessage = {
+    messageId: "message_agent",
+    roomId: room.roomId,
+    sequence: 2,
+    senderType: "agent" as const,
+    senderId: agent.agentId,
+    content: "已经完成",
+    mentions: [],
+    createdAt: "2026-08-23T00:03:00.000Z"
+  };
+  let messageWasSent = false;
   globalThis.fetch = async (input, init = {}) => {
     const path = typeof input === "string" ? input : input.url;
     const method = init.method ?? "GET";
@@ -106,8 +127,12 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         agentName: "Local Codex"
       });
     }
+    if (path === `/api/rooms/${room.roomId}/messages` && method === "POST") {
+      messageWasSent = true;
+      return jsonResponse({ message: memberMessage, runs: [] });
+    }
     if (path === `/api/rooms/${room.roomId}/messages?limit=100`) {
-      return jsonResponse({ items: [] });
+      return jsonResponse({ items: messageWasSent ? [memberMessage, agentMessage] : [] });
     }
     if (path === `/api/rooms/${room.roomId}/runs`) {
       return jsonResponse([]);
@@ -232,6 +257,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.ok(revokeRequest);
     assert.equal(revokeRequest.body, undefined);
     assert.equal(new Headers(revokeRequest.headers).has("content-type"), false);
+
+    fireEvent.click(screen.getByRole("button", { name: "对话" }));
+    const roomMessageInput = screen.getByLabelText("消息");
+    fireEvent.change(roomMessageInput, { target: { value: "请回答" } });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    const timeline = await screen.findByRole("region", { name: "房间消息" });
+    within(timeline).getByText("Review Bot");
+    within(timeline).getByText("已经完成");
   } finally {
     cleanup();
     dom.window.close();

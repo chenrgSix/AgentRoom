@@ -109,6 +109,7 @@ preserve the P0-P8 roadmap defined by the v0.2 architecture baseline:
 | WEB-013 | DONE | Expand Room participants to the full context sidebar | WEB-012 | participant roster fills the remaining column without a nested card or fixed-height list |
 | WEB-014 | DONE | Replace Mention selection with inline `@` suggestions | WEB-003, WEB-013 | typing `@` opens a keyboard-accessible Agent list and selection still submits a stable Agent ID |
 | WEB-015 | DONE | Add persistent light and dark themes | WEB-009, WEB-014 | desktop and mobile theme actions update the full Web shell and persist the local preference |
+| WEB-016 | DONE | Resolve timeline sender display names | WEB-003, WEB-011 | Agent and member messages render the registered sender name resolved from the stable sender ID |
 
 ## Workstream F4: MCP Team Participation
 

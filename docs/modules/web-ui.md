@@ -50,6 +50,10 @@ The UI uses schemas and generated types from `packages/contracts/`. Capability
 flags control whether start, resume, interrupt, handoff, or managed execution
 controls are shown.
 
+Timeline messages resolve their visible author from the stable `senderId` and
+the current Team roster. Registered Agent and member names are shown directly;
+the generic localized Agent label is reserved for missing historical identities.
+
 The current MVP separates Team conversation from the Agent control plane. The
 Room view owns messages, mentions, and Runs. The Agents view owns runtime
 roster, status, managed enrollment approval, MCP credentials, demo runtimes,
@@ -86,7 +90,7 @@ Component tests cover onboarding state transitions, Chinese-default locale
 persistence, Agent management navigation, enrollment approval, and capability
 gating.
 Browser acceptance covers message, mention, reconnect, Run progress, reply, and
-cancellation flows. Work is tracked by `WEB-001` through `WEB-015` in
+cancellation flows. Work is tracked by `WEB-001` through `WEB-016` in
 `docs/TASKS.md`.
 
 ## Dependencies

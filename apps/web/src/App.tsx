@@ -262,6 +262,10 @@ export function App() {
     () => new Map(agents.map((agent) => [agent.agentId, agent])),
     [agents]
   );
+  const membersById = useMemo(
+    () => new Map(members.map((member) => [member.memberId, member])),
+    [members]
+  );
   const mentionOptions = useMemo(() => {
     if (!mentionSearch) return [];
     const query = mentionSearch.query.toLocaleLowerCase(locale);
@@ -1087,38 +1091,47 @@ export function App() {
           </section>
         ) : (
           <section className="timeline" aria-label={t("roomMessages")}>
-            {messages.map((message) => (
-              <article className="message" key={message.messageId}>
-                <span className={`avatar ${message.senderType}`}>{message.senderType === "agent" ? "A" : "U"}</span>
-                <div>
-                  <header>
-                    <strong>{message.senderType === "agent" ? t("agent") : session?.displayName}</strong>
-                    <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
-                  </header>
-                  <p>{message.content}</p>
-                  {(message.mentions.length > 0 || runs.some((run) => run.triggerMessageId === message.messageId)) && (
-                    <div className="message-routing">
-                      {message.mentions.map((mention) => (
-                        <span className="mention-pill" key={mention.targetAgentId}>
-                          @{mention.displayLabel}
-                        </span>
-                      ))}
-                      {runs.filter((run) => run.triggerMessageId === message.messageId).map((run) => (
-                        <span className="run-card" key={run.runId} title={run.runId}>
-                          <strong>{agentsById.get(run.targetAgentId)?.name ?? t("agent")}</strong>
-                          <span className={`run-state ${run.state}`}>
-                            {runStateLabel(run.state, locale)}
+            {messages.map((message) => {
+              const senderName = message.senderType === "agent"
+                ? agentsById.get(message.senderId)?.name ?? t("agent")
+                : message.senderType === "member"
+                  ? membersById.get(message.senderId)?.displayName ?? session?.displayName ?? ""
+                  : "Agent Room";
+              const avatarLabel = senderName.trim().slice(0, 1).toLocaleUpperCase(locale) || "A";
+
+              return (
+                <article className="message" key={message.messageId}>
+                  <span className={`avatar ${message.senderType}`}>{avatarLabel}</span>
+                  <div>
+                    <header>
+                      <strong>{senderName}</strong>
+                      <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
+                    </header>
+                    <p>{message.content}</p>
+                    {(message.mentions.length > 0 || runs.some((run) => run.triggerMessageId === message.messageId)) && (
+                      <div className="message-routing">
+                        {message.mentions.map((mention) => (
+                          <span className="mention-pill" key={mention.targetAgentId}>
+                            @{mention.displayLabel}
                           </span>
-                          {["queued", "delivered", "working", "input_required"].includes(run.state) && (
-                            <button type="button" onClick={() => void cancelRun(run.runId)}>{t("cancel")}</button>
-                          )}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </article>
-            ))}
+                        ))}
+                        {runs.filter((run) => run.triggerMessageId === message.messageId).map((run) => (
+                          <span className="run-card" key={run.runId} title={run.runId}>
+                            <strong>{agentsById.get(run.targetAgentId)?.name ?? t("agent")}</strong>
+                            <span className={`run-state ${run.state}`}>
+                              {runStateLabel(run.state, locale)}
+                            </span>
+                            {["queued", "delivered", "working", "input_required"].includes(run.state) && (
+                              <button type="button" onClick={() => void cancelRun(run.runId)}>{t("cancel")}</button>
+                            )}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </article>
+              );
+            })}
           </section>
         )}
         {selectedRoom && activeView === "room" && (
