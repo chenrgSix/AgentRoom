@@ -2,7 +2,7 @@ name: agentroom
 
 services:
   secret-init:
-    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-v0.2.0-rc.1}
+    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-source-build}
     pull_policy: never
     command:
       - node
@@ -46,7 +46,7 @@ services:
     environment:
       AGENT_ROOM_DATABASE_PATH: ${AGENT_ROOM_DATABASE_PATH:-/data/agent-room.sqlite}
       AGENT_ROOM_PUBLIC_ORIGIN: ${AGENT_ROOM_PUBLIC_ORIGIN:?Set AGENT_ROOM_PUBLIC_ORIGIN to the public HTTPS origin}
-    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-v0.2.0-rc.1}
+    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-source-build}
     expose:
       - "3000"
     healthcheck:
@@ -56,6 +56,11 @@ services:
         - -e
         - fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
     init: true
+    logging:
+      driver: json-file
+      options:
+        max-file: "${AGENT_ROOM_LOG_MAX_FILES:-5}"
+        max-size: "${AGENT_ROOM_LOG_MAX_SIZE:-10m}"
     read_only: true
     restart: unless-stopped
     security_opt:
@@ -79,6 +84,11 @@ services:
         condition: service_healthy
     environment:
       AGENT_ROOM_DOMAIN: ${AGENT_ROOM_DOMAIN:?Set AGENT_ROOM_DOMAIN to the HTTPS host name}
+    logging:
+      driver: json-file
+      options:
+        max-file: "${AGENT_ROOM_LOG_MAX_FILES:-5}"
+        max-size: "${AGENT_ROOM_LOG_MAX_SIZE:-10m}"
     ports:
       - "${AGENT_ROOM_HTTP_PORT:-80}:80"
       - "${AGENT_ROOM_HTTPS_PORT:-443}:443"

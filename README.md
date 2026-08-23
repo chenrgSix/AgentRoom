@@ -64,9 +64,10 @@ active. The contracts package and server data layer are currently implemented.
 
 ## Installation and Quick Start
 
-The central service is currently installed from source. It requires Node.js 22
-and npm; Go is required only when developing the Bridge. Clone and start a
-local development instance:
+Source development requires Node.js 22 and npm; Go is required only when
+developing the Bridge. A production Compose host does not need either runtime
+because the image builds them inside Docker. Clone and start a local development
+instance:
 
 ```bash
 git clone https://github.com/chenrgSix/AgentRoom.git
@@ -167,30 +168,51 @@ instructions and supported tools.
 
 If an Agent does not reply, confirm that it was selected from the `@` list, its
 status is **就绪**, the Bridge is running, and the local runtime executable and
-login work. Server diagnostics are available at `/api/health` and
-`/api/metrics`.
+login work. Server health is available at `/api/health`; production Caddy
+intentionally hides `/api/metrics` from the public network.
 
 ## Production Deployment
 
 For a trusted small Team, use the included non-root Server and Caddy Compose
-profile. Point a public DNS name at the host, then prepare the ignored settings
-and file-backed Owner recovery secret:
+profile. The host needs Git, Docker Engine or Docker Desktop with Compose v2,
+OpenSSL, and curl; it does not need Node.js or Go. Point a public DNS A/AAAA
+record at the host, allow inbound TCP 80/443 and outbound ACME traffic, and
+ensure no other process owns those ports.
+
+Use a dedicated, clean checkout and record the exact source revision. Prefer a
+reviewed release tag when it contains the desired deployment changes. Then
+prepare the ignored settings and file-backed Owner recovery secret:
 
 ```bash
+git clone https://github.com/chenrgSix/AgentRoom.git
+cd AgentRoom
+git rev-parse HEAD                 # Record the exact deployed source revision.
 cp deploy/.env.example .env
 mkdir -p deploy/secrets
 umask 077
 openssl rand -hex 32 > deploy/secrets/owner_recovery_token
 # Edit AGENT_ROOM_DOMAIN and AGENT_ROOM_PUBLIC_ORIGIN in .env.
-docker compose up -d --build
-docker compose ps
+docker compose config --quiet
+docker compose build --pull agentroom
+docker compose up -d
+docker compose ps --all
+curl --fail https://team.example.com/api/health/ready
 ```
 
 The application is served only over HTTPS; port 80 exists solely for certificate
-issuance and redirect. The first browser creates or adopts the Owner with the
-recovery secret; the Owner then invites members with short-lived, one-time
-links. Run `./scripts/compose-backup.sh` for a verified online backup. Read
-[Deployment Baseline](docs/deployment.md) and
+issuance and redirect. `secret-init` should show `Exited (0)`, while `agentroom`
+and `caddy` should be running. Open the configured HTTPS origin, enter an Owner
+display name, and paste the recovery **file contents**, not its path. Keep that
+file offline-capable for later Owner recovery; members join through short-lived,
+one-time invitation links.
+
+Use `docker compose logs --tail=100 secret-init agentroom caddy` when startup
+fails. Run `./scripts/compose-backup.sh` for a verified online backup and copy
+the resulting file to another host or storage system. `docker compose stop`
+preserves the deployment, and `docker compose down` preserves named volumes;
+never use `docker compose down -v` unless you deliberately intend to erase the
+database, private backup volume, prepared recovery secret, and Caddy state. Read
+[Central Deployment](docs/deployment.md) and
 [Backup and Restore](docs/backup-and-restore.md) before exposing, restoring, or
 upgrading a server.
 

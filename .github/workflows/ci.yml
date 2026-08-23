@@ -57,6 +57,16 @@ jobs:
       - name: Check patch whitespace
         run: git diff --check
 
+      - name: Validate central Compose deployment
+        env:
+          AGENT_ROOM_DOMAIN: team.example.com
+          AGENT_ROOM_PUBLIC_ORIGIN: https://team.example.com
+          AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE: ./deploy/secrets/owner_recovery_token
+        run: |
+          docker compose config --quiet
+          bash -n scripts/compose-backup.sh
+          bash -n scripts/compose-restore.sh
+
   go:
     name: Go
     runs-on: ubuntu-latest

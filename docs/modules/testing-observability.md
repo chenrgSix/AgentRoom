@@ -150,6 +150,12 @@ in `docs/acceptance/ops-004-data-005-compose.md`. It separates local TLS smoke
 evidence from public certificate issuance and records the exact negative and
 large-database recovery checks.
 
+The operator-facing Compose lifecycle and static configuration evidence is
+recorded in `docs/acceptance/ops-005-compose-operations.md`. It covers bounded
+container logs, CI rendering, first setup, health, troubleshooting, upgrades,
+safe stop, off-host backup expectations, and version-aligned rollback without
+claiming public ACME or high-availability evidence.
+
 A Bridge release begins as an empty draft candidate and builds from the exact
 requested tag. The workflow requires five CLI archives, two native macOS GUI
 archives, one checksum file, and three top-level license files. It verifies

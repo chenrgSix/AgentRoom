@@ -163,6 +163,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | OPS-003 | DONE | Document and configure deployable listener topology | BRG-003, MCP-001 | loopback, proxy, and trusted-LAN modes are explicit |
 | OPS-004 | DONE | Package a trusted-team single-host deployment | OPS-003, SEC-005, DATA-004 | non-root Server plus Caddy Compose serves the app only over HTTPS, limits port 80 to ACME/redirect, hides metrics, preserves WebSocket/MCP headers, and passes graceful health checks |
 | DATA-005 | DONE | Add container backup and restore workflow | DATA-004, OPS-004 | timestamped native SQLite backup and streamed restore pass `quick_check`, SHA-256, no-overwrite, invalid-input, and 67 MB fixture acceptance |
+| OPS-005 | DONE | Make central Compose operations self-contained | OPS-004, DATA-005, QA-008 | environment template, CI config validation, bounded container logs, and operator runbooks cover first setup, health, troubleshooting, upgrades, safe stop, backup, restore, and rollback boundaries |
 | QA-002 | READY | Verify two-machine managed Agent flow | ADP-004, WEB-005 | two-physical-machine HTTPS runbook is executable; DONE requires committed PASS evidence for online and offline/reconnect Codex Runs |
 | QA-003 | DONE | Verify three-Agent guarded handoff | MCP-003, RUN-006 | public Web and Remote MCP E2E completes Alice → Bob → Carol Runs with shared trace and rejects a lineage loop |
 | QA-004 | DONE | Verify restart, reconnect, duplicate, and cancellation | DATA-003, RUN-005 | recovery matrix passes repeatedly |

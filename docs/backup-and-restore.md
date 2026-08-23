@@ -28,6 +28,10 @@ uses an atomic no-clobber hard link, so a concurrent destination cannot be
 overwritten. It neither overwrites an existing path nor deletes older backups.
 The verified container copy remains in the private backup volume; define and
 monitor a retention policy for both copies before long-running production use.
+Both copies are still on the same physical host. Copy each accepted backup and
+its reported SHA-256 to separately controlled off-host or offline-capable
+storage. Keep the digest independently from the database file, then periodically
+test a restore from that copy.
 
 ## Restore or Roll Back a Migration
 
@@ -45,14 +49,43 @@ applied migration file.
 The Compose restore helper stages a verified backup under a new name. It
 refuses to run while the Server container is active, streams SHA-256 instead of
 loading the database into memory, runs SQLite `quick_check`, and never replaces
-the current database:
+the current database.
+
+First hash the selected source and compare the complete 64-character value with
+the digest retained when that backup was created. Stop on any mismatch; the
+restore helper's later copy check cannot determine whether a valid SQLite file
+is the wrong backup.
+
+```bash
+sha256sum "$PWD/backups/agent-room-20260823T120000Z.sqlite"
+# On macOS when sha256sum is unavailable:
+shasum -a 256 "$PWD/backups/agent-room-20260823T120000Z.sqlite"
+```
+
+Only after that independent comparison passes, stop and stage the restore:
 
 ```bash
 docker compose stop caddy agentroom
-./scripts/compose-restore.sh "$PWD/backups/agent-room-20260823T120000Z.sqlite"
+./scripts/compose-restore.sh \
+  "$PWD/backups/agent-room-20260823T120000Z.sqlite" \
+  agent-room-rollback.sqlite
 ```
 
-Copy the printed `AGENT_ROOM_DATABASE_PATH` value into `.env`, run
-`docker compose up -d`, then check `/api/health/ready`, Team/Room history, one
-Agent connection, and one read-only MCP call. Keep both database files until
-that verification succeeds.
+Set the exact printed container path in `.env`:
+
+```dotenv
+AGENT_ROOM_DATABASE_PATH=/data/agent-room-rollback.sqlite
+```
+
+If the backup predates an application migration, also check out and rebuild the
+previous application release before starting. A newer image would immediately
+reapply its forward migrations to the restored database.
+
+Run `docker compose up -d`, inspect `docker compose ps --all` and
+`docker compose logs --tail=100 agentroom caddy`, then check
+`/api/health/ready`, Team/Room history, one Agent connection, and one read-only
+MCP call. Keep the original database path and restored file until verification
+succeeds. To abandon the restore, stop the services, put the original
+`AGENT_ROOM_DATABASE_PATH` and matching application release back in place, and
+start again; do not overwrite or delete either database while evaluating the
+result.
