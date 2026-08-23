@@ -2,6 +2,7 @@
 set -euo pipefail
 
 bridge_root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
+repository_root=$(CDPATH= cd -- "${bridge_root}/.." && pwd)
 output_dir=${OUTPUT_DIR:-"${bridge_root}/dist"}
 release_tag=${RELEASE_TAG:?RELEASE_TAG is required}
 goos=${GOOS:?GOOS is required}
@@ -43,6 +44,9 @@ mkdir -p "${staging}"
     ./cmd/agentroom-bridge
 )
 cp "${bridge_root}/README.md" "${staging}/README.md"
+cp "${repository_root}/LICENSE" "${staging}/LICENSE"
+cp "${repository_root}/NOTICE" "${staging}/NOTICE"
+cp "${repository_root}/COMMERCIAL-LICENSE.md" "${staging}/COMMERCIAL-LICENSE.md"
 
 host_os=$(go env GOHOSTOS)
 host_arch=$(go env GOHOSTARCH)

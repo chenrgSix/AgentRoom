@@ -45,6 +45,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | GOV-003 | DONE | Define repository standards | GOV-002 | README, contributing, lint, ADR rules |
 | GOV-004 | DONE | Split architecture into module documents | GOV-003 | module index and task register committed |
 | GOV-005 | DONE | Define adaptive Discussion orchestration baseline | GOV-004 | accepted ADR, module boundary, state machine, budget, and verification matrix agree |
+| GOV-006 | DONE | Adopt noncommercial source-available licensing | GOV-003 | standard license, Required Notice, commercial policy, contribution boundary, metadata, and release packaging agree |
 
 ## Workstream F0: Contracts and Fake System
 

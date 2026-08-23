@@ -2,6 +2,7 @@
   "name": "@agent-room/server",
   "version": "0.1.0",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "description": "Central Agent Room Team service",
   "type": "module",
   "scripts": {

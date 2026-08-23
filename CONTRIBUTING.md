@@ -81,3 +81,12 @@ tests, and Markdown checks. Record commands and results in the PR description.
 Explain the problem, affected ownership boundary, compatibility impact,
 security impact, and verification. Link the issue or ADR. Include screenshots
 for Web UI changes and example payloads for protocol changes.
+
+## Contribution Licensing
+
+The repository is source-available under the PolyForm Noncommercial License
+1.0.0 and may also be offered under separate commercial terms. Issues and
+design discussions are welcome. Before submitting code, documentation, or
+assets, contact the maintainer: external contributions require a separate
+written contribution agreement that preserves the maintainer's ability to
+offer commercial licenses. A pull request alone does not create that agreement.

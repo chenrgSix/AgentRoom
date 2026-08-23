@@ -27,6 +27,11 @@ The portable binaries are currently unsigned. macOS users may need to approve
 the first launch in system security settings. The `go run` commands below are
 developer alternatives.
 
+AgentRoom is source-available under the PolyForm Noncommercial License 1.0.0.
+Release archives include `LICENSE`, `NOTICE`, and `COMMERCIAL-LICENSE.md`.
+Commercial use, including SaaS or another paid hosted service, requires prior
+written permission.
+
 ```bash
 go run ./cmd/agentroom-bridge version
 go run ./cmd/agentroom-bridge console
