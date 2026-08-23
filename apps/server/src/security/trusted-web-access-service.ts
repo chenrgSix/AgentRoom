@@ -128,7 +128,11 @@ export class TrustedWebAccessService {
           : undefined;
         if (!existing) throw new Error("Existing bootstrap User disappeared");
         user = existing;
-      } else if (ownerCandidates.length === 0 && userCount.count === 0) {
+      } else if (
+        ownerCandidates.length === 0 &&
+        userCount.count === 0 &&
+        membershipCount.count === 0
+      ) {
         user = {
           userId: createOpaqueId("user"),
           displayName: normalizedDisplayName(displayName),

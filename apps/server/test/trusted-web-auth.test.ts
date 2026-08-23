@@ -456,6 +456,60 @@ test("trusted setup adopts one bootstrap User before any Team exists", async () 
   }
 });
 
+test("trusted setup fails closed for anonymous legacy Team ownership", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-ambiguous-owner-"));
+  const databasePath = path.join(directory, "server.sqlite");
+  const local = await createServerApp({ databasePath, clock: () => initialNow });
+  await local.close();
+
+  const database = new Database(databasePath);
+  try {
+    database.prepare(`
+      INSERT INTO teams (team_id, name, created_at) VALUES (?, ?, ?)
+    `).run("team_legacyanonymous", "Legacy Team", initialNow);
+    database.prepare(`
+      INSERT INTO team_members (
+        member_id, team_id, user_id, display_name, role, created_at
+      ) VALUES (?, ?, NULL, ?, 'owner', ?)
+    `).run(
+      "member_legacyanonymous",
+      "team_legacyanonymous",
+      "Legacy Anonymous Owner",
+      initialNow
+    );
+  } finally {
+    database.close();
+  }
+
+  const trusted = await createServerApp({
+    databasePath,
+    clock: () => initialNow,
+    webAuth: trustedWeb()
+  });
+  try {
+    const setup = await trusted.inject({
+      method: "POST",
+      url: "/api/auth/setup",
+      headers: {
+        origin: publicOrigin,
+        "x-agent-room-recovery-token": recoveryToken
+      },
+      payload: { displayName: "Unexpected replacement" }
+    });
+    assert.equal(setup.statusCode, 400);
+    assert.match(setup.json().error.message, /exactly one existing Owner User/u);
+    assert.deepEqual((await trusted.inject({
+      method: "GET",
+      url: "/api/auth/status"
+    })).json(), {
+      mode: "trusted-team",
+      state: "setup_required"
+    });
+  } finally {
+    await trusted.close();
+  }
+});
+
 test("local Web APIs reject a non-loopback Host", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-local-host-"));
   const app = await createServerApp({
