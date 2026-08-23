@@ -208,11 +208,11 @@ The first v0.2 candidate and continuous quality-gate evidence is recorded in
 the corrective workflow permission change, successful main CI and Release run
 IDs, the public prerelease, and an independent clean-download verification.
 
-The `v0.2.0-rc.2` plan is recorded in
-`docs/releases/v0.2.0-rc.2.md`. `QA-011` remains `ACTIVE` until the exact tagged
-source passes main CI, the draft workflow verifies all 11 assets, the candidate
-is published as a prerelease, and a clean download passes the committed
-verifier.
+The `v0.2.0-rc.2` release evidence is recorded in
+`docs/acceptance/qa-011-v0.2.0-rc.2.md`. `QA-011` is complete because the exact
+tagged source passed main CI, the draft workflow verified all 11 assets, the
+candidate was published as a prerelease, and a clean public download passed the
+committed verifier.
 
 ## Dependencies
 

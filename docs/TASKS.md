@@ -178,7 +178,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-006 | DONE | Verify local cross-process managed flow | BRG-005, ADP-005, RUN-003 | real server, Go Bridge, and Generic Runtime reply passes |
 | QA-008 | DONE | Add continuous repository quality gates | QA-005 | every main push and pull request validates contracts, Node builds/tests/E2E/docs, Go tests/vet, and native desktop compilation |
 | QA-009 | DONE | Publish and verify the v0.2 release candidate | BRG-011, BRG-015, SEC-005, OPS-004, QA-008 | tag-pinned, no-clobber draft-to-prerelease workflow publishes exactly seven archives, checksums, and license assets; clean downloads pass the same verifier |
-| QA-011 | ACTIVE | Publish and verify v0.2.0-rc.2 | QA-009, QA-010, BRG-018, OPS-005 | exact tagged source passes main CI; the no-clobber workflow uploads and verifies five CLI archives, two macOS desktop archives, checksums, and license assets; the published prerelease passes a clean-download verification |
+| QA-011 | DONE | Publish and verify v0.2.0-rc.2 | QA-009, QA-010, BRG-018, OPS-005 | exact tagged source passes main CI; the no-clobber workflow uploads and verifies five CLI archives, two macOS desktop archives, checksums, and license assets; the published prerelease passes a clean-download verification |
 
 ## Deferred Beyond MVP
 

@@ -215,6 +215,12 @@ candidate remains unsigned, manual-update-only, and subject to the separate
 real-login `BRG-013` gate. Full evidence is recorded in
 `docs/acceptance/qa-009-v0.2.0-rc.1.md`.
 
+Release `v0.2.0-rc.2` is the first Bridge package containing strict inbox
+recovery fencing and safe Codex/Generic failure metadata. GitHub Actions run
+`32653022605` built and verified all seven archives from the exact tag, and an
+independent public download passed the same 11-asset verifier. Full evidence is
+recorded in `docs/acceptance/qa-011-v0.2.0-rc.2.md`.
+
 ## Dependencies
 
 Contracts, Registry publication, Security pairing, and Runtime Adapters.
