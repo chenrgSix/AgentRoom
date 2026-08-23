@@ -62,6 +62,28 @@ func Save(path string, value Config) error {
 	if err != nil {
 		return err
 	}
+	return writeAtomic(resolved, value)
+}
+
+func Replace(path string, value Config) error {
+	if err := value.Validate(); err != nil {
+		return err
+	}
+	resolved, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("resolve config path: %w", err)
+	}
+	info, err := os.Lstat(resolved)
+	if err != nil {
+		return fmt.Errorf("inspect config path: %w", err)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("config path identifies a directory")
+	}
+	return writeAtomic(resolved, value)
+}
+
+func writeAtomic(resolved string, value Config) error {
 	if err := os.MkdirAll(filepath.Dir(resolved), 0o700); err != nil {
 		return fmt.Errorf("create config directory: %w", err)
 	}

@@ -92,4 +92,16 @@ func TestSaveWritesOwnerOnlyConfigAndRefusesOverwrite(t *testing.T) {
 	if err := Save(path, value); err == nil {
 		t.Fatal("expected existing config to prevent overwrite")
 	}
+	replacement := value
+	replacement.DeviceName = "Updated Mac"
+	if err := Replace(path, replacement); err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.DeviceName != "Updated Mac" {
+		t.Fatalf("unexpected replacement config: %#v", loaded)
+	}
 }

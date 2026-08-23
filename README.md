@@ -84,8 +84,9 @@ Run the two development commands in separate terminals, then open
 select an Agent in the composer to create and execute a structured Run.
 
 Use the Web **Connect an Agent** panel for a one-time MCP token. For a managed
-local Codex, run `agentroom-bridge join --server http://127.0.0.1:3000` on its
-machine and approve the displayed code in that panel. See
+local Codex or Pi, run `agentroom-bridge console` on its machine, open the
+printed local URL, and approve the displayed code in the central Web panel.
+The terminal-only `join` command remains available. See
 [docs/mcp-client-setup.md](docs/mcp-client-setup.md) and
 [bridge/README.md](bridge/README.md) for client and headless Bridge setup.
 

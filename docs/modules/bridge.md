@@ -19,9 +19,12 @@ to local Runtime Adapters.
 - Persist incoming deliveries before acknowledging them.
 - Deduplicate deliveries and forward each accepted Run exactly once locally.
 - Stream sequenced status, text replies, and handoff requests to the server.
+- Serve an optional token-authenticated loopback Console for local enrollment,
+  Runtime preset configuration, status, and process control.
 
 The Bridge does not store Team history, choose target Agents, authorize
-cross-member actions, or provide a GUI.
+cross-member actions, or provide Room conversation UI. Its local Console owns
+only this machine's Bridge configuration and lifecycle.
 
 The Go 1.26.7 process accepts a strict JSON configuration. Runtime commands are
 argument arrays, workspaces are absolute paths, environment propagation is an
@@ -41,6 +44,27 @@ The client never needs a credential copied from the server. Existing config or
 credential files stop enrollment before a request is created. Server-issued
 single-use invitations remain supported by `pair` for compatibility, but are
 not the normal onboarding flow.
+
+## Local Configuration Console
+
+`agentroom-bridge console` starts the recommended client setup surface on
+`127.0.0.1:3210`, prints a one-time random Console URL, and automatically runs
+an existing paired Bridge. Static assets are embedded in the Go binary, so no
+Node.js process or separate UI service is required on the client.
+
+The Console can discover Codex and Pi, create the first enrollment request,
+show the short Owner approval code, start or stop the Bridge, and edit existing
+Agent presets. Configuration updates are atomically persisted and restart the
+managed connection with an epoch fence so a late old process cannot overwrite
+new state. A paired server URL cannot be changed through configuration editing;
+joining another server requires a new Device enrollment.
+
+The HTTP listener rejects non-loopback addresses. Every API call requires a
+32-byte random Bearer token that is removed from browser history and kept only
+in tab session storage. Public state omits Console tokens, Device credentials,
+and environment values. The UI accepts `codex` and `pi` presets rather than
+arbitrary command strings; Pi may add one validated credential environment
+variable name, never its value.
 
 ## Connection Lifecycle
 
@@ -78,9 +102,12 @@ tokens, credentials, sensitive local paths, and full environment snapshots.
 
 ## Verification and Tasks
 
-Tests cover client enrollment, pairing, reconnect, epoch replacement, ACK loss, duplicate
-delivery, restart recovery, and revoked devices. Work is tracked by `BRG-001`
-through `BRG-006` in `docs/TASKS.md`.
+Tests cover client enrollment, pairing, reconnect, epoch replacement, ACK loss,
+duplicate delivery, restart recovery, revoked devices, Console authentication,
+strict Runtime presets, configuration replacement, and lifecycle fencing.
+Browser acceptance covers first setup, Runtime discovery, adding Pi to an
+existing Bridge, and status rendering. Work is tracked by `BRG-001` through
+`BRG-007` in `docs/TASKS.md`.
 
 ## Dependencies
 

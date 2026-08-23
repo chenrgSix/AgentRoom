@@ -5,6 +5,7 @@ explicit JSON configuration and never accepts shell command strings.
 
 ```bash
 go run ./cmd/agentroom-bridge version
+go run ./cmd/agentroom-bridge console
 go run ./cmd/agentroom-bridge join --server http://127.0.0.1:3000
 go run ./cmd/agentroom-bridge validate-config --config ./bridge.json
 go run ./cmd/agentroom-bridge pair --config ./bridge.json --code ONE_TIME_CODE
@@ -13,12 +14,29 @@ go test ./...
 go build ./cmd/agentroom-bridge
 ```
 
-`join` is the normal managed setup path. It detects `codex` and the current
-workspace, displays a short approval code, and waits for a Team owner to enter
-that code in Web **Connect an Agent**. After approval it writes the configuration
-and credential, publishes **Local Codex**, and stays online. Use `--workspace`,
-`--agent-name`, `--device-name`, or `--codex` to override detected values.
-Existing configuration or credential files are never overwritten.
+`console` is the recommended setup path. Open the complete token-bearing URL
+printed in the terminal. The local page detects Codex and Pi, requests Team
+enrollment, shows the Owner approval code, and manages Bridge start, stop, and
+Agent configuration. It listens only on `127.0.0.1:3210` by default; static UI
+assets are embedded in the Bridge binary.
+
+```bash
+agentroom-bridge console \
+  --workspace /absolute/path/to/project \
+  --config /absolute/path/to/bridge.json
+```
+
+An existing paired configuration starts automatically. Editing Agent presets
+atomically updates the configuration and restarts the managed connection. The
+Console never returns Device credentials or environment values to the browser.
+
+`join` is the terminal-only managed setup alternative. It detects `codex` and
+the current workspace, displays a short approval code, and waits for a Team
+owner to enter that code in Web **Connect an Agent**. After approval it writes
+the configuration and credential, publishes **Local Codex**, and stays online.
+Use `--workspace`, `--agent-name`, `--device-name`, or `--codex` to override
+detected values. Existing configuration or credential files are never
+overwritten.
 
 `serverUrl` must use HTTPS except for loopback development. Each Agent declares
 an adapter, argument-array command, absolute workspace, and environment variable

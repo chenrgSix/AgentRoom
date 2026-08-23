@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent Room Bridge</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <main class="shell">
+    <header class="hero">
+      <div class="brand"><span>AR</span></div>
+      <div>
+        <p class="eyebrow">LOCAL BRIDGE CONSOLE</p>
+        <h1>连接本机智能体</h1>
+        <p class="lede">配置 Codex 或 Pi，通过出站连接安全加入中央 Team。</p>
+      </div>
+      <div class="phase" id="phase">正在读取状态</div>
+    </header>
+
+    <div class="auth-warning hidden" id="auth-warning">
+      当前页面缺少本地控制令牌。请使用 Bridge 启动时输出的完整 Console 地址重新打开。
+    </div>
+    <div class="error hidden" id="error" role="alert"></div>
+
+    <section class="status-grid" aria-label="Bridge 状态">
+      <article><span>本地配置</span><strong id="configured">未创建</strong></article>
+      <article><span>Team 配对</span><strong id="paired">未配对</strong></article>
+      <article><span>Bridge</span><strong id="running">未运行</strong></article>
+      <article><span>本地智能体</span><strong id="agent-count">0 个</strong></article>
+    </section>
+
+    <section class="approval hidden" id="approval">
+      <div>
+        <p class="eyebrow">等待 TEAM OWNER 审批</p>
+        <h2>在中央 Web 管理界面输入此代码</h2>
+      </div>
+      <button class="join-code" id="join-code" type="button" title="复制加入码"></button>
+      <p id="join-expiry"></p>
+      <button class="secondary" id="cancel-enrollment" type="button">取消加入</button>
+    </section>
+
+    <section class="configured-view hidden" id="configured-view">
+      <div class="section-heading">
+        <div><p class="eyebrow">CURRENT DEVICE</p><h2 id="device-title">本机 Bridge</h2></div>
+        <div class="actions">
+          <button class="secondary hidden" id="resume-enrollment" type="button">请求加入 Team</button>
+          <button class="secondary" id="edit-config" type="button">编辑智能体</button>
+          <button class="primary" id="start-bridge" type="button">启动 Bridge</button>
+          <button class="secondary" id="stop-bridge" type="button">停止 Bridge</button>
+        </div>
+      </div>
+      <dl class="details">
+        <div><dt>中央服务</dt><dd id="current-server">—</dd></div>
+        <div><dt>Team</dt><dd id="current-team">—</dd></div>
+        <div><dt>Device</dt><dd id="current-device">—</dd></div>
+        <div><dt>配置文件</dt><dd id="config-path">—</dd></div>
+      </dl>
+      <div class="agent-list" id="agent-list"></div>
+    </section>
+
+    <form id="enrollment-form">
+      <section class="panel">
+        <div class="section-heading">
+          <div><p class="step">01</p><h2>中央服务</h2></div>
+          <p>Bridge 仅发起出站连接，非本机 HTTP 必须使用 HTTPS。</p>
+        </div>
+        <div class="fields two">
+          <label>服务地址<input id="server-url" required value="http://127.0.0.1:3000"></label>
+          <label>设备名称<input id="device-name" maxlength="80" required></label>
+        </div>
+        <label id="fingerprint-field" class="hidden">HTTPS 证书 SHA-256 指纹
+          <input id="fingerprint" autocomplete="off" placeholder="64 位十六进制指纹">
+        </label>
+      </section>
+
+      <section class="panel">
+        <div class="section-heading">
+          <div><p class="step">02</p><h2>选择本机智能体</h2></div>
+          <p>命令由 Bridge 生成固定参数，不接受服务器传入 shell 字符串。</p>
+        </div>
+        <div class="runtime-card">
+          <label class="runtime-toggle"><input id="codex-enabled" type="checkbox" checked><span>Codex</span><small>原生 JSONL · 支持中断</small></label>
+          <div class="runtime-fields" id="codex-fields">
+            <div class="fields two">
+              <label>显示名称<input id="codex-name" maxlength="80" value="Local Codex" required></label>
+              <label>角色<input id="codex-role" maxlength="80" value="Implementation" required></label>
+            </div>
+            <label>Codex 可执行文件<input id="codex-path" required></label>
+            <label>工作区<input class="workspace" id="codex-workspace" required></label>
+            <label>文件沙箱<select id="codex-sandbox"><option value="workspace-write">允许修改工作区</option><option value="read-only">只读</option></select></label>
+          </div>
+        </div>
+        <div class="runtime-card">
+          <label class="runtime-toggle"><input id="pi-enabled" type="checkbox"><span>Pi</span><small>Generic CLI · 无工具单轮模式</small></label>
+          <div class="runtime-fields hidden" id="pi-fields">
+            <div class="fields two">
+              <label>显示名称<input id="pi-name" maxlength="80" value="Local Pi"></label>
+              <label>角色<input id="pi-role" maxlength="80" value="Reviewer"></label>
+            </div>
+            <label>Pi 可执行文件<input id="pi-path"></label>
+            <label>工作区<input class="workspace" id="pi-workspace"></label>
+            <label>凭据环境变量名称（可选）<input id="pi-credential-env" placeholder="例如 ANTHROPIC_API_KEY"></label>
+          </div>
+        </div>
+      </section>
+
+      <section class="submit-panel">
+        <div><p class="eyebrow">03 · OWNER APPROVAL</p><h2>请求加入 Team</h2><p>提交后在中央 Web 输入一次性代码。凭据不会展示在本页面。</p></div>
+        <div class="actions">
+          <button class="secondary hidden" id="cancel-edit" type="button">取消编辑</button>
+          <button class="primary" id="submit-enrollment" type="submit">生成加入码</button>
+        </div>
+      </section>
+    </form>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>

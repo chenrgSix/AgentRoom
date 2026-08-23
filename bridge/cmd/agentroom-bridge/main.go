@@ -4,15 +4,19 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
 	"syscall"
+	"time"
 
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/connection"
+	"agentroom.dev/bridge/internal/console"
 	"agentroom.dev/bridge/internal/delivery"
 	"agentroom.dev/bridge/internal/enrollment"
 	"agentroom.dev/bridge/internal/identity"
@@ -32,12 +36,14 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("expected one of: version, validate-config, join, pair, run")
+		return fmt.Errorf("expected one of: version, console, validate-config, join, pair, run")
 	}
 	switch args[0] {
 	case "version":
 		fmt.Println(version)
 		return nil
+	case "console":
+		return runConsole(args[1:])
 	case "validate-config":
 		command := flag.NewFlagSet("validate-config", flag.ContinueOnError)
 		path := command.String("config", "", "path to bridge JSON configuration")
@@ -101,6 +107,69 @@ func run(args []string) error {
 		return runUntilSignal(loaded, credential)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
+	}
+}
+
+func runConsole(args []string) error {
+	command := flag.NewFlagSet("console", flag.ContinueOnError)
+	path := command.String("config", "", "path to bridge JSON configuration")
+	dataDir := command.String("data-dir", "", "directory for Bridge state and credential")
+	workspace := command.String("workspace", "", "default local Runtime workspace")
+	listen := command.String("listen", "127.0.0.1:3210", "loopback Console listen address")
+	if err := command.Parse(args); err != nil {
+		return err
+	}
+	resolvedPath := *path
+	if resolvedPath == "" {
+		resolvedPath = config.DefaultPath()
+	}
+	service, err := console.New(console.Options{
+		ConfigPath: resolvedPath,
+		DataDir:    *dataDir,
+		Workspace:  *workspace,
+	}, console.Dependencies{
+		Enroll:         enrollment.Join,
+		SaveConfig:     config.Save,
+		ReplaceConfig:  config.Replace,
+		SaveCredential: pairing.Save,
+		RunBridge:      runBridge,
+	})
+	if err != nil {
+		return err
+	}
+	defer service.Close()
+	listener, err := console.ListenLoopback(*listen)
+	if err != nil {
+		return err
+	}
+	defer listener.Close()
+	server := &http.Server{
+		Handler:           service.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		IdleTimeout:       30 * time.Second,
+	}
+	if err := service.StartConfiguredBridge(); err != nil {
+		return err
+	}
+	consoleURL := "http://" + listener.Addr().String() +
+		"/?token=" + url.QueryEscape(service.Token())
+	fmt.Printf("Bridge Console: %s\n", consoleURL)
+	fmt.Println("The Console accepts connections only from this machine.")
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	serveError := make(chan error, 1)
+	go func() { serveError <- server.Serve(listener) }()
+	select {
+	case <-ctx.Done():
+		shutdownContext, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return server.Shutdown(shutdownContext)
+	case err := <-serveError:
+		if err == nil || err == http.ErrServerClosed {
+			return nil
+		}
+		return err
 	}
 }
 
