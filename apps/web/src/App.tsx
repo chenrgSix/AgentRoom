@@ -84,9 +84,11 @@ interface MentionSearch {
 
 const userKey = "agent-room.local-user";
 const localeKey = "agent-room.locale";
+const themeKey = "agent-room.theme";
 
 type WorkspaceView = "room" | "agents";
 type ConnectionMode = "managed" | "mcp" | "demo";
+type Theme = "dark" | "light";
 
 function integrationLabel(mode: Agent["integrationMode"], locale: Locale): string {
   if (mode === "managed") return translate(locale, "managedBridge");
@@ -216,6 +218,9 @@ async function bootstrap(): Promise<LocalSession> {
 }
 
 export function App() {
+  const [theme, setTheme] = useState<Theme>(() =>
+    localStorage.getItem(themeKey) === "light" ? "light" : "dark"
+  );
   const [locale, setLocale] = useState<Locale>(() =>
     localStorage.getItem(localeKey) === "en" ? "en" : "zh-CN"
   );
@@ -277,6 +282,12 @@ export function App() {
     localStorage.setItem(localeKey, locale);
     document.documentElement.lang = locale;
   }, [locale]);
+
+  useEffect(() => {
+    localStorage.setItem(themeKey, theme);
+    document.documentElement.dataset.theme = theme;
+    document.documentElement.style.colorScheme = theme;
+  }, [theme]);
 
   async function loadTeams(activeSession: LocalSession) {
     const next = await jsonRequest<Team[]>("/api/teams", {}, activeSession.token);
@@ -759,6 +770,12 @@ export function App() {
               </>
             )}
             <button aria-label={locale === "zh-CN" ? "移动端界面语言" : "Mobile interface language"} onClick={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")} type="button">{locale === "zh-CN" ? "EN" : "中"}</button>
+            <button
+              aria-label={locale === "zh-CN" ? "移动端主题" : "Mobile theme"}
+              onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+              title={theme === "dark" ? t("switchToLight") : t("switchToDark")}
+              type="button"
+            >{theme === "dark" ? "☀" : "☾"}</button>
           </div>
         </nav>
         <header className="workspace-header">
@@ -810,6 +827,13 @@ export function App() {
               title={t("language")}
               type="button"
             >{locale === "zh-CN" ? "EN" : "中"}</button>
+            <button
+              aria-label={t("theme")}
+              className="header-theme"
+              onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
+              title={theme === "dark" ? t("switchToLight") : t("switchToDark")}
+              type="button"
+            >{theme === "dark" ? "☀" : "☾"}</button>
             {selectedTeam && (
               <div className="agent-summary">
                 <span className={`presence-dot ${readyAgents === 0 ? "offline" : ""}`} />

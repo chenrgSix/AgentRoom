@@ -15,6 +15,10 @@ available through an in-product switch, and the selected locale is persisted
 only in browser-local preferences. Protocol identifiers, commands, user data,
 and server-owned payloads are never translated.
 
+Dark is the default presentation theme. Users can switch to a light theme from
+desktop or narrow-screen navigation, and the choice is persisted locally
+without changing server-owned state.
+
 ## Primary Surfaces
 
 - Authenticated Team and Room shell.
@@ -30,6 +34,7 @@ and server-owned payloads are never translated.
   workspace, configuration, or account modules beneath it.
 - Full-height participant column without a nested card or fixed-height roster.
 - Narrow-screen navigation for Chat, Agent management, and locale selection.
+- Persistent light and dark presentation themes for desktop and narrow screens.
 
 There is no native desktop GUI in the MVP. Runtime access is provided by the
 optional headless Bridge, keeping existing agent clients unchanged.
@@ -81,7 +86,7 @@ Component tests cover onboarding state transitions, Chinese-default locale
 persistence, Agent management navigation, enrollment approval, and capability
 gating.
 Browser acceptance covers message, mention, reconnect, Run progress, reply, and
-cancellation flows. Work is tracked by `WEB-001` through `WEB-014` in
+cancellation flows. Work is tracked by `WEB-001` through `WEB-015` in
 `docs/TASKS.md`.
 
 ## Dependencies

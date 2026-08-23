@@ -137,6 +137,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const teamStep = teamHeading.closest("section");
     assert.ok(teamStep);
     assert.equal(dom.window.document.documentElement.lang, "zh-CN");
+    assert.equal(dom.window.document.documentElement.dataset.theme, "dark");
+
+    fireEvent.click(screen.getByRole("button", { name: "主题" }));
+    await waitFor(() => assert.equal(dom.window.document.documentElement.dataset.theme, "light"));
+    assert.equal(localStorage.getItem("agent-room.theme"), "light");
+    fireEvent.click(screen.getByRole("button", { name: "主题" }));
+    await waitFor(() => assert.equal(dom.window.document.documentElement.dataset.theme, "dark"));
+    assert.equal(localStorage.getItem("agent-room.theme"), "dark");
 
     fireEvent.click(screen.getByRole("button", { name: "界面语言" }));
     await screen.findByRole("heading", { name: "Create your first Team" });
