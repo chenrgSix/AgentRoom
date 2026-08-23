@@ -297,6 +297,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .run-card { display: inline-flex; align-items: center; gap: 5px; padding-left: 7px; border: 1px solid #343a30; border-radius: 999px; background: #1c1f1a; color: #aab0a4; font-size: 10px; }
 .run-card > strong { font-weight: 600; }
 .run-card > button { margin-right: 5px; padding: 2px 5px; border: 0; background: transparent; color: #c58d85; font-size: 9px; cursor: pointer; }
+.run-card.has-diagnostic { max-width: min(100%, 430px); flex-wrap: wrap; border-radius: 10px; padding: 6px 8px; }
+.run-diagnostic { display: grid; flex-basis: 100%; gap: 2px; padding-top: 5px; border-top: 1px solid #343a30; }
+.run-diagnostic > strong { color: #f0aaa1; font-size: 10px; }
+.run-diagnostic > small { color: #949b8e; font-size: 9px; line-height: 1.4; }
 .run-state { border: 1px solid #41463b; background: #252822; color: #aeb5a7; text-transform: capitalize; }
 .run-state.working, .run-state.delivered { border-color: #69783f; color: #d5e99b; }
 .run-state.completed { border-color: #4c7450; color: #9bdd9e; }
@@ -448,6 +452,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .selected-mention { border-color: #a8b887; background: #e4edd6; color: #4d6423; }
 :root[data-theme="light"] .run-card,
 :root[data-theme="light"] .run-state { border-color: #cbd3c3; background: #eef1ea; color: #5e6858; }
+:root[data-theme="light"] .run-diagnostic { border-color: #d5c8c4; }
+:root[data-theme="light"] .run-diagnostic > strong { color: #9c4f46; }
+:root[data-theme="light"] .run-diagnostic > small { color: #6f7869; }
 :root[data-theme="light"] .composer { border-color: #c6d0bd; background: rgb(251 252 248 / 97%); box-shadow: 0 18px 50px rgb(58 73 42 / 16%); }
 :root[data-theme="light"] .composer textarea { color: #263021; }
 :root[data-theme="light"] .discussion-status { border-color: #c6d2b8; background: #edf3e4; }

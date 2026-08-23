@@ -14,6 +14,11 @@ import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
 import { mergeRoomMessages } from "./room-sync.js";
 import {
+  loadRunDiagnostic,
+  type RunDiagnostic,
+  type RuntimeFailureCategory
+} from "./run-diagnostics.js";
+import {
   removeVisibleMentionToken,
   retainVisibleMentionIds
 } from "./structured-mentions.js";
@@ -240,6 +245,52 @@ function runStateLabel(state: Run["state"], locale: Locale): string {
     working: "执行中"
   };
   return labels[state];
+}
+
+function diagnosticCategoryLabel(
+  category: RuntimeFailureCategory | null,
+  locale: Locale
+): string {
+  if (!category) return locale === "zh-CN" ? "运行时" : "Runtime";
+  if (locale === "en") return category.replace("_", " ");
+  const labels: Record<RuntimeFailureCategory, string> = {
+    start: "启动",
+    authentication: "身份认证",
+    rate_limit: "调用限流",
+    network: "网络",
+    model: "模型",
+    configuration: "配置",
+    unknown: "未知"
+  };
+  return labels[category];
+}
+
+function diagnosticGuidance(
+  category: RuntimeFailureCategory | null,
+  locale: Locale
+): string {
+  if (locale === "en") {
+    const guidance: Record<RuntimeFailureCategory, string> = {
+      start: "Open Bridge and verify the Runtime executable.",
+      authentication: "Sign in to the Runtime or refresh its API credential.",
+      rate_limit: "Wait briefly, then retry the task.",
+      network: "Check this device's network and provider access.",
+      model: "Check the configured model and provider availability.",
+      configuration: "Open Bridge, review the Runtime preset, then run its self-test.",
+      unknown: "Export Bridge diagnostics if the retry also fails."
+    };
+    return guidance[category ?? "unknown"];
+  }
+  const guidance: Record<RuntimeFailureCategory, string> = {
+    start: "请打开 Bridge，检查运行时程序是否可执行。",
+    authentication: "请在本机重新登录运行时，或更新对应凭证。",
+    rate_limit: "请稍等片刻后重试任务。",
+    network: "请检查这台设备的网络和模型服务连接。",
+    model: "请检查所选模型及其服务是否可用。",
+    configuration: "请打开 Bridge 检查运行时预设，然后执行自检。",
+    unknown: "若重试仍失败，请从 Bridge 导出诊断信息。"
+  };
+  return guidance[category ?? "unknown"];
 }
 
 function discussionStateLabel(state: DiscussionState, locale: Locale): string {
@@ -587,6 +638,9 @@ export function App() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [runDiagnostics, setRunDiagnostics] = useState<
+    Record<string, RunDiagnostic | null>
+  >({});
   const [discussions, setDiscussions] = useState<DiscussionView[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -615,6 +669,7 @@ export function App() {
     cursor: string | null;
     sequence: number;
   } | null>(null);
+  const diagnosticRequestsRef = useRef(new Set<string>());
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.teamId === selectedTeamId) ?? null,
@@ -901,6 +956,8 @@ export function App() {
     if (!session || !selectedRoomId) {
       setMessages([]);
       setRuns([]);
+      setRunDiagnostics({});
+      diagnosticRequestsRef.current.clear();
       setDiscussions([]);
       messageSyncRef.current = null;
       return;
@@ -912,6 +969,8 @@ export function App() {
       sequence: 0
     };
     setMessages([]);
+    setRunDiagnostics({});
+    diagnosticRequestsRef.current.clear();
     void Promise.all([
       jsonRequest<RoomMessagePage>(
         `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`,
@@ -1028,6 +1087,33 @@ export function App() {
       window.clearInterval(timer);
     };
   }, [selectedRoomId, selectedTeamId, session]);
+
+  useEffect(() => {
+    if (!session || !selectedRoomId) return;
+    const failedRuns = runs.filter(({ state }) =>
+      ["failed", "expired", "outcome_unknown"].includes(state)
+    );
+    for (const run of failedRuns) {
+      if (diagnosticRequestsRef.current.has(run.runId)) continue;
+      diagnosticRequestsRef.current.add(run.runId);
+      void loadRunDiagnostic(
+        run.runId,
+        (path) => jsonRequest(path, {}, session.token)
+      ).then((diagnostic) => {
+        if (messageSyncRef.current?.roomId === selectedRoomId) {
+          setRunDiagnostics((current) => ({
+            ...current,
+            [run.runId]: diagnostic
+          }));
+        }
+      }).catch((reason: unknown) => {
+        diagnosticRequestsRef.current.delete(run.runId);
+        if (messageSyncRef.current?.roomId === selectedRoomId) {
+          setError(String(reason));
+        }
+      });
+    }
+  }, [runs, selectedRoomId, session]);
 
   async function createTeam(event: FormEvent) {
     event.preventDefault();
@@ -2024,13 +2110,36 @@ export function App() {
                           </span>
                         ))}
                         {runs.filter((run) => run.triggerMessageId === message.messageId).map((run) => (
-                          <span className="run-card" key={run.runId} title={run.runId}>
+                          <span
+                            className={`run-card ${runDiagnostics[run.runId] ? "has-diagnostic" : ""}`}
+                            key={run.runId}
+                            title={run.runId}
+                          >
                             <strong>{agentsById.get(run.targetAgentId)?.name ?? t("agent")}</strong>
                             <span className={`run-state ${run.state}`}>
                               {runStateLabel(run.state, locale)}
                             </span>
                             {["queued", "delivered", "working", "input_required"].includes(run.state) && (
                               <button type="button" onClick={() => void cancelRun(run.runId)}>{t("cancel")}</button>
+                            )}
+                            {runDiagnostics[run.runId] && (
+                              <span className="run-diagnostic" role="status">
+                                <strong>
+                                  {diagnosticCategoryLabel(
+                                    runDiagnostics[run.runId]?.category ?? null,
+                                    locale
+                                  )}
+                                  {` · ${runDiagnostics[run.runId]?.code}`}
+                                  {runDiagnostics[run.runId]?.exitCode !== null &&
+                                    ` · ${locale === "zh-CN" ? "退出码" : "exit"} ${runDiagnostics[run.runId]?.exitCode}`}
+                                </strong>
+                                <small>
+                                  {diagnosticGuidance(
+                                    runDiagnostics[run.runId]?.category ?? null,
+                                    locale
+                                  )}
+                                </small>
+                              </span>
                             )}
                           </span>
                         ))}

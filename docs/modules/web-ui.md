@@ -150,9 +150,10 @@ presentation and acceptance are completed by `WEB-020` and `QA-010`.
 `WEB-021` replaces first-page polling with a newest-100 snapshot, resumable
 cursor deltas, duplicate suppression, and a 500-message browser history bound.
 Refresh is single-flight and only merges messages, so a slow response cannot
-overwrite a newer Room projection. `WEB-022` reads the existing authorized Run-event API
-only for terminal failures and renders its allowlisted diagnostic fields; raw
-Runtime stderr never enters the browser contract.
+overwrite a newer Room projection. `WEB-022` reads the existing authorized
+Run-event API once for each terminal failure and renders only the error code,
+allowlisted category, exit code, and localized recovery guidance. Raw Runtime
+stderr, paths, messages, and unknown detail keys never enter the view model.
 
 ## Dependencies
 
