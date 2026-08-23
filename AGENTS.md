@@ -36,6 +36,7 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run dev:server` — run the Fastify API on port 3000.
 - `npm run dev:web` — run the Vite browser UI with an API proxy.
 - `go run ./cmd/agentroom-bridge console` from `bridge/` — run the token-authenticated local client setup UI.
+- Publishing a GitHub Release builds five standalone Bridge archives and attaches `SHA256SUMS`.
 - `npm run generate --workspace @agent-room/contracts` — regenerate wire types.
 - `rg '^#' agent_room_network_design_v0.2.md` — review heading hierarchy.
 - `npm run lint:docs` — lint maintained Markdown.

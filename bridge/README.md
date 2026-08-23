@@ -3,6 +3,25 @@
 The Bridge is an optional headless Go companion for managed Agents. It reads an
 explicit JSON configuration and never accepts shell command strings.
 
+## Install
+
+End users download the archive matching their operating system and CPU from
+[GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases), extract it,
+and run the included `agentroom-bridge` binary. Go and Node.js are not required.
+Verify the archive before extraction:
+
+```bash
+# Linux
+sha256sum -c SHA256SUMS --ignore-missing
+
+# macOS
+shasum -a 256 -c SHA256SUMS
+```
+
+The portable binaries are currently unsigned. macOS users may need to approve
+the first launch in system security settings. The `go run` commands below are
+developer alternatives.
+
 ```bash
 go run ./cmd/agentroom-bridge version
 go run ./cmd/agentroom-bridge console

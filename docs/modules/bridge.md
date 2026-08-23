@@ -107,7 +107,19 @@ duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
 Browser acceptance covers first setup, Runtime discovery, adding Pi to an
 existing Bridge, and status rendering. Work is tracked by `BRG-001` through
-`BRG-007` in `docs/TASKS.md`.
+`BRG-008` in `docs/TASKS.md`.
+
+## Distribution
+
+End users install a prebuilt Bridge and do not need Go or Node.js. Publishing a
+GitHub Release triggers `.github/workflows/release-bridge.yml`, which tests and
+cross-compiles CGO-free archives for macOS amd64/arm64, Windows amd64, and Linux
+amd64/arm64. The Release tag is injected into `agentroom-bridge version`; all
+archives and one `SHA256SUMS` file are attached to the Release.
+
+The first release artifacts are unsigned portable binaries. Platform signing,
+notarized installers, background-service installation, and signed automatic
+updates remain separate hardening work.
 
 ## Dependencies
 

@@ -83,6 +83,11 @@ Run the two development commands in separate terminals, then open
 `http://127.0.0.1:5173`. Create a Team, Room, and one or more Fake Agents;
 select an Agent in the composer to create and execute a structured Run.
 
+End users do not need Go or Node.js for the local Bridge. Download the matching
+standalone archive from
+[GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases), verify it
+with the published `SHA256SUMS`, and run `agentroom-bridge console`.
+
 Use the Web **Connect an Agent** panel for a one-time MCP token. For a managed
 local Codex or Pi, run `agentroom-bridge console` on its machine, open the
 printed local URL, and approve the displayed code in the central Web panel.
