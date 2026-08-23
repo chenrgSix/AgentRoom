@@ -20,8 +20,9 @@ The central server is the MVP trust authority. In the primary flow, a Bridge
 creates an unauthenticated, short-lived join request and shows its short code
 locally. Only a Team owner may approve that code in an authenticated Web
 session. The same Bridge then claims the approval using a separate high-entropy
-poll token over TLS, verifies the server fingerprint, and stores the resulting
-identity locally. Discovery and join creation alone never grant trust.
+poll token over TLS, verifies the server through normal system-CA trust or an
+explicit legacy SHA-256 pin, and stores the resulting identity locally.
+Discovery and join creation alone never grant trust.
 
 Web sessions and device credentials use random bearer secrets whose SHA-256
 hashes are persisted; plaintext secrets are returned only when issued. Session
@@ -37,12 +38,15 @@ URL, response, database, browser storage, or log, and is used only for initial
 setup or explicit Owner recovery.
 
 Trusted Web sessions use a `Secure`, `HttpOnly`, `SameSite=Strict`, host-only
-Cookie. Cookie-authenticated mutations must carry the configured same-origin
-`Origin`; Bridge and MCP Bearer authentication remains unchanged. A Team Owner
-may issue a short-lived one-time member invitation. Only its SHA-256 hash is
-stored, and claiming it atomically creates the User, binds the Member, consumes
-the invitation, and issues a Web session. Invitation tokens travel in a URL
-fragment so reverse proxies do not receive them in request logs.
+Cookie, and trusted Web APIs reject legacy Web Bearer sessions. Mutations must
+carry the configured same-origin `Origin`; Bridge and MCP Bearer authentication
+remains unchanged. Initial setup creates an Owner or safely adopts the single
+existing local Owner/bootstrap User, while ambiguous legacy identities fail
+closed. A Team Owner may issue a short-lived one-time member invitation. Only
+its SHA-256 hash is stored, and claiming it atomically creates the User, binds
+the Member, consumes the invitation, and issues a Web session. Invitation
+tokens travel in a URL fragment so reverse proxies do not receive them in
+request logs.
 
 Join requests expire after ten minutes. The database stores only hashes of the
 short code and poll token; the poll token is promoted to the Device credential

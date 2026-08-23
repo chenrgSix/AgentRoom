@@ -31,6 +31,8 @@ bin/
 /apps/*/var/
 /bridge/var/
 /bridge/agentroom-bridge
+/backups/
+/deploy/secrets/
 *.log
 *.sqlite
 *.sqlite-shm

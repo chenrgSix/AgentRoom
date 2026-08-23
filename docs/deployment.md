@@ -1,58 +1,81 @@
 # Deployment Baseline
 
-## Recommended Topology
+## Local Development
 
-Run one Node server and SQLite database on the Coordinator machine. Build the
-React project and let the server serve it, then place an HTTPS reverse proxy in
-front of the loopback listener:
+Local authentication is intentionally loopback-only. Build the React client
+and run the Node service without exposing it to another machine:
 
 ```bash
+npm ci
 npm run build
 AGENT_ROOM_WEB_ROOT="$PWD/apps/web/dist" \
-AGENT_ROOM_DATABASE_PATH="/srv/agent-room/server.sqlite" \
-AGENT_ROOM_HOST="127.0.0.1" \
-AGENT_ROOM_PORT="3000" \
+AGENT_ROOM_DATABASE_PATH="$PWD/var/server.sqlite" \
+AGENT_ROOM_HOST=127.0.0.1 \
 npm run start --workspace @agent-room/server
 ```
 
-The proxy must preserve WebSocket upgrades for `/ws/bridge`, request bodies for
-`POST /mcp`, and bearer `Authorization` headers. Remote Bridge and MCP clients
-connect only to the proxy's HTTPS origin. Bridge configuration pins the proxy
-certificate SHA-256 fingerprint.
+The local `/api/bootstrap` flow is for one machine. The process refuses a
+non-loopback listener in this mode.
 
-For a trusted LAN test without a local proxy, `AGENT_ROOM_HOST=0.0.0.0` exposes
-the HTTP listener. Do not use that mode across an untrusted network; non-loopback
-Bridge configuration already refuses plain HTTP.
+## Trusted-Team Compose Profile
 
-## Current Security Boundary
+The supported small-team deployment runs one non-root, capability-free,
+read-only Server container behind Caddy. Only Caddy publishes ports: 443 serves
+the application, while 80 is limited to certificate issuance and HTTPS
+redirects. Server port 3000, SQLite, secrets, and the backup volume stay on the
+private Compose network. The public proxy rejects `/api/metrics` and preserves
+WebSocket upgrades, MCP request bodies, and bearer authorization headers.
 
-The MVP Web bootstrap is a local Owner administration flow, not a public
-password or SSO login system. Protect Web and browser API routes at the reverse
-proxy and restrict them to the Team owner. MCP and Bridge routes retain their
-own per-Agent and per-Device bearer authentication. Native multi-user Web login
-is a post-MVP requirement.
+Prepare a public DNS name whose ports 80 and 443 reach the host, then create
+the ignored configuration and recovery secret:
 
-## Trusted-Team Container Profile
+```bash
+cp deploy/.env.example .env
+mkdir -p deploy/secrets
+umask 077
+openssl rand -hex 32 > deploy/secrets/owner_recovery_token
+```
 
-The v0.2 trusted-team profile runs one non-root Server container behind one
-Caddy HTTPS entry point. Only Caddy publishes host ports; Server port 3000 and
-the SQLite volume remain internal. `/api/metrics` is not exposed by the public
-route. Caddy preserves WebSocket upgrades, MCP authorization headers, and
-request bodies.
+Set the same HTTPS origin in `AGENT_ROOM_DOMAIN` and
+`AGENT_ROOM_PUBLIC_ORIGIN`, then start and inspect the profile:
 
-Trusted-team mode requires `AGENT_ROOM_PUBLIC_ORIGIN` and an Owner recovery
-token mounted as a read-only secret file. The application refuses to start
-without them. Public-CA domains pair with Bridge `system_ca` mode so normal
-certificate renewal does not require editing every client. An internal CA may
-use `system_ca` only after its root is installed on every client; an explicit
-leaf pin remains a short-lived compatibility choice.
+```bash
+docker compose config
+docker compose up -d --build
+docker compose ps
+curl --fail https://team.example.com/api/health/ready
+```
 
-The Compose profile uses restart and graceful-stop policies but does not hide
-backup semantics. Backups call the existing SQLite online backup API, create a
-new UTC-named file, run `quick_check`, and print a SHA-256 digest. They never
-copy a live WAL by hand, overwrite an existing backup, delete retention data,
-or restore over a running database.
+Open the HTTPS origin. The first browser uses the recovery secret once to
+adopt or create the Owner. Later Owner recovery uses the same file-backed
+secret. Members join through 24-hour, one-time invitation links; the link token
+is carried in the URL fragment and exchanged for an HttpOnly Cookie.
 
-Keep SQLite, WAL/SHM files, backups, Bridge configuration, credentials, and
-durable inbox directories readable only by their service accounts. Follow
-`docs/backup-and-restore.md` before upgrades.
+A short-lived, network-disabled initializer copies the host secret into a
+private Docker volume with read-only permissions before the non-root Server
+starts. This avoids relying on platform-specific Compose bind-mount ownership.
+The recovery file remains ignored by Git and excluded from the Docker build
+context. Do not expose Server port 3000 or place local auth mode behind a proxy.
+
+## TLS and Bridge Trust
+
+Caddy obtains and renews a public certificate automatically. Configure new
+Bridges with `system_ca` trust so normal renewal does not require editing each
+client. An internal CA is acceptable only after its root is installed on every
+client. Legacy SHA-256 leaf pins remain a compatibility mode and must be
+rotated when the certificate changes. Plain HTTP is limited to loopback.
+
+## Operations and Recovery
+
+Compose restarts both services and gives Server 30 seconds for graceful
+shutdown. Server drops all Linux capabilities; Caddy keeps only
+`NET_BIND_SERVICE`. Root filesystems are read-only, and only `/data`,
+`/backups`, the prepared secret volume, Caddy state, and `/tmp` are writable.
+Keep `.env`, recovery secrets, SQLite files, Bridge credentials, and exported
+diagnostics out of source control.
+
+Create a verified backup with `./scripts/compose-backup.sh`. Restore by staging
+a backup under a new database name with `./scripts/compose-restore.sh`; never
+overwrite a running SQLite file. Follow [Backup and Restore](backup-and-restore.md)
+before upgrades and retain the previous database until health, history, Agent,
+and MCP checks pass.

@@ -44,13 +44,16 @@ restart replays durable events or reports an unfinished Runtime as
 
 Backups use the SQLite backup API, include schema metadata, refuse overwrite,
 and pass `quick_check`. Restore and forward-only migration rollback procedure is
-documented in `docs/backup-and-restore.md` and tested with an acceptance marker.
+documented in `docs/backup-and-restore.md`. The Compose workflow installs host
+backups atomically without overwrite, streams restore hashes, stages a new
+database filename, removes only a rejected new target, and never changes the
+selected live database in place.
 
 ## Verification and Tasks
 
 Tests cover constraints, migration rollback behavior, crash points, delivery
 recovery, backup, restore, and corrupted input rejection. Work is tracked by
-`DATA-001` through `DATA-004` in `docs/TASKS.md`.
+`DATA-001` through `DATA-005` in `docs/TASKS.md`.
 
 ## Dependencies
 

@@ -161,8 +161,8 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | OPS-001 | DONE | Propagate trace IDs through message, Run, Bridge, runtime | RUN-003 | one authorized query reconstructs persisted Message, Run, Delivery, and Runtime event entries; cross-process E2E verifies one trace |
 | OPS-002 | DONE | Add structured logs, metrics, and health endpoints | OPS-001 | safe HTTP/Bridge/Run logs, Prometheus metrics, live/ready/degraded health, and tested failure signals |
 | OPS-003 | DONE | Document and configure deployable listener topology | BRG-003, MCP-001 | loopback, proxy, and trusted-LAN modes are explicit |
-| OPS-004 | ACTIVE | Package a trusted-team single-host deployment | OPS-003, SEC-005, DATA-004 | non-root Server plus Caddy Compose validates, exposes only HTTPS, hides metrics, preserves WebSocket/MCP headers, and passes graceful health checks |
-| DATA-005 | PLANNED | Add container backup and restore workflow | DATA-004, OPS-004 | timestamped native SQLite backup passes `quick_check` and SHA-256 verification without overwriting or deleting prior backups |
+| OPS-004 | DONE | Package a trusted-team single-host deployment | OPS-003, SEC-005, DATA-004 | non-root Server plus Caddy Compose serves the app only over HTTPS, limits port 80 to ACME/redirect, hides metrics, preserves WebSocket/MCP headers, and passes graceful health checks |
+| DATA-005 | DONE | Add container backup and restore workflow | DATA-004, OPS-004 | timestamped native SQLite backup and streamed restore pass `quick_check`, SHA-256, no-overwrite, invalid-input, and 67 MB fixture acceptance |
 | QA-002 | READY | Verify two-machine managed Agent flow | ADP-004, WEB-005 | two-physical-machine HTTPS runbook is executable; DONE requires committed PASS evidence for online and offline/reconnect Codex Runs |
 | QA-003 | DONE | Verify three-Agent guarded handoff | MCP-003, RUN-006 | public Web and Remote MCP E2E completes Alice → Bob → Carol Runs with shared trace and rejects a lineage loop |
 | QA-004 | DONE | Verify restart, reconnect, duplicate, and cancellation | DATA-003, RUN-005 | recovery matrix passes repeatedly |

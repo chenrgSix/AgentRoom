@@ -124,9 +124,10 @@ machines do not need Go or Node.js:
    **就绪** before it is mentioned.
 
 Codex must already be installed and signed in on the client. Pi is started by
-the Generic CLI adapter. For a remote server, HTTPS and an independently
-verified certificate SHA-256 fingerprint are mandatory. See the complete
-[Bridge guide](bridge/README.md).
+the Generic CLI adapter. Remote servers require HTTPS. Public certificates use
+normal `system_ca` validation and renew without client edits; an independently
+verified SHA-256 pin remains available for private/legacy deployments. See the
+complete [Bridge guide](bridge/README.md).
 
 ### Connect an already-running Agent through MCP
 
@@ -171,24 +172,26 @@ login work. Server diagnostics are available at `/api/health` and
 
 ## Production Deployment
 
-Build the Web and Server, migrate an explicit SQLite database, and serve the
-Web build from the loopback API listener:
+For a trusted small Team, use the included non-root Server and Caddy Compose
+profile. Point a public DNS name at the host, then prepare the ignored settings
+and file-backed Owner recovery secret:
 
 ```bash
-npm ci
-npm run build
-npm run db:migrate -- --database /srv/agent-room/server.sqlite
-AGENT_ROOM_WEB_ROOT="$PWD/apps/web/dist" \
-AGENT_ROOM_DATABASE_PATH="/srv/agent-room/server.sqlite" \
-AGENT_ROOM_HOST="127.0.0.1" \
-AGENT_ROOM_PORT="3000" \
-npm run start --workspace @agent-room/server
+cp deploy/.env.example .env
+mkdir -p deploy/secrets
+umask 077
+openssl rand -hex 32 > deploy/secrets/owner_recovery_token
+# Edit AGENT_ROOM_DOMAIN and AGENT_ROOM_PUBLIC_ORIGIN in .env.
+docker compose up -d --build
+docker compose ps
 ```
 
-Place an Owner-restricted HTTPS reverse proxy in front of this listener and
-preserve WebSocket upgrades for `/ws/bridge`. The current Web bootstrap is not
-a public multi-user login system. Read [Deployment Baseline](docs/deployment.md)
-and [Backup and Restore](docs/backup-and-restore.md) before exposing or
+The application is served only over HTTPS; port 80 exists solely for certificate
+issuance and redirect. The first browser creates or adopts the Owner with the
+recovery secret; the Owner then invites members with short-lived, one-time
+links. Run `./scripts/compose-backup.sh` for a verified online backup. Read
+[Deployment Baseline](docs/deployment.md) and
+[Backup and Restore](docs/backup-and-restore.md) before exposing, restoring, or
 upgrading a server.
 
 ## Development and Verification

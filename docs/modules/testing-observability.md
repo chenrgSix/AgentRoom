@@ -137,13 +137,18 @@ messages are never log fields.
 
 A task is `DONE` only when its completion evidence in `docs/TASKS.md` exists.
 Release notes name migrations, compatibility changes, security impact, and the
-exact checks run. Work is tracked by `QA-001` through `QA-007` and `OPS-001`
-through `OPS-002`.
+exact checks run. Work is tracked by `QA-001` through `QA-009` and `OPS-001`
+through `OPS-004`.
 
 The current security and exported-tree evidence is recorded in
 `docs/acceptance/qa-005-security-clean-room-audit.md`. Its PASS applies only to
 the documented trusted Owner deployment boundary and lists remaining release
 constraints explicitly.
+
+The trusted-team container, proxy, backup, and restore acceptance is recorded
+in `docs/acceptance/ops-004-data-005-compose.md`. It separates local TLS smoke
+evidence from public certificate issuance and records the exact negative and
+large-database recovery checks.
 
 A Bridge release begins as an immutable draft candidate. The workflow requires
 the exact five CLI archives, two native macOS GUI archives, one checksum file,

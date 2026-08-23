@@ -1,0 +1,101 @@
+name: agentroom
+
+services:
+  secret-init:
+    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-v0.2.0-rc.1}
+    pull_policy: never
+    command:
+      - node
+      - -e
+      - |
+        const fs = require("node:fs");
+        const source = "/source/owner_recovery_token";
+        const target = "/prepared/owner_recovery_token";
+        const value = fs.readFileSync(source, "utf8").trim();
+        if (value.length < 32 || value.length > 512) {
+          throw new Error("Owner recovery token must contain 32 to 512 characters");
+        }
+        const temporary = `$${target}.tmp`;
+        fs.writeFileSync(temporary, `$${value}\n`, { mode: 0o444 });
+        fs.chmodSync(temporary, 0o444);
+        fs.renameSync(temporary, target);
+    network_mode: none
+    read_only: true
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    user: "0:0"
+    volumes:
+      - type: bind
+        source: ${AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE:-./deploy/secrets/owner_recovery_token}
+        target: /source/owner_recovery_token
+        read_only: true
+      - agentroom_secrets:/prepared
+
+  agentroom:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    cap_drop:
+      - ALL
+    depends_on:
+      secret-init:
+        condition: service_completed_successfully
+    environment:
+      AGENT_ROOM_DATABASE_PATH: ${AGENT_ROOM_DATABASE_PATH:-/data/agent-room.sqlite}
+      AGENT_ROOM_PUBLIC_ORIGIN: ${AGENT_ROOM_PUBLIC_ORIGIN:?Set AGENT_ROOM_PUBLIC_ORIGIN to the public HTTPS origin}
+    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-v0.2.0-rc.1}
+    expose:
+      - "3000"
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/api/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))
+    init: true
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 30s
+    tmpfs:
+      - /tmp
+    volumes:
+      - agentroom_data:/data
+      - agentroom_backups:/backups
+      - agentroom_secrets:/run/secrets:ro
+
+  caddy:
+    cap_add:
+      - NET_BIND_SERVICE
+    cap_drop:
+      - ALL
+    image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    depends_on:
+      agentroom:
+        condition: service_healthy
+    environment:
+      AGENT_ROOM_DOMAIN: ${AGENT_ROOM_DOMAIN:?Set AGENT_ROOM_DOMAIN to the HTTPS host name}
+    ports:
+      - "${AGENT_ROOM_HTTP_PORT:-80}:80"
+      - "${AGENT_ROOM_HTTPS_PORT:-443}:443"
+    read_only: true
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  agentroom_backups:
+  agentroom_data:
+  agentroom_secrets:
+  caddy_config:
+  caddy_data:
