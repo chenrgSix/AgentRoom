@@ -175,9 +175,19 @@ important unresolved questions, recent transcript, checkpoint summary, and
 remaining lease. Runtime Adapters must consume this context rather than sending
 only the triggering instruction.
 
+The server serializes this named context into the Run instruction so existing
+managed and pull adapters participate without a client rewrite. It limits the
+recent transcript to 12 Room Messages and keeps the existing 20,000-character
+Run instruction boundary.
+
 Managed adapters should emit structured assessments when supported. Generic or
 manual participants may emit reply-only output; the central evaluator and
 policy must continue safely under that capability downgrade.
+
+MVP finalization persists message outputs for summaries, final answers,
+decision records, and unresolved issues. Selecting `artifact` currently asks
+the finalizer for a message representation; binary Artifact transport remains
+owned by `FUT-004`.
 
 ## User Experience
 

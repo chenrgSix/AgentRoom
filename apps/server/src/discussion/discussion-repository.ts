@@ -187,6 +187,14 @@ export class DiscussionRepository {
     `).all(roomId) as DiscussionRow[]).map(mapDiscussion);
   }
 
+  public listOpen(): DiscussionRecord[] {
+    return (this.database.prepare(`
+      SELECT * FROM discussions
+      WHERE state NOT IN ('completed', 'canceled', 'terminated')
+      ORDER BY updated_at, discussion_id
+    `).all() as DiscussionRow[]).map(mapDiscussion);
+  }
+
   public listParticipants(discussionId: string): DiscussionParticipant[] {
     return (this.database.prepare(`
       SELECT * FROM discussion_participants
@@ -304,6 +312,7 @@ export class DiscussionRepository {
     nextSpeakerIndex: number;
     requestedAction: DiscussionRecord["requestedAction"];
     terminalAt: string | null;
+    budgetEvents?: DiscussionBudgetEvent[];
   }): DiscussionRecord {
     this.database.transaction(() => {
       this.database.prepare(`
@@ -337,8 +346,159 @@ export class DiscussionRepository {
       if (updated.changes !== 1) {
         throw new Error("Stale Discussion aggregate version");
       }
+      for (const event of input.budgetEvents ?? []) {
+        this.insertBudgetEvent(event);
+      }
     }).immediate();
     return this.require(input.decision.discussionId);
+  }
+
+  public recordDecisionAndPlanTurn(input: {
+    decision: DiscussionDecision;
+    turn: DiscussionTurn;
+    expectedVersion: number;
+    state: DiscussionState;
+    stateReason: DiscussionStateReason | null;
+    outputMode: DiscussionOutputMode;
+    progress: ProgressSnapshot;
+    budget: BudgetSnapshot;
+    nextSpeakerIndex: number;
+    requestedAction: DiscussionRecord["requestedAction"];
+    budgetEvents?: DiscussionBudgetEvent[];
+  }): DiscussionRecord {
+    this.database.transaction(() => {
+      this.database.prepare(`
+        INSERT INTO discussion_decisions (
+          decision_id, discussion_id, aggregate_version, progress_version,
+          action, reason, next_agent_id, output_mode, created_at
+        ) VALUES (
+          @decisionId, @discussionId, @aggregateVersion, @progressVersion,
+          @action, @reason, @nextAgentId, @outputMode, @createdAt
+        )
+      `).run(input.decision);
+      const updated = this.database.prepare(`
+        UPDATE discussions
+        SET state = ?, state_reason = ?, output_mode = ?, progress_json = ?,
+            budget_json = ?, current_turn = ?, next_speaker_index = ?,
+            requested_action = ?, version = version + 1, updated_at = ?
+        WHERE discussion_id = ? AND version = ?
+      `).run(
+        input.state,
+        input.stateReason,
+        input.outputMode,
+        JSON.stringify(input.progress),
+        JSON.stringify(input.budget),
+        input.turn.ordinal,
+        input.nextSpeakerIndex,
+        input.requestedAction,
+        input.decision.createdAt,
+        input.decision.discussionId,
+        input.expectedVersion
+      );
+      if (updated.changes !== 1) {
+        throw new Error("Stale Discussion aggregate version");
+      }
+      this.database.prepare(`
+        INSERT INTO discussion_turns (
+          turn_id, discussion_id, ordinal, kind, speaker_agent_id,
+          input_message_id, run_id, output_message_id, state, assessment_json,
+          reply_hash, created_at, updated_at, completed_at
+        ) VALUES (
+          @turnId, @discussionId, @ordinal, @kind, @speakerAgentId,
+          @inputMessageId, @runId, @outputMessageId, @state, @assessmentJson,
+          @replyHash, @createdAt, @updatedAt, @completedAt
+        )
+      `).run({
+        ...input.turn,
+        assessmentJson: input.turn.assessment
+          ? JSON.stringify(input.turn.assessment)
+          : null
+      });
+      for (const event of input.budgetEvents ?? []) {
+        this.insertBudgetEvent(event);
+      }
+    }).immediate();
+    return this.require(input.decision.discussionId);
+  }
+
+  public requestAction(input: {
+    discussionId: string;
+    expectedVersion: number;
+    action: DiscussionRecord["requestedAction"];
+    state: DiscussionState;
+    stateReason: DiscussionStateReason | null;
+    now: string;
+  }): DiscussionRecord {
+    const updated = this.database.prepare(`
+      UPDATE discussions
+      SET requested_action = ?, state = ?, state_reason = ?,
+          version = version + 1, updated_at = ?
+      WHERE discussion_id = ? AND version = ?
+    `).run(
+      input.action,
+      input.state,
+      input.stateReason,
+      input.now,
+      input.discussionId,
+      input.expectedVersion
+    );
+    if (updated.changes !== 1) {
+      throw new Error("Stale Discussion aggregate version");
+    }
+    return this.require(input.discussionId);
+  }
+
+  public updateGoal(input: {
+    discussionId: string;
+    expectedVersion: number;
+    goal: string;
+    now: string;
+  }): DiscussionRecord {
+    const updated = this.database.prepare(`
+      UPDATE discussions
+      SET goal = ?, state = 'active', state_reason = NULL,
+          requested_action = NULL, version = version + 1, updated_at = ?
+      WHERE discussion_id = ? AND version = ?
+    `).run(input.goal, input.now, input.discussionId, input.expectedVersion);
+    if (updated.changes !== 1) {
+      throw new Error("Stale Discussion aggregate version");
+    }
+    return this.require(input.discussionId);
+  }
+
+  public finishFinalization(input: {
+    discussionId: string;
+    expectedVersion: number;
+    state: "completed" | "terminated";
+    now: string;
+  }): DiscussionRecord {
+    const updated = this.database.prepare(`
+      UPDATE discussions
+      SET state = ?, requested_action = NULL, version = version + 1,
+          updated_at = ?, terminal_at = ?
+      WHERE discussion_id = ? AND version = ? AND state = 'finalizing'
+    `).run(
+      input.state,
+      input.now,
+      input.now,
+      input.discussionId,
+      input.expectedVersion
+    );
+    if (updated.changes !== 1) {
+      throw new Error("Stale or non-finalizing Discussion aggregate");
+    }
+    return this.require(input.discussionId);
+  }
+
+  public listPlannedTurns(): DiscussionTurn[] {
+    return (this.database.prepare(`
+      SELECT dt.*
+      FROM discussion_turns dt
+      JOIN discussions d ON d.discussion_id = dt.discussion_id
+      WHERE dt.state = 'planned'
+        AND d.state IN ('active', 'stop_requested', 'finalizing')
+      ORDER BY dt.created_at, dt.turn_id
+    `).all() as TurnRow[]).map(mapTurn);
   }
 
   public appendBudgetEvent(event: DiscussionBudgetEvent): void {

@@ -18,6 +18,13 @@ import { openDatabase } from "./data/database.js";
 import { prepareDatabaseDirectory } from "./data/database-location.js";
 import { migrateDatabase } from "./data/migration-runner.js";
 import { createOpaqueId } from "./domain/identifiers.js";
+import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
+import { DiscussionRepository } from "./discussion/discussion-repository.js";
+import type {
+  DiscussionMode,
+  DiscussionOutputMode,
+  DiscussionPolicy
+} from "./discussion/discussion-types.js";
 import { createTeamMcpServer } from "./mcp/mcp-server.js";
 import { TeamWaitService } from "./mcp/team-wait-service.js";
 import { AgentService } from "./registry/agent-service.js";
@@ -104,9 +111,59 @@ export async function createServerApp(
   );
   const bridgeRunEvents = new BridgeRunEventService(core, runRepository);
   const handoffs = new HandoffService(core, runRepository);
-  const manualRuns = new ManualRunService(core, runRepository, messages);
   const cancellations = new CancellationService(
     core, runRepository, auth, bridgeConnections, clock
+  );
+  const discussionRepository = new DiscussionRepository(database);
+  const discussions = new DiscussionOrchestrator(
+    core,
+    messages,
+    discussionRepository,
+    runRepository,
+    auth,
+    clock
+  );
+  const dispatchDiscussionRun = async (run: ReturnType<RunRepository["getRun"]>) => {
+    if (!run) return;
+    const agent = core.getAgent(run.targetAgentId);
+    const adapter = fakeAdapters.get(run.targetAgentId);
+    if (adapter) {
+      const turn = discussionRepository.findTurnByRun(run.runId);
+      adapter.enqueue({
+        expectedInstruction: run.instruction,
+        events: [
+          { type: "status", sequence: 1, status: "working" },
+          {
+            type: "reply",
+            sequence: 2,
+            content: turn?.kind === "finalization"
+              ? `${agent?.name ?? "Agent"} 结论：保留已形成的共识，并明确记录未决问题。`
+              : `${agent?.name ?? "Agent"}：建议核对证据、风险和未决问题。`
+          },
+          { type: "status", sequence: 3, status: "completed" }
+        ]
+      });
+      const completed = await executor.execute(run.runId, adapter);
+      await advanceDiscussion(completed.runId);
+      return;
+    }
+    if (agent?.integrationMode === "managed") {
+      delivery.dispatch(run.runId);
+    }
+  };
+  const advanceDiscussion = async (runId: string): Promise<void> => {
+    const result = discussions.onRunTerminal(runId);
+    if (result?.scheduledRun) {
+      await dispatchDiscussionRun(result.scheduledRun);
+    }
+  };
+  const manualRuns = new ManualRunService(
+    core,
+    runRepository,
+    messages,
+    (run) => {
+      void advanceDiscussion(run.runId);
+    }
   );
   const app = Fastify({ logger: options.logger ?? false });
   await app.register(fastifyWebsocket, {
@@ -264,7 +321,7 @@ export async function createServerApp(
             return;
           }
           const runtimeError = error as Record<string, unknown> | undefined;
-          bridgeRunEvents.applyStatus(devicePrincipal, {
+          const applied = bridgeRunEvents.applyStatus(devicePrincipal, {
             runId: message.payload.runId,
             agentId: message.payload.agentId,
             sequence: message.payload.sequence as number,
@@ -281,6 +338,15 @@ export async function createServerApp(
                 }
               : {})
           }, clock());
+          if (
+            applied.applied &&
+            new Set(["completed", "failed", "canceled", "outcome_unknown"])
+              .has(applied.run.state)
+          ) {
+            void advanceDiscussion(applied.run.runId).catch((error: unknown) => {
+              app.log.error(error, "Discussion advancement failed");
+            });
+          }
           return;
         }
         if (message.type === "run.reply" && registeredEpoch !== undefined) {
@@ -619,6 +685,96 @@ export async function createServerApp(
     }
   );
   app.get<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/discussions",
+    async (request) => discussions.list(principal(request), request.params.roomId)
+  );
+  app.post<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/discussions",
+    async (request) => {
+      const body = bodyObject(request);
+      if (
+        !Array.isArray(body.participantAgentIds) ||
+        !body.participantAgentIds.every((value) => typeof value === "string")
+      ) {
+        throw new Error("participantAgentIds must be an array of Agent IDs");
+      }
+      const rawPolicy = body.policy;
+      if (
+        rawPolicy !== undefined &&
+        (!rawPolicy || typeof rawPolicy !== "object" || Array.isArray(rawPolicy))
+      ) {
+        throw new Error("policy must be a JSON object");
+      }
+      const result = discussions.create(principal(request), {
+        roomId: request.params.roomId,
+        goal: requiredString(body.goal, "goal", 20_000),
+        participantAgentIds: body.participantAgentIds,
+        ...(body.mode === undefined
+          ? {}
+          : { mode: body.mode as DiscussionMode }),
+        ...(body.outputMode === undefined
+          ? {}
+          : { outputMode: body.outputMode as DiscussionOutputMode }),
+        ...(rawPolicy === undefined
+          ? {}
+          : { policy: rawPolicy as Partial<DiscussionPolicy> })
+      });
+      if (result.scheduledRun) {
+        await dispatchDiscussionRun(result.scheduledRun);
+      }
+      return discussions.get(principal(request), result.discussion.discussionId);
+    }
+  );
+  app.get<{ Params: { discussionId: string } }>(
+    "/api/discussions/:discussionId",
+    async (request) => discussions.get(
+      principal(request),
+      request.params.discussionId
+    )
+  );
+  app.post<{ Params: { discussionId: string } }>(
+    "/api/discussions/:discussionId/actions",
+    async (request) => {
+      const actor = principal(request);
+      const body = bodyObject(request);
+      const action = requiredString(body.action, "action", 40);
+      if (!new Set([
+        "finish", "stop_after_turn", "pause", "cancel", "continue",
+        "adjust_goal"
+      ]).has(action)) {
+        throw new Error("Unsupported Discussion action");
+      }
+      const result = discussions.control(
+        actor,
+        request.params.discussionId,
+        {
+          action: action as Parameters<DiscussionOrchestrator["control"]>[2]["action"],
+          ...(body.goal === undefined
+            ? {}
+            : { goal: requiredString(body.goal, "goal", 20_000) }),
+          ...(body.extensionTurns === undefined
+            ? {}
+            : { extensionTurns: Number(body.extensionTurns) })
+        }
+      );
+      let cancelWarning: string | null = null;
+      if (result.cancelRunId) {
+        try {
+          cancellations.cancel(actor, result.cancelRunId, "Discussion stopped immediately");
+        } catch (error) {
+          cancelWarning = error instanceof Error ? error.message : "Runtime cancel failed";
+        }
+      }
+      if (result.scheduledRun) {
+        await dispatchDiscussionRun(result.scheduledRun);
+      }
+      return {
+        ...discussions.get(actor, request.params.discussionId),
+        cancelWarning
+      };
+    }
+  );
+  app.get<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/runs",
     async (request) => runs.listRoomRuns(
       principal(request), request.params.roomId, clock()
@@ -683,6 +839,10 @@ export async function createServerApp(
     error: { code: -32_000, message: "Method not allowed" },
     id: null
   }));
+
+  for (const recoveredRun of discussions.recover()) {
+    await dispatchDiscussionRun(recoveredRun);
+  }
 
   if (options.webRoot) {
     await app.register(fastifyStatic, {

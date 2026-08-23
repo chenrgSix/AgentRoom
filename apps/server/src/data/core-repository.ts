@@ -568,6 +568,18 @@ export class CoreRepository {
     return mapMessage(this.database, row);
   }
 
+  public findAgentReply(
+    parentMessageId: string,
+    agentId: string
+  ): MessageRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM messages
+      WHERE parent_message_id = ? AND sender_type = 'agent' AND sender_id = ?
+      ORDER BY sequence DESC LIMIT 1
+    `).get(parentMessageId, agentId) as MessageRow | undefined;
+    return row && mapMessage(this.database, row);
+  }
+
   public listMessagesAfter(
     roomId: string,
     sequence: number,

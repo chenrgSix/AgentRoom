@@ -158,6 +158,34 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       runEvents.json().map((item: { event: { type: string } }) => item.event.type),
       ["status", "reply", "status"]
     );
+    const startDiscussion = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${room.roomId}/discussions`,
+      headers: { authorization },
+      payload: {
+        goal: "Agree deterministic delivery recovery.",
+        participantAgentIds: [agent.agentId, reviewer.agentId],
+        mode: "review",
+        outputMode: "decision_record"
+      }
+    });
+    assert.equal(startDiscussion.statusCode, 200);
+    const discussion = startDiscussion.json() as {
+      discussion: { discussionId: string; state: string; stateReason: string };
+      turns: Array<{ kind: string; state: string }>;
+    };
+    assert.equal(discussion.discussion.state, "completed");
+    assert.equal(discussion.discussion.stateReason, "discussion_plateau");
+    assert.equal(discussion.turns.at(-1)?.kind, "finalization");
+    assert.ok(discussion.turns.every(({ state }) => state === "completed"));
+    const listDiscussions = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${room.roomId}/discussions`,
+      headers: { authorization }
+    });
+    assert.equal(listDiscussions.statusCode, 200);
+    assert.equal(listDiscussions.json()[0].discussion.discussionId,
+      discussion.discussion.discussionId);
   } finally {
     await app.close();
   }
@@ -176,7 +204,7 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       headers: { authorization: `Bearer ${token}` }
     });
     assert.equal(timeline.statusCode, 200);
-    assert.equal(timeline.json().items.length, 4);
+    assert.equal(timeline.json().items.length, 10);
   } finally {
     await reloaded.close();
   }

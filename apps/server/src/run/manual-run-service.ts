@@ -12,7 +12,8 @@ export class ManualRunService {
   public constructor(
     private readonly core: CoreRepository,
     private readonly runs: RunRepository,
-    private readonly messages: MessageService
+    private readonly messages: MessageService,
+    private readonly onTerminal?: (run: RunRecord) => void
   ) {}
 
   public listMentions(principal: McpPrincipal): Array<{
@@ -72,9 +73,11 @@ export class ManualRunService {
       });
     }
     run = reply.run;
-    return this.runs.applyEvent(run.runId, {
+    const completed = this.runs.applyEvent(run.runId, {
       type: "status", sequence: run.lastSequence + 1, status: "completed"
     }, now).run;
+    this.onTerminal?.(completed);
+    return completed;
   }
 
   public fail(
@@ -91,7 +94,7 @@ export class ManualRunService {
     if (terminalStates.has(run.state)) {
       return run;
     }
-    return this.runs.applyEvent(run.runId, {
+    const failed = this.runs.applyEvent(run.runId, {
       type: "status",
       sequence: run.lastSequence + 1,
       status: "failed",
@@ -101,5 +104,7 @@ export class ManualRunService {
         retryable: false
       }
     }, now).run;
+    this.onTerminal?.(failed);
+    return failed;
   }
 }
