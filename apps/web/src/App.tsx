@@ -732,6 +732,7 @@ export function App() {
   const [pendingMessages, setPendingMessages] = useState<PendingRoomMessage[]>([]);
   const [discussionGoalEditId, setDiscussionGoalEditId] = useState<string | null>(null);
   const [discussionGoalDraft, setDiscussionGoalDraft] = useState("");
+  const [expandedDiscussionId, setExpandedDiscussionId] = useState<string | null>(null);
   const [mentionAgentIds, setMentionAgentIds] = useState<string[]>([]);
   const [mentionSearch, setMentionSearch] = useState<MentionSearch | null>(null);
   const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
@@ -876,6 +877,13 @@ export function App() {
       phase !== "finalization" && ordinal <= activeWave.ordinal
     ).length
     : 0;
+  const visibleDiscussionExpanded = visibleDiscussion?.discussion.discussionId === expandedDiscussionId;
+
+  useEffect(() => {
+    if (!visibleDiscussion || ["completed", "canceled", "terminated"].includes(visibleDiscussion.discussion.state)) {
+      setExpandedDiscussionId(null);
+    }
+  }, [visibleDiscussion?.discussion.discussionId, visibleDiscussion?.discussion.state]);
 
   useEffect(() => {
     localStorage.setItem(localeKey, locale);
@@ -2710,120 +2718,150 @@ export function App() {
         {selectedRoom && activeView === "room" && (
           <div className="room-dock">
             {visibleDiscussion && (
-              <section className="discussion-status" aria-label={locale === "zh-CN" ? "当前智能体讨论" : "Active Agent Discussion"}>
-                <div className="discussion-status-copy">
+              <section className={`discussion-status${visibleDiscussionExpanded ? " expanded" : ""}`} aria-label={locale === "zh-CN" ? "当前智能体讨论" : "Active Agent Discussion"}>
+                <button
+                  aria-controls={`discussion-details-${visibleDiscussion.discussion.discussionId}`}
+                  aria-expanded={visibleDiscussionExpanded}
+                  aria-label={locale === "zh-CN"
+                    ? `${visibleDiscussionExpanded ? "收起" : "展开"}讨论详情`
+                    : `${visibleDiscussionExpanded ? "Collapse" : "Expand"} Discussion details`}
+                  className="discussion-status-toggle"
+                  onClick={() => setExpandedDiscussionId(visibleDiscussionExpanded
+                    ? null
+                    : visibleDiscussion.discussion.discussionId)}
+                  type="button"
+                >
                   <span className={`discussion-state ${visibleDiscussion.discussion.state}`}>
                     {discussionStateLabel(visibleDiscussion.discussion.state, locale)}
                     {visibleDiscussion.discussion.state === "active" && activeDiscussionWaveNumber > 0 &&
                       ` · ${locale === "zh-CN" ? "第" : "wave "}${activeDiscussionWaveNumber}${locale === "zh-CN" ? "轮" : ""}`}
                   </span>
-                  {discussionGoalEditId === visibleDiscussion.discussion.discussionId ? (
-                    <textarea
-                      aria-label={locale === "zh-CN" ? "讨论目标" : "Discussion goal"}
-                      className="discussion-goal-editor"
-                      onChange={(event) => setDiscussionGoalDraft(event.currentTarget.value)}
-                      rows={2}
-                      value={discussionGoalDraft}
-                    />
-                  ) : (
-                    <strong>{visibleDiscussion.discussion.goal}</strong>
-                  )}
-                  <small>
-                    {visibleDiscussion.discussion.progress.openQuestions.length > 0
-                      ? (locale === "zh-CN"
-                          ? `还有 ${visibleDiscussion.discussion.progress.openQuestions.length} 个未决问题`
-                          : `${visibleDiscussion.discussion.progress.openQuestions.length} open questions`)
-                      : ["completed", "canceled", "terminated"].includes(visibleDiscussion.discussion.state)
-                        ? (locale === "zh-CN" ? "本次讨论已经结束" : "This Discussion has ended")
-                        : (locale === "zh-CN" ? "正在根据进展和边际收益决定下一步" : "The Orchestrator is evaluating progress and marginal gain")}
-                  </small>
+                  <strong className="discussion-status-title">{visibleDiscussion.discussion.goal}</strong>
                   {activeWave && (
-                    <div className={`discussion-wave ${activeWave.phase} ${activeWave.state}`}>
-                      <div className="discussion-wave-summary">
-                        <span>{wavePhaseLabel(activeWave.phase, locale)}</span>
-                        <span className="discussion-wave-result">
-                          <span className={`discussion-wave-state ${activeWave.state}`}>
-                            {waveStateLabel(activeWave.state, locale)}
-                          </span>
-                          <strong>{locale === "zh-CN"
-                            ? `${activeWaveEndedMembers}/${activeWaveExpectedMembers} 已结束`
-                            : `${activeWaveEndedMembers}/${activeWaveExpectedMembers} finished`}</strong>
-                        </span>
-                      </div>
-                      {activeWave.phase === "finalization" && activeWave.state === "open" && (
-                        <div className="discussion-wave-finalizing" role="status">
-                          <span aria-hidden="true" className="discussion-wave-pulse" />
-                          <span>{locale === "zh-CN" ? "正在汇总各智能体结果" : "Consolidating Agent results"}</span>
+                    <span
+                      aria-label={locale === "zh-CN"
+                        ? `智能体进度 ${activeWaveEndedMembers}/${activeWaveExpectedMembers}`
+                        : `Agent progress ${activeWaveEndedMembers}/${activeWaveExpectedMembers}`}
+                      className="discussion-status-progress"
+                    >{activeWaveEndedMembers}/{activeWaveExpectedMembers}</span>
+                  )}
+                  <span className="discussion-status-toggle-label">
+                    {locale === "zh-CN"
+                      ? (visibleDiscussionExpanded ? "收起" : "详情")
+                      : (visibleDiscussionExpanded ? "Hide" : "Details")}
+                  </span>
+                  <span aria-hidden="true" className="discussion-status-chevron">⌄</span>
+                </button>
+                {visibleDiscussionExpanded && (
+                  <div className="discussion-status-details" id={`discussion-details-${visibleDiscussion.discussion.discussionId}`}>
+                    <div className="discussion-status-copy">
+                      {discussionGoalEditId === visibleDiscussion.discussion.discussionId && (
+                        <textarea
+                          aria-label={locale === "zh-CN" ? "讨论目标" : "Discussion goal"}
+                          className="discussion-goal-editor"
+                          onChange={(event) => setDiscussionGoalDraft(event.currentTarget.value)}
+                          rows={2}
+                          value={discussionGoalDraft}
+                        />
+                      )}
+                      <small>
+                        {visibleDiscussion.discussion.progress.openQuestions.length > 0
+                          ? (locale === "zh-CN"
+                              ? `还有 ${visibleDiscussion.discussion.progress.openQuestions.length} 个未决问题`
+                              : `${visibleDiscussion.discussion.progress.openQuestions.length} open questions`)
+                          : ["completed", "canceled", "terminated"].includes(visibleDiscussion.discussion.state)
+                            ? (locale === "zh-CN" ? "本次讨论已经结束" : "This Discussion has ended")
+                            : (locale === "zh-CN" ? "正在根据进展和边际收益决定下一步" : "The Orchestrator is evaluating progress and marginal gain")}
+                      </small>
+                      {activeWave && (
+                        <div className={`discussion-wave ${activeWave.phase} ${activeWave.state}`}>
+                          <div className="discussion-wave-summary">
+                            <span>{wavePhaseLabel(activeWave.phase, locale)}</span>
+                            <span className="discussion-wave-result">
+                              <span className={`discussion-wave-state ${activeWave.state}`}>
+                                {waveStateLabel(activeWave.state, locale)}
+                              </span>
+                              <strong>{locale === "zh-CN"
+                                ? `${activeWaveEndedMembers}/${activeWaveExpectedMembers} 已结束`
+                                : `${activeWaveEndedMembers}/${activeWaveExpectedMembers} finished`}</strong>
+                            </span>
+                          </div>
+                          {activeWave.phase === "finalization" && activeWave.state === "open" && (
+                            <div className="discussion-wave-finalizing" role="status">
+                              <span aria-hidden="true" className="discussion-wave-pulse" />
+                              <span>{locale === "zh-CN" ? "正在汇总各智能体结果" : "Consolidating Agent results"}</span>
+                            </div>
+                          )}
+                          <ul
+                            aria-label={activeWave.phase === "finalization"
+                              ? (locale === "zh-CN" ? "结论生成进度" : "Conclusion generation progress")
+                              : locale === "zh-CN"
+                                ? `第${activeDiscussionWaveNumber}轮并行进度`
+                                : `Wave ${activeDiscussionWaveNumber} parallel progress`}
+                            className="discussion-wave-members"
+                          >
+                            {activeWaveMembers.map(({ agent, state, turn }) => (
+                              <li className={`discussion-wave-member ${state}`} key={turn.turnId}>
+                                <span aria-hidden="true" className="discussion-wave-member-dot" />
+                                <span className="discussion-wave-member-copy">
+                                  <strong>{agent?.name ?? (locale === "zh-CN" ? "智能体" : "Agent")}</strong>
+                                  {turn.terminalReason && (
+                                    <small>{locale === "zh-CN" ? "原因：" : "Reason: "}{terminalReasonLabel(turn.terminalReason, locale)}</small>
+                                  )}
+                                </span>
+                                <span>{waveMemberStateLabel(state, locale)}</span>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
                       )}
-                      <ul
-                        aria-label={activeWave.phase === "finalization"
-                          ? (locale === "zh-CN" ? "结论生成进度" : "Conclusion generation progress")
-                          : locale === "zh-CN"
-                            ? `第${activeDiscussionWaveNumber}轮并行进度`
-                            : `Wave ${activeDiscussionWaveNumber} parallel progress`}
-                        className="discussion-wave-members"
-                      >
-                        {activeWaveMembers.map(({ agent, state, turn }) => (
-                          <li className={`discussion-wave-member ${state}`} key={turn.turnId}>
-                            <span aria-hidden="true" className="discussion-wave-member-dot" />
-                            <span className="discussion-wave-member-copy">
-                              <strong>{agent?.name ?? (locale === "zh-CN" ? "智能体" : "Agent")}</strong>
-                              {turn.terminalReason && (
-                                <small>{locale === "zh-CN" ? "原因：" : "Reason: "}{terminalReasonLabel(turn.terminalReason, locale)}</small>
-                              )}
-                            </span>
-                            <span>{waveMemberStateLabel(state, locale)}</span>
-                          </li>
-                        ))}
-                      </ul>
                     </div>
-                  )}
-                </div>
-                <div className="discussion-controls">
-                  {activeDiscussion && (discussionGoalEditId === activeDiscussion.discussion.discussionId ? (
-                    <>
-                      <button className="discussion-primary" disabled={busy || !discussionGoalDraft.trim()} onClick={() => void saveDiscussionGoal()} type="button">
-                        {locale === "zh-CN" ? "保存目标" : "Save goal"}
-                      </button>
-                      <button disabled={busy} onClick={cancelDiscussionGoalEdit} type="button">
-                        {locale === "zh-CN" ? "取消" : "Cancel"}
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      {["awaiting_extension", "waiting_human", "paused"].includes(activeDiscussion.discussion.state) ? (
-                        <button className="discussion-primary" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "continue")} type="button">
-                          {locale === "zh-CN" ? "继续解决" : "Continue solving"}
-                        </button>
-                      ) : activeDiscussion.discussion.state !== "finalizing" && activeDiscussion.discussion.state !== "stop_requested" ? (
-                        <button className="discussion-primary" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "finish")} type="button">
-                          {locale === "zh-CN" ? "结束并生成结论" : "Finish and generate conclusion"}
-                        </button>
-                      ) : null}
-                      {activeDiscussion.discussion.state === "active" && (
+                    <div className="discussion-controls">
+                      {activeDiscussion && (discussionGoalEditId === activeDiscussion.discussion.discussionId ? (
                         <>
-                          <button disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "stop_after_turn")} type="button">
-                            {locale === "zh-CN" ? "本轮后停止" : "Stop after turn"}
+                          <button className="discussion-primary" disabled={busy || !discussionGoalDraft.trim()} onClick={() => void saveDiscussionGoal()} type="button">
+                            {locale === "zh-CN" ? "保存目标" : "Save goal"}
                           </button>
-                          <button disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "pause")} type="button">
-                            {locale === "zh-CN" ? "暂停" : "Pause"}
+                          <button disabled={busy} onClick={cancelDiscussionGoalEdit} type="button">
+                            {locale === "zh-CN" ? "取消" : "Cancel"}
                           </button>
                         </>
-                      )}
-                      {["awaiting_extension", "waiting_human", "paused"].includes(activeDiscussion.discussion.state) && (
-                        <button disabled={busy} onClick={() => editDiscussionGoal(activeDiscussion)} type="button">
-                          {locale === "zh-CN" ? "调整目标" : "Adjust goal"}
-                        </button>
-                      )}
-                      {activeDiscussion.discussion.state !== "finalizing" && (
-                        <button className="discussion-danger" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "cancel")} type="button">
-                          {locale === "zh-CN" ? "立即停止" : "Stop now"}
-                        </button>
-                      )}
-                    </>
-                  ))}
-                </div>
+                      ) : (
+                        <>
+                          {["awaiting_extension", "waiting_human", "paused"].includes(activeDiscussion.discussion.state) ? (
+                            <button className="discussion-primary" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "continue")} type="button">
+                              {locale === "zh-CN" ? "继续解决" : "Continue solving"}
+                            </button>
+                          ) : activeDiscussion.discussion.state !== "finalizing" && activeDiscussion.discussion.state !== "stop_requested" ? (
+                            <button className="discussion-primary" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "finish")} type="button">
+                              {locale === "zh-CN" ? "结束并生成结论" : "Finish and generate conclusion"}
+                            </button>
+                          ) : null}
+                          {activeDiscussion.discussion.state === "active" && (
+                            <>
+                              <button disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "stop_after_turn")} type="button">
+                                {locale === "zh-CN" ? "本轮后停止" : "Stop after turn"}
+                              </button>
+                              <button disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "pause")} type="button">
+                                {locale === "zh-CN" ? "暂停" : "Pause"}
+                              </button>
+                            </>
+                          )}
+                          {["awaiting_extension", "waiting_human", "paused"].includes(activeDiscussion.discussion.state) && (
+                            <button disabled={busy} onClick={() => editDiscussionGoal(activeDiscussion)} type="button">
+                              {locale === "zh-CN" ? "调整目标" : "Adjust goal"}
+                            </button>
+                          )}
+                          {activeDiscussion.discussion.state !== "finalizing" && (
+                            <button className="discussion-danger" disabled={busy} onClick={() => void controlDiscussion(activeDiscussion.discussion.discussionId, "cancel")} type="button">
+                              {locale === "zh-CN" ? "立即停止" : "Stop now"}
+                            </button>
+                          )}
+                        </>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </section>
             )}
             <form className="composer" onSubmit={(event) => void submitComposer(event)}>

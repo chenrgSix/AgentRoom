@@ -180,7 +180,7 @@ test("waiting Discussion keeps the just-closed partial Wave visible", async () =
     }]
   });
 
-  const { cleanup, render, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
   try {
     const view = render(<App />);
     const panel = await view.findByRole("region", { name: "当前智能体讨论" });
@@ -189,6 +189,12 @@ test("waiting Discussion keeps the just-closed partial Wave visible", async () =
     assert.equal(panel.closest("form"), null, "Discussion status should not expand the composer form");
     assert.ok(dock.querySelector("form.composer"), "Room dock should keep a separate composer");
     within(panel).getByText("等待你的决定");
+    within(panel).getByLabelText("智能体进度 2/2");
+    assert.equal(within(panel).queryByText("部分完成"), null);
+    const toggle = within(panel).getByRole("button", { name: /展开讨论详情/u });
+    assert.equal(toggle.getAttribute("aria-expanded"), "false");
+    fireEvent.click(toggle);
+    assert.equal(toggle.getAttribute("aria-expanded"), "true");
     within(panel).getByText("部分完成");
     within(panel).getByText("2/2 已结束");
     const progress = within(panel).getByRole("list", { name: "第2轮并行进度" });
@@ -207,10 +213,14 @@ test("Room dock participates in layout instead of overlaying the timeline", asyn
   const timelineRule = stylesheet.match(/\.timeline\s*\{[^}]+\}/u)?.[0] ?? "";
   const composerRule = stylesheet.match(/\.composer\s*\{[^}]+\}/u)?.[0] ?? "";
   const dockRule = stylesheet.match(/\.room-dock\s*\{[^}]+\}/u)?.[0] ?? "";
+  const statusRule = stylesheet.match(/\.discussion-status\s*\{[^}]+\}/u)?.[0] ?? "";
+  const toggleRule = stylesheet.match(/\.discussion-status-toggle\s*\{[^}]+\}/u)?.[0] ?? "";
 
   assert.match(timelineRule, /overflow-y:\s*auto/u);
   assert.doesNotMatch(composerRule, /position:\s*absolute/u);
   assert.match(dockRule, /flex:\s*0 0 auto/u);
+  assert.match(statusRule, /overflow:\s*hidden/u);
+  assert.match(toggleRule, /min-height:\s*44px/u);
 });
 
 test("Run status replaces duplicate Mention metadata in a Member message", async () => {
@@ -311,11 +321,14 @@ test("completed Discussion keeps a failed finalization Wave and its reasons visi
     }]
   });
 
-  const { cleanup, render, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
   try {
     const view = render(<App />);
     const panel = await view.findByRole("region", { name: "当前智能体讨论" });
     within(panel).getByText("已完成");
+    within(panel).getByLabelText("智能体进度 1/1");
+    assert.equal(within(panel).queryByText("结论生成"), null);
+    fireEvent.click(within(panel).getByRole("button", { name: /展开讨论详情/u }));
     within(panel).getByText("结论生成");
     const summary = panel.querySelector(".discussion-wave-summary");
     assert.ok(summary);

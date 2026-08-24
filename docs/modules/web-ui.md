@@ -86,8 +86,12 @@ Wave keeps successful replies visible and identifies failed members; an
 all-failed Wave explains why human action is required. The single-Agent
 finalization Wave has an explicit conclusion-generating state. When a
 Discussion is waiting, paused, or terminal, its status keeps the current or most
-recent closed Wave visible, including each member's terminal reason. At a soft
-boundary the UI offers continue solving, adjust goal, or finish with a
+recent closed Wave available, including each member's terminal reason. The
+docked surface defaults to a single compact summary row containing authoritative
+Discussion state, truncated goal, and member progress. Expanding that row reveals
+Wave details and controls; a transition to a terminal state collapses it again so
+completed work does not permanently consume conversation space. At a soft
+boundary the expanded UI offers continue solving, adjust goal, or finish with a
 conclusion rather than exposing internal Wave allocation.
 
 The Room composer classifies one submission by its distinct structured Agent
@@ -125,9 +129,11 @@ immediate setup result and are never returned by list APIs.
 
 The Room timeline is the only vertically scrolling conversation surface. Its
 Discussion status and composer are docked after the timeline in normal layout
-flow, so their dynamic height never covers Message content. The Discussion
-surface may scroll within a bounded height while the composer remains visible;
-Mention suggestions may overlay the dock but never the persisted timeline.
+flow, so their dynamic height never covers Message content. Discussion status
+uses a compact, keyboard-accessible disclosure row by default; its detailed
+Wave surface may scroll within a bounded height while the composer remains
+visible. Mention suggestions may overlay the dock but never the persisted
+timeline.
 
 The desktop context sidebar contains only the Team identity and selected Room
 participants. The participant roster fills the column below the Team identity,
@@ -178,6 +184,9 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 - The composer has one Send action and no separate Discussion tab. Existing
   Discussion goal adjustment reuses its status panel without changing a Room
   message draft.
+- The docked Discussion summary remains one row until explicitly expanded;
+  terminal transitions restore the compact state while preserving on-demand
+  access to final Wave details and failure reasons.
 - Cancellation actions show their current authoritative outcome.
 - **Finish and generate conclusion** is the primary Discussion stop action;
   stop-after-round, pause, and resume are applied at the Wave boundary, while

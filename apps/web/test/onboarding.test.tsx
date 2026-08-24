@@ -616,6 +616,9 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const discussionPanel = await screen.findByRole("region", { name: "当前智能体讨论" });
     within(discussionPanel).getByText("讨论中 · 第1轮");
     within(discussionPanel).getByText("确定交付恢复规则 @all");
+    within(discussionPanel).getByLabelText("智能体进度 1/2");
+    assert.equal(within(discussionPanel).queryByRole("list", { name: "第1轮并行进度" }), null);
+    fireEvent.click(within(discussionPanel).getByRole("button", { name: /展开讨论详情/u }));
     within(discussionPanel).getByText("1/2 已结束");
     const waveProgress = within(discussionPanel).getByRole("list", { name: "第1轮并行进度" });
     assert.equal(within(waveProgress).getAllByRole("listitem").length, 2);
