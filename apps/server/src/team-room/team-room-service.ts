@@ -88,6 +88,7 @@ export class TeamRoomService {
       teamId,
       name: normalizedName(name, "Room name"),
       collaborationPolicy: { ...defaultRoomCollaborationPolicy },
+      settingsRevision: 1,
       createdAt: now,
       archivedAt: null
     };
@@ -223,6 +224,7 @@ export class TeamRoomService {
     input: {
       participants: RoomParticipants;
       collaborationPolicy: RoomCollaborationPolicy;
+      expectedRevision: number;
     },
     now: string
   ): RoomSettings {
@@ -236,10 +238,14 @@ export class TeamRoomService {
     const collaborationPolicy = parseRoomCollaborationPolicy(
       input.collaborationPolicy
     );
+    if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
+      throw new Error("Room settings revision must be a positive integer");
+    }
     return this.repository.replaceRoomSettings(
       roomId,
       participants,
       collaborationPolicy,
+      input.expectedRevision,
       now
     );
   }

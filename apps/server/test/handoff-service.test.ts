@@ -103,6 +103,7 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
 
     teams.updateRoomSettings(principal, room.roomId, {
       participants: core.getRoomParticipants(room.roomId),
+      expectedRevision: core.getRoom(room.roomId)?.settingsRevision ?? 0,
       collaborationPolicy: {
         allowDiscussion: true,
         allowAll: false,
@@ -114,6 +115,7 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
 
     teams.updateRoomSettings(principal, room.roomId, {
       participants: core.getRoomParticipants(room.roomId),
+      expectedRevision: core.getRoom(room.roomId)?.settingsRevision ?? 0,
       collaborationPolicy: {
         allowDiscussion: true,
         allowAll: true,
@@ -128,6 +130,7 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
     ), /depth cannot exceed 1/u);
     teams.updateRoomSettings(principal, room.roomId, {
       participants: core.getRoomParticipants(room.roomId),
+      expectedRevision: core.getRoom(room.roomId)?.settingsRevision ?? 0,
       collaborationPolicy: {
         allowDiscussion: true,
         allowAll: true,
@@ -142,6 +145,7 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
     ), /Room policy does not allow Agent handoffs/u);
     teams.updateRoomSettings(principal, room.roomId, {
       participants: core.getRoomParticipants(room.roomId),
+      expectedRevision: core.getRoom(room.roomId)?.settingsRevision ?? 0,
       collaborationPolicy: {
         allowDiscussion: true,
         allowAll: true,

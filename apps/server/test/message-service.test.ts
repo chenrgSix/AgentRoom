@@ -170,6 +170,7 @@ test("Room policy rejects only the exact reserved @all command", async () => {
     const room = teams.createRoom(principal, created.team.teamId, "general", now);
     teams.updateRoomSettings(principal, room.roomId, {
       participants: repository.getRoomParticipants(room.roomId),
+      expectedRevision: repository.getRoom(room.roomId)?.settingsRevision ?? 0,
       collaborationPolicy: {
         allowDiscussion: true,
         allowAll: false,

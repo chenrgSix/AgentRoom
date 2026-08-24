@@ -34,6 +34,7 @@ export interface RoomRecord {
   teamId: string;
   name: string;
   collaborationPolicy: RoomCollaborationPolicy;
+  settingsRevision: number;
   createdAt: string;
   archivedAt?: string | null;
 }
@@ -130,6 +131,7 @@ interface RoomRow {
   team_id: string;
   name: string;
   collaboration_policy_json: string;
+  settings_revision: number;
   created_at: string;
   archived_at: string | null;
 }
@@ -212,6 +214,7 @@ function mapRoom(row: RoomRow): RoomRecord {
     collaborationPolicy: readPersistedRoomCollaborationPolicy(
       row.collaboration_policy_json
     ),
+    settingsRevision: row.settings_revision,
     createdAt: row.created_at,
     archivedAt: row.archived_at
   };
@@ -277,6 +280,10 @@ export class CoreRepository {
         INSERT INTO room_human_participants (room_id, member_id, added_at)
         SELECT room_id, @memberId, @createdAt FROM rooms WHERE team_id = @teamId
       `).run(member);
+      this.database.prepare(`
+        UPDATE rooms SET settings_revision = settings_revision + 1
+        WHERE team_id = @teamId
+      `).run(member);
     }).immediate();
   }
 
@@ -338,6 +345,10 @@ export class CoreRepository {
         this.database.prepare(`
           INSERT INTO room_agent_participants (room_id, agent_id, added_at)
           SELECT room_id, @agentId, @createdAt FROM rooms WHERE team_id = @teamId
+        `).run(agent);
+        this.database.prepare(`
+          UPDATE rooms SET settings_revision = settings_revision + 1
+          WHERE team_id = @teamId
         `).run(agent);
       }
     }).immediate();
@@ -523,8 +534,8 @@ export class CoreRepository {
 
   public getRoom(roomId: string): RoomRecord | undefined {
     const row = this.database.prepare(`
-      SELECT room_id, team_id, name, collaboration_policy_json, created_at,
-             archived_at
+      SELECT room_id, team_id, name, collaboration_policy_json,
+             settings_revision, created_at, archived_at
       FROM rooms WHERE room_id = ?
     `).get(roomId) as RoomRow | undefined;
     return row && mapRoom(row);
@@ -532,8 +543,8 @@ export class CoreRepository {
 
   public listRooms(teamId: string, includeArchived = false): RoomRecord[] {
     const rows = this.database.prepare(`
-      SELECT room_id, team_id, name, collaboration_policy_json, created_at,
-             archived_at
+      SELECT room_id, team_id, name, collaboration_policy_json,
+             settings_revision, created_at, archived_at
       FROM rooms
       WHERE team_id = ? AND (? = 1 OR archived_at IS NULL)
       ORDER BY created_at, room_id
@@ -548,7 +559,7 @@ export class CoreRepository {
   ): RoomRecord[] {
     const rows = this.database.prepare(`
       SELECT r.room_id, r.team_id, r.name, r.collaboration_policy_json,
-             r.created_at, r.archived_at
+             r.settings_revision, r.created_at, r.archived_at
       FROM rooms r
       JOIN room_human_participants rp ON rp.room_id = r.room_id
       WHERE r.team_id = ? AND rp.member_id = ?
@@ -575,12 +586,18 @@ export class CoreRepository {
     roomId: string,
     participants: RoomParticipants,
     collaborationPolicy: RoomCollaborationPolicy,
+    expectedRevision: number,
     updatedAt: string
   ): { participants: RoomParticipants; room: RoomRecord } {
     return this.database.transaction(() => {
-      this.database.prepare(`
-        UPDATE rooms SET collaboration_policy_json = ? WHERE room_id = ?
-      `).run(JSON.stringify(collaborationPolicy), roomId);
+      const update = this.database.prepare(`
+        UPDATE rooms
+        SET collaboration_policy_json = ?, settings_revision = settings_revision + 1
+        WHERE room_id = ? AND settings_revision = ?
+      `).run(JSON.stringify(collaborationPolicy), roomId, expectedRevision);
+      if (update.changes !== 1) {
+        throw new Error("Room settings changed; reload and retry");
+      }
       this.database.prepare(`
         DELETE FROM room_human_participants WHERE room_id = ?
       `).run(roomId);
@@ -701,6 +718,10 @@ export class CoreRepository {
     addedAt: string
   ): RoomParticipants {
     return this.database.transaction(() => {
+      this.database.prepare(`
+        UPDATE rooms SET settings_revision = settings_revision + 1
+        WHERE room_id = ?
+      `).run(roomId);
       this.database.prepare(`
         DELETE FROM room_human_participants WHERE room_id = ?
       `).run(roomId);

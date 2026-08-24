@@ -105,14 +105,17 @@ test("an Owner persists Room collaboration policy with participant settings", as
     };
     assert.throws(() => service.updateRoomSettings(bob, room.roomId, {
       participants: service.getRoomParticipants(owner, room.roomId),
+      expectedRevision: service.getRoomSettings(owner, room.roomId).room.settingsRevision,
       collaborationPolicy: policy
     }, now), /Only a Team owner/u);
 
+    const initialSettings = service.getRoomSettings(owner, room.roomId);
     const settings = service.updateRoomSettings(owner, room.roomId, {
       participants: {
         memberIds: [created.owner.memberId],
         agentIds: []
       },
+      expectedRevision: initialSettings.room.settingsRevision,
       collaborationPolicy: policy
     }, now);
     assert.deepEqual(settings.participants, {
@@ -120,9 +123,19 @@ test("an Owner persists Room collaboration policy with participant settings", as
       agentIds: []
     });
     assert.deepEqual(settings.room.collaborationPolicy, policy);
+    assert.equal(
+      settings.room.settingsRevision,
+      initialSettings.room.settingsRevision + 1
+    );
     assert.deepEqual(service.getRoomSettings(owner, room.roomId), settings);
     assert.throws(() => service.updateRoomSettings(owner, room.roomId, {
+      participants: initialSettings.participants,
+      expectedRevision: initialSettings.room.settingsRevision,
+      collaborationPolicy: { ...policy, allowAll: true }
+    }, now), /Room settings changed; reload and retry/u);
+    assert.throws(() => service.updateRoomSettings(owner, room.roomId, {
       participants: settings.participants,
+      expectedRevision: settings.room.settingsRevision,
       collaborationPolicy: { ...policy, maxAgentMentionDepth: 5 }
     }, now), /depth from 1 to 4/u);
     assert.deepEqual(
@@ -406,7 +419,10 @@ test("an Owner controls Room humans and Agents without deleting the Room", async
       "2026-08-22T11:00:00.000Z"
     );
     const bob = auth.authenticateWebSession(bobSession.secret, now);
-    assert.deepEqual(service.listRooms(bob, created.team.teamId), [room]);
+    assert.deepEqual(
+      service.listRooms(bob, created.team.teamId),
+      [repository.getRoom(room.roomId)]
+    );
     assert.deepEqual(service.getRoomParticipants(owner, room.roomId), {
       memberIds: [
         "member_01K4Z6J7Y8N9P0Q1R2S3T4V5ZZ",

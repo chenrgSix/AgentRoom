@@ -146,6 +146,13 @@ function requiredBoolean(value: unknown, label: string): boolean {
   return value;
 }
 
+function requiredPositiveInteger(value: unknown, label: string): number {
+  if (!Number.isSafeInteger(value) || (value as number) < 1) {
+    throw new Error(`${label} must be a positive integer`);
+  }
+  return value as number;
+}
+
 function queryBoolean(value: string | undefined, label: string): boolean {
   if (value === undefined || value === "false") return false;
   if (value === "true") return true;
@@ -535,6 +542,7 @@ export async function createServerApp(
     }
     const message = error instanceof Error ? error.message : "Unexpected error";
     const statusCode = message.includes("UNIQUE constraint failed") ||
+      message === "Room settings changed; reload and retry" ||
       message.startsWith("Room already has an active Discussion:")
       ? 409
       : 400;
@@ -1206,7 +1214,11 @@ export async function createServerApp(
             memberIds: requiredStringArray(body.memberIds, "memberIds"),
             agentIds: requiredStringArray(body.agentIds, "agentIds")
           },
-          collaborationPolicy: rawPolicy as unknown as RoomCollaborationPolicy
+          collaborationPolicy: rawPolicy as unknown as RoomCollaborationPolicy,
+          expectedRevision: requiredPositiveInteger(
+            body.expectedRevision,
+            "expectedRevision"
+          )
         },
         clock()
       );

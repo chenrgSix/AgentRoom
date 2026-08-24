@@ -237,6 +237,7 @@ test("Room policy can disable new Agent Discussions", async () => {
         allowAgentMentions: true,
         maxAgentMentionDepth: 4
       },
+      environment.core.getRoom(environment.roomId)?.settingsRevision ?? 0,
       now
     );
     assert.throws(() => environment.orchestrator.create(environment.principal, {
