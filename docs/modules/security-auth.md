@@ -54,6 +54,13 @@ only after owner approval. Claim retries return the same Device and do not
 create duplicate identities. Legacy Bridge invitations also expire after ten
 minutes, bind the expected Device name, Team, and Member, and are single-use.
 
+A deployment may require a central Server Token on Bridge bootstrap and
+transport endpoints. The Bridge passes this opaque value in
+`X-AgentRoom-Server-Token`; the Server compares it without logging or
+persisting it. This is a simple deployment access parameter, not cryptographic
+Server identity. Device bearer authentication, Team ownership, revocation, and
+connection epochs remain mandatory and unchanged.
+
 ## Authorization Rules
 
 - Team membership gates Team-level Member and Agent administration.
@@ -89,7 +96,8 @@ Negative tests cover replay, forged poll tokens, non-owner approval, cross-Team 
 recovery-secret failure, invitation replay/expiry, cross-origin Cookie writes,
 revocation, unpublished Runtime launch, credential leakage, and attempts to
 bypass local policy. Work is tracked by `SEC-001` through `SEC-005`, with pairing
-transport under `BRG-002`, in `docs/TASKS.md`.
+transport under `BRG-002` and central Token transport under `BRG-025`, in
+`docs/TASKS.md`.
 
 Revoking a Device atomically marks it revoked, revokes all of its credentials,
 disables its managed Agents, and projects them offline. The active Bridge socket

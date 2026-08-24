@@ -28,7 +28,10 @@ only this machine's Bridge configuration and lifecycle.
 
 The Go 1.26.7 process accepts a strict JSON configuration. Runtime commands are
 argument arrays, workspaces are absolute paths, environment propagation is an
-allowlist, and non-loopback server URLs must use HTTPS.
+allowlist, and non-loopback server URLs must use HTTPS. A deployment may also
+configure an opaque central Server Token. Bridge HTTP and WebSocket requests
+pass it in the dedicated `X-AgentRoom-Server-Token` header; it is access input,
+not a replacement for the per-Device bearer credential.
 
 ## Managed Enrollment
 
@@ -143,8 +146,14 @@ Console coverage verifies first setup, Runtime discovery, multiple same-kind
 Agents, per-Agent modal/API ownership, rename-stable identity, active-work
 fencing, draft Runtime preflight, connection-only mutation and lifecycle
 preservation, and status rendering. Work is tracked by
-`BRG-001` through `BRG-024`
+`BRG-001` through `BRG-025`
 in `docs/TASKS.md`.
+
+`BRG-025` adds an optional central Server Token to the owner-only Bridge
+configuration and the paired connection-settings form. Public Console state
+exposes only whether a Token is configured. Join, claim, legacy pair, and
+WebSocket requests pass the Token as a dedicated header; deployments without a
+configured Token retain the local-development compatibility path.
 
 `BRG-024` adds a dedicated connection-settings mutation instead of reusing the
 legacy full-config form. It validates the central service URL and HTTPS trust,
