@@ -151,6 +151,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-029 | DONE | Render recoverable in-progress Agent output | RUN-007, WEB-021, WEB-026 | component and sync tests prove one provisional bubble per active Run resumes ordered deltas, applies reset boundaries, disappears on final reply, and never duplicates the durable Agent Message |
 | WEB-030 | DONE | Refresh Room conversation UI and render safe Markdown | WEB-023, WEB-029 | Markdown component regressions, 116 Server/Web/Contracts tests, production builds, cross-process E2E, and isolated real-browser checks prove GFM content, untrusted HTML isolation, streaming/final parity, readable Member/Agent hierarchy, non-overlaying composition, and zero-horizontal-overflow light/dark layouts at desktop, 720 px, and 390 px widths |
 | WEB-031 | DONE | Simplify conversation and Run status hierarchy | WEB-022, WEB-030 | 17 Web regressions, 117 workspace tests, production builds, and light/dark real-browser checks prove compact Member prompts, open Agent replies, non-duplicated Run targets, bounded diagnostics, and zero horizontal overflow |
+| WEB-032 | DONE | Parse exact Room Agent Mention commands | WEB-019, WEB-025 | 19 Web regressions, 119 workspace tests, production builds, and non-sending real-browser input checks prove direct `@Agent full name` and reserved `@all` resolve exact current-Room identities while prefixes and ambiguous names never route and over-limit expansions remain guarded by the five-Agent cap |
 
 ## Workstream F4: MCP Team Participation
 

@@ -93,10 +93,16 @@ conclusion rather than exposing internal Wave allocation.
 The Room composer classifies one submission by its distinct structured Agent
 identities. No Mention stores a Room message, one Mention creates a normal Run,
 and two to five Mentions create an adaptive Discussion whose goal is the message
-body. Free-form `@text` is not routing metadata. Selecting and removing chips
-keeps the visible tokens and stable IDs synchronized; the Server revalidates
-Room membership, Agent availability, Discussion participant policy, and the
-single-open-Discussion Room invariant.
+body. The Web resolves a complete `@Agent name` only when it exactly matches one
+current-Room identity; the reserved exact command `@all` expands to the full
+current-Room Agent roster. Prefix, substring, and role matches never route, and
+same-name commands remain ambiguous until the user selects a specific identity.
+Selecting and removing chips keeps the visible tokens and stable IDs
+synchronized; the Server revalidates Room membership, Agent availability,
+Discussion participant policy, and the single-open-Discussion Room invariant.
+The composer previews exact matches before submission. Browser acceptance types
+an exact full name, a non-matching prefix, and `@all` without sending a Message;
+component coverage verifies the resulting single-Run and Discussion payloads.
 
 Timeline messages resolve their visible author from the stable `senderId` and
 the current Team roster. Registered Agent and member names are shown directly;
@@ -161,7 +167,8 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 
 ## Interaction and Security Rules
 
-- Mentions select a registered Agent identity, not free-form `@text` parsing.
+- Exact Mention commands resolve only against registered current-Room Agent
+  names; `@all` is the only reserved expansion command.
 - Typing `@` opens the visible Agent suggestion list; selecting a result inserts
   its display name while retaining its stable identity for submission.
 - Mention identities are ordered and unique. Removing a selected token removes

@@ -76,8 +76,10 @@ enforces uniqueness per Room and sender, so an ambiguous retry returns the
 original Message and existing Runs without creating another sequence or
 re-executing completed work.
 
-Display labels never participate in routing. A quoted or plain-text
-`@Bob/Backend` without a structured Mention does not create a Run.
+Display labels never participate in Server routing. The Web may resolve an
+exact current-Room `@Agent name` or reserved `@all` command before submission,
+but it sends stable structured Mention IDs. A quoted or plain-text
+`@Bob/Backend` received without a structured Mention does not create a Run.
 
 ## History and Ordering
 

@@ -461,6 +461,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .selected-mentions { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-left: 7px; }
 .selected-mention { width: fit-content; padding: 3px 7px; border: 1px solid #485a31; border-radius: 999px; background: #29331f; color: #cbe583; font-size: 9px; font-weight: 750; cursor: pointer; }
 .composer-routing-hint { color: #818b77; font-size: 9px; }
+.exact-mention-preview { width: fit-content; margin-left: 7px; color: #aabd7c; font-size: 9px; font-weight: 700; }
+.exact-mention-preview.ambiguous { color: #d9a37b; }
 
 :root[data-theme="light"] {
   color: #263021;
@@ -589,6 +591,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .mention-option strong { color: #2c3727; }
 :root[data-theme="light"] .mention-option:hover,
 :root[data-theme="light"] .mention-option.active { border-color: #a8b987; background: #e7eedc; }
+:root[data-theme="light"] .exact-mention-preview { color: #536a2d; }
+:root[data-theme="light"] .exact-mention-preview.ambiguous { color: #8d5f36; }
 :root[data-theme="light"] .error-banner { border-color: #cf8e86; background: #fff0ed; color: #8a3d35; }
 :root[data-theme="light"] .member-invitation-result { border-color: #b4c49a; background: #e9f1de; }
 :root[data-theme="light"] .member-invitation-result > strong { color: #415723; }

@@ -33,6 +33,7 @@ import {
 } from "./message-outbox.js";
 import {
   removeVisibleMentionToken,
+  resolveExactMentionCommands,
   retainVisibleMentionIds
 } from "./structured-mentions.js";
 
@@ -812,7 +813,19 @@ export function App() {
       )
     ).slice(0, 8);
   }, [locale, mentionAgentIds, mentionSearch, roomAgents]);
+  const exactMentionCommands = useMemo(
+    () => resolveExactMentionCommands(messageContent, roomAgents),
+    [messageContent, roomAgents]
+  );
   const selectedMentionAgents = mentionAgentIds.flatMap((agentId) => {
+    const agent = agentsById.get(agentId);
+    return agent ? [agent] : [];
+  });
+  const unresolvedExactAmbiguousNames = exactMentionCommands.ambiguousNames.filter(
+    (name) => !selectedMentionAgents.some((agent) => agent.name === name)
+  );
+  const directlyParsedAgents = exactMentionCommands.agentIds.flatMap((agentId) => {
+    if (mentionAgentIds.includes(agentId)) return [];
     const agent = agentsById.get(agentId);
     return agent ? [agent] : [];
   });
@@ -1748,14 +1761,40 @@ export function App() {
   async function submitComposer(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedRoomId || !messageContent.trim()) return;
-    if (mentionAgentIds.length >= 2 && activeDiscussion) {
+    const exactCommands = resolveExactMentionCommands(messageContent, roomAgents);
+    const selectedNames = new Set(selectedMentionAgents.map(({ name }) => name));
+    const unresolvedAmbiguousNames = exactCommands.ambiguousNames.filter(
+      (name) => !selectedNames.has(name)
+    );
+    if (unresolvedAmbiguousNames.length > 0) {
+      setError(locale === "zh-CN"
+        ? `精确指令 @${unresolvedAmbiguousNames.join("、@")} 匹配到多个同名智能体，请从候选列表选择具体身份。`
+        : `Exact command @${unresolvedAmbiguousNames.join(", @")} matches multiple same-name Agents. Select a specific identity from the suggestions.`);
+      return;
+    }
+    const resolvedMentionAgentIds = exactCommands.usesAll
+      ? exactCommands.agentIds
+      : [...new Set([...mentionAgentIds, ...exactCommands.agentIds])];
+    if (exactCommands.usesAll && resolvedMentionAgentIds.length === 0) {
+      setError(locale === "zh-CN"
+        ? "当前房间没有可供 @all 路由的智能体。"
+        : "This Room has no Agents for @all to route to.");
+      return;
+    }
+    if (resolvedMentionAgentIds.length > 5) {
+      setError(locale === "zh-CN"
+        ? `精确指令匹配到 ${resolvedMentionAgentIds.length} 个智能体，超过一次协作最多 5 个的限制。`
+        : `The exact commands matched ${resolvedMentionAgentIds.length} Agents, exceeding the 5-Agent collaboration limit.`);
+      return;
+    }
+    if (resolvedMentionAgentIds.length >= 2 && activeDiscussion) {
       setError(locale === "zh-CN"
         ? "当前房间已有协作讨论，请先结束或停止后再发起新的协作。"
         : "This Room already has an active Discussion. Finish or stop it before starting another.");
       return;
     }
     setError(null);
-    if (mentionAgentIds.length >= 2) {
+    if (resolvedMentionAgentIds.length >= 2) {
       setComposerBusy(true);
       try {
         await jsonRequest<DiscussionView>(
@@ -1764,7 +1803,7 @@ export function App() {
             method: "POST",
             body: JSON.stringify({
               goal: messageContent,
-              participantAgentIds: mentionAgentIds,
+              participantAgentIds: resolvedMentionAgentIds,
               mode: "round_robin",
               outputMode: "final_answer"
             })
@@ -1787,7 +1826,9 @@ export function App() {
       clientMessageId: createClientMessageId(),
       roomId: selectedRoomId,
       content: messageContent,
-      ...(mentionAgentIds[0] ? { mentionAgentId: mentionAgentIds[0] } : {}),
+      ...(resolvedMentionAgentIds[0]
+        ? { mentionAgentId: resolvedMentionAgentIds[0] }
+        : {}),
       status: "pending"
     };
     setPendingMessages((current) => queuePendingMessage(current, pending));
@@ -2791,7 +2832,11 @@ export function App() {
                   <div className="mention-suggestions" aria-label={t("mentionAgent")} role="listbox">
                     <div className="mention-suggestions-heading">{t("mentionHint")}</div>
                     {mentionOptions.length === 0 ? (
-                      <p>{t("noMentionMatches")}</p>
+                      <p>{mentionSearch.query === "all"
+                        ? (locale === "zh-CN"
+                            ? `@all 将在发送时精确匹配当前房间的 ${roomAgents.length} 个智能体`
+                            : `@all will exactly target ${roomAgents.length} Agents in this Room on send`)
+                        : t("noMentionMatches")}</p>
                     ) : mentionOptions.map((agent, index) => (
                       <button
                         aria-selected={index === mentionOptionIndex}
@@ -2832,13 +2877,28 @@ export function App() {
                     </span>
                   </div>
                 )}
+                {(exactMentionCommands.usesAll || directlyParsedAgents.length > 0 || unresolvedExactAmbiguousNames.length > 0) && (
+                  <div className={`exact-mention-preview ${unresolvedExactAmbiguousNames.length > 0 ? "ambiguous" : ""}`} role="status">
+                    {exactMentionCommands.usesAll
+                      ? (locale === "zh-CN"
+                          ? `精确指令 @all · 将路由当前房间 ${exactMentionCommands.agentIds.length} 个智能体`
+                          : `Exact command @all · routes to ${exactMentionCommands.agentIds.length} Room Agents`)
+                      : unresolvedExactAmbiguousNames.length > 0
+                        ? (locale === "zh-CN"
+                            ? `同名智能体需要从候选列表明确选择：${unresolvedExactAmbiguousNames.join("、")}`
+                            : `Select a specific same-name Agent: ${unresolvedExactAmbiguousNames.join(", ")}`)
+                        : (locale === "zh-CN"
+                            ? `精确匹配：${directlyParsedAgents.map(({ name }) => `@${name}`).join("、")}`
+                            : `Exact match: ${directlyParsedAgents.map(({ name }) => `@${name}`).join(", ")}`)}
+                  </div>
+                )}
                 <textarea
                   aria-label={t("message")}
                   onChange={handleMessageChange}
                   onKeyDown={handleMessageKeyDown}
                   placeholder={locale === "zh-CN"
-                    ? `发送消息到 #${selectedRoom.name}；@ 一个智能体执行，@ 多个智能体协作`
-                    : `Message #${selectedRoom.name}; @ one Agent to run or multiple Agents to collaborate`}
+                    ? `发送消息到 #${selectedRoom.name}；支持 @Agent完整名称 和 @all`
+                    : `Message #${selectedRoom.name}; use an exact @Agent name or @all`}
                   required
                   rows={2}
                   value={messageContent}

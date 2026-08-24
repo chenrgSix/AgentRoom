@@ -2,6 +2,16 @@ interface MentionIdentity {
   name: string;
 }
 
+interface ExactMentionAgent extends MentionIdentity {
+  agentId: string;
+}
+
+export interface ExactMentionCommandResolution {
+  agentIds: string[];
+  ambiguousNames: string[];
+  usesAll: boolean;
+}
+
 const mentionBoundaryPunctuation = new Set(
   [..."()[]{}<>,.!?;:'\"，。！？；：（）【】《》"]
 );
@@ -39,6 +49,46 @@ function countMentionTokens(content: string, agentName: string): number {
     fromIndex = index + tokenLength;
   }
   return count;
+}
+
+export function resolveExactMentionCommands(
+  content: string,
+  agents: readonly ExactMentionAgent[]
+): ExactMentionCommandResolution {
+  if (findMentionToken(content, "all") >= 0) {
+    return {
+      agentIds: [...new Set(agents.map(({ agentId }) => agentId))],
+      ambiguousNames: [],
+      usesAll: true
+    };
+  }
+
+  const agentsByName = new Map<string, ExactMentionAgent[]>();
+  for (const agent of agents) {
+    const sameName = agentsByName.get(agent.name) ?? [];
+    sameName.push(agent);
+    agentsByName.set(agent.name, sameName);
+  }
+
+  const matches: Array<{ agentId: string; index: number }> = [];
+  const ambiguous: Array<{ index: number; name: string }> = [];
+  for (const [name, sameNameAgents] of agentsByName) {
+    const index = findMentionToken(content, name);
+    if (index < 0) continue;
+    if (sameNameAgents.length > 1) {
+      ambiguous.push({ index, name });
+      continue;
+    }
+    matches.push({ agentId: sameNameAgents[0]!.agentId, index });
+  }
+
+  matches.sort((left, right) => left.index - right.index);
+  ambiguous.sort((left, right) => left.index - right.index);
+  return {
+    agentIds: matches.map(({ agentId }) => agentId),
+    ambiguousNames: ambiguous.map(({ name }) => name),
+    usesAll: false
+  };
 }
 
 export function retainVisibleMentionIds(

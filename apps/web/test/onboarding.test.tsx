@@ -592,19 +592,30 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       assert.match(body.clientMessageId, /^client_[A-Za-z0-9_-]{8,128}$/u);
     });
 
-    fireEvent.change(roomMessageInput, { target: { value: "确定交付恢复规则 @Rev" } });
-    fireEvent.click(within(screen.getByRole("listbox", { name: "提及智能体" }))
-      .getByRole("option", { name: /@Review Bot/u }));
     fireEvent.change(roomMessageInput, {
-      target: { value: `${roomMessageInput.value}@Local` }
+      target: { value: "请 @Local Codex 精确执行" }
     });
-    fireEvent.click(within(screen.getByRole("listbox", { name: "提及智能体" }))
-      .getByRole("option", { name: /@Local Codex/u }));
-    screen.getByText("发送后将发起 2 个智能体的协作讨论");
+    screen.getByText("精确匹配：@Local Codex");
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => {
+      const messageRequests = requests.filter((candidate) =>
+        candidate.path === `/api/rooms/${room.roomId}/messages` &&
+        candidate.method === "POST"
+      );
+      const body = JSON.parse(messageRequests.at(-1)?.body ?? "{}") as {
+        content: string;
+        mentionAgentId: string;
+      };
+      assert.equal(body.content, "请 @Local Codex 精确执行");
+      assert.equal(body.mentionAgentId, secondAgent.agentId);
+    });
+
+    fireEvent.change(roomMessageInput, { target: { value: "确定交付恢复规则 @all" } });
+    screen.getByText("精确指令 @all · 将路由当前房间 2 个智能体");
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
     const discussionPanel = await screen.findByRole("region", { name: "当前智能体讨论" });
     within(discussionPanel).getByText("讨论中 · 第1轮");
-    within(discussionPanel).getByText("确定交付恢复规则 @Review Bot @Local Codex");
+    within(discussionPanel).getByText("确定交付恢复规则 @all");
     within(discussionPanel).getByText("1/2 已结束");
     const waveProgress = within(discussionPanel).getByRole("list", { name: "第1轮并行进度" });
     assert.equal(within(waveProgress).getAllByRole("listitem").length, 2);
@@ -622,7 +633,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         candidate.method === "POST"
       );
       assert.deepEqual(JSON.parse(request?.body ?? "{}"), {
-        goal: "确定交付恢复规则 @Review Bot @Local Codex ",
+        goal: "确定交付恢复规则 @all",
         participantAgentIds: [agent.agentId, secondAgent.agentId],
         mode: "round_robin",
         outputMode: "final_answer"
