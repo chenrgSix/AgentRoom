@@ -305,6 +305,7 @@ export async function createServerApp(
         ]
       });
       const completed = await executor.execute(run.runId, adapter);
+      await routeAgentReplyMentions(completed.runId);
       if (completed.state === "input_required") {
         await pauseDiscussionForInput(completed.runId);
       } else {
@@ -403,7 +404,9 @@ export async function createServerApp(
     messages,
     (run) => {
       if (discussionRepository.findTurnByRun(run.runId)) {
-        void advanceDiscussion(run.runId);
+        void routeAgentReplyMentions(run.runId).then(() =>
+          advanceDiscussion(run.runId)
+        );
         return;
       }
       void routeAgentReplyMentions(run.runId);

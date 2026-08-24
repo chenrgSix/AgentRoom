@@ -12,8 +12,18 @@ import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
+import { resolveExactAgentMentions } from "../src/team-room/exact-agent-mentions.js";
 
 const now = "2026-08-22T10:00:00.000Z";
+
+test("Agent reply commands use the longest known exact name before eligibility", () => {
+  const local = { agentId: "agent_local", name: "Local" };
+  const localCodex = { agentId: "agent_codex", name: "Local Codex" };
+  assert.deepEqual(
+    resolveExactAgentMentions("Ask @Local Codex", [local], [local, localCodex]),
+    { agentIds: [], ambiguousNames: [], usesAll: false }
+  );
+});
 
 test("only a structured visible Agent Mention is persisted for routing", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-mention-"));

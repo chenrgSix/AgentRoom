@@ -74,7 +74,8 @@ function longestMentionIndexes(
 
 export function resolveExactMentionCommands(
   content: string,
-  agents: readonly ExactMentionAgent[]
+  agents: readonly ExactMentionAgent[],
+  knownAgents: readonly ExactMentionAgent[] = agents
 ): ExactMentionCommandResolution {
   if (findMentionToken(content, "all") >= 0) {
     return {
@@ -84,8 +85,9 @@ export function resolveExactMentionCommands(
     };
   }
 
+  const eligibleAgentIds = new Set(agents.map(({ agentId }) => agentId));
   const agentsByName = new Map<string, ExactMentionAgent[]>();
-  for (const agent of agents) {
+  for (const agent of knownAgents) {
     const sameName = agentsByName.get(agent.name) ?? [];
     sameName.push(agent);
     agentsByName.set(agent.name, sameName);
@@ -98,10 +100,13 @@ export function resolveExactMentionCommands(
     const index = mentionIndexes.get(name)?.[0];
     if (index === undefined) continue;
     if (sameNameAgents.length > 1) {
-      ambiguous.push({ index, name });
+      if (sameNameAgents.some(({ agentId }) => eligibleAgentIds.has(agentId))) {
+        ambiguous.push({ index, name });
+      }
       continue;
     }
-    matches.push({ agentId: sameNameAgents[0]!.agentId, index });
+    const agentId = sameNameAgents[0]!.agentId;
+    if (eligibleAgentIds.has(agentId)) matches.push({ agentId, index });
   }
 
   matches.sort((left, right) => left.index - right.index);

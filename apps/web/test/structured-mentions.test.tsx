@@ -107,6 +107,14 @@ test("direct Mention commands match complete Agent names without fuzzy routing",
     ),
     "Ask @Local Codex"
   );
+  assert.deepEqual(
+    resolveExactMentionCommands(
+      "Ask @Local Codex",
+      [overlappingAgents[0]!],
+      overlappingAgents
+    ).agentIds,
+    []
+  );
 });
 
 test("@all is an exact reserved command and same-name Agents stay ambiguous", () => {

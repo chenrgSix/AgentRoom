@@ -53,12 +53,14 @@ export class HandoffService {
     if (!parent || !room || !room.collaborationPolicy.allowAgentMentions) {
       return [];
     }
-    const agents = this.core.listAgents(room.teamId).filter((agent) =>
+    const knownAgents = this.core.listAgents(room.teamId).filter((agent) =>
       agent.enabled &&
-      agent.agentId !== parent.targetAgentId &&
+      agent.agentId !== parent.targetAgentId
+    );
+    const agents = knownAgents.filter((agent) =>
       this.core.isRoomAgent(room.roomId, agent.agentId)
     );
-    const resolution = resolveExactAgentMentions(content, agents);
+    const resolution = resolveExactAgentMentions(content, agents, knownAgents);
     if (resolution.usesAll && !room.collaborationPolicy.allowAll) return [];
     const created: RunRecord[] = [];
     for (const targetAgentId of resolution.agentIds.slice(0, maximumUniqueAgents)) {

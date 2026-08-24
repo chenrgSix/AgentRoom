@@ -849,8 +849,8 @@ export function App() {
     ).slice(0, 8);
   }, [locale, mentionAgentIds, mentionSearch, roomAgents]);
   const exactMentionCommands = useMemo(
-    () => resolveExactMentionCommands(messageContent, roomAgents),
-    [messageContent, roomAgents]
+    () => resolveExactMentionCommands(messageContent, roomAgents, agents),
+    [agents, messageContent, roomAgents]
   );
   const selectedMentionAgents = mentionAgentIds.flatMap((agentId) => {
     const agent = agentsById.get(agentId);
@@ -1894,7 +1894,11 @@ export function App() {
   async function submitComposer(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedRoomId || !messageContent.trim()) return;
-    const exactCommands = resolveExactMentionCommands(messageContent, roomAgents);
+    const exactCommands = resolveExactMentionCommands(
+      messageContent,
+      roomAgents,
+      agents
+    );
     const selectedNames = new Set(selectedMentionAgents.map(({ name }) => name));
     const unresolvedAmbiguousNames = exactCommands.ambiguousNames.filter(
       (name) => !selectedNames.has(name)
