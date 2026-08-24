@@ -242,6 +242,13 @@ recovery fencing and safe Codex/Generic failure metadata. GitHub Actions run
 independent public download passed the same 11-asset verifier. Full evidence is
 recorded in `docs/acceptance/qa-011-v0.2.0-rc.2.md`.
 
+Release `v0.2.0-rc.3` adds Runtime self-test diagnostics, per-Agent execution
+isolation, queued cancellation, and bounded Runtime process-tree termination.
+GitHub Actions run `32682673642` built and verified all seven archives from the
+exact tag, and an independent public download passed the same 11-asset
+verifier. Full evidence is recorded in
+`docs/acceptance/qa-014-v0.2.0-rc.3.md`.
+
 ## Dependencies
 
 Contracts, Registry publication, Security pairing, and Runtime Adapters.
