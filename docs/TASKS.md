@@ -56,7 +56,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | CON-002 | DONE | Define IDs, timestamps, versions, and error envelope | CON-001 | common schemas and positive/negative fixtures pass |
 | CON-003 | DONE | Define Bridge message schemas | CON-002 | hello, heartbeat, publish, and run schemas validate |
 | CON-004 | DONE | Generate TypeScript and Go contract types | CON-003, Go toolchain | generation is deterministic and both languages agree on fixtures |
-| CON-005 | ACTIVE | Define recoverable Runtime output deltas | CON-004, RUN-003 | schema fixtures and generated TypeScript/Go types prove bounded, sequenced `run.output_delta` events remain distinct from the final reply |
+| CON-005 | DONE | Define recoverable Runtime output deltas | CON-004, RUN-003 | schema fixtures and generated TypeScript/Go types prove bounded, sequenced `run.output_delta` events remain distinct from the final reply |
 | DATA-001 | DONE | Add SQLite migration runner and database location | GOV-004 | empty database migrates from zero |
 | DATA-002 | DONE | Add Team, Room, Message, and registry tables | DATA-001, CON-002 | repository tests persist and reload entities |
 | ADP-001 | DONE | Implement deterministic Fake Runtime Adapter | CON-002 | scripted events exercise success and failure |
@@ -110,7 +110,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ADP-005 | DONE | Implement Generic CLI fallback | ADP-002 | stdout, exit, timeout, and cancel verified |
 | ADP-006 | DONE | Add structured Pi output boundary | ADP-005, BRG-019 | preset v2 emits Pi JSON events; the dedicated adapter exposes only the final assistant reply and fails closed on malformed streams or leaked provider tool protocol |
 | ADP-007 | DONE | Follow owner-controlled local Pi permissions | ADP-006, BRG-022 | config migration and Console edit tests prove preset v3 keeps only Bridge-owned JSON/print/session lifecycle flags while preserving local Pi policy; adapter and probe tests prove tool events remain private, final replies are delivered, and explicit self-tests temporarily disable local permissions |
-| BRG-023 | READY | Stream safe Runtime assistant output | CON-005, ADP-006, BRG-005 | Pi JSON delta fixtures and Bridge executor recovery tests prove bounded redacted previews stream in order, tool lifecycle stays local, and final replies remain authoritative; unsupported Runtimes retain final-only behavior |
+| BRG-023 | ACTIVE | Stream safe Runtime assistant output | CON-005, ADP-006, BRG-005 | Pi JSON delta fixtures and Bridge executor recovery tests prove bounded redacted previews stream in order, tool lifecycle stays local, and final replies remain authoritative; unsupported Runtimes retain final-only behavior |
 
 ## Workstream F3: Run Orchestration and Web Experience
 

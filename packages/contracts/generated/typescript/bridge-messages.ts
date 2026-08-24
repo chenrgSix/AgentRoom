@@ -3,6 +3,36 @@
 /**
  * Fields shared by versioned cross-process messages.
  */
+export interface RunOutputDeltaMessage {
+  messageId: string;
+  payload:   RunOutputDeltaPayload;
+  /**
+   * Major and minor protocol version negotiated by peers.
+   */
+  protocolVersion: string;
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  timestamp: string;
+  type:      RunOutputDeltaMessageType;
+  [property: string]: unknown;
+}
+
+export interface RunOutputDeltaPayload {
+  agentId:  string;
+  runId:    string;
+  sequence: number;
+  traceId:  string;
+  content:  string;
+  reset?:   boolean;
+  [property: string]: unknown;
+}
+
+export type RunOutputDeltaMessageType = "run.output_delta";
+
+/**
+ * Fields shared by versioned cross-process messages.
+ */
 export interface BridgeHelloMessage {
   messageId: string;
   payload:   BridgeHelloPayload;
@@ -440,6 +470,7 @@ export interface Device {
 export type BridgeJoinPairedStatus = "paired";
 
 export type BridgeMessage =
+  | RunOutputDeltaMessage
   | BridgeHelloMessage
   | BridgeHeartbeatMessage
   | AgentPublishMessage

@@ -19,6 +19,7 @@
             "run.requested",
             "run.accepted",
             "run.status",
+            "run.output_delta",
             "run.reply",
             "run.cancel_requested",
             "run.handoff_requested"
@@ -26,6 +27,25 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.output_delta"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/runOutputDeltaPayload"
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {
@@ -847,6 +867,30 @@
         }
       },
       "minProperties": 1
+    },
+    "runOutputDeltaPayload": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/runEventBase"
+        },
+        {
+          "type": "object",
+          "required": [
+            "content"
+          ],
+          "properties": {
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 20000
+            },
+            "reset": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      ]
     },
     "runReplyPayload": {
       "allOf": [

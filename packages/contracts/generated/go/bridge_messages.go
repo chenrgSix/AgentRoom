@@ -5,6 +5,26 @@ package contracts
 import "time"
 
 // Fields shared by versioned cross-process messages.
+type RunOutputDeltaMessage struct {
+	MessageID string                `json:"messageId"`
+	Payload   RunOutputDeltaPayload `json:"payload"`
+	// Major and minor protocol version negotiated by peers.
+	ProtocolVersion string `json:"protocolVersion"`
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	Timestamp time.Time                 `json:"timestamp"`
+	Type      RunOutputDeltaMessageType `json:"type"`
+}
+
+type RunOutputDeltaPayload struct {
+	AgentID  string `json:"agentId"`
+	RunID    string `json:"runId"`
+	Sequence int64  `json:"sequence"`
+	TraceID  string `json:"traceId"`
+	Content  string `json:"content"`
+	Reset    *bool  `json:"reset,omitempty"`
+}
+
+// Fields shared by versioned cross-process messages.
 type BridgeHelloMessage struct {
 	MessageID string             `json:"messageId"`
 	Payload   BridgeHelloPayload `json:"payload"`
@@ -302,6 +322,12 @@ type Device struct {
 	OwnerMemberID string `json:"ownerMemberId"`
 	TeamID        string `json:"teamId"`
 }
+
+type RunOutputDeltaMessageType string
+
+const (
+	RunOutputDelta RunOutputDeltaMessageType = "run.output_delta"
+)
 
 type BridgeHelloMessageType string
 

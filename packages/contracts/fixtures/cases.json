@@ -259,6 +259,25 @@
       "valid": false
     },
     {
+      "name": "valid Run output delta",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WQ",
+        "timestamp": "2026-08-22T10:00:06Z",
+        "type": "run.output_delta",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 3,
+          "content": "The boundary is being checked.",
+          "reset": true
+        }
+      },
+      "valid": true
+    },
+    {
       "name": "valid Run reply",
       "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
       "instance": {
@@ -372,6 +391,24 @@
           "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "sequence": 0
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Run output delta rejects empty content",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4W00",
+        "timestamp": "2026-08-22T10:00:12Z",
+        "type": "run.output_delta",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 3,
+          "content": ""
         }
       },
       "valid": false
