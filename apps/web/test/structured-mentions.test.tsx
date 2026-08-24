@@ -71,6 +71,42 @@ test("direct Mention commands match complete Agent names without fuzzy routing",
     ]).agentIds,
     ["agent_codex"]
   );
+  const overlappingAgents = [
+    { agentId: "agent_local", name: "Local" },
+    { agentId: "agent_codex", name: "Local Codex" }
+  ];
+  assert.deepEqual(
+    resolveExactMentionCommands("Ask @Local Codex to review", overlappingAgents)
+      .agentIds,
+    ["agent_codex"]
+  );
+  assert.deepEqual(
+    resolveExactMentionCommands(
+      "Ask @Local Codex, then @Local.",
+      overlappingAgents
+    ).agentIds,
+    ["agent_codex", "agent_local"]
+  );
+  const overlappingMap = new Map(overlappingAgents.map((agent) => [
+    agent.agentId,
+    { name: agent.name }
+  ]));
+  assert.deepEqual(
+    retainVisibleMentionIds(
+      "Ask @Local Codex",
+      ["agent_local", "agent_codex"],
+      overlappingMap
+    ),
+    ["agent_codex"]
+  );
+  assert.equal(
+    removeVisibleMentionToken(
+      "Ask @Local Codex",
+      "Local",
+      overlappingAgents.map(({ name }) => name)
+    ),
+    "Ask @Local Codex"
+  );
 });
 
 test("@all is an exact reserved command and same-name Agents stay ambiguous", () => {

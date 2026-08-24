@@ -60,6 +60,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     teamId: team.teamId,
     name: "general",
     collaborationPolicy: roomPolicy,
+    settingsRevision: 1,
     createdAt: "2026-08-23T00:01:00.000Z"
   };
   const member = {
@@ -126,6 +127,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   let reviewAgentEnabled = true;
   const failedClientMessageIds = new Set<string>();
   let roomAgentIds = [agent.agentId, secondAgent.agentId];
+  let roomSettingsRevision = room.settingsRevision;
   let discussionState = "";
   let discussionGoal = "确定交付恢复规则";
   let discussionChangeDelivered = false;
@@ -245,16 +247,26 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     }
     if (path === `/api/teams/${team.teamId}/rooms` && method === "POST") {
       roomWasCreated = true;
-      return jsonResponse(room);
+      return jsonResponse({ ...room, settingsRevision: roomSettingsRevision });
     }
     if (path === `/api/teams/${team.teamId}/rooms`) {
       return jsonResponse(roomWasCreated && !roomArchivedAt
-        ? [{ ...room, name: roomNameValue, archivedAt: null }]
+          ? [{
+              ...room,
+              name: roomNameValue,
+              settingsRevision: roomSettingsRevision,
+              archivedAt: null
+            }]
         : []);
     }
     if (path === `/api/teams/${team.teamId}/rooms?includeArchived=true`) {
       return jsonResponse(roomWasCreated
-        ? [{ ...room, name: roomNameValue, archivedAt: roomArchivedAt }]
+        ? [{
+            ...room,
+            name: roomNameValue,
+            settingsRevision: roomSettingsRevision,
+            archivedAt: roomArchivedAt
+          }]
         : []);
     }
     if (path === `/api/teams/${secondTeam.teamId}/rooms?includeArchived=true`) {
@@ -266,7 +278,12 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       if (update.archived !== undefined) {
         roomArchivedAt = update.archived ? "2026-08-24T00:00:00.000Z" : null;
       }
-      return jsonResponse({ ...room, name: roomNameValue, archivedAt: roomArchivedAt });
+      return jsonResponse({
+        ...room,
+        name: roomNameValue,
+        settingsRevision: roomSettingsRevision,
+        archivedAt: roomArchivedAt
+      });
     }
     if (
       path === `/api/teams/${team.teamId}/bridge-join-requests/approve` &&
@@ -340,14 +357,36 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         memberIds: string[];
         agentIds: string[];
         collaborationPolicy: typeof roomPolicy;
+        expectedRevision: number;
       };
+      assert.equal(updated.expectedRevision, roomSettingsRevision);
       roomAgentIds = updated.agentIds;
       Object.assign(roomPolicy, updated.collaborationPolicy);
+      roomSettingsRevision += 1;
       return jsonResponse({
-        room: { ...room, name: roomNameValue, archivedAt: roomArchivedAt },
+        room: {
+          ...room,
+          name: roomNameValue,
+          settingsRevision: roomSettingsRevision,
+          archivedAt: roomArchivedAt
+        },
         participants: {
           memberIds: updated.memberIds,
           agentIds: updated.agentIds
+        }
+      });
+    }
+    if (path === `/api/rooms/${room.roomId}/settings`) {
+      return jsonResponse({
+        room: {
+          ...room,
+          name: roomNameValue,
+          settingsRevision: roomSettingsRevision,
+          archivedAt: roomArchivedAt
+        },
+        participants: {
+          memberIds: [member.memberId],
+          agentIds: roomAgentIds
         }
       });
     }
@@ -703,7 +742,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
 
     let currentParticipants = screen.getByRole("region", { name: "房间成员" });
     fireEvent.click(within(currentParticipants).getByRole("button", { name: "房间设置" }));
-    let participantDialog = screen.getByRole("dialog", { name: "房间设置" });
+    let participantDialog = await screen.findByRole("dialog", { name: "房间设置" });
     const ownerCheckbox = within(participantDialog).getByRole("checkbox", {
       name: /Local Owner/u
     }) as HTMLInputElement;
@@ -737,7 +776,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         allowAll: false,
         allowAgentMentions: false,
         maxAgentMentionDepth: 2
-      }
+      },
+      expectedRevision: 1
     });
     screen.getByText("单次并行回复");
     screen.getByText("禁用 @all");
@@ -779,7 +819,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
 
     currentParticipants = screen.getByRole("region", { name: "房间成员" });
     fireEvent.click(within(currentParticipants).getByRole("button", { name: "房间设置" }));
-    participantDialog = screen.getByRole("dialog", { name: "房间设置" });
+    participantDialog = await screen.findByRole("dialog", { name: "房间设置" });
     fireEvent.click(within(participantDialog).getByRole("checkbox", { name: /Local Codex/u }));
     saveButton = within(participantDialog).getByRole("button", { name: "保存" });
     await act(async () => {
@@ -799,7 +839,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         allowAll: false,
         allowAgentMentions: false,
         maxAgentMentionDepth: 2
-      }
+      },
+      expectedRevision: 2
     });
     currentParticipants = screen.getByRole("region", { name: "房间成员" });
     assert.equal(within(currentParticipants).queryByText("Local Codex"), null);

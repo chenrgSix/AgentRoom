@@ -50,6 +50,7 @@ const room = {
   createdAt: "2026-08-24T00:00:00.000Z",
   name: "general",
   roomId: "room_test",
+  settingsRevision: 1,
   teamId: team.teamId
 };
 const agents = [{
@@ -99,10 +100,13 @@ function installFixture(input: {
     if (path === `/api/teams/${team.teamId}/agents`) return jsonResponse(agents);
     if (path === `/api/teams/${team.teamId}/members`) return jsonResponse([owner]);
     if (path === `/api/teams/${team.teamId}/devices`) return jsonResponse([]);
-    if (path === `/api/rooms/${room.roomId}/participants`) {
+    if (path === `/api/rooms/${room.roomId}/settings`) {
       return jsonResponse({
-        memberIds: [owner.memberId],
-        agentIds: agents.map(({ agentId }) => agentId)
+        room,
+        participants: {
+          memberIds: [owner.memberId],
+          agentIds: agents.map(({ agentId }) => agentId)
+        }
       });
     }
     if (path === `/api/rooms/${room.roomId}/messages?limit=100&tail=true`) {

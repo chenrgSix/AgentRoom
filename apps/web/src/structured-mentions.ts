@@ -38,17 +38,38 @@ function findMentionToken(
   return -1;
 }
 
-function countMentionTokens(content: string, agentName: string): number {
-  const tokenLength = agentName.length + 1;
-  let count = 0;
-  let fromIndex = 0;
-  while (fromIndex <= content.length) {
-    const index = findMentionToken(content, agentName, fromIndex);
-    if (index < 0) return count;
-    count += 1;
-    fromIndex = index + tokenLength;
+function longestMentionIndexes(
+  content: string,
+  names: Iterable<string>
+): Map<string, number[]> {
+  const candidates: Array<{ index: number; name: string }> = [];
+  for (const name of names) {
+    let fromIndex = 0;
+    while (fromIndex <= content.length) {
+      const index = findMentionToken(content, name, fromIndex);
+      if (index < 0) break;
+      candidates.push({ index, name });
+      fromIndex = index + name.length + 1;
+    }
   }
-  return count;
+  const longestLengthByIndex = new Map<number, number>();
+  for (const candidate of candidates) {
+    longestLengthByIndex.set(
+      candidate.index,
+      Math.max(longestLengthByIndex.get(candidate.index) ?? 0, candidate.name.length)
+    );
+  }
+  const indexesByName = new Map<string, number[]>();
+  for (const candidate of candidates) {
+    if (candidate.name.length !== longestLengthByIndex.get(candidate.index)) continue;
+    const indexes = indexesByName.get(candidate.name) ?? [];
+    indexes.push(candidate.index);
+    indexesByName.set(candidate.name, indexes);
+  }
+  for (const indexes of indexesByName.values()) {
+    indexes.sort((left, right) => left - right);
+  }
+  return indexesByName;
 }
 
 export function resolveExactMentionCommands(
@@ -69,12 +90,13 @@ export function resolveExactMentionCommands(
     sameName.push(agent);
     agentsByName.set(agent.name, sameName);
   }
+  const mentionIndexes = longestMentionIndexes(content, agentsByName.keys());
 
   const matches: Array<{ agentId: string; index: number }> = [];
   const ambiguous: Array<{ index: number; name: string }> = [];
   for (const [name, sameNameAgents] of agentsByName) {
-    const index = findMentionToken(content, name);
-    if (index < 0) continue;
+    const index = mentionIndexes.get(name)?.[0];
+    if (index === undefined) continue;
     if (sameNameAgents.length > 1) {
       ambiguous.push({ index, name });
       continue;
@@ -96,12 +118,18 @@ export function retainVisibleMentionIds(
   agentIds: readonly string[],
   agentsById: ReadonlyMap<string, MentionIdentity>
 ): string[] {
+  const visibleCounts = new Map(
+    [...longestMentionIndexes(
+      content,
+      new Set([...agentsById.values()].map(({ name }) => name))
+    )].map(([name, indexes]) => [name, indexes.length])
+  );
   const remainingByName = new Map<string, number>();
   return agentIds.filter((agentId) => {
     const agent = agentsById.get(agentId);
     if (!agent) return false;
     const remaining = remainingByName.get(agent.name) ??
-      countMentionTokens(content, agent.name);
+      visibleCounts.get(agent.name) ?? 0;
     if (remaining === 0) return false;
     remainingByName.set(agent.name, remaining - 1);
     return true;
@@ -110,11 +138,12 @@ export function retainVisibleMentionIds(
 
 export function removeVisibleMentionToken(
   content: string,
-  agentName: string
+  agentName: string,
+  knownAgentNames: Iterable<string> = [agentName]
 ): string {
   const token = `@${agentName}`;
-  const start = findMentionToken(content, agentName);
-  if (start < 0) return content;
+  const start = longestMentionIndexes(content, knownAgentNames).get(agentName)?.[0];
+  if (start === undefined) return content;
   const tokenEnd = start + token.length;
   const end = content[tokenEnd] === " " ? tokenEnd + 1 : tokenEnd;
   return `${content.slice(0, start)}${content.slice(end)}`;

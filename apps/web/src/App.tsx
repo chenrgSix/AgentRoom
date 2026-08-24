@@ -72,6 +72,7 @@ interface Room {
   teamId: string;
   name: string;
   collaborationPolicy?: RoomCollaborationPolicy;
+  settingsRevision: number;
   createdAt: string;
   archivedAt?: string | null;
 }
@@ -747,6 +748,9 @@ export function App() {
   const [roomPolicyDraft, setRoomPolicyDraft] = useState<RoomCollaborationPolicy>(
     defaultRoomCollaborationPolicy
   );
+  const [roomSettingsDraftRevision, setRoomSettingsDraftRevision] = useState<
+    number | null
+  >(null);
   const [teamName, setTeamName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
@@ -1333,12 +1337,12 @@ export function App() {
         {},
         session.token
       ),
-      jsonRequest<RoomParticipants>(
-        `/api/rooms/${selectedRoomId}/participants`,
+      jsonRequest<RoomSettings>(
+        `/api/rooms/${selectedRoomId}/settings`,
         {},
         session.token
       )
-    ]).then(async ([page, nextRuns, nextDiscussions, nextParticipants]) => {
+    ]).then(async ([page, nextRuns, nextDiscussions, nextSettings]) => {
       const outputBatches = await loadRunOutputEvents(
         nextRuns, runOutputSyncRef.current, session.token
       );
@@ -1352,9 +1356,12 @@ export function App() {
       setRuns(nextRuns);
       commitRunOutputEvents(nextRuns, outputBatches);
       setDiscussions(nextDiscussions);
-      setRoomParticipants(nextParticipants);
+      setRoomParticipants(nextSettings.participants);
+      setRooms((current) => current.map((room) =>
+        room.roomId === nextSettings.room.roomId ? nextSettings.room : room
+      ));
       setMentionAgentIds((current) => current.filter((agentId) =>
-        nextParticipants.agentIds.includes(agentId)
+        nextSettings.participants.agentIds.includes(agentId)
       ));
     })
       .catch((reason: unknown) => {
@@ -1396,7 +1403,7 @@ export function App() {
           nextDevices,
           nextRuns,
           nextDiscussions,
-          nextParticipants
+          nextSettings
         ] = await Promise.all([
           jsonRequest<Agent[]>(
             `/api/teams/${selectedTeamId}/agents`, {}, session.token
@@ -1413,8 +1420,8 @@ export function App() {
           jsonRequest<DiscussionView[]>(
             `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
           ),
-          jsonRequest<RoomParticipants>(
-            `/api/rooms/${selectedRoomId}/participants`, {}, session.token
+          jsonRequest<RoomSettings>(
+            `/api/rooms/${selectedRoomId}/settings`, {}, session.token
           )
         ]);
         const outputBatches = await loadRunOutputEvents(
@@ -1440,9 +1447,12 @@ export function App() {
           setRuns(nextRuns);
           commitRunOutputEvents(nextRuns, outputBatches);
           setDiscussions(nextDiscussions);
-          setRoomParticipants(nextParticipants);
+          setRoomParticipants(nextSettings.participants);
+          setRooms((current) => current.map((room) =>
+            room.roomId === nextSettings.room.roomId ? nextSettings.room : room
+          ));
           setMentionAgentIds((current) => current.filter((agentId) =>
-            nextParticipants.agentIds.includes(agentId)
+            nextSettings.participants.agentIds.includes(agentId)
           ));
         }
       } catch (reason) {
@@ -1573,16 +1583,40 @@ export function App() {
     }
   }
 
-  function openParticipantDialog() {
-    setParticipantMemberIds(roomParticipants.memberIds);
-    setParticipantAgentIds(roomParticipants.agentIds);
-    setRoomPolicyDraft({ ...selectedRoomPolicy });
-    setParticipantDialogOpen(true);
+  async function openParticipantDialog() {
+    if (!session || !selectedRoomId || participantBusy) return;
+    setParticipantBusy(true);
+    setError(null);
+    try {
+      const settings = await jsonRequest<RoomSettings>(
+        `/api/rooms/${selectedRoomId}/settings`,
+        {},
+        session.token
+      );
+      setRoomParticipants(settings.participants);
+      setRooms((current) => current.map((room) =>
+        room.roomId === settings.room.roomId ? settings.room : room
+      ));
+      setParticipantMemberIds(settings.participants.memberIds);
+      setParticipantAgentIds(settings.participants.agentIds);
+      setRoomPolicyDraft({ ...collaborationPolicyFor(settings.room) });
+      setRoomSettingsDraftRevision(settings.room.settingsRevision);
+      setParticipantDialogOpen(true);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setParticipantBusy(false);
+    }
   }
 
   async function saveRoomParticipants(event: FormEvent) {
     event.preventDefault();
-    if (!session || !selectedRoomId || currentMember?.role !== "owner") return;
+    if (
+      !session ||
+      !selectedRoomId ||
+      currentMember?.role !== "owner" ||
+      roomSettingsDraftRevision === null
+    ) return;
     setParticipantBusy(true);
     setError(null);
     try {
@@ -1593,7 +1627,8 @@ export function App() {
           body: JSON.stringify({
             memberIds: participantMemberIds,
             agentIds: participantAgentIds,
-            collaborationPolicy: roomPolicyDraft
+            collaborationPolicy: roomPolicyDraft,
+            expectedRevision: roomSettingsDraftRevision
           })
         },
         session.token
@@ -1602,12 +1637,32 @@ export function App() {
       setRooms((current) => current.map((room) =>
         room.roomId === updated.room.roomId ? updated.room : room
       ));
+      setRoomSettingsDraftRevision(updated.room.settingsRevision);
       setMentionAgentIds((current) => current.filter((agentId) =>
         updated.participants.agentIds.includes(agentId)
       ));
       setParticipantDialogOpen(false);
     } catch (reason) {
-      setError(String(reason));
+      if (String(reason).includes("Room settings changed; reload and retry")) {
+        const latest = await jsonRequest<RoomSettings>(
+          `/api/rooms/${selectedRoomId}/settings`,
+          {},
+          session.token
+        );
+        setRoomParticipants(latest.participants);
+        setRooms((current) => current.map((room) =>
+          room.roomId === latest.room.roomId ? latest.room : room
+        ));
+        setParticipantMemberIds(latest.participants.memberIds);
+        setParticipantAgentIds(latest.participants.agentIds);
+        setRoomPolicyDraft({ ...collaborationPolicyFor(latest.room) });
+        setRoomSettingsDraftRevision(latest.room.settingsRevision);
+        setError(locale === "zh-CN"
+          ? "房间设置已被其他客户端更新，已载入最新内容，请确认后再保存。"
+          : "Room settings changed in another client. Latest settings were loaded; review and save again.");
+      } else {
+        setError(String(reason));
+      }
     } finally {
       setParticipantBusy(false);
     }
@@ -2076,7 +2131,11 @@ export function App() {
   }
 
   function removeMention(agent: Agent) {
-    setMessageContent((current) => removeVisibleMentionToken(current, agent.name));
+    setMessageContent((current) => removeVisibleMentionToken(
+      current,
+      agent.name,
+      roomAgents.map(({ name }) => name)
+    ));
     setMentionAgentIds((current) => current.filter((agentId) => agentId !== agent.agentId));
     setMentionSearch(null);
   }
