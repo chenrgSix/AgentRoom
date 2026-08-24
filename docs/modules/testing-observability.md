@@ -194,6 +194,11 @@ Room tail synchronization, failed-Run diagnostic projection, legacy Runtime
 preset migration, and explicit Bridge self-test evidence is recorded in
 `docs/acceptance/qa-012-room-bridge-ux.md`.
 
+`QA-013` verifies the Bridge execution gate with deterministic same-Agent FIFO,
+cross-Agent parallel, duplicate, queued-cancel, and reconnect cases. Runtime
+start counts are authoritative evidence that queued or duplicate work did not
+escape isolation.
+
 The operator-facing Compose lifecycle and static configuration evidence is
 recorded in `docs/acceptance/ops-005-compose-operations.md`. It covers bounded
 container logs, CI rendering, first setup, health, troubleshooting, upgrades,

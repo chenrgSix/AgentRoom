@@ -132,6 +132,15 @@ Pi presets. Codex is forced to `read-only`, Pi retains its no-tool preset,
 active Team Runs fence the probe, and only allowlisted status and failure
 metadata return to the UI.
 
+`BRG-020` adds a lightweight per-Agent execution gate after durable inbox
+acceptance. Different Agent identities on one Bridge keep independent slots and
+may execute concurrently; Runs targeting one Agent wait in FIFO order with a
+default concurrency of one. Duplicate delivery only replays persisted events.
+An explicit cancellation while queued persists and reports `canceled` without
+invoking the Runtime. This scheduling boundary prevents one Agent configuration
+from concurrently sharing its session and workspace; per-Run Git worktrees
+remain a separate opt-in isolation layer.
+
 ## Desktop Client
 
 The browser Console is a compatibility surface, not the final end-user shell.
