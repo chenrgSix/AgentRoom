@@ -69,9 +69,13 @@ Each Room owns one Server-enforced collaboration policy with four settings:
 enabled with depth 4. The Owner-only
 `PUT /api/rooms/:roomId/settings` operation replaces the policy and participant
 roster atomically, so the browser never observes a policy for a different Agent
-roster. Depth is always persisted in the range 1 through 4, including while
-Agent handoffs are disabled, so re-enabling the capability restores the chosen
-bound.
+roster. Every settings response carries `settingsRevision`; writes must echo the
+revision they edited and receive `409 CONFLICT` after another participant or
+policy update. Team-change reconciliation and the settings dialog read the
+combined settings resource, so one client cannot silently overwrite another
+client's newer roster or policy. Depth is always persisted in the range 1
+through 4, including while Agent handoffs are disabled, so re-enabling the
+capability restores the chosen bound.
 
 ## Message Write Flow
 
@@ -95,7 +99,16 @@ A quoted or plain-text `@Bob/Backend` received from a Member without a
 structured Mention does not create a Run. After an ordinary Run reply is
 persisted, Run Orchestration may separately parse exact full Agent names from
 that Agent-authored content for a policy-bounded handoff; this never changes
-the persisted Message write contract.
+the persisted Message write contract. Exact-name parsing chooses the longest
+known Agent name at each `@` position before applying Room eligibility, so a
+spaced name cannot also trigger its shorter prefix.
+
+Each accepted reply creates a routing intent in the same transaction as the
+redacted `run_events` content. Handoff resolution reads only that persisted safe
+content. Child Run creation and managed Delivery establishment are idempotent;
+the intent is completed afterward and pending intents are replayed at startup.
+This closes the crash cuts before routing and between sibling child Runs without
+reintroducing unredacted Bridge content.
 
 ## History and Ordering
 

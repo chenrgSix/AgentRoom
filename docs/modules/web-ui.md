@@ -266,9 +266,13 @@ acceptance confirms the production shell has no horizontal overflow.
 `ROOM-007` adds the Owner-only Room collaboration settings surface and compact
 composer summary. Component coverage proves atomic policy/participant writes,
 disabled `@all`, one-shot multi-Agent submission, and retained multi-target
-outbox retries. Isolated real-browser acceptance proves two fake Agents each
-reply once without creating a Discussion, while light theme and 760 px and
-390 px settings layouts retain zero horizontal overflow.
+outbox retries. Settings open and Team-change reconciliation load the combined
+Room settings resource, while revision-fenced writes reload newer state instead
+of overwriting another client. Direct Mention parsing uses the longest known
+exact Agent name before current-Room eligibility. Isolated real-browser
+acceptance proves two fake Agents each reply once without creating a Discussion,
+while light theme and 760 px and 390 px settings layouts retain zero horizontal
+overflow.
 
 ## Dependencies
 
