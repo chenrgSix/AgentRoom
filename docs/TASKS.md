@@ -108,6 +108,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |
 | ADP-005 | DONE | Implement Generic CLI fallback | ADP-002 | stdout, exit, timeout, and cancel verified |
 | ADP-006 | DONE | Add structured Pi output boundary | ADP-005, BRG-019 | preset v2 emits Pi JSON events; the dedicated adapter exposes only the final assistant reply and fails closed on malformed streams or leaked provider tool protocol |
+| ADP-007 | ACTIVE | Follow owner-controlled local Pi permissions | ADP-006, BRG-022 | preset v3 keeps only Bridge-owned JSON/print/session lifecycle flags, preserves owner-authored Pi permission arguments during legacy migration, and parser/Console tests prove local tool events remain private while the final assistant reply is delivered |
 
 ## Workstream F3: Run Orchestration and Web Experience
 
