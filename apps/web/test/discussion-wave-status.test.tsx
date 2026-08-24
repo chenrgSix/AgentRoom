@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 import { JSDOM } from "jsdom";
@@ -169,6 +170,10 @@ test("waiting Discussion keeps the just-closed partial Wave visible", async () =
   try {
     const view = render(<App />);
     const panel = await view.findByRole("region", { name: "当前智能体讨论" });
+    const dock = panel.closest(".room-dock");
+    assert.ok(dock, "Discussion status should live in the Room dock");
+    assert.equal(panel.closest("form"), null, "Discussion status should not expand the composer form");
+    assert.ok(dock.querySelector("form.composer"), "Room dock should keep a separate composer");
     within(panel).getByText("等待你的决定");
     within(panel).getByText("部分完成");
     within(panel).getByText("2/2 已结束");
@@ -181,6 +186,17 @@ test("waiting Discussion keeps the just-closed partial Wave visible", async () =
     cleanup();
     dom.window.close();
   }
+});
+
+test("Room dock participates in layout instead of overlaying the timeline", async () => {
+  const stylesheet = await readFile(new URL("../src/styles.css", import.meta.url), "utf8");
+  const timelineRule = stylesheet.match(/\.timeline\s*\{[^}]+\}/u)?.[0] ?? "";
+  const composerRule = stylesheet.match(/\.composer\s*\{[^}]+\}/u)?.[0] ?? "";
+  const dockRule = stylesheet.match(/\.room-dock\s*\{[^}]+\}/u)?.[0] ?? "";
+
+  assert.match(timelineRule, /overflow-y:\s*auto/u);
+  assert.doesNotMatch(composerRule, /position:\s*absolute/u);
+  assert.match(dockRule, /flex:\s*0 0 auto/u);
 });
 
 test("completed Discussion keeps a failed finalization Wave and its reasons visible", async () => {

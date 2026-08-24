@@ -133,7 +133,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-016 | DONE | Resolve timeline sender display names | WEB-003, WEB-011 | Agent and member messages render the registered sender name resolved from the stable sender ID |
 | WEB-018 | DONE | Add trusted-team setup, invitation, and session screens | SEC-005, WEB-009 | Chinese-first setup/recovery, fragment invitation claim, session restore/logout, and Owner invite controls pass component and public API acceptance |
 | WEB-019 | DONE | Unify Room message and Discussion composer | WEB-014, WEB-017 | no separate Discussion entry remains; tests cover 0, 1, and 2-5 structured Mention routing, token identity synchronization, and competing Discussion rejection |
-| WEB-023 | PLANNED | Dock Room composition and Discussion status | WEB-019, WEB-022 | desktop and narrow-screen component coverage proves the timeline owns scrolling and the dynamically sized Discussion status and composer never overlay Room messages |
+| WEB-023 | DONE | Dock Room composition and Discussion status | WEB-019, WEB-022 | desktop and narrow-screen component coverage proves the timeline owns scrolling and the dynamically sized Discussion status and composer never overlay Room messages |
 | WEB-024 | PLANNED | Expose persistent Team creation entry | WEB-007, WEB-018 | desktop rail and mobile navigation open an accessible Team creation modal and switch to the created Team |
 | WEB-025 | PLANNED | Manage Room participants from the Room context | ROOM-004, WEB-013, WEB-014 | Owner-only participant controls update humans and Agents independently; sidebar and Mention suggestions render only the selected Room roster |
 

@@ -2148,7 +2148,7 @@ export function App() {
           </section>
         )}
         {selectedRoom && activeView === "room" && (
-          <form className="composer" onSubmit={(event) => void submitComposer(event)}>
+          <div className="room-dock">
             {visibleDiscussion && (
               <section className="discussion-status" aria-label={locale === "zh-CN" ? "当前智能体讨论" : "Active Agent Discussion"}>
                 <div className="discussion-status-copy">
@@ -2266,68 +2266,70 @@ export function App() {
                 </div>
               </section>
             )}
-            <div className="composer-input">
-              {mentionSearch && (
-                <div className="mention-suggestions" aria-label={t("mentionAgent")} role="listbox">
-                  <div className="mention-suggestions-heading">{t("mentionHint")}</div>
-                  {mentionOptions.length === 0 ? (
-                    <p>{t("noMentionMatches")}</p>
-                  ) : mentionOptions.map((agent, index) => (
-                    <button
-                      aria-selected={index === mentionOptionIndex}
-                      className={index === mentionOptionIndex ? "mention-option active" : "mention-option"}
-                      key={agent.agentId}
-                      onClick={() => selectMention(agent)}
-                      role="option"
-                      type="button"
-                    >
-                      <span className="participant-avatar agent">{agent.name.slice(0, 1).toUpperCase()}</span>
-                      <span><strong>@{agent.name}</strong><small>{roleLabel(agent.role, locale)}</small></span>
-                      <span className={`presence-dot ${agent.presence}`} />
-                    </button>
-                  ))}
-                </div>
-              )}
-              {selectedMentionAgents.length > 0 && (
-                <div className="selected-mentions" aria-label={locale === "zh-CN" ? "已提及智能体" : "Mentioned Agents"}>
-                  {selectedMentionAgents.map((agent) => (
-                    <button
-                      aria-label={locale === "zh-CN"
-                        ? `移除提及 ${agent.name}（${roleLabel(agent.role, locale)}）`
-                        : `Remove mention ${agent.name} (${roleLabel(agent.role, locale)})`}
-                      className="selected-mention"
-                      key={agent.agentId}
-                      onClick={() => removeMention(agent)}
-                      type="button"
-                    >
-                      @{agent.name} · {roleLabel(agent.role, locale)} ×
-                    </button>
-                  ))}
-                  <span className="composer-routing-hint">
-                    {selectedMentionAgents.length === 1
-                      ? (locale === "zh-CN" ? "发送后由该智能体执行" : "Send to run this Agent")
-                      : (locale === "zh-CN"
-                          ? `发送后将发起 ${selectedMentionAgents.length} 个智能体的协作讨论`
-                          : `Send to start a ${selectedMentionAgents.length}-Agent Discussion`)}
-                  </span>
-                </div>
-              )}
-              <textarea
-                aria-label={t("message")}
-                onChange={handleMessageChange}
-                onKeyDown={handleMessageKeyDown}
-                placeholder={locale === "zh-CN"
-                  ? `发送消息到 #${selectedRoom.name}；@ 一个智能体执行，@ 多个智能体协作`
-                  : `Message #${selectedRoom.name}; @ one Agent to run or multiple Agents to collaborate`}
-                required
-                rows={2}
-                value={messageContent}
-              />
-            </div>
-            <button className="composer-send" disabled={busy}>
-              {busy ? t("sending") : t("send")}
-            </button>
-          </form>
+            <form className="composer" onSubmit={(event) => void submitComposer(event)}>
+              <div className="composer-input">
+                {mentionSearch && (
+                  <div className="mention-suggestions" aria-label={t("mentionAgent")} role="listbox">
+                    <div className="mention-suggestions-heading">{t("mentionHint")}</div>
+                    {mentionOptions.length === 0 ? (
+                      <p>{t("noMentionMatches")}</p>
+                    ) : mentionOptions.map((agent, index) => (
+                      <button
+                        aria-selected={index === mentionOptionIndex}
+                        className={index === mentionOptionIndex ? "mention-option active" : "mention-option"}
+                        key={agent.agentId}
+                        onClick={() => selectMention(agent)}
+                        role="option"
+                        type="button"
+                      >
+                        <span className="participant-avatar agent">{agent.name.slice(0, 1).toUpperCase()}</span>
+                        <span><strong>@{agent.name}</strong><small>{roleLabel(agent.role, locale)}</small></span>
+                        <span className={`presence-dot ${agent.presence}`} />
+                      </button>
+                    ))}
+                  </div>
+                )}
+                {selectedMentionAgents.length > 0 && (
+                  <div className="selected-mentions" aria-label={locale === "zh-CN" ? "已提及智能体" : "Mentioned Agents"}>
+                    {selectedMentionAgents.map((agent) => (
+                      <button
+                        aria-label={locale === "zh-CN"
+                          ? `移除提及 ${agent.name}（${roleLabel(agent.role, locale)}）`
+                          : `Remove mention ${agent.name} (${roleLabel(agent.role, locale)})`}
+                        className="selected-mention"
+                        key={agent.agentId}
+                        onClick={() => removeMention(agent)}
+                        type="button"
+                      >
+                        @{agent.name} · {roleLabel(agent.role, locale)} ×
+                      </button>
+                    ))}
+                    <span className="composer-routing-hint">
+                      {selectedMentionAgents.length === 1
+                        ? (locale === "zh-CN" ? "发送后由该智能体执行" : "Send to run this Agent")
+                        : (locale === "zh-CN"
+                            ? `发送后将发起 ${selectedMentionAgents.length} 个智能体的协作讨论`
+                            : `Send to start a ${selectedMentionAgents.length}-Agent Discussion`)}
+                    </span>
+                  </div>
+                )}
+                <textarea
+                  aria-label={t("message")}
+                  onChange={handleMessageChange}
+                  onKeyDown={handleMessageKeyDown}
+                  placeholder={locale === "zh-CN"
+                    ? `发送消息到 #${selectedRoom.name}；@ 一个智能体执行，@ 多个智能体协作`
+                    : `Message #${selectedRoom.name}; @ one Agent to run or multiple Agents to collaborate`}
+                  required
+                  rows={2}
+                  value={messageContent}
+                />
+              </div>
+              <button className="composer-send" disabled={busy}>
+                {busy ? t("sending") : t("send")}
+              </button>
+            </form>
+          </div>
         )}
         {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
       </main>
