@@ -32,8 +32,8 @@ persisted Message before routing or realtime broadcast.
 
 | Entity | Required State |
 | --- | --- |
-| Team | teamId, name, createdAt |
-| Room | roomId, teamId, name, policy, createdAt |
+| Team | teamId, name, createdAt, archivedAt |
+| Room | roomId, teamId, name, policy, createdAt, archivedAt |
 | Room human participant | roomId, memberId, addedAt |
 | Room Agent participant | roomId, agentId, addedAt |
 | Member | referenced by Registry and Security |
@@ -49,6 +49,10 @@ Discussions, membership, or stable IDs. Archived resources are excluded from
 ordinary navigation and reject new work. Explicit lifecycle views may request
 them for restoration. Archiving is fenced while active Runs or Discussions
 could otherwise continue producing new history.
+
+The Web API uses `PATCH /api/teams/:teamId` and `PATCH /api/rooms/:roomId`
+for lifecycle updates. Ordinary list reads exclude archived records;
+`includeArchived=true` is reserved for explicit recovery surfaces.
 
 Room participation is explicit. Existing Rooms are migrated with every current
 Team Member and enabled Agent, and newly created Rooms inherit the same current

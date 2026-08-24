@@ -47,7 +47,8 @@ export class TeamRoomService {
     const team: TeamRecord = {
       teamId: createOpaqueId("team"),
       name: teamName,
-      createdAt: input.now
+      createdAt: input.now,
+      archivedAt: null
     };
     const owner: MemberRecord = {
       memberId: createOpaqueId("member"),
@@ -61,8 +62,8 @@ export class TeamRoomService {
     return { team, owner };
   }
 
-  public listTeams(principal: WebPrincipal): TeamRecord[] {
-    return this.repository.listTeamsForUser(principal.userId);
+  public listTeams(principal: WebPrincipal, includeArchived = false): TeamRecord[] {
+    return this.repository.listTeamsForUser(principal.userId, includeArchived);
   }
 
   public createRoom(
@@ -76,7 +77,8 @@ export class TeamRoomService {
       roomId: createOpaqueId("room"),
       teamId,
       name: normalizedName(name, "Room name"),
-      createdAt: now
+      createdAt: now,
+      archivedAt: null
     };
     this.repository.createRoom(room);
     return room;
@@ -84,10 +86,81 @@ export class TeamRoomService {
 
   public listRooms(
     principal: WebPrincipal,
-    teamId: string
+    teamId: string,
+    includeArchived = false
   ): RoomRecord[] {
-    const member = this.auth.requireTeamMember(principal, teamId);
-    return this.repository.listRoomsForMember(teamId, member.memberId);
+    const member = this.auth.requireTeamMember(principal, teamId, { includeArchived });
+    return this.repository.listRoomsForMember(
+      teamId,
+      member.memberId,
+      includeArchived
+    );
+  }
+
+  public updateTeam(
+    principal: WebPrincipal,
+    teamId: string,
+    input: { name?: string; archived?: boolean },
+    now: string
+  ): TeamRecord {
+    const actor = this.auth.requireTeamMember(principal, teamId, {
+      includeArchived: true
+    });
+    if (actor.role !== "owner") {
+      throw new Error("Only a Team owner can manage Team lifecycle");
+    }
+    const existing = this.repository.getTeam(teamId);
+    if (!existing) throw new Error("Authorized Team disappeared during lifecycle update");
+    if (input.name === undefined && input.archived === undefined) {
+      throw new Error("Team lifecycle update requires name or archived");
+    }
+    if (input.archived === true && this.repository.hasActiveWorkForTeam(teamId)) {
+      throw new Error("Team cannot be archived while Runs or Discussions are active");
+    }
+    return this.repository.updateTeamLifecycle(teamId, {
+      name: input.name === undefined
+        ? existing.name
+        : normalizedName(input.name, "Team name"),
+      archivedAt: input.archived === undefined
+        ? existing.archivedAt ?? null
+        : input.archived ? now : null
+    });
+  }
+
+  public updateRoom(
+    principal: WebPrincipal,
+    roomId: string,
+    input: { name?: string; archived?: boolean },
+    now: string
+  ): RoomRecord {
+    const existing = this.repository.getRoom(roomId);
+    if (!existing) throw new Error(`Room not found: ${roomId}`);
+    const actor = this.auth.requireTeamMember(principal, existing.teamId, {
+      includeArchived: true
+    });
+    if (actor.role !== "owner") {
+      throw new Error("Only a Team owner can manage Room lifecycle");
+    }
+    if (input.name === undefined && input.archived === undefined) {
+      throw new Error("Room lifecycle update requires name or archived");
+    }
+    if (input.archived === false) {
+      const team = this.repository.getTeam(existing.teamId);
+      if (team?.archivedAt) {
+        throw new Error("Room cannot be restored while its Team is archived");
+      }
+    }
+    if (input.archived === true && this.repository.hasActiveWorkForRoom(roomId)) {
+      throw new Error("Room cannot be archived while Runs or Discussions are active");
+    }
+    return this.repository.updateRoomLifecycle(roomId, {
+      name: input.name === undefined
+        ? existing.name
+        : normalizedName(input.name, "Room name"),
+      archivedAt: input.archived === undefined
+        ? existing.archivedAt ?? null
+        : input.archived ? now : null
+    });
   }
 
   public getRoomParticipants(

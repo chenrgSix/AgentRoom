@@ -134,8 +134,8 @@ export class AgentService {
       role: normalizedLabel(input.role, "Agent role"),
       integrationMode: "managed",
       capabilities: input.capabilities,
-      enabled: true,
-      presence: "ready",
+      enabled: existing?.enabled ?? true,
+      presence: existing?.enabled === false ? "offline" : "ready",
       createdAt: existing?.createdAt ?? input.now,
       updatedAt: input.now
     };
@@ -145,5 +145,23 @@ export class AgentService {
       this.repository.createAgent(agent);
     }
     return agent;
+  }
+
+  public setEnabled(
+    principal: WebPrincipal,
+    agentId: string,
+    enabled: boolean,
+    now: string
+  ): AgentRecord {
+    const existing = this.repository.getAgent(agentId);
+    if (!existing) throw new Error(`Agent not found: ${agentId}`);
+    const actor = this.auth.requireTeamMember(principal, existing.teamId);
+    if (actor.role !== "owner") {
+      throw new Error("Only a Team owner can manage Agent enablement");
+    }
+    if (!enabled && this.repository.hasActiveWorkForAgent(agentId)) {
+      throw new Error("Agent cannot be disabled while Runs or Discussions are active");
+    }
+    return this.repository.setAgentEnabled(agentId, enabled, now);
   }
 }

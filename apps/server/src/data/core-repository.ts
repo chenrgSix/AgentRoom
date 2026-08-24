@@ -12,6 +12,7 @@ export interface TeamRecord {
   teamId: string;
   name: string;
   createdAt: string;
+  archivedAt?: string | null;
 }
 
 export interface MemberRecord {
@@ -28,6 +29,7 @@ export interface RoomRecord {
   teamId: string;
   name: string;
   createdAt: string;
+  archivedAt?: string | null;
 }
 
 export interface RoomParticipants {
@@ -109,6 +111,21 @@ interface AgentRow {
   updated_at: string;
 }
 
+interface TeamRow {
+  team_id: string;
+  name: string;
+  created_at: string;
+  archived_at: string | null;
+}
+
+interface RoomRow {
+  room_id: string;
+  team_id: string;
+  name: string;
+  created_at: string;
+  archived_at: string | null;
+}
+
 interface MessageRow {
   message_id: string;
   trace_id: string;
@@ -165,6 +182,25 @@ function mapAgent(row: AgentRow): AgentRecord {
     presence: row.presence,
     createdAt: row.created_at,
     updatedAt: row.updated_at
+  };
+}
+
+function mapTeam(row: TeamRow): TeamRecord {
+  return {
+    teamId: row.team_id,
+    name: row.name,
+    createdAt: row.created_at,
+    archivedAt: row.archived_at
+  };
+}
+
+function mapRoom(row: RoomRow): RoomRecord {
+  return {
+    roomId: row.room_id,
+    teamId: row.team_id,
+    name: row.name,
+    createdAt: row.created_at,
+    archivedAt: row.archived_at
   };
 }
 
@@ -363,30 +399,33 @@ export class CoreRepository {
 
   public getTeam(teamId: string): TeamRecord | undefined {
     const row = this.database.prepare(`
-      SELECT team_id, name, created_at FROM teams WHERE team_id = ?
-    `).get(teamId) as
-      | { team_id: string; name: string; created_at: string }
-      | undefined;
-    return row && { teamId: row.team_id, name: row.name, createdAt: row.created_at };
+      SELECT team_id, name, created_at, archived_at FROM teams WHERE team_id = ?
+    `).get(teamId) as TeamRow | undefined;
+    return row && mapTeam(row);
   }
 
-  public listTeamsForUser(userId: string): TeamRecord[] {
+  public listTeamsForUser(userId: string, includeArchived = false): TeamRecord[] {
     const rows = this.database.prepare(`
-      SELECT t.team_id, t.name, t.created_at
+      SELECT t.team_id, t.name, t.created_at, t.archived_at
       FROM teams t
       JOIN team_members tm ON tm.team_id = t.team_id
-      WHERE tm.user_id = ?
+      WHERE tm.user_id = ? AND (? = 1 OR t.archived_at IS NULL)
       ORDER BY t.created_at, t.team_id
-    `).all(userId) as Array<{
-      team_id: string;
-      name: string;
-      created_at: string;
-    }>;
-    return rows.map((row) => ({
-      teamId: row.team_id,
-      name: row.name,
-      createdAt: row.created_at
-    }));
+    `).all(userId, includeArchived ? 1 : 0) as TeamRow[];
+    return rows.map(mapTeam);
+  }
+
+  public updateTeamLifecycle(
+    teamId: string,
+    input: { name: string; archivedAt: string | null }
+  ): TeamRecord {
+    this.database.prepare(`
+      UPDATE teams SET name = @name, archived_at = @archivedAt
+      WHERE team_id = @teamId
+    `).run({ teamId, ...input });
+    const team = this.getTeam(teamId);
+    if (!team) throw new Error(`Team not found: ${teamId}`);
+    return team;
   }
 
   public getMember(memberId: string): MemberRecord | undefined {
@@ -437,55 +476,102 @@ export class CoreRepository {
 
   public getRoom(roomId: string): RoomRecord | undefined {
     const row = this.database.prepare(`
-      SELECT room_id, team_id, name, created_at FROM rooms WHERE room_id = ?
-    `).get(roomId) as
-      | { room_id: string; team_id: string; name: string; created_at: string }
-      | undefined;
-    return row && {
-      roomId: row.room_id,
-      teamId: row.team_id,
-      name: row.name,
-      createdAt: row.created_at
-    };
+      SELECT room_id, team_id, name, created_at, archived_at
+      FROM rooms WHERE room_id = ?
+    `).get(roomId) as RoomRow | undefined;
+    return row && mapRoom(row);
   }
 
-  public listRooms(teamId: string): RoomRecord[] {
+  public listRooms(teamId: string, includeArchived = false): RoomRecord[] {
     const rows = this.database.prepare(`
-      SELECT room_id, team_id, name, created_at
-      FROM rooms WHERE team_id = ? ORDER BY created_at, room_id
-    `).all(teamId) as Array<{
-      room_id: string;
-      team_id: string;
-      name: string;
-      created_at: string;
-    }>;
-    return rows.map((row) => ({
-      roomId: row.room_id,
-      teamId: row.team_id,
-      name: row.name,
-      createdAt: row.created_at
-    }));
+      SELECT room_id, team_id, name, created_at, archived_at
+      FROM rooms
+      WHERE team_id = ? AND (? = 1 OR archived_at IS NULL)
+      ORDER BY created_at, room_id
+    `).all(teamId, includeArchived ? 1 : 0) as RoomRow[];
+    return rows.map(mapRoom);
   }
 
-  public listRoomsForMember(teamId: string, memberId: string): RoomRecord[] {
+  public listRoomsForMember(
+    teamId: string,
+    memberId: string,
+    includeArchived = false
+  ): RoomRecord[] {
     const rows = this.database.prepare(`
-      SELECT r.room_id, r.team_id, r.name, r.created_at
+      SELECT r.room_id, r.team_id, r.name, r.created_at, r.archived_at
       FROM rooms r
       JOIN room_human_participants rp ON rp.room_id = r.room_id
       WHERE r.team_id = ? AND rp.member_id = ?
+        AND (? = 1 OR r.archived_at IS NULL)
       ORDER BY r.created_at, r.room_id
-    `).all(teamId, memberId) as Array<{
-      room_id: string;
-      team_id: string;
-      name: string;
-      created_at: string;
-    }>;
-    return rows.map((row) => ({
-      roomId: row.room_id,
-      teamId: row.team_id,
-      name: row.name,
-      createdAt: row.created_at
-    }));
+    `).all(teamId, memberId, includeArchived ? 1 : 0) as RoomRow[];
+    return rows.map(mapRoom);
+  }
+
+  public updateRoomLifecycle(
+    roomId: string,
+    input: { name: string; archivedAt: string | null }
+  ): RoomRecord {
+    this.database.prepare(`
+      UPDATE rooms SET name = @name, archived_at = @archivedAt
+      WHERE room_id = @roomId
+    `).run({ roomId, ...input });
+    const room = this.getRoom(roomId);
+    if (!room) throw new Error(`Room not found: ${roomId}`);
+    return room;
+  }
+
+  public hasActiveWorkForRoom(roomId: string): boolean {
+    return Boolean(this.database.prepare(`
+      SELECT 1
+      FROM rooms r
+      WHERE r.room_id = ? AND (
+        EXISTS (
+          SELECT 1 FROM runs run
+          WHERE run.room_id = r.room_id
+            AND run.state NOT IN ('completed', 'failed', 'canceled', 'outcome_unknown')
+        ) OR EXISTS (
+          SELECT 1 FROM discussions discussion
+          WHERE discussion.room_id = r.room_id
+            AND discussion.state NOT IN ('completed', 'canceled', 'terminated')
+        )
+      )
+    `).get(roomId));
+  }
+
+  public hasActiveWorkForTeam(teamId: string): boolean {
+    return Boolean(this.database.prepare(`
+      SELECT 1 FROM rooms r
+      WHERE r.team_id = ? AND (
+        EXISTS (
+          SELECT 1 FROM runs run
+          WHERE run.room_id = r.room_id
+            AND run.state NOT IN ('completed', 'failed', 'canceled', 'outcome_unknown')
+        ) OR EXISTS (
+          SELECT 1 FROM discussions discussion
+          WHERE discussion.room_id = r.room_id
+            AND discussion.state NOT IN ('completed', 'canceled', 'terminated')
+        )
+      ) LIMIT 1
+    `).get(teamId));
+  }
+
+  public hasActiveWorkForAgent(agentId: string): boolean {
+    return Boolean(this.database.prepare(`
+      SELECT 1
+      WHERE EXISTS (
+        SELECT 1 FROM runs
+        WHERE target_agent_id = ?
+          AND state NOT IN ('completed', 'failed', 'canceled', 'outcome_unknown')
+      ) OR EXISTS (
+        SELECT 1
+        FROM discussion_participants participant
+        JOIN discussions discussion
+          ON discussion.discussion_id = participant.discussion_id
+        WHERE participant.agent_id = ?
+          AND discussion.state NOT IN ('completed', 'canceled', 'terminated')
+      )
+    `).get(agentId, agentId));
   }
 
   public isRoomMember(roomId: string, memberId: string): boolean {
@@ -626,6 +712,24 @@ export class CoreRepository {
       SELECT * FROM agents WHERE team_id = ? ORDER BY created_at, agent_id
     `).all(teamId) as AgentRow[];
     return rows.map(mapAgent);
+  }
+
+  public setAgentEnabled(
+    agentId: string,
+    enabled: boolean,
+    now: string
+  ): AgentRecord {
+    const existing = this.getAgent(agentId);
+    if (!existing) throw new Error(`Agent not found: ${agentId}`);
+    const presence = enabled
+      ? existing.integrationMode === "manual" ? "manual" : "offline"
+      : "offline";
+    this.database.prepare(`
+      UPDATE agents
+      SET enabled = ?, presence = ?, updated_at = ?
+      WHERE agent_id = ?
+    `).run(enabled ? 1 : 0, presence, now, agentId);
+    return this.getAgent(agentId)!;
   }
 
   public recordDevicePresence(record: DevicePresenceRecord): void {

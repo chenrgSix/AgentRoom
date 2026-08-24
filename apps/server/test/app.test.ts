@@ -98,6 +98,86 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       agents.json().map((item: { name: string }) => item.name).sort(),
       ["Builder", "Reviewer"]
     );
+    const renamedTeam = await app.inject({
+      method: "PATCH",
+      url: `/api/teams/${team.team.teamId}`,
+      headers: { authorization },
+      payload: { name: "Delivery Team" }
+    });
+    assert.equal(renamedTeam.statusCode, 200);
+    assert.equal(renamedTeam.json().name, "Delivery Team");
+    const renamedRoom = await app.inject({
+      method: "PATCH",
+      url: `/api/rooms/${room.roomId}`,
+      headers: { authorization },
+      payload: { name: "delivery" }
+    });
+    assert.equal(renamedRoom.statusCode, 200);
+    assert.equal(renamedRoom.json().name, "delivery");
+    const disabledAgent = await app.inject({
+      method: "PATCH",
+      url: `/api/agents/${reviewer.agentId}`,
+      headers: { authorization },
+      payload: { enabled: false }
+    });
+    assert.equal(disabledAgent.statusCode, 200);
+    assert.equal(disabledAgent.json().enabled, false);
+    const enabledAgent = await app.inject({
+      method: "PATCH",
+      url: `/api/agents/${reviewer.agentId}`,
+      headers: { authorization },
+      payload: { enabled: true }
+    });
+    assert.equal(enabledAgent.statusCode, 200);
+    const archivedRoom = await app.inject({
+      method: "PATCH",
+      url: `/api/rooms/${room.roomId}`,
+      headers: { authorization },
+      payload: { archived: true }
+    });
+    assert.equal(archivedRoom.statusCode, 200);
+    const activeRooms = await app.inject({
+      method: "GET",
+      url: `/api/teams/${team.team.teamId}/rooms`,
+      headers: { authorization }
+    });
+    assert.deepEqual(activeRooms.json(), []);
+    const allRooms = await app.inject({
+      method: "GET",
+      url: `/api/teams/${team.team.teamId}/rooms?includeArchived=true`,
+      headers: { authorization }
+    });
+    assert.equal(allRooms.json()[0].roomId, room.roomId);
+    await app.inject({
+      method: "PATCH",
+      url: `/api/rooms/${room.roomId}`,
+      headers: { authorization },
+      payload: { archived: false }
+    });
+    await app.inject({
+      method: "PATCH",
+      url: `/api/teams/${team.team.teamId}`,
+      headers: { authorization },
+      payload: { archived: true }
+    });
+    const activeTeams = await app.inject({
+      method: "GET",
+      url: "/api/teams",
+      headers: { authorization }
+    });
+    assert.deepEqual(activeTeams.json(), []);
+    const allTeams = await app.inject({
+      method: "GET",
+      url: "/api/teams?includeArchived=true",
+      headers: { authorization }
+    });
+    assert.equal(allTeams.json()[0].teamId, team.team.teamId);
+    await app.inject({
+      method: "PATCH",
+      url: `/api/teams/${team.team.teamId}`,
+      headers: { authorization },
+      payload: { archived: false }
+    });
     const changeCheckpoint = await app.inject({
       method: "GET",
       url: `/api/teams/${team.team.teamId}/changes?after=0`,

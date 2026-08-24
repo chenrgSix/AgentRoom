@@ -140,6 +140,17 @@ function requiredString(
   return value;
 }
 
+function requiredBoolean(value: unknown, label: string): boolean {
+  if (typeof value !== "boolean") throw new Error(`${label} must be a boolean`);
+  return value;
+}
+
+function queryBoolean(value: string | undefined, label: string): boolean {
+  if (value === undefined || value === "false") return false;
+  if (value === "true") return true;
+  throw new Error(`${label} must be true or false`);
+}
+
 function requiredStringArray(value: unknown, label: string): string[] {
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
     throw new Error(`${label} must be an array of strings`);
@@ -427,6 +438,9 @@ export async function createServerApp(
         changedTeamId = discussion
           ? core.getRoom(discussion.roomId)?.teamId
           : undefined;
+      }
+      if (!changedTeamId && params.agentId) {
+        changedTeamId = core.getAgent(params.agentId)?.teamId;
       }
       if (changedTeamId) teamChanges.notify(changedTeamId);
     }
@@ -951,8 +965,12 @@ export async function createServerApp(
     });
   }
 
-  app.get("/api/teams", async (request) =>
-    teamRooms.listTeams(principal(request))
+  app.get<{ Querystring: { includeArchived?: string } }>(
+    "/api/teams",
+    async (request) => teamRooms.listTeams(
+      principal(request),
+      queryBoolean(request.query.includeArchived, "includeArchived")
+    )
   );
   app.get<{
     Params: { teamId: string };
@@ -993,9 +1011,30 @@ export async function createServerApp(
       now: clock()
     });
   });
-  app.get<{ Params: { teamId: string } }>(
+  app.patch<{ Params: { teamId: string } }>(
+    "/api/teams/:teamId",
+    async (request) => {
+      const body = bodyObject(request);
+      return teamRooms.updateTeam(principal(request), request.params.teamId, {
+        ...(body.name === undefined
+          ? {}
+          : { name: requiredString(body.name, "name") }),
+        ...(body.archived === undefined
+          ? {}
+          : { archived: requiredBoolean(body.archived, "archived") })
+      }, clock());
+    }
+  );
+  app.get<{
+    Params: { teamId: string };
+    Querystring: { includeArchived?: string };
+  }>(
     "/api/teams/:teamId/rooms",
-    async (request) => teamRooms.listRooms(principal(request), request.params.teamId)
+    async (request) => teamRooms.listRooms(
+      principal(request),
+      request.params.teamId,
+      queryBoolean(request.query.includeArchived, "includeArchived")
+    )
   );
   app.post<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/rooms",
@@ -1007,6 +1046,20 @@ export async function createServerApp(
         requiredString(body.name, "name"),
         clock()
       );
+    }
+  );
+  app.patch<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId",
+    async (request) => {
+      const body = bodyObject(request);
+      return teamRooms.updateRoom(principal(request), request.params.roomId, {
+        ...(body.name === undefined
+          ? {}
+          : { name: requiredString(body.name, "name") }),
+        ...(body.archived === undefined
+          ? {}
+          : { archived: requiredBoolean(body.archived, "archived") })
+      }, clock());
     }
   );
   app.get<{ Params: { roomId: string } }>(
@@ -1034,6 +1087,14 @@ export async function createServerApp(
   app.get<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/devices",
     async (request) => registry.listDevices(principal(request), request.params.teamId)
+  );
+  app.patch<{ Params: { agentId: string } }>(
+    "/api/agents/:agentId",
+    async (request) => {
+      const body = bodyObject(request);
+      const enabled = requiredBoolean(body.enabled, "enabled");
+      return agents.setEnabled(principal(request), request.params.agentId, enabled, clock());
+    }
   );
   app.delete<{ Params: { teamId: string; deviceId: string } }>(
     "/api/teams/:teamId/devices/:deviceId",

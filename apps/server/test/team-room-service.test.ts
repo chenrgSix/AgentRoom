@@ -7,6 +7,7 @@ import test from "node:test";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
+import { AgentService } from "../src/registry/agent-service.js";
 import { AuthService, AuthorizationError } from "../src/security/auth-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
@@ -78,6 +79,148 @@ test("a non-member cannot discover Team Rooms", async () => {
       () => service.listRooms(principal, created.team.teamId),
       (error: unknown) =>
         error instanceof AuthorizationError && error.code === "FORBIDDEN"
+    );
+  } finally {
+    database.close();
+  }
+});
+
+test("an Owner renames, archives, and restores Teams and Rooms without changing IDs", async () => {
+  const { auth, database, repository, service } = await createFixture();
+  try {
+    const created = service.createTeamForUser({
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      userDisplayName: "Alice",
+      teamName: "Core Team",
+      now
+    });
+    const session = auth.issueWebSession(
+      created.owner.userId ?? "",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const principal = auth.authenticateWebSession(session.secret, now);
+    const room = service.createRoom(principal, created.team.teamId, "general", now);
+
+    const renamedRoom = service.updateRoom(
+      principal,
+      room.roomId,
+      { name: "delivery" },
+      now
+    );
+    assert.equal(renamedRoom.roomId, room.roomId);
+    assert.equal(renamedRoom.name, "delivery");
+    const archivedRoom = service.updateRoom(
+      principal,
+      room.roomId,
+      { archived: true },
+      now
+    );
+    assert.equal(archivedRoom.archivedAt, now);
+    assert.deepEqual(service.listRooms(principal, created.team.teamId), []);
+    assert.deepEqual(
+      service.listRooms(principal, created.team.teamId, true),
+      [archivedRoom]
+    );
+    assert.throws(() => service.getRoom(principal, room.roomId), /Room access denied/);
+    assert.equal(
+      service.updateRoom(principal, room.roomId, { archived: false }, now).archivedAt,
+      null
+    );
+
+    const renamedTeam = service.updateTeam(
+      principal,
+      created.team.teamId,
+      { name: "Delivery Team" },
+      now
+    );
+    assert.equal(renamedTeam.teamId, created.team.teamId);
+    assert.equal(renamedTeam.name, "Delivery Team");
+    const archivedTeam = service.updateTeam(
+      principal,
+      created.team.teamId,
+      { archived: true },
+      now
+    );
+    assert.deepEqual(service.listTeams(principal), []);
+    assert.deepEqual(service.listTeams(principal, true), [archivedTeam]);
+    assert.throws(
+      () => service.createRoom(principal, created.team.teamId, "blocked", now),
+      /Team access denied/
+    );
+    assert.throws(
+      () => service.updateRoom(principal, room.roomId, { archived: false }, now),
+      /Team is archived/
+    );
+    assert.equal(
+      service.updateTeam(principal, created.team.teamId, { archived: false }, now)
+        .archivedAt,
+      null
+    );
+
+    repository.createAgent({
+      agentId: "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      teamId: created.team.teamId,
+      ownerMemberId: created.owner.memberId,
+      deviceId: null,
+      name: "Reviewer",
+      role: "Reviewer",
+      integrationMode: "manual",
+      capabilities: {
+        supportsHandoff: true,
+        supportsInterrupt: false,
+        supportsResume: false,
+        supportsStart: false,
+        supportsStreaming: false
+      },
+      enabled: true,
+      presence: "manual",
+      createdAt: now,
+      updatedAt: now
+    });
+    const message = repository.appendMessage({
+      messageId: "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      roomId: room.roomId,
+      senderType: "member",
+      senderId: created.owner.memberId,
+      content: "Keep this active work fenced.",
+      mentions: [],
+      parentMessageId: null,
+      createdAt: now
+    });
+    database.prepare(`
+      INSERT INTO runs (
+        run_id, room_id, trigger_message_id, requester_member_id,
+        target_agent_id, parent_run_id, instruction, state, deadline_at,
+        created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, NULL, ?, 'queued', ?, ?, ?)
+    `).run(
+      "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      room.roomId,
+      message.messageId,
+      created.owner.memberId,
+      "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      "active",
+      "2026-08-22T11:00:00.000Z",
+      now,
+      now
+    );
+    assert.throws(
+      () => service.updateRoom(principal, room.roomId, { archived: true }, now),
+      /Runs or Discussions are active/
+    );
+    assert.throws(
+      () => service.updateTeam(principal, created.team.teamId, { archived: true }, now),
+      /Runs or Discussions are active/
+    );
+    assert.throws(
+      () => new AgentService(repository, auth).setEnabled(
+        principal,
+        "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        false,
+        now
+      ),
+      /Runs or Discussions are active/
     );
   } finally {
     database.close();

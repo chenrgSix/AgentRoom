@@ -70,11 +70,11 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ROOM-002 | DONE | Implement Message persistence and pagination | ROOM-001 | stable cursor ordering survives restart |
 | ROOM-003 | DONE | Validate structured Mention references | ROOM-002, REG-002 | invalid or unauthorized mentions are rejected |
 | ROOM-004 | DONE | Add Room-scoped human and Agent participation | ROOM-003, REG-002, SEC-002 | migrations preserve existing Room access; only assigned humans can discover and use a Room, only assigned Agents can be mentioned or join Discussions, and Owner-managed roster updates keep history intact |
-| ROOM-005 | PLANNED | Add recoverable Team and Room lifecycle controls | ROOM-004, SEC-005 | Owner-only rename and archive/restore preserve history and stable IDs; archived resources disappear from ordinary navigation and reject new work without physical deletion |
+| ROOM-005 | DONE | Add recoverable Team and Room lifecycle controls | ROOM-004, SEC-005 | migration 0017 plus `team-room-service.test.ts` prove Owner-only rename and archive/restore preserve history and stable IDs; archived resources disappear from ordinary navigation, reject new work, and active Runs or Discussions fence archival without physical deletion |
 | REG-001 | DONE | Implement Member and Device registry | DATA-002, SEC-001 | membership and device ownership persist |
 | REG-002 | DONE | Implement Agent publication and capability validation | REG-001, CON-003 | managed/manual agents publish correctly |
 | REG-003 | DONE | Implement Presence TTL and derived status | REG-002 | ready, busy, degraded, manual, offline verified |
-| REG-004 | PLANNED | Add recoverable Agent enablement controls | REG-003, ROOM-004, RUN-003 | Owner-only disable/enable preserves stable identity and Room assignment, rejects active work, and cannot be undone by managed Bridge republication |
+| REG-004 | DONE | Add recoverable Agent enablement controls | REG-003, ROOM-004, RUN-003 | `agent-service.test.ts` and `team-room-service.test.ts` prove Owner-only disable/enable preserves stable identity and Room assignment, rejects active work, and cannot be undone by managed Bridge republication |
 | WEB-001 | DONE | Scaffold Web shell and basic Team management | ROOM-001, REG-001 | user creates Team, Room, Member, and fake Agent |
 
 ## Workstream F2: Bridge and Managed Runtime

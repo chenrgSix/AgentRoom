@@ -74,6 +74,11 @@ Managed Bridge publications carry a locally persisted stable Agent ID. The
 server permits create or update only when Device, Owner, and Team match the
 authenticated Device credential; reconnect publication is idempotent.
 
+An Owner may disable or re-enable an Agent through
+`PATCH /api/agents/:agentId`. Disablement is fenced while that Agent has active
+Run or Discussion work, preserves Room assignment and history, and remains
+authoritative across subsequent managed Bridge republication.
+
 A newly created enabled Agent is initially assigned to the Team's existing
 Rooms. Room ownership may later remove that Agent independently per Room;
 republication of the same stable Agent updates metadata and Presence without
@@ -89,7 +94,7 @@ silently restoring removed Room assignments.
 
 ## Task Mapping
 
-`REG-001` through `REG-003`, with pairing in `BRG-002` and
+`REG-001` through `REG-004`, with pairing in `BRG-002` and
 `SEC-001`.
 
 ## Dependencies

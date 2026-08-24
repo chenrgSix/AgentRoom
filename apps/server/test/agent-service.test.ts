@@ -111,15 +111,29 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
       now
     });
 
+    const disabled = agents.setEnabled(principal, remote.agentId, false, now);
+    const republishedDisabled = agents.publishDeviceAgent(devicePrincipal, {
+      agentId: remote.agentId,
+      name: "Remote Builder While Disabled",
+      role: "Managed",
+      capabilities: remote.capabilities,
+      now
+    });
+    const enabled = agents.setEnabled(principal, remote.agentId, true, now);
+
     assert.equal(managed.presence, "offline");
     assert.equal(manual.presence, "manual");
     assert.equal(fake.integrationMode, "fake");
     assert.equal(republished.name, "Remote Builder Updated");
+    assert.equal(disabled.enabled, false);
+    assert.equal(republishedDisabled.enabled, false);
+    assert.equal(republishedDisabled.presence, "offline");
+    assert.equal(enabled.enabled, true);
     assert.deepEqual(
       agents.listAgents(principal, created.team.teamId)
         .map((agent) => agent.name)
         .sort(),
-      ["Builder", "Remote Builder Updated", "Reviewer", "Test Double"]
+      ["Builder", "Remote Builder While Disabled", "Reviewer", "Test Double"]
     );
     assert.throws(() => agents.publishAgent(principal, {
       teamId: created.team.teamId,

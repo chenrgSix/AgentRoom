@@ -122,13 +122,16 @@ export class AuthService {
 
   public requireTeamMember(
     principal: WebPrincipal,
-    teamId: string
+    teamId: string,
+    options: { includeArchived?: boolean } = {}
   ): MemberPrincipal {
     const row = this.database.prepare(`
-      SELECT member_id, role
-      FROM team_members
-      WHERE team_id = ? AND user_id = ?
-    `).get(teamId, principal.userId) as
+      SELECT tm.member_id, tm.role
+      FROM team_members tm
+      JOIN teams t ON t.team_id = tm.team_id
+      WHERE tm.team_id = ? AND tm.user_id = ?
+        AND (? = 1 OR t.archived_at IS NULL)
+    `).get(teamId, principal.userId, options.includeArchived ? 1 : 0) as
       | { member_id: string; role: MemberPrincipal["role"] }
       | undefined;
     if (!row) {
@@ -149,10 +152,11 @@ export class AuthService {
     const row = this.database.prepare(`
       SELECT r.team_id, tm.member_id, tm.role
       FROM rooms r
+      JOIN teams t ON t.team_id = r.team_id
       JOIN team_members tm ON tm.team_id = r.team_id AND tm.user_id = ?
       JOIN room_human_participants rp
         ON rp.room_id = r.room_id AND rp.member_id = tm.member_id
-      WHERE r.room_id = ?
+      WHERE r.room_id = ? AND r.archived_at IS NULL AND t.archived_at IS NULL
     `).get(principal.userId, roomId) as
       | {
           team_id: string;
