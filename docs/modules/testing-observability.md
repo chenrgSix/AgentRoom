@@ -230,6 +230,13 @@ tagged source passed main CI, the draft workflow verified all 11 assets, the
 candidate was published as a prerelease, and a clean public download passed the
 committed verifier.
 
+The `v0.2.0-rc.4` release evidence is recorded in
+`docs/acceptance/qa-015-v0.2.0-rc.4.md`. `QA-015` is complete because the exact
+tagged source passed main CI, the empty-draft workflow verified all 11 assets
+before and after upload, the candidate was published as a prerelease, and a
+fresh public download passed the committed verifier. The acceptance retains
+the separate real-login and two-physical-machine gates.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through

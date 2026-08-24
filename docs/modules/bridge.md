@@ -277,6 +277,13 @@ exact tag, and an independent public download passed the same 11-asset
 verifier. Full evidence is recorded in
 `docs/acceptance/qa-014-v0.2.0-rc.3.md`.
 
+Release `v0.2.0-rc.4` adds independent Agent configuration, detected-path
+application, and draft Runtime preflight without persistence or managed Bridge
+restart. GitHub Actions run `32698124280` built and verified all seven archives
+from the exact tag, and an independent public download passed the same 11-asset
+verifier. Full evidence is recorded in
+`docs/acceptance/qa-015-v0.2.0-rc.4.md`.
+
 ## Dependencies
 
 Contracts, Registry publication, Security pairing, and Runtime Adapters.

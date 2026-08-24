@@ -198,7 +198,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-012 | DONE | Verify Room and Bridge UX stabilization | WEB-021, WEB-022, BRG-019 | `docs/acceptance/qa-012-room-bridge-ux.md` records passing Node, Go, Desktop, E2E, docs, 101-plus-message, safe diagnostic, preset migration, bounded probe, and secret-leakage evidence |
 | QA-013 | DONE | Verify managed Agent concurrency isolation | BRG-020, QA-004 | `docs/acceptance/qa-013-agent-concurrency-isolation.md` records passing race, FIFO, cross-Agent overlap, duplicate, queued-cancel, reconnect, full Go/Desktop, Node, and deterministic E2E evidence |
 | QA-014 | DONE | Publish and verify v0.2.0-rc.3 | QA-012, QA-013 | `docs/acceptance/qa-014-v0.2.0-rc.3.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification |
-| QA-015 | ACTIVE | Publish and verify v0.2.0-rc.4 | WEB-026, WEB-027, WEB-028, BRG-022, QA-008 | exact-tag CI, seven Bridge archives, checksums and license assets pass the no-clobber workflow; independent clean-download verification and remaining physical gates are recorded before prerelease publication |
+| QA-015 | DONE | Publish and verify v0.2.0-rc.4 | WEB-026, WEB-027, WEB-028, BRG-022, QA-008 | `docs/acceptance/qa-015-v0.2.0-rc.4.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
 
 ## Deferred Beyond MVP
 
