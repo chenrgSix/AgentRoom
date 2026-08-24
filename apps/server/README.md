@@ -19,6 +19,11 @@ The production logger emits structured HTTP, Bridge, Delivery, and Run events
 without request bodies or Runtime content. Restrict metrics access at the
 reverse proxy when the listener is exposed beyond a trusted network.
 
+Set `AGENT_ROOM_BRIDGE_SERVER_TOKEN` to an opaque 32-to-512-byte value when a
+deployment should require the same access parameter from Bridge join, claim,
+legacy pair, and WebSocket requests. The value is compared without being
+logged or persisted. An unset value retains token-free local compatibility.
+
 ## Database Location
 
 The database path is resolved in this order:

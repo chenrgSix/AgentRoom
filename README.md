@@ -196,7 +196,8 @@ cp deploy/.env.example .env
 mkdir -p deploy/secrets
 umask 077
 openssl rand -hex 32 > deploy/secrets/owner_recovery_token
-# Edit AGENT_ROOM_DOMAIN and AGENT_ROOM_PUBLIC_ORIGIN in .env.
+openssl rand -hex 32                    # Paste as AGENT_ROOM_BRIDGE_SERVER_TOKEN.
+# Edit AGENT_ROOM_DOMAIN, AGENT_ROOM_PUBLIC_ORIGIN, and the Bridge Token in .env.
 docker compose config --quiet
 docker compose build --pull agentroom
 docker compose up -d

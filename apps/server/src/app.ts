@@ -55,6 +55,11 @@ import {
   AnonymousRateLimitError
 } from "./security/anonymous-rate-limiter.js";
 import { BridgePairingService } from "./security/bridge-pairing-service.js";
+import {
+  assertBridgeServerToken,
+  bridgeServerTokenHeader,
+  normalizeBridgeServerToken
+} from "./security/bridge-server-token.js";
 import { TrustedWebAccessService } from "./security/trusted-web-access-service.js";
 import type { WebAuthConfiguration } from "./security/web-auth-config.js";
 import { TeamRoomService } from "./team-room/team-room-service.js";
@@ -68,6 +73,7 @@ export interface ServerAppOptions {
     windowMilliseconds: number;
   };
   databasePath: string;
+  bridgeServerToken?: string;
   clock?: () => string;
   logger?: boolean;
   loggerInstance?: FastifyBaseLogger;
@@ -229,6 +235,7 @@ export async function createServerApp(
   const database = openDatabase(options.databasePath);
   const core = new CoreRepository(database);
   const auth = new AuthService(database);
+  const bridgeServerToken = normalizeBridgeServerToken(options.bridgeServerToken);
   const webAuth = options.webAuth ?? { mode: "local" as const };
   const trustedWeb = webAuth.mode === "trusted-team"
     ? new TrustedWebAccessService(
@@ -462,6 +469,12 @@ export async function createServerApp(
       Number.isFinite(timestamp) ? timestamp : Date.now()
     );
   };
+  const requireBridgeServerToken = (request: FastifyRequest): void => {
+    assertBridgeServerToken(
+      bridgeServerToken,
+      request.headers[bridgeServerTokenHeader]
+    );
+  };
 
   app.addHook("onRequest", async (request) => {
     requestStartedAt.set(request, process.hrtime.bigint());
@@ -598,6 +611,7 @@ export async function createServerApp(
   app.get("/ws/bridge", {
     websocket: true,
     preValidation: async (request) => {
+      requireBridgeServerToken(request);
       auth.authenticateDevice(bearerToken(request), clock());
     }
   }, (socket, request) => {
@@ -1382,6 +1396,7 @@ export async function createServerApp(
     }
   );
   app.post("/api/bridge/join-requests", async (request) => {
+    requireBridgeServerToken(request);
     limitAnonymous(request, "bridge-join-request");
     const body = bodyObject(request);
     return pairing.createJoinRequest({
@@ -1405,6 +1420,7 @@ export async function createServerApp(
   app.post<{ Params: { joinRequestId: string } }>(
     "/api/bridge/join-requests/:joinRequestId/claim",
     async (request, reply) => {
+      requireBridgeServerToken(request);
       const body = bodyObject(request);
       const result = pairing.claimJoinRequest(
         request.params.joinRequestId,
@@ -1426,6 +1442,7 @@ export async function createServerApp(
     }
   );
   app.post("/api/bridge/pair", async (request) => {
+    requireBridgeServerToken(request);
     limitAnonymous(request, "bridge-pair");
     const body = bodyObject(request);
     const result = pairing.exchange(
