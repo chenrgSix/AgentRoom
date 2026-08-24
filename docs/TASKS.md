@@ -146,7 +146,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-026 | DONE | Replace broad Room polling with event-driven reconciliation | WEB-021, OPS-002 | `team-change-service.test.ts`, the Web application tests, and Server/Web builds prove authorized monotonic Team change cursors wake selected-Room reconciliation promptly; reconnect, server restart, hidden tabs, and stream failure retain bounded HTTP fallback without a healthy two-second full refresh |
 | WEB-027 | DONE | Make Room message submission recoverable | WEB-019, WEB-026, ROOM-002 | migration 0018, Message/API regressions, the outbox unit test, onboarding component test, and Server/Web builds prove client Message IDs deduplicate ambiguous retries; pending and failed rows remain visible with same-ID retry, while message, Team, participant, and lifecycle operations use independent pending state |
 | WEB-028 | DONE | Expose recoverable Team, Room, and Agent lifecycle controls | ROOM-005, REG-004, WEB-024, WEB-025 | the onboarding component regression and Web build prove accessible Owner controls rename and archive/restore Teams and Rooms and disable/enable Agents; ordinary navigation excludes archived resources while the recovery modal retains access without deleting history |
-| WEB-029 | ACTIVE | Render recoverable in-progress Agent output | RUN-007, WEB-021, WEB-026 | component and sync tests prove one provisional bubble per active Run resumes ordered deltas, applies reset boundaries, disappears on final reply, and never duplicates the durable Agent Message |
+| WEB-029 | DONE | Render recoverable in-progress Agent output | RUN-007, WEB-021, WEB-026 | component and sync tests prove one provisional bubble per active Run resumes ordered deltas, applies reset boundaries, disappears on final reply, and never duplicates the durable Agent Message |
 
 ## Workstream F4: MCP Team Participation
 
@@ -204,7 +204,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-013 | DONE | Verify managed Agent concurrency isolation | BRG-020, QA-004 | `docs/acceptance/qa-013-agent-concurrency-isolation.md` records passing race, FIFO, cross-Agent overlap, duplicate, queued-cancel, reconnect, full Go/Desktop, Node, and deterministic E2E evidence |
 | QA-014 | DONE | Publish and verify v0.2.0-rc.3 | QA-012, QA-013 | `docs/acceptance/qa-014-v0.2.0-rc.3.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification |
 | QA-015 | DONE | Publish and verify v0.2.0-rc.4 | WEB-026, WEB-027, WEB-028, BRG-022, QA-008 | `docs/acceptance/qa-015-v0.2.0-rc.4.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
-| QA-016 | READY | Verify recoverable Runtime output streaming | BRG-023, RUN-007, WEB-029 | contract, Go, Server, Web, and deterministic cross-process checks prove visible incremental Pi output, final-only fallback, reconnect replay, cancellation fencing, redaction, and one durable final Room Message |
+| QA-016 | ACTIVE | Verify recoverable Runtime output streaming | BRG-023, RUN-007, WEB-029 | contract, Go, Server, Web, and deterministic cross-process checks prove visible incremental Pi output, final-only fallback, reconnect replay, cancellation fencing, redaction, and one durable final Room Message |
 
 ## Deferred Beyond MVP
 

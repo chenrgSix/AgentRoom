@@ -102,6 +102,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     mentions: [],
     createdAt: "2026-08-23T00:03:00.000Z"
   };
+  const streamAgentMessage = {
+    ...agentMessage,
+    messageId: "message_stream_final",
+    sequence: 3,
+    senderId: secondAgent.agentId,
+    content: "流式最终回复",
+    createdAt: "2026-08-23T00:04:03.000Z"
+  };
   let messageWasSent = false;
   let roomWasCreated = false;
   let teamNameValue = team.name;
@@ -113,6 +121,9 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   let roomAgentIds = [agent.agentId, secondAgent.agentId];
   let discussionState = "";
   let discussionGoal = "确定交付恢复规则";
+  let discussionChangeDelivered = false;
+  let streamFinal = false;
+  let streamChangeDelivered = false;
   const discussionRuns = [{
     runId: "run_review",
     triggerMessageId: "message_wave_review",
@@ -285,8 +296,37 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         syncCursor: "cursor-latest"
       });
     }
+    if (path === `/api/rooms/${room.roomId}/messages?limit=100&cursor=cursor-latest`) {
+      return jsonResponse({
+        items: streamFinal ? [streamAgentMessage] : [],
+        nextCursor: null,
+        syncCursor: streamFinal ? "cursor-stream-final" : "cursor-latest"
+      });
+    }
     if (path === `/api/rooms/${room.roomId}/runs`) {
       return jsonResponse(discussionState ? discussionRuns : []);
+    }
+    if (path.startsWith("/api/runs/run_builder/events?after=")) {
+      const after = Number.parseInt(path.split("after=")[1] ?? "0", 10);
+      if (after === 0) {
+        return jsonResponse([
+          { sequence: 1, event: { type: "status", sequence: 1, status: "working" } },
+          {
+            sequence: 2,
+            event: { type: "output", sequence: 2, content: "正在分析中央服务输出" }
+          }
+        ]);
+      }
+      if (after === 2 && streamFinal) {
+        return jsonResponse([
+          {
+            sequence: 3,
+            event: { type: "reply", sequence: 3, content: "流式最终回复" }
+          },
+          { sequence: 4, event: { type: "status", sequence: 4, status: "completed" } }
+        ]);
+      }
+      return jsonResponse([]);
     }
     if (path === `/api/rooms/${room.roomId}/participants` && method === "PUT") {
       const updated = JSON.parse(String(init.body)) as {
@@ -338,7 +378,19 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       return jsonResponse([]);
     }
     if (/^\/api\/teams\/[^/]+\/changes\?after=/u.test(path)) {
-      return jsonResponse({ changed: false, cursor: 0, reset: false });
+      if (discussionState && !discussionChangeDelivered) {
+        discussionChangeDelivered = true;
+        return jsonResponse({ changed: true, cursor: 1, reset: false });
+      }
+      if (streamFinal && !streamChangeDelivered) {
+        streamChangeDelivered = true;
+        return jsonResponse({ changed: true, cursor: 2, reset: false });
+      }
+      return jsonResponse({
+        changed: false,
+        cursor: streamChangeDelivered ? 2 : discussionChangeDelivered ? 1 : 0,
+        reset: false
+      });
     }
     throw new Error(`Unexpected request: ${method} ${path}`);
   };
@@ -562,6 +614,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.ok(builderProgress);
     within(reviewProgress).getByText("已完成");
     within(builderProgress).getByText("执行中");
+    await within(timeline).findByText("正在分析中央服务输出");
+    within(timeline).getByText("正在生成…");
     await waitFor(() => {
       const request = requests.find((candidate) =>
         candidate.path === `/api/rooms/${room.roomId}/discussions` &&
@@ -574,6 +628,10 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         outputMode: "final_answer"
       });
     });
+    streamFinal = true;
+    await within(timeline).findByText("流式最终回复");
+    await waitFor(() => assert.equal(within(timeline).queryByText("正在生成…"), null));
+    assert.equal(within(timeline).getAllByText("流式最终回复").length, 1);
     fireEvent.click(within(discussionPanel).getByRole("button", { name: "结束并生成结论" }));
     await screen.findByText("将在本轮后停止");
 

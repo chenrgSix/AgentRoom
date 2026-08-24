@@ -12,7 +12,13 @@ import {
 import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
 
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
-import { createSingleFlight, mergeRoomMessages } from "./room-sync.js";
+import {
+  createSingleFlight,
+  mergeRoomMessages,
+  reduceRunOutput,
+  type RunEventRecord,
+  type RunOutputProjection
+} from "./room-sync.js";
 import {
   loadRunDiagnostic,
   type RunDiagnostic,
@@ -491,6 +497,33 @@ async function jsonRequest<T>(
   return body;
 }
 
+const activeRunStates = new Set([
+  "queued",
+  "delivered",
+  "working",
+  "input_required"
+]);
+
+async function loadRunOutputEvents(
+  roomRuns: Run[],
+  current: Map<string, RunOutputProjection>,
+  token?: string
+): Promise<Map<string, RunEventRecord[]>> {
+  const candidates = roomRuns.filter((run) =>
+    activeRunStates.has(run.state) || current.has(run.runId)
+  );
+  const batches = await Promise.all(candidates.map(async (run) => {
+    const after = current.get(run.runId)?.sequence ?? 0;
+    const records = await jsonRequest<RunEventRecord[]>(
+      `/api/runs/${run.runId}/events?after=${after}`,
+      {},
+      token
+    );
+    return [run.runId, records] as const;
+  }));
+  return new Map(batches);
+}
+
 async function localBootstrap(): Promise<LocalSession> {
   const saved = localStorage.getItem(userKey);
   const existing = saved
@@ -662,6 +695,9 @@ export function App() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
   const [runs, setRuns] = useState<Run[]>([]);
+  const [runOutputs, setRunOutputs] = useState<
+    Record<string, RunOutputProjection>
+  >({});
   const [runDiagnostics, setRunDiagnostics] = useState<
     Record<string, RunDiagnostic | null>
   >({});
@@ -708,7 +744,34 @@ export function App() {
     sequence: number;
   } | null>(null);
   const diagnosticRequestsRef = useRef(new Set<string>());
+  const runOutputSyncRef = useRef(new Map<string, RunOutputProjection>());
   const selectedRoomIdRef = useRef<string | null>(selectedRoomId);
+
+  const commitRunOutputEvents = (
+    roomRuns: Run[],
+    batches: Map<string, RunEventRecord[]>
+  ): void => {
+    const next = new Map(runOutputSyncRef.current);
+    const visibleRunIds = new Set(roomRuns.map(({ runId }) => runId));
+    for (const runId of next.keys()) {
+      if (!visibleRunIds.has(runId)) next.delete(runId);
+    }
+    for (const [runId, records] of batches) {
+      next.set(runId, reduceRunOutput(next.get(runId), records));
+    }
+    for (const run of roomRuns) {
+      const projection = next.get(run.runId);
+      if (projection?.sealed && !activeRunStates.has(run.state)) {
+        next.delete(run.runId);
+      }
+    }
+    runOutputSyncRef.current = next;
+    setRunOutputs(Object.fromEntries(
+      [...next].filter(([, projection]) =>
+        !projection.sealed && projection.content.length > 0
+      )
+    ));
+  };
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.teamId === selectedTeamId) ?? null,
@@ -1145,6 +1208,8 @@ export function App() {
       setMessages([]);
       setPendingMessages([]);
       setRuns([]);
+      setRunOutputs({});
+      runOutputSyncRef.current.clear();
       setRoomParticipants({ memberIds: [], agentIds: [] });
       setRunDiagnostics({});
       diagnosticRequestsRef.current.clear();
@@ -1159,6 +1224,9 @@ export function App() {
       sequence: 0
     };
     setMessages([]);
+    setRuns([]);
+    setRunOutputs({});
+    runOutputSyncRef.current.clear();
     setRoomParticipants({ memberIds: [], agentIds: [] });
     setRunDiagnostics({});
     diagnosticRequestsRef.current.clear();
@@ -1183,7 +1251,10 @@ export function App() {
         {},
         session.token
       )
-    ]).then(([page, nextRuns, nextDiscussions, nextParticipants]) => {
+    ]).then(async ([page, nextRuns, nextDiscussions, nextParticipants]) => {
+      const outputBatches = await loadRunOutputEvents(
+        nextRuns, runOutputSyncRef.current, session.token
+      );
       if (stopped) return;
       setMessages(page.items);
       messageSyncRef.current = {
@@ -1192,6 +1263,7 @@ export function App() {
         sequence: page.items.at(-1)?.sequence ?? 0
       };
       setRuns(nextRuns);
+      commitRunOutputEvents(nextRuns, outputBatches);
       setDiscussions(nextDiscussions);
       setRoomParticipants(nextParticipants);
       setMentionAgentIds((current) => current.filter((agentId) =>
@@ -1258,6 +1330,9 @@ export function App() {
             `/api/rooms/${selectedRoomId}/participants`, {}, session.token
           )
         ]);
+        const outputBatches = await loadRunOutputEvents(
+          nextRuns, runOutputSyncRef.current, session.token
+        );
         if (!stopped) {
           setAgents(nextAgents);
           setMembers(nextMembers);
@@ -1276,6 +1351,7 @@ export function App() {
             };
           }
           setRuns(nextRuns);
+          commitRunOutputEvents(nextRuns, outputBatches);
           setDiscussions(nextDiscussions);
           setRoomParticipants(nextParticipants);
           setMentionAgentIds((current) => current.filter((agentId) =>
@@ -2522,6 +2598,28 @@ export function App() {
                         ))}
                       </div>
                     )}
+                  </div>
+                </article>
+              );
+            })}
+            {Object.entries(runOutputs).map(([runId, output]) => {
+              const run = runsById.get(runId);
+              if (!run) return null;
+              const senderName = agentsById.get(run.targetAgentId)?.name ?? t("agent");
+              const avatarLabel = senderName.trim().slice(0, 1)
+                .toLocaleUpperCase(locale) || "A";
+              return (
+                <article className="message streaming-message" key={`stream-${runId}`}>
+                  <span className="avatar agent">{avatarLabel}</span>
+                  <div>
+                    <header>
+                      <strong>{senderName}</strong>
+                      <span className="streaming-state" role="status">{t("generating")}</span>
+                    </header>
+                    <p>
+                      {output.content}
+                      <span aria-hidden="true" className="streaming-cursor" />
+                    </p>
                   </div>
                 </article>
               );

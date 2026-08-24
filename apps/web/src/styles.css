@@ -339,6 +339,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .message header strong { font-size: 13px; }
 .message time { color: #656c5f; font-size: 10px; }
 .message p { margin: 5px 0 0; color: #c7cbbf; font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+.streaming-message { border: 1px solid rgb(151 175 89 / 18%); background: rgb(34 42 25 / 34%); }
+.streaming-state { color: #a9bf70; font-size: 9px; font-weight: 750; }
+.streaming-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -.12em; background: #c9e47d; animation: streaming-cursor 900ms steps(1, end) infinite; }
+@keyframes streaming-cursor { 50% { opacity: .15; } }
 .pending-message { border: 1px dashed #4a5144; background: rgb(34 38 31 / 46%); }
 .pending-message.failed { border-color: #754c46; background: rgb(65 35 31 / 42%); }
 .pending-state { color: #8f9988; font-size: 9px; font-weight: 750; }
@@ -502,6 +506,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .orb { border-color: #aab98a; background: linear-gradient(145deg, #edf3e2, #dfe8d2); box-shadow: 0 22px 55px rgb(83 103 54 / 15%); }
 :root[data-theme="light"] .message:hover { background: rgb(82 101 54 / 5%); }
 :root[data-theme="light"] .message p { color: #3f493a; }
+:root[data-theme="light"] .streaming-message { border-color: #c5d3aa; background: #f2f6eb; }
+:root[data-theme="light"] .streaming-state { color: #657b32; }
+:root[data-theme="light"] .streaming-cursor { background: #718d32; }
 :root[data-theme="light"] .pending-message { border-color: #b9c3b0; background: #f0f3ec; }
 :root[data-theme="light"] .pending-message.failed { border-color: #cf9a92; background: #fff3f0; }
 :root[data-theme="light"] .message time { color: #7a8474; }
@@ -611,6 +618,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 
 @media (prefers-reduced-motion: reduce) {
   .discussion-wave-pulse { animation: none; }
+  .streaming-cursor { animation: none; }
 }
 
 @media (max-width: 1040px) {

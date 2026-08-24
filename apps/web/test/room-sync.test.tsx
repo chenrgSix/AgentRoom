@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { createSingleFlight, mergeRoomMessages } from "../src/room-sync.js";
+import {
+  createSingleFlight,
+  mergeRoomMessages,
+  reduceRunOutput
+} from "../src/room-sync.js";
 
 test("Room synchronization appends cursor deltas once and keeps newest history", () => {
   const snapshot = Array.from({ length: 100 }, (_, index) => ({
@@ -50,4 +54,54 @@ test("Room refresh is single-flight across overlapping poll ticks", async () => 
   assert.equal(calls, 2);
   release?.();
   assert.equal(await next, true);
+});
+
+test("Run output resumes ordered deltas, resets, and seals on the final reply", () => {
+  const first = reduceRunOutput(undefined, [
+    { sequence: 2, event: { type: "output", sequence: 2, content: "先分析" } },
+    { sequence: 1, event: { type: "status", sequence: 1, status: "working" } }
+  ]);
+  assert.deepEqual(first, {
+    sequence: 2,
+    content: "先分析",
+    sealed: false
+  });
+
+  const reset = reduceRunOutput(first, [
+    { sequence: 2, event: { type: "output", sequence: 2, content: "重复" } },
+    {
+      sequence: 3,
+      event: { type: "output", sequence: 3, content: "最终回答", reset: true }
+    }
+  ]);
+  assert.deepEqual(reset, {
+    sequence: 3,
+    content: "最终回答",
+    sealed: false
+  });
+
+  assert.deepEqual(reduceRunOutput(reset, [
+    { sequence: 4, event: { type: "reply", sequence: 4, content: "最终回答" } },
+    { sequence: 5, event: { type: "status", sequence: 5, status: "completed" } }
+  ]), {
+    sequence: 5,
+    content: "",
+    sealed: true
+  });
+});
+
+test("Run output waits for a missing sequence and clears on failure", () => {
+  const gap = reduceRunOutput(undefined, [
+    { sequence: 2, event: { type: "output", sequence: 2, content: "不应越过缺口" } }
+  ]);
+  assert.deepEqual(gap, { sequence: 0, content: "", sealed: false });
+  assert.deepEqual(reduceRunOutput(undefined, [
+    { sequence: 1, event: { type: "status", sequence: 1, status: "working" } },
+    { sequence: 2, event: { type: "output", sequence: 2, content: "处理中" } },
+    { sequence: 3, event: { type: "status", sequence: 3, status: "failed" } }
+  ]), {
+    sequence: 3,
+    content: "",
+    sealed: true
+  });
 });
