@@ -41,6 +41,32 @@ func LoadOrCreate(dataDir string, agents []config.AgentConfig) (map[string]strin
 	return identities, nil
 }
 
+// BindName associates a configured display name with an existing immutable
+// Agent identity. The old name may remain as a harmless alias so a failed
+// configuration replacement cannot orphan the original identity.
+func BindName(dataDir, name, agentID string) error {
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		return err
+	}
+	path := filepath.Join(dataDir, filename)
+	identities := make(map[string]string)
+	if source, err := os.ReadFile(path); err == nil {
+		if err := json.Unmarshal(source, &identities); err != nil {
+			return fmt.Errorf("decode Agent identities: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if existing := identities[name]; existing != "" && existing != agentID {
+		return fmt.Errorf("Agent name %q already has a different identity", name)
+	}
+	if identities[name] == agentID {
+		return nil
+	}
+	identities[name] = agentID
+	return save(path, identities)
+}
+
 func save(path string, identities map[string]string) error {
 	source, err := json.MarshalIndent(identities, "", "  ")
 	if err != nil {

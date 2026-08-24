@@ -54,11 +54,19 @@ environments. Static assets are embedded in the Go binary, so no Node.js
 process or separate UI service is required on the client.
 
 The Console can discover Codex and Pi, create the first enrollment request,
-show the short Owner approval code, start or stop the Bridge, and edit existing
-Agent presets. Configuration updates are atomically persisted and restart the
-managed connection with an epoch fence so a late old process cannot overwrite
-new state. A paired server URL cannot be changed through configuration editing;
-joining another server requires a new Device enrollment.
+show the short Owner approval code, start or stop the Bridge, add multiple Codex
+or Pi Agents, and edit one selected Agent in a modal. Each configured card owns
+its edit action; the browser sends a single-Agent request instead of rebuilding
+the sibling roster. An immutable `agentId` selects the record, and the local
+identity map binds a renamed display name back to that ID so a rename does not
+register a new central Agent. Agent deletion is outside this task.
+
+Configuration updates are atomically persisted. A running managed connection
+restarts with an epoch fence so a late old process cannot overwrite new state;
+a deliberately stopped Bridge remains stopped. All Agent mutations fail while
+any local Agent has active Team work or a Runtime self-test is running. A paired
+server URL cannot be changed through configuration editing; joining another
+server requires a new Device enrollment.
 
 The HTTP listener rejects non-loopback addresses. Every API call requires a
 32-byte random Bearer token that is removed from browser history and kept only
@@ -119,9 +127,10 @@ contain prompts, provider responses, credentials, or absolute paths.
 Tests cover client enrollment, pairing, reconnect, epoch replacement, ACK loss,
 duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
-Browser acceptance covers first setup, Runtime discovery, adding Pi to an
-existing Bridge, and status rendering. Work is tracked by `BRG-001` through
-`BRG-019` in `docs/TASKS.md`.
+Console coverage verifies first setup, Runtime discovery, multiple same-kind
+Agents, per-Agent modal/API ownership, rename-stable identity, active-work
+fencing, and status rendering. Work is tracked by `BRG-001` through `BRG-021`
+in `docs/TASKS.md`.
 
 `BRG-019` adds configuration schema version 1 and Runtime preset version 1.
 Recognized legacy Codex and Pi presets migrate in memory before validation,

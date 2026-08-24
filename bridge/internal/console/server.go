@@ -26,6 +26,7 @@ import (
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/diagnostics"
 	"agentroom.dev/bridge/internal/enrollment"
+	"agentroom.dev/bridge/internal/identity"
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
 	"agentroom.dev/bridge/internal/updatecheck"
@@ -65,6 +66,7 @@ type EnrollmentInput struct {
 }
 
 type AgentView struct {
+	AgentID                  string `json:"agentId"`
 	Kind                     string `json:"kind"`
 	Name                     string `json:"name"`
 	Role                     string `json:"role"`
@@ -216,7 +218,9 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 		service.configuration = &loaded
 		service.state.Configured = true
 		service.state.Phase = PhaseReady
-		service.applyConfigView(loaded)
+		if err := service.applyConfigView(loaded); err != nil {
+			return nil, err
+		}
 		if credential, credentialErr := pairing.Load(loaded.DataDir); credentialErr == nil {
 			service.credential = &credential
 			service.state.Paired = true
@@ -267,6 +271,8 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("POST /api/enrollment/start", s.authorize(s.startEnrollment))
 	mux.HandleFunc("POST /api/enrollment/cancel", s.authorize(s.cancelEnrollment))
 	mux.HandleFunc("PUT /api/config", s.authorize(s.updateConfig))
+	mux.HandleFunc("POST /api/agents", s.authorize(s.addAgent))
+	mux.HandleFunc("PUT /api/agents/{agentId}", s.authorize(s.updateAgent))
 	mux.HandleFunc("POST /api/runtime-tests", s.authorize(s.testRuntime))
 	mux.HandleFunc("POST /api/bridge/start", s.authorize(s.startBridge))
 	mux.HandleFunc("POST /api/bridge/stop", s.authorize(s.stopBridge))
@@ -283,15 +289,17 @@ func (s *Service) testRuntime(response http.ResponseWriter, request *http.Reques
 		return
 	}
 	var input struct {
+		AgentID   string `json:"agentId"`
 		AgentName string `json:"agentName"`
 	}
 	if err := decodeJSON(request, &input); err != nil {
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
+	agentID := strings.TrimSpace(input.AgentID)
 	name := strings.TrimSpace(input.AgentName)
-	if name == "" {
-		writeError(response, http.StatusBadRequest, "agentName is required")
+	if agentID == "" && name == "" {
+		writeError(response, http.StatusBadRequest, "agentId is required")
 		return
 	}
 	s.mu.Lock()
@@ -300,9 +308,18 @@ func (s *Service) testRuntime(response http.ResponseWriter, request *http.Reques
 		writeError(response, http.StatusConflict, "Configure the Bridge before testing a Runtime")
 		return
 	}
+	identities, err := identity.LoadOrCreate(s.configuration.DataDir, s.configuration.Agents)
+	if err != nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
 	var selected *config.AgentConfig
 	for index, agent := range s.configuration.Agents {
-		if agent.Name != name {
+		if agentID != "" && identities[agent.Name] != agentID {
+			continue
+		}
+		if agentID == "" && agent.Name != name {
 			continue
 		}
 		if index < len(s.state.Agents) && s.state.Agents[index].ActiveRuns > 0 {
@@ -315,7 +332,8 @@ func (s *Service) testRuntime(response http.ResponseWriter, request *http.Reques
 			writeError(response, http.StatusConflict, "Runtime self-test requires a managed Codex or Pi preset")
 			return
 		}
-		if _, running := s.runtimeTests[name]; running {
+		testKey := identities[agent.Name]
+		if _, running := s.runtimeTests[testKey]; running {
 			s.mu.Unlock()
 			writeError(response, http.StatusConflict, "Runtime self-test is already running")
 			return
@@ -324,7 +342,8 @@ func (s *Service) testRuntime(response http.ResponseWriter, request *http.Reques
 		copy.Command = append([]string{}, agent.Command...)
 		copy.EnvAllowlist = append([]string{}, agent.EnvAllowlist...)
 		selected = &copy
-		s.runtimeTests[name] = struct{}{}
+		agentID = testKey
+		s.runtimeTests[testKey] = struct{}{}
 		break
 	}
 	s.mu.Unlock()
@@ -334,7 +353,7 @@ func (s *Service) testRuntime(response http.ResponseWriter, request *http.Reques
 	}
 	defer func() {
 		s.mu.Lock()
-		delete(s.runtimeTests, name)
+		delete(s.runtimeTests, agentID)
 		s.mu.Unlock()
 	}()
 	probeContext, cancel := context.WithTimeout(request.Context(), time.Minute)
@@ -518,7 +537,13 @@ func (s *Service) startEnrollment(response http.ResponseWriter, request *http.Re
 	s.state.LastError = ""
 	s.state.JoinCode = ""
 	s.state.JoinExpiresAt = ""
-	s.applyConfigView(*configuration)
+	if err := s.applyConfigView(*configuration); err != nil {
+		s.joinCancel = nil
+		s.mu.Unlock()
+		cancel()
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
 	s.mu.Unlock()
 
 	go s.enroll(ctx, *configuration, configuredBefore)
@@ -634,6 +659,159 @@ func (s *Service) stopBridge(response http.ResponseWriter, _ *http.Request) {
 	writeJSON(response, http.StatusOK, s.StopBridge())
 }
 
+func (s *Service) addAgent(response http.ResponseWriter, request *http.Request) {
+	var input RuntimeInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	agent, err := buildRuntime(input)
+	if err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.requireAgentMutationLocked(); err != nil {
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
+	candidate := cloneConfiguration(*s.configuration)
+	candidate.Agents = append(candidate.Agents, agent)
+	if err := candidate.Validate(); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	identities, err := identity.LoadOrCreate(candidate.DataDir, candidate.Agents)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
+	if err := s.replaceConfigurationLocked(candidate); err != nil {
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
+	writeJSON(response, http.StatusCreated, s.agentViewLocked(identities[agent.Name]))
+}
+
+func (s *Service) updateAgent(response http.ResponseWriter, request *http.Request) {
+	agentID := strings.TrimSpace(request.PathValue("agentId"))
+	if agentID == "" {
+		writeError(response, http.StatusBadRequest, "agentId is required")
+		return
+	}
+	var input RuntimeInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	agent, err := buildRuntime(input)
+	if err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.requireAgentMutationLocked(); err != nil {
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
+	identities, err := identity.LoadOrCreate(s.configuration.DataDir, s.configuration.Agents)
+	if err != nil {
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
+	candidate := cloneConfiguration(*s.configuration)
+	selected := -1
+	for index, configured := range candidate.Agents {
+		if identities[configured.Name] == agentID {
+			selected = index
+			break
+		}
+	}
+	if selected < 0 {
+		writeError(response, http.StatusNotFound, "Configured Agent was not found")
+		return
+	}
+	candidate.Agents[selected] = agent
+	if err := candidate.Validate(); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := identity.BindName(candidate.DataDir, agent.Name, agentID); err != nil {
+		writeError(response, http.StatusConflict, publicError(err))
+		return
+	}
+	if err := s.replaceConfigurationLocked(candidate); err != nil {
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
+	writeJSON(response, http.StatusOK, s.agentViewLocked(agentID))
+}
+
+func (s *Service) requireAgentMutationLocked() error {
+	if s.configuration == nil || s.credential == nil {
+		return fmt.Errorf("Complete Team enrollment before editing Agents")
+	}
+	if s.joinCancel != nil {
+		return fmt.Errorf("Wait for Team enrollment to finish before editing Agents")
+	}
+	if len(s.runtimeTests) > 0 {
+		return fmt.Errorf("Wait for Runtime self-tests to finish before editing Agents")
+	}
+	for _, agent := range s.state.Agents {
+		if agent.ActiveRuns > 0 {
+			return fmt.Errorf("Wait for active Team tasks to finish before editing Agents")
+		}
+	}
+	return nil
+}
+
+func (s *Service) replaceConfigurationLocked(configuration config.Config) error {
+	if err := s.dependencies.ReplaceConfig(s.options.ConfigPath, configuration); err != nil {
+		return err
+	}
+	wasRunning := s.bridgeCancel != nil
+	if s.bridgeCancel != nil {
+		s.bridgeCancel()
+	}
+	s.bridgeEpoch++
+	s.bridgeCancel = nil
+	s.state.BridgeRunning = false
+	s.state.Connection = ConnectionView{State: operations.ConnectionStopped}
+	s.configuration = &configuration
+	if err := s.applyConfigView(configuration); err != nil {
+		s.state.Phase = PhaseError
+		s.state.LastError = publicError(err)
+		return err
+	}
+	s.state.Phase = PhaseReady
+	if wasRunning {
+		return s.startBridgeLocked()
+	}
+	return nil
+}
+
+func (s *Service) agentViewLocked(agentID string) AgentView {
+	for _, agent := range s.state.Agents {
+		if agent.AgentID == agentID {
+			return agent
+		}
+	}
+	return AgentView{}
+}
+
+func cloneConfiguration(source config.Config) config.Config {
+	clone := source
+	clone.Agents = make([]config.AgentConfig, len(source.Agents))
+	for index, agent := range source.Agents {
+		clone.Agents[index] = agent
+		clone.Agents[index].Command = append([]string{}, agent.Command...)
+		clone.Agents[index].EnvAllowlist = append([]string{}, agent.EnvAllowlist...)
+	}
+	return clone
+}
+
 func (s *Service) updateConfig(response http.ResponseWriter, request *http.Request) {
 	var input EnrollmentInput
 	if err := decodeJSON(request, &input); err != nil {
@@ -651,6 +829,10 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 		writeError(response, http.StatusConflict, "Complete Team enrollment before editing configuration")
 		return
 	}
+	if err := s.requireAgentMutationLocked(); err != nil {
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
 	if configuration.ServerURL != s.credential.ServerURL {
 		writeError(response, http.StatusConflict, "Paired Bridge server URL cannot be changed; enroll a new Device instead")
 		return
@@ -666,7 +848,12 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 	s.bridgeCancel = nil
 	s.state.BridgeRunning = false
 	s.configuration = &configuration
-	s.applyConfigView(configuration)
+	if err := s.applyConfigView(configuration); err != nil {
+		s.state.Phase = PhaseError
+		s.state.LastError = publicError(err)
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
 	if err := s.startBridgeLocked(); err != nil {
 		s.state.Phase = PhaseError
 		s.state.LastError = publicError(err)
@@ -690,46 +877,9 @@ func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 		if !runtime.Enabled {
 			continue
 		}
-		executablePath, err := executableFile(runtime.ExecutablePath)
+		agent, err := buildRuntime(runtime)
 		if err != nil {
-			return config.Config{}, fmt.Errorf("%s executable: %w", runtime.Kind, err)
-		}
-		workspace, err := existingDirectory(runtime.Workspace)
-		if err != nil {
-			return config.Config{}, fmt.Errorf("%s workspace: %w", runtime.Kind, err)
-		}
-		agent := config.AgentConfig{
-			Name:          strings.TrimSpace(runtime.Name),
-			Role:          strings.TrimSpace(runtime.Role),
-			Workspace:     workspace,
-			RuntimeKind:   runtime.Kind,
-			PresetVersion: config.CurrentPresetVersion,
-		}
-		switch runtime.Kind {
-		case "codex":
-			sandbox := runtime.Sandbox
-			if sandbox == "" {
-				sandbox = "workspace-write"
-			}
-			if sandbox != "read-only" && sandbox != "workspace-write" {
-				return config.Config{}, fmt.Errorf("Codex sandbox must be read-only or workspace-write")
-			}
-			agent.Adapter = "codex"
-			agent.Command = config.CodexPresetCommand(executablePath, sandbox)
-			agent.EnvAllowlist = []string{"HOME", "PATH", "CODEX_HOME"}
-		case "pi":
-			agent.Adapter = "generic"
-			agent.Command = config.PiPresetCommand(executablePath)
-			agent.EnvAllowlist = []string{"HOME", "PATH", "PI_CODING_AGENT_DIR", "PI_TELEMETRY"}
-			credentialName := strings.TrimSpace(runtime.CredentialEnvironmentVar)
-			if credentialName != "" {
-				if !environmentName.MatchString(credentialName) {
-					return config.Config{}, fmt.Errorf("Pi credential environment variable name is invalid")
-				}
-				agent.EnvAllowlist = appendUnique(agent.EnvAllowlist, credentialName)
-			}
-		default:
-			return config.Config{}, fmt.Errorf("Runtime kind must be codex or pi")
+			return config.Config{}, err
 		}
 		configuration.Agents = append(configuration.Agents, agent)
 	}
@@ -739,7 +889,57 @@ func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 	return configuration, nil
 }
 
-func (s *Service) applyConfigView(configuration config.Config) {
+func buildRuntime(runtime RuntimeInput) (config.AgentConfig, error) {
+	runtime.Kind = strings.TrimSpace(runtime.Kind)
+	executablePath, err := executableFile(runtime.ExecutablePath)
+	if err != nil {
+		return config.AgentConfig{}, fmt.Errorf("%s executable: %w", runtime.Kind, err)
+	}
+	workspace, err := existingDirectory(runtime.Workspace)
+	if err != nil {
+		return config.AgentConfig{}, fmt.Errorf("%s workspace: %w", runtime.Kind, err)
+	}
+	agent := config.AgentConfig{
+		Name:          strings.TrimSpace(runtime.Name),
+		Role:          strings.TrimSpace(runtime.Role),
+		Workspace:     workspace,
+		RuntimeKind:   runtime.Kind,
+		PresetVersion: config.CurrentPresetVersion,
+	}
+	switch runtime.Kind {
+	case "codex":
+		sandbox := runtime.Sandbox
+		if sandbox == "" {
+			sandbox = "workspace-write"
+		}
+		if sandbox != "read-only" && sandbox != "workspace-write" {
+			return config.AgentConfig{}, fmt.Errorf("Codex sandbox must be read-only or workspace-write")
+		}
+		agent.Adapter = "codex"
+		agent.Command = config.CodexPresetCommand(executablePath, sandbox)
+		agent.EnvAllowlist = []string{"HOME", "PATH", "CODEX_HOME"}
+	case "pi":
+		agent.Adapter = "generic"
+		agent.Command = config.PiPresetCommand(executablePath)
+		agent.EnvAllowlist = []string{"HOME", "PATH", "PI_CODING_AGENT_DIR", "PI_TELEMETRY"}
+		credentialName := strings.TrimSpace(runtime.CredentialEnvironmentVar)
+		if credentialName != "" {
+			if !environmentName.MatchString(credentialName) {
+				return config.AgentConfig{}, fmt.Errorf("Pi credential environment variable name is invalid")
+			}
+			agent.EnvAllowlist = appendUnique(agent.EnvAllowlist, credentialName)
+		}
+	default:
+		return config.AgentConfig{}, fmt.Errorf("Runtime kind must be codex or pi")
+	}
+	return agent, nil
+}
+
+func (s *Service) applyConfigView(configuration config.Config) error {
+	identities, err := identity.LoadOrCreate(configuration.DataDir, configuration.Agents)
+	if err != nil {
+		return fmt.Errorf("load Agent identities: %w", err)
+	}
 	s.state.ServerURL = configuration.ServerURL
 	s.state.ServerTrustMode = configuration.ResolvedTrustMode()
 	s.state.ServerCertificateSHA256 = configuration.ServerCertificateSHA256
@@ -780,12 +980,13 @@ func (s *Service) applyConfigView(configuration config.Config) {
 			runtimeState = string(operations.RuntimeIdle)
 		}
 		s.state.Agents = append(s.state.Agents, AgentView{
-			Kind: kind, Name: agent.Name, Role: agent.Role,
+			AgentID: identities[agent.Name], Kind: kind, Name: agent.Name, Role: agent.Role,
 			ExecutablePath: executablePath, Workspace: agent.Workspace,
 			Sandbox: sandbox, CredentialEnvironmentVar: credentialEnvironmentVar,
 			ExecutableReady: executableReady, RuntimeState: runtimeState,
 		})
 	}
+	return nil
 }
 
 func (s *Service) operationalObserver(epoch uint64) operations.Observer {

@@ -1,15 +1,19 @@
 const elements = Object.fromEntries([
   "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view",
-  "device-title", "start-bridge", "stop-bridge", "resume-enrollment", "edit-config", "current-server",
+  "device-title", "start-bridge", "stop-bridge", "resume-enrollment", "add-agent", "current-server",
   "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
   "enrollment-form", "server-url", "device-name", "trust-mode", "fingerprint-field",
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
   "codex-path", "codex-workspace", "codex-sandbox", "pi-enabled", "pi-fields",
   "pi-name", "pi-role", "pi-path", "pi-workspace", "pi-credential-env",
-  "submit-enrollment", "cancel-edit", "auth-warning", "error", "bridge-version",
+  "submit-enrollment", "auth-warning", "error", "bridge-version",
   "login-startup-row", "login-startup", "login-startup-warning", "export-diagnostics",
-  "diagnostics-result", "check-update", "update-result", "release-link"
+  "diagnostics-result", "check-update", "update-result", "release-link",
+  "agent-modal-backdrop", "agent-modal-title", "close-agent-modal", "cancel-agent-modal",
+  "agent-modal-error",
+  "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace",
+  "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env", "save-agent"
 ].map((id) => [id, document.getElementById(id)]));
 
 const query = new URLSearchParams(window.location.search);
@@ -20,7 +24,7 @@ if (query.get("token")) {
 const token = sessionStorage.getItem("agent-room-console-token") || "";
 if (!token) elements["auth-warning"].classList.remove("hidden");
 let currentState = null;
-let editMode = false;
+let editingAgentId = null;
 const runtimeTestResults = new Map();
 
 const labels = {
@@ -57,8 +61,11 @@ async function request(path, options = {}) {
 }
 
 function showError(error) {
-  elements.error.textContent = error ? String(error.message || error) : "";
-  elements.error.classList.toggle("hidden", !error);
+  const message = error ? String(error.message || error) : "";
+  elements.error.textContent = message;
+  elements.error.classList.toggle("hidden", !message);
+  elements["agent-modal-error"].textContent = message;
+  elements["agent-modal-error"].classList.toggle("hidden", !message);
 }
 
 function setRuntime(kind, enabled) {
@@ -93,7 +100,7 @@ function renderAgent(agent) {
   const probeSupported = agent.kind === "codex" || agent.kind === "pi";
   probeButton.disabled = !probeSupported || !agent.executableReady || agent.activeRuns > 0;
   const probeResult = document.createElement("span");
-  const latestProbe = runtimeTestResults.get(agent.name);
+  const latestProbe = runtimeTestResults.get(agent.agentId);
   if (latestProbe === "running") {
     probeButton.disabled = true;
     probeResult.textContent = "正在执行只读自检…";
@@ -111,22 +118,29 @@ function renderAgent(agent) {
       : "按需启动一次受限本地调用，不会自动执行";
   }
   probeButton.addEventListener("click", async () => {
-    runtimeTestResults.set(agent.name, "running");
+    runtimeTestResults.set(agent.agentId, "running");
     render(currentState);
     try {
       const result = await request("/api/runtime-tests", {
         method: "POST",
-        body: JSON.stringify({agentName: agent.name})
+        body: JSON.stringify({agentId: agent.agentId})
       });
-      runtimeTestResults.set(agent.name, result);
+      runtimeTestResults.set(agent.agentId, result);
     } catch (error) {
-      runtimeTestResults.delete(agent.name);
+      runtimeTestResults.delete(agent.agentId);
       showError(error);
     }
     if (currentState) render(currentState);
   });
   probe.append(probeButton, probeResult);
-  row.append(title, role, status, readiness, workspace, probe);
+  const editButton = document.createElement("button");
+  editButton.className = "secondary agent-edit";
+  editButton.type = "button";
+  editButton.textContent = "编辑";
+  editButton.disabled = currentState.agents.some((candidate) => candidate.activeRuns > 0) ||
+    [...runtimeTestResults.values()].includes("running");
+  editButton.addEventListener("click", () => openAgentModal(agent));
+  row.append(title, role, status, readiness, workspace, probe, editButton);
   return row;
 }
 
@@ -139,38 +153,33 @@ function syncTrustFields() {
   );
 }
 
-function fillConfigurationForm(state) {
-  elements["server-url"].value = state.serverUrl || "http://127.0.0.1:3000";
-  elements["device-name"].value = state.deviceName || "Local Bridge";
-  elements["trust-mode"].value = state.serverTrustMode || "system_ca";
-  elements.fingerprint.value = state.serverCertificateSha256 || "";
-  syncTrustFields();
-  const codex = state.agents.find((agent) => agent.kind === "codex");
-  const pi = state.agents.find((agent) => agent.kind === "pi");
-  elements["codex-enabled"].checked = Boolean(codex);
-  elements["pi-enabled"].checked = Boolean(pi);
-  setRuntime("codex", Boolean(codex));
-  setRuntime("pi", Boolean(pi));
-  if (codex) {
-    elements["codex-name"].value = codex.name;
-    elements["codex-role"].value = codex.role;
-    elements["codex-path"].value = codex.executablePath;
-    elements["codex-workspace"].value = codex.workspace;
-    elements["codex-sandbox"].value = codex.sandbox || "workspace-write";
-  } else {
-    elements["codex-path"].value = state.detectedCodex || "";
-    elements["codex-workspace"].value = state.agents[0]?.workspace || state.workspace || "";
-  }
-  if (pi) {
-    elements["pi-name"].value = pi.name;
-    elements["pi-role"].value = pi.role;
-    elements["pi-path"].value = pi.executablePath;
-    elements["pi-workspace"].value = pi.workspace;
-    elements["pi-credential-env"].value = pi.credentialEnvironmentVariable || "";
-  } else {
-    elements["pi-path"].value = state.detectedPi || "";
-    elements["pi-workspace"].value = state.agents[0]?.workspace || state.workspace || "";
-  }
+function syncAgentKindFields() {
+  const codex = elements["agent-kind"].value === "codex";
+  elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
+  elements["agent-credential-field"].classList.toggle("hidden", codex);
+}
+
+function openAgentModal(agent = null) {
+  showError(null);
+  editingAgentId = agent?.agentId || null;
+  const kind = agent?.kind === "pi" ? "pi" : "codex";
+  elements["agent-modal-title"].textContent = agent ? `编辑 ${agent.name}` : "添加智能体";
+  elements["agent-kind"].value = kind;
+  elements["agent-name"].value = agent?.name || (kind === "pi" ? "Local Pi" : "Local Codex");
+  elements["agent-role"].value = agent?.role || (kind === "pi" ? "Reviewer" : "Implementation");
+  elements["agent-path"].value = agent?.executablePath ||
+    (kind === "pi" ? currentState.detectedPi : currentState.detectedCodex) || "";
+  elements["agent-workspace"].value = agent?.workspace || currentState.agents[0]?.workspace || currentState.workspace || "";
+  elements["agent-sandbox"].value = agent?.sandbox || "workspace-write";
+  elements["agent-credential-env"].value = agent?.credentialEnvironmentVariable || "";
+  syncAgentKindFields();
+  elements["agent-modal-backdrop"].classList.remove("hidden");
+  elements["agent-name"].focus();
+}
+
+function closeAgentModal() {
+  editingAgentId = null;
+  elements["agent-modal-backdrop"].classList.add("hidden");
 }
 
 function render(state) {
@@ -195,7 +204,7 @@ function render(state) {
   }
 
   elements["configured-view"].classList.toggle("hidden", !state.configured);
-  elements["enrollment-form"].classList.toggle("hidden", (state.configured && !editMode) || waiting);
+  elements["enrollment-form"].classList.toggle("hidden", state.configured || waiting);
   if (state.configured) {
     elements["device-title"].textContent = state.deviceName;
     elements["current-server"].textContent = state.serverUrl;
@@ -213,7 +222,10 @@ function render(state) {
     elements["start-bridge"].disabled = state.bridgeRunning || !state.paired;
     elements["stop-bridge"].disabled = !state.bridgeRunning;
     elements["resume-enrollment"].classList.toggle("hidden", state.paired);
-    elements["edit-config"].classList.toggle("hidden", !state.paired);
+    const mutationBlocked = state.agents.some((agent) => agent.activeRuns > 0) ||
+      [...runtimeTestResults.values()].includes("running");
+    elements["add-agent"].classList.toggle("hidden", !state.paired);
+    elements["add-agent"].disabled = mutationBlocked;
     elements["agent-list"].replaceChildren(...state.agents.map(renderAgent));
   } else {
     if (!elements["device-name"].value) elements["device-name"].value = "Local Bridge";
@@ -229,8 +241,7 @@ function render(state) {
   const startupWarning = startup.pathMismatch ? "应用位置已变化，请关闭后重新开启此选项以修复。" : "";
   elements["login-startup-warning"].textContent = startupWarning;
   elements["login-startup-warning"].classList.toggle("hidden", !startupWarning);
-  elements["cancel-edit"].classList.toggle("hidden", !editMode);
-  elements["submit-enrollment"].textContent = editMode ? "保存并重启 Bridge" : "生成加入码";
+  elements["submit-enrollment"].textContent = "生成加入码";
 }
 
 async function refresh() {
@@ -249,16 +260,54 @@ elements["trust-mode"].addEventListener("change", syncTrustFields);
 elements["codex-enabled"].addEventListener("change", () => setRuntime("codex", elements["codex-enabled"].checked));
 elements["pi-enabled"].addEventListener("change", () => setRuntime("pi", elements["pi-enabled"].checked));
 elements["join-code"].addEventListener("click", async () => navigator.clipboard.writeText(elements["join-code"].textContent));
-elements["edit-config"].addEventListener("click", () => {
-  if (!currentState) return;
-  editMode = true;
-  fillConfigurationForm(currentState);
-  render(currentState);
-  elements["enrollment-form"].scrollIntoView({behavior: "smooth", block: "start"});
+elements["add-agent"].addEventListener("click", () => openAgentModal());
+elements["agent-kind"].addEventListener("change", () => {
+  const kind = elements["agent-kind"].value;
+  if (!editingAgentId) {
+    elements["agent-name"].value = kind === "pi" ? "Local Pi" : "Local Codex";
+    elements["agent-role"].value = kind === "pi" ? "Reviewer" : "Implementation";
+    elements["agent-path"].value = kind === "pi" ? currentState.detectedPi || "" : currentState.detectedCodex || "";
+  }
+  syncAgentKindFields();
 });
-elements["cancel-edit"].addEventListener("click", () => {
-  editMode = false;
-  if (currentState) render(currentState);
+for (const id of ["close-agent-modal", "cancel-agent-modal"]) {
+  elements[id].addEventListener("click", closeAgentModal);
+}
+elements["agent-modal-backdrop"].addEventListener("click", (event) => {
+  if (event.target === elements["agent-modal-backdrop"]) closeAgentModal();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !elements["agent-modal-backdrop"].classList.contains("hidden")) {
+    closeAgentModal();
+  }
+});
+
+elements["agent-form"].addEventListener("submit", async (event) => {
+  event.preventDefault();
+  showError(null);
+  elements["save-agent"].disabled = true;
+  const agentId = editingAgentId;
+  const kind = elements["agent-kind"].value;
+  try {
+    await request(agentId ? `/api/agents/${encodeURIComponent(agentId)}` : "/api/agents", {
+      method: agentId ? "PUT" : "POST",
+      body: JSON.stringify({
+        kind,
+        name: elements["agent-name"].value,
+        role: elements["agent-role"].value,
+        executablePath: elements["agent-path"].value,
+        workspace: elements["agent-workspace"].value,
+        sandbox: kind === "codex" ? elements["agent-sandbox"].value : "",
+        credentialEnvironmentVariable: kind === "pi" ? elements["agent-credential-env"].value : ""
+      })
+    });
+    closeAgentModal();
+    await refresh();
+  } catch (error) {
+    showError(error);
+  } finally {
+    elements["save-agent"].disabled = false;
+  }
 });
 
 elements["enrollment-form"].addEventListener("submit", async (event) => {
@@ -284,8 +333,8 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
     credentialEnvironmentVariable: elements["pi-credential-env"].value
   }];
   try {
-    await request(editMode ? "/api/config" : "/api/enrollment/start", {
-      method: editMode ? "PUT" : "POST",
+    await request("/api/enrollment/start", {
+      method: "POST",
       body: JSON.stringify({
         serverUrl: elements["server-url"].value,
         serverTrustMode: elements["server-url"].value.startsWith("https://")
@@ -299,7 +348,6 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
         runtimes
       })
     });
-    editMode = false;
     await refresh();
   } catch (error) {
     showError(error);

@@ -136,6 +136,7 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	for _, id := range []string{
 		`id="connection-state"`, `id="trust-mode"`, `id="login-startup"`,
 		`id="export-diagnostics"`, `id="check-update"`, `id="bridge-version"`,
+		`id="add-agent"`, `id="agent-modal-backdrop"`, `id="agent-form"`,
 	} {
 		if !bytes.Contains(html, []byte(id)) {
 			t.Fatalf("embedded UI omitted %s", id)
@@ -151,6 +152,10 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if bytes.Count(javascript, []byte(`request("/api/runtime-tests"`)) != 1 ||
 		!bytes.Contains(javascript, []byte("测试运行")) {
 		t.Fatal("Runtime self-test must exist only behind an explicit Agent-row action")
+	}
+	if !bytes.Contains(javascript, []byte("request(agentId ? `/api/agents/")) ||
+		bytes.Contains(javascript, []byte(`request(editMode ? "/api/config"`)) {
+		t.Fatal("Agent editor must target one Agent endpoint instead of replacing the whole configuration")
 	}
 }
 
@@ -351,7 +356,8 @@ func TestRuntimeSelfTestIsExplicitBoundedAndSafelyProjected(t *testing.T) {
 	if probeCalls != 0 {
 		t.Fatal("state polling must never run a Runtime self-test")
 	}
-	response := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/runtime-tests", map[string]string{"agentName": "Local Pi"})
+	agentID := service.State().Agents[0].AgentID
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/runtime-tests", map[string]string{"agentId": agentID})
 	body, _ := io.ReadAll(response.Body)
 	response.Body.Close()
 	if response.StatusCode != http.StatusOK || probeCalls != 1 {
@@ -367,10 +373,149 @@ func TestRuntimeSelfTestIsExplicitBoundedAndSafelyProjected(t *testing.T) {
 	service.mu.Lock()
 	service.state.Agents[0].ActiveRuns = 1
 	service.mu.Unlock()
-	conflict := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/runtime-tests", map[string]string{"agentName": "Local Pi"})
+	conflict := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/runtime-tests", map[string]string{"agentId": agentID})
 	conflict.Body.Close()
 	if conflict.StatusCode != http.StatusConflict || probeCalls != 1 {
 		t.Fatal("active Team task did not fence Runtime self-test")
+	}
+}
+
+func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
+	directory := t.TempDir()
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	loaded := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "http://127.0.0.1:3000",
+		DeviceName:    "Agent Editor Bridge",
+		DataDir:       dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "First Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex",
+			PresetVersion: config.CurrentPresetVersion,
+			Command:       config.CodexPresetCommand(executablePath, "workspace-write"),
+			Workspace:     directory,
+		}},
+	}
+	if err := config.Save(configPath, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if err := pairing.Save(dataDir, pairing.Credential{
+		ServerURL: loaded.ServerURL, DeviceID: "device_editor", TeamID: "team_editor",
+		OwnerMemberID: "member_editor", Token: "secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan struct{}, 3)
+	stopped := make(chan struct{}, 3)
+	dependencies := inertDependencies()
+	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential, _ operations.Observer) error {
+		started <- struct{}{}
+		<-ctx.Done()
+		stopped <- struct{}{}
+		return ctx.Err()
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "editor-token",
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	firstID := service.State().Agents[0].AgentID
+	if firstID == "" {
+		t.Fatal("Console state omitted the immutable Agent identity")
+	}
+	if _, err := service.StartBridge(); err != nil {
+		t.Fatal(err)
+	}
+	waitSignal(t, started, "initial Bridge start")
+	added := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/agents", RuntimeInput{
+		Kind: "codex", Name: "Second Codex", Role: "Reviewer",
+		ExecutablePath: executablePath, Workspace: directory, Sandbox: "read-only",
+	})
+	var addedView AgentView
+	if err := json.NewDecoder(added.Body).Decode(&addedView); err != nil {
+		t.Fatal(err)
+	}
+	added.Body.Close()
+	if added.StatusCode != http.StatusCreated || addedView.AgentID == "" || addedView.AgentID == firstID {
+		t.Fatalf("unexpected added Agent: %d %#v", added.StatusCode, addedView)
+	}
+	waitSignal(t, stopped, "old Bridge stop after Agent addition")
+	waitSignal(t, started, "Bridge restart after Agent addition")
+	service.StopBridge()
+	waitSignal(t, stopped, "Bridge stop before offline Agent edit")
+
+	edited := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agents/"+firstID, RuntimeInput{
+		Kind: "pi", Name: "Renamed First", Role: "Planner",
+		ExecutablePath: executablePath, Workspace: directory,
+		CredentialEnvironmentVar: "ANTHROPIC_API_KEY",
+	})
+	var editedView AgentView
+	if err := json.NewDecoder(edited.Body).Decode(&editedView); err != nil {
+		t.Fatal(err)
+	}
+	edited.Body.Close()
+	if edited.StatusCode != http.StatusOK || editedView.AgentID != firstID ||
+		editedView.Name != "Renamed First" || editedView.Kind != "pi" {
+		t.Fatalf("unexpected edited Agent: %d %#v", edited.StatusCode, editedView)
+	}
+	if service.State().BridgeRunning {
+		t.Fatal("editing a stopped Bridge unexpectedly started it")
+	}
+	persisted, err := config.Load(configPath)
+	if err != nil || len(persisted.Agents) != 2 || persisted.Agents[1].Name != "Second Codex" {
+		t.Fatalf("unexpected persisted Agents: %#v, %v", persisted.Agents, err)
+	}
+	reloaded, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "reload-token",
+	}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reloaded.Close()
+	if reloaded.State().Agents[0].AgentID != firstID {
+		t.Fatal("Agent rename changed identity after Console reload")
+	}
+
+	service.mu.Lock()
+	service.state.Agents[0].ActiveRuns = 1
+	service.mu.Unlock()
+	conflict := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/agents", RuntimeInput{
+		Kind: "pi", Name: "Blocked Pi", Role: "Reviewer",
+		ExecutablePath: executablePath, Workspace: directory,
+	})
+	conflict.Body.Close()
+	if conflict.StatusCode != http.StatusConflict {
+		t.Fatalf("active Team task did not fence Agent creation: %d", conflict.StatusCode)
+	}
+	service.mu.Lock()
+	service.state.Agents[0].ActiveRuns = 0
+	service.runtimeTests[firstID] = struct{}{}
+	service.mu.Unlock()
+	selfTestConflict := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agents/"+firstID, RuntimeInput{
+		Kind: "pi", Name: "Blocked Rename", Role: "Planner",
+		ExecutablePath: executablePath, Workspace: directory,
+	})
+	selfTestConflict.Body.Close()
+	if selfTestConflict.StatusCode != http.StatusConflict {
+		t.Fatalf("Runtime self-test did not fence Agent editing: %d", selfTestConflict.StatusCode)
+	}
+}
+
+func waitSignal(t *testing.T, signal <-chan struct{}, description string) {
+	t.Helper()
+	select {
+	case <-signal:
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for %s", description)
 	}
 }
 

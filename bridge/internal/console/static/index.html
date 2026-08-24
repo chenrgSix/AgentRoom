@@ -46,7 +46,7 @@
         <div><p class="eyebrow">CURRENT DEVICE</p><h2 id="device-title">本机 Bridge</h2></div>
         <div class="actions">
           <button class="secondary hidden" id="resume-enrollment" type="button">请求加入 Team</button>
-          <button class="secondary" id="edit-config" type="button">编辑智能体</button>
+          <button class="primary" id="add-agent" type="button">添加智能体</button>
           <button class="primary" id="start-bridge" type="button">启动 Bridge</button>
           <button class="secondary" id="stop-bridge" type="button">停止 Bridge</button>
         </div>
@@ -118,11 +118,48 @@
       <section class="submit-panel">
         <div><p class="eyebrow">03 · OWNER APPROVAL</p><h2>请求加入 Team</h2><p>提交后在中央 Web 输入一次性代码。凭据不会展示在本页面。</p></div>
         <div class="actions">
-          <button class="secondary hidden" id="cancel-edit" type="button">取消编辑</button>
           <button class="primary" id="submit-enrollment" type="submit">生成加入码</button>
         </div>
       </section>
     </form>
+
+    <div class="modal-backdrop hidden" id="agent-modal-backdrop">
+      <section class="agent-modal" role="dialog" aria-modal="true" aria-labelledby="agent-modal-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">LOCAL AGENT</p><h2 id="agent-modal-title">添加智能体</h2></div>
+          <button class="icon-button" id="close-agent-modal" type="button" aria-label="关闭">×</button>
+        </div>
+        <form id="agent-form">
+          <p class="inline-error hidden" id="agent-modal-error" role="alert"></p>
+          <label>运行时
+            <select id="agent-kind">
+              <option value="codex">Codex</option>
+              <option value="pi">Pi</option>
+            </select>
+          </label>
+          <div class="fields two">
+            <label>显示名称<input id="agent-name" maxlength="80" required></label>
+            <label>角色<input id="agent-role" maxlength="80" required></label>
+          </div>
+          <label>可执行文件<input id="agent-path" required></label>
+          <label>工作区<input id="agent-workspace" required></label>
+          <label id="agent-sandbox-field">文件沙箱
+            <select id="agent-sandbox">
+              <option value="workspace-write">允许修改工作区</option>
+              <option value="read-only">只读</option>
+            </select>
+          </label>
+          <label class="hidden" id="agent-credential-field">凭据环境变量名称（可选）
+            <input id="agent-credential-env" placeholder="例如 ANTHROPIC_API_KEY">
+          </label>
+          <p class="modal-help">保存只会更新这个智能体；若 Bridge 正在运行，将安全重启连接。任务或自检执行期间禁止修改。</p>
+          <div class="actions modal-actions">
+            <button class="secondary" id="cancel-agent-modal" type="button">取消</button>
+            <button class="primary" id="save-agent" type="submit">保存</button>
+          </div>
+        </form>
+      </section>
+    </div>
 
     <section class="panel client-tools">
       <div class="section-heading">
