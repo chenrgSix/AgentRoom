@@ -205,6 +205,7 @@ test("an Owner renames, archives, and restores Teams and Rooms without changing 
       now,
       now
     );
+    const agentService = new AgentService(repository, auth);
     assert.throws(
       () => service.updateRoom(principal, room.roomId, { archived: true }, now),
       /Runs or Discussions are active/
@@ -214,13 +215,56 @@ test("an Owner renames, archives, and restores Teams and Rooms without changing 
       /Runs or Discussions are active/
     );
     assert.throws(
-      () => new AgentService(repository, auth).setEnabled(
+      () => agentService.setEnabled(
         principal,
         "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
         false,
         now
       ),
       /Runs or Discussions are active/
+    );
+
+    database.prepare(`
+      UPDATE runs
+      SET state = 'expired', updated_at = ?, terminal_at = ?
+      WHERE run_id = ?
+    `).run(now, now, "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6");
+
+    assert.equal(
+      agentService.setEnabled(
+        principal,
+        "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        false,
+        now
+      ).enabled,
+      false
+    );
+    assert.equal(
+      agentService.setEnabled(
+        principal,
+        "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        true,
+        now
+      ).enabled,
+      true
+    );
+    assert.equal(
+      service.updateRoom(principal, room.roomId, { archived: true }, now).archivedAt,
+      now
+    );
+    assert.equal(
+      service.updateRoom(principal, room.roomId, { archived: false }, now).archivedAt,
+      null
+    );
+    assert.equal(
+      service.updateTeam(principal, created.team.teamId, { archived: true }, now)
+        .archivedAt,
+      now
+    );
+    assert.equal(
+      service.updateTeam(principal, created.team.teamId, { archived: false }, now)
+        .archivedAt,
+      null
     );
   } finally {
     database.close();

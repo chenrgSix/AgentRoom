@@ -558,7 +558,9 @@ export class CoreRepository {
         EXISTS (
           SELECT 1 FROM runs run
           WHERE run.room_id = r.room_id
-            AND run.state NOT IN ('completed', 'failed', 'canceled', 'outcome_unknown')
+            AND run.state NOT IN (
+              'completed', 'failed', 'canceled', 'expired', 'outcome_unknown'
+            )
         ) OR EXISTS (
           SELECT 1 FROM discussions discussion
           WHERE discussion.room_id = r.room_id
@@ -575,7 +577,9 @@ export class CoreRepository {
         EXISTS (
           SELECT 1 FROM runs run
           WHERE run.room_id = r.room_id
-            AND run.state NOT IN ('completed', 'failed', 'canceled', 'outcome_unknown')
+            AND run.state NOT IN (
+              'completed', 'failed', 'canceled', 'expired', 'outcome_unknown'
+            )
         ) OR EXISTS (
           SELECT 1 FROM discussions discussion
           WHERE discussion.room_id = r.room_id
@@ -591,7 +595,9 @@ export class CoreRepository {
       WHERE EXISTS (
         SELECT 1 FROM runs
         WHERE target_agent_id = ?
-          AND state NOT IN ('completed', 'failed', 'canceled', 'outcome_unknown')
+          AND state NOT IN (
+            'completed', 'failed', 'canceled', 'expired', 'outcome_unknown'
+          )
       ) OR EXISTS (
         SELECT 1
         FROM discussion_participants participant
