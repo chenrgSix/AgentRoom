@@ -82,8 +82,8 @@ Runtime, owns the resulting continue/finish decision.
 ## Verification and Tasks
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
-startup, streaming, cancellation, crash, and recovery. Work is
-tracked by `ADP-001` through `ADP-006` in `docs/TASKS.md`.
+startup, streaming, cancellation, crash, recovery, and local permission
+inheritance. Work is tracked by `ADP-001` through `ADP-007` in `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one
 context-cancelable `Execute` method that emits ordered semantic status or reply

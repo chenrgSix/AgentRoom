@@ -176,8 +176,8 @@ func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) 
 		t.Fatalf("Pi owner fields changed during migration: %#v", pi)
 	}
 	if pi.RuntimeKind != "pi" || pi.PresetVersion != CurrentPresetVersion ||
-		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
-		t.Fatalf("legacy Pi flags were not replaced: %#v", pi)
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-session --approve" {
+		t.Fatalf("legacy Pi transport changed owner permissions: %#v", pi)
 	}
 	onDisk, err := os.ReadFile(path)
 	if err != nil {
@@ -188,7 +188,7 @@ func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) 
 	}
 }
 
-func TestMigrateUpgradesVersionOnePiPresetToStructuredOutput(t *testing.T) {
+func TestMigrateUpgradesVersionOnePiPresetAndKeepsLocalPolicy(t *testing.T) {
 	configuration, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion, Agents: []AgentConfig{{
 		Name: "Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi", PresetVersion: 1,
 		Command:   []string{"/usr/local/bin/pi", "--print", "--no-tools", "--no-session"},
@@ -199,8 +199,27 @@ func TestMigrateUpgradesVersionOnePiPresetToStructuredOutput(t *testing.T) {
 	}
 	pi := configuration.Agents[0]
 	if pi.PresetVersion != CurrentPresetVersion ||
-		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-session --no-tools" {
 		t.Fatalf("version one Pi preset was not upgraded: %#v", pi)
+	}
+}
+
+func TestMigrateVersionTwoPiPresetDropsProductRestrictionsOnly(t *testing.T) {
+	configuration, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion, Agents: []AgentConfig{{
+		Name: "Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi", PresetVersion: 2,
+		Command: []string{
+			"/usr/local/bin/pi", "--mode", "json", "--print", "--no-tools", "--no-extensions",
+			"--no-skills", "--no-context-files", "--no-session", "--approve", "--tools", "read,grep",
+		},
+		Workspace: t.TempDir(),
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pi := configuration.Agents[0]
+	if pi.PresetVersion != CurrentPresetVersion ||
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-session --approve --tools read,grep" {
+		t.Fatalf("version two Pi restrictions were not retired safely: %#v", pi)
 	}
 }
 

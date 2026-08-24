@@ -790,6 +790,14 @@ func (s *Service) updateAgent(response http.ResponseWriter, request *http.Reques
 		writeError(response, http.StatusNotFound, "Configured Agent was not found")
 		return
 	}
+	previous := candidate.Agents[selected]
+	if agent.RuntimeKind == "pi" && previous.RuntimeKind == "pi" &&
+		len(agent.Command) > 0 {
+		agent.Command = config.PiPresetCommand(
+			agent.Command[0],
+			config.PiLocalPolicyArguments(previous.Command, previous.PresetVersion)...,
+		)
+	}
 	candidate.Agents[selected] = agent
 	if err := candidate.Validate(); err != nil {
 		writeError(response, http.StatusBadRequest, err.Error())

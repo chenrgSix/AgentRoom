@@ -51,7 +51,7 @@ type AgentConfig struct {
 
 const (
 	CurrentSchemaVersion = 1
-	CurrentPresetVersion = 2
+	CurrentPresetVersion = 3
 )
 
 func CodexPresetCommand(executable, sandbox string) []string {
@@ -61,11 +61,16 @@ func CodexPresetCommand(executable, sandbox string) []string {
 	return []string{executable, "exec", "--json", "--sandbox", sandbox, "-"}
 }
 
-func PiPresetCommand(executable string) []string {
-	return []string{
-		executable, "--mode", "json", "--print", "--no-tools", "--no-extensions", "--no-skills",
-		"--no-context-files", "--no-session",
-	}
+func PiPresetCommand(executable string, localPolicyArguments ...string) []string {
+	command := []string{executable, "--mode", "json", "--print", "--no-session"}
+	return append(command, localPolicyArguments...)
+}
+
+func PiProbeCommand(executable string) []string {
+	return PiPresetCommand(
+		executable,
+		"--no-tools", "--no-extensions", "--no-skills", "--no-context-files", "--no-approve",
+	)
 }
 
 func DefaultPath() string {
@@ -174,7 +179,10 @@ func Migrate(value Config) (Config, error) {
 			agent.PresetVersion = CurrentPresetVersion
 		case "pi":
 			if len(agent.Command) > 0 {
-				agent.Command = PiPresetCommand(agent.Command[0])
+				agent.Command = PiPresetCommand(
+					agent.Command[0],
+					PiLocalPolicyArguments(agent.Command, agent.PresetVersion)...,
+				)
 			}
 			agent.PresetVersion = CurrentPresetVersion
 		case "generic":
@@ -184,6 +192,44 @@ func Migrate(value Config) (Config, error) {
 		}
 	}
 	return value, nil
+}
+
+// PiLocalPolicyArguments removes only the transport and lifecycle flags owned
+// by Bridge. Version two also carried product-authored restrictions that are
+// intentionally retired by version three. Everything else remains under the
+// local owner's Pi configuration, including future extension-defined flags.
+func PiLocalPolicyArguments(command []string, presetVersion int) []string {
+	arguments := make([]string, 0, len(command))
+	for index := 1; index < len(command); index++ {
+		argument := command[index]
+		switch argument {
+		case "--mode":
+			if index+1 < len(command) {
+				index++
+			}
+			continue
+		case "--print", "-p", "--no-session":
+			continue
+		}
+		if strings.HasPrefix(argument, "--mode=") {
+			continue
+		}
+		if presetVersion == 2 && piVersionTwoRestriction(argument) {
+			continue
+		}
+		arguments = append(arguments, argument)
+	}
+	return arguments
+}
+
+func piVersionTwoRestriction(argument string) bool {
+	switch argument {
+	case "--no-tools", "-nt", "--no-extensions", "-ne", "--no-skills", "-ns",
+		"--no-context-files", "-nc":
+		return true
+	default:
+		return false
+	}
 }
 
 func legacyPiCommand(command []string) bool {

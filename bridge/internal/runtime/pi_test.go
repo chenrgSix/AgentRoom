@@ -25,6 +25,20 @@ func TestPiAdapterExtractsFinalAssistantReplyAndAssessment(t *testing.T) {
 	}
 }
 
+func TestPiAdapterKeepsToolLifecycleLocalAndReturnsFinalReply(t *testing.T) {
+	output := strings.Join([]string{
+		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"I will inspect it."},{"type":"toolCall","name":"read"}],"stopReason":"toolUse"}}`,
+		`{"type":"tool_execution_start","toolName":"read"}`,
+		`{"type":"tool_execution_end","toolName":"read","isError":false}`,
+		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"The project uses Go and TypeScript."}],"stopReason":"stop"}}`,
+	}, "\n")
+	events := executePiFixture(t, output)
+	if len(events) != 3 || events[1].Reply != "The project uses Go and TypeScript." ||
+		events[2].Status == nil || *events[2].Status != contracts.Completed {
+		t.Fatalf("unexpected Pi tool lifecycle projection: %#v", events)
+	}
+}
+
 func TestPiAdapterRejectsProviderToolProtocolLeak(t *testing.T) {
 	leaked := `I will inspect the repository.<]minimax[><tool_call>` +
 		`<tool_name>bash</tool_name><parameters><command>ls</command></parameters></tool_call>`

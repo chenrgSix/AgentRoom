@@ -121,6 +121,7 @@
             </div>
             <label>工作区<input class="workspace" id="pi-workspace"></label>
             <label>凭据环境变量名称（可选）<input id="pi-credential-env" placeholder="例如 ANTHROPIC_API_KEY"></label>
+            <p class="runtime-policy" id="pi-permission-policy">权限跟随本机 Pi：本地启用的工具、扩展、Skills 与项目上下文保持生效；中央服务无法提升权限。</p>
           </div>
         </div>
       </section>
@@ -167,6 +168,7 @@
           <label class="hidden" id="agent-credential-field">凭据环境变量名称（可选）
             <input id="agent-credential-env" placeholder="例如 ANTHROPIC_API_KEY">
           </label>
+          <p class="runtime-policy hidden" id="agent-pi-permission-policy">权限跟随本机 Pi；Bridge 仅固定 JSON 输出与无会话运行方式。</p>
           <p class="modal-help">保存只会更新这个智能体；若 Bridge 正在运行，将安全重启连接。任务或自检执行期间禁止修改。</p>
           <div class="actions modal-actions">
             <button class="secondary" id="cancel-agent-modal" type="button">取消</button>

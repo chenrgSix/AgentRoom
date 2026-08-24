@@ -152,16 +152,12 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
   "role": "Reviewer",
   "adapter": "generic",
   "runtimeKind": "pi",
-  "presetVersion": 2,
+  "presetVersion": 3,
   "command": [
     "/absolute/path/to/pi",
     "--mode",
     "json",
     "--print",
-    "--no-tools",
-    "--no-extensions",
-    "--no-skills",
-    "--no-context-files",
     "--no-session"
   ],
   "workspace": "/absolute/path/to/project",
@@ -169,14 +165,22 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
 }
 ```
 
-The top-level configuration uses `"schemaVersion": 1`. Legacy Console-created
-Codex and Pi presets are migrated in memory when loaded; the next explicit save
-persists the version fields and replaces obsolete Pi flags without changing the
-owner's names, roles, workspace, trust settings, or environment allowlist.
+The top-level configuration uses `"schemaVersion": 1`. Pi tools, extensions,
+Skills, project context, approval, and provider settings follow the owner's
+local Pi configuration. Owner-authored command arguments such as `--approve`,
+`--tools`, or extension flags remain local and survive Agent edits. The central
+service supplies only the bounded task instruction and cannot add permissions.
+Legacy Console-created presets are migrated in memory when loaded; preset v2's
+product-authored restrictions are removed, while other local Pi arguments and
+the owner's names, roles, workspace, trust settings, and environment allowlist
+remain intact. The next explicit save persists the new version.
 
 This mode receives each bounded turn on stdin and exits after replying. The Pi
 adapter reads its JSON event stream, publishes only the final assistant reply,
-and fails safely if a provider leaks raw tool-call markup. It is remotely
-wakeable through the Bridge but does not claim persistent Pi session resume.
+keeps tool lifecycle events local, and fails safely if a provider leaks raw
+tool-call markup. Explicit Runtime self-tests temporarily disable Pi tools and
+project-local resources; normal Team tasks retain the owner's policy. Pi is
+remotely wakeable through the Bridge but does not claim persistent session
+resume.
 Add only the credential environment variable actually required by the selected
 Pi provider; do not copy the full parent environment.

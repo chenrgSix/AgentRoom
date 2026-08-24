@@ -7,6 +7,7 @@ const elements = Object.fromEntries([
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
   "codex-path", "codex-workspace", "codex-sandbox", "pi-enabled", "pi-fields",
   "pi-name", "pi-role", "pi-path", "pi-workspace", "pi-credential-env",
+  "pi-permission-policy",
   "codex-use-detected", "codex-preflight", "codex-preflight-result",
   "pi-use-detected", "pi-preflight", "pi-preflight-result",
   "submit-enrollment", "auth-warning", "error", "bridge-version",
@@ -15,7 +16,8 @@ const elements = Object.fromEntries([
   "agent-modal-backdrop", "agent-modal-title", "close-agent-modal", "cancel-agent-modal",
   "agent-modal-error",
   "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace",
-  "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env", "save-agent",
+  "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env",
+  "agent-pi-permission-policy", "save-agent",
   "agent-use-detected", "agent-preflight", "agent-preflight-result"
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -145,6 +147,10 @@ function renderAgent(agent) {
   status.textContent = `${runtimeLabels[agent.runtimeState] || agent.runtimeState}${active}`;
   const readiness = document.createElement("span");
   readiness.textContent = agent.executableReady ? "可执行文件可用" : "可执行文件不存在或不可执行";
+  const permission = document.createElement("span");
+  permission.textContent = agent.kind === "pi"
+    ? "权限：跟随本机 Pi"
+    : `沙箱：${agent.sandbox || "workspace-write"}`;
   const probe = document.createElement("div");
   probe.className = "runtime-test";
   const probeButton = document.createElement("button");
@@ -194,7 +200,7 @@ function renderAgent(agent) {
   editButton.disabled = currentState.agents.some((candidate) => candidate.activeRuns > 0) ||
     [...runtimeTestResults.values()].includes("running");
   editButton.addEventListener("click", () => openAgentModal(agent));
-  row.append(title, role, status, readiness, workspace, probe, editButton);
+  row.append(title, role, status, readiness, permission, workspace, probe, editButton);
   return row;
 }
 
@@ -211,6 +217,7 @@ function syncAgentKindFields() {
   const codex = elements["agent-kind"].value === "codex";
   elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
   elements["agent-credential-field"].classList.toggle("hidden", codex);
+  elements["agent-pi-permission-policy"].classList.toggle("hidden", codex);
 }
 
 function openAgentModal(agent = null) {

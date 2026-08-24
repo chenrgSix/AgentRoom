@@ -144,9 +144,9 @@ Recognized legacy Codex and Pi presets migrate in memory before validation,
 while owner-controlled names, roles, workspaces, trust, and environment
 allowlists remain intact; unknown future versions fail closed. The Console
 exposes a user-triggered, bounded Runtime self-test only for managed Codex and
-Pi presets. Codex is forced to `read-only`, Pi retains its no-tool preset,
-active Team Runs fence the probe, and only allowlisted status and failure
-metadata return to the UI.
+Pi presets. Codex is forced to `read-only`, Pi temporarily uses a no-tool,
+no-project-resource command for the probe, active Team Runs fence the probe,
+and only allowlisted status and failure metadata return to the UI.
 
 `BRG-022` adds an explicit detected-path action and a token-authenticated draft
 preflight for both enrollment and the per-Agent modal. It validates the current
@@ -159,6 +159,13 @@ overlap it.
 are normalized to `--mode json` in memory and routed through the dedicated Pi
 event parser. Provider tool-call markup and malformed event streams become a
 safe `RUNTIME_PROTOCOL_INVALID` failure instead of a completed Room reply.
+
+`ADP-007` advances managed Runtime presets to version 3. Normal Pi Runs inherit
+the owner's local tools, extensions, Skills, project context, approval, and
+other local arguments; the Bridge owns only JSON output, non-interactive print,
+and no-session lifecycle flags. Agent edits retain those local arguments, tool
+lifecycle events remain on the client, and explicit self-tests still replace
+the command temporarily with a no-tool, no-project-resource probe.
 
 `BRG-020` adds a lightweight per-Agent execution gate after durable inbox
 acceptance. Different Agent identities on one Bridge keep independent slots and

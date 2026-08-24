@@ -31,6 +31,9 @@ func ProbeRuntime(ctx context.Context, agent config.AgentConfig) RuntimeProbeRes
 	if agent.RuntimeKind == "codex" && len(probeConfig.Command) > 0 {
 		probeConfig.Command = config.CodexPresetCommand(probeConfig.Command[0], "read-only")
 	}
+	if agent.RuntimeKind == "pi" && agent.PresetVersion > 0 && len(probeConfig.Command) > 0 {
+		probeConfig.Command = config.PiProbeCommand(probeConfig.Command[0])
+	}
 	var adapter bridgeruntime.Adapter
 	switch {
 	case probeConfig.RuntimeKind == "pi":

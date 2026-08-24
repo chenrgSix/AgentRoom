@@ -139,6 +139,7 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="add-agent"`, `id="agent-modal-backdrop"`, `id="agent-form"`,
 		`id="codex-use-detected"`, `id="codex-preflight"`,
 		`id="agent-use-detected"`, `id="agent-preflight"`,
+		`id="pi-permission-policy"`, `id="agent-pi-permission-policy"`,
 	} {
 		if !bytes.Contains(html, []byte(id)) {
 			t.Fatalf("embedded UI omitted %s", id)
@@ -158,6 +159,10 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if bytes.Count(javascript, []byte(`request("/api/runtime-preflight"`)) != 1 ||
 		!bytes.Contains(javascript, []byte(`elements["agent-use-detected"]`)) {
 		t.Fatal("draft Runtime preflight and detected-value action must remain explicit")
+	}
+	if !bytes.Contains(html, []byte("权限跟随本机 Pi")) ||
+		!bytes.Contains(javascript, []byte("权限：跟随本机 Pi")) {
+		t.Fatal("Console must disclose that managed Pi follows owner-controlled local permissions")
 	}
 	if !bytes.Contains(javascript, []byte("request(agentId ? `/api/agents/")) ||
 		bytes.Contains(javascript, []byte(`request(editMode ? "/api/config"`)) {
@@ -254,7 +259,7 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	if strings.Join(loaded.Agents[0].Command[1:], " ") != "exec --json --sandbox read-only -" {
 		t.Fatalf("unexpected Codex command: %#v", loaded.Agents[0].Command)
 	}
-	if strings.Join(loaded.Agents[1].Command[1:], " ") != "--mode json --print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
+	if strings.Join(loaded.Agents[1].Command[1:], " ") != "--mode json --print --no-session" {
 		t.Fatalf("unexpected Pi command: %#v", loaded.Agents[1].Command)
 	}
 	if !contains(loaded.Agents[1].EnvAllowlist, "ANTHROPIC_API_KEY") {
@@ -654,6 +659,66 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	selfTestConflict.Body.Close()
 	if selfTestConflict.StatusCode != http.StatusConflict {
 		t.Fatalf("Runtime self-test did not fence Agent editing: %d", selfTestConflict.StatusCode)
+	}
+}
+
+func TestAgentEditPreservesOwnerControlledPiPolicy(t *testing.T) {
+	directory := t.TempDir()
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	loaded := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "http://127.0.0.1:3000",
+		DeviceName:    "Pi Policy Bridge",
+		DataDir:       dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "Local Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi",
+			PresetVersion: config.CurrentPresetVersion,
+			Command: config.PiPresetCommand(
+				executablePath, "--approve", "--tools", "read,grep,find,ls",
+			),
+			Workspace: directory,
+		}},
+	}
+	if err := config.Save(configPath, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if err := pairing.Save(dataDir, pairing.Credential{
+		ServerURL: loaded.ServerURL, DeviceID: "device_pi_policy", TeamID: "team_pi_policy",
+		OwnerMemberID: "member_pi_policy", Token: "secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "pi-policy-token",
+	}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	agentID := service.State().Agents[0].AgentID
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agents/"+agentID, RuntimeInput{
+		Kind: "pi", Name: "Renamed Pi", Role: "Implementation",
+		ExecutablePath: executablePath, Workspace: directory,
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("unexpected Pi edit status: %d", response.StatusCode)
+	}
+	persisted, err := config.Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(persisted.Agents[0].Command[1:], " ") !=
+		"--mode json --print --no-session --approve --tools read,grep,find,ls" {
+		t.Fatalf("Pi edit changed owner-controlled policy: %#v", persisted.Agents[0].Command)
 	}
 }
 

@@ -3,6 +3,8 @@ package console
 import (
 	"context"
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -46,5 +48,38 @@ func TestProbeRuntimeHonorsCallerDeadline(t *testing.T) {
 	})
 	if result.Passed || result.Code != "RUNTIME_TIMEOUT" || time.Since(started) > time.Second {
 		t.Fatalf("probe did not honor caller deadline: %#v", result)
+	}
+}
+
+func TestManagedPiProbeTemporarilyDisablesLocalPermissions(t *testing.T) {
+	workspace := t.TempDir()
+	executable := filepath.Join(workspace, "pi")
+	script := `#!/bin/sh
+printf '%s\n' "$@" > probe-args.txt
+printf '%s\n' '{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"AGENTROOM_READY"}],"stopReason":"stop"}}'
+`
+	if err := os.WriteFile(executable, []byte(script), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	result := ProbeRuntime(context.Background(), config.AgentConfig{
+		Adapter: "generic", RuntimeKind: "pi", PresetVersion: config.CurrentPresetVersion,
+		Command: config.PiPresetCommand(
+			executable, "--approve", "--tools", "read,write,bash",
+		),
+		Workspace: workspace,
+	})
+	if !result.Passed {
+		t.Fatalf("managed Pi probe failed: %#v", result)
+	}
+	arguments, err := os.ReadFile(filepath.Join(workspace, "probe-args.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := strings.Join([]string{
+		"--mode", "json", "--print", "--no-session", "--no-tools", "--no-extensions",
+		"--no-skills", "--no-context-files", "--no-approve", "",
+	}, "\n")
+	if string(arguments) != expected {
+		t.Fatalf("probe inherited owner permissions: %q", arguments)
 	}
 }
