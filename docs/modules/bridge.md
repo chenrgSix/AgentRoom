@@ -54,19 +54,25 @@ environments. Static assets are embedded in the Go binary, so no Node.js
 process or separate UI service is required on the client.
 
 The Console can discover Codex and Pi, create the first enrollment request,
-show the short Owner approval code, start or stop the Bridge, add multiple Codex
-or Pi Agents, and edit one selected Agent in a modal. Each configured card owns
-its edit action; the browser sends a single-Agent request instead of rebuilding
-the sibling roster. An immutable `agentId` selects the record, and the local
-identity map binds a renamed display name back to that ID so a rename does not
-register a new central Agent. Agent deletion is outside this task.
+show the short Owner approval code, start or stop the Bridge, edit the central
+service URL and HTTPS trust in a connection-settings modal, add multiple Codex
+or Pi Agents, and edit one selected Agent in a modal. Connection editing mutates
+only the outbound endpoint fields and never rebuilds the Agent roster. Each
+configured Agent card owns its edit action; the browser sends a single-Agent
+request instead of rebuilding the sibling roster. An immutable `agentId`
+selects the record, and the local identity map binds a renamed display name
+back to that ID so a rename does not register a new central Agent. Agent
+deletion is outside this task.
 
 Configuration updates are atomically persisted. A running managed connection
 restarts with an epoch fence so a late old process cannot overwrite new state;
-a deliberately stopped Bridge remains stopped. All Agent mutations fail while
-any local Agent has active Team work or a Runtime self-test is running. A paired
-server URL cannot be changed through configuration editing; joining another
-server requires a new Device enrollment.
+a deliberately stopped Bridge remains stopped. Agent and connection mutations
+fail while enrollment, Runtime probing, or any local Agent's Team work is
+active. The configuration's central service URL is the authoritative outbound
+endpoint and may be changed after pairing, including a port change. The Device
+credential remains unchanged: the replacement endpoint must belong to the same
+central deployment and accept that credential, otherwise the normal
+authenticated connection fails visibly without silently enrolling elsewhere.
 
 The HTTP listener rejects non-loopback addresses. Every API call requires a
 32-byte random Bearer token that is removed from browser history and kept only
@@ -136,8 +142,13 @@ strict Runtime presets, configuration replacement, and lifecycle fencing.
 Console coverage verifies first setup, Runtime discovery, multiple same-kind
 Agents, per-Agent modal/API ownership, rename-stable identity, active-work
 fencing, draft Runtime preflight, and status rendering. Work is tracked by
-`BRG-001` through `BRG-022`
+`BRG-001` through `BRG-024`
 in `docs/TASKS.md`.
+
+`BRG-024` adds a dedicated connection-settings mutation instead of reusing the
+legacy full-config form. It validates the central service URL and HTTPS trust,
+preserves Device credentials and every Agent field, applies the same active-work
+fence as Agent editing, and reconnects only when the Bridge was already running.
 
 `BRG-019` adds configuration schema version 1 and Runtime preset version 1.
 Recognized legacy Codex and Pi presets migrate in memory before validation,
