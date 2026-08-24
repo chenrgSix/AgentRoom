@@ -54,6 +54,14 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
       teamId: created.team.teamId, deviceId: null, name: "Writer", role: "Manual",
       integrationMode: "manual", capabilities, now
     });
+    const local = agents.publishAgent(principal, {
+      teamId: created.team.teamId, deviceId: null, name: "Local", role: "Manual",
+      integrationMode: "manual", capabilities, now
+    });
+    const localCodex = agents.publishAgent(principal, {
+      teamId: created.team.teamId, deviceId: null, name: "Local Codex", role: "Manual",
+      integrationMode: "manual", capabilities, now
+    });
     const builderCredential = auth.issueMcpCredential(principal, builder.agentId, now, "2026-08-22T11:00:00.000Z");
     const reviewerCredential = auth.issueMcpCredential(principal, reviewer.agentId, now, "2026-08-22T11:00:00.000Z");
     const trigger = messages.createMemberMessage(principal, {
@@ -79,6 +87,30 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
     );
     assert.equal(exactReplyHandoff.length, 1);
     assert.equal(exactReplyHandoff[0]?.targetAgentId, writer.agentId);
+    const longestNameHandoff = handoffs.createFromReply(
+      root.runId,
+      "请 @Local Codex 处理",
+      now
+    );
+    assert.deepEqual(
+      longestNameHandoff.map(({ targetAgentId }) => targetAgentId),
+      [localCodex.agentId]
+    );
+    assert.equal(
+      longestNameHandoff.some(({ targetAgentId }) => targetAgentId === local.agentId),
+      false
+    );
+
+    teams.updateRoomSettings(principal, room.roomId, {
+      participants: core.getRoomParticipants(room.roomId),
+      collaborationPolicy: {
+        allowDiscussion: true,
+        allowAll: false,
+        allowAgentMentions: true,
+        maxAgentMentionDepth: 4
+      }
+    }, now);
+    assert.deepEqual(handoffs.createFromReply(root.runId, "@all 继续", now), []);
 
     teams.updateRoomSettings(principal, room.roomId, {
       participants: core.getRoomParticipants(room.roomId),

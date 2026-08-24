@@ -59,11 +59,26 @@ export class HandoffService {
       this.core.isRoomAgent(room.roomId, agent.agentId)
     );
     const resolution = resolveExactAgentMentions(content, agents);
+    if (resolution.usesAll && !room.collaborationPolicy.allowAll) return [];
     const created: RunRecord[] = [];
     for (const targetAgentId of resolution.agentIds.slice(0, maximumUniqueAgents)) {
       try {
         created.push(this.createChild(parent, targetAgentId, content, now));
-      } catch {
+      } catch (error) {
+        const existing = this.runs.findByTrigger(parent.triggerMessageId).find(
+          (run) => run.parentRunId === parent.runId &&
+            run.targetAgentId === targetAgentId
+        );
+        if (existing) {
+          created.push(existing);
+          continue;
+        }
+        if (!(error instanceof Error) || !(
+          error.message.startsWith("Handoff ") ||
+          error.message.includes("UNIQUE constraint failed")
+        )) {
+          throw error;
+        }
         // Exact Agent commands are best-effort at the bounded handoff boundary.
         // Invalid lineage, depth, or availability leaves the reply as plain text.
       }

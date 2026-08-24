@@ -338,6 +338,9 @@ export async function createServerApp(
   const dispatchOrdinaryHandoffRun = async (
     run: NonNullable<ReturnType<RunRepository["getRun"]>>
   ): Promise<void> => {
+    if (new Set([
+      "completed", "failed", "canceled", "expired", "outcome_unknown"
+    ]).has(run.state)) return;
     const agent = core.getAgent(run.targetAgentId);
     const adapter = fakeAdapters.get(run.targetAgentId);
     if (adapter) {
@@ -354,18 +357,30 @@ export async function createServerApp(
         ]
       });
       await executor.execute(run.runId, adapter);
+      await routeAgentReplyMentions(run.runId);
       return;
     }
     if (agent?.integrationMode === "managed") delivery.dispatch(run.runId);
   };
-  const routeAgentReplyMentions = async (
-    runId: string,
-    content: string
-  ): Promise<void> => {
-    if (discussionRepository.findTurnByRun(runId)) return;
-    const routedRuns = handoffs.createFromReply(runId, content, clock());
-    await Promise.all(routedRuns.map((run) => dispatchOrdinaryHandoffRun(run)));
-  };
+  async function routeAgentReplyMentions(runId: string): Promise<void> {
+    for (const intent of runRepository.listPendingReplyRoutingIntents(runId)) {
+      if (!discussionRepository.findTurnByRun(runId)) {
+        const routedRuns = handoffs.createFromReply(
+          runId,
+          intent.content,
+          clock()
+        );
+        for (const run of routedRuns) {
+          await dispatchOrdinaryHandoffRun(run);
+        }
+      }
+      runRepository.completeReplyRoutingIntent(
+        runId,
+        intent.replySequence,
+        clock()
+      );
+    }
+  }
   const sweepDiscussionDeadlines = async (): Promise<void> => {
     if (discussionSweepInFlight) return;
     discussionSweepInFlight = true;
@@ -384,12 +399,7 @@ export async function createServerApp(
         void advanceDiscussion(run.runId);
         return;
       }
-      const reply = runRepository.listEvents(run.runId).findLast(
-        ({ event }) => event.type === "reply"
-      )?.event;
-      if (reply?.type === "reply") {
-        void routeAgentReplyMentions(run.runId, reply.content);
-      }
+      void routeAgentReplyMentions(run.runId);
     }
   );
   const app = Fastify({
@@ -869,10 +879,8 @@ export async function createServerApp(
           }, "Run reply event processed");
           teamChanges.notify(devicePrincipal.teamId);
           if (applied.applied) {
-            void routeAgentReplyMentions(
-              applied.run.runId,
-              message.payload.content
-            ).then(() => teamChanges.notify(devicePrincipal.teamId))
+            void routeAgentReplyMentions(applied.run.runId)
+              .then(() => teamChanges.notify(devicePrincipal.teamId))
               .catch((error: unknown) => {
                 app.log.error(error, "Agent reply mention routing failed");
               });
@@ -1527,12 +1535,7 @@ export async function createServerApp(
         });
         const completed = await executor.execute(run.runId, adapter);
         executedRuns.push(completed);
-        const reply = runRepository.listEvents(run.runId).findLast(
-          ({ event }) => event.type === "reply"
-        )?.event;
-        if (reply?.type === "reply") {
-          await routeAgentReplyMentions(run.runId, reply.content);
-        }
+        await routeAgentReplyMentions(run.runId);
       }
       return {
         message,
@@ -1729,6 +1732,13 @@ export async function createServerApp(
   }));
 
   await dispatchDiscussionRuns(discussions.recover());
+  for (const runId of new Set(
+    runRepository.listPendingReplyRoutingIntents().map(({ parentRunId }) =>
+      parentRunId
+    )
+  )) {
+    await routeAgentReplyMentions(runId);
+  }
   discussionSweepTimer = setInterval(() => {
     void sweepDiscussionDeadlines().catch((error: unknown) => {
       app.log.error({

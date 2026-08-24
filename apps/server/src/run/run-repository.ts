@@ -44,6 +44,15 @@ export interface AppliedRunEvent {
   run: RunRecord;
 }
 
+export interface RunReplyRoutingIntent {
+  parentRunId: string;
+  replySequence: number;
+  content: string;
+  state: "pending" | "completed";
+  createdAt: string;
+  completedAt: string | null;
+}
+
 interface RunRow {
   run_id: string;
   trace_id: string;
@@ -73,6 +82,15 @@ interface RunEventRow {
   assessment_json: string | null;
   error_json: string | null;
   created_at: string;
+}
+
+interface RunReplyRoutingIntentRow {
+  parent_run_id: string;
+  reply_sequence: number;
+  content: string;
+  state: RunReplyRoutingIntent["state"];
+  created_at: string;
+  completed_at: string | null;
 }
 
 const terminalStates = new Set<RunState>([
@@ -141,6 +159,19 @@ function mapRunEvent(row: RunEventRow): RunEventRecord {
     sequence: row.sequence,
     event,
     createdAt: row.created_at
+  };
+}
+
+function mapReplyRoutingIntent(
+  row: RunReplyRoutingIntentRow
+): RunReplyRoutingIntent {
+  return {
+    parentRunId: row.parent_run_id,
+    replySequence: row.reply_sequence,
+    content: row.content,
+    state: row.state,
+    createdAt: row.created_at,
+    completedAt: row.completed_at
   };
 }
 
@@ -262,6 +293,13 @@ export class RunRepository {
           : null,
         now
       );
+      if (event.type === "reply") {
+        this.database.prepare(`
+          INSERT INTO run_reply_routing_intents (
+            parent_run_id, reply_sequence, content, state, created_at
+          ) VALUES (?, ?, ?, 'pending', ?)
+        `).run(runId, event.sequence, event.content, now);
+      }
       this.database.prepare(`
         UPDATE runs
         SET state = ?, last_sequence = ?, updated_at = ?, terminal_at = ?
@@ -282,5 +320,34 @@ export class RunRepository {
       ORDER BY sequence
     `).all(runId, afterSequence) as RunEventRow[];
     return rows.map(mapRunEvent);
+  }
+
+  public listPendingReplyRoutingIntents(
+    parentRunId?: string
+  ): RunReplyRoutingIntent[] {
+    const rows = (parentRunId
+      ? this.database.prepare(`
+          SELECT * FROM run_reply_routing_intents
+          WHERE state = 'pending' AND parent_run_id = ?
+          ORDER BY reply_sequence
+        `).all(parentRunId)
+      : this.database.prepare(`
+          SELECT * FROM run_reply_routing_intents
+          WHERE state = 'pending'
+          ORDER BY created_at, parent_run_id, reply_sequence
+        `).all()) as RunReplyRoutingIntentRow[];
+    return rows.map(mapReplyRoutingIntent);
+  }
+
+  public completeReplyRoutingIntent(
+    parentRunId: string,
+    replySequence: number,
+    now: string
+  ): void {
+    this.database.prepare(`
+      UPDATE run_reply_routing_intents
+      SET state = 'completed', completed_at = ?
+      WHERE parent_run_id = ? AND reply_sequence = ? AND state = 'pending'
+    `).run(now, parentRunId, replySequence);
   }
 }

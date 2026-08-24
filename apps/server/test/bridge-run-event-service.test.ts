@@ -130,6 +130,9 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
         recommendation: "finish"
       }
     );
+    const routingIntent = runRepository.listPendingReplyRoutingIntents(run.runId)[0];
+    assert.equal(routingIntent?.content.includes("very-sensitive"), false);
+    assert.equal(routingIntent?.content, "Implemented. [REDACTED]");
     const outputEvents = runRepository.listEvents(run.runId, 2).filter(
       (event) => event.event.type === "output"
     );
