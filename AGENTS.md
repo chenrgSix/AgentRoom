@@ -38,8 +38,8 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `go run ./cmd/agentroom-bridge console` from `bridge/` — run the token-authenticated local client setup UI.
 - `go build -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — build the native Wails Bridge GUI for the current platform.
 - `go test -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — verify desktop-only state mapping and compile its native shell.
-- `RELEASE_TAG=v0.2.0-rc.2 GOOS=linux GOARCH=amd64 ./scripts/package-release.sh` from `bridge/` — build one portable Bridge archive.
-- `RELEASE_TAG=v0.2.0-rc.2 GOARCH=arm64 ./scripts/package-desktop-darwin.sh` from `bridge/` — build one unsigned native macOS GUI archive.
+- `RELEASE_TAG=v0.2.0-rc.3 GOOS=linux GOARCH=amd64 ./scripts/package-release.sh` from `bridge/` — build one portable Bridge archive.
+- `RELEASE_TAG=v0.2.0-rc.3 GOARCH=arm64 ./scripts/package-desktop-darwin.sh` from `bridge/` — build one unsigned native macOS GUI archive.
 - Dispatching the Bridge Release workflow for an empty draft Release builds and verifies five CLI archives, two macOS GUI archives, checksums, and license assets.
 - `docker compose up -d --build` — run the trusted-team Server and Caddy profile.
 - `./scripts/compose-backup.sh` — create and copy a verified online SQLite backup.

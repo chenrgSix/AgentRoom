@@ -185,6 +185,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-011 | DONE | Publish and verify v0.2.0-rc.2 | QA-009, QA-010, BRG-018, OPS-005 | exact tagged source passes main CI; the no-clobber workflow uploads and verifies five CLI archives, two macOS desktop archives, checksums, and license assets; the published prerelease passes a clean-download verification |
 | QA-012 | DONE | Verify Room and Bridge UX stabilization | WEB-021, WEB-022, BRG-019 | `docs/acceptance/qa-012-room-bridge-ux.md` records passing Node, Go, Desktop, E2E, docs, 101-plus-message, safe diagnostic, preset migration, bounded probe, and secret-leakage evidence |
 | QA-013 | DONE | Verify managed Agent concurrency isolation | BRG-020, QA-004 | `docs/acceptance/qa-013-agent-concurrency-isolation.md` records passing race, FIFO, cross-Agent overlap, duplicate, queued-cancel, reconnect, full Go/Desktop, Node, and deterministic E2E evidence |
+| QA-014 | ACTIVE | Publish and verify v0.2.0-rc.3 | QA-012, QA-013 | exact tagged source passes main CI; the no-clobber workflow uploads and verifies five CLI archives, two macOS desktop archives, checksums, and license assets; the published prerelease passes a clean-download verification |
 
 ## Deferred Beyond MVP
 

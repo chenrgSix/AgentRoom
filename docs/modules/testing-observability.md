@@ -224,6 +224,11 @@ tagged source passed main CI, the draft workflow verified all 11 assets, the
 candidate was published as a prerelease, and a clean public download passed the
 committed verifier.
 
+`QA-014` tracks the `v0.2.0-rc.3` publication of Room tail synchronization,
+safe Runtime self-test diagnostics, and managed Agent execution isolation. It
+uses the same tag-pinned, empty-draft, no-clobber workflow and remains active
+until public assets pass a clean-download verification.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
