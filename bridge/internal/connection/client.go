@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -22,6 +23,8 @@ import (
 	contracts "agentroom.dev/contracts/generated/go"
 	"github.com/coder/websocket"
 )
+
+var ErrRunCancelRequested = errors.New("Run cancellation requested")
 
 type Client struct {
 	Config            config.Config
@@ -184,7 +187,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	readError := make(chan error, 1)
 	type activeRun struct {
 		agentID string
-		cancel  context.CancelFunc
+		cancel  context.CancelCauseFunc
 		token   *struct{}
 	}
 	active := make(map[string]activeRun)
@@ -215,7 +218,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 					reportReadError(err)
 					return
 				}
-				runContext, cancel := context.WithCancel(connectionContext)
+				runContext, cancel := context.WithCancelCause(connectionContext)
 				token := &struct{}{}
 				activeMu.Lock()
 				_, alreadyActive := active[requested.Payload.RunID]
@@ -226,7 +229,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 				}
 				activeMu.Unlock()
 				go func() {
-					defer cancel()
+					defer cancel(nil)
 					err := c.HandleRun(runContext, requested, func(sendContext context.Context, value any) error {
 						return writer.writeJSON(sendContext, value)
 					})
@@ -251,7 +254,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 				running, exists := active[canceled.Payload.RunID]
 				activeMu.Unlock()
 				if exists && running.agentID == canceled.Payload.AgentID {
-					running.cancel()
+					running.cancel(ErrRunCancelRequested)
 				}
 			}
 		}

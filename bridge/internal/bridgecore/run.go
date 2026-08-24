@@ -2,6 +2,7 @@ package bridgecore
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 
 	"agentroom.dev/bridge/internal/config"
@@ -62,7 +63,12 @@ func RunObserved(
 	}
 	executor := delivery.RuntimeExecutor{Inbox: inbox, Adapters: adapters, Observer: runtimeObserver}
 	runHandler := delivery.Handler{
-		Inbox: inbox, OnNew: executor.Execute, OnDuplicate: executor.Replay,
+		Inbox: inbox, Gate: delivery.NewAgentExecutionGate(),
+		OnNew: executor.Execute, OnDuplicate: executor.Replay,
+		OnQueuedCanceled: executor.CancelQueued,
+		IsExplicitCancel: func(ctx context.Context) bool {
+			return errors.Is(context.Cause(ctx), connection.ErrRunCancelRequested)
+		},
 	}
 	return (connection.Client{
 		Config: loaded, Credential: credential, BridgeVersion: bridgeVersion, Observer: observer,

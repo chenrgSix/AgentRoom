@@ -125,7 +125,34 @@ func (e RuntimeExecutor) now() time.Time {
 }
 
 func isTerminalState(state State) bool {
-	return state == StateCompleted || state == StateFailed || state == StateOutcomeUnknown
+	return state == StateCompleted || state == StateFailed ||
+		state == StateCanceled || state == StateOutcomeUnknown
+}
+
+func (e RuntimeExecutor) CancelQueued(ctx context.Context, record Record, send Sender) error {
+	latest, err := e.Inbox.Get(record.RunID)
+	if err != nil {
+		return err
+	}
+	if latest.State != StateAccepted {
+		return e.Replay(ctx, latest, send)
+	}
+	now := e.now()
+	sequence := latest.LastSequence + 1
+	message := contracts.RunStatusMessage{
+		ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
+		Type: contracts.RunStatus,
+		Payload: contracts.RunStatusPayload{
+			RunID: latest.RunID, AgentID: latest.Request.TargetAgentID,
+			TraceID: latest.Request.TraceID, Sequence: sequence, Status: contracts.Canceled,
+		},
+	}
+	if _, err := e.Inbox.AppendEvent(
+		latest.RunID, StateCanceled, sequence, message, now,
+	); err != nil {
+		return err
+	}
+	return send(ctx, message)
 }
 
 func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Sender, code string) error {
@@ -278,8 +305,10 @@ func stateForStatus(status contracts.RunExecutionStatus) State {
 		return StateWorking
 	case contracts.Completed:
 		return StateCompleted
-	case contracts.Failed, contracts.Canceled:
+	case contracts.Failed:
 		return StateFailed
+	case contracts.Canceled:
+		return StateCanceled
 	default:
 		return StateOutcomeUnknown
 	}

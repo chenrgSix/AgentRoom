@@ -139,7 +139,10 @@ default concurrency of one. Duplicate delivery only replays persisted events.
 An explicit cancellation while queued persists and reports `canceled` without
 invoking the Runtime. This scheduling boundary prevents one Agent configuration
 from concurrently sharing its session and workspace; per-Run Git worktrees
-remain a separate opt-in isolation layer.
+remain a separate opt-in isolation layer. If the Bridge connection disappears
+while a Run is queued, the durable accepted record is retained and converges to
+`outcome_unknown` during the existing restart recovery path; it is never
+silently started after losing its cancellation channel.
 
 ## Desktop Client
 

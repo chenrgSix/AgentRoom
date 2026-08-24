@@ -22,6 +22,7 @@ const (
 	StateWorking        State = "working"
 	StateCompleted      State = "completed"
 	StateFailed         State = "failed"
+	StateCanceled       State = "canceled"
 	StateOutcomeUnknown State = "outcome_unknown"
 )
 

@@ -13,10 +13,13 @@ type Sender func(context.Context, any) error
 type NewRunFunc func(context.Context, Record, Sender) error
 
 type Handler struct {
-	Inbox       *Inbox
-	OnNew       NewRunFunc
-	OnDuplicate NewRunFunc
-	Now         func() time.Time
+	Inbox            *Inbox
+	Gate             *AgentExecutionGate
+	OnNew            NewRunFunc
+	OnDuplicate      NewRunFunc
+	OnQueuedCanceled NewRunFunc
+	IsExplicitCancel func(context.Context) bool
+	Now              func() time.Time
 }
 
 func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessage, send Sender) error {
@@ -47,9 +50,30 @@ func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessa
 		return h.OnDuplicate(ctx, record, send)
 	}
 	if !duplicate && h.OnNew != nil {
+		if h.Gate != nil {
+			release, err := h.Gate.Acquire(ctx, message.Payload.TargetAgentID)
+			if err != nil {
+				return h.handleQueueExit(ctx, record, send)
+			}
+			defer release()
+			if ctx.Err() != nil {
+				return h.handleQueueExit(ctx, record, send)
+			}
+		}
 		return h.OnNew(ctx, record, send)
 	}
 	return nil
+}
+
+func (h Handler) handleQueueExit(ctx context.Context, record Record, send Sender) error {
+	if h.IsExplicitCancel == nil || !h.IsExplicitCancel(ctx) || h.OnQueuedCanceled == nil {
+		// The durable accepted record remains recoverable when the connection or
+		// process context ends for a reason other than an explicit Run cancel.
+		return nil
+	}
+	reportContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	return h.OnQueuedCanceled(reportContext, record, send)
 }
 
 func newMessageID() string {
