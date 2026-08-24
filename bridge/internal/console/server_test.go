@@ -137,6 +137,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="connection-state"`, `id="trust-mode"`, `id="login-startup"`,
 		`id="export-diagnostics"`, `id="check-update"`, `id="bridge-version"`,
 		`id="add-agent"`, `id="agent-modal-backdrop"`, `id="agent-form"`,
+		`id="codex-use-detected"`, `id="codex-preflight"`,
+		`id="agent-use-detected"`, `id="agent-preflight"`,
 	} {
 		if !bytes.Contains(html, []byte(id)) {
 			t.Fatalf("embedded UI omitted %s", id)
@@ -152,6 +154,10 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if bytes.Count(javascript, []byte(`request("/api/runtime-tests"`)) != 1 ||
 		!bytes.Contains(javascript, []byte("测试运行")) {
 		t.Fatal("Runtime self-test must exist only behind an explicit Agent-row action")
+	}
+	if bytes.Count(javascript, []byte(`request("/api/runtime-preflight"`)) != 1 ||
+		!bytes.Contains(javascript, []byte(`elements["agent-use-detected"]`)) {
+		t.Fatal("draft Runtime preflight and detected-value action must remain explicit")
 	}
 	if !bytes.Contains(javascript, []byte("request(agentId ? `/api/agents/")) ||
 		bytes.Contains(javascript, []byte(`request(editMode ? "/api/config"`)) {
@@ -377,6 +383,147 @@ func TestRuntimeSelfTestIsExplicitBoundedAndSafelyProjected(t *testing.T) {
 	conflict.Body.Close()
 	if conflict.StatusCode != http.StatusConflict || probeCalls != 1 {
 		t.Fatal("active Team task did not fence Runtime self-test")
+	}
+}
+
+func TestRuntimeDraftPreflightDoesNotPersistOrRestartAndFencesConcurrentWork(t *testing.T) {
+	directory := t.TempDir()
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	loaded := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "http://127.0.0.1:3000", DeviceName: "Draft Bridge", DataDir: dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "Existing Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex",
+			PresetVersion: config.CurrentPresetVersion,
+			Command:       config.CodexPresetCommand(executablePath, "workspace-write"), Workspace: directory,
+		}},
+	}
+	if err := config.Save(configPath, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if err := pairing.Save(dataDir, pairing.Credential{
+		ServerURL: loaded.ServerURL, DeviceID: "device_draft", TeamID: "team_draft",
+		OwnerMemberID: "member_draft", Token: "secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	probeStarted := make(chan struct{}, 1)
+	releaseProbe := make(chan struct{})
+	probeCalls := 0
+	replaceCalls := 0
+	bridgeStarts := 0
+	dependencies := inertDependencies()
+	dependencies.ReplaceConfig = func(path string, configuration config.Config) error {
+		replaceCalls++
+		return config.Replace(path, configuration)
+	}
+	dependencies.RunBridge = func(context.Context, config.Config, pairing.Credential, operations.Observer) error {
+		bridgeStarts++
+		return nil
+	}
+	dependencies.ProbeRuntime = func(_ context.Context, agent config.AgentConfig) RuntimeProbeResult {
+		probeCalls++
+		if agent.Name != "Draft Pi" || agent.RuntimeKind != "pi" || agent.Command[0] != executablePath {
+			t.Errorf("preflight did not use the submitted draft: %#v", agent)
+		}
+		probeStarted <- struct{}{}
+		<-releaseProbe
+		return RuntimeProbeResult{Passed: true, Code: "RUNTIME_PROBE_OK", DurationMillis: 9}
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "draft-token",
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+	draft := RuntimeInput{
+		Kind: "pi", Enabled: true, Name: "Draft Pi", Role: "Reviewer",
+		ExecutablePath: executablePath, Workspace: directory,
+	}
+	payload, err := json.Marshal(draft)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, err := http.NewRequest(
+		http.MethodPost,
+		server.URL+"/api/runtime-preflight",
+		bytes.NewReader(payload),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("authorization", "Bearer "+service.Token())
+	request.Header.Set("content-type", "application/json")
+	responseResult := make(chan *http.Response, 1)
+	errorResult := make(chan error, 1)
+	go func() {
+		response, requestErr := http.DefaultClient.Do(request)
+		if requestErr != nil {
+			errorResult <- requestErr
+			return
+		}
+		responseResult <- response
+	}()
+	select {
+	case <-probeStarted:
+	case requestErr := <-errorResult:
+		t.Fatal(requestErr)
+	case <-time.After(time.Second):
+		t.Fatal("draft preflight did not start")
+	}
+
+	for path, body := range map[string]any{
+		"/api/runtime-preflight": draft,
+		"/api/runtime-tests":     map[string]string{"agentId": service.State().Agents[0].AgentID},
+		"/api/agents":            draft,
+		"/api/enrollment/start":  nil,
+	} {
+		conflict := consoleRequest(t, server.URL, service.Token(), http.MethodPost, path, body)
+		conflict.Body.Close()
+		if conflict.StatusCode != http.StatusConflict {
+			t.Fatalf("active preflight did not fence %s: %d", path, conflict.StatusCode)
+		}
+	}
+	close(releaseProbe)
+	var response *http.Response
+	select {
+	case response = <-responseResult:
+	case requestErr := <-errorResult:
+		t.Fatal(requestErr)
+	case <-time.After(time.Second):
+		t.Fatal("draft preflight did not finish")
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK || probeCalls != 1 {
+		t.Fatalf("unexpected draft preflight result: status=%d calls=%d", response.StatusCode, probeCalls)
+	}
+	after, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(before, after) || replaceCalls != 0 || bridgeStarts != 0 {
+		t.Fatalf("preflight mutated client state: replace=%d starts=%d", replaceCalls, bridgeStarts)
+	}
+
+	service.mu.Lock()
+	service.state.Agents[0].ActiveRuns = 1
+	service.mu.Unlock()
+	blocked := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/runtime-preflight", draft)
+	blocked.Body.Close()
+	if blocked.StatusCode != http.StatusConflict || probeCalls != 1 {
+		t.Fatal("active Team task did not fence draft preflight")
 	}
 }
 

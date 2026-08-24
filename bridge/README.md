@@ -94,6 +94,10 @@ agentroom-bridge console \
 An existing paired configuration starts automatically. Editing Agent presets
 atomically updates the configuration and restarts the managed connection. The
 Console never returns Device credentials or environment values to the browser.
+Detected Codex and Pi executables are copied into a form only after an explicit
+**使用检测值** action. **保存前预检** runs the same bounded safe probe against
+the unsaved form without writing configuration or restarting the Bridge. An
+active Team task or another Runtime probe blocks both preflight and save.
 
 The status area distinguishes the local process from the central connection:
 `stopped`, `connecting`, `online`, and `retrying` are not interchangeable. It

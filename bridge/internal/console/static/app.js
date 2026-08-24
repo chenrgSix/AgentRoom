@@ -7,13 +7,16 @@ const elements = Object.fromEntries([
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
   "codex-path", "codex-workspace", "codex-sandbox", "pi-enabled", "pi-fields",
   "pi-name", "pi-role", "pi-path", "pi-workspace", "pi-credential-env",
+  "codex-use-detected", "codex-preflight", "codex-preflight-result",
+  "pi-use-detected", "pi-preflight", "pi-preflight-result",
   "submit-enrollment", "auth-warning", "error", "bridge-version",
   "login-startup-row", "login-startup", "login-startup-warning", "export-diagnostics",
   "diagnostics-result", "check-update", "update-result", "release-link",
   "agent-modal-backdrop", "agent-modal-title", "close-agent-modal", "cancel-agent-modal",
   "agent-modal-error",
   "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace",
-  "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env", "save-agent"
+  "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env", "save-agent",
+  "agent-use-detected", "agent-preflight", "agent-preflight-result"
 ].map((id) => [id, document.getElementById(id)]));
 
 const query = new URLSearchParams(window.location.search);
@@ -25,6 +28,7 @@ const token = sessionStorage.getItem("agent-room-console-token") || "";
 if (!token) elements["auth-warning"].classList.remove("hidden");
 let currentState = null;
 let editingAgentId = null;
+let draftPreflightRunning = false;
 const runtimeTestResults = new Map();
 
 const labels = {
@@ -70,8 +74,58 @@ function showError(error) {
 
 function setRuntime(kind, enabled) {
   elements[`${kind}-fields`].classList.toggle("hidden", !enabled);
-  for (const input of elements[`${kind}-fields`].querySelectorAll("input, select")) {
+  for (const input of elements[`${kind}-fields`].querySelectorAll("input, select, button")) {
     input.disabled = !enabled;
+  }
+}
+
+function runtimeDraft(kind, source) {
+  const prefix = source === "agent" ? "agent" : kind;
+  return {
+    kind,
+    enabled: true,
+    name: elements[`${prefix}-name`].value,
+    role: elements[`${prefix}-role`].value,
+    executablePath: elements[`${prefix}-path`].value,
+    workspace: elements[`${prefix}-workspace`].value,
+    sandbox: kind === "codex" ? elements[`${prefix}-sandbox`].value : "",
+    credentialEnvironmentVariable: kind === "pi"
+      ? elements[`${prefix}-credential-env`].value
+      : ""
+  };
+}
+
+function probeSummary(result) {
+  const exit = result.exitCode === undefined ? "" : ` · 退出码 ${result.exitCode}`;
+  return result.passed
+    ? `预检通过 · ${result.durationMillis} ms`
+    : `预检失败 · ${result.code}${result.category ? ` · ${result.category}` : ""}${exit}`;
+}
+
+async function preflightDraft(kind, source, button, resultElement) {
+  if (draftPreflightRunning) return;
+  draftPreflightRunning = true;
+  button.disabled = true;
+  const saveButton = source === "agent" ? elements["save-agent"] : elements["submit-enrollment"];
+  saveButton.disabled = true;
+  resultElement.className = "";
+  resultElement.textContent = "正在执行受限预检…";
+  showError(null);
+  try {
+    const result = await request("/api/runtime-preflight", {
+      method: "POST",
+      body: JSON.stringify(runtimeDraft(kind, source))
+    });
+    resultElement.className = result.passed ? "probe-passed" : "probe-failed";
+    resultElement.textContent = probeSummary(result);
+  } catch (error) {
+    resultElement.className = "probe-failed";
+    resultElement.textContent = "预检请求失败";
+    showError(error);
+  } finally {
+    draftPreflightRunning = false;
+    button.disabled = false;
+    saveButton.disabled = false;
   }
 }
 
@@ -172,6 +226,8 @@ function openAgentModal(agent = null) {
   elements["agent-workspace"].value = agent?.workspace || currentState.agents[0]?.workspace || currentState.workspace || "";
   elements["agent-sandbox"].value = agent?.sandbox || "workspace-write";
   elements["agent-credential-env"].value = agent?.credentialEnvironmentVariable || "";
+  elements["agent-preflight-result"].className = "";
+  elements["agent-preflight-result"].textContent = "先验证当前表单；不会写入文件或重启 Bridge。";
   syncAgentKindFields();
   elements["agent-modal-backdrop"].classList.remove("hidden");
   elements["agent-name"].focus();
@@ -223,7 +279,7 @@ function render(state) {
     elements["stop-bridge"].disabled = !state.bridgeRunning;
     elements["resume-enrollment"].classList.toggle("hidden", state.paired);
     const mutationBlocked = state.agents.some((agent) => agent.activeRuns > 0) ||
-      [...runtimeTestResults.values()].includes("running");
+      [...runtimeTestResults.values()].includes("running") || draftPreflightRunning;
     elements["add-agent"].classList.toggle("hidden", !state.paired);
     elements["add-agent"].disabled = mutationBlocked;
     elements["agent-list"].replaceChildren(...state.agents.map(renderAgent));
@@ -270,6 +326,35 @@ elements["agent-kind"].addEventListener("change", () => {
   }
   syncAgentKindFields();
 });
+elements["agent-use-detected"].addEventListener("click", () => {
+  const kind = elements["agent-kind"].value;
+  elements["agent-path"].value = kind === "pi"
+    ? currentState.detectedPi || ""
+    : currentState.detectedCodex || "";
+});
+elements["agent-preflight"].addEventListener("click", () => {
+  void preflightDraft(
+    elements["agent-kind"].value,
+    "agent",
+    elements["agent-preflight"],
+    elements["agent-preflight-result"]
+  );
+});
+for (const kind of ["codex", "pi"]) {
+  elements[`${kind}-use-detected`].addEventListener("click", () => {
+    elements[`${kind}-path`].value = kind === "pi"
+      ? currentState.detectedPi || ""
+      : currentState.detectedCodex || "";
+  });
+  elements[`${kind}-preflight`].addEventListener("click", () => {
+    void preflightDraft(
+      kind,
+      kind,
+      elements[`${kind}-preflight`],
+      elements[`${kind}-preflight-result`]
+    );
+  });
+}
 for (const id of ["close-agent-modal", "cancel-agent-modal"]) {
   elements[id].addEventListener("click", closeAgentModal);
 }
@@ -291,15 +376,7 @@ elements["agent-form"].addEventListener("submit", async (event) => {
   try {
     await request(agentId ? `/api/agents/${encodeURIComponent(agentId)}` : "/api/agents", {
       method: agentId ? "PUT" : "POST",
-      body: JSON.stringify({
-        kind,
-        name: elements["agent-name"].value,
-        role: elements["agent-role"].value,
-        executablePath: elements["agent-path"].value,
-        workspace: elements["agent-workspace"].value,
-        sandbox: kind === "codex" ? elements["agent-sandbox"].value : "",
-        credentialEnvironmentVariable: kind === "pi" ? elements["agent-credential-env"].value : ""
-      })
+      body: JSON.stringify(runtimeDraft(kind, "agent"))
     });
     closeAgentModal();
     await refresh();

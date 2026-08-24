@@ -135,7 +135,8 @@ duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
 Console coverage verifies first setup, Runtime discovery, multiple same-kind
 Agents, per-Agent modal/API ownership, rename-stable identity, active-work
-fencing, and status rendering. Work is tracked by `BRG-001` through `BRG-021`
+fencing, draft Runtime preflight, and status rendering. Work is tracked by
+`BRG-001` through `BRG-022`
 in `docs/TASKS.md`.
 
 `BRG-019` adds configuration schema version 1 and Runtime preset version 1.
@@ -146,6 +147,13 @@ exposes a user-triggered, bounded Runtime self-test only for managed Codex and
 Pi presets. Codex is forced to `read-only`, Pi retains its no-tool preset,
 active Team Runs fence the probe, and only allowlisted status and failure
 metadata return to the UI.
+
+`BRG-022` adds an explicit detected-path action and a token-authenticated draft
+preflight for both enrollment and the per-Agent modal. It validates the current
+unsaved preset with the bounded safe probe, never persists configuration or
+restarts the managed connection, and uses the same lifecycle fence as Agent
+mutation: enrollment, active Team work, and concurrent Runtime probes cannot
+overlap it.
 
 `ADP-006` advances managed Runtime presets to version 2. Existing Pi presets
 are normalized to `--mode json` in memory and routed through the dedicated Pi

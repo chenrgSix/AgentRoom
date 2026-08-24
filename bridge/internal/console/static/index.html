@@ -97,6 +97,11 @@
               <label>角色<input id="codex-role" maxlength="80" value="Implementation" required></label>
             </div>
             <label>Codex 可执行文件<input id="codex-path" required></label>
+            <div class="runtime-draft-actions">
+              <button class="secondary" id="codex-use-detected" type="button">使用检测到的 Codex</button>
+              <button class="secondary" id="codex-preflight" type="button">保存前预检</button>
+              <span id="codex-preflight-result">预检不会保存配置或重启 Bridge。</span>
+            </div>
             <label>工作区<input class="workspace" id="codex-workspace" required></label>
             <label>文件沙箱<select id="codex-sandbox"><option value="workspace-write">允许修改工作区</option><option value="read-only">只读</option></select></label>
           </div>
@@ -109,6 +114,11 @@
               <label>角色<input id="pi-role" maxlength="80" value="Reviewer"></label>
             </div>
             <label>Pi 可执行文件<input id="pi-path"></label>
+            <div class="runtime-draft-actions">
+              <button class="secondary" id="pi-use-detected" type="button">使用检测到的 Pi</button>
+              <button class="secondary" id="pi-preflight" type="button">保存前预检</button>
+              <span id="pi-preflight-result">预检不会保存配置或重启 Bridge。</span>
+            </div>
             <label>工作区<input class="workspace" id="pi-workspace"></label>
             <label>凭据环境变量名称（可选）<input id="pi-credential-env" placeholder="例如 ANTHROPIC_API_KEY"></label>
           </div>
@@ -142,6 +152,11 @@
             <label>角色<input id="agent-role" maxlength="80" required></label>
           </div>
           <label>可执行文件<input id="agent-path" required></label>
+          <div class="runtime-draft-actions">
+            <button class="secondary" id="agent-use-detected" type="button">使用检测值</button>
+            <button class="secondary" id="agent-preflight" type="button">保存前预检</button>
+            <span id="agent-preflight-result">先验证当前表单；不会写入文件或重启 Bridge。</span>
+          </div>
           <label>工作区<input id="agent-workspace" required></label>
           <label id="agent-sandbox-field">文件沙箱
             <select id="agent-sandbox">

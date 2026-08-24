@@ -136,19 +136,20 @@ type Options struct {
 }
 
 type Service struct {
-	mu            sync.Mutex
-	options       Options
-	dependencies  Dependencies
-	tokenHash     [32]byte
-	token         string
-	state         State
-	configuration *config.Config
-	credential    *pairing.Credential
-	joinCancel    context.CancelFunc
-	bridgeCancel  context.CancelFunc
-	bridgeEpoch   uint64
-	events        []diagnostics.Event
-	runtimeTests  map[string]struct{}
+	mu               sync.Mutex
+	options          Options
+	dependencies     Dependencies
+	tokenHash        [32]byte
+	token            string
+	state            State
+	configuration    *config.Config
+	credential       *pairing.Credential
+	joinCancel       context.CancelFunc
+	bridgeCancel     context.CancelFunc
+	bridgeEpoch      uint64
+	events           []diagnostics.Event
+	runtimeTests     map[string]struct{}
+	runtimePreflight bool
 }
 
 var environmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,79}$`)
@@ -274,6 +275,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("POST /api/agents", s.authorize(s.addAgent))
 	mux.HandleFunc("PUT /api/agents/{agentId}", s.authorize(s.updateAgent))
 	mux.HandleFunc("POST /api/runtime-tests", s.authorize(s.testRuntime))
+	mux.HandleFunc("POST /api/runtime-preflight", s.authorize(s.preflightRuntime))
 	mux.HandleFunc("POST /api/bridge/start", s.authorize(s.startBridge))
 	mux.HandleFunc("POST /api/bridge/stop", s.authorize(s.stopBridge))
 	mux.HandleFunc("PUT /api/login-startup", s.authorize(s.updateLoginStartup))
@@ -303,6 +305,11 @@ func (s *Service) testRuntime(response http.ResponseWriter, request *http.Reques
 		return
 	}
 	s.mu.Lock()
+	if s.runtimePreflight {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, "Wait for the Runtime preflight to finish")
+		return
+	}
 	if s.configuration == nil {
 		s.mu.Unlock()
 		writeError(response, http.StatusConflict, "Configure the Bridge before testing a Runtime")
@@ -360,6 +367,51 @@ func (s *Service) testRuntime(response http.ResponseWriter, request *http.Reques
 	defer cancel()
 	result := s.dependencies.ProbeRuntime(probeContext, *selected)
 	writeJSON(response, http.StatusOK, result)
+}
+
+func (s *Service) preflightRuntime(response http.ResponseWriter, request *http.Request) {
+	if s.dependencies.ProbeRuntime == nil {
+		writeError(response, http.StatusNotImplemented, "Runtime preflight is not available")
+		return
+	}
+	var input RuntimeInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	agent, err := buildRuntime(input)
+	if err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.mu.Lock()
+	if s.joinCancel != nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, "Wait for Team enrollment to finish before testing a draft")
+		return
+	}
+	if s.runtimePreflight || len(s.runtimeTests) > 0 {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, "Another Runtime test is already running")
+		return
+	}
+	for _, configured := range s.state.Agents {
+		if configured.ActiveRuns > 0 {
+			s.mu.Unlock()
+			writeError(response, http.StatusConflict, "Runtime preflight is blocked by an active Team task")
+			return
+		}
+	}
+	s.runtimePreflight = true
+	s.mu.Unlock()
+	defer func() {
+		s.mu.Lock()
+		s.runtimePreflight = false
+		s.mu.Unlock()
+	}()
+	probeContext, cancel := context.WithTimeout(request.Context(), time.Minute)
+	defer cancel()
+	writeJSON(response, http.StatusOK, s.dependencies.ProbeRuntime(probeContext, agent))
 }
 
 func (s *Service) updateLoginStartup(response http.ResponseWriter, request *http.Request) {
@@ -505,6 +557,11 @@ func (s *Service) startEnrollment(response http.ResponseWriter, request *http.Re
 		}
 	}
 	s.mu.Lock()
+	if s.runtimePreflight || len(s.runtimeTests) > 0 {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, "Wait for the Runtime test to finish before enrollment")
+		return
+	}
 	if s.joinCancel != nil || s.bridgeCancel != nil {
 		s.mu.Unlock()
 		writeError(response, http.StatusConflict, "Stop the active Bridge or enrollment first")
@@ -758,6 +815,9 @@ func (s *Service) requireAgentMutationLocked() error {
 	}
 	if len(s.runtimeTests) > 0 {
 		return fmt.Errorf("Wait for Runtime self-tests to finish before editing Agents")
+	}
+	if s.runtimePreflight {
+		return fmt.Errorf("Wait for the Runtime preflight to finish before editing Agents")
 	}
 	for _, agent := range s.state.Agents {
 		if agent.ActiveRuns > 0 {
