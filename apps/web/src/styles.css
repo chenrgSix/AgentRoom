@@ -79,7 +79,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .participant-heading > div { display: grid; min-width: 0; gap: 2px; }
 .participant-heading strong { color: #cbd2c1; font-size: 10px; }
 .participant-heading small { overflow: hidden; color: #707869; font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
-.participant-heading > span { padding: 3px 6px; border-radius: 999px; background: #293021; color: #aabd7a; font-size: 8px; font-weight: 800; }
+.participant-heading-actions { display: flex; align-items: center; gap: 5px; }
+.participant-heading-actions > span { padding: 3px 6px; border-radius: 999px; background: #293021; color: #aabd7a; font-size: 8px; font-weight: 800; }
+.participant-heading-actions > button { width: 25px; height: 25px; border: 1px solid #465235; border-radius: 7px; background: #20261b; color: #b8d173; font-size: 11px; cursor: pointer; }
+.participant-heading-actions > button:hover { border-color: #7b914b; background: #2a331f; }
 .participant-list { display: flex; min-height: 0; flex: 1; flex-direction: column; gap: 4px; overflow-y: auto; padding-right: 2px; }
 .participant-list > p { margin: 4px 0; color: #70786a; font-size: 9px; }
 .participant-row { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 7px; border-radius: 9px; }
@@ -274,6 +277,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .modal-form input:focus { border-color: #84994f; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .secondary-action { padding: 10px 14px; border: 1px solid #434b3c; border-radius: 9px; background: #232720; color: #aeb5a7; cursor: pointer; }
+.participant-modal { width: min(100%, 620px); }
+.participant-editor-group { min-width: 0; margin: 8px 0 0; padding: 0; border: 0; }
+.participant-editor-group legend { margin-bottom: 8px; color: #b8c1ae; font-size: 10px; font-weight: 800; }
+.participant-editor-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; max-height: 180px; overflow-y: auto; }
+.participant-editor-list label { display: grid; grid-template-columns: 18px minmax(0, 1fr); align-items: center; gap: 9px; padding: 9px; border: 1px solid #353d31; border-radius: 9px; background: #121510; cursor: pointer; }
+.participant-editor-list input { width: 16px; height: 16px; margin: 0; padding: 0; accent-color: #bddb67; }
+.participant-editor-list span { display: grid; min-width: 0; gap: 2px; }
+.participant-editor-list strong { overflow: hidden; color: #d9ded3; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.participant-editor-list small { overflow: hidden; color: #737b6e; font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
 
 .empty-stage { display: grid; place-items: center; width: 100%; max-width: 760px; margin: auto; padding: 60px 30px 150px; text-align: center; }
 .orb { display: grid; place-items: center; width: 96px; height: 96px; margin-bottom: 28px; border: 1px solid #4e5938; border-radius: 32px; background: linear-gradient(145deg, #27301d, #171a14); box-shadow: 0 24px 70px rgb(0 0 0 / 32%); transform: rotate(8deg); }
@@ -516,6 +528,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .modal-heading > button,
 :root[data-theme="light"] .secondary-action { border-color: #c7d0be; background: #edf1e8; color: #566151; }
 :root[data-theme="light"] .modal-form input { border-color: #c3cdb9; background: #fff; color: #263021; }
+:root[data-theme="light"] .participant-editor-list label { border-color: #cbd4c3; background: #f3f6ef; }
+:root[data-theme="light"] .participant-editor-list strong { color: #3d4938; }
+:root[data-theme="light"] .participant-editor-list small { color: #687362; }
 :root[data-theme="light"] .access-error { border-color: #cf8e86; background: #fff0ed; color: #8a3d35; }
 
 @media (max-width: 760px) {
@@ -544,6 +559,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .agent-card-grid { grid-template-columns: 1fr; }
   .control-panel { padding: 15px; }
   .room-dock { padding: 8px 12px 12px; }
+  .participant-editor-list { grid-template-columns: 1fr; }
   .discussion-status { align-items: stretch; flex-direction: column; gap: 8px; }
   .discussion-wave { min-width: 0; }
   .composer .discussion-goal-editor { min-width: 0; }

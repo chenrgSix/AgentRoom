@@ -109,6 +109,12 @@ and return to Chat are compact workspace-header actions. Agent management
 remains a separate global rail destination, so configuration is not stacked
 below Room members.
 
+The roster and Mention suggestions are scoped to the selected Room rather than
+the whole Team. A Team Owner can open the participant control beside the roster
+count and independently include or exclude Team Members and enabled Agents in
+an accessible modal. Every Team Owner remains selected and cannot be removed;
+non-Owners never receive the control.
+
 An empty installation presents a three-step Team, Room, and Agent onboarding
 flow in the main workspace. Required fields use native browser validation;
 actions remain visibly available unless a request is already in progress.
@@ -149,8 +155,9 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 
 Component tests cover onboarding state transitions, Chinese-default locale,
 Agent management, enrollment approval, the unified no-Mention, one-Mention,
-and multi-Mention paths, participant identity, Wave barrier progress, member
-failure, finalization, and finish controls. They also assert that no separate
+and multi-Mention paths, Room-scoped participant editing and Mention filtering,
+participant identity, Wave barrier progress, member failure, finalization, and
+finish controls. They also assert that no separate
 Discussion entry remains and no duplicate Agent reply is rendered. Existing
 browser acceptance covers message, Mention, reconnect, Run progress, reply, and
 cancellation. A public end-to-end two-Agent parallel Discussion persists its

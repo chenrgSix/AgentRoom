@@ -104,6 +104,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   };
   let messageWasSent = false;
   let roomWasCreated = false;
+  let roomAgentIds = [agent.agentId, secondAgent.agentId];
   let discussionState = "";
   let discussionGoal = "确定交付恢复规则";
   const discussionRuns = [{
@@ -228,6 +229,17 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/rooms/${room.roomId}/runs`) {
       return jsonResponse(discussionState ? discussionRuns : []);
     }
+    if (path === `/api/rooms/${room.roomId}/participants` && method === "PUT") {
+      const updated = JSON.parse(String(init.body)) as {
+        memberIds: string[];
+        agentIds: string[];
+      };
+      roomAgentIds = updated.agentIds;
+      return jsonResponse(updated);
+    }
+    if (path === `/api/rooms/${room.roomId}/participants`) {
+      return jsonResponse({ memberIds: [member.memberId], agentIds: roomAgentIds });
+    }
     if (path === `/api/rooms/${room.roomId}/discussions` && method === "POST") {
       discussionGoal = (JSON.parse(String(init.body)) as { goal: string }).goal;
       discussionState = "active";
@@ -265,7 +277,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     throw new Error(`Unexpected request: ${method} ${path}`);
   };
 
-  const { cleanup, fireEvent, render, screen, waitFor, within } = await import("@testing-library/react");
+  const { act, cleanup, fireEvent, render, screen, waitFor, within } = await import("@testing-library/react");
   try {
     render(<App />);
     const teamHeading = await screen.findByRole("heading", { name: "创建你的第一个 Team" });
@@ -330,7 +342,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.equal(screen.queryByLabelText("新建假智能体名称"), null);
     assert.equal(screen.queryByLabelText("新 Team 名称"), null);
     const participants = screen.getByRole("region", { name: "房间成员" });
-    within(participants).getByText("Local Owner");
+    await within(participants).findByText("Local Owner");
     within(participants).getByText("Team 所有者");
     const roomSidebar = participants.closest("aside");
     assert.ok(roomSidebar);
@@ -447,6 +459,37 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     });
     fireEvent.click(within(discussionPanel).getByRole("button", { name: "结束并生成结论" }));
     await screen.findByText("将在本轮后停止");
+
+    fireEvent.click(screen.getByRole("button", { name: "管理房间成员" }));
+    const participantDialog = screen.getByRole("dialog", { name: "管理房间成员" });
+    const ownerCheckbox = within(participantDialog).getByRole("checkbox", {
+      name: /Local Owner/u
+    }) as HTMLInputElement;
+    assert.equal(ownerCheckbox.checked, true);
+    assert.equal(ownerCheckbox.disabled, true);
+    fireEvent.click(within(participantDialog).getByRole("checkbox", { name: /Local Codex/u }));
+    const saveButton = await within(participantDialog).findByRole("button", { name: "保存" });
+    await waitFor(() => assert.equal((saveButton as HTMLButtonElement).disabled, false));
+    await act(async () => {
+      fireEvent.click(saveButton);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await waitFor(() => assert.equal(
+      screen.queryByRole("dialog", { name: "管理房间成员" }),
+      null
+    ));
+    const participantRequest = requests.findLast((candidate) =>
+      candidate.path === `/api/rooms/${room.roomId}/participants` &&
+      candidate.method === "PUT"
+    );
+    assert.deepEqual(JSON.parse(participantRequest?.body ?? "{}"), {
+      memberIds: [member.memberId],
+      agentIds: [agent.agentId]
+    });
+    assert.equal(within(participants).queryByText("Local Codex"), null);
+    fireEvent.change(roomMessageInput, { target: { value: "请 @Local" } });
+    const filteredSuggestions = screen.getByRole("listbox", { name: "提及智能体" });
+    assert.equal(within(filteredSuggestions).queryByRole("option", { name: /@Local Codex/u }), null);
   } finally {
     cleanup();
     dom.window.close();

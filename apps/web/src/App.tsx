@@ -47,6 +47,7 @@ interface Room {
 
 interface Agent {
   agentId: string;
+  enabled?: boolean;
   name: string;
   role: string;
   integrationMode: "managed" | "manual" | "fake";
@@ -72,6 +73,11 @@ interface RoomMessagePage {
   items: Message[];
   nextCursor: string | null;
   syncCursor?: string;
+}
+
+interface RoomParticipants {
+  memberIds: string[];
+  agentIds: string[];
 }
 
 interface Device {
@@ -633,6 +639,10 @@ export function App() {
   );
   const [teams, setTeams] = useState<Team[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomParticipants, setRoomParticipants] = useState<RoomParticipants>({
+    memberIds: [],
+    agentIds: []
+  });
   const [members, setMembers] = useState<Member[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
@@ -647,6 +657,9 @@ export function App() {
   const [activeView, setActiveView] = useState<WorkspaceView>("room");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [participantDialogOpen, setParticipantDialogOpen] = useState(false);
+  const [participantMemberIds, setParticipantMemberIds] = useState<string[]>([]);
+  const [participantAgentIds, setParticipantAgentIds] = useState<string[]>([]);
   const [teamName, setTeamName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
@@ -692,16 +705,24 @@ export function App() {
     () => new Map(runs.map((run) => [run.runId, run])),
     [runs]
   );
+  const roomMembers = useMemo(() => {
+    const visible = new Set(roomParticipants.memberIds);
+    return members.filter(({ memberId }) => visible.has(memberId));
+  }, [members, roomParticipants.memberIds]);
+  const roomAgents = useMemo(() => {
+    const visible = new Set(roomParticipants.agentIds);
+    return agents.filter(({ agentId }) => visible.has(agentId));
+  }, [agents, roomParticipants.agentIds]);
   const mentionOptions = useMemo(() => {
     if (!mentionSearch) return [];
     const query = mentionSearch.query.toLocaleLowerCase(locale);
-    return agents.filter((agent) =>
+    return roomAgents.filter((agent) =>
       !mentionAgentIds.includes(agent.agentId) && (
         agent.name.toLocaleLowerCase(locale).includes(query) ||
         roleLabel(agent.role, locale).toLocaleLowerCase(locale).includes(query)
       )
     ).slice(0, 8);
-  }, [agents, locale, mentionAgentIds, mentionSearch]);
+  }, [locale, mentionAgentIds, mentionSearch, roomAgents]);
   const selectedMentionAgents = mentionAgentIds.flatMap((agentId) => {
     const agent = agentsById.get(agentId);
     return agent ? [agent] : [];
@@ -957,6 +978,7 @@ export function App() {
     if (!session || !selectedRoomId) {
       setMessages([]);
       setRuns([]);
+      setRoomParticipants({ memberIds: [], agentIds: [] });
       setRunDiagnostics({});
       diagnosticRequestsRef.current.clear();
       setDiscussions([]);
@@ -970,6 +992,7 @@ export function App() {
       sequence: 0
     };
     setMessages([]);
+    setRoomParticipants({ memberIds: [], agentIds: [] });
     setRunDiagnostics({});
     diagnosticRequestsRef.current.clear();
     void Promise.all([
@@ -987,8 +1010,13 @@ export function App() {
         `/api/rooms/${selectedRoomId}/discussions`,
         {},
         session.token
+      ),
+      jsonRequest<RoomParticipants>(
+        `/api/rooms/${selectedRoomId}/participants`,
+        {},
+        session.token
       )
-    ]).then(([page, nextRuns, nextDiscussions]) => {
+    ]).then(([page, nextRuns, nextDiscussions, nextParticipants]) => {
       if (stopped) return;
       setMessages(page.items);
       messageSyncRef.current = {
@@ -998,6 +1026,10 @@ export function App() {
       };
       setRuns(nextRuns);
       setDiscussions(nextDiscussions);
+      setRoomParticipants(nextParticipants);
+      setMentionAgentIds((current) => current.filter((agentId) =>
+        nextParticipants.agentIds.includes(agentId)
+      ));
     })
       .catch((reason: unknown) => {
         if (!stopped) setError(String(reason));
@@ -1035,7 +1067,8 @@ export function App() {
           nextMembers,
           nextDevices,
           nextRuns,
-          nextDiscussions
+          nextDiscussions,
+          nextParticipants
         ] = await Promise.all([
           jsonRequest<Agent[]>(
             `/api/teams/${selectedTeamId}/agents`, {}, session.token
@@ -1051,6 +1084,9 @@ export function App() {
           ),
           jsonRequest<DiscussionView[]>(
             `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
+          ),
+          jsonRequest<RoomParticipants>(
+            `/api/rooms/${selectedRoomId}/participants`, {}, session.token
           )
         ]);
         if (!stopped) {
@@ -1072,6 +1108,10 @@ export function App() {
           }
           setRuns(nextRuns);
           setDiscussions(nextDiscussions);
+          setRoomParticipants(nextParticipants);
+          setMentionAgentIds((current) => current.filter((agentId) =>
+            nextParticipants.agentIds.includes(agentId)
+          ));
         }
       } catch (reason) {
         if (!stopped) setError(String(reason));
@@ -1147,6 +1187,41 @@ export function App() {
       setRoomName("");
       setRooms((current) => [...current, room]);
       setSelectedRoomId(room.roomId);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openParticipantDialog() {
+    setParticipantMemberIds(roomParticipants.memberIds);
+    setParticipantAgentIds(roomParticipants.agentIds);
+    setParticipantDialogOpen(true);
+  }
+
+  async function saveRoomParticipants(event: FormEvent) {
+    event.preventDefault();
+    if (!session || !selectedRoomId || currentMember?.role !== "owner") return;
+    setBusy(true);
+    setError(null);
+    try {
+      const updated = await jsonRequest<RoomParticipants>(
+        `/api/rooms/${selectedRoomId}/participants`,
+        {
+          method: "PUT",
+          body: JSON.stringify({
+            memberIds: participantMemberIds,
+            agentIds: participantAgentIds
+          })
+        },
+        session.token
+      );
+      setRoomParticipants(updated);
+      setMentionAgentIds((current) => current.filter((agentId) =>
+        updated.agentIds.includes(agentId)
+      ));
+      setParticipantDialogOpen(false);
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -1651,21 +1726,31 @@ export function App() {
           <section className="participant-panel" aria-label={t("roomParticipants")}>
             <div className="participant-heading">
               <div><strong>{t("roomParticipants")}</strong><small>#{selectedRoom.name}</small></div>
-              <span>{members.length + agents.length}</span>
+              <div className="participant-heading-actions">
+                <span>{roomMembers.length + roomAgents.length}</span>
+                {currentMember?.role === "owner" && (
+                  <button
+                    aria-label={t("manageRoomParticipants")}
+                    onClick={openParticipantDialog}
+                    title={t("manageRoomParticipants")}
+                    type="button"
+                  >⚙</button>
+                )}
+              </div>
             </div>
             <div className="participant-list">
-              {members.length === 0 && agents.length === 0 ? (
+              {roomMembers.length === 0 && roomAgents.length === 0 ? (
                 <p>{t("noParticipants")}</p>
               ) : (
                 <>
-                  {members.map((member) => (
+                  {roomMembers.map((member) => (
                     <article className="participant-row" key={member.memberId}>
                       <span className="participant-avatar human">{member.displayName.slice(0, 1).toUpperCase()}</span>
                       <div><strong>{member.displayName}</strong><small>{member.role === "owner" ? t("teamOwner") : t("teamMember")}</small></div>
                       <span className="participant-kind">{locale === "zh-CN" ? "成员" : "Human"}</span>
                     </article>
                   ))}
-                  {agents.map((agent) => (
+                  {roomAgents.map((agent) => (
                     <article className="participant-row" key={agent.agentId}>
                       <span className="participant-avatar agent">{agent.name.slice(0, 1).toUpperCase()}</span>
                       <div><strong>{agent.name}</strong><small>{roleLabel(agent.role, locale)}</small></div>
@@ -2374,6 +2459,73 @@ export function App() {
               <div className="modal-actions">
                 <button className="secondary-action" onClick={() => setTeamDialogOpen(false)} type="button">{t("cancel")}</button>
                 <button className="primary-action" disabled={busy}>{busy ? t("creating") : t("createTeam")}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
+      {participantDialogOpen && selectedRoom && (
+        <div className="modal-backdrop" onMouseDown={(event) => {
+          if (event.currentTarget === event.target) setParticipantDialogOpen(false);
+        }}>
+          <section
+            aria-labelledby="room-participants-dialog-title"
+            aria-modal="true"
+            className="modal-card participant-modal"
+            role="dialog"
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">#{selectedRoom.name}</p>
+                <h3 id="room-participants-dialog-title">{t("manageRoomParticipants")}</h3>
+              </div>
+              <button aria-label={t("cancel")} onClick={() => setParticipantDialogOpen(false)} type="button">×</button>
+            </div>
+            <p>{t("roomParticipantsHelp")}</p>
+            <form className="modal-form" onSubmit={(event) => void saveRoomParticipants(event)}>
+              <fieldset className="participant-editor-group">
+                <legend>{t("teamMembers")}</legend>
+                <div className="participant-editor-list">
+                  {members.map((member) => (
+                    <label key={member.memberId}>
+                      <input
+                        checked={participantMemberIds.includes(member.memberId)}
+                        disabled={member.role === "owner"}
+                        onChange={() => setParticipantMemberIds((current) =>
+                          current.includes(member.memberId)
+                            ? current.filter((memberId) => memberId !== member.memberId)
+                            : [...current, member.memberId]
+                        )}
+                        type="checkbox"
+                      />
+                      <span><strong>{member.displayName}</strong><small>{member.role === "owner" ? t("teamOwner") : t("teamMember")}</small></span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <fieldset className="participant-editor-group">
+                <legend>{t("teamAgents")}</legend>
+                <div className="participant-editor-list">
+                  {agents.map((agent) => (
+                    <label key={agent.agentId}>
+                      <input
+                        checked={participantAgentIds.includes(agent.agentId)}
+                        disabled={agent.enabled === false}
+                        onChange={() => setParticipantAgentIds((current) =>
+                          current.includes(agent.agentId)
+                            ? current.filter((agentId) => agentId !== agent.agentId)
+                            : [...current, agent.agentId]
+                        )}
+                        type="checkbox"
+                      />
+                      <span><strong>{agent.name}</strong><small>{roleLabel(agent.role, locale)}</small></span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+              <div className="modal-actions">
+                <button className="secondary-action" onClick={() => setParticipantDialogOpen(false)} type="button">{t("cancel")}</button>
+                <button className="primary-action" disabled={busy}>{busy ? t("saving") : t("save")}</button>
               </div>
             </form>
           </section>

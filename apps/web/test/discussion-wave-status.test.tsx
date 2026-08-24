@@ -98,6 +98,12 @@ function installFixture(input: {
     if (path === `/api/teams/${team.teamId}/agents`) return jsonResponse(agents);
     if (path === `/api/teams/${team.teamId}/members`) return jsonResponse([owner]);
     if (path === `/api/teams/${team.teamId}/devices`) return jsonResponse([]);
+    if (path === `/api/rooms/${room.roomId}/participants`) {
+      return jsonResponse({
+        memberIds: [owner.memberId],
+        agentIds: agents.map(({ agentId }) => agentId)
+      });
+    }
     if (path === `/api/rooms/${room.roomId}/messages?limit=100&tail=true`) {
       return jsonResponse({ items: [], nextCursor: null, syncCursor: "cursor-empty" });
     }
