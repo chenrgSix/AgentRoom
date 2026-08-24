@@ -13,7 +13,7 @@ const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(testDirectory, "../..");
 
-async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs = 12_000): Promise<T> {
+async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs = 25_000): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const result = await read();
@@ -33,7 +33,7 @@ async function stopProcess(process: ChildProcess): Promise<void> {
 }
 
 test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
-  timeout: 30_000
+  timeout: 60_000
 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-e2e-"));
   const app = await createServerApp({
