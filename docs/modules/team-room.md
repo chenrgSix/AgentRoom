@@ -15,6 +15,7 @@ persisted Message before routing or realtime broadcast.
 - Create and read Teams and Rooms.
 - Resolve authenticated users to Team Members.
 - Persist and replace each Room's human and Agent participant roster.
+- Persist each Room's Agent collaboration policy.
 - Persist Room Messages and structured Mention references.
 - Provide cursor-based history pagination.
 - Broadcast committed Room changes to authorized Web clients.
@@ -33,7 +34,7 @@ persisted Message before routing or realtime broadcast.
 | Entity | Required State |
 | --- | --- |
 | Team | teamId, name, createdAt, archivedAt |
-| Room | roomId, teamId, name, policy, createdAt, archivedAt |
+| Room | roomId, teamId, name, collaborationPolicy, createdAt, archivedAt |
 | Room human participant | roomId, memberId, addedAt |
 | Room Agent participant | roomId, agentId, addedAt |
 | Member | referenced by Registry and Security |
@@ -62,10 +63,21 @@ ordinary reads or Agent republication. Every Team Owner must remain a human
 participant so a Room cannot become unmanageable. Roster removal affects new
 access and routing while preserving Messages, Runs, and Discussion history.
 
+Each Room owns one Server-enforced collaboration policy with four settings:
+`allowDiscussion`, `allowAll`, `allowAgentMentions`, and
+`maxAgentMentionDepth`. Existing and new Rooms default to all three capabilities
+enabled with depth 4. The Owner-only
+`PUT /api/rooms/:roomId/settings` operation replaces the policy and participant
+roster atomically, so the browser never observes a policy for a different Agent
+roster. Depth is always persisted in the range 1 through 4, including while
+Agent handoffs are disabled, so re-enabling the capability restores the chosen
+bound.
+
 ## Message Write Flow
 
 1. Authenticate the actor and authorize Room membership.
-2. Validate content size and structured Mention IDs.
+2. Validate content size, the maximum five structured Mention IDs, and the
+   Room's `@all` policy when the exact reserved command is present.
 3. Verify every Agent Mention is visible to the actor in the Room.
 4. Persist Message and Mentions in one transaction.
 5. Commit before emitting `message.created`.
@@ -76,10 +88,14 @@ enforces uniqueness per Room and sender, so an ambiguous retry returns the
 original Message and existing Runs without creating another sequence or
 re-executing completed work.
 
-Display labels never participate in Server routing. The Web may resolve an
-exact current-Room `@Agent name` or reserved `@all` command before submission,
-but it sends stable structured Mention IDs. A quoted or plain-text
-`@Bob/Backend` received without a structured Mention does not create a Run.
+Display labels in a Member Message never participate in Server target
+selection. The Web may resolve an exact current-Room `@Agent name` or reserved
+`@all` command before submission, but it sends stable structured Mention IDs.
+A quoted or plain-text `@Bob/Backend` received from a Member without a
+structured Mention does not create a Run. After an ordinary Run reply is
+persisted, Run Orchestration may separately parse exact full Agent names from
+that Agent-authored content for a policy-bounded handoff; this never changes
+the persisted Message write contract.
 
 ## History and Ordering
 
@@ -104,13 +120,18 @@ but it sends stable structured Mention IDs. A quoted or plain-text
 - Cross-Team access and forged Agent IDs are rejected.
 - Unassigned humans cannot discover or use a Room, and unassigned Agents cannot
   be mentioned, selected for a Discussion, or targeted by a handoff.
-- Plain-text mentions never trigger work.
+- Non-Owners cannot replace Room settings, and rejected settings never partly
+  change the participant roster.
+- Disabled Discussions, disabled `@all`, disabled Agent handoffs, and the
+  configured handoff depth are enforced on the Server rather than trusted to
+  browser presentation.
+- Member plain-text mentions never trigger work.
 - Realtime reconnect converges to persisted history.
 
 ## Task Mapping
 
-`ROOM-001` through `ROOM-004`, with Web delivery in `WEB-002`, `WEB-003`,
-and `WEB-025`.
+`ROOM-001` through `ROOM-007`, with Web delivery in `WEB-002`, `WEB-003`,
+`WEB-025`, and the Room settings surface completed with `ROOM-007`.
 
 ## Dependencies
 

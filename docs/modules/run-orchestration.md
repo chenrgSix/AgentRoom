@@ -118,8 +118,20 @@ rule and prevents restart from stranding the barrier.
 
 A handoff request contains parent Run, target Agent, summary, and optional
 context references. The server validates Room access, target availability,
-lineage, maximum depth 4, maximum unique Agents 5, and maximum Run duration
-20 minutes before creating a child Run.
+lineage, the Room's configured maximum depth from 1 through 4, maximum unique
+Agents 5, and maximum Run duration 20 minutes before creating a child Run.
+`allowAgentMentions=false` rejects both explicit MCP handoffs and automatic
+reply routing before a child Run is created.
+
+After an ordinary Run persists its Agent reply, the Server parses the content
+as exact commands against current Room Agent names. A complete `@Agent name`
+may create one child handoff, and exact `@all` may fan out to the remaining
+eligible Agents only when the Room allows it. Prefix, substring, ambiguous
+same-name, source-Agent, disabled, unassigned, over-depth, and lineage-revisit
+targets do not route. Reply parsing is best effort after the parent result is
+durable: one rejected candidate cannot erase the reply or cancel valid sibling
+handoffs. Replies owned by a structured Discussion do not enter this parser,
+because the Discussion Orchestrator alone schedules its next Wave.
 
 The MCP caller must be the parent Run's target Agent. Child Runs inherit the
 root trigger and deadline, use a new durable Run ID, and cannot revisit an Agent
@@ -150,6 +162,8 @@ resolves its own first-terminal race under the rules above.
 - Offline delivery runs once after reconnect.
 - Cancellation and completion races are deterministic.
 - Handoff loop, depth, and unique-Agent limits are enforced.
+- Room policy rejects disabled handoffs, applies the configured depth, and
+  exact reply parsing never routes fuzzy or ambiguous Agent names.
 - A Discussion Wave fans out all planned member Runs without serial dispatch.
 - `orchestrationKey` recovery recreates neither duplicate Runs nor duplicate
   Runtime executions.

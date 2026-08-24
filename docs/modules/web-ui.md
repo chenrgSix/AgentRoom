@@ -39,6 +39,8 @@ without changing server-owned state.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
 - Selected Room participant roster projected from Team members and visible Agents.
+- Owner-only Room settings for participant access, multi-Agent Discussion,
+  `@all`, Agent-to-Agent handoffs, and maximum handoff depth.
 - Context sidebar ending at the selected Room participant roster, without
   workspace, configuration, or account modules beneath it.
 - Full-height participant column without a nested card or fixed-height roster.
@@ -95,11 +97,14 @@ boundary the expanded UI offers continue solving, adjust goal, or finish with a
 conclusion rather than exposing internal Wave allocation.
 
 The Room composer classifies one submission by its distinct structured Agent
-identities. No Mention stores a Room message, one Mention creates a normal Run,
-and two to five Mentions create an adaptive Discussion whose goal is the message
-body. The Web resolves a complete `@Agent name` only when it exactly matches one
-current-Room identity; the reserved exact command `@all` expands to the full
-current-Room Agent roster. Prefix, substring, and role matches never route, and
+identities and the current Server-owned Room policy. No Mention stores a Room
+message and one Mention creates a normal Run. Two to five Mentions create an
+adaptive Discussion whose goal is the message body when Discussions are
+enabled; when they are disabled, the same submission creates one Message and
+parallel one-shot Runs so each selected Agent replies once. The Web resolves a
+complete `@Agent name` only when it exactly matches one current-Room identity;
+the reserved exact command `@all` expands to the full current-Room Agent roster
+only when allowed. Prefix, substring, and role matches never route, and
 same-name commands remain ambiguous until the user selects a specific identity.
 Selecting and removing chips keeps the visible tokens and stable IDs
 synchronized; the Server revalidates Room membership, Agent availability,
@@ -133,7 +138,9 @@ flow, so their dynamic height never covers Message content. Discussion status
 uses a compact, keyboard-accessible disclosure row by default; its detailed
 Wave surface may scroll within a bounded height while the composer remains
 visible. Mention suggestions may overlay the dock but never the persisted
-timeline.
+timeline. Request errors participate in workspace layout above the timeline
+and clear when the user edits the draft, so an error cannot cover the Send
+action or stale-block a corrected command.
 
 The desktop context sidebar contains only the Team identity and selected Room
 participants. The participant roster fills the column below the Team identity,
@@ -144,10 +151,13 @@ remains a separate global rail destination, so configuration is not stacked
 below Room members.
 
 The roster and Mention suggestions are scoped to the selected Room rather than
-the whole Team. A Team Owner can open the participant control beside the roster
-count and independently include or exclude Team Members and enabled Agents in
-an accessible modal. Every Team Owner remains selected and cannot be removed;
-non-Owners never receive the control.
+the whole Team. A Team Owner can open Room settings beside the roster count or
+from the compact composer policy summary. The same accessible modal
+independently includes or excludes Team Members and enabled Agents and configures
+Discussion, `@all`, Agent handoff, and depth policy. Every Team Owner remains
+selected and cannot be removed; non-Owners never receive the control. The
+composer summary exposes the effective mode without turning Discussion into a
+separate Send action.
 
 An empty installation presents a three-step Team, Room, and Agent onboarding
 flow in the main workspace. Required fields use native browser validation;
@@ -252,6 +262,13 @@ Failure guidance stays attached to its owning Run without stretching sibling
 targets or turning Mention labels into empty oversized pills. A component
 regression covers the Mention-to-Run replacement, and light/dark real-browser
 acceptance confirms the production shell has no horizontal overflow.
+
+`ROOM-007` adds the Owner-only Room collaboration settings surface and compact
+composer summary. Component coverage proves atomic policy/participant writes,
+disabled `@all`, one-shot multi-Agent submission, and retained multi-target
+outbox retries. Isolated real-browser acceptance proves two fake Agents each
+reply once without creating a Discussion, while light theme and 760 px and
+390 px settings layouts retain zero horizontal overflow.
 
 ## Dependencies
 
