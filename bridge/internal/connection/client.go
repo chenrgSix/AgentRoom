@@ -27,15 +27,16 @@ import (
 var ErrRunCancelRequested = errors.New("Run cancellation requested")
 
 type Client struct {
-	Config            config.Config
-	Credential        pairing.Credential
-	BridgeVersion     string
-	HeartbeatInterval time.Duration
-	HandleRun         func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
-	RecoverRuns       func(context.Context, func(context.Context, any) error) error
-	Observer          operations.Observer
-	RetryInitial      time.Duration
-	RetryMaximum      time.Duration
+	Config              config.Config
+	Credential          pairing.Credential
+	BridgeVersion       string
+	HeartbeatInterval   time.Duration
+	HandleRun           func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
+	RecoverRuns         func(context.Context, func(context.Context, any) error) error
+	Observer            operations.Observer
+	RetryInitial        time.Duration
+	RetryMaximum        time.Duration
+	StreamingAgentNames map[string]bool
 }
 
 func (c Client) Run(ctx context.Context) error {
@@ -146,13 +147,14 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		return false, err
 	}
 	for _, configured := range c.Config.Agents {
+		agentID := identities[configured.Name]
 		capabilities := contracts.Capabilities{
 			InvocationMode:    contracts.Managed,
 			SupportsHandoff:   false,
 			SupportsInterrupt: true,
 			SupportsResume:    false,
 			SupportsStart:     true,
-			SupportsStreaming: false,
+			SupportsStreaming: c.StreamingAgentNames[configured.Name],
 		}
 		publication := contracts.AgentPublishMessage{
 			ProtocolVersion: "1.0",
@@ -160,7 +162,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			Timestamp:       time.Now().UTC(),
 			Type:            contracts.AgentPublish,
 			Payload: contracts.AgentPublishPayload{
-				AgentID:       identities[configured.Name],
+				AgentID:       agentID,
 				Capabilities:  capabilities,
 				DeviceID:      c.Credential.DeviceID,
 				Name:          configured.Name,

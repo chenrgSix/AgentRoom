@@ -57,8 +57,9 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 			DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
-		BridgeVersion:     "test",
-		HeartbeatInterval: 10 * time.Millisecond,
+		BridgeVersion:       "test",
+		HeartbeatInterval:   10 * time.Millisecond,
+		StreamingAgentNames: map[string]bool{"Builder": true},
 	}
 	done := make(chan error, 1)
 	go func() { done <- client.Run(ctx) }()
@@ -67,6 +68,14 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	heartbeat := <-messages
 	if hello["type"] != "bridge.hello" || publication["type"] != "agent.publish" || heartbeat["type"] != "bridge.heartbeat" {
 		t.Fatalf("unexpected messages: %#v %#v %#v", hello, publication, heartbeat)
+	}
+	payload, ok := publication["payload"].(map[string]any)
+	if !ok {
+		t.Fatalf("unexpected publication payload: %#v", publication)
+	}
+	capabilities, ok := payload["capabilities"].(map[string]any)
+	if !ok || capabilities["supportsStreaming"] != true {
+		t.Fatalf("streaming capability was not published: %#v", publication)
 	}
 	cancel()
 	select {

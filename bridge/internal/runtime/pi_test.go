@@ -3,8 +3,11 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"agentroom.dev/bridge/internal/config"
 	contracts "agentroom.dev/contracts/generated/go"
@@ -17,10 +20,12 @@ func TestPiAdapterExtractsFinalAssistantReplyAndAssessment(t *testing.T) {
 		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Useful review.\n<agentroom-assessment>{\"goalSatisfied\":true,\"confidence\":0.9}</agentroom-assessment>"}],"stopReason":"stop"}}`,
 	}, "\n")
 	events := executePiFixture(t, output)
-	if len(events) != 3 || events[1].Reply != "Useful review." ||
-		events[1].Assessment == nil || events[1].Assessment.GoalSatisfied == nil ||
-		!*events[1].Assessment.GoalSatisfied || events[2].Status == nil ||
-		*events[2].Status != contracts.Completed {
+	if len(events) != 4 || events[1].Output == nil ||
+		events[1].Output.Content != "Useful review." ||
+		events[2].Reply != "Useful review." || events[2].Assessment == nil ||
+		events[2].Assessment.GoalSatisfied == nil ||
+		!*events[2].Assessment.GoalSatisfied || events[3].Status == nil ||
+		*events[3].Status != contracts.Completed {
 		t.Fatalf("unexpected Pi events: %#v", events)
 	}
 }
@@ -33,9 +38,89 @@ func TestPiAdapterKeepsToolLifecycleLocalAndReturnsFinalReply(t *testing.T) {
 		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"The project uses Go and TypeScript."}],"stopReason":"stop"}}`,
 	}, "\n")
 	events := executePiFixture(t, output)
-	if len(events) != 3 || events[1].Reply != "The project uses Go and TypeScript." ||
-		events[2].Status == nil || *events[2].Status != contracts.Completed {
+	if len(events) != 4 || events[1].Output == nil ||
+		events[1].Output.Content != "The project uses Go and TypeScript." ||
+		events[2].Reply != "The project uses Go and TypeScript." ||
+		events[3].Status == nil || *events[3].Status != contracts.Completed {
 		t.Fatalf("unexpected Pi tool lifecycle projection: %#v", events)
+	}
+}
+
+func TestPiAdapterEmitsPreviewBeforeFinalReply(t *testing.T) {
+	t.Setenv("AGENTROOM_PI_HELPER", "stream")
+	adapter := PiAdapter{Config: config.AgentConfig{
+		Command:   []string{os.Args[0], "-test.run=TestPiHelperProcess"},
+		Workspace: t.TempDir(), EnvAllowlist: []string{"AGENTROOM_PI_HELPER"},
+	}}
+	var previewAt time.Time
+	var replyAt time.Time
+	if err := adapter.Execute(context.Background(), Request{}, func(_ context.Context, event Event) error {
+		if event.Output != nil && previewAt.IsZero() {
+			previewAt = time.Now()
+		}
+		if event.Reply != "" {
+			replyAt = time.Now()
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if previewAt.IsZero() || replyAt.IsZero() || !previewAt.Before(replyAt) {
+		t.Fatalf("preview was not emitted before final reply: preview=%s reply=%s", previewAt, replyAt)
+	}
+}
+
+func TestPiHelperProcess(t *testing.T) {
+	if os.Getenv("AGENTROOM_PI_HELPER") != "stream" {
+		return
+	}
+	text := strings.Repeat("streaming ", 12)
+	encoded, err := json.Marshal(text)
+	if err != nil {
+		os.Exit(2)
+	}
+	fmt.Println(`{"type":"message_start","message":{"role":"assistant","content":[]}}`)
+	fmt.Println(`{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":` + string(encoded) + `}}`)
+	_ = os.Stdout.Sync()
+	time.Sleep(200 * time.Millisecond)
+	fmt.Println(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":` +
+		string(encoded) + `}],"stopReason":"stop"}}`)
+	os.Exit(0)
+}
+
+func TestPiStreamParserBatchesTextAndResetsAfterToolUse(t *testing.T) {
+	parser := &piStreamParser{}
+	consumePiLine(t, parser, `{"type":"message_start","message":{"role":"assistant","content":[]}}`)
+	consumePiLine(t, parser, `{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"`+
+		strings.Repeat("A", 80)+`"}}`)
+	first, err := parser.outputDelta(false)
+	if err != nil || first == nil || first.Reset || first.Content != strings.Repeat("A", 16) {
+		t.Fatalf("unexpected first preview: %#v, %v", first, err)
+	}
+	consumePiLine(t, parser, `{"type":"message_end","message":{"role":"assistant","content":[`+
+		`{"type":"text","text":"`+strings.Repeat("A", 80)+`"},{"type":"toolCall"}],"stopReason":"toolUse"}}`)
+	consumePiLine(t, parser, `{"type":"message_start","message":{"role":"assistant","content":[]}}`)
+	consumePiLine(t, parser, `{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"`+
+		strings.Repeat("B", 80)+`"}}`)
+	second, err := parser.outputDelta(false)
+	if err != nil || second == nil || !second.Reset || second.Content != strings.Repeat("B", 16) {
+		t.Fatalf("unexpected reset preview: %#v, %v", second, err)
+	}
+}
+
+func TestPiStreamParserWithholdsSplitSecretsAndAssessment(t *testing.T) {
+	parser := &piStreamParser{}
+	consumePiLine(t, parser, `{"type":"message_start","message":{"role":"assistant","content":[]}}`)
+	text := strings.Repeat("visible ", 12) + "token=very-sensitive-value" +
+		strings.Repeat(" trailing", 12) + assessmentOpen + `{"goalSatisfied":true}` + assessmentClose
+	consumePiLine(t, parser, `{"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":`+
+		quotedJSON(t, text)+`}}`)
+	delta, err := parser.outputDelta(false)
+	if err != nil || delta == nil {
+		t.Fatalf("expected safe preview: %#v, %v", delta, err)
+	}
+	if strings.Contains(delta.Content, "very-sensitive") || strings.Contains(delta.Content, "agentroom-assessment") {
+		t.Fatalf("private content escaped preview: %q", delta.Content)
 	}
 }
 
@@ -98,4 +183,13 @@ func quotedJSON(t *testing.T, value string) string {
 		t.Fatal(err)
 	}
 	return string(encoded)
+}
+
+func consumePiLine(t *testing.T, parser *piStreamParser, line string) bool {
+	t.Helper()
+	final, err := parser.consume([]byte(line))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return final
 }

@@ -44,6 +44,8 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	adapter := &bridgeruntime.FakeAdapter{}
 	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
 		{Status: &working}, {
+			Output: &bridgeruntime.OutputDelta{Content: "working token=very-sensitive-value"},
+		}, {
 			Reply:      "done token=very-sensitive-value",
 			Assessment: &contracts.Assessment{GoalSatisfied: &goalSatisfied},
 		}, {Status: &completed},
@@ -65,15 +67,19 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(sent) != 3 {
-		t.Fatalf("sent %d events, want 3", len(sent))
+	if len(sent) != 4 {
+		t.Fatalf("sent %d events, want 4", len(sent))
 	}
 	if len(runtimeEvents) != 2 || runtimeEvents[0].ActiveDelta != 1 ||
 		runtimeEvents[1].ActiveDelta != -1 || runtimeEvents[1].State != operations.RuntimeIdle ||
 		runtimeEvents[1].LastStatus != string(contracts.Completed) || runtimeEvents[1].ErrorCode != "" {
 		t.Fatalf("unexpected local Runtime projection: %#v", runtimeEvents)
 	}
-	reply, ok := sent[1].(contracts.RunReplyMessage)
+	output, ok := sent[1].(contracts.RunOutputDeltaMessage)
+	if !ok || strings.Contains(output.Payload.Content, "very-sensitive") {
+		t.Fatalf("output delta was not safely transported: %#v", sent[1])
+	}
+	reply, ok := sent[2].(contracts.RunReplyMessage)
 	if !ok || reply.Payload.Assessment == nil ||
 		reply.Payload.Assessment.GoalSatisfied == nil ||
 		!*reply.Payload.Assessment.GoalSatisfied {
@@ -83,13 +89,31 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if latest.State != StateCompleted || latest.LastSequence != 4 {
+	if latest.State != StateCompleted || latest.LastSequence != 5 {
 		t.Fatalf("unexpected persisted record: %#v", latest)
 	}
 	for _, event := range latest.Events {
 		if strings.Contains(string(event), "very-sensitive") {
 			t.Fatalf("secret persisted in durable Bridge event: %s", event)
 		}
+	}
+	var replayed []any
+	if err := executor.Replay(context.Background(), latest, func(_ context.Context, value any) error {
+		replayed = append(replayed, value)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(replayed) != 4 {
+		t.Fatalf("replayed %d events, want 4", len(replayed))
+	}
+	rawOutput, ok := replayed[1].(json.RawMessage)
+	var replayEnvelope struct {
+		Type string `json:"type"`
+	}
+	if !ok || json.Unmarshal(rawOutput, &replayEnvelope) != nil ||
+		replayEnvelope.Type != string(contracts.RunOutputDelta) {
+		t.Fatalf("replay omitted output delta: %#v", replayed)
 	}
 }
 

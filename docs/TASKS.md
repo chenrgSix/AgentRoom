@@ -110,7 +110,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ADP-005 | DONE | Implement Generic CLI fallback | ADP-002 | stdout, exit, timeout, and cancel verified |
 | ADP-006 | DONE | Add structured Pi output boundary | ADP-005, BRG-019 | preset v2 emits Pi JSON events; the dedicated adapter exposes only the final assistant reply and fails closed on malformed streams or leaked provider tool protocol |
 | ADP-007 | DONE | Follow owner-controlled local Pi permissions | ADP-006, BRG-022 | config migration and Console edit tests prove preset v3 keeps only Bridge-owned JSON/print/session lifecycle flags while preserving local Pi policy; adapter and probe tests prove tool events remain private, final replies are delivered, and explicit self-tests temporarily disable local permissions |
-| BRG-023 | ACTIVE | Stream safe Runtime assistant output | CON-005, ADP-006, BRG-005 | Pi JSON delta fixtures and Bridge executor recovery tests prove bounded redacted previews stream in order, tool lifecycle stays local, and final replies remain authoritative; unsupported Runtimes retain final-only behavior |
+| BRG-023 | DONE | Stream safe Runtime assistant output | CON-005, ADP-006, BRG-005 | Pi JSON delta fixtures and Bridge executor recovery tests prove bounded redacted previews stream in order, tool lifecycle stays local, and final replies remain authoritative; unsupported Runtimes retain final-only behavior |
 
 ## Workstream F3: Run Orchestration and Web Experience
 
@@ -122,7 +122,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | RUN-004 | DONE | Implement cancellation and terminal-state races | RUN-003 | first persisted terminal state wins |
 | RUN-005 | DONE | Implement offline queue and expiry | RUN-002, REG-003 | reconnect delivers queued work once |
 | RUN-006 | DONE | Implement guarded handoff | RUN-003 | depth, loop, and unique-agent limits pass |
-| RUN-007 | READY | Persist and expose resumable Runtime output | CON-005, BRG-023, DATA-003 | authenticated service and WebSocket tests prove output deltas persist with the Run sequence, reject gaps and foreign Devices, replay by cursor, notify the Team, and never append Room Messages |
+| RUN-007 | ACTIVE | Persist and expose resumable Runtime output | CON-005, BRG-023, DATA-003 | authenticated service and WebSocket tests prove output deltas persist with the Run sequence, reject gaps and foreign Devices, replay by cursor, notify the Team, and never append Room Messages |
 | WEB-002 | DONE | Implement Team Room message timeline | WEB-001, ROOM-002 | reload preserves ordered history |
 | WEB-003 | DONE | Implement structured Mention composer | WEB-002, ROOM-003 | display labels resolve to stable Agent IDs |
 | WEB-004 | DONE | Implement Agent presence panel | WEB-001, REG-003 | all integration modes render accurately |

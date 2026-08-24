@@ -19,9 +19,15 @@ type Request struct {
 
 type Event struct {
 	Status     *contracts.RunExecutionStatus
+	Output     *OutputDelta
 	Reply      string
 	Assessment *contracts.Assessment
 	Error      *contracts.AgentRoomError
+}
+
+type OutputDelta struct {
+	Content string
+	Reset   bool
 }
 
 type EmitFunc func(context.Context, Event) error

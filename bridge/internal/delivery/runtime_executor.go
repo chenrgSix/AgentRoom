@@ -86,6 +86,30 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			defer cancelSend()
 			return send(sendContext, message)
 		}
+		if event.Output != nil {
+			if event.Output.Content == "" {
+				return fmt.Errorf("Runtime emitted an empty output delta")
+			}
+			content := bridgeruntime.RedactSensitiveText(event.Output.Content)
+			var reset *bool
+			if event.Output.Reset {
+				value := true
+				reset = &value
+			}
+			message := contracts.RunOutputDeltaMessage{
+				ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
+				Type: contracts.RunOutputDelta,
+				Payload: contracts.RunOutputDeltaPayload{
+					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
+					TraceID: record.Request.TraceID, Sequence: sequence,
+					Content: content, Reset: reset,
+				},
+			}
+			if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
+				return err
+			}
+			return send(eventContext, message)
+		}
 		if event.Reply == "" {
 			return fmt.Errorf("Runtime emitted an empty event")
 		}
@@ -277,6 +301,7 @@ func validateRecoveryRecord(record Record) error {
 		}
 		switch envelope.Type {
 		case string(contracts.RunStatus),
+			string(contracts.RunOutputDelta),
 			string(contracts.RunReply),
 			string(contracts.RunHandoffRequested):
 		default:

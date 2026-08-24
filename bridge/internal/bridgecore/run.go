@@ -46,19 +46,22 @@ func RunObserved(
 	}
 	adapters := make(map[string]bridgeruntime.Adapter, len(loaded.Agents))
 	agentNames := make(map[string]string, len(loaded.Agents))
+	streamingAgentNames := make(map[string]bool, len(loaded.Agents))
 	for _, configured := range loaded.Agents {
 		agentID := identities[configured.Name]
 		agentNames[agentID] = configured.Name
 		if configured.RuntimeKind == "pi" {
 			adapters[agentID] = bridgeruntime.PiAdapter{Config: configured}
-			continue
+		} else {
+			switch configured.Adapter {
+			case "generic":
+				adapters[agentID] = bridgeruntime.GenericAdapter{Config: configured}
+			case "codex":
+				adapters[agentID] = bridgeruntime.CodexAdapter{Config: configured}
+			}
 		}
-		switch configured.Adapter {
-		case "generic":
-			adapters[agentID] = bridgeruntime.GenericAdapter{Config: configured}
-		case "codex":
-			adapters[agentID] = bridgeruntime.CodexAdapter{Config: configured}
-		}
+		streamingAgentNames[configured.Name] = adapters[agentID] != nil &&
+			adapters[agentID].Capabilities().SupportsStreaming
 	}
 	runtimeObserver := observer
 	runtimeObserver.OnRuntime = func(event operations.RuntimeEvent) {
@@ -76,6 +79,7 @@ func RunObserved(
 	}
 	return (connection.Client{
 		Config: loaded, Credential: credential, BridgeVersion: bridgeVersion, Observer: observer,
+		StreamingAgentNames: streamingAgentNames,
 		RecoverRuns: func(ctx context.Context, send func(context.Context, any) error) error {
 			return executor.Recover(ctx, delivery.Sender(send))
 		},
