@@ -141,7 +141,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-025 | DONE | Manage Room participants from the Room context | ROOM-004, WEB-013, WEB-014 | Owner-only participant controls update humans and Agents independently; sidebar and Mention suggestions render only the selected Room roster |
 | WEB-026 | DONE | Replace broad Room polling with event-driven reconciliation | WEB-021, OPS-002 | `team-change-service.test.ts`, the Web application tests, and Server/Web builds prove authorized monotonic Team change cursors wake selected-Room reconciliation promptly; reconnect, server restart, hidden tabs, and stream failure retain bounded HTTP fallback without a healthy two-second full refresh |
 | WEB-027 | PLANNED | Make Room message submission recoverable | WEB-019, WEB-026, ROOM-002 | client Message IDs deduplicate ambiguous retries; pending and failed rows remain visible with retry, while message, Team, and participant operations use independent pending state |
-| WEB-028 | PLANNED | Expose recoverable Team, Room, and Agent lifecycle controls | ROOM-005, REG-004, WEB-024, WEB-025 | accessible Owner controls rename and archive/restore Teams and Rooms and disable/enable Agents; ordinary navigation excludes archived resources and never deletes history |
+| WEB-028 | DONE | Expose recoverable Team, Room, and Agent lifecycle controls | ROOM-005, REG-004, WEB-024, WEB-025 | the onboarding component regression and Web build prove accessible Owner controls rename and archive/restore Teams and Rooms and disable/enable Agents; ordinary navigation excludes archived resources while the recovery modal retains access without deleting history |
 
 ## Workstream F4: MCP Team Participation
 

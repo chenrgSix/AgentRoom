@@ -27,6 +27,7 @@ interface Team {
   teamId: string;
   name: string;
   createdAt: string;
+  archivedAt?: string | null;
 }
 
 interface Member {
@@ -43,6 +44,7 @@ interface Room {
   teamId: string;
   name: string;
   createdAt: string;
+  archivedAt?: string | null;
 }
 
 interface Agent {
@@ -663,6 +665,12 @@ export function App() {
   const [activeView, setActiveView] = useState<WorkspaceView>("room");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [lifecycleDialogOpen, setLifecycleDialogOpen] = useState(false);
+  const [lifecycleTeams, setLifecycleTeams] = useState<Team[]>([]);
+  const [lifecycleRooms, setLifecycleRooms] = useState<Room[]>([]);
+  const [lifecycleTeamId, setLifecycleTeamId] = useState<string | null>(null);
+  const [lifecycleNames, setLifecycleNames] = useState<Record<string, string>>({});
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
   const [participantDialogOpen, setParticipantDialogOpen] = useState(false);
   const [participantMemberIds, setParticipantMemberIds] = useState<string[]>([]);
   const [participantAgentIds, setParticipantAgentIds] = useState<string[]>([]);
@@ -737,6 +745,9 @@ export function App() {
   const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
   const activeDevices = devices.filter((device) => device.status === "active").length;
   const currentMember = members.find((member) => member.userId === session?.userId) ?? null;
+  const lifecycleTeam = lifecycleTeams.find(({ teamId }) =>
+    teamId === lifecycleTeamId
+  ) ?? null;
   const t = (key: TranslationKey) => translate(locale, key);
   const activeDiscussion = [...discussions].reverse().find(({ discussion }) =>
     !["completed", "canceled", "terminated"].includes(discussion.state)
@@ -807,7 +818,138 @@ export function App() {
   async function loadTeams(activeSession: LocalSession) {
     const next = await jsonRequest<Team[]>("/api/teams", {}, activeSession.token);
     setTeams(next);
-    setSelectedTeamId((current) => current ?? next[0]?.teamId ?? null);
+    setSelectedTeamId((current) =>
+      next.some(({ teamId }) => teamId === current) ? current : next[0]?.teamId ?? null
+    );
+  }
+
+  async function loadLifecycleResources(
+    activeSession: LocalSession,
+    preferredTeamId?: string | null
+  ) {
+    const nextTeams = await jsonRequest<Team[]>(
+      "/api/teams?includeArchived=true",
+      {},
+      activeSession.token
+    );
+    const nextTeamId = preferredTeamId && nextTeams.some(({ teamId }) =>
+      teamId === preferredTeamId
+    ) ? preferredTeamId : nextTeams[0]?.teamId ?? null;
+    const nextRooms = nextTeamId
+      ? await jsonRequest<Room[]>(
+        `/api/teams/${nextTeamId}/rooms?includeArchived=true`,
+        {},
+        activeSession.token
+      )
+      : [];
+    setLifecycleTeams(nextTeams);
+    setLifecycleTeamId(nextTeamId);
+    setLifecycleRooms(nextRooms);
+    setLifecycleNames(Object.fromEntries([
+      ...nextTeams.map((team) => [team.teamId, team.name]),
+      ...nextRooms.map((room) => [room.roomId, room.name])
+    ]));
+  }
+
+  async function openLifecycleDialog() {
+    if (!session || currentMember?.role !== "owner") return;
+    setLifecycleDialogOpen(true);
+    setLifecycleBusy(true);
+    setError(null);
+    try {
+      await loadLifecycleResources(session, selectedTeamId);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
+  async function selectLifecycleTeam(teamId: string) {
+    if (!session) return;
+    setLifecycleBusy(true);
+    setError(null);
+    try {
+      await loadLifecycleResources(session, teamId);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
+  async function updateLifecycleTeam(
+    team: Team,
+    update: { name?: string; archived?: boolean }
+  ) {
+    if (!session) return;
+    setLifecycleBusy(true);
+    setError(null);
+    try {
+      await jsonRequest<Team>(`/api/teams/${team.teamId}`, {
+        method: "PATCH",
+        body: JSON.stringify(update)
+      }, session.token);
+      await loadTeams(session);
+      await loadLifecycleResources(session, team.teamId);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
+  async function updateLifecycleRoom(
+    room: Room,
+    update: { name?: string; archived?: boolean }
+  ) {
+    if (!session) return;
+    setLifecycleBusy(true);
+    setError(null);
+    try {
+      await jsonRequest<Room>(`/api/rooms/${room.roomId}`, {
+        method: "PATCH",
+        body: JSON.stringify(update)
+      }, session.token);
+      if (room.teamId === selectedTeamId) {
+        const nextRooms = await jsonRequest<Room[]>(
+          `/api/teams/${room.teamId}/rooms`, {}, session.token
+        );
+        setRooms(nextRooms);
+        setSelectedRoomId((current) =>
+          nextRooms.some(({ roomId }) => roomId === current)
+            ? current
+            : nextRooms[0]?.roomId ?? null
+        );
+      }
+      await loadLifecycleResources(session, room.teamId);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setLifecycleBusy(false);
+    }
+  }
+
+  async function setAgentEnabled(agent: Agent, enabled: boolean) {
+    if (!session || currentMember?.role !== "owner") return;
+    setLifecycleBusy(true);
+    setError(null);
+    try {
+      const updated = await jsonRequest<Agent>(`/api/agents/${agent.agentId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ enabled })
+      }, session.token);
+      setAgents((current) => current.map((item) =>
+        item.agentId === updated.agentId ? updated : item
+      ));
+      if (!enabled) {
+        setMentionAgentIds((current) => current.filter((id) => id !== agent.agentId));
+      }
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setLifecycleBusy(false);
+    }
   }
 
   async function activateSession(
@@ -1754,6 +1896,15 @@ export function App() {
         </div>
         {selectedTeam && (
           <div className="rail-actions">
+            {currentMember?.role === "owner" && (
+              <button
+                aria-label={locale === "zh-CN" ? "资源生命周期" : "Resource lifecycle"}
+                className="rail-manage"
+                onClick={() => void openLifecycleDialog()}
+                title={locale === "zh-CN" ? "重命名、归档或恢复资源" : "Rename, archive, or restore resources"}
+                type="button"
+              >⚙</button>
+            )}
             <button
               aria-label={t("teamMembers")}
               className={activeView === "members" ? "rail-manage active" : "rail-manage"}
@@ -2047,11 +2198,14 @@ export function App() {
                 ) : (
                   <div className="agent-card-grid">
                     {agents.map((agent) => (
-                      <article className="agent-card" key={agent.agentId}>
+                      <article className={`agent-card ${agent.enabled === false ? "disabled" : ""}`} key={agent.agentId}>
                         <div className="agent-card-top">
                           <span className="agent-avatar">{agent.name.slice(0, 2).toUpperCase()}</span>
-                          <span className={`status-badge ${agent.presence}`}>
-                            <span className={`presence-dot ${agent.presence}`} />{presenceLabel(agent.presence, locale)}
+                          <span className={`status-badge ${agent.enabled === false ? "offline" : agent.presence}`}>
+                            <span className={`presence-dot ${agent.enabled === false ? "offline" : agent.presence}`} />
+                            {agent.enabled === false
+                              ? (locale === "zh-CN" ? "已停用" : "Disabled")
+                              : presenceLabel(agent.presence, locale)}
                           </span>
                         </div>
                         <div className="agent-card-copy">
@@ -2062,6 +2216,18 @@ export function App() {
                           {integrationLabel(agent.integrationMode, locale)}
                         </span>
                         <small>{presenceHelp(agent, locale)}</small>
+                        {currentMember?.role === "owner" && (
+                          <button
+                            className="agent-enable-action"
+                            disabled={lifecycleBusy}
+                            onClick={() => void setAgentEnabled(agent, agent.enabled === false)}
+                            type="button"
+                          >
+                            {agent.enabled === false
+                              ? (locale === "zh-CN" ? "重新启用" : "Enable")
+                              : (locale === "zh-CN" ? "停用" : "Disable")}
+                          </button>
+                        )}
                       </article>
                     ))}
                   </div>
@@ -2516,6 +2682,131 @@ export function App() {
                 <button className="primary-action" disabled={busy}>{busy ? t("creating") : t("createTeam")}</button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+      {lifecycleDialogOpen && (
+        <div className="modal-backdrop" onMouseDown={(event) => {
+          if (event.currentTarget === event.target) setLifecycleDialogOpen(false);
+        }}>
+          <section
+            aria-labelledby="resource-lifecycle-dialog-title"
+            aria-modal="true"
+            className="modal-card lifecycle-modal"
+            role="dialog"
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">{locale === "zh-CN" ? "可恢复资源" : "RECOVERABLE RESOURCES"}</p>
+                <h3 id="resource-lifecycle-dialog-title">
+                  {locale === "zh-CN" ? "管理 Team 与房间" : "Manage Teams and Rooms"}
+                </h3>
+              </div>
+              <button aria-label={t("cancel")} onClick={() => setLifecycleDialogOpen(false)} type="button">×</button>
+            </div>
+            <p>
+              {locale === "zh-CN"
+                ? "归档会从普通导航隐藏资源，但会保留消息、运行、讨论和稳定 ID；存在活动任务时会被安全拦截。"
+                : "Archiving hides resources from normal navigation while retaining history and stable IDs. Active work blocks the action."}
+            </p>
+            {lifecycleBusy && lifecycleTeams.length === 0 ? (
+              <p>{locale === "zh-CN" ? "正在载入资源…" : "Loading resources…"}</p>
+            ) : (
+              <div className="lifecycle-layout">
+                <nav aria-label={locale === "zh-CN" ? "选择 Team" : "Select Team"} className="lifecycle-team-list">
+                  {lifecycleTeams.map((team) => (
+                    <button
+                      className={team.teamId === lifecycleTeamId ? "active" : ""}
+                      key={team.teamId}
+                      onClick={() => void selectLifecycleTeam(team.teamId)}
+                      type="button"
+                    >
+                      <strong>{team.name}</strong>
+                      <small>{team.archivedAt
+                        ? (locale === "zh-CN" ? "已归档" : "Archived")
+                        : (locale === "zh-CN" ? "使用中" : "Active")}</small>
+                    </button>
+                  ))}
+                </nav>
+                {lifecycleTeam && (
+                  <div className="lifecycle-resource-list">
+                    <section className="lifecycle-resource-row team-resource">
+                      <div>
+                        <strong>Team</strong>
+                        <small>{lifecycleTeam.teamId}</small>
+                      </div>
+                      <input
+                        aria-label={locale === "zh-CN" ? "Team 名称" : "Team name"}
+                        onChange={(event) => setLifecycleNames((current) => ({
+                          ...current,
+                          [lifecycleTeam.teamId]: event.target.value
+                        }))}
+                        value={lifecycleNames[lifecycleTeam.teamId] ?? lifecycleTeam.name}
+                      />
+                      <div className="lifecycle-actions">
+                        <button
+                          disabled={lifecycleBusy || !lifecycleNames[lifecycleTeam.teamId]?.trim() || lifecycleNames[lifecycleTeam.teamId] === lifecycleTeam.name}
+                          onClick={() => void updateLifecycleTeam(lifecycleTeam, {
+                            name: lifecycleNames[lifecycleTeam.teamId]!
+                          })}
+                          type="button"
+                        >{locale === "zh-CN" ? "保存名称" : "Save name"}</button>
+                        <button
+                          className={lifecycleTeam.archivedAt ? "restore-action" : "archive-action"}
+                          disabled={lifecycleBusy}
+                          onClick={() => void updateLifecycleTeam(lifecycleTeam, {
+                            archived: !lifecycleTeam.archivedAt
+                          })}
+                          type="button"
+                        >{lifecycleTeam.archivedAt
+                            ? (locale === "zh-CN" ? "恢复 Team" : "Restore Team")
+                            : (locale === "zh-CN" ? "归档 Team" : "Archive Team")}</button>
+                      </div>
+                    </section>
+                    <h4>{locale === "zh-CN" ? "房间" : "Rooms"}</h4>
+                    {lifecycleRooms.length === 0 ? (
+                      <p>{locale === "zh-CN" ? "这个 Team 还没有房间。" : "This Team has no Rooms yet."}</p>
+                    ) : lifecycleRooms.map((room) => (
+                      <section className="lifecycle-resource-row" key={room.roomId}>
+                        <div>
+                          <strong># {room.name}</strong>
+                          <small>{room.archivedAt
+                            ? (locale === "zh-CN" ? "已归档" : "Archived")
+                            : (locale === "zh-CN" ? "使用中" : "Active")}</small>
+                        </div>
+                        <input
+                          aria-label={locale === "zh-CN" ? `${room.name} 房间名称` : `${room.name} Room name`}
+                          onChange={(event) => setLifecycleNames((current) => ({
+                            ...current,
+                            [room.roomId]: event.target.value
+                          }))}
+                          value={lifecycleNames[room.roomId] ?? room.name}
+                        />
+                        <div className="lifecycle-actions">
+                          <button
+                            disabled={lifecycleBusy || !lifecycleNames[room.roomId]?.trim() || lifecycleNames[room.roomId] === room.name}
+                            onClick={() => void updateLifecycleRoom(room, {
+                              name: lifecycleNames[room.roomId]!
+                            })}
+                            type="button"
+                          >{locale === "zh-CN" ? "保存名称" : "Save name"}</button>
+                          <button
+                            className={room.archivedAt ? "restore-action" : "archive-action"}
+                            disabled={lifecycleBusy || Boolean(lifecycleTeam.archivedAt && room.archivedAt)}
+                            onClick={() => void updateLifecycleRoom(room, {
+                              archived: !room.archivedAt
+                            })}
+                            type="button"
+                          >{room.archivedAt
+                              ? (locale === "zh-CN" ? "恢复房间" : "Restore Room")
+                              : (locale === "zh-CN" ? "归档房间" : "Archive Room")}</button>
+                        </div>
+                      </section>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </section>
         </div>
       )}

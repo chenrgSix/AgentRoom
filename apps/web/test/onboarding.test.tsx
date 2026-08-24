@@ -104,6 +104,11 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   };
   let messageWasSent = false;
   let roomWasCreated = false;
+  let teamNameValue = team.name;
+  let teamArchivedAt: string | null = null;
+  let roomNameValue = room.name;
+  let roomArchivedAt: string | null = null;
+  let reviewAgentEnabled = true;
   let roomAgentIds = [agent.agentId, secondAgent.agentId];
   let discussionState = "";
   let discussionGoal = "确定交付恢复规则";
@@ -189,21 +194,60 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       const name = (JSON.parse(String(init.body)) as { name: string }).name;
       return jsonResponse({ team: name === secondTeam.name ? secondTeam : team });
     }
+    if (path === "/api/teams?includeArchived=true") {
+      const createdNames = requests
+        .filter((request) => request.path === "/api/teams" && request.method === "POST")
+        .map((request) => (JSON.parse(request.body ?? "{}") as { name?: string }).name);
+      return jsonResponse([
+        ...(createdNames.includes(team.name)
+          ? [{ ...team, name: teamNameValue, archivedAt: teamArchivedAt }]
+          : []),
+        ...(createdNames.includes(secondTeam.name) ? [secondTeam] : [])
+      ]);
+    }
     if (path === "/api/teams") {
       const createdNames = requests
         .filter((request) => request.path === "/api/teams" && request.method === "POST")
         .map((request) => (JSON.parse(request.body ?? "{}") as { name?: string }).name);
       return jsonResponse([
-        ...(createdNames.includes(team.name) ? [team] : []),
+        ...(createdNames.includes(team.name) && !teamArchivedAt
+          ? [{ ...team, name: teamNameValue, archivedAt: null }]
+          : []),
         ...(createdNames.includes(secondTeam.name) ? [secondTeam] : [])
       ]);
+    }
+    if (path === `/api/teams/${team.teamId}` && method === "PATCH") {
+      const update = JSON.parse(String(init.body)) as { name?: string; archived?: boolean };
+      if (update.name) teamNameValue = update.name;
+      if (update.archived !== undefined) {
+        teamArchivedAt = update.archived ? "2026-08-24T00:00:00.000Z" : null;
+      }
+      return jsonResponse({ ...team, name: teamNameValue, archivedAt: teamArchivedAt });
     }
     if (path === `/api/teams/${team.teamId}/rooms` && method === "POST") {
       roomWasCreated = true;
       return jsonResponse(room);
     }
     if (path === `/api/teams/${team.teamId}/rooms`) {
-      return jsonResponse(roomWasCreated ? [room] : []);
+      return jsonResponse(roomWasCreated && !roomArchivedAt
+        ? [{ ...room, name: roomNameValue, archivedAt: null }]
+        : []);
+    }
+    if (path === `/api/teams/${team.teamId}/rooms?includeArchived=true`) {
+      return jsonResponse(roomWasCreated
+        ? [{ ...room, name: roomNameValue, archivedAt: roomArchivedAt }]
+        : []);
+    }
+    if (path === `/api/teams/${secondTeam.teamId}/rooms?includeArchived=true`) {
+      return jsonResponse([]);
+    }
+    if (path === `/api/rooms/${room.roomId}` && method === "PATCH") {
+      const update = JSON.parse(String(init.body)) as { name?: string; archived?: boolean };
+      if (update.name) roomNameValue = update.name;
+      if (update.archived !== undefined) {
+        roomArchivedAt = update.archived ? "2026-08-24T00:00:00.000Z" : null;
+      }
+      return jsonResponse({ ...room, name: roomNameValue, archivedAt: roomArchivedAt });
     }
     if (
       path === `/api/teams/${team.teamId}/bridge-join-requests/approve` &&
@@ -268,8 +312,12 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/teams/${secondTeam.teamId}/members`) {
       return jsonResponse([{ ...member, memberId: "member_second", teamId: secondTeam.teamId }]);
     }
+    if (path === `/api/agents/${agent.agentId}` && method === "PATCH") {
+      reviewAgentEnabled = (JSON.parse(String(init.body)) as { enabled: boolean }).enabled;
+      return jsonResponse({ ...agent, enabled: reviewAgentEnabled });
+    }
     if (path.endsWith("/agents")) {
-      return jsonResponse([agent, secondAgent]);
+      return jsonResponse([{ ...agent, enabled: reviewAgentEnabled }, secondAgent]);
     }
     if (path.endsWith("/rooms")) {
       return jsonResponse([]);
@@ -355,6 +403,45 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.equal((screen.getByLabelText("选择房间") as HTMLSelectElement).value, room.roomId);
     screen.getByLabelText("新房间名称");
     assert.equal(screen.queryByRole("combobox", { name: "提及智能体" }), null);
+
+    fireEvent.click(screen.getByRole("button", { name: "资源生命周期" }));
+    const lifecycleDialog = await screen.findByRole("dialog", { name: "管理 Team 与房间" });
+    const lifecycleTeamName = within(lifecycleDialog).getByLabelText("Team 名称");
+    fireEvent.change(lifecycleTeamName, { target: { value: "Delivery Team" } });
+    const teamResource = lifecycleTeamName.closest("section");
+    assert.ok(teamResource);
+    fireEvent.click(within(teamResource).getByRole("button", { name: "保存名称" }));
+    await within(lifecycleDialog).findByText("Delivery Team");
+
+    const lifecycleRoomName = within(lifecycleDialog).getByLabelText("general 房间名称");
+    fireEvent.change(lifecycleRoomName, { target: { value: "delivery" } });
+    const roomResource = lifecycleRoomName.closest("section");
+    assert.ok(roomResource);
+    fireEvent.click(within(roomResource).getByRole("button", { name: "保存名称" }));
+    const renamedRoomInput = await within(lifecycleDialog).findByLabelText("delivery 房间名称");
+    const renamedRoomResource = renamedRoomInput.closest("section");
+    assert.ok(renamedRoomResource);
+    fireEvent.click(within(renamedRoomResource).getByRole("button", { name: "归档房间" }));
+    const restoreRoom = await within(lifecycleDialog).findByRole("button", { name: "恢复房间" });
+    fireEvent.click(restoreRoom);
+    await within(lifecycleDialog).findByRole("button", { name: "归档房间" });
+
+    const currentTeamResource = within(lifecycleDialog).getByLabelText("Team 名称")
+      .closest("section");
+    assert.ok(currentTeamResource);
+    fireEvent.click(within(currentTeamResource).getByRole("button", { name: "归档 Team" }));
+    const restoreTeam = await within(lifecycleDialog).findByRole("button", { name: "恢复 Team" });
+    fireEvent.click(restoreTeam);
+    await within(lifecycleDialog).findByRole("button", { name: "归档 Team" });
+    fireEvent.click(within(lifecycleDialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => assert.equal(
+      screen.queryByRole("dialog", { name: "管理 Team 与房间" }),
+      null
+    ));
+    fireEvent.click(screen.getByTitle("Delivery Team"));
+    await screen.findByRole("heading", { name: "在房间中开始对话 #delivery" });
+    await within(screen.getByRole("region", { name: "房间成员" })).findByText("Review Bot");
+
     const messageInput = screen.getByLabelText("消息") as HTMLTextAreaElement;
     fireEvent.change(messageInput, { target: { value: "请 @Rev" } });
     within(screen.getByRole("listbox", { name: "提及智能体" }))
@@ -370,6 +457,12 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     screen.getByRole("heading", { name: "Team 智能体" });
     screen.getByText("托管本地 Codex");
     screen.getByText(/这不是智能体名称/u);
+    const reviewCard = screen.getByRole("heading", { name: "Review Bot" }).closest("article");
+    assert.ok(reviewCard);
+    fireEvent.click(within(reviewCard).getByRole("button", { name: "停用" }));
+    const enableReview = await within(reviewCard).findByRole("button", { name: "重新启用" });
+    fireEvent.click(enableReview);
+    await within(reviewCard).findByRole("button", { name: "停用" });
 
     fireEvent.click(screen.getByRole("tab", { name: "演示智能体" }));
     screen.getByText("仅用于模拟");
@@ -489,7 +582,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       memberIds: [member.memberId],
       agentIds: [agent.agentId]
     });
-    assert.equal(within(participants).queryByText("Local Codex"), null);
+    const currentParticipants = screen.getByRole("region", { name: "房间成员" });
+    assert.equal(within(currentParticipants).queryByText("Local Codex"), null);
     fireEvent.change(roomMessageInput, { target: { value: "请 @Local" } });
     const filteredSuggestions = screen.getByRole("listbox", { name: "提及智能体" });
     assert.equal(within(filteredSuggestions).queryByRole("option", { name: /@Local Codex/u }), null);

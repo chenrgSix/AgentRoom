@@ -127,6 +127,13 @@ navigation opens the same accessible Team creation dialog. Successful creation
 selects the new Team immediately; creating a second Team never requires leaving
 or deleting the current Team.
 
+Team Owners have a persistent resource-lifecycle control in the desktop rail.
+Its accessible modal lists active and archived Teams and Rooms, supports inline
+rename plus archive/restore, explains history retention, and keeps recovery
+available after ordinary navigation hides an archived resource. Agent cards
+independently expose disable/enable actions and visibly distinguish disabled
+Agents. Server fences remain authoritative when active work blocks an action.
+
 In trusted-team mode, an unauthenticated browser never calls the local
 bootstrap route. It renders setup only when the Server reports an empty
 installation, accepts an Owner recovery secret only in component memory, and
@@ -160,8 +167,9 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 Component tests cover onboarding state transitions, Chinese-default locale,
 Agent management, enrollment approval, the unified no-Mention, one-Mention,
 and multi-Mention paths, Room-scoped participant editing and Mention filtering,
-participant identity, Wave barrier progress, member failure, finalization, and
-finish controls. They also assert that no separate
+resource rename/archive/restore, Agent disable/enable, participant identity,
+Wave barrier progress, member failure, finalization, and finish controls. They
+also assert that no separate
 Discussion entry remains and no duplicate Agent reply is rendered. Existing
 browser acceptance covers message, Mention, reconnect, Run progress, reply, and
 cancellation. A public end-to-end two-Agent parallel Discussion persists its
