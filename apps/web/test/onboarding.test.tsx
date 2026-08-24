@@ -49,10 +49,17 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     name: "Research Team",
     createdAt: "2026-08-23T00:10:00.000Z"
   };
+  const roomPolicy = {
+    allowDiscussion: true,
+    allowAll: true,
+    allowAgentMentions: true,
+    maxAgentMentionDepth: 4
+  };
   const room = {
     roomId: "room_test",
     teamId: team.teamId,
     name: "general",
+    collaborationPolicy: roomPolicy,
     createdAt: "2026-08-23T00:01:00.000Z"
   };
   const member = {
@@ -328,13 +335,21 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       }
       return jsonResponse([]);
     }
-    if (path === `/api/rooms/${room.roomId}/participants` && method === "PUT") {
+    if (path === `/api/rooms/${room.roomId}/settings` && method === "PUT") {
       const updated = JSON.parse(String(init.body)) as {
         memberIds: string[];
         agentIds: string[];
+        collaborationPolicy: typeof roomPolicy;
       };
       roomAgentIds = updated.agentIds;
-      return jsonResponse(updated);
+      Object.assign(roomPolicy, updated.collaborationPolicy);
+      return jsonResponse({
+        room: { ...room, name: roomNameValue, archivedAt: roomArchivedAt },
+        participants: {
+          memberIds: updated.memberIds,
+          agentIds: updated.agentIds
+        }
+      });
     }
     if (path === `/api/rooms/${room.roomId}/participants`) {
       return jsonResponse({ memberIds: [member.memberId], agentIds: roomAgentIds });
@@ -686,33 +701,107 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     fireEvent.click(within(discussionPanel).getByRole("button", { name: "结束并生成结论" }));
     await screen.findByText("将在本轮后停止");
 
-    fireEvent.click(screen.getByRole("button", { name: "管理房间成员" }));
-    const participantDialog = screen.getByRole("dialog", { name: "管理房间成员" });
+    let currentParticipants = screen.getByRole("region", { name: "房间成员" });
+    fireEvent.click(within(currentParticipants).getByRole("button", { name: "房间设置" }));
+    let participantDialog = screen.getByRole("dialog", { name: "房间设置" });
     const ownerCheckbox = within(participantDialog).getByRole("checkbox", {
       name: /Local Owner/u
     }) as HTMLInputElement;
     assert.equal(ownerCheckbox.checked, true);
     assert.equal(ownerCheckbox.disabled, true);
-    fireEvent.click(within(participantDialog).getByRole("checkbox", { name: /Local Codex/u }));
-    const saveButton = await within(participantDialog).findByRole("button", { name: "保存" });
+    fireEvent.change(within(participantDialog).getByRole("combobox", { name: "最大接力深度" }), {
+      target: { value: "2" }
+    });
+    fireEvent.click(within(participantDialog).getByRole("checkbox", { name: /允许多 Agent 讨论/u }));
+    fireEvent.click(within(participantDialog).getByRole("checkbox", { name: /允许 @all/u }));
+    fireEvent.click(within(participantDialog).getByRole("checkbox", { name: /允许 Agent 互相点名/u }));
+    let saveButton = await within(participantDialog).findByRole("button", { name: "保存" });
     await waitFor(() => assert.equal((saveButton as HTMLButtonElement).disabled, false));
     await act(async () => {
       fireEvent.click(saveButton);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await waitFor(() => assert.equal(
-      screen.queryByRole("dialog", { name: "管理房间成员" }),
+      screen.queryByRole("dialog", { name: "房间设置" }),
       null
     ));
+    const policyRequest = requests.findLast((candidate) =>
+      candidate.path === `/api/rooms/${room.roomId}/settings` &&
+      candidate.method === "PUT"
+    );
+    assert.deepEqual(JSON.parse(policyRequest?.body ?? "{}"), {
+      memberIds: [member.memberId],
+      agentIds: [agent.agentId, secondAgent.agentId],
+      collaborationPolicy: {
+        allowDiscussion: false,
+        allowAll: false,
+        allowAgentMentions: false,
+        maxAgentMentionDepth: 2
+      }
+    });
+    screen.getByText("单次并行回复");
+    screen.getByText("禁用 @all");
+    screen.getByText("Agent 接力关闭");
+
+    const discussionRequestsBeforeOneShot = requests.filter((candidate) =>
+      candidate.path === `/api/rooms/${room.roomId}/discussions` &&
+      candidate.method === "POST"
+    ).length;
+    fireEvent.change(roomMessageInput, {
+      target: { value: "@all 请一起分析" }
+    });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    assert.equal(
+      screen.getByRole("alert").textContent,
+      "操作失败：当前房间设置不允许使用 @all。"
+    );
+    fireEvent.change(roomMessageInput, {
+      target: { value: "请 @Review Bot 和 @Local Codex 各回复一次" }
+    });
+    assert.equal(screen.queryByRole("alert"), null);
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => {
+      const messageRequests = requests.filter((candidate) =>
+        candidate.path === `/api/rooms/${room.roomId}/messages` &&
+        candidate.method === "POST"
+      );
+      const body = JSON.parse(messageRequests.at(-1)?.body ?? "{}") as {
+        content: string;
+        mentionAgentIds: string[];
+      };
+      assert.equal(body.content, "请 @Review Bot 和 @Local Codex 各回复一次");
+      assert.deepEqual(body.mentionAgentIds, [agent.agentId, secondAgent.agentId]);
+    });
+    assert.equal(requests.filter((candidate) =>
+      candidate.path === `/api/rooms/${room.roomId}/discussions` &&
+      candidate.method === "POST"
+    ).length, discussionRequestsBeforeOneShot);
+
+    currentParticipants = screen.getByRole("region", { name: "房间成员" });
+    fireEvent.click(within(currentParticipants).getByRole("button", { name: "房间设置" }));
+    participantDialog = screen.getByRole("dialog", { name: "房间设置" });
+    fireEvent.click(within(participantDialog).getByRole("checkbox", { name: /Local Codex/u }));
+    saveButton = within(participantDialog).getByRole("button", { name: "保存" });
+    await act(async () => {
+      fireEvent.click(saveButton);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await waitFor(() => assert.equal(screen.queryByRole("dialog", { name: "房间设置" }), null));
     const participantRequest = requests.findLast((candidate) =>
-      candidate.path === `/api/rooms/${room.roomId}/participants` &&
+      candidate.path === `/api/rooms/${room.roomId}/settings` &&
       candidate.method === "PUT"
     );
     assert.deepEqual(JSON.parse(participantRequest?.body ?? "{}"), {
       memberIds: [member.memberId],
-      agentIds: [agent.agentId]
+      agentIds: [agent.agentId],
+      collaborationPolicy: {
+        allowDiscussion: false,
+        allowAll: false,
+        allowAgentMentions: false,
+        maxAgentMentionDepth: 2
+      }
     });
-    const currentParticipants = screen.getByRole("region", { name: "房间成员" });
+    currentParticipants = screen.getByRole("region", { name: "房间成员" });
     assert.equal(within(currentParticipants).queryByText("Local Codex"), null);
     fireEvent.change(roomMessageInput, { target: { value: "请 @Local" } });
     const filteredSuggestions = screen.getByRole("listbox", { name: "提及智能体" });

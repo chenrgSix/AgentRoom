@@ -53,10 +53,25 @@ interface Member {
   createdAt: string;
 }
 
+interface RoomCollaborationPolicy {
+  allowDiscussion: boolean;
+  allowAll: boolean;
+  allowAgentMentions: boolean;
+  maxAgentMentionDepth: number;
+}
+
+const defaultRoomCollaborationPolicy: RoomCollaborationPolicy = {
+  allowDiscussion: true,
+  allowAll: true,
+  allowAgentMentions: true,
+  maxAgentMentionDepth: 4
+};
+
 interface Room {
   roomId: string;
   teamId: string;
   name: string;
+  collaborationPolicy?: RoomCollaborationPolicy;
   createdAt: string;
   archivedAt?: string | null;
 }
@@ -94,6 +109,15 @@ interface RoomMessagePage {
 interface RoomParticipants {
   memberIds: string[];
   agentIds: string[];
+}
+
+interface RoomSettings {
+  room: Room;
+  participants: RoomParticipants;
+}
+
+function collaborationPolicyFor(room: Room | null): RoomCollaborationPolicy {
+  return room?.collaborationPolicy ?? defaultRoomCollaborationPolicy;
 }
 
 interface TeamChangeCursor {
@@ -720,6 +744,9 @@ export function App() {
   const [participantDialogOpen, setParticipantDialogOpen] = useState(false);
   const [participantMemberIds, setParticipantMemberIds] = useState<string[]>([]);
   const [participantAgentIds, setParticipantAgentIds] = useState<string[]>([]);
+  const [roomPolicyDraft, setRoomPolicyDraft] = useState<RoomCollaborationPolicy>(
+    defaultRoomCollaborationPolicy
+  );
   const [teamName, setTeamName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
@@ -786,6 +813,7 @@ export function App() {
     () => rooms.find((room) => room.roomId === selectedRoomId) ?? null,
     [rooms, selectedRoomId]
   );
+  const selectedRoomPolicy = collaborationPolicyFor(selectedRoom);
   const agentsById = useMemo(
     () => new Map(agents.map((agent) => [agent.agentId, agent])),
     [agents]
@@ -1548,6 +1576,7 @@ export function App() {
   function openParticipantDialog() {
     setParticipantMemberIds(roomParticipants.memberIds);
     setParticipantAgentIds(roomParticipants.agentIds);
+    setRoomPolicyDraft({ ...selectedRoomPolicy });
     setParticipantDialogOpen(true);
   }
 
@@ -1557,20 +1586,24 @@ export function App() {
     setParticipantBusy(true);
     setError(null);
     try {
-      const updated = await jsonRequest<RoomParticipants>(
-        `/api/rooms/${selectedRoomId}/participants`,
+      const updated = await jsonRequest<RoomSettings>(
+        `/api/rooms/${selectedRoomId}/settings`,
         {
           method: "PUT",
           body: JSON.stringify({
             memberIds: participantMemberIds,
-            agentIds: participantAgentIds
+            agentIds: participantAgentIds,
+            collaborationPolicy: roomPolicyDraft
           })
         },
         session.token
       );
-      setRoomParticipants(updated);
+      setRoomParticipants(updated.participants);
+      setRooms((current) => current.map((room) =>
+        room.roomId === updated.room.roomId ? updated.room : room
+      ));
       setMentionAgentIds((current) => current.filter((agentId) =>
-        updated.agentIds.includes(agentId)
+        updated.participants.agentIds.includes(agentId)
       ));
       setParticipantDialogOpen(false);
     } catch (reason) {
@@ -1820,6 +1853,12 @@ export function App() {
     const resolvedMentionAgentIds = exactCommands.usesAll
       ? exactCommands.agentIds
       : [...new Set([...mentionAgentIds, ...exactCommands.agentIds])];
+    if (exactCommands.usesAll && !selectedRoomPolicy.allowAll) {
+      setError(locale === "zh-CN"
+        ? "当前房间设置不允许使用 @all。"
+        : "This Room does not allow the @all command.");
+      return;
+    }
     if (exactCommands.usesAll && resolvedMentionAgentIds.length === 0) {
       setError(locale === "zh-CN"
         ? "当前房间没有可供 @all 路由的智能体。"
@@ -1832,14 +1871,21 @@ export function App() {
         : `The exact commands matched ${resolvedMentionAgentIds.length} Agents, exceeding the 5-Agent collaboration limit.`);
       return;
     }
-    if (resolvedMentionAgentIds.length >= 2 && activeDiscussion) {
+    if (
+      selectedRoomPolicy.allowDiscussion &&
+      resolvedMentionAgentIds.length >= 2 &&
+      activeDiscussion
+    ) {
       setError(locale === "zh-CN"
         ? "当前房间已有协作讨论，请先结束或停止后再发起新的协作。"
         : "This Room already has an active Discussion. Finish or stop it before starting another.");
       return;
     }
     setError(null);
-    if (resolvedMentionAgentIds.length >= 2) {
+    if (
+      selectedRoomPolicy.allowDiscussion &&
+      resolvedMentionAgentIds.length >= 2
+    ) {
       setComposerBusy(true);
       try {
         await jsonRequest<DiscussionView>(
@@ -1871,8 +1917,8 @@ export function App() {
       clientMessageId: createClientMessageId(),
       roomId: selectedRoomId,
       content: messageContent,
-      ...(resolvedMentionAgentIds[0]
-        ? { mentionAgentId: resolvedMentionAgentIds[0] }
+      ...(resolvedMentionAgentIds.length > 0
+        ? { mentionAgentIds: resolvedMentionAgentIds }
         : {}),
       status: "pending"
     };
@@ -1898,9 +1944,11 @@ export function App() {
           body: JSON.stringify({
             content: pending.content,
             clientMessageId: pending.clientMessageId,
-            ...(pending.mentionAgentId
-              ? { mentionAgentId: pending.mentionAgentId }
-              : {})
+            ...(pending.mentionAgentIds?.length === 1
+              ? { mentionAgentId: pending.mentionAgentIds[0] }
+              : pending.mentionAgentIds && pending.mentionAgentIds.length > 1
+                ? { mentionAgentIds: pending.mentionAgentIds }
+                : {})
           })
         },
         session.token
@@ -1987,6 +2035,7 @@ export function App() {
     const match = /(?:^|\s)@([^@\s]*)$/u.exec(beforeCursor);
 
     setMessageContent(nextContent);
+    setError(null);
     setMentionAgentIds((current) =>
       retainVisibleMentionIds(nextContent, current, agentsById)
     );
@@ -2164,9 +2213,9 @@ export function App() {
                 <span>{roomMembers.length + roomAgents.length}</span>
                 {currentMember?.role === "owner" && (
                   <button
-                    aria-label={t("manageRoomParticipants")}
+                    aria-label={t("roomSettings")}
                     onClick={openParticipantDialog}
-                    title={t("manageRoomParticipants")}
+                    title={t("roomSettings")}
                     type="button"
                   >⚙</button>
                 )}
@@ -2340,6 +2389,7 @@ export function App() {
             )}
           </div>
         </header>
+        {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
         {!selectedTeam ? (
           <section className="empty-stage onboarding-stage">
             <div className="orb"><span>✦</span></div>
@@ -2777,11 +2827,13 @@ export function App() {
                     </span>
                   </header>
                   <MarkdownMessage content={pending.content} />
-                  {pending.mentionAgentId && (
+                  {pending.mentionAgentIds && pending.mentionAgentIds.length > 0 && (
                     <div className="message-routing">
-                      <span className="mention-pill">
-                        @{agentsById.get(pending.mentionAgentId)?.name ?? t("agent")}
-                      </span>
+                      {pending.mentionAgentIds.map((agentId) => (
+                        <span className="mention-pill" key={agentId}>
+                          @{agentsById.get(agentId)?.name ?? t("agent")}
+                        </span>
+                      ))}
                     </div>
                   )}
                   {pending.status === "failed" && (
@@ -2948,14 +3000,36 @@ export function App() {
             )}
             <form className="composer" onSubmit={(event) => void submitComposer(event)}>
               <div className="composer-input">
+                <div className="room-policy-summary" aria-label={locale === "zh-CN" ? "当前房间协作策略" : "Current Room collaboration policy"}>
+                  <span className={`policy-mode ${selectedRoomPolicy.allowDiscussion ? "discussion" : "single"}`}>
+                    {selectedRoomPolicy.allowDiscussion
+                      ? (locale === "zh-CN" ? "讨论模式" : "Discussion mode")
+                      : (locale === "zh-CN" ? "单次并行回复" : "One-shot replies")}
+                  </span>
+                  <span>{selectedRoomPolicy.allowAll ? "@all" : (locale === "zh-CN" ? "禁用 @all" : "@all off")}</span>
+                  <span>{selectedRoomPolicy.allowAgentMentions
+                    ? (locale === "zh-CN"
+                        ? `Agent 接力 ${selectedRoomPolicy.maxAgentMentionDepth} 层`
+                        : `${selectedRoomPolicy.maxAgentMentionDepth}-level Agent handoff`)
+                    : (locale === "zh-CN" ? "Agent 接力关闭" : "Agent handoff off")}</span>
+                  {currentMember?.role === "owner" && (
+                    <button onClick={openParticipantDialog} type="button">
+                      {locale === "zh-CN" ? "房间设置" : "Room settings"}
+                    </button>
+                  )}
+                </div>
                 {mentionSearch && (
                   <div className="mention-suggestions" aria-label={t("mentionAgent")} role="listbox">
                     <div className="mention-suggestions-heading">{t("mentionHint")}</div>
                     {mentionOptions.length === 0 ? (
                       <p>{mentionSearch.query === "all"
-                        ? (locale === "zh-CN"
-                            ? `@all 将在发送时精确匹配当前房间的 ${roomAgents.length} 个智能体`
-                            : `@all will exactly target ${roomAgents.length} Agents in this Room on send`)
+                        ? !selectedRoomPolicy.allowAll
+                          ? (locale === "zh-CN"
+                              ? "当前房间设置已禁用 @all"
+                              : "@all is disabled by this Room's settings")
+                          : (locale === "zh-CN"
+                              ? `@all 将在发送时精确匹配当前房间的 ${roomAgents.length} 个智能体`
+                              : `@all will exactly target ${roomAgents.length} Agents in this Room on send`)
                         : t("noMentionMatches")}</p>
                     ) : mentionOptions.map((agent, index) => (
                       <button
@@ -2991,18 +3065,26 @@ export function App() {
                     <span className="composer-routing-hint">
                       {selectedMentionAgents.length === 1
                         ? (locale === "zh-CN" ? "发送后由该智能体执行" : "Send to run this Agent")
-                        : (locale === "zh-CN"
-                            ? `发送后将发起 ${selectedMentionAgents.length} 个智能体的协作讨论`
-                            : `Send to start a ${selectedMentionAgents.length}-Agent Discussion`)}
+                        : selectedRoomPolicy.allowDiscussion
+                          ? (locale === "zh-CN"
+                              ? `发送后将发起 ${selectedMentionAgents.length} 个智能体的协作讨论`
+                              : `Send to start a ${selectedMentionAgents.length}-Agent Discussion`)
+                          : (locale === "zh-CN"
+                              ? `发送后将并行触发 ${selectedMentionAgents.length} 个智能体，各回复一次`
+                              : `Send to run ${selectedMentionAgents.length} Agents once in parallel`)}
                     </span>
                   </div>
                 )}
                 {(exactMentionCommands.usesAll || directlyParsedAgents.length > 0 || unresolvedExactAmbiguousNames.length > 0) && (
-                  <div className={`exact-mention-preview ${unresolvedExactAmbiguousNames.length > 0 ? "ambiguous" : ""}`} role="status">
+                  <div className={`exact-mention-preview ${unresolvedExactAmbiguousNames.length > 0 ? "ambiguous" : ""} ${exactMentionCommands.usesAll && !selectedRoomPolicy.allowAll ? "policy-disabled" : ""}`} role="status">
                     {exactMentionCommands.usesAll
-                      ? (locale === "zh-CN"
-                          ? `精确指令 @all · 将路由当前房间 ${exactMentionCommands.agentIds.length} 个智能体`
-                          : `Exact command @all · routes to ${exactMentionCommands.agentIds.length} Room Agents`)
+                      ? !selectedRoomPolicy.allowAll
+                        ? (locale === "zh-CN"
+                            ? "精确指令 @all · 当前房间已禁用"
+                            : "Exact command @all · disabled in this Room")
+                        : (locale === "zh-CN"
+                            ? `精确指令 @all · 将路由当前房间 ${exactMentionCommands.agentIds.length} 个智能体`
+                            : `Exact command @all · routes to ${exactMentionCommands.agentIds.length} Room Agents`)
                       : unresolvedExactAmbiguousNames.length > 0
                         ? (locale === "zh-CN"
                             ? `同名智能体需要从候选列表明确选择：${unresolvedExactAmbiguousNames.join("、")}`
@@ -3017,8 +3099,8 @@ export function App() {
                   onChange={handleMessageChange}
                   onKeyDown={handleMessageKeyDown}
                   placeholder={locale === "zh-CN"
-                    ? `发送消息到 #${selectedRoom.name}；支持 @Agent完整名称 和 @all`
-                    : `Message #${selectedRoom.name}; use an exact @Agent name or @all`}
+                    ? `发送消息到 #${selectedRoom.name}；支持 @Agent完整名称${selectedRoomPolicy.allowAll ? " 和 @all" : ""}`
+                    : `Message #${selectedRoom.name}; use an exact @Agent name${selectedRoomPolicy.allowAll ? " or @all" : ""}`}
                   required
                   rows={2}
                   value={messageContent}
@@ -3030,7 +3112,6 @@ export function App() {
             </form>
           </div>
         )}
-        {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
       </main>
       {teamDialogOpen && (
         <div className="modal-backdrop" onMouseDown={(event) => {
@@ -3255,7 +3336,7 @@ export function App() {
           if (event.currentTarget === event.target) setParticipantDialogOpen(false);
         }}>
           <section
-            aria-labelledby="room-participants-dialog-title"
+            aria-labelledby="room-settings-dialog-title"
             aria-modal="true"
             className="modal-card participant-modal"
             role="dialog"
@@ -3263,12 +3344,84 @@ export function App() {
             <div className="modal-heading">
               <div>
                 <p className="eyebrow">#{selectedRoom.name}</p>
-                <h3 id="room-participants-dialog-title">{t("manageRoomParticipants")}</h3>
+                <h3 id="room-settings-dialog-title">{t("roomSettings")}</h3>
               </div>
               <button aria-label={t("cancel")} onClick={() => setParticipantDialogOpen(false)} type="button">×</button>
             </div>
-            <p>{t("roomParticipantsHelp")}</p>
+            <p>{t("roomSettingsHelp")}</p>
             <form className="modal-form" onSubmit={(event) => void saveRoomParticipants(event)}>
+              <fieldset className="room-policy-editor">
+                <legend>{locale === "zh-CN" ? "Agent 协作" : "Agent collaboration"}</legend>
+                <div className="room-policy-options">
+                  <label className="room-policy-switch">
+                    <input
+                      checked={roomPolicyDraft.allowDiscussion}
+                      onChange={(event) => setRoomPolicyDraft((current) => ({
+                        ...current,
+                        allowDiscussion: event.target.checked
+                      }))}
+                      type="checkbox"
+                    />
+                    <span>
+                      <strong>{locale === "zh-CN" ? "允许多 Agent 讨论" : "Allow multi-Agent Discussions"}</strong>
+                      <small>{locale === "zh-CN"
+                        ? "开启后，多 Agent 提及进入有轮次和结论的讨论；关闭后只并行回复一次。"
+                        : "When on, multi-Agent mentions start a governed Discussion; when off, each Agent replies once."}</small>
+                    </span>
+                  </label>
+                  <label className="room-policy-switch">
+                    <input
+                      checked={roomPolicyDraft.allowAll}
+                      onChange={(event) => setRoomPolicyDraft((current) => ({
+                        ...current,
+                        allowAll: event.target.checked
+                      }))}
+                      type="checkbox"
+                    />
+                    <span>
+                      <strong>{locale === "zh-CN" ? "允许 @all" : "Allow @all"}</strong>
+                      <small>{locale === "zh-CN"
+                        ? "允许成员用精确 @all 指令选择当前房间全部已启用 Agent。"
+                        : "Let members use the exact @all command for every enabled Agent in this Room."}</small>
+                    </span>
+                  </label>
+                  <label className="room-policy-switch">
+                    <input
+                      checked={roomPolicyDraft.allowAgentMentions}
+                      onChange={(event) => setRoomPolicyDraft((current) => ({
+                        ...current,
+                        allowAgentMentions: event.target.checked
+                      }))}
+                      type="checkbox"
+                    />
+                    <span>
+                      <strong>{locale === "zh-CN" ? "允许 Agent 互相点名" : "Allow Agent-to-Agent mentions"}</strong>
+                      <small>{locale === "zh-CN"
+                        ? "Agent 回复中的完整名称 @指令可触发受限接力；模糊名称不会路由。"
+                        : "Exact full-name @ commands in Agent replies can trigger bounded handoffs; fuzzy names never route."}</small>
+                    </span>
+                  </label>
+                </div>
+                <label className="room-policy-depth">
+                  <span>
+                    <strong>{locale === "zh-CN" ? "最大接力深度" : "Maximum handoff depth"}</strong>
+                    <small>{locale === "zh-CN" ? "限制 Agent 连续互相点名的层数" : "Limits chained Agent-to-Agent mentions"}</small>
+                  </span>
+                  <select
+                    aria-label={locale === "zh-CN" ? "最大接力深度" : "Maximum handoff depth"}
+                    disabled={!roomPolicyDraft.allowAgentMentions}
+                    onChange={(event) => setRoomPolicyDraft((current) => ({
+                      ...current,
+                      maxAgentMentionDepth: Number(event.target.value)
+                    }))}
+                    value={roomPolicyDraft.maxAgentMentionDepth}
+                  >
+                    {[1, 2, 3, 4].map((depth) => (
+                      <option key={depth} value={depth}>{depth}</option>
+                    ))}
+                  </select>
+                </label>
+              </fieldset>
               <fieldset className="participant-editor-group">
                 <legend>{t("teamMembers")}</legend>
                 <div className="participant-editor-list">
@@ -3290,7 +3443,7 @@ export function App() {
                 </div>
               </fieldset>
               <fieldset className="participant-editor-group">
-                <legend>{t("teamAgents")}</legend>
+                <legend>{t("teamAgents")} · {locale === "zh-CN" ? "单独启用" : "Per-Agent access"}</legend>
                 <div className="participant-editor-list">
                   {agents.map((agent) => (
                     <label key={agent.agentId}>

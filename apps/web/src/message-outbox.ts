@@ -2,7 +2,7 @@ export interface PendingRoomMessage {
   clientMessageId: string;
   roomId: string;
   content: string;
-  mentionAgentId?: string;
+  mentionAgentIds?: string[];
   status: "pending" | "failed";
 }
 
