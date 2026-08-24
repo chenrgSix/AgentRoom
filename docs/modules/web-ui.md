@@ -26,6 +26,8 @@ without changing server-owned state.
   logout, and Owner invitation controls without exposing session credentials to
   JavaScript.
 - Ordered message timeline and thread view.
+- Safe Markdown/GFM narrative rendering for durable and provisional messages,
+  including headings, lists, tables, task lists, links, images, and code blocks.
 - Unified Room composer for messages, single-Agent Runs, and adaptive
   multi-Agent Discussions.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
@@ -99,6 +101,14 @@ single-open-Discussion Room invariant.
 Timeline messages resolve their visible author from the stable `senderId` and
 the current Team roster. Registered Agent and member names are shown directly;
 the generic localized Agent label is reserved for missing historical identities.
+Durable and provisional content use the same React-native Markdown renderer.
+Raw HTML is ignored, protocol URLs retain the renderer's safe URL transform,
+cross-origin HTTP(S) links open with `noopener noreferrer`, and remote images
+load lazily without a referrer. The Web does not import Agentdown directly:
+Agentdown is currently a Vue 3 Runtime, while this application is React 19;
+shipping both UI runtimes would duplicate message and Run ownership. The Web
+instead follows the same block-safety principles at its existing projection
+boundary.
 
 The current MVP separates Team conversation from the Agent control plane. The
 Room view owns messages, mentions, and Runs. The Agents view owns runtime
@@ -204,6 +214,12 @@ plain-text generating bubble. It preserves one cursor per Run, ignores stale
 duplicates, clears on reset or final reply, and discards previews for Runs that
 become terminal without a reply. Reload and Team-change reconciliation use the
 same reducer, so the live and recovery paths cannot diverge.
+
+`WEB-030` keeps the timeline as the only scrolling conversation surface while
+giving it a bounded reading measure, distinct Member and Agent message shells,
+larger narrative typography, responsive code/table overflow, and a visually
+anchored dock. Streaming and final replies share Markdown rendering so the
+authoritative replacement changes state rather than presentation semantics.
 
 ## Dependencies
 

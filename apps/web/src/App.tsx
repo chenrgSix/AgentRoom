@@ -12,6 +12,7 @@ import {
 import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
 
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
+import { MarkdownMessage } from "./MarkdownMessage.js";
 import {
   createSingleFlight,
   mergeRoomMessages,
@@ -2547,14 +2548,14 @@ export function App() {
               const avatarLabel = senderName.trim().slice(0, 1).toLocaleUpperCase(locale) || "A";
 
               return (
-                <article className="message" key={message.messageId}>
+                <article className={`message ${message.senderType}-message`} key={message.messageId}>
                   <span className={`avatar ${message.senderType}`}>{avatarLabel}</span>
-                  <div>
+                  <div className="message-card">
                     <header>
                       <strong>{senderName}</strong>
                       <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                     </header>
-                    <p>{message.content}</p>
+                    <MarkdownMessage content={message.content} />
                     {(message.mentions.length > 0 || runs.some((run) => run.triggerMessageId === message.messageId)) && (
                       <div className="message-routing">
                         {message.mentions.map((mention) => (
@@ -2609,27 +2610,27 @@ export function App() {
               const avatarLabel = senderName.trim().slice(0, 1)
                 .toLocaleUpperCase(locale) || "A";
               return (
-                <article className="message streaming-message" key={`stream-${runId}`}>
+                <article className="message agent-message streaming-message" key={`stream-${runId}`}>
                   <span className="avatar agent">{avatarLabel}</span>
-                  <div>
+                  <div className="message-card">
                     <header>
                       <strong>{senderName}</strong>
                       <span className="streaming-state" role="status">{t("generating")}</span>
                     </header>
-                    <p>
-                      {output.content}
+                    <div className="streaming-content">
+                      <MarkdownMessage content={output.content} streaming />
                       <span aria-hidden="true" className="streaming-cursor" />
-                    </p>
+                    </div>
                   </div>
                 </article>
               );
             })}
             {pendingRoomMessages.map((pending) => (
-              <article className={`message pending-message ${pending.status}`} key={pending.clientMessageId}>
+              <article className={`message member-message pending-message ${pending.status}`} key={pending.clientMessageId}>
                 <span className="avatar member">
                   {(session?.displayName ?? "M").slice(0, 1).toLocaleUpperCase(locale)}
                 </span>
-                <div>
+                <div className="message-card">
                   <header>
                     <strong>{session?.displayName}</strong>
                     <span className={`pending-state ${pending.status}`}>
@@ -2638,7 +2639,7 @@ export function App() {
                         : (locale === "zh-CN" ? "发送失败" : "Send failed")}
                     </span>
                   </header>
-                  <p>{pending.content}</p>
+                  <MarkdownMessage content={pending.content} />
                   {pending.mentionAgentId && (
                     <div className="message-routing">
                       <span className="mention-pill">
