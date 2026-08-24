@@ -488,19 +488,49 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const renamedRoomInput = await within(lifecycleDialog).findByLabelText("delivery 房间名称");
     const renamedRoomResource = renamedRoomInput.closest("section");
     assert.ok(renamedRoomResource);
-    fireEvent.click(within(renamedRoomResource).getByRole("button", { name: "归档房间" }));
-    const restoreRoom = await within(lifecycleDialog).findByRole("button", { name: "恢复房间" });
-    fireEvent.click(restoreRoom);
-    await within(lifecycleDialog).findByRole("button", { name: "归档房间" });
+    fireEvent.click(within(lifecycleDialog).getByRole("button", { name: "取消" }));
+    await waitFor(() => assert.equal(
+      screen.queryByRole("dialog", { name: "管理 Team 与房间" }),
+      null
+    ));
+    await screen.findByRole("heading", { name: "# delivery" });
 
-    const currentTeamResource = within(lifecycleDialog).getByLabelText("Team 名称")
+    fireEvent.click(screen.getByRole("button", { name: "房间操作" }));
+    let roomActions = screen.getByRole("menu", { name: "房间操作" });
+    within(roomActions).getByText("归档后可从资源生命周期恢复。");
+    fireEvent.click(within(roomActions).getByRole("menuitem", { name: "归档房间" }));
+    let archiveDialog = screen.getByRole("dialog", { name: "归档 #delivery" });
+    within(archiveDialog).getByText(/消息、运行、讨论和稳定 ID 都会保留/u);
+    fireEvent.click(within(archiveDialog).getAllByRole("button", { name: "取消" }).at(-1)!);
+    assert.equal(screen.queryByRole("dialog", { name: "归档 #delivery" }), null);
+
+    fireEvent.click(screen.getByRole("button", { name: "房间操作" }));
+    roomActions = screen.getByRole("menu", { name: "房间操作" });
+    fireEvent.click(within(roomActions).getByRole("menuitem", { name: "归档房间" }));
+    archiveDialog = screen.getByRole("dialog", { name: "归档 #delivery" });
+    fireEvent.click(within(archiveDialog).getByRole("button", { name: "确认归档房间" }));
+    await screen.findByRole("heading", { name: "选择一个房间" });
+    const shortcutArchiveRequest = requests.findLast((candidate) =>
+      candidate.path === `/api/rooms/${room.roomId}` &&
+      candidate.method === "PATCH" &&
+      JSON.parse(candidate.body ?? "{}").archived === true
+    );
+    assert.ok(shortcutArchiveRequest);
+
+    fireEvent.click(screen.getByRole("button", { name: "资源生命周期" }));
+    const reopenedLifecycleDialog = await screen.findByRole("dialog", { name: "管理 Team 与房间" });
+    const restoreRoom = await within(reopenedLifecycleDialog).findByRole("button", { name: "恢复房间" });
+    fireEvent.click(restoreRoom);
+    await within(reopenedLifecycleDialog).findByRole("button", { name: "归档房间" });
+
+    const currentTeamResource = within(reopenedLifecycleDialog).getByLabelText("Team 名称")
       .closest("section");
     assert.ok(currentTeamResource);
     fireEvent.click(within(currentTeamResource).getByRole("button", { name: "归档 Team" }));
-    const restoreTeam = await within(lifecycleDialog).findByRole("button", { name: "恢复 Team" });
+    const restoreTeam = await within(reopenedLifecycleDialog).findByRole("button", { name: "恢复 Team" });
     fireEvent.click(restoreTeam);
-    await within(lifecycleDialog).findByRole("button", { name: "归档 Team" });
-    fireEvent.click(within(lifecycleDialog).getByRole("button", { name: "取消" }));
+    await within(reopenedLifecycleDialog).findByRole("button", { name: "归档 Team" });
+    fireEvent.click(within(reopenedLifecycleDialog).getByRole("button", { name: "取消" }));
     await waitFor(() => assert.equal(
       screen.queryByRole("dialog", { name: "管理 Team 与房间" }),
       null
@@ -628,6 +658,13 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.ok(builderProgress);
     within(reviewProgress).getByText("已完成");
     within(builderProgress).getByText("执行中");
+    fireEvent.click(screen.getByRole("button", { name: "房间操作" }));
+    const activeRoomActions = screen.getByRole("menu", { name: "房间操作" });
+    const blockedArchive = within(activeRoomActions).getByRole("menuitem", { name: "归档房间" }) as HTMLButtonElement;
+    assert.equal(blockedArchive.disabled, true);
+    within(activeRoomActions).getByText("存在活动运行或讨论，暂时无法归档。");
+    assert.equal(screen.queryByRole("dialog", { name: /归档 #/u }), null);
+    fireEvent.click(screen.getByRole("button", { name: "房间操作" }));
     await within(timeline).findByText("正在分析中央服务输出");
     within(timeline).getByText("正在生成…");
     await waitFor(() => {

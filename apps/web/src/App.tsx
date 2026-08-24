@@ -1,7 +1,7 @@
 import {
   type ChangeEvent,
   type FormEvent,
-  type KeyboardEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -715,6 +715,8 @@ export function App() {
   const [lifecycleTeamId, setLifecycleTeamId] = useState<string | null>(null);
   const [lifecycleNames, setLifecycleNames] = useState<Record<string, string>>({});
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [roomActionsOpen, setRoomActionsOpen] = useState(false);
+  const [archiveRoomConfirmOpen, setArchiveRoomConfirmOpen] = useState(false);
   const [participantDialogOpen, setParticipantDialogOpen] = useState(false);
   const [participantMemberIds, setParticipantMemberIds] = useState<string[]>([]);
   const [participantAgentIds, setParticipantAgentIds] = useState<string[]>([]);
@@ -844,6 +846,8 @@ export function App() {
   const activeDiscussion = [...discussions].reverse().find(({ discussion }) =>
     !["completed", "canceled", "terminated"].includes(discussion.state)
   ) ?? null;
+  const roomHasActiveRuns = runs.some(({ state }) => activeRunStates.has(state));
+  const roomHasActiveWork = roomHasActiveRuns || activeDiscussion !== null;
   const visibleDiscussion = activeDiscussion ?? discussions.at(-1) ?? null;
   const activeWave = visibleDiscussion?.waves.find(({ ordinal, state }) =>
     state === "open" && ordinal === visibleDiscussion.discussion.currentWave
@@ -884,6 +888,28 @@ export function App() {
       setExpandedDiscussionId(null);
     }
   }, [visibleDiscussion?.discussion.discussionId, visibleDiscussion?.discussion.state]);
+
+  useEffect(() => {
+    setRoomActionsOpen(false);
+    setArchiveRoomConfirmOpen(false);
+  }, [activeView, selectedRoomId, selectedTeamId]);
+
+  useEffect(() => {
+    if (!roomActionsOpen) return;
+    const closeOnOutsidePointer = (event: PointerEvent) => {
+      const target = event.target as Element | null;
+      if (!target?.closest(".header-room-actions")) setRoomActionsOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setRoomActionsOpen(false);
+    };
+    document.addEventListener("pointerdown", closeOnOutsidePointer);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOnOutsidePointer);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [roomActionsOpen]);
 
   useEffect(() => {
     localStorage.setItem(localeKey, locale);
@@ -1005,8 +1031,8 @@ export function App() {
   async function updateLifecycleRoom(
     room: Room,
     update: { name?: string; archived?: boolean }
-  ) {
-    if (!session) return;
+  ): Promise<boolean> {
+    if (!session) return false;
     setLifecycleBusy(true);
     setError(null);
     try {
@@ -1026,10 +1052,21 @@ export function App() {
         );
       }
       await loadLifecycleResources(session, room.teamId);
+      return true;
     } catch (reason) {
       setError(String(reason));
+      return false;
     } finally {
       setLifecycleBusy(false);
+    }
+  }
+
+  async function archiveSelectedRoom() {
+    if (!selectedRoom || roomHasActiveWork) return;
+    const archived = await updateLifecycleRoom(selectedRoom, { archived: true });
+    if (archived) {
+      setArchiveRoomConfirmOpen(false);
+      setRoomActionsOpen(false);
     }
   }
 
@@ -1995,7 +2032,7 @@ export function App() {
     setMentionSearch(null);
   }
 
-  function handleMessageKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+  function handleMessageKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
     if (!mentionSearch) return;
     if (event.key === "Escape") {
       event.preventDefault();
@@ -2184,19 +2221,64 @@ export function App() {
           </div>
         </nav>
         <header className="workspace-header">
-          <div>
-            <p className="eyebrow">
-              {activeView === "agents" && selectedTeam
-                ? t("controlPlane")
-                : activeView === "members" && selectedTeam ? t("teamAccess") : t("room")}
-            </p>
-            <h2>
-              {activeView === "agents" && selectedTeam
-                ? t("agentsDevices")
-                : activeView === "members" && selectedTeam
-                  ? t("teamMembers")
-                : selectedRoom ? `# ${selectedRoom.name}` : t("chooseRoom")}
-            </h2>
+          <div className="workspace-heading">
+            <div className="workspace-heading-copy">
+              <p className="eyebrow">
+                {activeView === "agents" && selectedTeam
+                  ? t("controlPlane")
+                  : activeView === "members" && selectedTeam ? t("teamAccess") : t("room")}
+              </p>
+              <h2>
+                {activeView === "agents" && selectedTeam
+                  ? t("agentsDevices")
+                  : activeView === "members" && selectedTeam
+                    ? t("teamMembers")
+                  : selectedRoom ? `# ${selectedRoom.name}` : t("chooseRoom")}
+              </h2>
+            </div>
+            {activeView === "room" && selectedRoom && currentMember?.role === "owner" && (
+              <div className="header-room-actions">
+                <button
+                  aria-expanded={roomActionsOpen}
+                  aria-haspopup="menu"
+                  aria-label={locale === "zh-CN" ? "房间操作" : "Room actions"}
+                  className="header-room-more"
+                  onClick={() => setRoomActionsOpen((current) => !current)}
+                  title={locale === "zh-CN" ? "房间操作" : "Room actions"}
+                  type="button"
+                >•••</button>
+                {roomActionsOpen && (
+                  <div aria-label={locale === "zh-CN" ? "房间操作" : "Room actions"} className="header-room-menu" role="menu">
+                    <button
+                      onClick={() => {
+                        setRoomActionsOpen(false);
+                        openParticipantDialog();
+                      }}
+                      role="menuitem"
+                      type="button"
+                    >{locale === "zh-CN" ? "管理房间成员" : "Manage Room participants"}</button>
+                    <button
+                      className="archive-room-action"
+                      disabled={roomHasActiveWork}
+                      onClick={() => {
+                        setRoomActionsOpen(false);
+                        setArchiveRoomConfirmOpen(true);
+                      }}
+                      role="menuitem"
+                      title={roomHasActiveWork
+                        ? (locale === "zh-CN" ? "请先结束当前运行或讨论" : "Finish active Runs or Discussions first")
+                        : undefined}
+                      type="button"
+                    >{locale === "zh-CN" ? "归档房间" : "Archive Room"}</button>
+                    <small className={roomHasActiveWork ? "blocked" : ""}>
+                      {roomHasActiveWork
+                        ? (locale === "zh-CN" ? "存在活动运行或讨论，暂时无法归档。" : "Active Runs or Discussions currently block archival.")
+                        : (locale === "zh-CN" ? "归档后可从资源生命周期恢复。" : "Restore later from Resource lifecycle.")}
+                    </small>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <div className="workspace-controls">
             {selectedTeam && selectedRoom && (
@@ -2983,6 +3065,63 @@ export function App() {
                 <button className="primary-action" disabled={teamBusy}>{teamBusy ? t("creating") : t("createTeam")}</button>
               </div>
             </form>
+          </section>
+        </div>
+      )}
+      {archiveRoomConfirmOpen && selectedRoom && (
+        <div className="modal-backdrop" onMouseDown={(event) => {
+          if (event.currentTarget === event.target && !lifecycleBusy) {
+            setArchiveRoomConfirmOpen(false);
+          }
+        }}>
+          <section
+            aria-labelledby="archive-room-dialog-title"
+            aria-modal="true"
+            className="modal-card archive-room-modal"
+            role="dialog"
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">{locale === "zh-CN" ? "可恢复操作" : "RECOVERABLE ACTION"}</p>
+                <h3 id="archive-room-dialog-title">
+                  {locale === "zh-CN" ? `归档 #${selectedRoom.name}` : `Archive #${selectedRoom.name}`}
+                </h3>
+              </div>
+              <button
+                aria-label={t("cancel")}
+                disabled={lifecycleBusy}
+                onClick={() => setArchiveRoomConfirmOpen(false)}
+                type="button"
+              >×</button>
+            </div>
+            <p>
+              {locale === "zh-CN"
+                ? "房间会从普通列表隐藏，但消息、运行、讨论和稳定 ID 都会保留。之后可在资源生命周期中恢复。"
+                : "The Room will leave normal navigation while Messages, Runs, Discussions, and stable IDs remain recoverable from Resource lifecycle."}
+            </p>
+            {roomHasActiveWork && (
+              <p className="archive-room-blocked" role="status">
+                {locale === "zh-CN"
+                  ? "当前仍有运行或讨论，请结束后再归档。"
+                  : "Finish the active Runs or Discussion before archiving."}
+              </p>
+            )}
+            <div className="modal-actions">
+              <button
+                className="secondary-action"
+                disabled={lifecycleBusy}
+                onClick={() => setArchiveRoomConfirmOpen(false)}
+                type="button"
+              >{t("cancel")}</button>
+              <button
+                className="danger-action"
+                disabled={lifecycleBusy || roomHasActiveWork}
+                onClick={() => void archiveSelectedRoom()}
+                type="button"
+              >{lifecycleBusy
+                  ? (locale === "zh-CN" ? "归档中…" : "Archiving…")
+                  : (locale === "zh-CN" ? "确认归档房间" : "Confirm archive")}</button>
+            </div>
           </section>
         </div>
       )}

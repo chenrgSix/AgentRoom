@@ -162,7 +162,12 @@ Its accessible modal lists active and archived Teams and Rooms, supports inline
 rename plus archive/restore, explains history retention, and keeps recovery
 available after ordinary navigation hides an archived resource. Agent cards
 independently expose disable/enable actions and visibly distinguish disabled
-Agents. Server fences remain authoritative when active work blocks an action.
+Agents. The current Room heading also exposes an Owner-only action menu with a
+recoverable archive shortcut and an explicit confirmation dialog. The shortcut
+disappears with the archived Room, while restoration remains centralized in the
+resource-lifecycle surface. Active Runs or Discussions disable the menu action
+with a visible reason; Server fences remain authoritative if state changes
+during confirmation.
 
 In trusted-team mode, an unauthenticated browser never calls the local
 bootstrap route. It renders setup only when the Server reports an empty
