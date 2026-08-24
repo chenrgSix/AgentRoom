@@ -139,6 +139,13 @@ function requiredString(
   return value;
 }
 
+function requiredStringArray(value: unknown, label: string): string[] {
+  if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
+    throw new Error(`${label} must be an array of strings`);
+  }
+  return value as string[];
+}
+
 function bearerToken(request: FastifyRequest): string {
   const authorization = request.headers.authorization;
   if (!authorization?.startsWith("Bearer ") || authorization.length <= 7) {
@@ -942,6 +949,28 @@ export async function createServerApp(
         principal(request),
         request.params.teamId,
         requiredString(body.name, "name"),
+        clock()
+      );
+    }
+  );
+  app.get<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/participants",
+    async (request) => teamRooms.getRoomParticipants(
+      principal(request),
+      request.params.roomId
+    )
+  );
+  app.put<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/participants",
+    async (request) => {
+      const body = bodyObject(request);
+      return teamRooms.replaceRoomParticipants(
+        principal(request),
+        request.params.roomId,
+        {
+          memberIds: requiredStringArray(body.memberIds, "memberIds"),
+          agentIds: requiredStringArray(body.agentIds, "agentIds")
+        },
         clock()
       );
     }

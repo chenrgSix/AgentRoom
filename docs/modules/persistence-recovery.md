@@ -6,15 +6,21 @@
 - Planned location: `apps/server/`
 - Owns: SQLite schema, repositories, transactions, backup and recovery
 
-The server persistence layer owns durable Team, Room, Message, Agent projection,
-Run, delivery, Discussion Wave, and audit records. SQLite is the MVP database
-for a single central server instance.
+The server persistence layer owns durable Team, Room, explicit human and Agent
+Room participation, Message, Agent projection, Run, delivery, Discussion Wave,
+and audit records. SQLite is the MVP database for a single central server
+instance.
 
 ## Storage Model
 
 Repositories expose domain operations rather than raw SQL to other modules.
 Schema migrations are ordered, transactional where SQLite permits, and tested
 against both an empty database and the previous supported version.
+
+The Room-participant migration backfills every existing Team Member and enabled
+Agent into each existing Team Room. Roster replacement updates both participant
+tables in one immediate transaction; removing a participant never cascades into
+Message, Run, or Discussion history.
 
 The Node.js server uses `better-sqlite3`. The database location resolves from
 `AGENT_ROOM_DATABASE_PATH`, then `AGENT_ROOM_DATA_DIR`, then the local

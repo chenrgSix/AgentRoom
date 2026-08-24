@@ -87,7 +87,12 @@ export class MessageService {
       }
       targets.add(mention.targetAgentId);
       const agent = this.repository.getAgent(mention.targetAgentId);
-      if (!agent || agent.teamId !== member.teamId || !agent.enabled) {
+      if (
+        !agent ||
+        agent.teamId !== member.teamId ||
+        !agent.enabled ||
+        !this.repository.isRoomAgent(input.roomId, agent.agentId)
+      ) {
         throw new Error(`Mention target is unavailable: ${mention.targetAgentId}`);
       }
     }
@@ -119,7 +124,8 @@ export class MessageService {
       !agent ||
       !agent.enabled ||
       agent.teamId !== member.teamId ||
-      agent.ownerMemberId !== member.memberId
+      agent.ownerMemberId !== member.memberId ||
+      !this.repository.isRoomAgent(input.roomId, agent.agentId)
     ) {
       throw new Error("Authenticated MCP Agent is unavailable in this Room");
     }

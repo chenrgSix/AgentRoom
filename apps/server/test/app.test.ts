@@ -88,6 +88,7 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       headers: { authorization }
     });
     assert.equal(members.json()[0].displayName, "Alice");
+    const ownerMemberId = members.json()[0].memberId as string;
     const agents = await app.inject({
       method: "GET",
       url: `/api/teams/${team.team.teamId}/agents`,
@@ -186,6 +187,48 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
     assert.equal(listDiscussions.statusCode, 200);
     assert.equal(listDiscussions.json()[0].discussion.discussionId,
       discussion.discussion.discussionId);
+
+    const roomParticipants = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${room.roomId}/participants`,
+      headers: { authorization }
+    });
+    assert.equal(roomParticipants.statusCode, 200);
+    assert.deepEqual(roomParticipants.json().memberIds, [ownerMemberId]);
+    assert.deepEqual(
+      roomParticipants.json().agentIds.sort(),
+      [agent.agentId, reviewer.agentId].sort()
+    );
+    const updateParticipants = await app.inject({
+      method: "PUT",
+      url: `/api/rooms/${room.roomId}/participants`,
+      headers: { authorization },
+      payload: { memberIds: [ownerMemberId], agentIds: [agent.agentId] }
+    });
+    assert.equal(updateParticipants.statusCode, 200);
+    assert.deepEqual(updateParticipants.json(), {
+      memberIds: [ownerMemberId],
+      agentIds: [agent.agentId]
+    });
+    const removedAgentMention = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${room.roomId}/messages`,
+      headers: { authorization },
+      payload: { content: "Reviewer is no longer assigned", mentionAgentId: reviewer.agentId }
+    });
+    assert.equal(removedAgentMention.statusCode, 400);
+    assert.match(removedAgentMention.json().error.message, /Mention target is unavailable/u);
+    const removedAgentDiscussion = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${room.roomId}/discussions`,
+      headers: { authorization },
+      payload: {
+        goal: "Do not schedule an unassigned reviewer.",
+        participantAgentIds: [agent.agentId, reviewer.agentId]
+      }
+    });
+    assert.equal(removedAgentDiscussion.statusCode, 400);
+    assert.match(removedAgentDiscussion.json().error.message, /participant is unavailable/u);
 
     const createConflictRoom = await app.inject({
       method: "POST",

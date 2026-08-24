@@ -146,13 +146,29 @@ export class AuthService {
     principal: WebPrincipal,
     roomId: string
   ): MemberPrincipal {
-    const room = this.database.prepare(`
-      SELECT team_id FROM rooms WHERE room_id = ?
-    `).get(roomId) as { team_id: string } | undefined;
-    if (!room) {
+    const row = this.database.prepare(`
+      SELECT r.team_id, tm.member_id, tm.role
+      FROM rooms r
+      JOIN team_members tm ON tm.team_id = r.team_id AND tm.user_id = ?
+      JOIN room_human_participants rp
+        ON rp.room_id = r.room_id AND rp.member_id = tm.member_id
+      WHERE r.room_id = ?
+    `).get(principal.userId, roomId) as
+      | {
+          team_id: string;
+          member_id: string;
+          role: MemberPrincipal["role"];
+        }
+      | undefined;
+    if (!row) {
       throw new AuthorizationError("FORBIDDEN", "Room access denied");
     }
-    return this.requireTeamMember(principal, room.team_id);
+    return {
+      ...principal,
+      memberId: row.member_id,
+      teamId: row.team_id,
+      role: row.role
+    };
   }
 
   public revokeWebSession(sessionId: string, now: string): boolean {

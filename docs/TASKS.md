@@ -69,7 +69,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ROOM-001 | DONE | Implement Team and Room repositories and services | DATA-002, SEC-001 | create, read, and authorization tests pass |
 | ROOM-002 | DONE | Implement Message persistence and pagination | ROOM-001 | stable cursor ordering survives restart |
 | ROOM-003 | DONE | Validate structured Mention references | ROOM-002, REG-002 | invalid or unauthorized mentions are rejected |
-| ROOM-004 | PLANNED | Add Room-scoped human and Agent participation | ROOM-003, REG-002, SEC-002 | migrations preserve existing Room access; only assigned humans can discover and use a Room, only assigned Agents can be mentioned or join Discussions, and Owner-managed roster updates keep history intact |
+| ROOM-004 | DONE | Add Room-scoped human and Agent participation | ROOM-003, REG-002, SEC-002 | migrations preserve existing Room access; only assigned humans can discover and use a Room, only assigned Agents can be mentioned or join Discussions, and Owner-managed roster updates keep history intact |
 | REG-001 | DONE | Implement Member and Device registry | DATA-002, SEC-001 | membership and device ownership persist |
 | REG-002 | DONE | Implement Agent publication and capability validation | REG-001, CON-003 | managed/manual agents publish correctly |
 | REG-003 | DONE | Implement Presence TTL and derived status | REG-002 | ready, busy, degraded, manual, offline verified |

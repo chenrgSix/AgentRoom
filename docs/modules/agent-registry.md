@@ -74,6 +74,11 @@ Managed Bridge publications carry a locally persisted stable Agent ID. The
 server permits create or update only when Device, Owner, and Team match the
 authenticated Device credential; reconnect publication is idempotent.
 
+A newly created enabled Agent is initially assigned to the Team's existing
+Rooms. Room ownership may later remove that Agent independently per Room;
+republication of the same stable Agent updates metadata and Presence without
+silently restoring removed Room assignments.
+
 ## Verification
 
 - Reconnect converges publication without duplicate Agents.

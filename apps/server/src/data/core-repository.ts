@@ -30,6 +30,11 @@ export interface RoomRecord {
   createdAt: string;
 }
 
+export interface RoomParticipants {
+  memberIds: string[];
+  agentIds: string[];
+}
+
 export interface DeviceRecord {
   deviceId: string;
   teamId: string;
@@ -211,20 +216,38 @@ export class CoreRepository {
   }
 
   public createMember(member: MemberRecord): void {
-    this.database.prepare(`
-      INSERT INTO team_members (
-        member_id, team_id, user_id, display_name, role, created_at
-      ) VALUES (
-        @memberId, @teamId, @userId, @displayName, @role, @createdAt
-      )
-    `).run(member);
+    this.database.transaction(() => {
+      this.database.prepare(`
+        INSERT INTO team_members (
+          member_id, team_id, user_id, display_name, role, created_at
+        ) VALUES (
+          @memberId, @teamId, @userId, @displayName, @role, @createdAt
+        )
+      `).run(member);
+      this.database.prepare(`
+        INSERT INTO room_human_participants (room_id, member_id, added_at)
+        SELECT room_id, @memberId, @createdAt FROM rooms WHERE team_id = @teamId
+      `).run(member);
+    }).immediate();
   }
 
   public createRoom(room: RoomRecord): void {
-    this.database.prepare(`
-      INSERT INTO rooms (room_id, team_id, name, created_at)
-      VALUES (@roomId, @teamId, @name, @createdAt)
-    `).run(room);
+    this.database.transaction(() => {
+      this.database.prepare(`
+        INSERT INTO rooms (room_id, team_id, name, created_at)
+        VALUES (@roomId, @teamId, @name, @createdAt)
+      `).run(room);
+      this.database.prepare(`
+        INSERT INTO room_human_participants (room_id, member_id, added_at)
+        SELECT @roomId, member_id, @createdAt
+        FROM team_members WHERE team_id = @teamId
+      `).run(room);
+      this.database.prepare(`
+        INSERT INTO room_agent_participants (room_id, agent_id, added_at)
+        SELECT @roomId, agent_id, @createdAt
+        FROM agents WHERE team_id = @teamId AND enabled = 1
+      `).run(room);
+    }).immediate();
   }
 
   public createDevice(device: DeviceRecord): void {
@@ -238,21 +261,29 @@ export class CoreRepository {
   }
 
   public createAgent(agent: AgentRecord): void {
-    this.database.prepare(`
-      INSERT INTO agents (
-        agent_id, team_id, owner_member_id, device_id, name, role,
-        integration_mode, capabilities_json, enabled, presence, created_at,
-        updated_at
-      ) VALUES (
-        @agentId, @teamId, @ownerMemberId, @deviceId, @name, @role,
-        @integrationMode, @capabilitiesJson, @enabled, @presence, @createdAt,
-        @updatedAt
-      )
-    `).run({
-      ...agent,
-      capabilitiesJson: JSON.stringify(agent.capabilities),
-      enabled: agent.enabled ? 1 : 0
-    });
+    this.database.transaction(() => {
+      this.database.prepare(`
+        INSERT INTO agents (
+          agent_id, team_id, owner_member_id, device_id, name, role,
+          integration_mode, capabilities_json, enabled, presence, created_at,
+          updated_at
+        ) VALUES (
+          @agentId, @teamId, @ownerMemberId, @deviceId, @name, @role,
+          @integrationMode, @capabilitiesJson, @enabled, @presence, @createdAt,
+          @updatedAt
+        )
+      `).run({
+        ...agent,
+        capabilitiesJson: JSON.stringify(agent.capabilities),
+        enabled: agent.enabled ? 1 : 0
+      });
+      if (agent.enabled) {
+        this.database.prepare(`
+          INSERT INTO room_agent_participants (room_id, agent_id, added_at)
+          SELECT room_id, @agentId, @createdAt FROM rooms WHERE team_id = @teamId
+        `).run(agent);
+      }
+    }).immediate();
   }
 
   public updateAgentPublication(agent: AgentRecord): void {
@@ -434,6 +465,83 @@ export class CoreRepository {
       name: row.name,
       createdAt: row.created_at
     }));
+  }
+
+  public listRoomsForMember(teamId: string, memberId: string): RoomRecord[] {
+    const rows = this.database.prepare(`
+      SELECT r.room_id, r.team_id, r.name, r.created_at
+      FROM rooms r
+      JOIN room_human_participants rp ON rp.room_id = r.room_id
+      WHERE r.team_id = ? AND rp.member_id = ?
+      ORDER BY r.created_at, r.room_id
+    `).all(teamId, memberId) as Array<{
+      room_id: string;
+      team_id: string;
+      name: string;
+      created_at: string;
+    }>;
+    return rows.map((row) => ({
+      roomId: row.room_id,
+      teamId: row.team_id,
+      name: row.name,
+      createdAt: row.created_at
+    }));
+  }
+
+  public isRoomMember(roomId: string, memberId: string): boolean {
+    return Boolean(this.database.prepare(`
+      SELECT 1 FROM room_human_participants
+      WHERE room_id = ? AND member_id = ?
+    `).get(roomId, memberId));
+  }
+
+  public isRoomAgent(roomId: string, agentId: string): boolean {
+    return Boolean(this.database.prepare(`
+      SELECT 1 FROM room_agent_participants
+      WHERE room_id = ? AND agent_id = ?
+    `).get(roomId, agentId));
+  }
+
+  public getRoomParticipants(roomId: string): RoomParticipants {
+    const memberIds = this.database.prepare(`
+      SELECT member_id FROM room_human_participants
+      WHERE room_id = ? ORDER BY member_id
+    `).all(roomId).map((row) => (row as { member_id: string }).member_id);
+    const agentIds = this.database.prepare(`
+      SELECT agent_id FROM room_agent_participants
+      WHERE room_id = ? ORDER BY agent_id
+    `).all(roomId).map((row) => (row as { agent_id: string }).agent_id);
+    return { memberIds, agentIds };
+  }
+
+  public replaceRoomParticipants(
+    roomId: string,
+    participants: RoomParticipants,
+    addedAt: string
+  ): RoomParticipants {
+    return this.database.transaction(() => {
+      this.database.prepare(`
+        DELETE FROM room_human_participants WHERE room_id = ?
+      `).run(roomId);
+      this.database.prepare(`
+        DELETE FROM room_agent_participants WHERE room_id = ?
+      `).run(roomId);
+      const addMember = this.database.prepare(`
+        INSERT INTO room_human_participants (room_id, member_id, added_at)
+        VALUES (?, ?, ?)
+      `);
+      for (const memberId of participants.memberIds) {
+        addMember.run(roomId, memberId, addedAt);
+      }
+      const addAgent = this.database.prepare(`
+        INSERT INTO room_agent_participants (room_id, agent_id, added_at)
+        VALUES (?, ?, ?)
+      `);
+      for (const agentId of participants.agentIds) {
+        addAgent.run(roomId, agentId, addedAt);
+      }
+      return this.getRoomParticipants(roomId);
+    }).immediate();
   }
 
   public getDevice(deviceId: string): DeviceRecord | undefined {

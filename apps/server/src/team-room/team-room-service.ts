@@ -1,6 +1,7 @@
 import type {
   CoreRepository,
   MemberRecord,
+  RoomParticipants,
   RoomRecord,
   TeamRecord
 } from "../data/core-repository.js";
@@ -85,8 +86,65 @@ export class TeamRoomService {
     principal: WebPrincipal,
     teamId: string
   ): RoomRecord[] {
-    this.auth.requireTeamMember(principal, teamId);
-    return this.repository.listRooms(teamId);
+    const member = this.auth.requireTeamMember(principal, teamId);
+    return this.repository.listRoomsForMember(teamId, member.memberId);
+  }
+
+  public getRoomParticipants(
+    principal: WebPrincipal,
+    roomId: string
+  ): RoomParticipants {
+    this.auth.requireRoomMember(principal, roomId);
+    return this.repository.getRoomParticipants(roomId);
+  }
+
+  public replaceRoomParticipants(
+    principal: WebPrincipal,
+    roomId: string,
+    input: RoomParticipants,
+    now: string
+  ): RoomParticipants {
+    const actor = this.auth.requireRoomMember(principal, roomId);
+    if (actor.role !== "owner") {
+      throw new Error("Only a Team owner can manage Room participants");
+    }
+    const room = this.repository.getRoom(roomId);
+    if (!room) {
+      throw new Error("Authorized Room disappeared during participant update");
+    }
+    if (!Array.isArray(input.memberIds) || !Array.isArray(input.agentIds)) {
+      throw new Error("Room participant IDs must be arrays");
+    }
+    const memberIds = [...new Set(input.memberIds)];
+    const agentIds = [...new Set(input.agentIds)];
+    if (memberIds.length !== input.memberIds.length || agentIds.length !== input.agentIds.length) {
+      throw new Error("Room participant IDs must be unique");
+    }
+    const teamMembers = this.repository.listMembers(room.teamId);
+    const allowedMembers = new Set(teamMembers.map(({ memberId }) => memberId));
+    if (memberIds.some((memberId) => !allowedMembers.has(memberId))) {
+      throw new Error("Room member must belong to the Room Team");
+    }
+    const requiredOwners = teamMembers
+      .filter(({ role }) => role === "owner")
+      .map(({ memberId }) => memberId);
+    if (requiredOwners.some((memberId) => !memberIds.includes(memberId))) {
+      throw new Error("Team owners cannot be removed from a Room");
+    }
+    const teamAgents = new Map(
+      this.repository.listAgents(room.teamId).map((agent) => [agent.agentId, agent])
+    );
+    if (agentIds.some((agentId) => {
+      const agent = teamAgents.get(agentId);
+      return !agent || !agent.enabled;
+    })) {
+      throw new Error("Room Agent must be an enabled Agent in the Room Team");
+    }
+    return this.repository.replaceRoomParticipants(
+      roomId,
+      { memberIds, agentIds },
+      now
+    );
   }
 
   public getRoom(

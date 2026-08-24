@@ -50,6 +50,10 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
       teamId: created.team.teamId, deviceId: null, name: "Reviewer", role: "Manual",
       integrationMode: "manual", capabilities, now
     });
+    const writer = agents.publishAgent(principal, {
+      teamId: created.team.teamId, deviceId: null, name: "Writer", role: "Manual",
+      integrationMode: "manual", capabilities, now
+    });
     const builderCredential = auth.issueMcpCredential(principal, builder.agentId, now, "2026-08-22T11:00:00.000Z");
     const reviewerCredential = auth.issueMcpCredential(principal, reviewer.agentId, now, "2026-08-22T11:00:00.000Z");
     const trigger = messages.createMemberMessage(principal, {
@@ -64,6 +68,13 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
     }, now);
     assert.equal(child.parentRunId, root.runId);
     assert.equal(child.targetAgentId, reviewer.agentId);
+    teams.replaceRoomParticipants(principal, room.roomId, {
+      memberIds: [created.owner.memberId],
+      agentIds: [builder.agentId, reviewer.agentId]
+    }, now);
+    assert.throws(() => handoffs.create(auth.authenticateMcp(builderCredential.secret, now), {
+      parentRunId: root.runId, targetAgentId: writer.agentId, instruction: "Write it"
+    }, now), /identity or target mismatch/u);
     assert.throws(() => handoffs.create(auth.authenticateMcp(reviewerCredential.secret, now), {
       parentRunId: child.runId, targetAgentId: builder.agentId, instruction: "Loop back"
     }, now), /cannot revisit/u);

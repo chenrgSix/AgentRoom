@@ -31,7 +31,8 @@ export class HandoffService {
       parent.targetAgentId !== principal.agentId ||
       room.teamId !== principal.teamId ||
       target.teamId !== principal.teamId ||
-      !target.enabled
+      !target.enabled ||
+      !this.core.isRoomAgent(parent.roomId, target.agentId)
     ) {
       throw new Error("Handoff identity or target mismatch");
     }

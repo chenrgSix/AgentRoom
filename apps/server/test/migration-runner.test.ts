@@ -25,16 +25,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 15);
+  assert.equal(first.currentVersion, 16);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -55,7 +55,7 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       )
       .get() as { count: number };
 
-    assert.equal(migrationCount.count, 15);
+    assert.equal(migrationCount.count, 16);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
   } finally {
@@ -135,7 +135,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [15]);
+  assert.deepEqual(migrated.appliedVersions, [15, 16]);
   const database = new Database(databasePath, { readonly: true });
   try {
     const discussion = database.prepare(`
@@ -154,10 +154,18 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
       expected_members: number;
       input_message_id: string;
     };
+    const roomParticipants = database.prepare(`
+      SELECT
+        (SELECT count(*) FROM room_human_participants
+          WHERE room_id = 'room_legacy') AS human_count,
+        (SELECT count(*) FROM room_agent_participants
+          WHERE room_id = 'room_legacy') AS agent_count
+    `).get() as { human_count: number; agent_count: number };
     assert.deepEqual(discussion, {
       execution_model: "parallel_wave",
       current_wave: 1
     });
+    assert.deepEqual(roomParticipants, { human_count: 1, agent_count: 1 });
     assert.equal(turn.wave_member_ordinal, 0);
     assert.equal(turn.state, "planned");
     assert.deepEqual(wave, {

@@ -83,3 +83,98 @@ test("a non-member cannot discover Team Rooms", async () => {
     database.close();
   }
 });
+
+test("an Owner controls Room humans and Agents without deleting the Room", async () => {
+  const { auth, database, repository, service } = await createFixture();
+  try {
+    const created = service.createTeamForUser({
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      userDisplayName: "Alice",
+      teamName: "Core Team",
+      now
+    });
+    const ownerSession = auth.issueWebSession(
+      created.owner.userId ?? "",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const owner = auth.authenticateWebSession(ownerSession.secret, now);
+    const room = service.createRoom(owner, created.team.teamId, "private", now);
+
+    repository.createUser({
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5ZZ",
+      displayName: "Bob",
+      createdAt: now
+    });
+    repository.createMember({
+      memberId: "member_01K4Z6J7Y8N9P0Q1R2S3T4V5ZZ",
+      teamId: created.team.teamId,
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5ZZ",
+      displayName: "Bob",
+      role: "member",
+      createdAt: now
+    });
+    repository.createAgent({
+      agentId: "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5ZZ",
+      teamId: created.team.teamId,
+      ownerMemberId: created.owner.memberId,
+      deviceId: null,
+      name: "Reviewer",
+      role: "Reviewer",
+      integrationMode: "manual",
+      capabilities: {
+        supportsHandoff: true,
+        supportsInterrupt: false,
+        supportsResume: false,
+        supportsStart: false,
+        supportsStreaming: false
+      },
+      enabled: true,
+      presence: "manual",
+      createdAt: now,
+      updatedAt: now
+    });
+    const bobSession = auth.issueWebSession(
+      "user_01K4Z6J7Y8N9P0Q1R2S3T4V5ZZ",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const bob = auth.authenticateWebSession(bobSession.secret, now);
+    assert.deepEqual(service.listRooms(bob, created.team.teamId), [room]);
+    assert.deepEqual(service.getRoomParticipants(owner, room.roomId), {
+      memberIds: [
+        "member_01K4Z6J7Y8N9P0Q1R2S3T4V5ZZ",
+        created.owner.memberId
+      ].sort(),
+      agentIds: ["agent_01K4Z6J7Y8N9P0Q1R2S3T4V5ZZ"]
+    });
+    assert.throws(
+      () => service.replaceRoomParticipants(bob, room.roomId, {
+        memberIds: [created.owner.memberId],
+        agentIds: []
+      }, now),
+      /Only a Team owner/
+    );
+
+    const updated = service.replaceRoomParticipants(owner, room.roomId, {
+      memberIds: [created.owner.memberId],
+      agentIds: []
+    }, now);
+    assert.deepEqual(updated, {
+      memberIds: [created.owner.memberId],
+      agentIds: []
+    });
+    assert.deepEqual(service.listRooms(bob, created.team.teamId), []);
+    assert.throws(() => service.getRoom(bob, room.roomId), /Room access denied/);
+    assert.equal(repository.getRoom(room.roomId)?.name, "private");
+    assert.throws(
+      () => service.replaceRoomParticipants(owner, room.roomId, {
+        memberIds: [],
+        agentIds: []
+      }, now),
+      /owners cannot be removed/
+    );
+  } finally {
+    database.close();
+  }
+});

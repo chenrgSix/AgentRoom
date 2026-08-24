@@ -159,7 +159,12 @@ export class DiscussionOrchestrator {
     }
     const participantAgents = uniqueAgentIds.map((agentId) => {
       const agent = this.core.getAgent(agentId);
-      if (!agent || !agent.enabled || agent.teamId !== room.teamId) {
+      if (
+        !agent ||
+        !agent.enabled ||
+        agent.teamId !== room.teamId ||
+        !this.core.isRoomAgent(room.roomId, agentId)
+      ) {
         throw new Error(`Discussion participant is unavailable: ${agentId}`);
       }
       return agent;
@@ -1456,7 +1461,11 @@ export class DiscussionOrchestrator {
     if (!room) return [];
     return participants.filter(({ agentId }) => {
       const agent = this.core.getAgent(agentId);
-      return Boolean(agent?.enabled && agent.teamId === room.teamId);
+      return Boolean(
+        agent?.enabled &&
+        agent.teamId === room.teamId &&
+        this.core.isRoomAgent(room.roomId, agentId)
+      );
     });
   }
 
