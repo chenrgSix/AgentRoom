@@ -69,6 +69,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ROOM-001 | DONE | Implement Team and Room repositories and services | DATA-002, SEC-001 | create, read, and authorization tests pass |
 | ROOM-002 | DONE | Implement Message persistence and pagination | ROOM-001 | stable cursor ordering survives restart |
 | ROOM-003 | DONE | Validate structured Mention references | ROOM-002, REG-002 | invalid or unauthorized mentions are rejected |
+| ROOM-004 | PLANNED | Add Room-scoped human and Agent participation | ROOM-003, REG-002, SEC-002 | migrations preserve existing Room access; only assigned humans can discover and use a Room, only assigned Agents can be mentioned or join Discussions, and Owner-managed roster updates keep history intact |
 | REG-001 | DONE | Implement Member and Device registry | DATA-002, SEC-001 | membership and device ownership persist |
 | REG-002 | DONE | Implement Agent publication and capability validation | REG-001, CON-003 | managed/manual agents publish correctly |
 | REG-003 | DONE | Implement Presence TTL and derived status | REG-002 | ready, busy, degraded, manual, offline verified |
@@ -98,6 +99,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | BRG-018 | DONE | Preserve safe Runtime failure metadata centrally | BRG-017, RUN-003 | Codex and Generic exit metadata survives authenticated WebSocket ingestion and Run-event persistence; only allowlisted category, exit code, and stderr-presence fields survive, while raw stderr and unknown keys are rejected |
 | BRG-019 | DONE | Version Bridge Runtime presets and add local self-test | BRG-018, BRG-007 | Go migration tests preserve owner fields while replacing legacy Pi flags and rejecting future versions; authenticated Console tests prove manual-only, active-Run-fenced, bounded Codex/Pi probes with safe result projection |
 | BRG-020 | DONE | Isolate concurrent managed Agent execution | BRG-005, BRG-016 | race-tested Bridge coverage proves durable acceptance, same-Agent FIFO, cross-Agent overlap, duplicate bypass, queued cancel without Runtime start, explicit cancel causality, and deterministic disconnect recovery |
+| BRG-021 | PLANNED | Manage Bridge Agents individually | BRG-007, BRG-019, BRG-020 | authenticated Console tests prove multiple Codex/Pi Agents can be added and one selected Agent can be edited in a modal without changing its stable identity, replacing sibling configuration, or interrupting active work |
 | ADP-002 | DONE | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |
 | ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |
@@ -131,6 +133,9 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-016 | DONE | Resolve timeline sender display names | WEB-003, WEB-011 | Agent and member messages render the registered sender name resolved from the stable sender ID |
 | WEB-018 | DONE | Add trusted-team setup, invitation, and session screens | SEC-005, WEB-009 | Chinese-first setup/recovery, fragment invitation claim, session restore/logout, and Owner invite controls pass component and public API acceptance |
 | WEB-019 | DONE | Unify Room message and Discussion composer | WEB-014, WEB-017 | no separate Discussion entry remains; tests cover 0, 1, and 2-5 structured Mention routing, token identity synchronization, and competing Discussion rejection |
+| WEB-023 | PLANNED | Dock Room composition and Discussion status | WEB-019, WEB-022 | desktop and narrow-screen component coverage proves the timeline owns scrolling and the dynamically sized Discussion status and composer never overlay Room messages |
+| WEB-024 | PLANNED | Expose persistent Team creation entry | WEB-007, WEB-018 | desktop rail and mobile navigation open an accessible Team creation modal and switch to the created Team |
+| WEB-025 | PLANNED | Manage Room participants from the Room context | ROOM-004, WEB-013, WEB-014 | Owner-only participant controls update humans and Agents independently; sidebar and Mention suggestions render only the selected Room roster |
 
 ## Workstream F4: MCP Team Participation
 
