@@ -40,6 +40,8 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
     databasePath: path.join(directory, "server.sqlite")
   });
   let bridgeProcess: ChildProcess | undefined;
+  let stage = "setup";
+  let bridgeStdout = "";
   let bridgeStderr = "";
   try {
     await app.listen({ host: "127.0.0.1", port: 0 });
@@ -96,12 +98,16 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
     }, null, 2));
     await execFileAsync(bridgeBinary, ["pair", "--config", configPath, "--code", pairingCode]);
     bridgeProcess = spawn(bridgeBinary, ["run", "--config", configPath], {
-      stdio: ["ignore", "ignore", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    bridgeProcess.stdout?.on("data", (source: Buffer) => {
+      bridgeStdout = (bridgeStdout + source.toString()).slice(-2_000);
     });
     bridgeProcess.stderr?.on("data", (source: Buffer) => {
-      bridgeStderr += source.toString();
+      bridgeStderr = (bridgeStderr + source.toString()).slice(-2_000);
     });
 
+    stage = "wait for Echo Builder presence";
     const agent = await waitFor(async () => {
       const response = await app.inject({
         method: "GET", url: `/api/teams/${teamId}/agents`, headers: authorization
@@ -124,6 +130,7 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
     const traceId = sent.json().message.traceId as string;
     assert.equal(sent.json().runs[0].traceId, traceId);
 
+    stage = "wait for Echo Builder completion";
     await waitFor(async () => {
       const response = await app.inject({
         method: "GET", url: `/api/rooms/${roomId}/runs`, headers: authorization
@@ -160,6 +167,7 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
     });
     assert.equal(deniedTrace.statusCode, 403);
 
+    stage = "wait for Slow Builder presence";
     const slowAgent = await waitFor(async () => {
       const response = await app.inject({
         method: "GET", url: `/api/teams/${teamId}/agents`, headers: authorization
@@ -177,6 +185,7 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
       payload: { content: "Wait until canceled", mentionAgentId: slowAgent.agentId }
     });
     const slowRunId = slowSent.json().runs[0].runId as string;
+    stage = "wait for Slow Builder working state";
     await waitFor(async () => {
       const response = await app.inject({
         method: "GET", url: `/api/rooms/${roomId}/runs`, headers: authorization
@@ -191,6 +200,7 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
       payload: { reason: "E2E cancellation" }
     });
     assert.equal(canceled.statusCode, 200);
+    stage = "wait for Slow Builder cancellation";
     await waitFor(async () => {
       const response = await app.inject({
         method: "GET", url: `/api/rooms/${roomId}/runs`, headers: authorization
@@ -201,7 +211,11 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
       return run?.state === "canceled" ? run : undefined;
     });
   } catch (error) {
-    throw new Error(`${String(error)}\nBridge stderr:\n${bridgeStderr}`);
+    throw new Error(
+      `${String(error)}\nStage: ${stage}` +
+      `\nBridge exit: code=${String(bridgeProcess?.exitCode)} signal=${String(bridgeProcess?.signalCode)}` +
+      `\nBridge stdout:\n${bridgeStdout}\nBridge stderr:\n${bridgeStderr}`
+    );
   } finally {
     if (bridgeProcess) await stopProcess(bridgeProcess);
     await app.close();
