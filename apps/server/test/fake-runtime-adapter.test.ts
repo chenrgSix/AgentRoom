@@ -9,8 +9,9 @@ test("Fake Runtime deterministically streams a success script", async () => {
     expectedInstruction: "Review the API.",
     events: [
       { type: "status", sequence: 1, status: "working" },
-      { type: "reply", sequence: 2, content: "The API is consistent." },
-      { type: "status", sequence: 3, status: "completed" }
+      { type: "output", sequence: 2, content: "The API is " },
+      { type: "reply", sequence: 3, content: "The API is consistent." },
+      { type: "status", sequence: 4, status: "completed" }
     ]
   });
   const request = {
@@ -25,8 +26,9 @@ test("Fake Runtime deterministically streams a success script", async () => {
   }
   assert.deepEqual(events, [
     { type: "status", sequence: 1, status: "working" },
-    { type: "reply", sequence: 2, content: "The API is consistent." },
-    { type: "status", sequence: 3, status: "completed" }
+    { type: "output", sequence: 2, content: "The API is " },
+    { type: "reply", sequence: 3, content: "The API is consistent." },
+    { type: "status", sequence: 4, status: "completed" }
   ]);
   assert.deepEqual(adapter.receivedRequests(), [request]);
 });

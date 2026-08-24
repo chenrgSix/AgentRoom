@@ -62,9 +62,15 @@ export class InProcessRunExecutor {
 
     try {
       for await (const event of adapter.execute(request)) {
-        const safeEvent = event.type === "reply"
+        const safeEvent = event.type === "reply" || event.type === "output"
           ? { ...event, content: redactSensitiveText(event.content) }
           : event;
+        if (
+          safeEvent.type === "output" &&
+          (safeEvent.content.length === 0 || safeEvent.content.length > 20_000)
+        ) {
+          throw new Error("Runtime output delta must contain 1 to 20000 characters");
+        }
         const applied = this.runs.applyEvent(runId, safeEvent, this.clock());
         if (applied.applied && safeEvent.type === "reply") {
           this.appendReply(applied.run, safeEvent);

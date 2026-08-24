@@ -366,7 +366,7 @@ test("Bridge rejects a well-formed but incorrect traceId", async () => {
   }
 });
 
-test("Bridge applies accepted, status, and reply messages with the matching traceId", async () => {
+test("Bridge applies accepted, output, status, and reply messages with the matching traceId", async () => {
   const fixture = await createFixture();
   try {
     await acceptRun(fixture);
@@ -378,18 +378,25 @@ test("Bridge applies accepted, status, and reply messages with the matching trac
       status: "working"
     }));
     await waitFor(() => runState(fixture, "working"));
-    send(fixture.socket, envelope("run.reply", {
+    send(fixture.socket, envelope("run.output_delta", {
       runId: fixture.runId,
       traceId: fixture.traceId,
       agentId,
       sequence: 3,
+      content: "Strict trace "
+    }));
+    send(fixture.socket, envelope("run.reply", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 4,
       content: "Strict trace accepted."
     }));
     send(fixture.socket, envelope("run.status", {
       runId: fixture.runId,
       traceId: fixture.traceId,
       agentId,
-      sequence: 4,
+      sequence: 5,
       status: "completed"
     }));
     await waitFor(() => runState(fixture, "completed"));
@@ -399,6 +406,38 @@ test("Bridge applies accepted, status, and reply messages with the matching trac
       headers: fixture.authorization
     });
     assert.equal(timeline.json().items.at(-1).content, "Strict trace accepted.");
+    const output = await fixture.app.inject({
+      method: "GET",
+      url: `/api/runs/${fixture.runId}/events?after=2`,
+      headers: fixture.authorization
+    });
+    assert.equal(output.statusCode, 200);
+    assert.deepEqual(
+      output.json().map((record: { event: { type: string } }) => record.event.type),
+      ["output", "reply", "status"]
+    );
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("Bridge rejects malformed Runtime output metadata", async () => {
+  const fixture = await createFixture();
+  try {
+    await acceptRun(fixture);
+    const closed = nextClose(fixture.socket);
+    send(fixture.socket, envelope("run.output_delta", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 2,
+      content: "private preview",
+      reset: "yes"
+    }));
+    assert.deepEqual(await closed, {
+      code: 4_008,
+      reason: "Bridge message rejected: run_output_rejected"
+    });
   } finally {
     await closeFixture(fixture);
   }

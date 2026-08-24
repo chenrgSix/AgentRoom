@@ -184,6 +184,60 @@ export class BridgeRunEventService {
     return applied;
   }
 
+  public applyOutput(
+    principal: DevicePrincipal,
+    input: {
+      runId: string;
+      traceId: string;
+      agentId: string;
+      sequence: number;
+      content: string;
+      reset?: boolean;
+    },
+    now: string
+  ): AppliedRunEvent {
+    const run = this.requireOwnedRun(
+      principal, input.runId, input.traceId, input.agentId
+    );
+    this.validateSequence(input.sequence);
+    if (
+      input.content.length === 0 ||
+      input.content.length > 20_000 ||
+      (input.reset !== undefined && typeof input.reset !== "boolean")
+    ) {
+      throw new Error("Runtime output delta must contain 1 to 20000 characters");
+    }
+    const currentOutput = this.runs.listEvents(run.runId).reduce(
+      (content, record) => {
+        if (record.event.type === "reply") return "";
+        if (record.event.type !== "output") return content;
+        return record.event.reset
+          ? record.event.content
+          : content + record.event.content;
+      },
+      ""
+    );
+    const safeContent = redactSensitiveText(input.content);
+    const outputEvent = {
+      type: "output" as const,
+      sequence: input.sequence,
+      content: safeContent,
+      ...(input.reset ? { reset: true } : {})
+    };
+    if (
+      input.sequence <= run.lastSequence ||
+      new Set(["completed", "failed", "canceled", "expired", "outcome_unknown"])
+        .has(run.state)
+    ) {
+      return this.runs.applyEvent(run.runId, outputEvent, now);
+    }
+    const nextOutput = input.reset ? safeContent : currentOutput + safeContent;
+    if (nextOutput.length > 20_000) {
+      throw new Error("Runtime provisional output exceeds 20000 characters");
+    }
+    return this.runs.applyEvent(run.runId, outputEvent, now);
+  }
+
   private requireOwnedRun(
     principal: DevicePrincipal,
     runId: string,

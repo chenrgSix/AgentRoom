@@ -69,6 +69,10 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
     runId: run.runId, traceId: run.traceId,
     agentId: agent.agentId, sequence: 2, status: "working"
   }, now);
+  new BridgeRunEventService(core, runRepository).applyOutput(devicePrincipal, {
+    runId: run.runId, traceId: run.traceId,
+    agentId: agent.agentId, sequence: 3, content: "Recoverable "
+  }, now);
   database.close();
 
   database = openDatabase(databasePath);
@@ -80,8 +84,12 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
       database, recoveredCore, recoveredRuns, new BridgeConnectionRegistry(), () => now
     );
     assert.equal(recoveredRuns.getRun(run.runId)?.state, "working");
-    assert.equal(recoveredRuns.getRun(run.runId)?.lastSequence, 2);
-    assert.deepEqual(recoveredRuns.listEvents(run.runId).map((event) => event.sequence), [1, 2]);
+    assert.equal(recoveredRuns.getRun(run.runId)?.lastSequence, 3);
+    assert.deepEqual(recoveredRuns.listEvents(run.runId).map((event) => event.sequence), [1, 2, 3]);
+    assert.deepEqual(
+      recoveredRuns.listEvents(run.runId, 2).map((event) => event.event),
+      [{ type: "output", sequence: 3, content: "Recoverable " }]
+    );
     assert.equal(
       recoveredDelivery.getByRun(run.runId)?.deliveryAttemptId,
       persistedDelivery.deliveryAttemptId
@@ -89,10 +97,10 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
     new BridgeRunEventService(recoveredCore, recoveredRuns).applyReply(
       recoveredAuth.authenticateDevice(credential.secret, now),
       { runId: run.runId, traceId: run.traceId,
-        agentId: agent.agentId, sequence: 3, content: "Recovered." },
+        agentId: agent.agentId, sequence: 4, content: "Recovered." },
       now
     );
-    assert.equal(recoveredRuns.getRun(run.runId)?.lastSequence, 3);
+    assert.equal(recoveredRuns.getRun(run.runId)?.lastSequence, 4);
   } finally {
     database.close();
   }

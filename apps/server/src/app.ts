@@ -180,6 +180,7 @@ type BridgeRejectionCategory =
   | "invalid_trace_id"
   | "run_acceptance_rejected"
   | "run_status_rejected"
+  | "run_output_rejected"
   | "run_reply_rejected"
   | "hello_required";
 
@@ -192,6 +193,7 @@ const bridgeLogMessageTypes = new Set([
   "agent.publish",
   "run.accepted",
   "run.status",
+  "run.output_delta",
   "run.reply"
 ]);
 
@@ -827,12 +829,51 @@ export async function createServerApp(
           teamChanges.notify(devicePrincipal.teamId);
           return;
         }
+        if (message.type === "run.output_delta" && registeredEpoch !== undefined) {
+          if (
+            typeof message.payload.runId !== "string" ||
+            typeof message.payload.agentId !== "string" ||
+            !Number.isSafeInteger(message.payload.sequence) ||
+            typeof message.payload.content !== "string" ||
+            (message.payload.reset !== undefined &&
+              typeof message.payload.reset !== "boolean")
+          ) {
+            rejectMessage("run_output_rejected");
+            return;
+          }
+          if (!isBridgeTraceId(message.payload.traceId)) {
+            rejectMessage("invalid_trace_id");
+            return;
+          }
+          const applied = bridgeRunEvents.applyOutput(devicePrincipal, {
+            runId: message.payload.runId,
+            traceId: message.payload.traceId,
+            agentId: message.payload.agentId,
+            sequence: message.payload.sequence as number,
+            content: message.payload.content,
+            ...(message.payload.reset === true ? { reset: true } : {})
+          }, clock());
+          app.log.info({
+            event: "run.output.applied",
+            traceId: applied.run.traceId,
+            runId: applied.run.runId,
+            agentId: applied.run.targetAgentId,
+            sequence: message.payload.sequence,
+            applied: applied.applied
+          }, "Run output event processed");
+          if (applied.applied) {
+            teamChanges.notify(devicePrincipal.teamId);
+          }
+          return;
+        }
         rejectMessage("hello_required");
       } catch {
         const category: BridgeRejectionCategory = message.type === "run.accepted"
           ? "run_acceptance_rejected"
           : message.type === "run.status"
             ? "run_status_rejected"
+            : message.type === "run.output_delta"
+              ? "run_output_rejected"
             : message.type === "run.reply"
               ? "run_reply_rejected"
               : message.type === "agent.publish"
@@ -1504,7 +1545,10 @@ export async function createServerApp(
       principal(request), request.params.roomId, clock()
     )
   );
-  app.get<{ Params: { runId: string } }>(
+  app.get<{
+    Params: { runId: string };
+    Querystring: { after?: string };
+  }>(
     "/api/runs/:runId/events",
     async (request) => {
       const actor = principal(request);
@@ -1513,7 +1557,13 @@ export async function createServerApp(
         throw new Error(`Run not found: ${request.params.runId}`);
       }
       runs.listRoomRuns(actor, run.roomId);
-      return runRepository.listEvents(run.runId);
+      const after = request.query.after === undefined
+        ? 0
+        : Number.parseInt(request.query.after, 10);
+      if (!Number.isSafeInteger(after) || after < 0) {
+        throw new Error("Run event cursor must be a non-negative integer");
+      }
+      return runRepository.listEvents(run.runId, after);
     }
   );
   app.get<{ Params: { traceId: string } }>(

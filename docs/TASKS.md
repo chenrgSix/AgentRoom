@@ -122,7 +122,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | RUN-004 | DONE | Implement cancellation and terminal-state races | RUN-003 | first persisted terminal state wins |
 | RUN-005 | DONE | Implement offline queue and expiry | RUN-002, REG-003 | reconnect delivers queued work once |
 | RUN-006 | DONE | Implement guarded handoff | RUN-003 | depth, loop, and unique-agent limits pass |
-| RUN-007 | ACTIVE | Persist and expose resumable Runtime output | CON-005, BRG-023, DATA-003 | authenticated service and WebSocket tests prove output deltas persist with the Run sequence, reject gaps and foreign Devices, replay by cursor, notify the Team, and never append Room Messages |
+| RUN-007 | DONE | Persist and expose resumable Runtime output | CON-005, BRG-023, DATA-003 | authenticated service and WebSocket tests prove output deltas persist with the Run sequence, reject gaps and foreign Devices, replay by cursor, notify the Team, and never append Room Messages |
 | WEB-002 | DONE | Implement Team Room message timeline | WEB-001, ROOM-002 | reload preserves ordered history |
 | WEB-003 | DONE | Implement structured Mention composer | WEB-002, ROOM-003 | display labels resolve to stable Agent IDs |
 | WEB-004 | DONE | Implement Agent presence panel | WEB-001, REG-003 | all integration modes render accurately |
@@ -146,7 +146,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-026 | DONE | Replace broad Room polling with event-driven reconciliation | WEB-021, OPS-002 | `team-change-service.test.ts`, the Web application tests, and Server/Web builds prove authorized monotonic Team change cursors wake selected-Room reconciliation promptly; reconnect, server restart, hidden tabs, and stream failure retain bounded HTTP fallback without a healthy two-second full refresh |
 | WEB-027 | DONE | Make Room message submission recoverable | WEB-019, WEB-026, ROOM-002 | migration 0018, Message/API regressions, the outbox unit test, onboarding component test, and Server/Web builds prove client Message IDs deduplicate ambiguous retries; pending and failed rows remain visible with same-ID retry, while message, Team, participant, and lifecycle operations use independent pending state |
 | WEB-028 | DONE | Expose recoverable Team, Room, and Agent lifecycle controls | ROOM-005, REG-004, WEB-024, WEB-025 | the onboarding component regression and Web build prove accessible Owner controls rename and archive/restore Teams and Rooms and disable/enable Agents; ordinary navigation excludes archived resources while the recovery modal retains access without deleting history |
-| WEB-029 | READY | Render recoverable in-progress Agent output | RUN-007, WEB-021, WEB-026 | component and sync tests prove one provisional bubble per active Run resumes ordered deltas, applies reset boundaries, disappears on final reply, and never duplicates the durable Agent Message |
+| WEB-029 | ACTIVE | Render recoverable in-progress Agent output | RUN-007, WEB-021, WEB-026 | component and sync tests prove one provisional bubble per active Run resumes ordered deltas, applies reset boundaries, disappears on final reply, and never duplicates the durable Agent Message |
 
 ## Workstream F4: MCP Team Participation
 

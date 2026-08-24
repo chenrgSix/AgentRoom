@@ -69,6 +69,7 @@ interface RunEventRow {
   event_type: RuntimeEvent["type"];
   status: RunState | null;
   content: string | null;
+  output_reset: 0 | 1;
   assessment_json: string | null;
   error_json: string | null;
   created_at: string;
@@ -114,7 +115,14 @@ function mapRunEvent(row: RunEventRow): RunEventRecord {
           ? { assessment: JSON.parse(row.assessment_json) as Record<string, unknown> }
           : {})
       }
-    : {
+    : row.event_type === "output"
+      ? {
+          type: "output",
+          sequence: row.sequence,
+          content: row.content ?? "",
+          ...(row.output_reset === 1 ? { reset: true } : {})
+        }
+      : {
         type: "status",
         sequence: row.sequence,
         status: row.status as Extract<RuntimeEvent, { type: "status" }>["status"],
@@ -235,16 +243,17 @@ export class RunRepository {
       const terminalAt = terminalStates.has(nextState) ? now : null;
       this.database.prepare(`
         INSERT INTO run_events (
-          run_id, trace_id, sequence, event_type, status, content, error_json,
-          assessment_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          run_id, trace_id, sequence, event_type, status, content, output_reset,
+          error_json, assessment_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         runId,
         current.traceId,
         event.sequence,
         event.type,
         event.type === "status" ? event.status : null,
-        event.type === "reply" ? event.content : null,
+        event.type === "reply" || event.type === "output" ? event.content : null,
+        event.type === "output" && event.reset ? 1 : 0,
         event.type === "status" && event.error
           ? JSON.stringify(event.error)
           : null,
@@ -266,10 +275,12 @@ export class RunRepository {
     }).immediate();
   }
 
-  public listEvents(runId: string): RunEventRecord[] {
+  public listEvents(runId: string, afterSequence = 0): RunEventRecord[] {
     const rows = this.database.prepare(`
-      SELECT * FROM run_events WHERE run_id = ? ORDER BY sequence
-    `).all(runId) as RunEventRow[];
+      SELECT * FROM run_events
+      WHERE run_id = ? AND sequence > ?
+      ORDER BY sequence
+    `).all(runId, afterSequence) as RunEventRow[];
     return rows.map(mapRunEvent);
   }
 }

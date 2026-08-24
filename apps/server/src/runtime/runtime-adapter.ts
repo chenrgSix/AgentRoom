@@ -32,6 +32,12 @@ export type RuntimeEvent =
       };
     }
   | {
+      type: "output";
+      sequence: number;
+      content: string;
+      reset?: boolean;
+    }
+  | {
       type: "reply";
       sequence: number;
       content: string;
