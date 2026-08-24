@@ -146,6 +146,53 @@ test("Room Message tail snapshot resumes after the newest message", async () => 
   }
 });
 
+test("Room policy rejects only the exact reserved @all command", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-all-policy-"));
+  const databasePath = path.join(directory, "server.sqlite");
+  await migrateDatabase(databasePath);
+  const database = openDatabase(databasePath);
+  try {
+    const repository = new CoreRepository(database);
+    const auth = new AuthService(database);
+    const teams = new TeamRoomService(repository, auth);
+    const created = teams.createTeamForUser({
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5A1",
+      userDisplayName: "Alice",
+      teamName: "Policy Team",
+      now
+    });
+    const session = auth.issueWebSession(
+      created.owner.userId ?? "",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const principal = auth.authenticateWebSession(session.secret, now);
+    const room = teams.createRoom(principal, created.team.teamId, "general", now);
+    teams.updateRoomSettings(principal, room.roomId, {
+      participants: repository.getRoomParticipants(room.roomId),
+      collaborationPolicy: {
+        allowDiscussion: true,
+        allowAll: false,
+        allowAgentMentions: true,
+        maxAgentMentionDepth: 4
+      }
+    }, now);
+    const messages = new MessageService(repository, auth);
+    assert.throws(() => messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "请 @all 一起处理",
+      now
+    }), /does not allow the @all command/u);
+    assert.equal(messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "@alliance is plain text",
+      now
+    }).content, "@alliance is plain text");
+  } finally {
+    database.close();
+  }
+});
+
 test("a client Message ID makes ambiguous member retries idempotent", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-client-message-"));
   const databasePath = path.join(directory, "server.sqlite");

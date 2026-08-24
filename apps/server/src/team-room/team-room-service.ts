@@ -11,10 +11,20 @@ import type {
   MemberPrincipal,
   WebPrincipal
 } from "../security/auth-service.js";
+import {
+  defaultRoomCollaborationPolicy,
+  parseRoomCollaborationPolicy,
+  type RoomCollaborationPolicy
+} from "./room-collaboration-policy.js";
 
 export interface CreatedTeam {
   team: TeamRecord;
   owner: MemberRecord;
+}
+
+export interface RoomSettings {
+  room: RoomRecord;
+  participants: RoomParticipants;
 }
 
 function normalizedName(value: string, label: string): string {
@@ -77,6 +87,7 @@ export class TeamRoomService {
       roomId: createOpaqueId("room"),
       teamId,
       name: normalizedName(name, "Room name"),
+      collaborationPolicy: { ...defaultRoomCollaborationPolicy },
       createdAt: now,
       archivedAt: null
     };
@@ -171,6 +182,19 @@ export class TeamRoomService {
     return this.repository.getRoomParticipants(roomId);
   }
 
+  public getRoomSettings(
+    principal: WebPrincipal,
+    roomId: string
+  ): RoomSettings {
+    this.auth.requireRoomMember(principal, roomId);
+    const room = this.repository.getRoom(roomId);
+    if (!room) throw new Error(`Room not found: ${roomId}`);
+    return {
+      room,
+      participants: this.repository.getRoomParticipants(roomId)
+    };
+  }
+
   public replaceRoomParticipants(
     principal: WebPrincipal,
     roomId: string,
@@ -185,12 +209,66 @@ export class TeamRoomService {
     if (!room) {
       throw new Error("Authorized Room disappeared during participant update");
     }
+    const { memberIds, agentIds } = this.validateRoomParticipants(room, input);
+    return this.repository.replaceRoomParticipants(
+      roomId,
+      { memberIds, agentIds },
+      now
+    );
+  }
+
+  public updateRoomSettings(
+    principal: WebPrincipal,
+    roomId: string,
+    input: {
+      participants: RoomParticipants;
+      collaborationPolicy: RoomCollaborationPolicy;
+    },
+    now: string
+  ): RoomSettings {
+    const actor = this.auth.requireRoomMember(principal, roomId);
+    if (actor.role !== "owner") {
+      throw new Error("Only a Team owner can manage Room settings");
+    }
+    const room = this.repository.getRoom(roomId);
+    if (!room) throw new Error("Authorized Room disappeared during settings update");
+    const participants = this.validateRoomParticipants(room, input.participants);
+    const collaborationPolicy = parseRoomCollaborationPolicy(
+      input.collaborationPolicy
+    );
+    return this.repository.replaceRoomSettings(
+      roomId,
+      participants,
+      collaborationPolicy,
+      now
+    );
+  }
+
+  public getRoom(
+    principal: WebPrincipal,
+    roomId: string
+  ): { member: MemberPrincipal; room: RoomRecord } {
+    const member = this.auth.requireRoomMember(principal, roomId);
+    const room = this.repository.getRoom(roomId);
+    if (!room) {
+      throw new Error("Authorized Room disappeared during lookup");
+    }
+    return { member, room };
+  }
+
+  private validateRoomParticipants(
+    room: RoomRecord,
+    input: RoomParticipants
+  ): RoomParticipants {
     if (!Array.isArray(input.memberIds) || !Array.isArray(input.agentIds)) {
       throw new Error("Room participant IDs must be arrays");
     }
     const memberIds = [...new Set(input.memberIds)];
     const agentIds = [...new Set(input.agentIds)];
-    if (memberIds.length !== input.memberIds.length || agentIds.length !== input.agentIds.length) {
+    if (
+      memberIds.length !== input.memberIds.length ||
+      agentIds.length !== input.agentIds.length
+    ) {
       throw new Error("Room participant IDs must be unique");
     }
     const teamMembers = this.repository.listMembers(room.teamId);
@@ -213,22 +291,6 @@ export class TeamRoomService {
     })) {
       throw new Error("Room Agent must be an enabled Agent in the Room Team");
     }
-    return this.repository.replaceRoomParticipants(
-      roomId,
-      { memberIds, agentIds },
-      now
-    );
-  }
-
-  public getRoom(
-    principal: WebPrincipal,
-    roomId: string
-  ): { member: MemberPrincipal; room: RoomRecord } {
-    const member = this.auth.requireRoomMember(principal, roomId);
-    const room = this.repository.getRoom(roomId);
-    if (!room) {
-      throw new Error("Authorized Room disappeared during lookup");
-    }
-    return { member, room };
+    return { memberIds, agentIds };
   }
 }

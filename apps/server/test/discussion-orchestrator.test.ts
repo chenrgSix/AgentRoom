@@ -225,6 +225,31 @@ function sortedRunIds(runs: readonly RunRecord[]): string[] {
   return runs.map(({ runId }) => runId).sort();
 }
 
+test("Room policy can disable new Agent Discussions", async () => {
+  const environment = await fixture();
+  try {
+    environment.core.replaceRoomSettings(
+      environment.roomId,
+      environment.core.getRoomParticipants(environment.roomId),
+      {
+        allowDiscussion: false,
+        allowAll: true,
+        allowAgentMentions: true,
+        maxAgentMentionDepth: 4
+      },
+      now
+    );
+    assert.throws(() => environment.orchestrator.create(environment.principal, {
+      roomId: environment.roomId,
+      goal: "This Discussion is disabled by Room policy",
+      participantAgentIds: environment.agentIds
+    }), /Room policy does not allow Agent Discussions/u);
+    assert.equal(environment.discussions.listForRoom(environment.roomId).length, 0);
+  } finally {
+    environment.close();
+  }
+});
+
 test("create fans one Wave out to every participant and advances only after its barrier", async () => {
   const value = await fixture();
   try {

@@ -10,6 +10,7 @@ import type {
   WebPrincipal
 } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
+import { containsExactAllMention } from "./exact-agent-mentions.js";
 
 interface MessageCursor {
   roomId: string;
@@ -76,8 +77,16 @@ export class MessageService {
     }
   ): { created: boolean; message: MessageRecord } {
     const member = this.auth.requireRoomMember(principal, input.roomId);
+    const room = this.repository.getRoom(input.roomId);
+    if (!room) throw new Error(`Room not found: ${input.roomId}`);
     if (input.content.trim().length === 0 || input.content.length > 20_000) {
       throw new Error("Message content must contain 1 to 20000 characters");
+    }
+    if (
+      containsExactAllMention(input.content) &&
+      !room.collaborationPolicy.allowAll
+    ) {
+      throw new Error("Room policy does not allow the @all command");
     }
     if (
       input.clientMessageId !== undefined &&
@@ -94,6 +103,9 @@ export class MessageService {
       }
     }
     const mentions = input.mentions ?? [];
+    if (mentions.length > 5) {
+      throw new Error("A Room Message cannot route to more than 5 Agents");
+    }
     const targets = new Set<string>();
     for (const mention of mentions) {
       if (

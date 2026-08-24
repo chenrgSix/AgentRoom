@@ -149,6 +149,9 @@ export class DiscussionOrchestrator {
     if (!room) {
       throw new Error(`Room not found: ${input.roomId}`);
     }
+    if (!room.collaborationPolicy.allowDiscussion) {
+      throw new Error("Room policy does not allow Agent Discussions");
+    }
     const openDiscussion = this.repository.listForRoom(input.roomId).find(
       ({ state }) => !terminalDiscussionStates.has(state)
     );

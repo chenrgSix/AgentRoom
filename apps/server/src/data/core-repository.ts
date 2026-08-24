@@ -1,6 +1,11 @@
 import type Database from "better-sqlite3";
 
 import { createOpaqueId } from "../domain/identifiers.js";
+import {
+  defaultRoomCollaborationPolicy,
+  readPersistedRoomCollaborationPolicy,
+  type RoomCollaborationPolicy
+} from "../team-room/room-collaboration-policy.js";
 
 export interface WebUserRecord {
   userId: string;
@@ -28,6 +33,7 @@ export interface RoomRecord {
   roomId: string;
   teamId: string;
   name: string;
+  collaborationPolicy: RoomCollaborationPolicy;
   createdAt: string;
   archivedAt?: string | null;
 }
@@ -123,6 +129,7 @@ interface RoomRow {
   room_id: string;
   team_id: string;
   name: string;
+  collaboration_policy_json: string;
   created_at: string;
   archived_at: string | null;
 }
@@ -202,6 +209,9 @@ function mapRoom(row: RoomRow): RoomRecord {
     roomId: row.room_id,
     teamId: row.team_id,
     name: row.name,
+    collaborationPolicy: readPersistedRoomCollaborationPolicy(
+      row.collaboration_policy_json
+    ),
     createdAt: row.created_at,
     archivedAt: row.archived_at
   };
@@ -273,9 +283,17 @@ export class CoreRepository {
   public createRoom(room: RoomRecord): void {
     this.database.transaction(() => {
       this.database.prepare(`
-        INSERT INTO rooms (room_id, team_id, name, created_at)
-        VALUES (@roomId, @teamId, @name, @createdAt)
-      `).run(room);
+        INSERT INTO rooms (
+          room_id, team_id, name, collaboration_policy_json, created_at
+        ) VALUES (
+          @roomId, @teamId, @name, @collaborationPolicyJson, @createdAt
+        )
+      `).run({
+        ...room,
+        collaborationPolicyJson: JSON.stringify(
+          room.collaborationPolicy ?? defaultRoomCollaborationPolicy
+        )
+      });
       this.database.prepare(`
         INSERT INTO room_human_participants (room_id, member_id, added_at)
         SELECT @roomId, member_id, @createdAt
@@ -505,7 +523,8 @@ export class CoreRepository {
 
   public getRoom(roomId: string): RoomRecord | undefined {
     const row = this.database.prepare(`
-      SELECT room_id, team_id, name, created_at, archived_at
+      SELECT room_id, team_id, name, collaboration_policy_json, created_at,
+             archived_at
       FROM rooms WHERE room_id = ?
     `).get(roomId) as RoomRow | undefined;
     return row && mapRoom(row);
@@ -513,7 +532,8 @@ export class CoreRepository {
 
   public listRooms(teamId: string, includeArchived = false): RoomRecord[] {
     const rows = this.database.prepare(`
-      SELECT room_id, team_id, name, created_at, archived_at
+      SELECT room_id, team_id, name, collaboration_policy_json, created_at,
+             archived_at
       FROM rooms
       WHERE team_id = ? AND (? = 1 OR archived_at IS NULL)
       ORDER BY created_at, room_id
@@ -527,7 +547,8 @@ export class CoreRepository {
     includeArchived = false
   ): RoomRecord[] {
     const rows = this.database.prepare(`
-      SELECT r.room_id, r.team_id, r.name, r.created_at, r.archived_at
+      SELECT r.room_id, r.team_id, r.name, r.collaboration_policy_json,
+             r.created_at, r.archived_at
       FROM rooms r
       JOIN room_human_participants rp ON rp.room_id = r.room_id
       WHERE r.team_id = ? AND rp.member_id = ?
@@ -548,6 +569,45 @@ export class CoreRepository {
     const room = this.getRoom(roomId);
     if (!room) throw new Error(`Room not found: ${roomId}`);
     return room;
+  }
+
+  public replaceRoomSettings(
+    roomId: string,
+    participants: RoomParticipants,
+    collaborationPolicy: RoomCollaborationPolicy,
+    updatedAt: string
+  ): { participants: RoomParticipants; room: RoomRecord } {
+    return this.database.transaction(() => {
+      this.database.prepare(`
+        UPDATE rooms SET collaboration_policy_json = ? WHERE room_id = ?
+      `).run(JSON.stringify(collaborationPolicy), roomId);
+      this.database.prepare(`
+        DELETE FROM room_human_participants WHERE room_id = ?
+      `).run(roomId);
+      this.database.prepare(`
+        DELETE FROM room_agent_participants WHERE room_id = ?
+      `).run(roomId);
+      const addMember = this.database.prepare(`
+        INSERT INTO room_human_participants (room_id, member_id, added_at)
+        VALUES (?, ?, ?)
+      `);
+      for (const memberId of participants.memberIds) {
+        addMember.run(roomId, memberId, updatedAt);
+      }
+      const addAgent = this.database.prepare(`
+        INSERT INTO room_agent_participants (room_id, agent_id, added_at)
+        VALUES (?, ?, ?)
+      `);
+      for (const agentId of participants.agentIds) {
+        addAgent.run(roomId, agentId, updatedAt);
+      }
+      const room = this.getRoom(roomId);
+      if (!room) throw new Error(`Room not found: ${roomId}`);
+      return {
+        participants: this.getRoomParticipants(roomId),
+        room
+      };
+    }).immediate();
   }
 
   public hasActiveWorkForRoom(roomId: string): boolean {

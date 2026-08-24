@@ -68,6 +68,55 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
     }, now);
     assert.equal(child.parentRunId, root.runId);
     assert.equal(child.targetAgentId, reviewer.agentId);
+    assert.deepEqual(
+      handoffs.createFromReply(root.runId, "请 @Writ 处理", now),
+      []
+    );
+    const exactReplyHandoff = handoffs.createFromReply(
+      root.runId,
+      "请 @Writer 处理",
+      now
+    );
+    assert.equal(exactReplyHandoff.length, 1);
+    assert.equal(exactReplyHandoff[0]?.targetAgentId, writer.agentId);
+
+    teams.updateRoomSettings(principal, room.roomId, {
+      participants: core.getRoomParticipants(room.roomId),
+      collaborationPolicy: {
+        allowDiscussion: true,
+        allowAll: true,
+        allowAgentMentions: true,
+        maxAgentMentionDepth: 1
+      }
+    }, now);
+    assert.throws(() => handoffs.create(
+      auth.authenticateMcp(reviewerCredential.secret, now),
+      { parentRunId: child.runId, targetAgentId: writer.agentId, instruction: "Write it" },
+      now
+    ), /depth cannot exceed 1/u);
+    teams.updateRoomSettings(principal, room.roomId, {
+      participants: core.getRoomParticipants(room.roomId),
+      collaborationPolicy: {
+        allowDiscussion: true,
+        allowAll: true,
+        allowAgentMentions: false,
+        maxAgentMentionDepth: 4
+      }
+    }, now);
+    assert.throws(() => handoffs.create(
+      auth.authenticateMcp(builderCredential.secret, now),
+      { parentRunId: root.runId, targetAgentId: writer.agentId, instruction: "Write it" },
+      now
+    ), /Room policy does not allow Agent handoffs/u);
+    teams.updateRoomSettings(principal, room.roomId, {
+      participants: core.getRoomParticipants(room.roomId),
+      collaborationPolicy: {
+        allowDiscussion: true,
+        allowAll: true,
+        allowAgentMentions: true,
+        maxAgentMentionDepth: 4
+      }
+    }, now);
     teams.replaceRoomParticipants(principal, room.roomId, {
       memberIds: [created.owner.memberId],
       agentIds: [builder.agentId, reviewer.agentId]

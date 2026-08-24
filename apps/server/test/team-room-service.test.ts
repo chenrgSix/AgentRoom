@@ -55,6 +55,85 @@ test("a user creates and reloads Teams and Rooms", async () => {
   }
 });
 
+test("an Owner persists Room collaboration policy with participant settings", async () => {
+  const { auth, database, repository, service } = await createFixture();
+  try {
+    const created = service.createTeamForUser({
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5P1",
+      userDisplayName: "Alice",
+      teamName: "Policy Team",
+      now
+    });
+    const ownerSession = auth.issueWebSession(
+      created.owner.userId ?? "",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const owner = auth.authenticateWebSession(ownerSession.secret, now);
+    const room = service.createRoom(owner, created.team.teamId, "governed", now);
+    assert.deepEqual(room.collaborationPolicy, {
+      allowDiscussion: true,
+      allowAll: true,
+      allowAgentMentions: true,
+      maxAgentMentionDepth: 4
+    });
+
+    repository.createUser({
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5P2",
+      displayName: "Bob",
+      createdAt: now
+    });
+    repository.createMember({
+      memberId: "member_01K4Z6J7Y8N9P0Q1R2S3T4V5P2",
+      teamId: created.team.teamId,
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5P2",
+      displayName: "Bob",
+      role: "member",
+      createdAt: now
+    });
+    const bobSession = auth.issueWebSession(
+      "user_01K4Z6J7Y8N9P0Q1R2S3T4V5P2",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const bob = auth.authenticateWebSession(bobSession.secret, now);
+    const policy = {
+      allowDiscussion: false,
+      allowAll: false,
+      allowAgentMentions: false,
+      maxAgentMentionDepth: 2
+    };
+    assert.throws(() => service.updateRoomSettings(bob, room.roomId, {
+      participants: service.getRoomParticipants(owner, room.roomId),
+      collaborationPolicy: policy
+    }, now), /Only a Team owner/u);
+
+    const settings = service.updateRoomSettings(owner, room.roomId, {
+      participants: {
+        memberIds: [created.owner.memberId],
+        agentIds: []
+      },
+      collaborationPolicy: policy
+    }, now);
+    assert.deepEqual(settings.participants, {
+      memberIds: [created.owner.memberId],
+      agentIds: []
+    });
+    assert.deepEqual(settings.room.collaborationPolicy, policy);
+    assert.deepEqual(service.getRoomSettings(owner, room.roomId), settings);
+    assert.throws(() => service.updateRoomSettings(owner, room.roomId, {
+      participants: settings.participants,
+      collaborationPolicy: { ...policy, maxAgentMentionDepth: 5 }
+    }, now), /depth from 1 to 4/u);
+    assert.deepEqual(
+      service.getRoomSettings(owner, room.roomId).room.collaborationPolicy,
+      policy
+    );
+  } finally {
+    database.close();
+  }
+});
+
 test("a non-member cannot discover Team Rooms", async () => {
   const { auth, database, repository, service } = await createFixture();
   try {

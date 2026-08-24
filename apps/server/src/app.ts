@@ -60,6 +60,7 @@ import type { WebAuthConfiguration } from "./security/web-auth-config.js";
 import { TeamRoomService } from "./team-room/team-room-service.js";
 import { TeamChangeService } from "./team-room/team-change-service.js";
 import { MessageService } from "./team-room/message-service.js";
+import type { RoomCollaborationPolicy } from "./team-room/room-collaboration-policy.js";
 
 export interface ServerAppOptions {
   anonymousRateLimit?: {
@@ -334,6 +335,37 @@ export async function createServerApp(
       await dispatchDiscussionRuns(result.scheduledRuns);
     }
   };
+  const dispatchOrdinaryHandoffRun = async (
+    run: NonNullable<ReturnType<RunRepository["getRun"]>>
+  ): Promise<void> => {
+    const agent = core.getAgent(run.targetAgentId);
+    const adapter = fakeAdapters.get(run.targetAgentId);
+    if (adapter) {
+      adapter.enqueue({
+        expectedInstruction: run.instruction,
+        events: [
+          { type: "status", sequence: 1, status: "working" },
+          {
+            type: "reply",
+            sequence: 2,
+            content: `${agent?.name ?? "Agent"} completed: ${run.instruction}`
+          },
+          { type: "status", sequence: 3, status: "completed" }
+        ]
+      });
+      await executor.execute(run.runId, adapter);
+      return;
+    }
+    if (agent?.integrationMode === "managed") delivery.dispatch(run.runId);
+  };
+  const routeAgentReplyMentions = async (
+    runId: string,
+    content: string
+  ): Promise<void> => {
+    if (discussionRepository.findTurnByRun(runId)) return;
+    const routedRuns = handoffs.createFromReply(runId, content, clock());
+    await Promise.all(routedRuns.map((run) => dispatchOrdinaryHandoffRun(run)));
+  };
   const sweepDiscussionDeadlines = async (): Promise<void> => {
     if (discussionSweepInFlight) return;
     discussionSweepInFlight = true;
@@ -348,7 +380,16 @@ export async function createServerApp(
     runRepository,
     messages,
     (run) => {
-      void advanceDiscussion(run.runId);
+      if (discussionRepository.findTurnByRun(run.runId)) {
+        void advanceDiscussion(run.runId);
+        return;
+      }
+      const reply = runRepository.listEvents(run.runId).findLast(
+        ({ event }) => event.type === "reply"
+      )?.event;
+      if (reply?.type === "reply") {
+        void routeAgentReplyMentions(run.runId, reply.content);
+      }
     }
   );
   const app = Fastify({
@@ -827,6 +868,15 @@ export async function createServerApp(
             applied: applied.applied
           }, "Run reply event processed");
           teamChanges.notify(devicePrincipal.teamId);
+          if (applied.applied) {
+            void routeAgentReplyMentions(
+              applied.run.runId,
+              message.payload.content
+            ).then(() => teamChanges.notify(devicePrincipal.teamId))
+              .catch((error: unknown) => {
+                app.log.error(error, "Agent reply mention routing failed");
+              });
+          }
           return;
         }
         if (message.type === "run.output_delta" && registeredEpoch !== undefined) {
@@ -1125,6 +1175,35 @@ export async function createServerApp(
       );
     }
   );
+  app.get<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/settings",
+    async (request) => teamRooms.getRoomSettings(
+      principal(request),
+      request.params.roomId
+    )
+  );
+  app.put<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/settings",
+    async (request) => {
+      const body = bodyObject(request);
+      const rawPolicy = body.collaborationPolicy;
+      if (!rawPolicy || typeof rawPolicy !== "object" || Array.isArray(rawPolicy)) {
+        throw new Error("collaborationPolicy must be a JSON object");
+      }
+      return teamRooms.updateRoomSettings(
+        principal(request),
+        request.params.roomId,
+        {
+          participants: {
+            memberIds: requiredStringArray(body.memberIds, "memberIds"),
+            agentIds: requiredStringArray(body.agentIds, "agentIds")
+          },
+          collaborationPolicy: rawPolicy as unknown as RoomCollaborationPolicy
+        },
+        clock()
+      );
+    }
+  );
   app.get<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/devices",
     async (request) => registry.listDevices(principal(request), request.params.teamId)
@@ -1365,10 +1444,21 @@ export async function createServerApp(
     async (request) => {
       const actor = principal(request);
       const body = bodyObject(request);
-      const mentionAgentId = body.mentionAgentId === undefined
+      const legacyMentionAgentId = body.mentionAgentId === undefined
         ? undefined
         : requiredString(body.mentionAgentId, "mentionAgentId", 140);
-      const target = mentionAgentId ? core.getAgent(mentionAgentId) : undefined;
+      if (legacyMentionAgentId && body.mentionAgentIds !== undefined) {
+        throw new Error("Use mentionAgentId or mentionAgentIds, not both");
+      }
+      const mentionAgentIds = body.mentionAgentIds === undefined
+        ? (legacyMentionAgentId ? [legacyMentionAgentId] : [])
+        : requiredStringArray(body.mentionAgentIds, "mentionAgentIds");
+      if (
+        mentionAgentIds.length > 5 ||
+        new Set(mentionAgentIds).size !== mentionAgentIds.length
+      ) {
+        throw new Error("mentionAgentIds must contain up to 5 unique Agent IDs");
+      }
       const persisted = messages.createMemberMessageResult(actor, {
         roomId: request.params.roomId,
         content: requiredString(body.content, "content", 20_000),
@@ -1381,15 +1471,18 @@ export async function createServerApp(
                 140
               )
             }),
-        ...(mentionAgentId
+        ...(mentionAgentIds.length > 0
           ? {
-              mentions: [{
+              mentions: mentionAgentIds.map((agentId) => {
+                const target = core.getAgent(agentId);
+                return {
                 targetType: "agent" as const,
-                targetAgentId: mentionAgentId,
+                targetAgentId: agentId,
                 displayLabel: target
                   ? `${target.name} / ${target.role}`
-                  : mentionAgentId
-              }]
+                  : agentId
+                };
+              })
             }
           : {}),
         now: clock()
@@ -1419,6 +1512,7 @@ export async function createServerApp(
           executedRuns.push(runRepository.getRun(run.runId) ?? run);
           continue;
         }
+        const target = core.getAgent(run.targetAgentId);
         adapter.enqueue({
           expectedInstruction: message.content,
           events: [
@@ -1431,7 +1525,14 @@ export async function createServerApp(
             { type: "status", sequence: 3, status: "completed" }
           ]
         });
-        executedRuns.push(await executor.execute(run.runId, adapter));
+        const completed = await executor.execute(run.runId, adapter);
+        executedRuns.push(completed);
+        const reply = runRepository.listEvents(run.runId).findLast(
+          ({ event }) => event.type === "reply"
+        )?.event;
+        if (reply?.type === "reply") {
+          await routeAgentReplyMentions(run.runId, reply.content);
+        }
       }
       return {
         message,
