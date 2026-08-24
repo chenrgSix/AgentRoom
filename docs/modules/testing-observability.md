@@ -197,7 +197,8 @@ preset migration, and explicit Bridge self-test evidence is recorded in
 `QA-013` verifies the Bridge execution gate with deterministic same-Agent FIFO,
 cross-Agent parallel, duplicate, queued-cancel, and reconnect cases. Runtime
 start counts are authoritative evidence that queued or duplicate work did not
-escape isolation.
+escape isolation. Passing evidence is recorded in
+`docs/acceptance/qa-013-agent-concurrency-isolation.md`.
 
 The operator-facing Compose lifecycle and static configuration evidence is
 recorded in `docs/acceptance/ops-005-compose-operations.md`. It covers bounded
