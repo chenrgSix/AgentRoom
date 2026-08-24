@@ -181,7 +181,10 @@ func Migrate(value Config) (Config, error) {
 			}
 			agent.PresetVersion = CurrentPresetVersion
 		case "pi":
-			if len(agent.Command) > 0 {
+			// Preset version 4 changes only the Codex transport. A Pi preset
+			// already at version 3 must keep its owner-authored command byte for
+			// byte while sharing the new repository-wide version marker.
+			if agent.PresetVersion < 3 && len(agent.Command) > 0 {
 				agent.Command = PiPresetCommand(
 					agent.Command[0],
 					PiLocalPolicyArguments(agent.Command, agent.PresetVersion)...,

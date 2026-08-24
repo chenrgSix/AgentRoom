@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -219,6 +220,21 @@ func TestMigrateVersionThreeCodexPresetKeepsOwnerSandbox(t *testing.T) {
 	if codex.PresetVersion != CurrentPresetVersion || codex.Sandbox != "read-only" ||
 		strings.Join(codex.Command[1:], " ") != "app-server --listen stdio://" {
 		t.Fatalf("version three Codex preset was not upgraded safely: %#v", codex)
+	}
+}
+
+func TestMigrateVersionThreePiPresetOnlyAdvancesMarker(t *testing.T) {
+	command := []string{"/custom/pi-protocol-helper", "--owner-flag", "custom value"}
+	configuration, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion, Agents: []AgentConfig{{
+		Name: "Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi", PresetVersion: 3,
+		Command: append([]string(nil), command...), Workspace: t.TempDir(),
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pi := configuration.Agents[0]
+	if pi.PresetVersion != CurrentPresetVersion || !slices.Equal(pi.Command, command) {
+		t.Fatalf("version three Pi command changed during marker-only migration: %#v", pi)
 	}
 }
 
