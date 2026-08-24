@@ -19,7 +19,7 @@ terminal session are not required. Verify the archive before extraction:
 sha256sum -c SHA256SUMS --ignore-missing
 
 # macOS (set this to the archive you downloaded)
-ARCHIVE=agentroom-bridge-desktop_0.2.0-rc.3_darwin_arm64.zip
+ARCHIVE=agentroom-bridge-desktop_0.2.0-rc.4_darwin_arm64.zip
 grep "  ${ARCHIVE}$" SHA256SUMS | shasum -a 256 -c -
 ```
 
