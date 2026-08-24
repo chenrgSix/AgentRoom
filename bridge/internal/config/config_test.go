@@ -176,7 +176,7 @@ func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) 
 		t.Fatalf("Pi owner fields changed during migration: %#v", pi)
 	}
 	if pi.RuntimeKind != "pi" || pi.PresetVersion != CurrentPresetVersion ||
-		strings.Join(pi.Command[1:], " ") != "--print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
 		t.Fatalf("legacy Pi flags were not replaced: %#v", pi)
 	}
 	onDisk, err := os.ReadFile(path)
@@ -185,6 +185,22 @@ func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) 
 	}
 	if bytes.Contains(onDisk, []byte(`"schemaVersion"`)) {
 		t.Fatal("Load must not rewrite owner configuration implicitly")
+	}
+}
+
+func TestMigrateUpgradesVersionOnePiPresetToStructuredOutput(t *testing.T) {
+	configuration, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion, Agents: []AgentConfig{{
+		Name: "Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi", PresetVersion: 1,
+		Command:   []string{"/usr/local/bin/pi", "--print", "--no-tools", "--no-session"},
+		Workspace: t.TempDir(),
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pi := configuration.Agents[0]
+	if pi.PresetVersion != CurrentPresetVersion ||
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
+		t.Fatalf("version one Pi preset was not upgraded: %#v", pi)
 	}
 }
 

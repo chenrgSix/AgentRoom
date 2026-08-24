@@ -41,8 +41,14 @@ Codex and Generic nonzero exits include only a stable local classification,
 numeric exit code, and stderr-presence flag. The central service applies the
 same three-field allowlist before Run-event persistence; raw stderr and unknown
 detail keys never cross that boundary.
-Pi is verified through this fallback using non-interactive `--print`, no-tools,
-no-session operation; it does not gain resume or remote session claims.
+Pi uses a dedicated parser over its non-interactive JSON event stream while
+retaining the Generic process lifecycle. Preset version 2 runs `--mode json`,
+no-tools, and no-session; the adapter exposes only the last completed assistant
+message. The local JSON event stream is capped at 512 KB and the extracted
+reply remains capped at 20 KB. Malformed JSON, a missing assistant reply, or
+provider-specific raw tool-call markup fails the Run with
+`RUNTIME_PROTOCOL_INVALID`; none of that stdout is published to the Room. Pi
+does not gain resume or remote session claims.
 
 The first Fake Adapter lives in the central server workspace solely for the
 in-process MVP acceptance harness. It implements the same ordered request/event
@@ -72,7 +78,7 @@ Runtime, owns the resulting continue/finish decision.
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, streaming, cancellation, crash, and recovery. Work is
-tracked by `ADP-001` through `ADP-005` in `docs/TASKS.md`.
+tracked by `ADP-001` through `ADP-006` in `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one
 context-cancelable `Execute` method that emits ordered semantic status or reply

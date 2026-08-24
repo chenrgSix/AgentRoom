@@ -132,6 +132,11 @@ Pi presets. Codex is forced to `read-only`, Pi retains its no-tool preset,
 active Team Runs fence the probe, and only allowlisted status and failure
 metadata return to the UI.
 
+`ADP-006` advances managed Runtime presets to version 2. Existing Pi presets
+are normalized to `--mode json` in memory and routed through the dedicated Pi
+event parser. Provider tool-call markup and malformed event streams become a
+safe `RUNTIME_PROTOCOL_INVALID` failure instead of a completed Room reply.
+
 `BRG-020` adds a lightweight per-Agent execution gate after durable inbox
 acceptance. Different Agent identities on one Bridge keep independent slots and
 may execute concurrently; Runs targeting one Agent wait in FIFO order with a

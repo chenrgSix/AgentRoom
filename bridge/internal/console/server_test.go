@@ -243,7 +243,7 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	if strings.Join(loaded.Agents[0].Command[1:], " ") != "exec --json --sandbox read-only -" {
 		t.Fatalf("unexpected Codex command: %#v", loaded.Agents[0].Command)
 	}
-	if strings.Join(loaded.Agents[1].Command[1:], " ") != "--print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
+	if strings.Join(loaded.Agents[1].Command[1:], " ") != "--mode json --print --no-tools --no-extensions --no-skills --no-context-files --no-session" {
 		t.Fatalf("unexpected Pi command: %#v", loaded.Agents[1].Command)
 	}
 	if !contains(loaded.Agents[1].EnvAllowlist, "ANTHROPIC_API_KEY") {

@@ -148,9 +148,11 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
   "role": "Reviewer",
   "adapter": "generic",
   "runtimeKind": "pi",
-  "presetVersion": 1,
+  "presetVersion": 2,
   "command": [
     "/absolute/path/to/pi",
+    "--mode",
+    "json",
     "--print",
     "--no-tools",
     "--no-extensions",
@@ -168,7 +170,9 @@ Codex and Pi presets are migrated in memory when loaded; the next explicit save
 persists the version fields and replaces obsolete Pi flags without changing the
 owner's names, roles, workspace, trust settings, or environment allowlist.
 
-This mode receives each bounded turn on stdin and exits after replying. It is
-remotely wakeable through the Bridge but does not claim persistent Pi session
-resume. Add only the credential environment variable actually required by the
-selected Pi provider; do not copy the full parent environment.
+This mode receives each bounded turn on stdin and exits after replying. The Pi
+adapter reads its JSON event stream, publishes only the final assistant reply,
+and fails safely if a provider leaks raw tool-call markup. It is remotely
+wakeable through the Bridge but does not claim persistent Pi session resume.
+Add only the credential environment variable actually required by the selected
+Pi provider; do not copy the full parent environment.

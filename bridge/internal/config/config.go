@@ -51,7 +51,7 @@ type AgentConfig struct {
 
 const (
 	CurrentSchemaVersion = 1
-	CurrentPresetVersion = 1
+	CurrentPresetVersion = 2
 )
 
 func CodexPresetCommand(executable, sandbox string) []string {
@@ -63,7 +63,7 @@ func CodexPresetCommand(executable, sandbox string) []string {
 
 func PiPresetCommand(executable string) []string {
 	return []string{
-		executable, "--print", "--no-tools", "--no-extensions", "--no-skills",
+		executable, "--mode", "json", "--print", "--no-tools", "--no-extensions", "--no-skills",
 		"--no-context-files", "--no-session",
 	}
 }
@@ -163,7 +163,7 @@ func Migrate(value Config) (Config, error) {
 				agent.RuntimeKind = "generic"
 			}
 		}
-		if agent.PresetVersion != 0 {
+		if agent.PresetVersion == CurrentPresetVersion || agent.RuntimeKind == "generic" {
 			continue
 		}
 		switch agent.RuntimeKind {

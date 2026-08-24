@@ -17,7 +17,8 @@ const maxRuntimeOutput = 20_000
 var errOutputLimit = errors.New("Runtime output exceeded limit")
 
 type GenericAdapter struct {
-	Config config.AgentConfig
+	Config      config.AgentConfig
+	outputLimit int
 }
 
 func (g GenericAdapter) Name() string { return "generic" }
@@ -42,7 +43,11 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 	command.Dir = g.Config.Workspace
 	command.Env = allowedEnvironment(g.Config.EnvAllowlist)
 	command.Stdin = strings.NewReader(request.Run.Instruction)
-	stdout := &limitedBuffer{remaining: maxRuntimeOutput}
+	outputLimit := g.outputLimit
+	if outputLimit <= 0 {
+		outputLimit = maxRuntimeOutput
+	}
+	stdout := &limitedBuffer{remaining: outputLimit}
 	stderr := &limitedBuffer{remaining: 4_096}
 	command.Stdout = stdout
 	command.Stderr = stderr
@@ -62,7 +67,7 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 		failed := contracts.Failed
 		return emit(ctx, Event{
 			Status: &failed,
-			Error:  runtimeError("RUNTIME_OUTPUT_LIMIT", "Runtime output exceeded 20000 bytes."),
+			Error:  runtimeError("RUNTIME_OUTPUT_LIMIT", "Runtime output exceeded its safe limit."),
 		})
 	}
 	if err != nil {

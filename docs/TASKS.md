@@ -102,6 +102,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |
 | ADP-005 | DONE | Implement Generic CLI fallback | ADP-002 | stdout, exit, timeout, and cancel verified |
+| ADP-006 | DONE | Add structured Pi output boundary | ADP-005, BRG-019 | preset v2 emits Pi JSON events; the dedicated adapter exposes only the final assistant reply and fails closed on malformed streams or leaked provider tool protocol |
 
 ## Workstream F3: Run Orchestration and Web Experience
 

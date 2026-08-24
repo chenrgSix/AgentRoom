@@ -11,9 +11,10 @@ import (
 )
 
 func TestProbeRuntimeAcceptsExpectedReplyAndNeverReturnsProcessOutput(t *testing.T) {
+	ready := `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"AGENTROOM_READY"}],"stopReason":"stop"}}`
 	passed := ProbeRuntime(context.Background(), config.AgentConfig{
 		Adapter: "generic", RuntimeKind: "pi",
-		Command:   []string{"/bin/sh", "-c", "printf AGENTROOM_READY"},
+		Command:   []string{"/usr/bin/printf", "%s", ready},
 		Workspace: t.TempDir(),
 	})
 	if !passed.Passed || passed.Code != "RUNTIME_PROBE_OK" {

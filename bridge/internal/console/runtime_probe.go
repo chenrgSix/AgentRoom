@@ -32,10 +32,12 @@ func ProbeRuntime(ctx context.Context, agent config.AgentConfig) RuntimeProbeRes
 		probeConfig.Command = config.CodexPresetCommand(probeConfig.Command[0], "read-only")
 	}
 	var adapter bridgeruntime.Adapter
-	switch probeConfig.Adapter {
-	case "codex":
+	switch {
+	case probeConfig.RuntimeKind == "pi":
+		adapter = bridgeruntime.PiAdapter{Config: probeConfig}
+	case probeConfig.Adapter == "codex":
 		adapter = bridgeruntime.CodexAdapter{Config: probeConfig}
-	case "generic":
+	case probeConfig.Adapter == "generic":
 		adapter = bridgeruntime.GenericAdapter{Config: probeConfig}
 	default:
 		return probeFailure(started, "RUNTIME_PROBE_ADAPTER_INVALID", "configuration", nil, false)
