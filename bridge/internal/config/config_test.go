@@ -251,3 +251,24 @@ func TestMigrateRejectsFutureConfigAndPresetVersions(t *testing.T) {
 		t.Fatal("expected a future Runtime preset to fail closed")
 	}
 }
+
+func TestAgentConfigScopesStructuredOutputProtocolToGenericRuntime(t *testing.T) {
+	base := AgentConfig{
+		Name: "Generic", Role: "Worker", Adapter: "generic", RuntimeKind: "generic",
+		Command: []string{"/usr/local/bin/runtime"}, Workspace: t.TempDir(),
+		OutputProtocol: OutputProtocolAgentRoomJSONLV1,
+	}
+	if err := base.validate(); err != nil {
+		t.Fatalf("valid Generic output protocol was rejected: %v", err)
+	}
+	unknown := base
+	unknown.OutputProtocol = "arbitrary-stdout"
+	if err := unknown.validate(); err == nil {
+		t.Fatal("unknown Generic output protocol was accepted")
+	}
+	pi := base
+	pi.RuntimeKind = "pi"
+	if err := pi.validate(); err == nil {
+		t.Fatal("Pi was allowed to claim the Generic output protocol")
+	}
+}

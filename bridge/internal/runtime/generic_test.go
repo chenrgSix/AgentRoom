@@ -3,6 +3,8 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,9 @@ func TestGenericAdapterPassesInstructionOnStdin(t *testing.T) {
 		Command:   []string{"/usr/bin/tr", "a-z", "A-Z"},
 		Workspace: t.TempDir(),
 	}}
+	if adapter.Capabilities().SupportsStreaming {
+		t.Fatal("plain stdout Generic Runtime must remain final-only")
+	}
 	var events []Event
 	err := adapter.Execute(context.Background(), Request{
 		Run: contracts.RunRequestedPayload{Instruction: "hello team"},
@@ -28,6 +33,99 @@ func TestGenericAdapterPassesInstructionOnStdin(t *testing.T) {
 	}
 	if len(events) != 3 || events[1].Reply != "HELLO TEAM" || *events[2].Status != contracts.Completed {
 		t.Fatalf("unexpected events: %#v", events)
+	}
+}
+
+func TestGenericAdapterStreamsOptInStructuredOutput(t *testing.T) {
+	text := strings.Repeat("streaming ", 12)
+	firstLine := `{"type":"assistant.delta","delta":` + quotedJSON(t, text) + `}`
+	finalLine := `{"type":"reply.final","text":` + quotedJSON(t, text) + `}`
+	script := "printf '%s\\n' '" + firstLine + "'; sleep 0.2; printf '%s\\n' '" + finalLine + "'"
+	adapter := GenericAdapter{Config: config.AgentConfig{
+		Command: []string{"/bin/sh", "-c", script}, Workspace: t.TempDir(),
+		RuntimeKind: "generic", OutputProtocol: config.OutputProtocolAgentRoomJSONLV1,
+	}}
+	if !adapter.Capabilities().SupportsStreaming {
+		t.Fatal("structured Generic Runtime did not publish streaming capability")
+	}
+	var previewAt time.Time
+	var replyAt time.Time
+	var reply string
+	if err := adapter.Execute(context.Background(), Request{}, func(_ context.Context, event Event) error {
+		if event.Output != nil && previewAt.IsZero() {
+			previewAt = time.Now()
+		}
+		if event.Reply != "" {
+			replyAt = time.Now()
+			reply = event.Reply
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if previewAt.IsZero() || replyAt.IsZero() || !previewAt.Before(replyAt) ||
+		reply != strings.TrimSpace(text) {
+		t.Fatalf("Generic preview was not emitted before final reply: preview=%s reply=%s content=%q", previewAt, replyAt, reply)
+	}
+}
+
+func TestGenericStreamParserResetsAndWithholdsPrivateTail(t *testing.T) {
+	parser := &genericStreamParser{}
+	first, err := parser.consume([]byte(`{"type":"assistant.delta","delta":"` + strings.Repeat("A", 80) + `"}`))
+	if err != nil || first == nil || first.Reset || first.Content != strings.Repeat("A", 16) {
+		t.Fatalf("unexpected first Generic preview: %#v, %v", first, err)
+	}
+	secret := strings.Repeat("visible ", 12) + "token=very-sensitive-value" + strings.Repeat(" trailing", 12)
+	second, err := parser.consume([]byte(`{"type":"assistant.delta","reset":true,"delta":` + quotedJSON(t, secret) + `}`))
+	if err != nil || second == nil || !second.Reset || strings.Contains(second.Content, "very-sensitive") {
+		t.Fatalf("Generic reset leaked private output: %#v, %v", second, err)
+	}
+	final, err := parser.consume([]byte(`{"type":"reply.final","text":"Safe final.` +
+		`\n<agentroom-assessment>{\"goalSatisfied\":true}</agentroom-assessment>"}`))
+	if err != nil || final == nil || !final.Reset || final.Content != "Safe final." ||
+		parser.finalReply == "" {
+		t.Fatalf("unexpected Generic final event: %#v, %v", final, err)
+	}
+}
+
+func TestGenericStructuredAdapterFailsClosedOnInvalidStreams(t *testing.T) {
+	for _, mode := range []string{"malformed", "missing-final", "tool-leak"} {
+		t.Run(mode, func(t *testing.T) {
+			t.Setenv("AGENTROOM_GENERIC_HELPER", mode)
+			adapter := GenericAdapter{Config: config.AgentConfig{
+				Command: []string{os.Args[0], "-test.run=TestGenericHelperProcess"}, Workspace: t.TempDir(),
+				RuntimeKind: "generic", OutputProtocol: config.OutputProtocolAgentRoomJSONLV1,
+				EnvAllowlist: []string{"AGENTROOM_GENERIC_HELPER"},
+			}}
+			var terminal Event
+			if err := adapter.Execute(context.Background(), Request{}, func(_ context.Context, event Event) error {
+				terminal = event
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			if terminal.Status == nil || *terminal.Status != contracts.Failed || terminal.Error == nil ||
+				terminal.Error.Code != "RUNTIME_PROTOCOL_INVALID" || terminal.Reply != "" {
+				t.Fatalf("invalid Generic stream escaped fail-closed boundary: %#v", terminal)
+			}
+		})
+	}
+}
+
+func TestGenericHelperProcess(t *testing.T) {
+	switch os.Getenv("AGENTROOM_GENERIC_HELPER") {
+	case "stream":
+		text := strings.Repeat("streaming ", 12)
+		fmt.Println(`{"type":"assistant.delta","delta":` + quotedJSON(t, text) + `}`)
+		_ = os.Stdout.Sync()
+		time.Sleep(200 * time.Millisecond)
+		fmt.Println(`{"type":"reply.final","text":` + quotedJSON(t, text) + `}`)
+	case "malformed":
+		fmt.Println(`not-json`)
+	case "missing-final":
+		fmt.Println(`{"type":"runtime.status","state":"done"}`)
+	case "tool-leak":
+		fmt.Println(`{"type":"reply.final","text":"<tool_call><tool_name>bash</tool_name></tool_call>"}`)
 	}
 }
 

@@ -39,20 +39,22 @@ func (c Config) ResolvedTrustMode() TrustMode {
 }
 
 type AgentConfig struct {
-	Name          string   `json:"name"`
-	Role          string   `json:"role"`
-	Adapter       string   `json:"adapter"`
-	RuntimeKind   string   `json:"runtimeKind"`
-	PresetVersion int      `json:"presetVersion"`
-	Command       []string `json:"command"`
-	Workspace     string   `json:"workspace"`
-	Sandbox       string   `json:"sandbox,omitempty"`
-	EnvAllowlist  []string `json:"envAllowlist,omitempty"`
+	Name           string   `json:"name"`
+	Role           string   `json:"role"`
+	Adapter        string   `json:"adapter"`
+	RuntimeKind    string   `json:"runtimeKind"`
+	PresetVersion  int      `json:"presetVersion"`
+	Command        []string `json:"command"`
+	Workspace      string   `json:"workspace"`
+	Sandbox        string   `json:"sandbox,omitempty"`
+	OutputProtocol string   `json:"outputProtocol,omitempty"`
+	EnvAllowlist   []string `json:"envAllowlist,omitempty"`
 }
 
 const (
-	CurrentSchemaVersion = 1
-	CurrentPresetVersion = 4
+	CurrentSchemaVersion           = 1
+	CurrentPresetVersion           = 4
+	OutputProtocolAgentRoomJSONLV1 = "agentroom-jsonl-v1"
 )
 
 func CodexPresetCommand(executable string) []string {
@@ -376,6 +378,10 @@ func (a AgentConfig) validate() error {
 	}
 	if (a.RuntimeKind == "pi" || a.RuntimeKind == "generic") && a.Adapter != "generic" {
 		return fmt.Errorf("pi and generic runtimeKind require the generic adapter")
+	}
+	if a.OutputProtocol != "" &&
+		(a.RuntimeKind != "generic" || a.OutputProtocol != OutputProtocolAgentRoomJSONLV1) {
+		return fmt.Errorf("outputProtocol is supported only for generic runtimeKind as %s", OutputProtocolAgentRoomJSONLV1)
 	}
 	if a.PresetVersion < 0 || a.PresetVersion > CurrentPresetVersion {
 		return fmt.Errorf("presetVersion must be between 0 and %d", CurrentPresetVersion)

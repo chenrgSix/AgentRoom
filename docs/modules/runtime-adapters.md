@@ -72,9 +72,18 @@ the last completed `agentMessage` plus `turn/completed` as authoritative. Tool,
 reasoning, command-output, and approval protocol stays local. Interactive
 server requests receive a protocol error instead of being approved. A bounded
 safety tail, redaction, protocol/output limits, process-group cancellation, and
-final-reply parsing match the Pi streaming boundary. Generic CLI remains
-final-only because plain stdout has no stable boundary between assistant text
-and private control output.
+final-reply parsing match the Pi streaming boundary.
+
+Generic CLI remains final-only by default because plain stdout has no stable
+boundary between assistant text and private control output. An owner-authored
+Generic configuration may explicitly select
+`outputProtocol: agentroom-jsonl-v1`. Only that protocol publishes streaming
+capability. Its newline-delimited `assistant.delta` events carry non-empty text
+and an optional reset flag; exactly one `reply.final` carries the authoritative
+assistant reply. Unknown JSON events remain private, while malformed JSON,
+assistant events after the final reply, missing/duplicate final replies,
+oversized output, or leaked provider tool markup fail closed. The complete
+producer contract is maintained in `docs/generic-runtime-stream-contract.md`.
 
 The first Fake Adapter lives in the central server workspace solely for the
 in-process MVP acceptance harness. It implements the same ordered request/event
@@ -104,7 +113,7 @@ Runtime, owns the resulting continue/finish decision.
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, streaming, cancellation, crash, recovery, and local permission
-inheritance. Work is tracked by `ADP-001` through `ADP-008` and `BRG-023` in
+inheritance. Work is tracked by `ADP-001` through `ADP-009` and `BRG-023` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one

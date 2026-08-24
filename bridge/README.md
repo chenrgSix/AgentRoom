@@ -191,3 +191,10 @@ normal Team tasks retain the owner's policy. Pi is remotely wakeable through
 the Bridge but does not claim persistent session resume.
 Add only the credential environment variable actually required by the selected
 Pi provider; do not copy the full parent environment.
+
+Owner-authored Generic Runtimes remain final-only unless they explicitly set
+`"outputProtocol": "agentroom-jsonl-v1"`. In that mode stdout must contain one
+JSON object per line using `assistant.delta` and one authoritative
+`reply.final`; ordinary logs and terminal rendering do not belong on stdout.
+The complete producer contract and example configuration are in
+[`docs/generic-runtime-stream-contract.md`](../docs/generic-runtime-stream-contract.md).

@@ -177,6 +177,13 @@ Bridge boundary; reasoning, tool lifecycle, command output, and approval
 requests remain local. Pi version 3 presets receive only the shared version
 marker update and retain their owner-controlled command arguments.
 
+`ADP-009` adds an optional `outputProtocol` field only for owner-authored
+Generic Runtime configurations. Omitting it preserves bounded, final-only
+stdout behavior. Selecting `agentroom-jsonl-v1` opts the Runtime into the
+documented assistant-delta/final-reply JSONL contract and publishes streaming
+capability; unknown protocol names and attempts to attach the protocol to Codex
+or Pi fail configuration validation.
+
 `BRG-020` adds a lightweight per-Agent execution gate after durable inbox
 acceptance. Different Agent identities on one Bridge keep independent slots and
 may execute concurrently; Runs targeting one Agent wait in FIFO order with a

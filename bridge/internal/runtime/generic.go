@@ -24,13 +24,19 @@ type GenericAdapter struct {
 func (g GenericAdapter) Name() string { return "generic" }
 
 func (g GenericAdapter) Capabilities() Capabilities {
-	return Capabilities{SupportsInterrupt: true}
+	return Capabilities{
+		SupportsStreaming: g.Config.OutputProtocol == config.OutputProtocolAgentRoomJSONLV1,
+		SupportsInterrupt: true,
+	}
 }
 
 func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) error {
 	working := contracts.Working
 	if err := emit(ctx, Event{Status: &working}); err != nil {
 		return err
+	}
+	if g.Config.OutputProtocol == config.OutputProtocolAgentRoomJSONLV1 {
+		return g.executeStructured(ctx, request, emit)
 	}
 	runContext := ctx
 	cancel := func() {}
