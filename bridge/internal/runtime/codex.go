@@ -42,6 +42,7 @@ func (c CodexAdapter) Execute(ctx context.Context, request Request, emit EmitFun
 	processContext, cancelProcess := context.WithCancel(runContext)
 	defer cancelProcess()
 	command := exec.CommandContext(processContext, c.Config.Command[0], c.Config.Command[1:]...)
+	configureRuntimeCommand(command)
 	command.Dir = c.Config.Workspace
 	command.Env = allowedEnvironment(c.Config.EnvAllowlist)
 	command.Stdin = strings.NewReader(request.Run.Instruction)

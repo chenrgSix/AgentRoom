@@ -38,6 +38,7 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 	}
 	defer cancel()
 	command := exec.CommandContext(runContext, g.Config.Command[0], g.Config.Command[1:]...)
+	configureRuntimeCommand(command)
 	command.Dir = g.Config.Workspace
 	command.Env = allowedEnvironment(g.Config.EnvAllowlist)
 	command.Stdin = strings.NewReader(request.Run.Instruction)
