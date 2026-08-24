@@ -36,8 +36,10 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
   timeout: 60_000
 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-e2e-"));
+  const bridgeServerToken = "managed-e2e-central-token-12345678901234567890";
   const app = await createServerApp({
-    databasePath: path.join(directory, "server.sqlite")
+    databasePath: path.join(directory, "server.sqlite"),
+    bridgeServerToken
   });
   let bridgeProcess: ChildProcess | undefined;
   let stage = "setup";
@@ -91,6 +93,7 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     const configPath = path.join(directory, "bridge.json");
     await writeFile(configPath, JSON.stringify({
       serverUrl,
+      serverToken: bridgeServerToken,
       deviceName: "Bob Bridge",
       dataDir: path.join(directory, "bridge-data"),
       agents: [{
@@ -315,6 +318,8 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
       );
       return run?.state === "canceled" ? run : undefined;
     });
+    assert.equal(bridgeStdout.includes(bridgeServerToken), false);
+    assert.equal(bridgeStderr.includes(bridgeServerToken), false);
   } catch (error) {
     throw new Error(
       `${String(error)}\nStage: ${stage}` +

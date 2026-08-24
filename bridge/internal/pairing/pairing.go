@@ -55,6 +55,9 @@ func Exchange(ctx context.Context, cfg config.Config, code string) (Credential, 
 		return Credential{}, err
 	}
 	request.Header.Set("content-type", "application/json")
+	if cfg.ServerToken != "" {
+		request.Header.Set(config.ServerTokenHeader, cfg.ServerToken)
+	}
 	response, err := HTTPClient(cfg).Do(request)
 	if err != nil {
 		return Credential{}, fmt.Errorf("pair request: %w", err)

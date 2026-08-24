@@ -44,6 +44,7 @@ func TestLoadValidConfig(t *testing.T) {
 func TestRejectsUnsafeOrAmbiguousConfig(t *testing.T) {
 	valid := Config{
 		ServerURL:               "https://team.example.com",
+		ServerToken:             strings.Repeat("t", 32),
 		ServerCertificateSHA256: strings.Repeat("a", 64),
 		DeviceName:              "Alice Mac",
 		DataDir:                 t.TempDir(),
@@ -79,13 +80,20 @@ func TestRejectsUnsafeOrAmbiguousConfig(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("expected duplicate Agent name to be rejected")
 	}
+	for _, token := range []string{strings.Repeat("t", 31), strings.Repeat("t", 513), " " + strings.Repeat("t", 32), strings.Repeat("t", 32) + "\n"} {
+		invalid = valid
+		invalid.ServerToken = token
+		if err := invalid.Validate(); err == nil {
+			t.Fatalf("expected invalid central Server Token length or whitespace to be rejected: %q", token)
+		}
+	}
 }
 
 func TestSaveWritesOwnerOnlyConfigAndRefusesOverwrite(t *testing.T) {
 	directory := t.TempDir()
 	path := filepath.Join(directory, "nested", "bridge.json")
 	value := Config{
-		ServerURL: "http://127.0.0.1:3000", DeviceName: "Alice Mac",
+		ServerURL: "http://127.0.0.1:3000", ServerToken: strings.Repeat("s", 32), DeviceName: "Alice Mac",
 		DataDir: filepath.Join(directory, "data"),
 		Agents: []AgentConfig{{
 			Name: "Local Codex", Role: "Implementation", Adapter: "codex",
@@ -117,12 +125,22 @@ func TestSaveWritesOwnerOnlyConfigAndRefusesOverwrite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if loaded.DeviceName != "Updated Mac" {
+	if loaded.DeviceName != "Updated Mac" || loaded.ServerToken != value.ServerToken {
 		t.Fatalf("unexpected replacement config: %#v", loaded)
 	}
 	if loaded.SchemaVersion != CurrentSchemaVersion ||
 		loaded.Agents[0].PresetVersion != CurrentPresetVersion {
 		t.Fatalf("saved config omitted version markers: %#v", loaded)
+	}
+}
+
+func TestMigrateVersionOneConfigurationWithoutServerToken(t *testing.T) {
+	configuration, err := Migrate(Config{SchemaVersion: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if configuration.SchemaVersion != CurrentSchemaVersion || configuration.ServerToken != "" {
+		t.Fatalf("legacy configuration migration changed Token compatibility: %#v", configuration)
 	}
 }
 

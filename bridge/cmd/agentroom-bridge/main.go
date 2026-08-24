@@ -187,6 +187,7 @@ func runConsole(args []string) error {
 func join(args []string) error {
 	command := flag.NewFlagSet("join", flag.ContinueOnError)
 	serverURL := command.String("server", "", "Agent Room server URL")
+	serverToken := command.String("server-token", "", "central Server Token")
 	path := command.String("config", "", "path for generated bridge JSON configuration")
 	dataDir := command.String("data-dir", "", "directory for Bridge state and credential")
 	workspace := command.String("workspace", "", "local Codex workspace")
@@ -269,7 +270,7 @@ func join(args []string) error {
 		resolvedTrustMode = config.TrustMode(strings.TrimSpace(*trustMode))
 	}
 	loaded := config.Config{
-		ServerURL: *serverURL, ServerTrustMode: resolvedTrustMode,
+		ServerURL: *serverURL, ServerToken: strings.TrimSpace(*serverToken), ServerTrustMode: resolvedTrustMode,
 		ServerCertificateSHA256: *fingerprint,
 		DeviceName:              resolvedDevice, DataDir: resolvedDataDir,
 		Agents: []config.AgentConfig{{

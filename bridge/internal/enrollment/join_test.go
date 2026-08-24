@@ -12,8 +12,14 @@ import (
 )
 
 func TestJoinShowsCodePollsAndReturnsCredential(t *testing.T) {
+	serverToken := "central-server-token-12345678901234567890"
 	var claims atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get(config.ServerTokenHeader) != serverToken {
+			t.Errorf("central Server Token was not transported to %s", request.URL.Path)
+			response.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 		response.Header().Set("content-type", "application/json")
 		switch request.URL.Path {
 		case "/api/bridge/join-requests":
@@ -59,7 +65,7 @@ func TestJoinShowsCodePollsAndReturnsCredential(t *testing.T) {
 	defer server.Close()
 
 	cfg := config.Config{
-		ServerURL: server.URL, DeviceName: "Alice Mac", DataDir: t.TempDir(),
+		ServerURL: server.URL, ServerToken: serverToken, DeviceName: "Alice Mac", DataDir: t.TempDir(),
 		Agents: []config.AgentConfig{{
 			Name: "Local Codex", Role: "Codex implementer", Adapter: "codex",
 			Command: []string{"codex", "exec", "--json", "-"}, Workspace: t.TempDir(),

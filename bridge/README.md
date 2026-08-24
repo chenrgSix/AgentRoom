@@ -51,7 +51,7 @@ written permission.
 ```bash
 go run ./cmd/agentroom-bridge version
 go run ./cmd/agentroom-bridge console
-go run ./cmd/agentroom-bridge join --server http://127.0.0.1:3000
+go run ./cmd/agentroom-bridge join --server http://127.0.0.1:3000 --server-token CENTRAL_SERVER_TOKEN
 go run ./cmd/agentroom-bridge validate-config --config ./bridge.json
 go run ./cmd/agentroom-bridge pair --config ./bridge.json --code ONE_TIME_CODE
 go run ./cmd/agentroom-bridge run --config ./bridge.json
@@ -143,6 +143,14 @@ an adapter, argument-array command, absolute workspace, and environment variable
 allowlist. Credentials, stable Agent identities, the durable Run inbox, and
 replayable Runtime events are stored under `dataDir` with owner-only file modes.
 
+Deployments may optionally require a 32–512 byte central `serverToken`. Enter it
+next to the central address during Console setup, pass it to terminal enrollment
+with `join --server-token`, or replace/clear it later under **连接设置**. Bridge
+sends it as `X-AgentRoom-Server-Token` on join, claim, legacy pair, and WebSocket
+requests. The Console returns only an “已配置/未配置” flag; it never returns the
+stored value. This Token is a deployment access parameter and remains separate
+from the per-Device bearer credential.
+
 For normal public HTTPS, the default `system_ca` mode validates the certificate
 chain, hostname, validity, and renewal through the operating-system trust store;
 no fingerprint is required. Private deployments may explicitly choose
@@ -177,7 +185,8 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
 }
 ```
 
-The top-level configuration uses `"schemaVersion": 1`. Pi tools, extensions,
+The top-level configuration uses `"schemaVersion": 2`; version 1 files load
+without a central Token and migrate in memory. Pi tools, extensions,
 Skills, project context, approval, and provider settings follow the owner's
 local Pi configuration. Owner-authored command arguments such as `--approve`,
 `--tools`, or extension flags remain local and survive Agent edits. The central

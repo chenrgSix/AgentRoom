@@ -17,10 +17,15 @@ import (
 )
 
 func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
+	serverToken := "central-server-token-12345678901234567890"
 	messages := make(chan map[string]any, 3)
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.Header.Get("authorization") != "Bearer device-secret" {
 			http.Error(response, "unauthorized", http.StatusUnauthorized)
+			return
+		}
+		if request.Header.Get(config.ServerTokenHeader) != serverToken {
+			http.Error(response, "missing central Server Token", http.StatusUnauthorized)
 			return
 		}
 		socket, err := websocket.Accept(response, request, nil)
@@ -46,8 +51,9 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	directory := t.TempDir()
 	client := Client{
 		Config: config.Config{
-			ServerURL: server.URL,
-			DataDir:   directory,
+			ServerURL:   server.URL,
+			ServerToken: serverToken,
+			DataDir:     directory,
 			Agents: []config.AgentConfig{{
 				Name: "Builder", Role: "Implementation", Adapter: "generic",
 				Command: []string{"agent"}, Workspace: directory,

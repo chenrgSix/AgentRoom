@@ -2,8 +2,9 @@ const elements = Object.fromEntries([
   "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view",
   "device-title", "start-bridge", "stop-bridge", "resume-enrollment", "edit-connection", "add-agent", "current-server",
+  "current-server-token",
   "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
-  "enrollment-form", "server-url", "device-name", "trust-mode", "fingerprint-field",
+  "enrollment-form", "server-url", "server-token", "device-name", "trust-mode", "fingerprint-field",
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
   "codex-path", "codex-workspace", "codex-sandbox", "pi-enabled", "pi-fields",
   "pi-name", "pi-role", "pi-path", "pi-workspace", "pi-credential-env",
@@ -21,7 +22,8 @@ const elements = Object.fromEntries([
   "agent-use-detected", "agent-preflight", "agent-preflight-result",
   "connection-modal-backdrop", "connection-modal-title", "close-connection-modal",
   "cancel-connection-modal", "connection-modal-error", "connection-form",
-  "connection-server-url", "connection-trust-mode", "connection-fingerprint-field",
+  "connection-server-url", "connection-server-token", "clear-server-token-field", "clear-server-token",
+  "connection-trust-mode", "connection-fingerprint-field",
   "connection-fingerprint", "save-connection"
 ].map((id) => [id, document.getElementById(id)]));
 
@@ -232,6 +234,13 @@ function syncConnectionTrustFields() {
   );
 }
 
+function syncConnectionTokenFields() {
+  const configured = Boolean(currentState?.serverTokenConfigured);
+  elements["clear-server-token"].disabled = !configured;
+  if (!configured) elements["clear-server-token"].checked = false;
+  elements["connection-server-token"].disabled = elements["clear-server-token"].checked;
+}
+
 function syncAgentKindFields() {
   const codex = elements["agent-kind"].value === "codex";
   elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
@@ -267,9 +276,15 @@ function closeAgentModal() {
 function openConnectionModal() {
   showError(null);
   elements["connection-server-url"].value = currentState.serverUrl || "";
+  elements["connection-server-token"].value = "";
+  elements["connection-server-token"].placeholder = currentState.serverTokenConfigured
+    ? "留空则保留当前 Token"
+    : "输入中央服务管理员提供的 Token";
+  elements["clear-server-token"].checked = false;
   elements["connection-trust-mode"].value = currentState.serverTrustMode || "system_ca";
   elements["connection-fingerprint"].value = currentState.serverCertificateSha256 || "";
   syncConnectionTrustFields();
+  syncConnectionTokenFields();
   elements["connection-modal-backdrop"].classList.remove("hidden");
   elements["connection-server-url"].focus();
 }
@@ -304,6 +319,7 @@ function render(state) {
   if (state.configured) {
     elements["device-title"].textContent = state.deviceName;
     elements["current-server"].textContent = state.serverUrl;
+    elements["current-server-token"].textContent = state.serverTokenConfigured ? "已配置" : "未配置";
     elements["current-team"].textContent = state.teamId || "等待配对";
     elements["current-device"].textContent = state.deviceId || "等待配对";
     elements["config-path"].textContent = state.configPath;
@@ -357,6 +373,10 @@ elements["server-url"].addEventListener("input", () => {
 elements["trust-mode"].addEventListener("change", syncTrustFields);
 elements["connection-server-url"].addEventListener("input", syncConnectionTrustFields);
 elements["connection-trust-mode"].addEventListener("change", syncConnectionTrustFields);
+elements["clear-server-token"].addEventListener("change", () => {
+  if (elements["clear-server-token"].checked) elements["connection-server-token"].value = "";
+  syncConnectionTokenFields();
+});
 elements["codex-enabled"].addEventListener("change", () => setRuntime("codex", elements["codex-enabled"].checked));
 elements["pi-enabled"].addEventListener("change", () => setRuntime("pi", elements["pi-enabled"].checked));
 elements["join-code"].addEventListener("click", async () => navigator.clipboard.writeText(elements["join-code"].textContent));
@@ -433,6 +453,8 @@ elements["connection-form"].addEventListener("submit", async (event) => {
       method: "PUT",
       body: JSON.stringify({
         serverUrl,
+        serverToken: elements["connection-server-token"].value.trim(),
+        clearServerToken: elements["clear-server-token"].checked,
         serverTrustMode: trustMode,
         serverCertificateSha256: https && trustMode === "pinned_sha256"
           ? elements["connection-fingerprint"].value
@@ -495,6 +517,7 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({
         serverUrl: elements["server-url"].value,
+        serverToken: elements["server-token"].value.trim(),
         serverTrustMode: usesHTTPS(elements["server-url"].value)
           ? elements["trust-mode"].value
           : "system_ca",

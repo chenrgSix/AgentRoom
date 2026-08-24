@@ -54,6 +54,7 @@
       </div>
       <dl class="details">
         <div><dt>中央服务</dt><dd id="current-server">—</dd></div>
+        <div><dt>中央 Token</dt><dd id="current-server-token">未配置</dd></div>
         <div><dt>Team</dt><dd id="current-team">—</dd></div>
         <div><dt>Device</dt><dd id="current-device">—</dd></div>
         <div><dt>配置文件</dt><dd id="config-path">—</dd></div>
@@ -74,6 +75,9 @@
           <label>服务地址<input id="server-url" required value="http://127.0.0.1:3000"></label>
           <label>设备名称<input id="device-name" maxlength="80" required></label>
         </div>
+        <label>中央 Server Token（可选）
+          <input id="server-token" type="password" autocomplete="new-password" minlength="32" maxlength="512" placeholder="由中央服务管理员提供">
+        </label>
         <label>HTTPS 信任方式
           <select id="trust-mode">
             <option value="system_ca">系统 CA（推荐，适合公开证书）</option>
@@ -146,6 +150,13 @@
           <label>中央服务地址
             <input id="connection-server-url" type="url" required placeholder="https://team.example.com:3000">
           </label>
+          <label>中央 Server Token
+            <input id="connection-server-token" type="password" autocomplete="new-password" minlength="32" maxlength="512" placeholder="留空则保留当前 Token">
+          </label>
+          <label class="runtime-toggle" id="clear-server-token-field">
+            <input id="clear-server-token" type="checkbox">
+            <span>清除已保存的中央 Token</span>
+          </label>
           <label>HTTPS 信任方式
             <select id="connection-trust-mode">
               <option value="system_ca">系统 CA（推荐，适合公开证书）</option>
@@ -155,7 +166,7 @@
           <label id="connection-fingerprint-field" class="hidden">HTTPS 证书 SHA-256 指纹
             <input id="connection-fingerprint" autocomplete="off" placeholder="64 位十六进制指纹">
           </label>
-          <p class="modal-help">只更新本机 Bridge 的出站地址和 HTTPS 信任配置，不会重建智能体或修改 Device 凭据。请确保新地址属于同一个中央服务；若 Bridge 正在运行，保存后会安全重连。</p>
+          <p class="modal-help">只更新本机 Bridge 的出站地址、中央 Token 和 HTTPS 信任配置，不会重建智能体或修改 Device 凭据。Token 留空时保留原值；若 Bridge 正在运行，保存后会安全重连。</p>
           <div class="actions modal-actions">
             <button class="secondary" id="cancel-connection-modal" type="button">取消</button>
             <button class="primary" id="save-connection" type="submit">保存并应用</button>

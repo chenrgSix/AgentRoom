@@ -12,6 +12,7 @@ import (
 type Config struct {
 	SchemaVersion           int           `json:"schemaVersion"`
 	ServerURL               string        `json:"serverUrl"`
+	ServerToken             string        `json:"serverToken,omitempty"`
 	ServerTrustMode         TrustMode     `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string        `json:"serverCertificateSha256,omitempty"`
 	DeviceName              string        `json:"deviceName"`
@@ -52,9 +53,10 @@ type AgentConfig struct {
 }
 
 const (
-	CurrentSchemaVersion           = 1
+	CurrentSchemaVersion           = 2
 	CurrentPresetVersion           = 4
 	OutputProtocolAgentRoomJSONLV1 = "agentroom-jsonl-v1"
+	ServerTokenHeader              = "X-AgentRoom-Server-Token"
 )
 
 func CodexPresetCommand(executable string) []string {
@@ -313,6 +315,15 @@ func (c Config) Validate() error {
 	}
 	if parsed.Scheme != "https" && !(parsed.Scheme == "http" && isLoopback(parsed.Hostname())) {
 		return fmt.Errorf("serverUrl must use HTTPS except on loopback")
+	}
+	if c.ServerToken != "" {
+		if strings.TrimSpace(c.ServerToken) != c.ServerToken || strings.ContainsAny(c.ServerToken, "\r\n") {
+			return fmt.Errorf("serverToken must not contain surrounding whitespace or line breaks")
+		}
+		length := len([]byte(c.ServerToken))
+		if length < 32 || length > 512 {
+			return fmt.Errorf("serverToken must contain 32 to 512 bytes")
+		}
 	}
 	trustMode := c.ResolvedTrustMode()
 	if trustMode != TrustSystemCA && trustMode != TrustPinnedSHA256 {

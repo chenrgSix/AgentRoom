@@ -113,6 +113,9 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	}
 	header := make(http.Header)
 	header.Set("authorization", "Bearer "+c.Credential.Token)
+	if c.Config.ServerToken != "" {
+		header.Set(config.ServerTokenHeader, c.Config.ServerToken)
+	}
 	socket, response, err := websocket.Dial(ctx, endpoint, &websocket.DialOptions{
 		HTTPClient: pairing.HTTPClient(c.Config),
 		HTTPHeader: header,

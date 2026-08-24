@@ -40,6 +40,9 @@ func Join(ctx context.Context, cfg config.Config, show func(Challenge)) (pairing
 		return pairing.Credential{}, err
 	}
 	request.Header.Set("content-type", "application/json")
+	if cfg.ServerToken != "" {
+		request.Header.Set(config.ServerTokenHeader, cfg.ServerToken)
+	}
 	response, err := pairing.HTTPClient(cfg).Do(request)
 	if err != nil {
 		return pairing.Credential{}, fmt.Errorf("create join request: %w", err)
@@ -106,6 +109,9 @@ func claim(
 		return pairing.Credential{}, false, err
 	}
 	request.Header.Set("content-type", "application/json")
+	if cfg.ServerToken != "" {
+		request.Header.Set(config.ServerTokenHeader, cfg.ServerToken)
+	}
 	response, err := pairing.HTTPClient(cfg).Do(request)
 	if err != nil {
 		return pairing.Credential{}, false, fmt.Errorf("claim join request: %w", err)

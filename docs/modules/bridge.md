@@ -160,7 +160,10 @@ legacy full-config form. It validates the central service URL and HTTPS trust,
 preserves Device credentials and every Agent field, applies the same active-work
 fence as Agent editing, and reconnects only when the Bridge was already running.
 
-`BRG-019` adds configuration schema version 1 and Runtime preset version 1.
+`BRG-019` introduced configuration schema version one and Runtime preset
+version one. `BRG-025` advances only the configuration schema to version two for the
+optional central Server Token; version 1 remains a token-free compatibility
+input and migrates in memory.
 Recognized legacy Codex and Pi presets migrate in memory before validation,
 while owner-controlled names, roles, workspaces, trust, and environment
 allowlists remain intact; unknown future versions fail closed. The Console

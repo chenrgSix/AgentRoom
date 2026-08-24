@@ -143,6 +143,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="pi-permission-policy"`, `id="agent-pi-permission-policy"`,
 		`id="edit-connection"`, `id="connection-modal-backdrop"`,
 		`id="connection-form"`, `id="connection-server-url"`,
+		`id="server-token"`, `id="current-server-token"`,
+		`id="connection-server-token"`, `id="clear-server-token"`,
 		`id="connection-trust-mode"`, `id="connection-fingerprint"`,
 	} {
 		if !bytes.Contains(html, []byte(id)) {
@@ -173,7 +175,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		t.Fatal("Agent editor must target one Agent endpoint instead of replacing the whole configuration")
 	}
 	if bytes.Count(javascript, []byte(`request("/api/connection-settings"`)) != 1 ||
-		!bytes.Contains(html, []byte("只更新本机 Bridge")) {
+		!bytes.Contains(html, []byte("只更新本机 Bridge")) ||
+		!bytes.Contains(javascript, []byte("serverTokenConfigured")) {
 		t.Fatal("connection editor must use its dedicated endpoint and disclose its narrow ownership")
 	}
 }
@@ -220,8 +223,9 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		t.Fatal(err)
 	}
 	payload := EnrollmentInput{
-		ServerURL:  "http://127.0.0.1:3000",
-		DeviceName: "Alice Local Bridge",
+		ServerURL:   "http://127.0.0.1:3000",
+		ServerToken: strings.Repeat("e", 32),
+		DeviceName:  "Alice Local Bridge",
 		Runtimes: []RuntimeInput{{
 			Kind: "codex", Enabled: true, Name: "Local Codex", Role: "Builder",
 			ExecutablePath: executablePath, Workspace: directory, Sandbox: "read-only",
@@ -258,7 +262,7 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	if len(loaded.Agents) != 2 {
 		t.Fatalf("expected two configured Agents, got %d", len(loaded.Agents))
 	}
-	if loaded.SchemaVersion != config.CurrentSchemaVersion ||
+	if loaded.SchemaVersion != config.CurrentSchemaVersion || loaded.ServerToken != payload.ServerToken ||
 		loaded.Agents[0].RuntimeKind != "codex" || loaded.Agents[1].RuntimeKind != "pi" ||
 		loaded.Agents[0].PresetVersion != config.CurrentPresetVersion ||
 		loaded.Agents[1].PresetVersion != config.CurrentPresetVersion {
@@ -279,11 +283,13 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		t.Fatal("expected persisted enrollment credential")
 	}
 	stateBody, _ := json.Marshal(service.State())
-	if bytes.Contains(stateBody, []byte(credential.Token)) {
-		t.Fatal("public Console state exposed the device credential")
+	if bytes.Contains(stateBody, []byte(credential.Token)) || bytes.Contains(stateBody, []byte(payload.ServerToken)) ||
+		!bytes.Contains(stateBody, []byte(`"serverTokenConfigured":true`)) {
+		t.Fatal("public Console state exposed a credential or omitted the central Token status")
 	}
 
 	updated := payload
+	updated.ServerToken = ""
 	updated.Runtimes = []RuntimeInput{{
 		Kind: "pi", Enabled: true, Name: "Local Pi Updated", Role: "Reviewer",
 		ExecutablePath: executablePath, Workspace: directory,
@@ -306,7 +312,8 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		t.Fatal("Bridge did not restart with updated configuration")
 	}
 	loaded, err = config.Load(configPath)
-	if err != nil || len(loaded.Agents) != 1 || loaded.Agents[0].Name != "Local Pi Updated" {
+	if err != nil || len(loaded.Agents) != 1 || loaded.Agents[0].Name != "Local Pi Updated" ||
+		loaded.ServerToken != payload.ServerToken {
 		t.Fatalf("unexpected updated config: %#v, %v", loaded, err)
 	}
 
@@ -340,6 +347,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	initial := config.Config{
 		SchemaVersion:   config.CurrentSchemaVersion,
 		ServerURL:       "http://127.0.0.1:3000",
+		ServerToken:     strings.Repeat("i", 32),
 		ServerTrustMode: config.TrustSystemCA,
 		DeviceName:      "Movable Bridge",
 		DataDir:         dataDir,
@@ -400,6 +408,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	}
 	response := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
 		ServerURL:       "http://127.0.0.1:3443",
+		ServerToken:     strings.Repeat("r", 32),
 		ServerTrustMode: config.TrustSystemCA,
 	})
 	response.Body.Close()
@@ -407,22 +416,28 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 		t.Fatalf("expected connection settings update, got %d", response.StatusCode)
 	}
 	waitSignal(t, stopped, "Bridge stop after connection settings update")
-	if restarted := waitConfigSignal(t, started, "Bridge restart after connection update"); restarted.ServerURL != "http://127.0.0.1:3443" {
-		t.Fatalf("Bridge restarted with stale URL: %s", restarted.ServerURL)
+	if restarted := waitConfigSignal(t, started, "Bridge restart after connection update"); restarted.ServerURL != "http://127.0.0.1:3443" || restarted.ServerToken != strings.Repeat("r", 32) {
+		t.Fatalf("Bridge restarted with stale connection settings: %#v", restarted)
 	}
 	persisted, err := config.Load(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !reflect.DeepEqual(persisted.Agents, initial.Agents) || persisted.DeviceName != initial.DeviceName {
+	if !reflect.DeepEqual(persisted.Agents, initial.Agents) || persisted.DeviceName != initial.DeviceName ||
+		persisted.ServerToken != strings.Repeat("r", 32) {
 		t.Fatal("connection settings update replaced unrelated Bridge configuration")
 	}
 	persistedCredential, err := pairing.Load(dataDir)
 	if err != nil || !reflect.DeepEqual(persistedCredential, credential) {
 		t.Fatalf("connection settings update changed Device credential: %#v, %v", persistedCredential, err)
 	}
-	if state := service.State(); state.ServerURL != "http://127.0.0.1:3443" || !state.BridgeRunning {
+	if state := service.State(); state.ServerURL != "http://127.0.0.1:3443" ||
+		!state.ServerTokenConfigured || !state.BridgeRunning {
 		t.Fatalf("unexpected updated Console state: %#v", state)
+	}
+	stateBody, _ := json.Marshal(service.State())
+	if bytes.Contains(stateBody, []byte(strings.Repeat("r", 32))) {
+		t.Fatal("public Console state exposed the central Server Token")
 	}
 
 	service.mu.Lock()
@@ -444,12 +459,28 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	waitSignal(t, stopped, "Bridge stop before offline connection update")
 	offline := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
 		ServerURL:               "https://team.example.com:9443",
+		ClearServerToken:        true,
 		ServerTrustMode:         config.TrustPinnedSHA256,
 		ServerCertificateSHA256: strings.Repeat("a", 64),
 	})
 	offline.Body.Close()
-	if offline.StatusCode != http.StatusOK || service.State().BridgeRunning {
+	if offline.StatusCode != http.StatusOK || service.State().BridgeRunning || service.State().ServerTokenConfigured {
 		t.Fatal("editing an offline Bridge unexpectedly started it")
+	}
+	persisted, err = config.Load(configPath)
+	if err != nil || persisted.ServerToken != "" {
+		t.Fatalf("clearing the central Server Token was not persisted: %#v, %v", persisted, err)
+	}
+
+	invalidToken := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL:               "https://team.example.com:9443",
+		ServerToken:             "too-short",
+		ServerTrustMode:         config.TrustPinnedSHA256,
+		ServerCertificateSHA256: strings.Repeat("a", 64),
+	})
+	invalidToken.Body.Close()
+	if invalidToken.StatusCode != http.StatusBadRequest || service.State().ServerTokenConfigured {
+		t.Fatal("invalid central Server Token changed persisted state")
 	}
 
 	invalid := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{

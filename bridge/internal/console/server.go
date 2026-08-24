@@ -59,6 +59,7 @@ type RuntimeInput struct {
 
 type EnrollmentInput struct {
 	ServerURL               string           `json:"serverUrl"`
+	ServerToken             string           `json:"serverToken,omitempty"`
 	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string           `json:"serverCertificateSha256,omitempty"`
 	DeviceName              string           `json:"deviceName"`
@@ -67,6 +68,8 @@ type EnrollmentInput struct {
 
 type ConnectionSettingsInput struct {
 	ServerURL               string           `json:"serverUrl"`
+	ServerToken             string           `json:"serverToken,omitempty"`
+	ClearServerToken        bool             `json:"clearServerToken,omitempty"`
 	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string           `json:"serverCertificateSha256,omitempty"`
 }
@@ -106,6 +109,7 @@ type State struct {
 	ConfigPath              string           `json:"configPath"`
 	Workspace               string           `json:"workspace"`
 	ServerURL               string           `json:"serverUrl,omitempty"`
+	ServerTokenConfigured   bool             `json:"serverTokenConfigured"`
 	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string           `json:"serverCertificateSha256,omitempty"`
 	DeviceName              string           `json:"deviceName,omitempty"`
@@ -901,6 +905,16 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 	}
 	candidate := cloneConfiguration(*s.configuration)
 	candidate.ServerURL = strings.TrimSpace(input.ServerURL)
+	replacementToken := strings.TrimSpace(input.ServerToken)
+	if input.ClearServerToken && replacementToken != "" {
+		writeError(response, http.StatusBadRequest, "serverToken cannot be replaced and cleared together")
+		return
+	}
+	if input.ClearServerToken {
+		candidate.ServerToken = ""
+	} else if replacementToken != "" {
+		candidate.ServerToken = replacementToken
+	}
 	candidate.ServerTrustMode = input.ServerTrustMode
 	candidate.ServerCertificateSHA256 = strings.TrimSpace(input.ServerCertificateSHA256)
 	if err := candidate.Validate(); err != nil {
@@ -908,6 +922,7 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 		return
 	}
 	if candidate.ServerURL == s.configuration.ServerURL &&
+		candidate.ServerToken == s.configuration.ServerToken &&
 		candidate.ServerTrustMode == s.configuration.ServerTrustMode &&
 		candidate.ServerCertificateSHA256 == s.configuration.ServerCertificateSHA256 {
 		writeJSON(response, http.StatusOK, s.state)
@@ -937,6 +952,9 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 		writeError(response, http.StatusConflict, err.Error())
 		return
 	}
+	if configuration.ServerToken == "" {
+		configuration.ServerToken = s.configuration.ServerToken
+	}
 	if err := s.replaceConfigurationLocked(configuration); err != nil {
 		writeError(response, http.StatusInternalServerError, publicError(err))
 		return
@@ -948,6 +966,7 @@ func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 	configuration := config.Config{
 		SchemaVersion:           config.CurrentSchemaVersion,
 		ServerURL:               strings.TrimSpace(input.ServerURL),
+		ServerToken:             strings.TrimSpace(input.ServerToken),
 		ServerTrustMode:         input.ServerTrustMode,
 		ServerCertificateSHA256: strings.TrimSpace(input.ServerCertificateSHA256),
 		DeviceName:              strings.TrimSpace(input.DeviceName),
@@ -1023,6 +1042,7 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 		return fmt.Errorf("load Agent identities: %w", err)
 	}
 	s.state.ServerURL = configuration.ServerURL
+	s.state.ServerTokenConfigured = configuration.ServerToken != ""
 	s.state.ServerTrustMode = configuration.ResolvedTrustMode()
 	s.state.ServerCertificateSHA256 = configuration.ServerCertificateSHA256
 	s.state.DeviceName = configuration.DeviceName

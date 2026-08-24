@@ -42,9 +42,14 @@ func TestHTTPClientUsesSystemRootsOrExplicitPin(t *testing.T) {
 }
 
 func TestExchangeStoresCredentialWithOwnerOnlyPermissions(t *testing.T) {
+	serverToken := "central-server-token-12345678901234567890"
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/api/bridge/pair" {
 			http.NotFound(response, request)
+			return
+		}
+		if request.Header.Get(config.ServerTokenHeader) != serverToken {
+			http.Error(response, "missing central Server Token", http.StatusUnauthorized)
 			return
 		}
 		response.Header().Set("content-type", "application/json")
@@ -57,7 +62,7 @@ func TestExchangeStoresCredentialWithOwnerOnlyPermissions(t *testing.T) {
 	}))
 	defer server.Close()
 	directory := t.TempDir()
-	cfg := config.Config{ServerURL: server.URL, DeviceName: "Alice Mac", DataDir: directory}
+	cfg := config.Config{ServerURL: server.URL, ServerToken: serverToken, DeviceName: "Alice Mac", DataDir: directory}
 	credential, err := Exchange(context.Background(), cfg, "one-time-code")
 	if err != nil {
 		t.Fatal(err)
