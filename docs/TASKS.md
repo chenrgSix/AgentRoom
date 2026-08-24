@@ -212,6 +212,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-014 | DONE | Publish and verify v0.2.0-rc.3 | QA-012, QA-013 | `docs/acceptance/qa-014-v0.2.0-rc.3.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification |
 | QA-015 | DONE | Publish and verify v0.2.0-rc.4 | WEB-026, WEB-027, WEB-028, BRG-022, QA-008 | `docs/acceptance/qa-015-v0.2.0-rc.4.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
 | QA-016 | DONE | Verify recoverable Runtime output streaming | BRG-023, RUN-007, WEB-029 | `docs/acceptance/qa-016-runtime-output-streaming.md` records passing contract, Go, Server, Web, race, Desktop, and deterministic real-Bridge checks for incremental Pi output, final-only fallback, reconnect replay, cancellation fencing, redaction, and one durable final Room Message |
+| QA-017 | DONE | Publish and verify v0.2.0-rc.5 | QA-016, WEB-032, WEB-033, WEB-034, QA-008 | `docs/acceptance/qa-017-v0.2.0-rc.5.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
 
 ## Deferred Beyond MVP
 

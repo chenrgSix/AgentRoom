@@ -308,6 +308,13 @@ from the exact tag, and an independent public download passed the same 11-asset
 verifier. Full evidence is recorded in
 `docs/acceptance/qa-015-v0.2.0-rc.4.md`.
 
+Release `v0.2.0-rc.5` adds owner-controlled local Pi permissions and resumable
+safe output streaming for Pi, managed Codex, and Generic Runtime adapters.
+GitHub Actions run `32723421229` built and verified all seven archives from the
+exact tag, and an independent public download passed the same 11-asset
+verifier. Full evidence is recorded in
+`docs/acceptance/qa-017-v0.2.0-rc.5.md`.
+
 ## Dependencies
 
 Contracts, Registry publication, Security pairing, and Runtime Adapters.
