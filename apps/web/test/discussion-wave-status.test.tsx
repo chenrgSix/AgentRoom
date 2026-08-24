@@ -116,6 +116,9 @@ function installFixture(input: {
         waves: input.waves
       }]);
     }
+    if (path.startsWith(`/api/teams/${team.teamId}/changes?after=`)) {
+      return jsonResponse({ changed: false, cursor: 0, reset: false });
+    }
     throw new Error(`Unexpected request: ${path}`);
   };
 }

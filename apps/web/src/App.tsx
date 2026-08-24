@@ -80,6 +80,12 @@ interface RoomParticipants {
   agentIds: string[];
 }
 
+interface TeamChangeCursor {
+  changed: boolean;
+  cursor: number;
+  reset: boolean;
+}
+
 interface Device {
   deviceId: string;
   name: string;
@@ -1042,6 +1048,8 @@ export function App() {
   useEffect(() => {
     if (!session || !selectedTeamId || !selectedRoomId) return;
     let stopped = false;
+    let activeController: AbortController | null = null;
+    let retryTimer: number | null = null;
     const refresh = async () => {
       try {
         const sync = messageSyncRef.current?.roomId === selectedRoomId
@@ -1118,10 +1126,57 @@ export function App() {
       }
     };
     const refreshSingleFlight = createSingleFlight(refresh);
-    const timer = window.setInterval(() => void refreshSingleFlight(), 2_000);
+    const delay = (milliseconds: number) => new Promise<void>((resolve) => {
+      retryTimer = window.setTimeout(() => {
+        retryTimer = null;
+        resolve();
+      }, milliseconds);
+    });
+    const listen = async () => {
+      let cursor = 0;
+      while (!stopped) {
+        if (document.visibilityState === "hidden") {
+          await delay(1_000);
+          continue;
+        }
+        activeController = new AbortController();
+        try {
+          const change = await jsonRequest<TeamChangeCursor>(
+            `/api/teams/${selectedTeamId}/changes?after=${cursor}`,
+            { signal: activeController.signal },
+            session.token
+          );
+          cursor = change.cursor;
+          if (change.changed || change.reset) {
+            await refreshSingleFlight();
+          } else {
+            await delay(250);
+          }
+        } catch (reason) {
+          if (stopped || activeController?.signal.aborted) return;
+          await refreshSingleFlight();
+          await delay(2_000);
+        }
+      }
+    };
+    const reconcileVisible = () => {
+      if (document.visibilityState === "hidden") {
+        activeController?.abort();
+      } else {
+        void refreshSingleFlight();
+      }
+    };
+    document.addEventListener("visibilitychange", reconcileVisible);
+    const fallbackTimer = window.setInterval(() => {
+      if (document.visibilityState !== "hidden") void refreshSingleFlight();
+    }, 30_000);
+    void listen();
     return () => {
       stopped = true;
-      window.clearInterval(timer);
+      activeController?.abort();
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
+      window.clearInterval(fallbackTimer);
+      document.removeEventListener("visibilitychange", reconcileVisible);
     };
   }, [selectedRoomId, selectedTeamId, session]);
 

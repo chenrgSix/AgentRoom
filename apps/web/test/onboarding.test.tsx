@@ -274,6 +274,9 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path.endsWith("/rooms")) {
       return jsonResponse([]);
     }
+    if (/^\/api\/teams\/[^/]+\/changes\?after=/u.test(path)) {
+      return jsonResponse({ changed: false, cursor: 0, reset: false });
+    }
     throw new Error(`Unexpected request: ${method} ${path}`);
   };
 

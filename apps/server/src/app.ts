@@ -58,6 +58,7 @@ import { BridgePairingService } from "./security/bridge-pairing-service.js";
 import { TrustedWebAccessService } from "./security/trusted-web-access-service.js";
 import type { WebAuthConfiguration } from "./security/web-auth-config.js";
 import { TeamRoomService } from "./team-room/team-room-service.js";
+import { TeamChangeService } from "./team-room/team-change-service.js";
 import { MessageService } from "./team-room/message-service.js";
 
 export interface ServerAppOptions {
@@ -222,6 +223,7 @@ export async function createServerApp(
     options.anonymousRateLimit?.windowMilliseconds
   );
   const teamRooms = new TeamRoomService(core, auth);
+  const teamChanges = new TeamChangeService();
   const registry = new MemberDeviceService(core, auth);
   const agents = new AgentService(core, auth);
   const presence = new PresenceService(core, auth);
@@ -410,6 +412,24 @@ export async function createServerApp(
       statusCode: reply.statusCode,
       durationMs: Number(durationMs.toFixed(3))
     }, "HTTP request completed");
+    if (reply.statusCode < 400 && unsafeHttpMethods.has(request.method)) {
+      const params = (request.params ?? {}) as Record<string, string | undefined>;
+      let changedTeamId = params.teamId;
+      if (!changedTeamId && params.roomId) {
+        changedTeamId = core.getRoom(params.roomId)?.teamId;
+      }
+      if (!changedTeamId && params.runId) {
+        const run = runRepository.getRun(params.runId);
+        changedTeamId = run ? core.getRoom(run.roomId)?.teamId : undefined;
+      }
+      if (!changedTeamId && params.discussionId) {
+        const discussion = discussionRepository.get(params.discussionId);
+        changedTeamId = discussion
+          ? core.getRoom(discussion.roomId)?.teamId
+          : undefined;
+      }
+      if (changedTeamId) teamChanges.notify(changedTeamId);
+    }
   });
 
   app.addHook("onClose", (_instance, done) => {
@@ -605,6 +625,7 @@ export async function createServerApp(
             now: clock()
           });
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
+          teamChanges.notify(devicePrincipal.teamId);
           return;
         }
         if (message.type === "bridge.heartbeat" && registeredEpoch !== undefined) {
@@ -622,6 +643,7 @@ export async function createServerApp(
             now: clock()
           });
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
+          teamChanges.notify(devicePrincipal.teamId);
           return;
         }
         if (message.type === "agent.publish" && registeredEpoch !== undefined) {
@@ -654,6 +676,7 @@ export async function createServerApp(
             now: clock()
           });
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
+          teamChanges.notify(devicePrincipal.teamId);
           return;
         }
         if (message.type === "run.accepted" && registeredEpoch !== undefined) {
@@ -685,6 +708,7 @@ export async function createServerApp(
             deviceId: devicePrincipal.deviceId,
             state: accepted.state
           }, "Run delivery accepted");
+          teamChanges.notify(devicePrincipal.teamId);
           return;
         }
         if (message.type === "run.status" && registeredEpoch !== undefined) {
@@ -734,18 +758,23 @@ export async function createServerApp(
             sequence: message.payload.sequence,
             applied: applied.applied
           }, "Run state event processed");
+          teamChanges.notify(devicePrincipal.teamId);
           if (
             applied.applied &&
             new Set(["completed", "failed", "canceled", "outcome_unknown"])
               .has(applied.run.state)
           ) {
-            void advanceDiscussion(applied.run.runId).catch((error: unknown) => {
-              app.log.error(error, "Discussion advancement failed");
-            });
+            void advanceDiscussion(applied.run.runId)
+              .then(() => teamChanges.notify(devicePrincipal.teamId))
+              .catch((error: unknown) => {
+                app.log.error(error, "Discussion advancement failed");
+              });
           } else if (applied.applied && applied.run.state === "input_required") {
-            void pauseDiscussionForInput(applied.run.runId).catch((error: unknown) => {
-              app.log.error(error, "Discussion input-required transition failed");
-            });
+            void pauseDiscussionForInput(applied.run.runId)
+              .then(() => teamChanges.notify(devicePrincipal.teamId))
+              .catch((error: unknown) => {
+                app.log.error(error, "Discussion input-required transition failed");
+              });
           }
           return;
         }
@@ -781,6 +810,7 @@ export async function createServerApp(
             sequence: message.payload.sequence,
             applied: applied.applied
           }, "Run reply event processed");
+          teamChanges.notify(devicePrincipal.teamId);
           return;
         }
         rejectMessage("hello_required");
@@ -799,6 +829,7 @@ export async function createServerApp(
     });
     socket.on("close", () => {
       bridgeConnections.remove(devicePrincipal.deviceId, socket);
+      teamChanges.notify(devicePrincipal.teamId);
       app.log.info({
         event: "bridge.connection.closed",
         deviceId: devicePrincipal.deviceId,
@@ -923,6 +954,31 @@ export async function createServerApp(
   app.get("/api/teams", async (request) =>
     teamRooms.listTeams(principal(request))
   );
+  app.get<{
+    Params: { teamId: string };
+    Querystring: { after?: string };
+  }>("/api/teams/:teamId/changes", async (request, reply) => {
+    auth.requireTeamMember(principal(request), request.params.teamId);
+    const after = request.query.after === undefined
+      ? 0
+      : Number.parseInt(request.query.after, 10);
+    if (!Number.isSafeInteger(after) || after < 0) {
+      throw new Error("Team change cursor must be a non-negative integer");
+    }
+    noStore(reply);
+    const controller = new AbortController();
+    const abort = () => controller.abort(new Error("Team change client disconnected"));
+    request.raw.once("aborted", abort);
+    reply.raw.once("close", abort);
+    try {
+      return await teamChanges.wait(request.params.teamId, after, {
+        signal: controller.signal
+      });
+    } finally {
+      request.raw.off("aborted", abort);
+      reply.raw.off("close", abort);
+    }
+  });
   app.post("/api/teams", async (request) => {
     const actor = principal(request);
     const user = core.getUser(actor.userId);

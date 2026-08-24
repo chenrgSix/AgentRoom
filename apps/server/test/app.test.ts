@@ -98,6 +98,18 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       agents.json().map((item: { name: string }) => item.name).sort(),
       ["Builder", "Reviewer"]
     );
+    const changeCheckpoint = await app.inject({
+      method: "GET",
+      url: `/api/teams/${team.team.teamId}/changes?after=0`,
+      headers: { authorization }
+    });
+    assert.equal(changeCheckpoint.statusCode, 200);
+    const changeCursor = changeCheckpoint.json().cursor as number;
+    const nextChange = app.inject({
+      method: "GET",
+      url: `/api/teams/${team.team.teamId}/changes?after=${changeCursor}`,
+      headers: { authorization }
+    });
     const createMessage = await app.inject({
       method: "POST",
       url: `/api/rooms/${room.roomId}/messages`,
@@ -108,6 +120,13 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       }
     });
     assert.equal(createMessage.statusCode, 200);
+    const changed = await nextChange;
+    assert.equal(changed.statusCode, 200);
+    assert.deepEqual(changed.json(), {
+      changed: true,
+      cursor: changeCursor + 1,
+      reset: false
+    });
     const routed = createMessage.json() as {
       message: { sequence: number };
       runs: Array<{ runId: string; targetAgentId: string; state: string }>;
