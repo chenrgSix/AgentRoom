@@ -43,6 +43,13 @@ persisted Message before routing or realtime broadcast.
 Message content is immutable in MVP. Deletion, editing, reactions, attachments,
 and full-text search are deferred.
 
+Team and Room lifecycle is recoverable. Owners may rename or archive and
+restore them, but the Server never physically deletes their Messages, Runs,
+Discussions, membership, or stable IDs. Archived resources are excluded from
+ordinary navigation and reject new work. Explicit lifecycle views may request
+them for restoration. Archiving is fenced while active Runs or Discussions
+could otherwise continue producing new history.
+
 Room participation is explicit. Existing Rooms are migrated with every current
 Team Member and enabled Agent, and newly created Rooms inherit the same current
 Team roster. Newly registered Members and Agents are assigned to existing Rooms

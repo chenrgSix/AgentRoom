@@ -48,10 +48,14 @@ optional headless Bridge, keeping existing agent clients unchanged.
 
 ## Data Flow
 
-HTTP reads establish a snapshot and WebSocket events advance it. Every stream
-event has a cursor; gaps or reconnects trigger server reconciliation. Optimistic
-messages remain visibly pending until acknowledged and are replaced by their
-server-assigned identity.
+HTTP reads establish a snapshot and an authenticated Team change channel wakes
+reconciliation. Every notification has a monotonic cursor; gaps, server restart,
+tab visibility changes, and reconnects trigger bounded HTTP reconciliation.
+Healthy event delivery replaces broad two-second polling, while a slower
+fallback remains available after channel failure. Optimistic messages carry a
+client-generated idempotency identity, remain visibly pending until
+acknowledged, and expose an explicit retry after failure without duplicating the
+server Message or its Runs.
 
 The UI uses schemas and generated types from `packages/contracts/`. Capability
 flags control whether start, resume, interrupt, handoff, or managed execution

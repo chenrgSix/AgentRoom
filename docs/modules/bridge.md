@@ -75,6 +75,12 @@ and environment values. The UI accepts `codex` and `pi` presets rather than
 arbitrary command strings; Pi may add one validated credential environment
 variable name, never its value.
 
+The per-Agent modal may populate the executable and workspace from bounded
+local discovery and may run the existing safe Codex/Pi probe against the draft
+before save. Preflight is explicit, token-authenticated, does not persist or
+restart the Bridge, and is fenced against every active Team Run or concurrent
+Runtime probe.
+
 ## Connection Lifecycle
 
 The initial transport is `/ws/bridge`. After TLS connection, the Bridge sends a

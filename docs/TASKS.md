@@ -70,9 +70,11 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ROOM-002 | DONE | Implement Message persistence and pagination | ROOM-001 | stable cursor ordering survives restart |
 | ROOM-003 | DONE | Validate structured Mention references | ROOM-002, REG-002 | invalid or unauthorized mentions are rejected |
 | ROOM-004 | DONE | Add Room-scoped human and Agent participation | ROOM-003, REG-002, SEC-002 | migrations preserve existing Room access; only assigned humans can discover and use a Room, only assigned Agents can be mentioned or join Discussions, and Owner-managed roster updates keep history intact |
+| ROOM-005 | PLANNED | Add recoverable Team and Room lifecycle controls | ROOM-004, SEC-005 | Owner-only rename and archive/restore preserve history and stable IDs; archived resources disappear from ordinary navigation and reject new work without physical deletion |
 | REG-001 | DONE | Implement Member and Device registry | DATA-002, SEC-001 | membership and device ownership persist |
 | REG-002 | DONE | Implement Agent publication and capability validation | REG-001, CON-003 | managed/manual agents publish correctly |
 | REG-003 | DONE | Implement Presence TTL and derived status | REG-002 | ready, busy, degraded, manual, offline verified |
+| REG-004 | PLANNED | Add recoverable Agent enablement controls | REG-003, ROOM-004, RUN-003 | Owner-only disable/enable preserves stable identity and Room assignment, rejects active work, and cannot be undone by managed Bridge republication |
 | WEB-001 | DONE | Scaffold Web shell and basic Team management | ROOM-001, REG-001 | user creates Team, Room, Member, and fake Agent |
 
 ## Workstream F2: Bridge and Managed Runtime
@@ -100,6 +102,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | BRG-019 | DONE | Version Bridge Runtime presets and add local self-test | BRG-018, BRG-007 | Go migration tests preserve owner fields while replacing legacy Pi flags and rejecting future versions; authenticated Console tests prove manual-only, active-Run-fenced, bounded Codex/Pi probes with safe result projection |
 | BRG-020 | DONE | Isolate concurrent managed Agent execution | BRG-005, BRG-016 | race-tested Bridge coverage proves durable acceptance, same-Agent FIFO, cross-Agent overlap, duplicate bypass, queued cancel without Runtime start, explicit cancel causality, and deterministic disconnect recovery |
 | BRG-021 | DONE | Manage Bridge Agents individually | BRG-007, BRG-019, BRG-020 | authenticated Console tests prove multiple Codex/Pi Agents can be added and one selected Agent can be edited in a modal without changing its stable identity, replacing sibling configuration, or interrupting active work |
+| BRG-022 | PLANNED | Preflight Bridge Runtime configuration before save | BRG-019, BRG-021 | token-authenticated Console coverage proves detected paths can populate one Agent modal and a bounded Codex/Pi probe validates the draft without persisting it or overlapping active work |
 | ADP-002 | DONE | Implement Runtime Adapter interface | ADP-001, BRG-001 | Fake Adapter runs behind production interface |
 | ADP-003 | DONE | Spike Codex machine-protocol lifecycle | ADP-002 | start, events, interrupt, and exit documented |
 | ADP-004 | DONE | Implement managed Codex Team Session | ADP-003, BRG-005 | Bridge completes one remote Codex run |
@@ -136,6 +139,9 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-023 | DONE | Dock Room composition and Discussion status | WEB-019, WEB-022 | desktop and narrow-screen component coverage proves the timeline owns scrolling and the dynamically sized Discussion status and composer never overlay Room messages |
 | WEB-024 | DONE | Expose persistent Team creation entry | WEB-007, WEB-018 | desktop rail and mobile navigation open an accessible Team creation modal and switch to the created Team |
 | WEB-025 | DONE | Manage Room participants from the Room context | ROOM-004, WEB-013, WEB-014 | Owner-only participant controls update humans and Agents independently; sidebar and Mention suggestions render only the selected Room roster |
+| WEB-026 | PLANNED | Replace broad Room polling with event-driven reconciliation | WEB-021, OPS-002 | authorized Team change cursors wake selected-Room reconciliation promptly; reconnect, server restart, hidden tabs, and stream failure retain bounded HTTP fallback without a healthy two-second full refresh |
+| WEB-027 | PLANNED | Make Room message submission recoverable | WEB-019, WEB-026, ROOM-002 | client Message IDs deduplicate ambiguous retries; pending and failed rows remain visible with retry, while message, Team, and participant operations use independent pending state |
+| WEB-028 | PLANNED | Expose recoverable Team, Room, and Agent lifecycle controls | ROOM-005, REG-004, WEB-024, WEB-025 | accessible Owner controls rename and archive/restore Teams and Rooms and disable/enable Agents; ordinary navigation excludes archived resources and never deletes history |
 
 ## Workstream F4: MCP Team Participation
 
@@ -192,6 +198,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-012 | DONE | Verify Room and Bridge UX stabilization | WEB-021, WEB-022, BRG-019 | `docs/acceptance/qa-012-room-bridge-ux.md` records passing Node, Go, Desktop, E2E, docs, 101-plus-message, safe diagnostic, preset migration, bounded probe, and secret-leakage evidence |
 | QA-013 | DONE | Verify managed Agent concurrency isolation | BRG-020, QA-004 | `docs/acceptance/qa-013-agent-concurrency-isolation.md` records passing race, FIFO, cross-Agent overlap, duplicate, queued-cancel, reconnect, full Go/Desktop, Node, and deterministic E2E evidence |
 | QA-014 | DONE | Publish and verify v0.2.0-rc.3 | QA-012, QA-013 | `docs/acceptance/qa-014-v0.2.0-rc.3.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification |
+| QA-015 | PLANNED | Publish and verify v0.2.0-rc.4 | WEB-026, WEB-027, WEB-028, BRG-022, QA-008 | exact-tag CI, seven Bridge archives, checksums and license assets pass the no-clobber workflow; independent clean-download verification and remaining physical gates are recorded before prerelease publication |
 
 ## Deferred Beyond MVP
 
