@@ -69,6 +69,7 @@ const agents = [{
 function installFixture(input: {
   discussionState: "waiting_human" | "completed";
   currentWave: number;
+  messages?: unknown[];
   runs: unknown[];
   turns: unknown[];
   waves: unknown[];
@@ -105,7 +106,11 @@ function installFixture(input: {
       });
     }
     if (path === `/api/rooms/${room.roomId}/messages?limit=100&tail=true`) {
-      return jsonResponse({ items: [], nextCursor: null, syncCursor: "cursor-empty" });
+      return jsonResponse({
+        items: input.messages ?? [],
+        nextCursor: null,
+        syncCursor: "cursor-empty"
+      });
     }
     if (path === `/api/rooms/${room.roomId}/runs`) return jsonResponse(input.runs);
     if (path === `/api/rooms/${room.roomId}/discussions`) {
@@ -206,6 +211,67 @@ test("Room dock participates in layout instead of overlaying the timeline", asyn
   assert.match(timelineRule, /overflow-y:\s*auto/u);
   assert.doesNotMatch(composerRule, /position:\s*absolute/u);
   assert.match(dockRule, /flex:\s*0 0 auto/u);
+});
+
+test("Run status replaces duplicate Mention metadata in a Member message", async () => {
+  const dom = installDom();
+  installFixture({
+    currentWave: 1,
+    discussionState: "completed",
+    messages: [{
+      content: "请分析这个交付方案",
+      createdAt: "2026-08-24T00:01:00.000Z",
+      mentions: [{
+        displayLabel: "方案智能体 / Codex implementer",
+        targetAgentId: agents[0]!.agentId
+      }],
+      messageId: "message_prompt",
+      roomId: room.roomId,
+      senderId: owner.memberId,
+      senderType: "member",
+      sequence: 1
+    }],
+    runs: [{
+      runId: "run_solver",
+      state: "completed",
+      targetAgentId: agents[0]!.agentId,
+      triggerMessageId: "message_prompt",
+      updatedAt: "2026-08-24T00:02:00.000Z"
+    }],
+    turns: [{
+      kind: "discussion",
+      runId: "run_solver",
+      speakerAgentId: agents[0]!.agentId,
+      state: "completed",
+      terminalReason: null,
+      turnId: "turn_solver",
+      waveId: "wave_1",
+      waveMemberOrdinal: 1
+    }],
+    waves: [{
+      expectedMembers: 1,
+      ordinal: 1,
+      phase: "contribution",
+      state: "completed",
+      waveId: "wave_1"
+    }]
+  });
+
+  const { cleanup, render, within } = await import("@testing-library/react");
+  try {
+    const view = render(<App />);
+    const prompt = await view.findByText("请分析这个交付方案");
+    const message = prompt.closest("article");
+    assert.ok(message);
+    assert.ok(message.querySelector(".message-routing.with-runs"));
+    assert.equal(message.querySelectorAll(".run-card").length, 1);
+    assert.equal(message.querySelector(".mention-pill"), null);
+    within(message).getByText("方案智能体");
+    within(message).getByText("已完成");
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
 });
 
 test("completed Discussion keeps a failed finalization Wave and its reasons visible", async () => {

@@ -150,6 +150,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-028 | DONE | Expose recoverable Team, Room, and Agent lifecycle controls | ROOM-005, REG-004, WEB-024, WEB-025 | the onboarding component regression and Web build prove accessible Owner controls rename and archive/restore Teams and Rooms and disable/enable Agents; ordinary navigation excludes archived resources while the recovery modal retains access without deleting history |
 | WEB-029 | DONE | Render recoverable in-progress Agent output | RUN-007, WEB-021, WEB-026 | component and sync tests prove one provisional bubble per active Run resumes ordered deltas, applies reset boundaries, disappears on final reply, and never duplicates the durable Agent Message |
 | WEB-030 | DONE | Refresh Room conversation UI and render safe Markdown | WEB-023, WEB-029 | Markdown component regressions, 116 Server/Web/Contracts tests, production builds, cross-process E2E, and isolated real-browser checks prove GFM content, untrusted HTML isolation, streaming/final parity, readable Member/Agent hierarchy, non-overlaying composition, and zero-horizontal-overflow light/dark layouts at desktop, 720 px, and 390 px widths |
+| WEB-031 | DONE | Simplify conversation and Run status hierarchy | WEB-022, WEB-030 | 17 Web regressions, 117 workspace tests, production builds, and light/dark real-browser checks prove compact Member prompts, open Agent replies, non-duplicated Run targets, bounded diagnostics, and zero horizontal overflow |
 
 ## Workstream F4: MCP Team Participation
 

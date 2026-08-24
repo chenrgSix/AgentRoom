@@ -224,6 +224,14 @@ Isolated real-browser acceptance covers desktop light/dark themes plus 720 px
 and 390 px widths; both narrow layouts retain zero horizontal page overflow and
 place the dock immediately after the timeline rather than over its content.
 
+`WEB-031` removes duplicated routing metadata once authoritative Runs exist.
+Agent replies use an open narrative row, Member prompts use one restrained
+right-aligned bubble, and each triggered Run becomes one compact status panel.
+Failure guidance stays attached to its owning Run without stretching sibling
+targets or turning Mention labels into empty oversized pills. A component
+regression covers the Mention-to-Run replacement, and light/dark real-browser
+acceptance confirms the production shell has no horizontal overflow.
+
 ## Dependencies
 
 Team/Room, Registry, Run Orchestration, Bridge pairing APIs, and Security.

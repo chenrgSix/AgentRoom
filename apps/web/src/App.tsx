@@ -2546,6 +2546,9 @@ export function App() {
                   ? membersById.get(message.senderId)?.displayName ?? session?.displayName ?? ""
                   : "Agent Room";
               const avatarLabel = senderName.trim().slice(0, 1).toLocaleUpperCase(locale) || "A";
+              const messageRuns = runs.filter(
+                (run) => run.triggerMessageId === message.messageId
+              );
 
               return (
                 <article className={`message ${message.senderType}-message`} key={message.messageId}>
@@ -2556,20 +2559,23 @@ export function App() {
                       <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                     </header>
                     <MarkdownMessage content={message.content} />
-                    {(message.mentions.length > 0 || runs.some((run) => run.triggerMessageId === message.messageId)) && (
-                      <div className="message-routing">
-                        {message.mentions.map((mention) => (
+                    {(message.mentions.length > 0 || messageRuns.length > 0) && (
+                      <div className={`message-routing ${messageRuns.length > 0 ? "with-runs" : "mentions-only"}`}>
+                        {messageRuns.length === 0 && message.mentions.map((mention) => (
                           <span className="mention-pill" key={mention.targetAgentId}>
                             @{mention.displayLabel}
                           </span>
                         ))}
-                        {runs.filter((run) => run.triggerMessageId === message.messageId).map((run) => (
+                        {messageRuns.map((run) => (
                           <span
                             className={`run-card ${runDiagnostics[run.runId] ? "has-diagnostic" : ""}`}
                             key={run.runId}
                             title={run.runId}
                           >
-                            <strong>{agentsById.get(run.targetAgentId)?.name ?? t("agent")}</strong>
+                            <span className="run-card-agent">
+                              <span aria-hidden="true" className={`run-dot ${run.state}`} />
+                              <strong>{agentsById.get(run.targetAgentId)?.name ?? t("agent")}</strong>
+                            </span>
                             <span className={`run-state ${run.state}`}>
                               {runStateLabel(run.state, locale)}
                             </span>
