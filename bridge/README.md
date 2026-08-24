@@ -94,6 +94,11 @@ agentroom-bridge console \
 An existing paired configuration starts automatically. Editing Agent presets
 atomically updates the configuration and restarts the managed connection. The
 Console never returns Device credentials or environment values to the browser.
+The configured-device view also exposes **连接设置** for changing the central
+service URL, port, and HTTPS trust mode without rebuilding the Agent roster or
+rewriting the Device credential. A running Bridge reconnects after save; a
+manually stopped Bridge remains stopped. The replacement endpoint must be the
+same central deployment and accept the existing credential.
 Detected Codex and Pi executables are copied into a form only after an explicit
 **使用检测值** action. **保存前预检** runs the same bounded safe probe against
 the unsaved form without writing configuration or restarting the Bridge. An

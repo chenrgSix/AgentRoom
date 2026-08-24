@@ -141,7 +141,8 @@ duplicate delivery, restart recovery, revoked devices, Console authentication,
 strict Runtime presets, configuration replacement, and lifecycle fencing.
 Console coverage verifies first setup, Runtime discovery, multiple same-kind
 Agents, per-Agent modal/API ownership, rename-stable identity, active-work
-fencing, draft Runtime preflight, and status rendering. Work is tracked by
+fencing, draft Runtime preflight, connection-only mutation and lifecycle
+preservation, and status rendering. Work is tracked by
 `BRG-001` through `BRG-024`
 in `docs/TASKS.md`.
 
