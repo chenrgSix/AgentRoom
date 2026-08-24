@@ -32,7 +32,7 @@ async function stopProcess(process: ChildProcess): Promise<void> {
   ]);
 }
 
-test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
+test("Web Mention streams Pi output and completes through a paired Go Bridge", {
   timeout: 60_000
 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-e2e-"));
@@ -75,6 +75,19 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
     await execFileAsync(goBinary, ["build", "-o", bridgeBinary, "./cmd/agentroom-bridge"], {
       cwd: path.join(repositoryRoot, "bridge")
     });
+    const piReply = `PI STREAMING FINAL ${"RESULT ".repeat(14).trim()}`;
+    const piHelperPath = path.join(directory, "pi-helper.mjs");
+    await writeFile(piHelperPath, [
+      `const reply = ${JSON.stringify(piReply)};`,
+      "const send = (event) => process.stdout.write(`${JSON.stringify(event)}\\n`);",
+      "send({ type: 'message_start', message: { role: 'assistant', content: [] } });",
+      "send({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: reply } });",
+      "setTimeout(() => {",
+      "  send({ type: 'message_end', message: {",
+      "    role: 'assistant', content: [{ type: 'text', text: reply }], stopReason: 'stop'",
+      "  } });",
+      "}, 1200);"
+    ].join("\n"));
     const configPath = path.join(directory, "bridge.json");
     await writeFile(configPath, JSON.stringify({
       serverUrl,
@@ -85,6 +98,15 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
         role: "Generic Runtime",
         adapter: "generic",
         command: ["/usr/bin/tr", "a-z", "A-Z"],
+        workspace: directory,
+        envAllowlist: []
+      }, {
+        name: "Pi Builder",
+        role: "Streaming Runtime",
+        adapter: "generic",
+        runtimeKind: "pi",
+        presetVersion: 3,
+        command: [process.execPath, piHelperPath],
         workspace: directory,
         envAllowlist: []
       }, {
@@ -166,6 +188,89 @@ test("Web Mention completes through a paired Go Bridge and Generic Runtime", {
       }
     });
     assert.equal(deniedTrace.statusCode, 403);
+
+    stage = "wait for Pi Builder presence";
+    const piAgent = await waitFor(async () => {
+      const response = await app.inject({
+        method: "GET", url: `/api/teams/${teamId}/agents`, headers: authorization
+      });
+      return (response.json() as Array<{
+        agentId: string;
+        name: string;
+        presence: string;
+      }>).find((candidate) =>
+        candidate.name === "Pi Builder" && candidate.presence === "ready"
+      );
+    });
+    const piSent = await app.inject({
+      method: "POST", url: `/api/rooms/${roomId}/messages`, headers: authorization,
+      payload: { content: "Stream through real Bridge", mentionAgentId: piAgent.agentId }
+    });
+    assert.equal(piSent.statusCode, 200);
+    const piRunId = piSent.json().runs[0].runId as string;
+    stage = "wait for Pi Builder output before final reply";
+    const previewEvents = await waitFor(async () => {
+      const response = await app.inject({
+        method: "GET", url: `/api/runs/${piRunId}/events?after=0`, headers: authorization
+      });
+      const events = response.json() as Array<{
+        sequence: number;
+        event: { type: string; content?: string };
+      }>;
+      const output = events.find(({ event }) => event.type === "output");
+      const reply = events.find(({ event }) => event.type === "reply");
+      return output && !reply ? events : undefined;
+    });
+    const preview = previewEvents.find(({ event }) => event.type === "output");
+    assert.ok(preview);
+    assert.ok(preview.event.content);
+    assert.ok(piReply.startsWith(preview.event.content));
+    const timelineBeforeReply = await app.inject({
+      method: "GET", url: `/api/rooms/${roomId}/messages?limit=100`, headers: authorization
+    });
+    assert.equal(
+      timelineBeforeReply.json().items.some((item: { content: string }) => item.content === piReply),
+      false
+    );
+
+    stage = "wait for Pi Builder completion";
+    await waitFor(async () => {
+      const response = await app.inject({
+        method: "GET", url: `/api/rooms/${roomId}/runs`, headers: authorization
+      });
+      const run = (response.json() as Array<{ runId: string; state: string }>).find(
+        (candidate) => candidate.runId === piRunId
+      );
+      return run?.state === "completed" ? run : undefined;
+    });
+    const completedEventsResponse = await app.inject({
+      method: "GET", url: `/api/runs/${piRunId}/events?after=0`, headers: authorization
+    });
+    const completedEvents = completedEventsResponse.json() as Array<{
+      sequence: number;
+      event: { type: string; content?: string };
+    }>;
+    const outputEvent = completedEvents.find(({ event }) => event.type === "output");
+    const replyEvent = completedEvents.find(({ event }) => event.type === "reply");
+    assert.ok(outputEvent);
+    assert.ok(replyEvent);
+    assert.ok(outputEvent.sequence < replyEvent.sequence);
+    assert.equal(replyEvent.event.content, piReply);
+    const resumedEvents = await app.inject({
+      method: "GET",
+      url: `/api/runs/${piRunId}/events?after=${outputEvent.sequence}`,
+      headers: authorization
+    });
+    assert.ok((resumedEvents.json() as Array<{ event: { type: string } }>).some(
+      ({ event }) => event.type === "reply"
+    ));
+    const piTimeline = await app.inject({
+      method: "GET", url: `/api/rooms/${roomId}/messages?limit=100`, headers: authorization
+    });
+    assert.equal(
+      piTimeline.json().items.filter((item: { content: string }) => item.content === piReply).length,
+      1
+    );
 
     stage = "wait for Slow Builder presence";
     const slowAgent = await waitFor(async () => {

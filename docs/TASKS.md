@@ -204,7 +204,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-013 | DONE | Verify managed Agent concurrency isolation | BRG-020, QA-004 | `docs/acceptance/qa-013-agent-concurrency-isolation.md` records passing race, FIFO, cross-Agent overlap, duplicate, queued-cancel, reconnect, full Go/Desktop, Node, and deterministic E2E evidence |
 | QA-014 | DONE | Publish and verify v0.2.0-rc.3 | QA-012, QA-013 | `docs/acceptance/qa-014-v0.2.0-rc.3.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification |
 | QA-015 | DONE | Publish and verify v0.2.0-rc.4 | WEB-026, WEB-027, WEB-028, BRG-022, QA-008 | `docs/acceptance/qa-015-v0.2.0-rc.4.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
-| QA-016 | ACTIVE | Verify recoverable Runtime output streaming | BRG-023, RUN-007, WEB-029 | contract, Go, Server, Web, and deterministic cross-process checks prove visible incremental Pi output, final-only fallback, reconnect replay, cancellation fencing, redaction, and one durable final Room Message |
+| QA-016 | DONE | Verify recoverable Runtime output streaming | BRG-023, RUN-007, WEB-029 | `docs/acceptance/qa-016-runtime-output-streaming.md` records passing contract, Go, Server, Web, race, Desktop, and deterministic real-Bridge checks for incremental Pi output, final-only fallback, reconnect replay, cancellation fencing, redaction, and one durable final Room Message |
 
 ## Deferred Beyond MVP
 

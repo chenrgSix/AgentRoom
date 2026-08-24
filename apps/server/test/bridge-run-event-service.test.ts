@@ -147,6 +147,45 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       agentId: agent.agentId, sequence: 7, status: "failed"
     }, now), /identity mismatch/u);
 
+    const canceledTrigger = messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "Cancel this stream",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: agent.agentId,
+        displayLabel: "Builder / Managed"
+      }],
+      now
+    });
+    const canceledRun = runs.createRunsForMessage(
+      principal, canceledTrigger.messageId, now
+    )[0];
+    assert.ok(canceledRun);
+    runRepository.applyEvent(canceledRun.runId, {
+      type: "status", sequence: 1, status: "delivered"
+    }, now);
+    service.applyStatus(devicePrincipal, {
+      runId: canceledRun.runId, traceId: canceledRun.traceId,
+      agentId: agent.agentId, sequence: 2, status: "working"
+    }, now);
+    service.applyOutput(devicePrincipal, {
+      runId: canceledRun.runId, traceId: canceledRun.traceId,
+      agentId: agent.agentId, sequence: 3, content: "Cancelable preview"
+    }, now);
+    service.applyStatus(devicePrincipal, {
+      runId: canceledRun.runId, traceId: canceledRun.traceId,
+      agentId: agent.agentId, sequence: 4, status: "canceled"
+    }, now);
+    assert.equal(service.applyOutput(devicePrincipal, {
+      runId: canceledRun.runId, traceId: canceledRun.traceId,
+      agentId: agent.agentId, sequence: 5, content: "late canceled output"
+    }, now).applied, false);
+    assert.deepEqual(
+      runRepository.listEvents(canceledRun.runId).map(({ sequence }) => sequence),
+      [1, 2, 3, 4]
+    );
+    assert.equal(core.listMessagesAfter(room.roomId, 0, 20).length, 3);
+
     const bob = registry.addMember(principal, {
       teamId: created.team.teamId,
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4B0B0",
