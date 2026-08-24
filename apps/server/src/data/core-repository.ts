@@ -86,6 +86,7 @@ export interface MessageRecord {
   content: string;
   mentions: MentionRecord[];
   parentMessageId: string | null;
+  clientMessageId?: string | null;
   createdAt: string;
 }
 
@@ -135,6 +136,7 @@ interface MessageRow {
   sender_id: string;
   content: string;
   parent_message_id: string | null;
+  client_message_id: string | null;
   created_at: string;
 }
 
@@ -164,6 +166,7 @@ function mapMessage(
       displayLabel: mention.display_label
     })),
     parentMessageId: row.parent_message_id,
+    clientMessageId: row.client_message_id,
     createdAt: row.created_at
   };
 }
@@ -338,8 +341,15 @@ export class CoreRepository {
   public appendMessage(
     message: Omit<MessageRecord, "sequence" | "traceId"> & { traceId?: string }
   ): MessageRecord {
+    return this.appendMessageWithResult(message).message;
+  }
+
+  public appendMessageWithResult(
+    message: Omit<MessageRecord, "sequence" | "traceId"> & { traceId?: string }
+  ): { created: boolean; message: MessageRecord } {
     const persistedMessage = {
       ...message,
+      clientMessageId: message.clientMessageId ?? null,
       traceId: message.traceId ?? createOpaqueId("trace")
     };
     return this.database.transaction(() => {
@@ -348,6 +358,22 @@ export class CoreRepository {
       `).get(persistedMessage.roomId) as { team_id: string } | undefined;
       if (!room) {
         throw new Error(`Room not found: ${persistedMessage.roomId}`);
+      }
+
+      if (persistedMessage.clientMessageId) {
+        const existing = this.database.prepare(`
+          SELECT * FROM messages
+          WHERE room_id = ? AND sender_type = ? AND sender_id = ?
+            AND client_message_id = ?
+        `).get(
+          persistedMessage.roomId,
+          persistedMessage.senderType,
+          persistedMessage.senderId,
+          persistedMessage.clientMessageId
+        ) as MessageRow | undefined;
+        if (existing) {
+          return { created: false, message: mapMessage(this.database, existing) };
+        }
       }
 
       const findAgent = this.database.prepare(`
@@ -372,10 +398,10 @@ export class CoreRepository {
       this.database.prepare(`
         INSERT INTO messages (
           message_id, trace_id, room_id, sequence, sender_type, sender_id, content,
-          parent_message_id, created_at
+          parent_message_id, client_message_id, created_at
         ) VALUES (
           @messageId, @traceId, @roomId, @sequence, @senderType, @senderId, @content,
-          @parentMessageId, @createdAt
+          @parentMessageId, @clientMessageId, @createdAt
         )
       `).run({ ...persistedMessage, sequence: sequenceRow.sequence });
 
@@ -393,7 +419,10 @@ export class CoreRepository {
         );
       }
 
-      return { ...persistedMessage, sequence: sequenceRow.sequence };
+      return {
+        created: true,
+        message: { ...persistedMessage, sequence: sequenceRow.sequence }
+      };
     }).immediate();
   }
 

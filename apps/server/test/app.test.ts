@@ -196,7 +196,8 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       headers: { authorization },
       payload: {
         content: "Hello Team",
-        mentionAgentId: agent.agentId
+        mentionAgentId: agent.agentId,
+        clientMessageId: "client_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
       }
     });
     assert.equal(createMessage.statusCode, 200);
@@ -208,12 +209,25 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
       reset: false
     });
     const routed = createMessage.json() as {
-      message: { sequence: number };
+      message: { messageId: string; sequence: number };
       runs: Array<{ runId: string; targetAgentId: string; state: string }>;
     };
     assert.equal(routed.message.sequence, 1);
     assert.equal(routed.runs[0]?.targetAgentId, agent.agentId);
     assert.equal(routed.runs[0]?.state, "completed");
+    const retryMessage = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${room.roomId}/messages`,
+      headers: { authorization },
+      payload: {
+        content: "ambiguous retry content is ignored",
+        mentionAgentId: agent.agentId,
+        clientMessageId: "client_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+      }
+    });
+    assert.equal(retryMessage.statusCode, 200);
+    assert.equal(retryMessage.json().message.messageId, routed.message.messageId);
+    assert.equal(retryMessage.json().runs[0].runId, routed.runs[0]?.runId);
     const reviewMessage = await app.inject({
       method: "POST",
       url: `/api/rooms/${room.roomId}/messages`,

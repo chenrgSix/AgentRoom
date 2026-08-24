@@ -57,12 +57,33 @@ export class MessageService {
       content: string;
       mentions?: MentionRecord[];
       parentMessageId?: string | null;
+      clientMessageId?: string;
       now: string;
     }
   ): MessageRecord {
+    return this.createMemberMessageResult(principal, input).message;
+  }
+
+  public createMemberMessageResult(
+    principal: WebPrincipal,
+    input: {
+      roomId: string;
+      content: string;
+      mentions?: MentionRecord[];
+      parentMessageId?: string | null;
+      clientMessageId?: string;
+      now: string;
+    }
+  ): { created: boolean; message: MessageRecord } {
     const member = this.auth.requireRoomMember(principal, input.roomId);
     if (input.content.trim().length === 0 || input.content.length > 20_000) {
       throw new Error("Message content must contain 1 to 20000 characters");
+    }
+    if (
+      input.clientMessageId !== undefined &&
+      !/^client_[A-Za-z0-9_-]{8,128}$/u.test(input.clientMessageId)
+    ) {
+      throw new Error("Client Message ID is invalid");
     }
     const parent = input.parentMessageId
       ? this.repository.getMessage(input.parentMessageId)
@@ -96,7 +117,7 @@ export class MessageService {
         throw new Error(`Mention target is unavailable: ${mention.targetAgentId}`);
       }
     }
-    return this.repository.appendMessage({
+    return this.repository.appendMessageWithResult({
       messageId: createOpaqueId("msg"),
       roomId: input.roomId,
       senderType: "member",
@@ -104,6 +125,7 @@ export class MessageService {
       content: input.content,
       mentions,
       parentMessageId: input.parentMessageId ?? null,
+      ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
       ...(parent ? { traceId: parent.traceId } : {}),
       createdAt: input.now
     });

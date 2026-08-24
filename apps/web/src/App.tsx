@@ -19,6 +19,12 @@ import {
   type RuntimeFailureCategory
 } from "./run-diagnostics.js";
 import {
+  createClientMessageId,
+  type PendingRoomMessage,
+  queuePendingMessage,
+  updatePendingMessage
+} from "./message-outbox.js";
+import {
   removeVisibleMentionToken,
   retainVisibleMentionIds
 } from "./structured-mentions.js";
@@ -685,12 +691,16 @@ export function App() {
   const [memberInvitation, setMemberInvitation] = useState<MemberInvitation | null>(null);
   const [invitationCopied, setInvitationCopied] = useState(false);
   const [messageContent, setMessageContent] = useState("");
+  const [pendingMessages, setPendingMessages] = useState<PendingRoomMessage[]>([]);
   const [discussionGoalEditId, setDiscussionGoalEditId] = useState<string | null>(null);
   const [discussionGoalDraft, setDiscussionGoalDraft] = useState("");
   const [mentionAgentIds, setMentionAgentIds] = useState<string[]>([]);
   const [mentionSearch, setMentionSearch] = useState<MentionSearch | null>(null);
   const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [teamBusy, setTeamBusy] = useState(false);
+  const [participantBusy, setParticipantBusy] = useState(false);
+  const [composerBusy, setComposerBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messageSyncRef = useRef<{
     roomId: string;
@@ -698,6 +708,7 @@ export function App() {
     sequence: number;
   } | null>(null);
   const diagnosticRequestsRef = useRef(new Set<string>());
+  const selectedRoomIdRef = useRef<string | null>(selectedRoomId);
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.teamId === selectedTeamId) ?? null,
@@ -745,6 +756,9 @@ export function App() {
   const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
   const activeDevices = devices.filter((device) => device.status === "active").length;
   const currentMember = members.find((member) => member.userId === session?.userId) ?? null;
+  const pendingRoomMessages = pendingMessages.filter(({ roomId }) =>
+    roomId === selectedRoomId
+  );
   const lifecycleTeam = lifecycleTeams.find(({ teamId }) =>
     teamId === lifecycleTeamId
   ) ?? null;
@@ -796,6 +810,10 @@ export function App() {
     document.documentElement.dataset.theme = theme;
     document.documentElement.style.colorScheme = theme;
   }, [theme]);
+
+  useEffect(() => {
+    selectedRoomIdRef.current = selectedRoomId;
+  }, [selectedRoomId]);
 
   useLayoutEffect(() => {
     if (!pendingInvitationToken) return;
@@ -1125,6 +1143,7 @@ export function App() {
   useEffect(() => {
     if (!session || !selectedRoomId) {
       setMessages([]);
+      setPendingMessages([]);
       setRuns([]);
       setRoomParticipants({ memberIds: [], agentIds: [] });
       setRunDiagnostics({});
@@ -1352,7 +1371,7 @@ export function App() {
   async function createTeam(event: FormEvent) {
     event.preventDefault();
     if (!session || !teamName.trim()) return;
-    setBusy(true);
+    setTeamBusy(true);
     setError(null);
     try {
       const created = await jsonRequest<{ team: Team }>("/api/teams", {
@@ -1366,14 +1385,14 @@ export function App() {
     } catch (reason) {
       setError(String(reason));
     } finally {
-      setBusy(false);
+      setTeamBusy(false);
     }
   }
 
   async function createRoom(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedTeamId || !roomName.trim()) return;
-    setBusy(true);
+    setTeamBusy(true);
     setError(null);
     try {
       const room = await jsonRequest<Room>(
@@ -1387,7 +1406,7 @@ export function App() {
     } catch (reason) {
       setError(String(reason));
     } finally {
-      setBusy(false);
+      setTeamBusy(false);
     }
   }
 
@@ -1400,7 +1419,7 @@ export function App() {
   async function saveRoomParticipants(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedRoomId || currentMember?.role !== "owner") return;
-    setBusy(true);
+    setParticipantBusy(true);
     setError(null);
     try {
       const updated = await jsonRequest<RoomParticipants>(
@@ -1422,7 +1441,7 @@ export function App() {
     } catch (reason) {
       setError(String(reason));
     } finally {
-      setBusy(false);
+      setParticipantBusy(false);
     }
   }
 
@@ -1435,7 +1454,7 @@ export function App() {
       currentMember?.role !== "owner" ||
       !memberInviteName.trim()
     ) return;
-    setBusy(true);
+    setTeamBusy(true);
     setError(null);
     try {
       const invitation = await jsonRequest<MemberInvitation>(
@@ -1452,7 +1471,7 @@ export function App() {
     } catch (reason) {
       setError(String(reason));
     } finally {
-      setBusy(false);
+      setTeamBusy(false);
     }
   }
 
@@ -1658,10 +1677,10 @@ export function App() {
         : "This Room already has an active Discussion. Finish or stop it before starting another.");
       return;
     }
-    setBusy(true);
     setError(null);
-    try {
-      if (mentionAgentIds.length >= 2) {
+    if (mentionAgentIds.length >= 2) {
+      setComposerBusy(true);
+      try {
         await jsonRequest<DiscussionView>(
           `/api/rooms/${selectedRoomId}/discussions`,
           {
@@ -1675,27 +1694,73 @@ export function App() {
           },
           session.token
         );
-      } else {
-        await jsonRequest<{ message: Message; runs: Run[] }>(
-          `/api/rooms/${selectedRoomId}/messages`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              content: messageContent,
-              ...(mentionAgentIds[0] ? { mentionAgentId: mentionAgentIds[0] } : {})
-            })
-          },
-          session.token
-        );
+        setMessageContent("");
+        setMentionAgentIds([]);
+        setMentionSearch(null);
+        await refreshRoomState();
+      } catch (reason) {
+        setError(String(reason));
+      } finally {
+        setComposerBusy(false);
       }
-      setMessageContent("");
-      setMentionAgentIds([]);
-      setMentionSearch(null);
-      await refreshRoomState();
+      return;
+    }
+
+    const pending: PendingRoomMessage = {
+      clientMessageId: createClientMessageId(),
+      roomId: selectedRoomId,
+      content: messageContent,
+      ...(mentionAgentIds[0] ? { mentionAgentId: mentionAgentIds[0] } : {}),
+      status: "pending"
+    };
+    setPendingMessages((current) => queuePendingMessage(current, pending));
+    setMessageContent("");
+    setMentionAgentIds([]);
+    setMentionSearch(null);
+    await deliverPendingMessage(pending);
+  }
+
+  async function deliverPendingMessage(pending: PendingRoomMessage) {
+    if (!session) return;
+    setComposerBusy(true);
+    setPendingMessages((current) =>
+      updatePendingMessage(current, pending.clientMessageId, "pending")
+    );
+    setError(null);
+    try {
+      const result = await jsonRequest<{ message: Message; runs: Run[] }>(
+        `/api/rooms/${pending.roomId}/messages`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: pending.content,
+            clientMessageId: pending.clientMessageId,
+            ...(pending.mentionAgentId
+              ? { mentionAgentId: pending.mentionAgentId }
+              : {})
+          })
+        },
+        session.token
+      );
+      setPendingMessages((current) => current.filter(({ clientMessageId }) =>
+        clientMessageId !== pending.clientMessageId
+      ));
+      if (selectedRoomIdRef.current === pending.roomId) {
+        setMessages((current) => mergeRoomMessages(current, [result.message]));
+        setRuns((current) => {
+          const byId = new Map(current.map((run) => [run.runId, run]));
+          for (const run of result.runs) byId.set(run.runId, run);
+          return [...byId.values()];
+        });
+        await refreshRoomState();
+      }
     } catch (reason) {
+      setPendingMessages((current) =>
+        updatePendingMessage(current, pending.clientMessageId, "failed")
+      );
       setError(String(reason));
     } finally {
-      setBusy(false);
+      setComposerBusy(false);
     }
   }
 
@@ -2036,7 +2101,7 @@ export function App() {
                     required
                     value={roomName}
                   />
-                  <button aria-label={t("createRoom")} disabled={busy} title={t("createRoom")}>+</button>
+                  <button aria-label={t("createRoom")} disabled={teamBusy} title={t("createRoom")}>+</button>
                 </form>
               </>
             )}
@@ -2084,7 +2149,7 @@ export function App() {
                   required
                   value={teamName}
                 />
-                <button disabled={busy}>{busy ? t("creating") : t("createTeam")}</button>
+                <button disabled={teamBusy}>{teamBusy ? t("creating") : t("createTeam")}</button>
               </div>
               <small>{t("nextRoomAgent")}</small>
             </form>
@@ -2140,7 +2205,7 @@ export function App() {
                       <label htmlFor="member-invite-name">{t("memberDisplayName")}</label>
                       <div>
                         <input id="member-invite-name" onChange={(event) => setMemberInviteName(event.target.value)} placeholder={locale === "zh-CN" ? "例如：小李" : "For example: Bob"} required value={memberInviteName} />
-                        <button disabled={busy}>{busy ? t("creating") : t("createInvitation")}</button>
+                        <button disabled={teamBusy}>{teamBusy ? t("creating") : t("createInvitation")}</button>
                       </div>
                     </form>
                     {memberInvitation && (
@@ -2356,12 +2421,12 @@ export function App() {
                   required
                   value={roomName}
                 />
-                <button disabled={busy}>{busy ? t("creating") : t("createRoom")}</button>
+                <button disabled={teamBusy}>{teamBusy ? t("creating") : t("createRoom")}</button>
               </div>
               <small>{t("addMoreRooms")}</small>
             </form>
           </section>
-        ) : messages.length === 0 ? (
+        ) : messages.length === 0 && pendingRoomMessages.length === 0 ? (
           <section className="empty-stage">
             <div className="orb"><span>✦</span></div>
             <p className="eyebrow">{agents.length === 0 ? (locale === "zh-CN" ? "第 3 步，共 3 步" : "STEP 3 OF 3") : t("centralTeamReady")}</p>
@@ -2461,6 +2526,39 @@ export function App() {
                 </article>
               );
             })}
+            {pendingRoomMessages.map((pending) => (
+              <article className={`message pending-message ${pending.status}`} key={pending.clientMessageId}>
+                <span className="avatar member">
+                  {(session?.displayName ?? "M").slice(0, 1).toLocaleUpperCase(locale)}
+                </span>
+                <div>
+                  <header>
+                    <strong>{session?.displayName}</strong>
+                    <span className={`pending-state ${pending.status}`}>
+                      {pending.status === "pending"
+                        ? (locale === "zh-CN" ? "发送中…" : "Sending…")
+                        : (locale === "zh-CN" ? "发送失败" : "Send failed")}
+                    </span>
+                  </header>
+                  <p>{pending.content}</p>
+                  {pending.mentionAgentId && (
+                    <div className="message-routing">
+                      <span className="mention-pill">
+                        @{agentsById.get(pending.mentionAgentId)?.name ?? t("agent")}
+                      </span>
+                    </div>
+                  )}
+                  {pending.status === "failed" && (
+                    <button
+                      className="retry-message"
+                      disabled={composerBusy}
+                      onClick={() => void deliverPendingMessage(pending)}
+                      type="button"
+                    >{locale === "zh-CN" ? "使用同一消息 ID 重试" : "Retry with the same Message ID"}</button>
+                  )}
+                </div>
+              </article>
+            ))}
           </section>
         )}
         {selectedRoom && activeView === "room" && (
@@ -2641,8 +2739,8 @@ export function App() {
                   value={messageContent}
                 />
               </div>
-              <button className="composer-send" disabled={busy}>
-                {busy ? t("sending") : t("send")}
+              <button className="composer-send" disabled={composerBusy}>
+                {composerBusy ? t("sending") : t("send")}
               </button>
             </form>
           </div>
@@ -2679,7 +2777,7 @@ export function App() {
               />
               <div className="modal-actions">
                 <button className="secondary-action" onClick={() => setTeamDialogOpen(false)} type="button">{t("cancel")}</button>
-                <button className="primary-action" disabled={busy}>{busy ? t("creating") : t("createTeam")}</button>
+                <button className="primary-action" disabled={teamBusy}>{teamBusy ? t("creating") : t("createTeam")}</button>
               </div>
             </form>
           </section>
@@ -2871,7 +2969,7 @@ export function App() {
               </fieldset>
               <div className="modal-actions">
                 <button className="secondary-action" onClick={() => setParticipantDialogOpen(false)} type="button">{t("cancel")}</button>
-                <button className="primary-action" disabled={busy}>{busy ? t("saving") : t("save")}</button>
+                <button className="primary-action" disabled={participantBusy}>{participantBusy ? t("saving") : t("save")}</button>
               </div>
             </form>
           </section>

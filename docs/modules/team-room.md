@@ -71,6 +71,11 @@ access and routing while preserving Messages, Runs, and Discussion history.
 5. Commit before emitting `message.created`.
 6. Let Run Orchestration consume the committed event.
 
+Browser member writes include a stable `clientMessageId`. Migration 0018
+enforces uniqueness per Room and sender, so an ambiguous retry returns the
+original Message and existing Runs without creating another sequence or
+re-executing completed work.
+
 Display labels never participate in routing. A quoted or plain-text
 `@Bob/Backend` without a structured Mention does not create a Run.
 

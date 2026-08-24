@@ -145,3 +145,56 @@ test("Room Message tail snapshot resumes after the newest message", async () => 
     database.close();
   }
 });
+
+test("a client Message ID makes ambiguous member retries idempotent", async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-client-message-"));
+  const databasePath = path.join(directory, "server.sqlite");
+  await migrateDatabase(databasePath);
+  const database = openDatabase(databasePath);
+  try {
+    const repository = new CoreRepository(database);
+    const auth = new AuthService(database);
+    const teams = new TeamRoomService(repository, auth);
+    const created = teams.createTeamForUser({
+      userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W8",
+      userDisplayName: "Alice",
+      teamName: "Retry Team",
+      now
+    });
+    const session = auth.issueWebSession(
+      created.owner.userId ?? "",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const principal = auth.authenticateWebSession(session.secret, now);
+    const room = teams.createRoom(principal, created.team.teamId, "general", now);
+    const messages = new MessageService(repository, auth);
+    const input = {
+      roomId: room.roomId,
+      content: "send exactly once",
+      clientMessageId: "client_01K4Z6J7Y8N9P0Q1R2S3T4V5W8",
+      now
+    };
+    const first = messages.createMemberMessageResult(principal, input);
+    const retry = messages.createMemberMessageResult(principal, {
+      ...input,
+      content: "a retry cannot mutate the committed Message"
+    });
+
+    assert.equal(first.created, true);
+    assert.equal(retry.created, false);
+    assert.deepEqual(retry.message, first.message);
+    assert.equal(repository.latestMessageSequence(room.roomId), 1);
+    assert.throws(
+      () => messages.createMemberMessage(principal, {
+        roomId: room.roomId,
+        content: "invalid identity",
+        clientMessageId: "retry",
+        now
+      }),
+      /Client Message ID is invalid/
+    );
+  } finally {
+    database.close();
+  }
+});

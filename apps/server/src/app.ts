@@ -1328,9 +1328,18 @@ export async function createServerApp(
         ? undefined
         : requiredString(body.mentionAgentId, "mentionAgentId", 140);
       const target = mentionAgentId ? core.getAgent(mentionAgentId) : undefined;
-      const message = messages.createMemberMessage(actor, {
+      const persisted = messages.createMemberMessageResult(actor, {
         roomId: request.params.roomId,
         content: requiredString(body.content, "content", 20_000),
+        ...(body.clientMessageId === undefined
+          ? {}
+          : {
+              clientMessageId: requiredString(
+                body.clientMessageId,
+                "clientMessageId",
+                140
+              )
+            }),
         ...(mentionAgentId
           ? {
               mentions: [{
@@ -1344,6 +1353,13 @@ export async function createServerApp(
           : {}),
         now: clock()
       });
+      const message = persisted.message;
+      if (!persisted.created) {
+        return {
+          message,
+          runs: runRepository.findByTrigger(message.messageId)
+        };
+      }
       const createdRuns = runs.createRunsForMessage(actor, message.messageId, clock());
       const executedRuns = [];
       for (const run of createdRuns) {

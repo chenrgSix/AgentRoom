@@ -339,6 +339,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .message header strong { font-size: 13px; }
 .message time { color: #656c5f; font-size: 10px; }
 .message p { margin: 5px 0 0; color: #c7cbbf; font-size: 14px; line-height: 1.55; white-space: pre-wrap; }
+.pending-message { border: 1px dashed #4a5144; background: rgb(34 38 31 / 46%); }
+.pending-message.failed { border-color: #754c46; background: rgb(65 35 31 / 42%); }
+.pending-state { color: #8f9988; font-size: 9px; font-weight: 750; }
+.pending-state.failed { color: #e3a097; }
+.retry-message { margin-top: 9px; padding: 6px 9px; border: 1px solid #765049; border-radius: 7px; background: #2e201d; color: #e2aaa3; font-size: 9px; font-weight: 750; cursor: pointer; }
 .message-routing { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 9px; }
 .mention-pill, .run-state { padding: 4px 8px; border-radius: 999px; font-size: 10px; font-weight: 700; }
 .mention-pill { border: 1px solid #526333; background: #222a19; color: #d3ea91; }
@@ -497,6 +502,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .orb { border-color: #aab98a; background: linear-gradient(145deg, #edf3e2, #dfe8d2); box-shadow: 0 22px 55px rgb(83 103 54 / 15%); }
 :root[data-theme="light"] .message:hover { background: rgb(82 101 54 / 5%); }
 :root[data-theme="light"] .message p { color: #3f493a; }
+:root[data-theme="light"] .pending-message { border-color: #b9c3b0; background: #f0f3ec; }
+:root[data-theme="light"] .pending-message.failed { border-color: #cf9a92; background: #fff3f0; }
 :root[data-theme="light"] .message time { color: #7a8474; }
 :root[data-theme="light"] .mention-pill,
 :root[data-theme="light"] .selected-mention { border-color: #a8b887; background: #e4edd6; color: #4d6423; }

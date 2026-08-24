@@ -184,6 +184,13 @@ Run-event API once for each terminal failure and renders only the error code,
 allowlisted category, exit code, and localized recovery guidance. Raw Runtime
 stderr, paths, messages, and unknown detail keys never enter the view model.
 
+`WEB-027` clears an ordinary zero/one-Mention draft into a visible optimistic
+row with one client Message ID. A failed row remains in the Room with an
+explicit retry action that reuses the same identity; a successful response
+merges immediately and then reconciles authoritative history. Composer, Team,
+participant, and lifecycle mutations use independent pending state, so an
+unrelated control no longer freezes message entry or recovery.
+
 ## Dependencies
 
 Team/Room, Registry, Run Orchestration, Bridge pairing APIs, and Security.

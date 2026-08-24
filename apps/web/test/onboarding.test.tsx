@@ -109,6 +109,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   let roomNameValue = room.name;
   let roomArchivedAt: string | null = null;
   let reviewAgentEnabled = true;
+  const failedClientMessageIds = new Set<string>();
   let roomAgentIds = [agent.agentId, secondAgent.agentId];
   let discussionState = "";
   let discussionGoal = "确定交付恢复规则";
@@ -260,8 +261,22 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       });
     }
     if (path === `/api/rooms/${room.roomId}/messages` && method === "POST") {
+      const body = JSON.parse(String(init.body)) as {
+        clientMessageId: string;
+        content: string;
+      };
+      if (body.content === "需要重试" && !failedClientMessageIds.has(body.clientMessageId)) {
+        failedClientMessageIds.add(body.clientMessageId);
+        return new Response(JSON.stringify({ error: "temporary failure" }), {
+          headers: { "content-type": "application/json" },
+          status: 503
+        });
+      }
       messageWasSent = true;
-      return jsonResponse({ message: memberMessage, runs: [] });
+      return jsonResponse({
+        message: { ...memberMessage, content: body.content },
+        runs: []
+      });
     }
     if (path === `/api/rooms/${room.roomId}/messages?limit=100&tail=true`) {
       return jsonResponse({
@@ -498,10 +513,12 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     const timeline = await screen.findByRole("region", { name: "房间消息" });
     within(timeline).getByText("Review Bot");
     within(timeline).getByText("已经完成");
-    assert.deepEqual(JSON.parse(requests.find((candidate) =>
+    const plainMessageBody = JSON.parse(requests.find((candidate) =>
       candidate.path === `/api/rooms/${room.roomId}/messages` &&
       candidate.method === "POST"
-    )?.body ?? "{}"), { content: "请回答" });
+    )?.body ?? "{}") as { clientMessageId: string; content: string };
+    assert.equal(plainMessageBody.content, "请回答");
+    assert.match(plainMessageBody.clientMessageId, /^client_[A-Za-z0-9_-]{8,128}$/u);
 
     assert.equal(screen.queryByRole("tab", { name: "发起讨论" }), null);
     fireEvent.change(roomMessageInput, { target: { value: "请 @Rev" } });
@@ -513,10 +530,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         candidate.path === `/api/rooms/${room.roomId}/messages` &&
         candidate.method === "POST"
       );
-      assert.deepEqual(JSON.parse(messageRequests.at(-1)?.body ?? "{}"), {
-        content: "请 @Review Bot ",
-        mentionAgentId: agent.agentId
-      });
+      const body = JSON.parse(messageRequests.at(-1)?.body ?? "{}") as {
+        clientMessageId: string;
+        content: string;
+        mentionAgentId: string;
+      };
+      assert.equal(body.content, "请 @Review Bot ");
+      assert.equal(body.mentionAgentId, agent.agentId);
+      assert.match(body.clientMessageId, /^client_[A-Za-z0-9_-]{8,128}$/u);
     });
 
     fireEvent.change(roomMessageInput, { target: { value: "确定交付恢复规则 @Rev" } });
@@ -587,6 +608,29 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     fireEvent.change(roomMessageInput, { target: { value: "请 @Local" } });
     const filteredSuggestions = screen.getByRole("listbox", { name: "提及智能体" });
     assert.equal(within(filteredSuggestions).queryByRole("option", { name: /@Local Codex/u }), null);
+    fireEvent.change(roomMessageInput, { target: { value: "需要重试" } });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    const retryButton = await screen.findByRole("button", { name: "使用同一消息 ID 重试" });
+    assert.equal((roomMessageInput as HTMLTextAreaElement).value, "");
+    fireEvent.click(retryButton);
+    await waitFor(() => assert.equal(
+      screen.queryByRole("button", { name: "使用同一消息 ID 重试" }),
+      null
+    ));
+    const retryRequests = requests.filter((candidate) => {
+      if (
+        candidate.path !== `/api/rooms/${room.roomId}/messages` ||
+        candidate.method !== "POST"
+      ) return false;
+      return (JSON.parse(candidate.body ?? "{}") as { content?: string }).content === "需要重试";
+    });
+    assert.equal(retryRequests.length, 2);
+    assert.equal(
+      (JSON.parse(retryRequests[0]?.body ?? "{}") as { clientMessageId: string })
+        .clientMessageId,
+      (JSON.parse(retryRequests[1]?.body ?? "{}") as { clientMessageId: string })
+        .clientMessageId
+    );
   } finally {
     cleanup();
     dom.window.close();
