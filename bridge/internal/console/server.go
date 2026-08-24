@@ -65,6 +65,12 @@ type EnrollmentInput struct {
 	Runtimes                []RuntimeInput   `json:"runtimes"`
 }
 
+type ConnectionSettingsInput struct {
+	ServerURL               string           `json:"serverUrl"`
+	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
+	ServerCertificateSHA256 string           `json:"serverCertificateSha256,omitempty"`
+}
+
 type AgentView struct {
 	AgentID                  string `json:"agentId"`
 	Kind                     string `json:"kind"`
@@ -272,6 +278,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("POST /api/enrollment/start", s.authorize(s.startEnrollment))
 	mux.HandleFunc("POST /api/enrollment/cancel", s.authorize(s.cancelEnrollment))
 	mux.HandleFunc("PUT /api/config", s.authorize(s.updateConfig))
+	mux.HandleFunc("PUT /api/connection-settings", s.authorize(s.updateConnectionSettings))
 	mux.HandleFunc("POST /api/agents", s.authorize(s.addAgent))
 	mux.HandleFunc("PUT /api/agents/{agentId}", s.authorize(s.updateAgent))
 	mux.HandleFunc("POST /api/runtime-tests", s.authorize(s.testRuntime))
@@ -729,7 +736,7 @@ func (s *Service) addAgent(response http.ResponseWriter, request *http.Request) 
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.requireAgentMutationLocked(); err != nil {
+	if err := s.requireConfigurationMutationLocked(); err != nil {
 		writeError(response, http.StatusConflict, err.Error())
 		return
 	}
@@ -769,7 +776,7 @@ func (s *Service) updateAgent(response http.ResponseWriter, request *http.Reques
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.requireAgentMutationLocked(); err != nil {
+	if err := s.requireConfigurationMutationLocked(); err != nil {
 		writeError(response, http.StatusConflict, err.Error())
 		return
 	}
@@ -814,22 +821,22 @@ func (s *Service) updateAgent(response http.ResponseWriter, request *http.Reques
 	writeJSON(response, http.StatusOK, s.agentViewLocked(agentID))
 }
 
-func (s *Service) requireAgentMutationLocked() error {
+func (s *Service) requireConfigurationMutationLocked() error {
 	if s.configuration == nil || s.credential == nil {
-		return fmt.Errorf("Complete Team enrollment before editing Agents")
+		return fmt.Errorf("Complete Team enrollment before editing configuration")
 	}
 	if s.joinCancel != nil {
-		return fmt.Errorf("Wait for Team enrollment to finish before editing Agents")
+		return fmt.Errorf("Wait for Team enrollment to finish before editing configuration")
 	}
 	if len(s.runtimeTests) > 0 {
-		return fmt.Errorf("Wait for Runtime self-tests to finish before editing Agents")
+		return fmt.Errorf("Wait for Runtime self-tests to finish before editing configuration")
 	}
 	if s.runtimePreflight {
-		return fmt.Errorf("Wait for the Runtime preflight to finish before editing Agents")
+		return fmt.Errorf("Wait for the Runtime preflight to finish before editing configuration")
 	}
 	for _, agent := range s.state.Agents {
 		if agent.ActiveRuns > 0 {
-			return fmt.Errorf("Wait for active Team tasks to finish before editing Agents")
+			return fmt.Errorf("Wait for active Team tasks to finish before editing configuration")
 		}
 	}
 	return nil
@@ -880,6 +887,39 @@ func cloneConfiguration(source config.Config) config.Config {
 	return clone
 }
 
+func (s *Service) updateConnectionSettings(response http.ResponseWriter, request *http.Request) {
+	var input ConnectionSettingsInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.requireConfigurationMutationLocked(); err != nil {
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
+	candidate := cloneConfiguration(*s.configuration)
+	candidate.ServerURL = strings.TrimSpace(input.ServerURL)
+	candidate.ServerTrustMode = input.ServerTrustMode
+	candidate.ServerCertificateSHA256 = strings.TrimSpace(input.ServerCertificateSHA256)
+	if err := candidate.Validate(); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	if candidate.ServerURL == s.configuration.ServerURL &&
+		candidate.ServerTrustMode == s.configuration.ServerTrustMode &&
+		candidate.ServerCertificateSHA256 == s.configuration.ServerCertificateSHA256 {
+		writeJSON(response, http.StatusOK, s.state)
+		return
+	}
+	if err := s.replaceConfigurationLocked(candidate); err != nil {
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
+	writeJSON(response, http.StatusOK, s.state)
+}
+
 func (s *Service) updateConfig(response http.ResponseWriter, request *http.Request) {
 	var input EnrollmentInput
 	if err := decodeJSON(request, &input); err != nil {
@@ -893,39 +933,12 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.configuration == nil || s.credential == nil {
-		writeError(response, http.StatusConflict, "Complete Team enrollment before editing configuration")
-		return
-	}
-	if err := s.requireAgentMutationLocked(); err != nil {
+	if err := s.requireConfigurationMutationLocked(); err != nil {
 		writeError(response, http.StatusConflict, err.Error())
 		return
 	}
-	if configuration.ServerURL != s.credential.ServerURL {
-		writeError(response, http.StatusConflict, "Paired Bridge server URL cannot be changed; enroll a new Device instead")
-		return
-	}
-	if err := s.dependencies.ReplaceConfig(s.options.ConfigPath, configuration); err != nil {
+	if err := s.replaceConfigurationLocked(configuration); err != nil {
 		writeError(response, http.StatusInternalServerError, publicError(err))
-		return
-	}
-	if s.bridgeCancel != nil {
-		s.bridgeCancel()
-	}
-	s.bridgeEpoch++
-	s.bridgeCancel = nil
-	s.state.BridgeRunning = false
-	s.configuration = &configuration
-	if err := s.applyConfigView(configuration); err != nil {
-		s.state.Phase = PhaseError
-		s.state.LastError = publicError(err)
-		writeError(response, http.StatusInternalServerError, publicError(err))
-		return
-	}
-	if err := s.startBridgeLocked(); err != nil {
-		s.state.Phase = PhaseError
-		s.state.LastError = publicError(err)
-		writeError(response, http.StatusInternalServerError, err.Error())
 		return
 	}
 	writeJSON(response, http.StatusOK, s.state)

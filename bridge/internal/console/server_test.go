@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -302,13 +303,15 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		t.Fatalf("unexpected updated config: %#v, %v", loaded, err)
 	}
 
-	wrongServer := updated
-	wrongServer.ServerURL = "http://127.0.0.1:3001"
-	rejected := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/config", wrongServer)
-	if rejected.StatusCode != http.StatusConflict {
-		t.Fatalf("expected paired server change to be rejected, got %d", rejected.StatusCode)
+	changedServer := updated
+	changedServer.ServerURL = "http://127.0.0.1:3001"
+	changed := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/config", changedServer)
+	if changed.StatusCode != http.StatusOK {
+		t.Fatalf("expected paired server change to succeed, got %d", changed.StatusCode)
 	}
-	rejected.Body.Close()
+	changed.Body.Close()
+	waitSignal(t, bridgeStopped, "old Bridge stop after server change")
+	waitSignal(t, bridgeStarted, "Bridge restart after server change")
 
 	stopResponse := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/bridge/stop", nil)
 	stopResponse.Body.Close()
@@ -316,6 +319,151 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	case <-bridgeStopped:
 	case <-time.After(time.Second):
 		t.Fatal("Bridge process did not receive Console cancellation")
+	}
+}
+
+func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing.T) {
+	directory := t.TempDir()
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	initial := config.Config{
+		SchemaVersion:   config.CurrentSchemaVersion,
+		ServerURL:       "http://127.0.0.1:3000",
+		ServerTrustMode: config.TrustSystemCA,
+		DeviceName:      "Movable Bridge",
+		DataDir:         dataDir,
+		Agents: []config.AgentConfig{
+			{
+				Name: "Local Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex",
+				PresetVersion: config.CurrentPresetVersion,
+				Command:       config.CodexPresetCommand(executablePath), Sandbox: "workspace-write",
+				Workspace: directory, EnvAllowlist: []string{"HOME", "PATH", "CODEX_HOME"},
+			},
+			{
+				Name: "Local Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi",
+				PresetVersion: config.CurrentPresetVersion,
+				Command:       config.PiPresetCommand(executablePath), Workspace: directory,
+				EnvAllowlist: []string{"HOME", "PATH", "PI_CODING_AGENT_DIR", "PI_TELEMETRY"},
+			},
+		},
+	}
+	if err := config.Save(configPath, initial); err != nil {
+		t.Fatal(err)
+	}
+	credential := pairing.Credential{
+		ServerURL: initial.ServerURL, DeviceID: "device_move", TeamID: "team_move",
+		OwnerMemberID: "member_move", Token: "unchanged-secret",
+	}
+	if err := pairing.Save(dataDir, credential); err != nil {
+		t.Fatal(err)
+	}
+	started := make(chan config.Config, 3)
+	stopped := make(chan struct{}, 3)
+	dependencies := inertDependencies()
+	dependencies.RunBridge = func(
+		ctx context.Context,
+		configuration config.Config,
+		_ pairing.Credential,
+		_ operations.Observer,
+	) error {
+		started <- configuration
+		<-ctx.Done()
+		stopped <- struct{}{}
+		return ctx.Err()
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "settings-token",
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	if _, err := service.StartBridge(); err != nil {
+		t.Fatal(err)
+	}
+	if running := waitConfigSignal(t, started, "initial Bridge start"); running.ServerURL != initial.ServerURL {
+		t.Fatalf("Bridge started with unexpected URL: %s", running.ServerURL)
+	}
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL:       "http://127.0.0.1:3443",
+		ServerTrustMode: config.TrustSystemCA,
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("expected connection settings update, got %d", response.StatusCode)
+	}
+	waitSignal(t, stopped, "Bridge stop after connection settings update")
+	if restarted := waitConfigSignal(t, started, "Bridge restart after connection update"); restarted.ServerURL != "http://127.0.0.1:3443" {
+		t.Fatalf("Bridge restarted with stale URL: %s", restarted.ServerURL)
+	}
+	persisted, err := config.Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(persisted.Agents, initial.Agents) || persisted.DeviceName != initial.DeviceName {
+		t.Fatal("connection settings update replaced unrelated Bridge configuration")
+	}
+	persistedCredential, err := pairing.Load(dataDir)
+	if err != nil || !reflect.DeepEqual(persistedCredential, credential) {
+		t.Fatalf("connection settings update changed Device credential: %#v, %v", persistedCredential, err)
+	}
+	if state := service.State(); state.ServerURL != "http://127.0.0.1:3443" || !state.BridgeRunning {
+		t.Fatalf("unexpected updated Console state: %#v", state)
+	}
+
+	service.mu.Lock()
+	epoch := service.bridgeEpoch
+	service.mu.Unlock()
+	unchanged := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL:       "http://127.0.0.1:3443",
+		ServerTrustMode: config.TrustSystemCA,
+	})
+	unchanged.Body.Close()
+	service.mu.Lock()
+	unchangedEpoch := service.bridgeEpoch
+	service.mu.Unlock()
+	if unchanged.StatusCode != http.StatusOK || unchangedEpoch != epoch {
+		t.Fatal("saving unchanged connection settings restarted the Bridge")
+	}
+
+	service.StopBridge()
+	waitSignal(t, stopped, "Bridge stop before offline connection update")
+	offline := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL:               "https://team.example.com:9443",
+		ServerTrustMode:         config.TrustPinnedSHA256,
+		ServerCertificateSHA256: strings.Repeat("a", 64),
+	})
+	offline.Body.Close()
+	if offline.StatusCode != http.StatusOK || service.State().BridgeRunning {
+		t.Fatal("editing an offline Bridge unexpectedly started it")
+	}
+
+	invalid := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL:       "http://team.example.com:3000",
+		ServerTrustMode: config.TrustSystemCA,
+	})
+	invalid.Body.Close()
+	if invalid.StatusCode != http.StatusBadRequest || service.State().ServerURL != "https://team.example.com:9443" {
+		t.Fatal("invalid central service URL changed persisted state")
+	}
+
+	service.mu.Lock()
+	service.state.Agents[0].ActiveRuns = 1
+	service.mu.Unlock()
+	blocked := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL:       "https://team.example.com:10443",
+		ServerTrustMode: config.TrustSystemCA,
+	})
+	blocked.Body.Close()
+	if blocked.StatusCode != http.StatusConflict || service.State().ServerURL != "https://team.example.com:9443" {
+		t.Fatal("active Team work did not fence connection settings editing")
 	}
 }
 
@@ -729,6 +877,17 @@ func waitSignal(t *testing.T, signal <-chan struct{}, description string) {
 	case <-signal:
 	case <-time.After(time.Second):
 		t.Fatalf("timed out waiting for %s", description)
+	}
+}
+
+func waitConfigSignal(t *testing.T, signal <-chan config.Config, description string) config.Config {
+	t.Helper()
+	select {
+	case configuration := <-signal:
+		return configuration
+	case <-time.After(time.Second):
+		t.Fatalf("timed out waiting for %s", description)
+		return config.Config{}
 	}
 }
 
