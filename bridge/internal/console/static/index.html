@@ -46,6 +46,7 @@
         <div><p class="eyebrow">CURRENT DEVICE</p><h2 id="device-title">本机 Bridge</h2></div>
         <div class="actions">
           <button class="secondary hidden" id="resume-enrollment" type="button">请求加入 Team</button>
+          <button class="secondary" id="edit-connection" type="button">连接设置</button>
           <button class="primary" id="add-agent" type="button">添加智能体</button>
           <button class="primary" id="start-bridge" type="button">启动 Bridge</button>
           <button class="secondary" id="stop-bridge" type="button">停止 Bridge</button>
@@ -133,6 +134,35 @@
         </div>
       </section>
     </form>
+
+    <div class="modal-backdrop hidden" id="connection-modal-backdrop">
+      <section class="agent-modal connection-modal" role="dialog" aria-modal="true" aria-labelledby="connection-modal-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">BRIDGE CONNECTION</p><h2 id="connection-modal-title">编辑连接设置</h2></div>
+          <button class="icon-button" id="close-connection-modal" type="button" aria-label="关闭">×</button>
+        </div>
+        <form id="connection-form">
+          <p class="inline-error hidden" id="connection-modal-error" role="alert"></p>
+          <label>中央服务地址
+            <input id="connection-server-url" type="url" required placeholder="https://team.example.com:3000">
+          </label>
+          <label>HTTPS 信任方式
+            <select id="connection-trust-mode">
+              <option value="system_ca">系统 CA（推荐，适合公开证书）</option>
+              <option value="pinned_sha256">固定叶证书 SHA-256（高级）</option>
+            </select>
+          </label>
+          <label id="connection-fingerprint-field" class="hidden">HTTPS 证书 SHA-256 指纹
+            <input id="connection-fingerprint" autocomplete="off" placeholder="64 位十六进制指纹">
+          </label>
+          <p class="modal-help">只更新本机 Bridge 的出站地址和 HTTPS 信任配置，不会重建智能体或修改 Device 凭据。请确保新地址属于同一个中央服务；若 Bridge 正在运行，保存后会安全重连。</p>
+          <div class="actions modal-actions">
+            <button class="secondary" id="cancel-connection-modal" type="button">取消</button>
+            <button class="primary" id="save-connection" type="submit">保存并应用</button>
+          </div>
+        </form>
+      </section>
+    </div>
 
     <div class="modal-backdrop hidden" id="agent-modal-backdrop">
       <section class="agent-modal" role="dialog" aria-modal="true" aria-labelledby="agent-modal-title">

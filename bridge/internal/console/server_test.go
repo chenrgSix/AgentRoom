@@ -141,6 +141,9 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="codex-use-detected"`, `id="codex-preflight"`,
 		`id="agent-use-detected"`, `id="agent-preflight"`,
 		`id="pi-permission-policy"`, `id="agent-pi-permission-policy"`,
+		`id="edit-connection"`, `id="connection-modal-backdrop"`,
+		`id="connection-form"`, `id="connection-server-url"`,
+		`id="connection-trust-mode"`, `id="connection-fingerprint"`,
 	} {
 		if !bytes.Contains(html, []byte(id)) {
 			t.Fatalf("embedded UI omitted %s", id)
@@ -168,6 +171,10 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if !bytes.Contains(javascript, []byte("request(agentId ? `/api/agents/")) ||
 		bytes.Contains(javascript, []byte(`request(editMode ? "/api/config"`)) {
 		t.Fatal("Agent editor must target one Agent endpoint instead of replacing the whole configuration")
+	}
+	if bytes.Count(javascript, []byte(`request("/api/connection-settings"`)) != 1 ||
+		!bytes.Contains(html, []byte("只更新本机 Bridge")) {
+		t.Fatal("connection editor must use its dedicated endpoint and disclose its narrow ownership")
 	}
 }
 

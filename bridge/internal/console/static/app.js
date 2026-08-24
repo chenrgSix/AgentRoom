@@ -1,7 +1,7 @@
 const elements = Object.fromEntries([
   "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view",
-  "device-title", "start-bridge", "stop-bridge", "resume-enrollment", "add-agent", "current-server",
+  "device-title", "start-bridge", "stop-bridge", "resume-enrollment", "edit-connection", "add-agent", "current-server",
   "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
   "enrollment-form", "server-url", "device-name", "trust-mode", "fingerprint-field",
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
@@ -18,7 +18,11 @@ const elements = Object.fromEntries([
   "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace",
   "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env",
   "agent-pi-permission-policy", "save-agent",
-  "agent-use-detected", "agent-preflight", "agent-preflight-result"
+  "agent-use-detected", "agent-preflight", "agent-preflight-result",
+  "connection-modal-backdrop", "connection-modal-title", "close-connection-modal",
+  "cancel-connection-modal", "connection-modal-error", "connection-form",
+  "connection-server-url", "connection-trust-mode", "connection-fingerprint-field",
+  "connection-fingerprint", "save-connection"
 ].map((id) => [id, document.getElementById(id)]));
 
 const query = new URLSearchParams(window.location.search);
@@ -72,6 +76,8 @@ function showError(error) {
   elements.error.classList.toggle("hidden", !message);
   elements["agent-modal-error"].textContent = message;
   elements["agent-modal-error"].classList.toggle("hidden", !message);
+  elements["connection-modal-error"].textContent = message;
+  elements["connection-modal-error"].classList.toggle("hidden", !message);
 }
 
 function setRuntime(kind, enabled) {
@@ -204,12 +210,25 @@ function renderAgent(agent) {
   return row;
 }
 
+function usesHTTPS(value) {
+  return value.trim().toLowerCase().startsWith("https://");
+}
+
 function syncTrustFields() {
-  const https = elements["server-url"].value.startsWith("https://");
+  const https = usesHTTPS(elements["server-url"].value);
   elements["trust-mode"].disabled = !https;
   elements["fingerprint-field"].classList.toggle(
     "hidden",
     !https || elements["trust-mode"].value !== "pinned_sha256"
+  );
+}
+
+function syncConnectionTrustFields() {
+  const https = usesHTTPS(elements["connection-server-url"].value);
+  elements["connection-trust-mode"].disabled = !https;
+  elements["connection-fingerprint-field"].classList.toggle(
+    "hidden",
+    !https || elements["connection-trust-mode"].value !== "pinned_sha256"
   );
 }
 
@@ -243,6 +262,20 @@ function openAgentModal(agent = null) {
 function closeAgentModal() {
   editingAgentId = null;
   elements["agent-modal-backdrop"].classList.add("hidden");
+}
+
+function openConnectionModal() {
+  showError(null);
+  elements["connection-server-url"].value = currentState.serverUrl || "";
+  elements["connection-trust-mode"].value = currentState.serverTrustMode || "system_ca";
+  elements["connection-fingerprint"].value = currentState.serverCertificateSha256 || "";
+  syncConnectionTrustFields();
+  elements["connection-modal-backdrop"].classList.remove("hidden");
+  elements["connection-server-url"].focus();
+}
+
+function closeConnectionModal() {
+  elements["connection-modal-backdrop"].classList.add("hidden");
 }
 
 function render(state) {
@@ -289,6 +322,8 @@ function render(state) {
       [...runtimeTestResults.values()].includes("running") || draftPreflightRunning;
     elements["add-agent"].classList.toggle("hidden", !state.paired);
     elements["add-agent"].disabled = mutationBlocked;
+    elements["edit-connection"].classList.toggle("hidden", !state.paired);
+    elements["edit-connection"].disabled = mutationBlocked;
     elements["agent-list"].replaceChildren(...state.agents.map(renderAgent));
   } else {
     if (!elements["device-name"].value) elements["device-name"].value = "Local Bridge";
@@ -320,10 +355,13 @@ elements["server-url"].addEventListener("input", () => {
   syncTrustFields();
 });
 elements["trust-mode"].addEventListener("change", syncTrustFields);
+elements["connection-server-url"].addEventListener("input", syncConnectionTrustFields);
+elements["connection-trust-mode"].addEventListener("change", syncConnectionTrustFields);
 elements["codex-enabled"].addEventListener("change", () => setRuntime("codex", elements["codex-enabled"].checked));
 elements["pi-enabled"].addEventListener("change", () => setRuntime("pi", elements["pi-enabled"].checked));
 elements["join-code"].addEventListener("click", async () => navigator.clipboard.writeText(elements["join-code"].textContent));
 elements["add-agent"].addEventListener("click", () => openAgentModal());
+elements["edit-connection"].addEventListener("click", openConnectionModal);
 elements["agent-kind"].addEventListener("change", () => {
   const kind = elements["agent-kind"].value;
   if (!editingAgentId) {
@@ -365,12 +403,48 @@ for (const kind of ["codex", "pi"]) {
 for (const id of ["close-agent-modal", "cancel-agent-modal"]) {
   elements[id].addEventListener("click", closeAgentModal);
 }
+for (const id of ["close-connection-modal", "cancel-connection-modal"]) {
+  elements[id].addEventListener("click", closeConnectionModal);
+}
 elements["agent-modal-backdrop"].addEventListener("click", (event) => {
   if (event.target === elements["agent-modal-backdrop"]) closeAgentModal();
+});
+elements["connection-modal-backdrop"].addEventListener("click", (event) => {
+  if (event.target === elements["connection-modal-backdrop"]) closeConnectionModal();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !elements["agent-modal-backdrop"].classList.contains("hidden")) {
     closeAgentModal();
+  }
+  if (event.key === "Escape" && !elements["connection-modal-backdrop"].classList.contains("hidden")) {
+    closeConnectionModal();
+  }
+});
+
+elements["connection-form"].addEventListener("submit", async (event) => {
+  event.preventDefault();
+  showError(null);
+  elements["save-connection"].disabled = true;
+  const serverUrl = elements["connection-server-url"].value.trim();
+  const https = usesHTTPS(serverUrl);
+  const trustMode = https ? elements["connection-trust-mode"].value : "system_ca";
+  try {
+    await request("/api/connection-settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        serverUrl,
+        serverTrustMode: trustMode,
+        serverCertificateSha256: https && trustMode === "pinned_sha256"
+          ? elements["connection-fingerprint"].value
+          : ""
+      })
+    });
+    closeConnectionModal();
+    await refresh();
+  } catch (error) {
+    showError(error);
+  } finally {
+    elements["save-connection"].disabled = false;
   }
 });
 
@@ -421,10 +495,10 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
       method: "POST",
       body: JSON.stringify({
         serverUrl: elements["server-url"].value,
-        serverTrustMode: elements["server-url"].value.startsWith("https://")
+        serverTrustMode: usesHTTPS(elements["server-url"].value)
           ? elements["trust-mode"].value
           : "system_ca",
-        serverCertificateSha256: elements["server-url"].value.startsWith("https://") &&
+        serverCertificateSha256: usesHTTPS(elements["server-url"].value) &&
           elements["trust-mode"].value === "pinned_sha256"
           ? elements.fingerprint.value
           : "",
