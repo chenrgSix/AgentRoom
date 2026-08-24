@@ -106,6 +106,13 @@ Every connection must start with protocol `1.0` `bridge.hello`; a newer epoch
 closes the old socket, while stale epochs and identity-mismatched heartbeats are
 closed without updating Presence.
 
+The Bridge explicitly accepts authenticated inbound WebSocket messages up to
+16 MiB. This is a transport trust-boundary limit, not a 32 KiB product message
+limit: it covers the protocol-defined Run instruction plus fifty context
+messages after UTF-8 and JSON encoding, with expansion room for compatible
+fields. Larger artifacts require a separately bounded transfer protocol rather
+than an unbounded WebSocket allocation.
+
 ## Durable Inbox and ACK
 
 The Bridge writes `deliveryAttemptId`, `idempotencyKey`, payload hash, and local
@@ -145,9 +152,15 @@ strict Runtime presets, configuration replacement, and lifecycle fencing.
 Console coverage verifies first setup, Runtime discovery, multiple same-kind
 Agents, per-Agent modal/API ownership, rename-stable identity, active-work
 fencing, draft Runtime preflight, connection-only mutation and lifecycle
-preservation, and status rendering. Work is tracked by
-`BRG-001` through `BRG-025`
+preservation, status rendering, and acceptance of a Run envelope above the
+WebSocket library's hidden 32 KiB default without reconnect. Work is tracked by
+`BRG-001` through `BRG-026`
 in `docs/TASKS.md`.
+
+`BRG-026` replaces the WebSocket library's default 32 KiB read ceiling with the
+explicit 16 MiB Bridge transport boundary. A real client/server regression uses
+multibyte Discussion context to prove the Bridge accepts the oversized Run on
+one connection instead of reconnecting until its deadline expires.
 
 `BRG-025` adds an optional central Server Token to the owner-only Bridge
 configuration and the paired connection-settings form. Public Console state

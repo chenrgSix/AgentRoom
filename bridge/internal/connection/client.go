@@ -26,6 +26,12 @@ import (
 
 var ErrRunCancelRequested = errors.New("Run cancellation requested")
 
+// The Bridge protocol permits a Run request with one 32,768-character
+// instruction and up to fifty 32,768-character context messages. Sixteen MiB
+// covers those defined fields after worst-case UTF-8 and JSON escaping while
+// retaining a finite trust-boundary limit for central-server input.
+const maxBridgeIncomingMessageBytes int64 = 16 << 20
+
 type Client struct {
 	Config              config.Config
 	Credential          pairing.Credential
@@ -126,6 +132,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		}
 		return false, fmt.Errorf("bridge WebSocket dial: %w", err)
 	}
+	socket.SetReadLimit(maxBridgeIncomingMessageBytes)
 	defer socket.CloseNow()
 	connectionContext, cancelConnection := context.WithCancel(ctx)
 	defer cancelConnection()
