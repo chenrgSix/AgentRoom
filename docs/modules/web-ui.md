@@ -220,6 +220,9 @@ giving it a bounded reading measure, distinct Member and Agent message shells,
 larger narrative typography, responsive code/table overflow, and a visually
 anchored dock. Streaming and final replies share Markdown rendering so the
 authoritative replacement changes state rather than presentation semantics.
+Isolated real-browser acceptance covers desktop light/dark themes plus 720 px
+and 390 px widths; both narrow layouts retain zero horizontal page overflow and
+place the dock immediately after the timeline rather than over its content.
 
 ## Dependencies
 
