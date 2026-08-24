@@ -15,6 +15,7 @@ interface DeliveryPayload {
   triggerMessageId: string;
   requesterMemberId: string;
   targetAgentId: string;
+  targetAgentName?: string;
   deliveryAttemptId: string;
   idempotencyKey: string;
   parentRunId?: string;
@@ -22,8 +23,10 @@ interface DeliveryPayload {
   contextMessages: Array<{
     messageId: string;
     senderId: string;
+    senderName?: string;
     content: string;
   }>;
+  routingAgents?: Array<{ agentId: string; name: string }>;
   deadline: string;
 }
 
@@ -197,6 +200,7 @@ export class DeliveryService {
       triggerMessageId: run.triggerMessageId,
       requesterMemberId: run.requesterMemberId,
       targetAgentId: run.targetAgentId,
+      targetAgentName: agent.name,
       deliveryAttemptId,
       idempotencyKey,
       ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
@@ -206,8 +210,31 @@ export class DeliveryService {
         .map((message) => ({
           messageId: message.messageId,
           senderId: message.senderId,
+          senderName: message.senderType === "member"
+            ? this.core.getMember(message.senderId)?.displayName ?? "Member"
+            : message.senderType === "agent"
+              ? this.core.getAgent(message.senderId)?.name ?? "Agent"
+              : "Agent Room",
           content: message.content
         })),
+      routingAgents: this.core.getRoom(run.roomId)?.collaborationPolicy
+        .allowAgentMentions
+        ? this.core.listAgents(agent.teamId)
+          .filter((candidate) =>
+            candidate.enabled &&
+            candidate.agentId !== agent.agentId &&
+            this.core.isRoomAgent(run.roomId, candidate.agentId)
+          )
+          .sort((left, right) => left.name === right.name
+            ? left.agentId.localeCompare(right.agentId)
+            : left.name.localeCompare(right.name)
+          )
+          .slice(0, 20)
+          .map((candidate) => ({
+            agentId: candidate.agentId,
+            name: candidate.name
+          }))
+        : [],
       deadline: run.deadlineAt
     };
     const payloadJson = JSON.stringify(payload);

@@ -21,6 +21,12 @@ Every behavioral fix adds a focused regression. Protocol changes require
 cross-language compatibility tests. The deterministic FakeAdapter is the
 default for races, disconnects, duplicate delivery, and timeout scenarios.
 
+Runtime activity coverage treats official reasoning summaries as untrusted
+output. Go parser/executor tests with split secret fragments, TypeScript
+WebSocket persistence tests, Web projection tests, and the real paired-Bridge
+Pi E2E must agree on one sequence while proving structured commands, arguments,
+tool results, and hidden reasoning never become central payloads.
+
 Every push to `main` and every pull request runs schema validation, generated
 contract checks, Node builds and tests, deterministic cross-process E2E,
 Markdown lint, Go tests and vet, plus a native macOS desktop compile. Release
@@ -92,7 +98,7 @@ seconds; no existing Team, Bridge configuration, or session data was changed.
 ## Required Scenarios
 
 The release suite covers offline queueing, ACK loss, duplicate delivery,
-out-of-order events, cancellation races, restart recovery, capability
+out-of-order status/output/activity/reply events, cancellation races, restart recovery, capability
 downgrade, sensitive-output filtering, and the three-member handoff journey
 defined by the architecture baseline. Discussion scenarios additionally cover
 useful continuation, low-value repetition, unresolved high-priority issues,
@@ -107,8 +113,8 @@ durable recovery cut points.
 One `traceId` follows Message, Run, delivery, Bridge, and Runtime events.
 The central service creates the opaque `trace_...` identity when a root Message
 is persisted. Replies, child Runs, durable delivery payloads, and sequenced Run
-events inherit it. Bridges must echo a non-empty value on ACK, status, reply,
-and handoff events. The server rejects an absent, invalid, or mismatched value;
+events inherit it. Bridges must echo a non-empty value on ACK, status, output,
+activity, reply, and handoff events. The server rejects an absent, invalid, or mismatched value;
 it never infers a missing value from the Run. A terminal local inbox record with
 incompatible trace metadata is isolated before recovery and never replayed. An
 incompatible active record fails closed and remains available for explicit

@@ -5,6 +5,30 @@ package contracts
 import "time"
 
 // Fields shared by versioned cross-process messages.
+type RunActivityMessage struct {
+	MessageID string             `json:"messageId"`
+	Payload   RunActivityPayload `json:"payload"`
+	// Major and minor protocol version negotiated by peers.
+	ProtocolVersion string `json:"protocolVersion"`
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	Timestamp time.Time              `json:"timestamp"`
+	Type      RunActivityMessageType `json:"type"`
+}
+
+type RunActivityPayload struct {
+	AgentID    string  `json:"agentId"`
+	RunID      string  `json:"runId"`
+	Sequence   int64   `json:"sequence"`
+	TraceID    string  `json:"traceId"`
+	ActivityID string  `json:"activityId"`
+	Content    *string `json:"content,omitempty"`
+	Kind       string  `json:"kind"`
+	Label      *string `json:"label,omitempty"`
+	Phase      string  `json:"phase"`
+	Reset      *bool   `json:"reset,omitempty"`
+}
+
+// Fields shared by versioned cross-process messages.
 type RunOutputDeltaMessage struct {
 	MessageID string                `json:"messageId"`
 	Payload   RunOutputDeltaPayload `json:"payload"`
@@ -121,24 +145,32 @@ type RunRequestedMessage struct {
 type RunRequestedPayload struct {
 	ContextMessages []ContextMessage `json:"contextMessages"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
-	Deadline          time.Time `json:"deadline"`
-	DeliveryAttemptID string    `json:"deliveryAttemptId"`
-	IdempotencyKey    string    `json:"idempotencyKey"`
-	Instruction       string    `json:"instruction"`
-	ParentRunID       *string   `json:"parentRunId,omitempty"`
-	RequesterMemberID string    `json:"requesterMemberId"`
-	RoomID            string    `json:"roomId"`
-	RunID             string    `json:"runId"`
-	TargetAgentID     string    `json:"targetAgentId"`
-	TraceID           string    `json:"traceId"`
-	TriggerMessageID  string    `json:"triggerMessageId"`
+	Deadline          time.Time      `json:"deadline"`
+	DeliveryAttemptID string         `json:"deliveryAttemptId"`
+	IdempotencyKey    string         `json:"idempotencyKey"`
+	Instruction       string         `json:"instruction"`
+	ParentRunID       *string        `json:"parentRunId,omitempty"`
+	RequesterMemberID string         `json:"requesterMemberId"`
+	RoomID            string         `json:"roomId"`
+	RoutingAgents     []RoutingAgent `json:"routingAgents,omitempty"`
+	RunID             string         `json:"runId"`
+	TargetAgentID     string         `json:"targetAgentId"`
+	TargetAgentName   *string        `json:"targetAgentName,omitempty"`
+	TraceID           string         `json:"traceId"`
+	TriggerMessageID  string         `json:"triggerMessageId"`
 }
 
 type ContextMessage struct {
 	Content   string `json:"content"`
 	MessageID string `json:"messageId"`
 	// Opaque identifier with a lowercase type prefix and non-semantic suffix.
-	SenderID string `json:"senderId"`
+	SenderID   string  `json:"senderId"`
+	SenderName *string `json:"senderName,omitempty"`
+}
+
+type RoutingAgent struct {
+	AgentID string `json:"agentId"`
+	Name    string `json:"name"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -322,6 +354,12 @@ type Device struct {
 	OwnerMemberID string `json:"ownerMemberId"`
 	TeamID        string `json:"teamId"`
 }
+
+type RunActivityMessageType string
+
+const (
+	RunActivity RunActivityMessageType = "run.activity"
+)
 
 type RunOutputDeltaMessageType string
 

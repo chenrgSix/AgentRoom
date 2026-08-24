@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+	"unicode/utf8"
 
 	"agentroom.dev/bridge/internal/operations"
 	bridgeruntime "agentroom.dev/bridge/internal/runtime"
@@ -85,6 +86,49 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			}
 			defer cancelSend()
 			return send(sendContext, message)
+		}
+		if event.Activity != nil {
+			activity := event.Activity
+			if activity.ID == "" || utf8.RuneCountInString(activity.ID) > 160 ||
+				(activity.Kind != "reasoning" && activity.Kind != "tool") ||
+				(activity.Phase != "started" && activity.Phase != "updated" &&
+					activity.Phase != "completed" && activity.Phase != "failed") {
+				return fmt.Errorf("Runtime emitted an invalid activity event")
+			}
+			label := bridgeruntime.RedactSensitiveText(activity.Label)
+			content := bridgeruntime.RedactSensitiveText(activity.Content)
+			if utf8.RuneCountInString(label) > 120 ||
+				utf8.RuneCountInString(content) > 4_000 {
+				return fmt.Errorf("Runtime activity exceeded its safe limit")
+			}
+			var labelValue *string
+			if label != "" {
+				labelValue = &label
+			}
+			var contentValue *string
+			if content != "" {
+				contentValue = &content
+			}
+			var reset *bool
+			if activity.Reset {
+				value := true
+				reset = &value
+			}
+			message := contracts.RunActivityMessage{
+				ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
+				Type: contracts.RunActivity,
+				Payload: contracts.RunActivityPayload{
+					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
+					TraceID: record.Request.TraceID, Sequence: sequence,
+					ActivityID: activity.ID, Kind: activity.Kind,
+					Phase: activity.Phase, Label: labelValue,
+					Content: contentValue, Reset: reset,
+				},
+			}
+			if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
+				return err
+			}
+			return send(eventContext, message)
 		}
 		if event.Output != nil {
 			if event.Output.Content == "" {
@@ -301,6 +345,7 @@ func validateRecoveryRecord(record Record) error {
 		}
 		switch envelope.Type {
 		case string(contracts.RunStatus),
+			string(contracts.RunActivity),
 			string(contracts.RunOutputDelta),
 			string(contracts.RunReply),
 			string(contracts.RunHandoffRequested):

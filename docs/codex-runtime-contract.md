@@ -21,9 +21,11 @@ additive contract:
    owner-selected sandbox with remote escalation disabled.
 3. `turn/start` submits the bounded Run instruction.
 4. `item/agentMessage/delta` supplies safe provisional assistant text.
-5. `item/completed` with `item.type = agentMessage` supplies the authoritative
+5. `item/reasoning/summaryTextDelta` supplies an official public reasoning
+   summary; supported tool items supply only their name/category and lifecycle.
+6. `item/completed` with `item.type = agentMessage` supplies the authoritative
    latest reply.
-6. `turn/completed` confirms a known terminal outcome; a failed or interrupted
+7. `turn/completed` confirms a known terminal outcome; a failed or interrupted
    status produces a safe failed Run.
 
 Unknown event types are ignored for forward compatibility. Malformed JSON,
@@ -35,7 +37,10 @@ Assistant previews retain a 64-rune safety tail before emission so a credential
 or private `agentroom-assessment` envelope split across events can be redacted
 before crossing the machine boundary. Starting a new Agent message resets the
 provisional preview; the final completed Agent message remains authoritative.
-Reasoning, tools, command output, and other App Server events remain local.
+Reasoning summaries use their own safety tail and whole-summary redaction.
+Supported tool activity exposes only a bounded display label and lifecycle;
+raw hidden reasoning, structured commands, arguments, tool input/output, approvals,
+and other App Server events remain local.
 
 ## Lifecycle Limits
 

@@ -88,6 +88,27 @@ func TestGenericStreamParserResetsAndWithholdsPrivateTail(t *testing.T) {
 	}
 }
 
+func TestGenericStreamParserProjectsOptInActivityEvents(t *testing.T) {
+	parser := &genericStreamParser{}
+	for _, line := range []string{
+		`{"type":"reasoning.delta","id":"reasoning-1","delta":"Checking the queue."}`,
+		`{"type":"reasoning.completed","id":"reasoning-1"}`,
+		`{"type":"tool.started","id":"tool-1","name":"search"}`,
+		`{"type":"tool.completed","id":"tool-1","name":"search","isError":false}`,
+	} {
+		if _, err := parser.consume([]byte(line)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	activities := parser.drainActivities()
+	if len(activities) != 4 || activities[0].Kind != "reasoning" ||
+		activities[0].Content != "Checking the queue." ||
+		activities[1].Phase != "completed" || activities[2].Kind != "tool" ||
+		activities[2].Label != "search" || activities[3].Phase != "completed" {
+		t.Fatalf("unexpected Generic activities: %#v", activities)
+	}
+}
+
 func TestGenericStructuredAdapterFailsClosedOnInvalidStreams(t *testing.T) {
 	for _, mode := range []string{"malformed", "missing-final", "tool-leak"} {
 		t.Run(mode, func(t *testing.T) {

@@ -44,6 +44,11 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	adapter := &bridgeruntime.FakeAdapter{}
 	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
 		{Status: &working}, {
+			Activity: &bridgeruntime.Activity{
+				ID: "reasoning-1", Kind: "reasoning", Phase: "updated",
+				Label: "Thinking", Content: "checking token=very-sensitive-value",
+			},
+		}, {
 			Output: &bridgeruntime.OutputDelta{Content: "working token=very-sensitive-value"},
 		}, {
 			Reply:      "done token=very-sensitive-value",
@@ -67,29 +72,34 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(sent) != 4 {
-		t.Fatalf("sent %d events, want 4", len(sent))
+	if len(sent) != 5 {
+		t.Fatalf("sent %d events, want 5", len(sent))
 	}
 	if len(runtimeEvents) != 2 || runtimeEvents[0].ActiveDelta != 1 ||
 		runtimeEvents[1].ActiveDelta != -1 || runtimeEvents[1].State != operations.RuntimeIdle ||
 		runtimeEvents[1].LastStatus != string(contracts.Completed) || runtimeEvents[1].ErrorCode != "" {
 		t.Fatalf("unexpected local Runtime projection: %#v", runtimeEvents)
 	}
-	output, ok := sent[1].(contracts.RunOutputDeltaMessage)
-	if !ok || strings.Contains(output.Payload.Content, "very-sensitive") {
-		t.Fatalf("output delta was not safely transported: %#v", sent[1])
+	activity, ok := sent[1].(contracts.RunActivityMessage)
+	if !ok || activity.Payload.Content == nil ||
+		strings.Contains(*activity.Payload.Content, "very-sensitive") {
+		t.Fatalf("activity was not safely transported: %#v", sent[1])
 	}
-	reply, ok := sent[2].(contracts.RunReplyMessage)
+	output, ok := sent[2].(contracts.RunOutputDeltaMessage)
+	if !ok || strings.Contains(output.Payload.Content, "very-sensitive") {
+		t.Fatalf("output delta was not safely transported: %#v", sent[2])
+	}
+	reply, ok := sent[3].(contracts.RunReplyMessage)
 	if !ok || reply.Payload.Assessment == nil ||
 		reply.Payload.Assessment.GoalSatisfied == nil ||
 		!*reply.Payload.Assessment.GoalSatisfied {
-		t.Fatalf("assessment was not transported: %#v", sent[1])
+		t.Fatalf("assessment was not transported: %#v", sent[3])
 	}
 	latest, err := inbox.Get(request.RunID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if latest.State != StateCompleted || latest.LastSequence != 5 {
+	if latest.State != StateCompleted || latest.LastSequence != 6 {
 		t.Fatalf("unexpected persisted record: %#v", latest)
 	}
 	for _, event := range latest.Events {
@@ -104,16 +114,16 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(replayed) != 4 {
-		t.Fatalf("replayed %d events, want 4", len(replayed))
+	if len(replayed) != 5 {
+		t.Fatalf("replayed %d events, want 5", len(replayed))
 	}
 	rawOutput, ok := replayed[1].(json.RawMessage)
 	var replayEnvelope struct {
 		Type string `json:"type"`
 	}
 	if !ok || json.Unmarshal(rawOutput, &replayEnvelope) != nil ||
-		replayEnvelope.Type != string(contracts.RunOutputDelta) {
-		t.Fatalf("replay omitted output delta: %#v", replayed)
+		replayEnvelope.Type != string(contracts.RunActivity) {
+		t.Fatalf("replay omitted activity: %#v", replayed)
 	}
 }
 

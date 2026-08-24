@@ -33,7 +33,7 @@ func (g GenericAdapter) executeStructured(ctx context.Context, request Request, 
 	configureRuntimeCommand(command)
 	command.Dir = g.Config.Workspace
 	command.Env = allowedEnvironment(g.Config.EnvAllowlist)
-	command.Stdin = strings.NewReader(request.Run.Instruction)
+	command.Stdin = strings.NewReader(runtimePrompt(request.Run))
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return emitGenericStartFailure(ctx, emit)
@@ -59,6 +59,16 @@ func (g GenericAdapter) executeStructured(ctx context.Context, request Request, 
 		delta, consumeError := parser.consume(scanner.Bytes())
 		if consumeError != nil {
 			protocolError = consumeError
+			break
+		}
+		for _, activity := range parser.drainActivities() {
+			activityValue := activity
+			if err := emit(runContext, Event{Activity: &activityValue}); err != nil {
+				executionError = err
+				break
+			}
+		}
+		if executionError != nil {
 			break
 		}
 		if delta != nil {
@@ -151,10 +161,13 @@ func emitGenericProtocolFailure(ctx context.Context, emit EmitFunc) error {
 }
 
 type genericStreamEvent struct {
-	Type  string `json:"type"`
-	Delta string `json:"delta"`
-	Reset bool   `json:"reset"`
-	Text  string `json:"text"`
+	Type    string `json:"type"`
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Delta   string `json:"delta"`
+	Reset   bool   `json:"reset"`
+	Text    string `json:"text"`
+	IsError bool   `json:"isError"`
 }
 
 type genericStreamParser struct {
@@ -163,6 +176,14 @@ type genericStreamParser struct {
 	finalReply   string
 	resetPending bool
 	finalSeen    bool
+	activities   []Activity
+	reasoning    map[string]*activityTextPreview
+}
+
+func (p *genericStreamParser) drainActivities() []Activity {
+	activities := p.activities
+	p.activities = nil
+	return activities
 }
 
 func (p *genericStreamParser) consume(source []byte) (*OutputDelta, error) {
@@ -183,6 +204,52 @@ func (p *genericStreamParser) consume(source []byte) (*OutputDelta, error) {
 		return nil, errGenericProtocolInvalid
 	}
 	switch event.Type {
+	case "reasoning.delta":
+		if p.finalSeen || event.ID == "" || len(event.ID) > 160 || event.Delta == "" {
+			return nil, errGenericProtocolInvalid
+		}
+		if p.reasoning == nil {
+			p.reasoning = make(map[string]*activityTextPreview)
+		}
+		preview := p.reasoning[event.ID]
+		if preview == nil {
+			preview = &activityTextPreview{}
+			p.reasoning[event.ID] = preview
+		}
+		preview.append(event.Delta, event.Reset)
+		p.activities = append(p.activities, preview.project(event.ID, "Thinking", false)...)
+		return nil, nil
+	case "reasoning.completed":
+		if event.ID == "" || len(event.ID) > 160 {
+			return nil, errGenericProtocolInvalid
+		}
+		if preview := p.reasoning[event.ID]; preview != nil {
+			p.activities = append(p.activities, preview.project(event.ID, "Thinking", true)...)
+			delete(p.reasoning, event.ID)
+		}
+		p.activities = append(p.activities, Activity{
+			ID: event.ID, Kind: "reasoning", Phase: "completed", Label: "Thinking",
+		})
+		return nil, nil
+	case "tool.started", "tool.completed":
+		if event.ID == "" || len(event.ID) > 160 || strings.TrimSpace(event.Name) == "" {
+			return nil, errGenericProtocolInvalid
+		}
+		label := strings.TrimSpace(event.Name)
+		if len([]rune(label)) > 120 {
+			label = string([]rune(label)[:120])
+		}
+		phase := "started"
+		if event.Type == "tool.completed" {
+			phase = "completed"
+			if event.IsError {
+				phase = "failed"
+			}
+		}
+		p.activities = append(p.activities, Activity{
+			ID: event.ID, Kind: "tool", Phase: phase, Label: label,
+		})
+		return nil, nil
 	case "assistant.delta":
 		if p.finalSeen || event.Delta == "" {
 			return nil, errGenericProtocolInvalid

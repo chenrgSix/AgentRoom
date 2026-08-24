@@ -366,7 +366,7 @@ test("Bridge rejects a well-formed but incorrect traceId", async () => {
   }
 });
 
-test("Bridge applies accepted, output, status, and reply messages with the matching traceId", async () => {
+test("Bridge applies accepted, output, activity, status, and reply messages with the matching traceId", async () => {
   const fixture = await createFixture();
   try {
     await acceptRun(fixture);
@@ -385,18 +385,29 @@ test("Bridge applies accepted, output, status, and reply messages with the match
       sequence: 3,
       content: "Strict trace "
     }));
-    send(fixture.socket, envelope("run.reply", {
+    send(fixture.socket, envelope("run.activity", {
       runId: fixture.runId,
       traceId: fixture.traceId,
       agentId,
       sequence: 4,
+      activityId: "reasoning-1",
+      kind: "reasoning",
+      phase: "updated",
+      label: "Thinking",
+      content: "Validated the strict trace."
+    }));
+    send(fixture.socket, envelope("run.reply", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 5,
       content: "Strict trace accepted."
     }));
     send(fixture.socket, envelope("run.status", {
       runId: fixture.runId,
       traceId: fixture.traceId,
       agentId,
-      sequence: 5,
+      sequence: 6,
       status: "completed"
     }));
     await waitFor(() => runState(fixture, "completed"));
@@ -414,8 +425,17 @@ test("Bridge applies accepted, output, status, and reply messages with the match
     assert.equal(output.statusCode, 200);
     assert.deepEqual(
       output.json().map((record: { event: { type: string } }) => record.event.type),
-      ["output", "reply", "status"]
+      ["output", "activity", "reply", "status"]
     );
+    assert.deepEqual(output.json()[1].event, {
+      type: "activity",
+      sequence: 4,
+      activityId: "reasoning-1",
+      kind: "reasoning",
+      phase: "updated",
+      label: "Thinking",
+      content: "Validated the strict trace."
+    });
   } finally {
     await closeFixture(fixture);
   }

@@ -191,6 +191,7 @@
           "triggerMessageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WB",
           "requesterMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "targetAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "targetAgentName": "Builder",
           "deliveryAttemptId": "delivery_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "idempotencyKey": "idem_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "instruction": "Review the Room request and reply with a plan.",
@@ -198,7 +199,14 @@
             {
               "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WB",
               "senderId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "senderName": "Alice",
               "content": "Please review the API boundary."
+            }
+          ],
+          "routingAgents": [
+            {
+              "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
+              "name": "Reviewer"
             }
           ],
           "deadline": "2026-08-22T10:20:04Z"
@@ -257,6 +265,28 @@
         }
       },
       "valid": false
+    },
+    {
+      "name": "valid Run reasoning activity",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WY",
+        "timestamp": "2026-08-22T10:00:06Z",
+        "type": "run.activity",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 3,
+          "activityId": "reasoning-1",
+          "kind": "reasoning",
+          "phase": "updated",
+          "label": "Thinking",
+          "content": "Checking the scheduling boundary."
+        }
+      },
+      "valid": true
     },
     {
       "name": "valid Run output delta",

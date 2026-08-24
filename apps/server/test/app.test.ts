@@ -206,7 +206,10 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
     assert.deepEqual(changed.json(), {
       changed: true,
       cursor: changeCursor + 1,
-      reset: false
+      reset: false,
+      team: false,
+      roomIds: [room.roomId],
+      runRoomIds: []
     });
     const routed = createMessage.json() as {
       message: { messageId: string; sequence: number };

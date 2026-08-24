@@ -4,7 +4,9 @@ import test from "node:test";
 import {
   createSingleFlight,
   mergeRoomMessages,
-  reduceRunOutput
+  reduceRunActivities,
+  reduceRunOutput,
+  teamChangeRefreshScope
 } from "../src/room-sync.js";
 
 test("Room synchronization appends cursor deltas once and keeps newest history", () => {
@@ -104,4 +106,73 @@ test("Run output waits for a missing sequence and clears on failure", () => {
     content: "",
     sealed: true
   });
+});
+
+test("Run activities merge reasoning deltas and tool lifecycle by stable id", () => {
+  const projection = reduceRunActivities(undefined, [
+    { sequence: 1, event: { type: "status", sequence: 1, status: "working" } },
+    {
+      sequence: 2,
+      event: {
+        type: "activity", sequence: 2, activityId: "reasoning-1",
+        kind: "reasoning", phase: "updated", label: "Thinking", content: "先检查"
+      }
+    },
+    {
+      sequence: 3,
+      event: {
+        type: "activity", sequence: 3, activityId: "reasoning-1",
+        kind: "reasoning", phase: "completed", content: "调度"
+      }
+    },
+    {
+      sequence: 4,
+      event: {
+        type: "activity", sequence: 4, activityId: "tool-1",
+        kind: "tool", phase: "started", label: "search"
+      }
+    },
+    {
+      sequence: 5,
+      event: {
+        type: "activity", sequence: 5, activityId: "tool-1",
+        kind: "tool", phase: "completed", label: "search"
+      }
+    },
+    { sequence: 6, event: { type: "reply", sequence: 6, content: "完成" } }
+  ]);
+  assert.equal(projection.sequence, 6);
+  assert.equal(projection.sealed, true);
+  assert.deepEqual(projection.items, [
+    {
+      activityId: "reasoning-1", kind: "reasoning", phase: "completed",
+      label: "Thinking", content: "先检查调度", sequence: 3
+    },
+    {
+      activityId: "tool-1", kind: "tool", phase: "completed",
+      label: "search", content: "", sequence: 5
+    }
+  ]);
+});
+
+test("Team change hints choose full, selected-Room, or no reconciliation", () => {
+  assert.equal(teamChangeRefreshScope({
+    changed: true, reset: false, team: true, roomIds: []
+  }, "room_selected"), "full");
+  assert.equal(teamChangeRefreshScope({
+    changed: true, reset: false, team: false, roomIds: ["room_selected"]
+  }, "room_selected"), "room");
+  assert.equal(teamChangeRefreshScope({
+    changed: true, reset: false, team: false, roomIds: [],
+    runRoomIds: ["room_selected"]
+  }, "room_selected"), "events");
+  assert.equal(teamChangeRefreshScope({
+    changed: true, reset: false, team: false, roomIds: ["room_other"]
+  }, "room_selected"), null);
+  assert.equal(teamChangeRefreshScope({
+    changed: true, reset: false
+  }, "room_selected"), "full");
+  assert.equal(teamChangeRefreshScope({
+    changed: false, reset: true, team: false, roomIds: []
+  }, "room_selected"), "full");
 });

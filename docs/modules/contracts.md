@@ -74,7 +74,7 @@ when the owning module explicitly supports round trips.
 
 `schemas/bridge/messages.schema.json` defines `bridge.hello`, heartbeat, Agent
 publication/status, and the Run request, acceptance, status, output delta,
-reply, cancel, and handoff messages. Payloads carry immutable entity IDs, and
+activity, reply, cancel, and handoff messages. Payloads carry immutable entity IDs, and
 every Bridge Run event starts with sequence 1. `run.cancel_requested` is the
 server-to-Bridge interrupt command required by the documented cancellation
 flow.
@@ -90,6 +90,14 @@ projection. Servers accept Bridges that never emit output deltas; deployment
 must upgrade the central service before enabling a Bridge that emits the new
 message type.
 
+`run.activity` is a recoverable, sequenced view of explicitly public Runtime
+work. It carries a stable activity ID, `reasoning` or `tool` kind, lifecycle
+phase, and bounded optional label/content. Reasoning content means a Runtime's
+official summary stream, never hidden chain-of-thought. Tool activity exposes
+only an allowlisted display name and phase; structured command records,
+arguments, tool input/output, and approvals are outside the wire contract. Activity
+never appends a Room Message or counts as an Agent reply.
+
 `run.reply` has an additive optional `assessment` object for Discussion
 evidence: goal satisfaction, confidence, question/evidence deltas,
 disagreement, Reviewer approval, and a recommendation. Clients that omit the
@@ -103,6 +111,11 @@ non-empty `traceId`; the server rejects an absent, invalid, or mismatched value.
 Local inbox data written before trace propagation is not a recoverable protocol
 1.0 record and is handled by the Bridge's incompatible-record policy rather
 than inferred by the server.
+
+The request may also include the target Agent name, named context senders, and
+the exact enabled Room peers eligible for reply routing. These are display and
+prompt-projection fields; stable IDs and server-side eligibility remain routing
+authority.
 
 ## Versioning Rules
 
@@ -137,7 +150,7 @@ traces, or internal database errors.
 
 ## Task Mapping
 
-`CON-001` through `CON-005`, plus cross-language portions of `QA-001`.
+`CON-001` through `CON-006`, plus cross-language portions of `QA-001`.
 
 ## Dependencies
 

@@ -32,6 +32,16 @@ export type RuntimeEvent =
       };
     }
   | {
+      type: "activity";
+      sequence: number;
+      activityId: string;
+      kind: "reasoning" | "tool";
+      phase: "started" | "updated" | "completed" | "failed";
+      label?: string;
+      content?: string;
+      reset?: boolean;
+    }
+  | {
       type: "output";
       sequence: number;
       content: string;

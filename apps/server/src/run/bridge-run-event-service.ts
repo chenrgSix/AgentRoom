@@ -184,6 +184,53 @@ export class BridgeRunEventService {
     return applied;
   }
 
+  public applyActivity(
+    principal: DevicePrincipal,
+    input: {
+      runId: string;
+      traceId: string;
+      agentId: string;
+      sequence: number;
+      activityId: string;
+      kind: "reasoning" | "tool";
+      phase: "started" | "updated" | "completed" | "failed";
+      label?: string;
+      content?: string;
+      reset?: boolean;
+    },
+    now: string
+  ): AppliedRunEvent {
+    const run = this.requireOwnedRun(
+      principal, input.runId, input.traceId, input.agentId
+    );
+    this.validateSequence(input.sequence);
+    if (
+      input.activityId.trim().length === 0 ||
+      input.activityId.length > 160 ||
+      !new Set(["reasoning", "tool"]).has(input.kind) ||
+      !new Set(["started", "updated", "completed", "failed"]).has(input.phase) ||
+      (input.label !== undefined && (
+        input.label.trim().length === 0 || input.label.length > 120
+      )) ||
+      (input.content !== undefined && (
+        input.content.trim().length === 0 || input.content.length > 4_000
+      )) ||
+      (input.reset !== undefined && typeof input.reset !== "boolean")
+    ) {
+      throw new Error("Invalid Runtime activity");
+    }
+    return this.runs.applyEvent(run.runId, {
+      type: "activity",
+      sequence: input.sequence,
+      activityId: input.activityId,
+      kind: input.kind,
+      phase: input.phase,
+      ...(input.label ? { label: redactSensitiveText(input.label) } : {}),
+      ...(input.content ? { content: redactSensitiveText(input.content) } : {}),
+      ...(input.reset ? { reset: true } : {})
+    }, now);
+  }
+
   public applyOutput(
     principal: DevicePrincipal,
     input: {

@@ -80,6 +80,7 @@ interface RunEventRow {
   content: string | null;
   output_reset: 0 | 1;
   assessment_json: string | null;
+  activity_json: string | null;
   error_json: string | null;
   created_at: string;
 }
@@ -124,7 +125,16 @@ function mapRun(row: RunRow): RunRecord {
 }
 
 function mapRunEvent(row: RunEventRow): RunEventRecord {
-  const event: RuntimeEvent = row.event_type === "reply"
+  const event: RuntimeEvent = row.event_type === "activity"
+    ? {
+        type: "activity",
+        sequence: row.sequence,
+        ...JSON.parse(row.activity_json ?? "{}") as Omit<
+          Extract<RuntimeEvent, { type: "activity" }>,
+          "type" | "sequence"
+        >
+      }
+    : row.event_type === "reply"
       ? {
         type: "reply",
         sequence: row.sequence,
@@ -275,8 +285,8 @@ export class RunRepository {
       this.database.prepare(`
         INSERT INTO run_events (
           run_id, trace_id, sequence, event_type, status, content, output_reset,
-          error_json, assessment_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          error_json, assessment_json, activity_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         runId,
         current.traceId,
@@ -290,6 +300,16 @@ export class RunRepository {
           : null,
         event.type === "reply" && event.assessment
           ? JSON.stringify(event.assessment)
+          : null,
+        event.type === "activity"
+          ? JSON.stringify({
+              activityId: event.activityId,
+              kind: event.kind,
+              phase: event.phase,
+              ...(event.label ? { label: event.label } : {}),
+              ...(event.content ? { content: event.content } : {}),
+              ...(event.reset ? { reset: true } : {})
+            })
           : null,
         now
       );

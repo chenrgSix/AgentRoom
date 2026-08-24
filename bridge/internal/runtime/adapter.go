@@ -19,10 +19,20 @@ type Request struct {
 
 type Event struct {
 	Status     *contracts.RunExecutionStatus
+	Activity   *Activity
 	Output     *OutputDelta
 	Reply      string
 	Assessment *contracts.Assessment
 	Error      *contracts.AgentRoomError
+}
+
+type Activity struct {
+	ID      string
+	Kind    string
+	Phase   string
+	Label   string
+	Content string
+	Reset   bool
 }
 
 type OutputDelta struct {

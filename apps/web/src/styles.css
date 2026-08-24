@@ -374,6 +374,22 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .streaming-message > .message-card { border-color: rgb(139 173 80 / 38%); background: transparent; }
 .streaming-state { color: #b8d879; font-size: 10px; font-weight: 750; }
 .streaming-content { min-width: 0; }
+.agent-run-activity { max-width: 720px; margin: 8px 0 10px; border: 1px solid #303b31; border-radius: 10px; background: rgb(25 31 26 / 72%); color: #9da89f; }
+.agent-run-activity > summary { display: grid; grid-template-columns: 7px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 34px; padding: 6px 9px; cursor: pointer; list-style: none; }
+.agent-run-activity > summary::-webkit-details-marker { display: none; }
+.agent-run-activity > summary strong { overflow: hidden; color: #b8c4ba; font-size: 10px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.agent-run-activity > summary > span:last-child { min-width: 20px; padding: 2px 5px; border: 1px solid #3d493d; border-radius: 999px; color: #7f8a81; font-size: 8px; text-align: center; }
+.agent-run-activity-pulse { width: 6px; height: 6px; border-radius: 50%; background: #75806f; }
+.agent-run-activity.active .agent-run-activity-pulse { background: #bddc72; box-shadow: 0 0 0 4px rgb(189 220 114 / 9%); animation: activity-pulse 1.5s ease-in-out infinite; }
+@keyframes activity-pulse { 50% { opacity: .35; transform: scale(.75); } }
+.agent-run-activity-body { display: grid; gap: 5px; max-height: min(300px, 34vh); overflow-y: auto; padding: 7px 9px 9px; border-top: 1px solid #303830; }
+.agent-run-activity-body > small { color: #747f76; font-size: 8px; line-height: 1.45; }
+.agent-run-activity-item { display: grid; gap: 5px; padding: 6px 7px; border-radius: 7px; background: #1c221d; }
+.agent-run-activity-item > header { display: flex; justify-content: space-between; gap: 8px; margin: 0; }
+.agent-run-activity-item > header strong { color: #aeb9b0; font-size: 9px; }
+.agent-run-activity-item > header span { color: #788279; font-size: 8px; }
+.agent-run-activity-item.failed > header span { color: #e89b92; }
+.agent-run-activity-item.reasoning .markdown-message { color: #a8b1aa; font-size: 10px; line-height: 1.55; }
 .streaming-cursor { display: inline-block; width: 2px; height: 1em; margin-left: 3px; vertical-align: -.12em; background: #c9e47d; animation: streaming-cursor 900ms steps(1, end) infinite; }
 @keyframes streaming-cursor { 50% { opacity: .15; } }
 .pending-message .message-card { border-style: dashed; opacity: .78; }
@@ -605,6 +621,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .message p { color: #3f493a; }
 :root[data-theme="light"] .streaming-message { background: transparent; }
 :root[data-theme="light"] .streaming-state { color: #657b32; }
+:root[data-theme="light"] .agent-run-activity { border-color: #d7dfd1; background: #f7faf4; color: #667064; }
+:root[data-theme="light"] .agent-run-activity > summary strong { color: #546154; }
+:root[data-theme="light"] .agent-run-activity > summary > span:last-child { border-color: #d1dacb; color: #798377; }
+:root[data-theme="light"] .agent-run-activity-body { border-color: #dde4d9; }
+:root[data-theme="light"] .agent-run-activity-item { background: #fff; }
+:root[data-theme="light"] .agent-run-activity-item > header strong { color: #566257; }
+:root[data-theme="light"] .agent-run-activity-item.reasoning .markdown-message { color: #556058; }
 :root[data-theme="light"] .streaming-cursor { background: #718d32; }
 :root[data-theme="light"] .pending-message { background: transparent; }
 :root[data-theme="light"] .pending-message.failed { background: transparent; }

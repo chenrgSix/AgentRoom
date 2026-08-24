@@ -3,6 +3,39 @@
 /**
  * Fields shared by versioned cross-process messages.
  */
+export interface RunActivityMessage {
+  messageId: string;
+  payload:   RunActivityPayload;
+  /**
+   * Major and minor protocol version negotiated by peers.
+   */
+  protocolVersion: string;
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  timestamp: string;
+  type:      RunActivityMessageType;
+  [property: string]: unknown;
+}
+
+export interface RunActivityPayload {
+  agentId:    string;
+  runId:      string;
+  sequence:   number;
+  traceId:    string;
+  activityId: string;
+  content?:   string;
+  kind:       string;
+  label?:     string;
+  phase:      string;
+  reset?:     boolean;
+}
+
+export type RunActivityMessageType = "run.activity";
+
+/**
+ * Fields shared by versioned cross-process messages.
+ */
 export interface RunOutputDeltaMessage {
   messageId: string;
   payload:   RunOutputDeltaPayload;
@@ -188,8 +221,10 @@ export interface RunRequestedPayload {
   parentRunId?:      string;
   requesterMemberId: string;
   roomId:            string;
+  routingAgents?:    RoutingAgent[];
   runId:             string;
   targetAgentId:     string;
+  targetAgentName?:  string;
   traceId:           string;
   triggerMessageId:  string;
   [property: string]: unknown;
@@ -201,8 +236,14 @@ export interface ContextMessage {
   /**
    * Opaque identifier with a lowercase type prefix and non-semantic suffix.
    */
-  senderId: string;
+  senderId:    string;
+  senderName?: string;
   [property: string]: unknown;
+}
+
+export interface RoutingAgent {
+  agentId: string;
+  name:    string;
 }
 
 export type RunRequestedMessageType = "run.requested";
@@ -470,6 +511,7 @@ export interface Device {
 export type BridgeJoinPairedStatus = "paired";
 
 export type BridgeMessage =
+  | RunActivityMessage
   | RunOutputDeltaMessage
   | BridgeHelloMessage
   | BridgeHeartbeatMessage

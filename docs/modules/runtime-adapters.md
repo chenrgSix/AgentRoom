@@ -48,8 +48,10 @@ tools, extensions, Skills, project context, and approval remain governed by the
 owner's local Pi configuration and explicit local arguments. Bridge migration
 removes the product-authored restrictions from preset version 2 while retaining
 other owner-authored arguments from older configurations. Pi assistant
-`text_delta` events feed a bounded provisional preview; thinking, usage, tool
-calls, tool results, and provider protocol stay local. When a tool-using
+`text_delta` events feed a bounded provisional preview. Explicit
+`thinking_delta`/`reasoning_delta` summary text and tool execution name/phase
+feed the separate activity stream; usage, structured command/tool records,
+arguments/results, approvals, and provider protocol stay local. When a tool-using
 assistant message is followed by a new assistant message, the next visible
 delta resets the provisional preview so only the current answer remains. The
 last completed non-tool assistant message is still the authoritative reply.
@@ -66,10 +68,12 @@ Codex preset version 4 uses the local Codex App Server over JSONL stdio. The
 Bridge initializes one ephemeral Thread per Run in the fixed owner-selected
 workspace, passes the owner-selected `read-only` or `workspace-write` sandbox,
 and uses `approvalPolicy: never` so a remote Team message cannot escalate local
-permissions. It publishes only `item/agentMessage/delta`, resets provisional
+permissions. It publishes `item/agentMessage/delta`, resets provisional
 output when Codex starts a new Agent message after a tool boundary, and treats
 the last completed `agentMessage` plus `turn/completed` as authoritative. Tool,
-reasoning, command-output, and approval protocol stays local. Interactive
+reasoning-summary deltas and allowlisted tool item name/phase become activity;
+raw hidden reasoning, structured command/tool records, arguments, and approval
+protocol stay local. Interactive
 server requests receive a protocol error instead of being approved. A bounded
 safety tail, redaction, protocol/output limits, process-group cancellation, and
 final-reply parsing match the Pi streaming boundary.
@@ -80,7 +84,9 @@ Generic configuration may explicitly select
 `outputProtocol: agentroom-jsonl-v1`. Only that protocol publishes streaming
 capability. Its newline-delimited `assistant.delta` events carry non-empty text
 and an optional reset flag; exactly one `reply.final` carries the authoritative
-assistant reply. Unknown JSON events remain private, while malformed JSON,
+assistant reply. It may explicitly publish `reasoning.delta`,
+`reasoning.completed`, `tool.started`, and `tool.completed` activity. Unknown
+JSON events remain private, while malformed JSON,
 assistant events after the final reply, missing/duplicate final replies,
 oversized output, or leaked provider tool markup fail closed. The complete
 producer contract is maintained in `docs/generic-runtime-stream-contract.md`.
@@ -97,6 +103,13 @@ server-provided shell string. They must isolate process groups, bound output,
 propagate cancellation, and clean up children. Existing Runtime command, file,
 network, and approval policies remain authoritative.
 
+Before execution, managed adapters project at most the newest 12 prior Room
+messages into a 12 KiB named transcript and include the target plus exact
+eligible peer Agent names. The Runtime is instructed to use complete
+case-sensitive `@Agent name` commands with no fuzzy role or prefix matching.
+This improves handoff intent, but the server still parses,
+authorizes, depth-limits, and persists every resulting child Run.
+
 ## Events and Replies
 
 Adapter events carry `runId`, `sessionRef`, sequence, timestamp, and schema
@@ -112,13 +125,14 @@ Runtime, owns the resulting continue/finish decision.
 ## Verification and Tasks
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
-startup, streaming, cancellation, crash, recovery, and local permission
-inheritance. Work is tracked by `ADP-001` through `ADP-009` and `BRG-023` in
+startup, streaming, activity, named context, cancellation, crash, recovery,
+and local permission inheritance. Work is tracked by `ADP-001` through
+`ADP-010` and `BRG-023`/`BRG-027` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one
-context-cancelable `Execute` method that emits ordered semantic status or reply
-events. The deterministic Go Fake Adapter is the first contract implementation.
+context-cancelable `Execute` method that emits ordered semantic status, output,
+activity, or reply events. The deterministic Go Fake Adapter is the first contract implementation.
 The pinned Codex App Server event subset and lifecycle limits are documented in
 `docs/codex-runtime-contract.md` and guarded by Go parser fixtures.
 

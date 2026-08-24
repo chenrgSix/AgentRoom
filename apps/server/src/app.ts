@@ -194,6 +194,7 @@ type BridgeRejectionCategory =
   | "invalid_trace_id"
   | "run_acceptance_rejected"
   | "run_status_rejected"
+  | "run_activity_rejected"
   | "run_output_rejected"
   | "run_reply_rejected"
   | "hello_required";
@@ -207,6 +208,7 @@ const bridgeLogMessageTypes = new Set([
   "agent.publish",
   "run.accepted",
   "run.status",
+  "run.activity",
   "run.output_delta",
   "run.reply"
 ]);
@@ -518,7 +520,17 @@ export async function createServerApp(
       if (!changedTeamId && params.agentId) {
         changedTeamId = core.getAgent(params.agentId)?.teamId;
       }
-      if (changedTeamId) teamChanges.notify(changedTeamId);
+      if (changedTeamId) {
+        const roomId = params.roomId;
+        const roomTimelineMutation =
+          request.routeOptions.url === "/api/rooms/:roomId/messages";
+        teamChanges.notify(
+          changedTeamId,
+          roomTimelineMutation && roomId
+            ? { kind: "room", roomId }
+            : { kind: "team" }
+        );
+      }
     }
   });
 
@@ -800,7 +812,9 @@ export async function createServerApp(
             deviceId: devicePrincipal.deviceId,
             state: accepted.state
           }, "Run delivery accepted");
-          teamChanges.notify(devicePrincipal.teamId);
+          teamChanges.notify(devicePrincipal.teamId, {
+            kind: "room", roomId: accepted.roomId
+          });
           return;
         }
         if (message.type === "run.status" && registeredEpoch !== undefined) {
@@ -850,20 +864,26 @@ export async function createServerApp(
             sequence: message.payload.sequence,
             applied: applied.applied
           }, "Run state event processed");
-          teamChanges.notify(devicePrincipal.teamId);
+          teamChanges.notify(devicePrincipal.teamId, {
+            kind: "room", roomId: applied.run.roomId
+          });
           if (
             applied.applied &&
             new Set(["completed", "failed", "canceled", "outcome_unknown"])
               .has(applied.run.state)
           ) {
             void advanceDiscussion(applied.run.runId)
-              .then(() => teamChanges.notify(devicePrincipal.teamId))
+              .then(() => teamChanges.notify(devicePrincipal.teamId, {
+                kind: "room", roomId: applied.run.roomId
+              }))
               .catch((error: unknown) => {
                 app.log.error(error, "Discussion advancement failed");
               });
           } else if (applied.applied && applied.run.state === "input_required") {
             void pauseDiscussionForInput(applied.run.runId)
-              .then(() => teamChanges.notify(devicePrincipal.teamId))
+              .then(() => teamChanges.notify(devicePrincipal.teamId, {
+                kind: "room", roomId: applied.run.roomId
+              }))
               .catch((error: unknown) => {
                 app.log.error(error, "Discussion input-required transition failed");
               });
@@ -902,14 +922,70 @@ export async function createServerApp(
             sequence: message.payload.sequence,
             applied: applied.applied
           }, "Run reply event processed");
-          teamChanges.notify(devicePrincipal.teamId);
+          teamChanges.notify(devicePrincipal.teamId, {
+            kind: "room", roomId: applied.run.roomId
+          });
           if (applied.applied) {
             void routeAgentReplyMentions(applied.run.runId)
-              .then(() => teamChanges.notify(devicePrincipal.teamId))
+              .then(() => teamChanges.notify(devicePrincipal.teamId, {
+                kind: "room", roomId: applied.run.roomId
+              }))
               .catch((error: unknown) => {
                 app.log.error(error, "Agent reply mention routing failed");
               });
           }
+          return;
+        }
+        if (message.type === "run.activity" && registeredEpoch !== undefined) {
+          if (
+            typeof message.payload.runId !== "string" ||
+            typeof message.payload.agentId !== "string" ||
+            !Number.isSafeInteger(message.payload.sequence) ||
+            typeof message.payload.activityId !== "string" ||
+            typeof message.payload.kind !== "string" ||
+            typeof message.payload.phase !== "string" ||
+            (message.payload.label !== undefined &&
+              typeof message.payload.label !== "string") ||
+            (message.payload.content !== undefined &&
+              typeof message.payload.content !== "string") ||
+            (message.payload.reset !== undefined &&
+              typeof message.payload.reset !== "boolean")
+          ) {
+            rejectMessage("run_activity_rejected");
+            return;
+          }
+          if (!isBridgeTraceId(message.payload.traceId)) {
+            rejectMessage("invalid_trace_id");
+            return;
+          }
+          const applied = bridgeRunEvents.applyActivity(devicePrincipal, {
+            runId: message.payload.runId,
+            traceId: message.payload.traceId,
+            agentId: message.payload.agentId,
+            sequence: message.payload.sequence as number,
+            activityId: message.payload.activityId,
+            kind: message.payload.kind as "reasoning" | "tool",
+            phase: message.payload.phase as
+              "started" | "updated" | "completed" | "failed",
+            ...(typeof message.payload.label === "string"
+              ? { label: message.payload.label }
+              : {}),
+            ...(typeof message.payload.content === "string"
+              ? { content: message.payload.content }
+              : {}),
+            ...(message.payload.reset === true ? { reset: true } : {})
+          }, clock());
+          app.log.info({
+            event: "run.activity.applied",
+            traceId: applied.run.traceId,
+            runId: applied.run.runId,
+            agentId: applied.run.targetAgentId,
+            sequence: message.payload.sequence,
+            applied: applied.applied
+          }, "Run activity event processed");
+          if (applied.applied) teamChanges.notify(devicePrincipal.teamId, {
+            kind: "run", roomId: applied.run.roomId
+          });
           return;
         }
         if (message.type === "run.output_delta" && registeredEpoch !== undefined) {
@@ -945,7 +1021,9 @@ export async function createServerApp(
             applied: applied.applied
           }, "Run output event processed");
           if (applied.applied) {
-            teamChanges.notify(devicePrincipal.teamId);
+            teamChanges.notify(devicePrincipal.teamId, {
+              kind: "run", roomId: applied.run.roomId
+            });
           }
           return;
         }
@@ -955,6 +1033,8 @@ export async function createServerApp(
           ? "run_acceptance_rejected"
           : message.type === "run.status"
             ? "run_status_rejected"
+            : message.type === "run.activity"
+              ? "run_activity_rejected"
             : message.type === "run.output_delta"
               ? "run_output_rejected"
             : message.type === "run.reply"

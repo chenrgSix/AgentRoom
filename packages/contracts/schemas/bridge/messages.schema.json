@@ -19,6 +19,7 @@
             "run.requested",
             "run.accepted",
             "run.status",
+            "run.activity",
             "run.output_delta",
             "run.reply",
             "run.cancel_requested",
@@ -27,6 +28,25 @@
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "run.activity"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/runActivityPayload"
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {
@@ -654,6 +674,11 @@
         "senderId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json"
         },
+        "senderName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
         "content": {
           "type": "string",
           "maxLength": 32768
@@ -695,6 +720,11 @@
         "targetAgentId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
         },
+        "targetAgentName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
         "deliveryAttemptId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deliveryAttemptId"
         },
@@ -719,8 +749,33 @@
             "$ref": "#/$defs/contextMessage"
           }
         },
+        "routingAgents": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "$ref": "#/$defs/routingAgent"
+          }
+        },
         "deadline": {
           "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "routingAgent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "agentId",
+        "name"
+      ],
+      "properties": {
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
         }
       }
     },
@@ -891,6 +946,63 @@
           }
         }
       ]
+    },
+    "runActivityPayload": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/runEventBase"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "activityId",
+            "kind",
+            "phase"
+          ],
+          "properties": {
+            "runId": true,
+            "traceId": true,
+            "agentId": true,
+            "sequence": true,
+            "activityId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 160
+            },
+            "kind": {
+              "$ref": "#/$defs/runActivityKind"
+            },
+            "phase": {
+              "$ref": "#/$defs/runActivityPhase"
+            },
+            "label": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "content": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "reset": {
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      ]
+    },
+    "runActivityKind": {
+      "title": "Run Activity Kind",
+      "type": "string",
+      "pattern": "^(reasoning|tool)$"
+    },
+    "runActivityPhase": {
+      "title": "Run Activity Phase",
+      "type": "string",
+      "pattern": "^(started|updated|completed|failed)$"
     },
     "runReplyPayload": {
       "allOf": [

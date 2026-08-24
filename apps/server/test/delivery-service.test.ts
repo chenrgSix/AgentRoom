@@ -71,6 +71,21 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       },
       now
     });
+    const reviewer = agents.publishAgent(principal, {
+      teamId: created.team.teamId,
+      deviceId: device.deviceId,
+      name: "Reviewer",
+      role: "Managed",
+      integrationMode: "managed",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      now
+    });
     const message = messages.createMemberMessage(principal, {
       roomId: room.roomId,
       content: "Implement delivery",
@@ -99,6 +114,19 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
     connections.register(device.deviceId, 1, socket);
     delivery.dispatchQueuedForDevice(device.deviceId);
     assert.equal(socket.messages.length, 1);
+    const requested = JSON.parse(socket.messages[0] ?? "{}") as {
+      payload?: {
+        targetAgentName?: string;
+        contextMessages?: Array<{ senderName?: string }>;
+        routingAgents?: Array<{ agentId: string; name: string }>;
+      };
+    };
+    assert.equal(requested.payload?.targetAgentName, "Builder");
+    assert.equal(requested.payload?.contextMessages?.at(-1)?.senderName, "Alice");
+    assert.deepEqual(requested.payload?.routingAgents, [{
+      agentId: reviewer.agentId,
+      name: "Reviewer"
+    }]);
     const first = delivery.getByRun(run.runId);
     const repeated = delivery.dispatch(run.runId);
     assert.equal(socket.messages.length, 2);
@@ -124,6 +152,39 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       "delivered"
     );
     assert.equal(delivery.getByRun(run.runId)?.state, "accepted");
+
+    teams.updateRoomSettings(principal, room.roomId, {
+      participants: {
+        memberIds: [created.owner.memberId],
+        agentIds: [agent.agentId, reviewer.agentId]
+      },
+      collaborationPolicy: {
+        allowDiscussion: true,
+        allowAll: true,
+        allowAgentMentions: false,
+        maxAgentMentionDepth: 4
+      },
+      expectedRevision: core.getRoom(room.roomId)?.settingsRevision ?? 0
+    }, now);
+    const isolatedMessage = messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "Do not advertise peer routing",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: agent.agentId,
+        displayLabel: "Builder / Managed"
+      }],
+      now
+    });
+    const isolatedRun = runs.createRunsForMessage(
+      principal, isolatedMessage.messageId, now
+    )[0];
+    assert.ok(isolatedRun);
+    delivery.dispatch(isolatedRun.runId);
+    const isolatedRequest = JSON.parse(socket.messages.at(-1) ?? "{}") as {
+      payload?: { routingAgents?: Array<{ agentId: string; name: string }> };
+    };
+    assert.deepEqual(isolatedRequest.payload?.routingAgents, []);
 
     const expiringMessage = messages.createMemberMessage(principal, {
       roomId: room.roomId,

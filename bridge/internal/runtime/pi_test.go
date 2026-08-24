@@ -30,7 +30,7 @@ func TestPiAdapterExtractsFinalAssistantReplyAndAssessment(t *testing.T) {
 	}
 }
 
-func TestPiAdapterKeepsToolLifecycleLocalAndReturnsFinalReply(t *testing.T) {
+func TestPiAdapterProjectsBoundedToolLifecycleAndReturnsFinalReply(t *testing.T) {
 	output := strings.Join([]string{
 		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"I will inspect it."},{"type":"toolCall","name":"read"}],"stopReason":"toolUse"}}`,
 		`{"type":"tool_execution_start","toolName":"read"}`,
@@ -38,11 +38,31 @@ func TestPiAdapterKeepsToolLifecycleLocalAndReturnsFinalReply(t *testing.T) {
 		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"The project uses Go and TypeScript."}],"stopReason":"stop"}}`,
 	}, "\n")
 	events := executePiFixture(t, output)
-	if len(events) != 4 || events[1].Output == nil ||
-		events[1].Output.Content != "The project uses Go and TypeScript." ||
-		events[2].Reply != "The project uses Go and TypeScript." ||
-		events[3].Status == nil || *events[3].Status != contracts.Completed {
+	if len(events) != 6 || events[1].Activity == nil ||
+		events[1].Activity.Kind != "tool" || events[1].Activity.Phase != "started" ||
+		events[1].Activity.Label != "read" || events[2].Activity == nil ||
+		events[2].Activity.Phase != "completed" || events[3].Output == nil ||
+		events[3].Output.Content != "The project uses Go and TypeScript." ||
+		events[4].Reply != "The project uses Go and TypeScript." ||
+		events[5].Status == nil || *events[5].Status != contracts.Completed {
 		t.Fatalf("unexpected Pi tool lifecycle projection: %#v", events)
+	}
+}
+
+func TestPiAdapterProjectsExplicitThinkingDeltas(t *testing.T) {
+	output := strings.Join([]string{
+		`{"type":"message_start","message":{"role":"assistant","content":[]}}`,
+		`{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","delta":"Inspecting the request."}}`,
+		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"stopReason":"stop"}}`,
+	}, "\n")
+	events := executePiFixture(t, output)
+	if len(events) != 6 || events[1].Activity == nil ||
+		events[1].Activity.Kind != "reasoning" ||
+		events[1].Activity.Content != "Inspecting the request." ||
+		events[2].Activity == nil || events[2].Activity.Phase != "completed" ||
+		events[3].Output == nil || events[4].Reply != "Done." ||
+		events[5].Status == nil || *events[5].Status != contracts.Completed {
+		t.Fatalf("unexpected Pi thinking projection: %#v", events)
 	}
 }
 

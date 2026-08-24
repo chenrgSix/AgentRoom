@@ -22,7 +22,7 @@ it cannot bypass Run delivery, idempotency, or cancellation rules.
   persisted Discussion member Turn on the Wave path.
 - Persist delivery before pushing to a Bridge.
 - Retry unacknowledged delivery with the same Run ID.
-- Apply sequenced Bridge status and reply events.
+- Apply sequenced Bridge status, output, activity, and reply events.
 - Manage cancellation, expiry, offline queue, and terminal outcomes.
 - Validate and create child Runs for handoff.
 - Publish Run projections for Web and MCP.
@@ -88,18 +88,18 @@ Each accepted Run has a Bridge-generated monotonic `sequence`. The server
 persists an event only when its sequence is greater than the last accepted
 value. Duplicate and stale events are acknowledged but do not alter state.
 
-The server accepts contiguous `run.status`, `run.output_delta`, and `run.reply`
-events only from the Device that owns the target Agent. Events persist in
-`run_events`; an output delta advances the Run sequence without changing its
-state or appending a Room Message. An applied reply appends one Agent-authored
+The server accepts contiguous `run.status`, `run.output_delta`, `run.activity`,
+and `run.reply` events only from the Device that owns the target Agent. Events
+persist in `run_events`; output and activity advance the Run sequence without
+changing its state or appending a Room Message. An applied reply appends one Agent-authored
 Room Message linked to its trigger. Duplicate events do not create duplicate
 output or replies, and the first terminal state remains authoritative. A
 terminal Run rejects later output exactly as it rejects any other late event.
 
 Authorized Room members may read persisted Run events after a sequence cursor
-to reconstruct provisional output after refresh or reconnect. Applying a delta
-wakes the existing Team change channel; the browser then fetches only unseen
-events. Reset deltas replace the provisional text before their content is
+to reconstruct provisional output and activity after refresh or reconnect.
+Applying either wakes the existing Team change channel with the owning Room ID;
+the browser then fetches only unseen events. Reset deltas replace the provisional text before their content is
 appended. Seeing a final reply discards the provisional projection, while the
 durable Room Message remains the only completed conversation entry.
 
@@ -107,6 +107,12 @@ The Bridge also stores emitted event envelopes in its durable inbox before
 network send. Reconnect replays these envelopes idempotently; a Bridge process
 restart converts any unfinished local execution to `outcome_unknown` before
 replay, so the central projection cannot remain falsely `working`.
+
+Before delivery, the server resolves each context sender's current display
+name and includes enabled peer Agents assigned to the Room. These names help a
+Runtime emit complete exact `@Agent name` commands, but the stable IDs and
+Room policy used by the server remain authoritative. Bridge adapters bound the
+prompt projection independently of the larger transport allowance.
 
 For a Discussion Wave, `input_required` is an intermediate Run report rather
 than an immediately resumable barrier state. The Orchestrator writes a terminal

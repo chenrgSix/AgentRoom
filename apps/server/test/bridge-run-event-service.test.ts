@@ -63,30 +63,36 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       runId: run.runId, traceId: run.traceId,
       agentId: agent.agentId, sequence: 2, status: "working"
     }, now).run.state, "working");
-    assert.equal(service.applyOutput(devicePrincipal, {
+    assert.equal(service.applyActivity(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
       agentId: agent.agentId, sequence: 3,
+      activityId: "reasoning-1", kind: "reasoning", phase: "updated",
+      label: "Thinking", content: "Checking token=activity-sensitive-value"
+    }, now).applied, true);
+    assert.equal(service.applyOutput(devicePrincipal, {
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 4,
       content: "Draft token=output-sensitive-value"
     }, now).applied, true);
     assert.equal(service.applyOutput(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: agent.agentId, sequence: 4,
+      agentId: agent.agentId, sequence: 5,
       content: "Final preview", reset: true
     }, now).applied, true);
     assert.equal(service.applyOutput(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: agent.agentId, sequence: 4,
+      agentId: agent.agentId, sequence: 5,
       content: "Final preview", reset: true
     }, now).applied, false);
     assert.throws(() => service.applyOutput(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: agent.agentId, sequence: 6,
+      agentId: agent.agentId, sequence: 7,
       content: "Gap"
     }, now), /sequence gap/u);
     assert.equal(core.listMessagesAfter(room.roomId, 0, 20).length, 1);
     assert.equal(service.applyReply(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: agent.agentId, sequence: 5,
+      agentId: agent.agentId, sequence: 6,
       content: "Implemented. token=very-sensitive-value",
       assessment: {
         goalSatisfied: true,
@@ -97,16 +103,16 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     }, now).applied, true);
     assert.equal(service.applyReply(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: agent.agentId, sequence: 5,
+      agentId: agent.agentId, sequence: 6,
       content: "Implemented. token=very-sensitive-value"
     }, now).applied, false);
     assert.equal(service.applyStatus(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: agent.agentId, sequence: 6, status: "completed"
+      agentId: agent.agentId, sequence: 7, status: "completed"
     }, now).run.state, "completed");
     assert.equal(service.applyOutput(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: agent.agentId, sequence: 7,
+      agentId: agent.agentId, sequence: 8,
       content: "late output"
     }, now).applied, false);
     assert.equal(core.listMessagesAfter(room.roomId, 0, 20).length, 2);
@@ -130,6 +136,18 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
         recommendation: "finish"
       }
     );
+    const activityEvent = runRepository.listEvents(run.runId).find(
+      (event) => event.event.type === "activity"
+    );
+    assert.deepEqual(activityEvent?.event, {
+      type: "activity",
+      sequence: 3,
+      activityId: "reasoning-1",
+      kind: "reasoning",
+      phase: "updated",
+      label: "Thinking",
+      content: "Checking [REDACTED]"
+    });
     const routingIntent = runRepository.listPendingReplyRoutingIntents(run.runId)[0];
     assert.equal(routingIntent?.content.includes("very-sensitive"), false);
     assert.equal(routingIntent?.content, "Implemented. [REDACTED]");
@@ -137,17 +155,17 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       (event) => event.event.type === "output"
     );
     assert.deepEqual(outputEvents.map(({ event }) => event), [
-      { type: "output", sequence: 3, content: "Draft [REDACTED]" },
-      { type: "output", sequence: 4, content: "Final preview", reset: true }
+      { type: "output", sequence: 4, content: "Draft [REDACTED]" },
+      { type: "output", sequence: 5, content: "Final preview", reset: true }
     ]);
     assert.equal(core.getAgent(agent.agentId)?.presence, "ready");
     assert.throws(() => service.applyStatus(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: "agent_wrong_identity", sequence: 7, status: "failed"
+      agentId: "agent_wrong_identity", sequence: 8, status: "failed"
     }, now), /identity mismatch/u);
     assert.throws(() => service.applyStatus(devicePrincipal, {
       runId: run.runId, traceId: "trace_wrong_identity",
-      agentId: agent.agentId, sequence: 7, status: "failed"
+      agentId: agent.agentId, sequence: 8, status: "failed"
     }, now), /identity mismatch/u);
 
     const canceledTrigger = messages.createMemberMessage(principal, {

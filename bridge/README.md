@@ -135,8 +135,10 @@ Managed Codex preset version 4 starts the customer's local
 `codex app-server --listen stdio://` with the configured workspace and
 `read-only` or `workspace-write` sandbox. The Bridge publishes bounded
 `item/agentMessage/delta` previews and keeps the completed Agent message as the
-authoritative Room reply. It never adds approval bypass flags; reasoning, tool
-lifecycle, command output, and interactive approval requests remain local.
+authoritative Room reply. It never adds approval bypass flags. Official
+reasoning-summary activity and allowlisted tool name/lifecycle may cross, while raw hidden
+reasoning, structured commands, arguments, tool output, and interactive approval
+requests remain local.
 
 `serverUrl` must use HTTPS except for loopback development. Each Agent declares
 an adapter, argument-array command, absolute workspace, and environment variable
@@ -198,8 +200,10 @@ remain intact. The next explicit save persists the new version.
 
 This mode receives each bounded turn on stdin and exits after replying. The Pi
 adapter reads its JSON event stream, publishes bounded assistant text previews
-plus the final authoritative assistant reply, keeps tool lifecycle events
-local, and fails safely if a provider leaks raw tool-call markup. Explicit
+plus the final authoritative assistant reply. Explicit thinking/reasoning
+summary deltas and tool name/lifecycle appear as safe activity; usage,
+structured tool records, arguments/results, and provider protocol remain local. It fails safely
+if a provider leaks raw tool-call markup. Explicit
 Runtime self-tests temporarily disable Pi tools and project-local resources;
 normal Team tasks retain the owner's policy. Pi is remotely wakeable through
 the Bridge but does not claim persistent session resume.
@@ -209,6 +213,7 @@ Pi provider; do not copy the full parent environment.
 Owner-authored Generic Runtimes remain final-only unless they explicitly set
 `"outputProtocol": "agentroom-jsonl-v1"`. In that mode stdout must contain one
 JSON object per line using `assistant.delta` and one authoritative
-`reply.final`; ordinary logs and terminal rendering do not belong on stdout.
+`reply.final`; optional reasoning and tool lifecycle events use the documented
+allowlist, and ordinary logs and terminal rendering do not belong on stdout.
 The complete producer contract and example configuration are in
 [`docs/generic-runtime-stream-contract.md`](../docs/generic-runtime-stream-contract.md).

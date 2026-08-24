@@ -78,11 +78,16 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
       cwd: path.join(repositoryRoot, "bridge")
     });
     const piReply = `PI STREAMING FINAL ${"RESULT ".repeat(14).trim()}`;
+    const piReasoning = `Inspecting exact Agent routing ${"context ".repeat(12).trim()}`;
     const piHelperPath = path.join(directory, "pi-helper.mjs");
     await writeFile(piHelperPath, [
       `const reply = ${JSON.stringify(piReply)};`,
       "const send = (event) => process.stdout.write(`${JSON.stringify(event)}\\n`);",
       "send({ type: 'message_start', message: { role: 'assistant', content: [] } });",
+      `send({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: ${JSON.stringify(`${piReasoning} token=split`)} } });`,
+      "send({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: '-secret-value-123456' } });",
+      "send({ type: 'tool_execution_start', toolCallId: 'tool-1', toolName: 'inspect_project' });",
+      "send({ type: 'tool_execution_end', toolCallId: 'tool-1', toolName: 'inspect_project' });",
       "send({ type: 'message_update', assistantMessageEvent: { type: 'text_delta', delta: reply } });",
       "setTimeout(() => {",
       "  send({ type: 'message_end', message: {",
@@ -168,8 +173,12 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     const timeline = await app.inject({
       method: "GET", url: `/api/rooms/${roomId}/messages?limit=100`, headers: authorization
     });
-    assert.equal(timeline.json().items.at(-1).content, "RUN THROUGH REAL BRIDGE");
-    assert.equal(timeline.json().items.at(-1).traceId, traceId);
+    const echoReply = timeline.json().items.at(-1);
+    assert.match(echoReply.content, /OTHER ELIGIBLE AGENT NAMES: PI BUILDER; SLOW BUILDER/);
+    assert.match(echoReply.content, /CURRENT REQUEST:\nRUN THROUGH REAL BRIDGE$/);
+    assert.equal(echoReply.content.includes("@PI BUILDER"), false);
+    assert.equal(echoReply.content.includes("@ALL"), false);
+    assert.equal(echoReply.traceId, traceId);
     const traceResponse = await app.inject({
       method: "GET", url: `/api/traces/${traceId}`, headers: authorization
     });
@@ -218,16 +227,24 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
       });
       const events = response.json() as Array<{
         sequence: number;
-        event: { type: string; content?: string };
+        event: { type: string; kind?: string; content?: string };
       }>;
       const output = events.find(({ event }) => event.type === "output");
+      const activity = events.find(({ event }) => event.type === "activity");
       const reply = events.find(({ event }) => event.type === "reply");
-      return output && !reply ? events : undefined;
+      return output && activity && !reply ? events : undefined;
     });
     const preview = previewEvents.find(({ event }) => event.type === "output");
     assert.ok(preview);
     assert.ok(preview.event.content);
     assert.ok(piReply.startsWith(preview.event.content));
+    const liveActivities = previewEvents.filter(({ event }) => event.type === "activity");
+    assert.ok(liveActivities.some(({ event }) => event.kind === "reasoning"));
+    assert.ok(liveActivities.some(({ event }) => event.kind === "tool"));
+    assert.equal(
+      liveActivities.some(({ event }) => event.content?.includes("split-secret-value")),
+      false
+    );
     const timelineBeforeReply = await app.inject({
       method: "GET", url: `/api/rooms/${roomId}/messages?limit=100`, headers: authorization
     });
@@ -251,7 +268,7 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     });
     const completedEvents = completedEventsResponse.json() as Array<{
       sequence: number;
-      event: { type: string; content?: string };
+      event: { type: string; kind?: string; phase?: string; content?: string };
     }>;
     const outputEvent = completedEvents.find(({ event }) => event.type === "output");
     const replyEvent = completedEvents.find(({ event }) => event.type === "reply");
@@ -259,6 +276,9 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     assert.ok(replyEvent);
     assert.ok(outputEvent.sequence < replyEvent.sequence);
     assert.equal(replyEvent.event.content, piReply);
+    assert.ok(completedEvents.some(({ event }) =>
+      event.type === "activity" && event.kind === "reasoning" && event.phase === "completed"
+    ));
     const resumedEvents = await app.inject({
       method: "GET",
       url: `/api/runs/${piRunId}/events?after=${outputEvent.sequence}`,

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"os/exec"
 	"strings"
@@ -22,9 +23,10 @@ const piPreviewFlushInterval = 75 * time.Millisecond
 var errPiProtocolInvalid = errors.New("Pi returned an incompatible event stream")
 var errPiOutputLimit = errors.New("Pi assistant output exceeded its safe limit")
 
-// PiAdapter keeps Pi behind its documented JSON event boundary. Only assistant
-// text deltas and the final assistant reply may cross the Bridge boundary;
-// thinking, usage, tool events, and provider-specific fragments remain local.
+// PiAdapter keeps Pi behind its documented JSON event boundary. Assistant text
+// and the final reply cross as output; explicit thinking/reasoning summaries
+// and tool name/lifecycle cross as activity. Usage, tool arguments/results,
+// commands, paths, and provider-specific fragments remain local.
 type PiAdapter struct {
 	Config config.AgentConfig
 }
@@ -52,7 +54,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 	configureRuntimeCommand(command)
 	command.Dir = p.Config.Workspace
 	command.Env = allowedEnvironment(p.Config.EnvAllowlist)
-	command.Stdin = strings.NewReader(request.Run.Instruction)
+	command.Stdin = strings.NewReader(runtimePrompt(request.Run))
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return emitPiStartFailure(ctx, emit)
@@ -125,6 +127,18 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 				protocolError = consumeError
 				streamDone = true
 				cancelProcess()
+				continue
+			}
+			for _, activity := range parser.drainActivities() {
+				activityValue := activity
+				if err := emit(runContext, Event{Activity: &activityValue}); err != nil {
+					executionError = err
+					streamDone = true
+					cancelProcess()
+					break
+				}
+			}
+			if executionError != nil {
 				continue
 			}
 			if finalAssistant {
@@ -236,6 +250,9 @@ type piEvent struct {
 	Type                  string                   `json:"type"`
 	Message               *piMessage               `json:"message"`
 	AssistantMessageEvent *piAssistantMessageEvent `json:"assistantMessageEvent"`
+	ToolName              string                   `json:"toolName"`
+	ToolCallID            string                   `json:"toolCallId"`
+	IsError               bool                     `json:"isError"`
 }
 
 type piAssistantMessageEvent struct {
@@ -262,6 +279,18 @@ type piStreamParser struct {
 	finalReply       string
 	resetPending     bool
 	resetNext        bool
+	activities       []Activity
+	reasoningID      string
+	reasoningCounter int
+	reasoningPreview *activityTextPreview
+	toolID           string
+	toolCounter      int
+}
+
+func (p *piStreamParser) drainActivities() []Activity {
+	activities := p.activities
+	p.activities = nil
+	return activities
 }
 
 func (p *piStreamParser) consume(source []byte) (bool, error) {
@@ -279,6 +308,43 @@ func (p *piStreamParser) consume(source []byte) (bool, error) {
 		return false, errPiProtocolInvalid
 	}
 	switch event.Type {
+	case "tool_execution_start":
+		p.toolCounter++
+		p.toolID = event.ToolCallID
+		if p.toolID == "" || len(p.toolID) > 160 {
+			p.toolID = fmt.Sprintf("pi-tool-%d", p.toolCounter)
+		}
+		label := strings.TrimSpace(event.ToolName)
+		if label == "" {
+			label = "Tool"
+		}
+		if len([]rune(label)) > 120 {
+			label = string([]rune(label)[:120])
+		}
+		p.activities = append(p.activities, Activity{
+			ID: p.toolID, Kind: "tool", Phase: "started", Label: label,
+		})
+	case "tool_execution_end":
+		activityID := event.ToolCallID
+		if activityID == "" || len(activityID) > 160 {
+			activityID = p.toolID
+		}
+		if activityID == "" {
+			p.toolCounter++
+			activityID = fmt.Sprintf("pi-tool-%d", p.toolCounter)
+		}
+		label := strings.TrimSpace(event.ToolName)
+		if label == "" {
+			label = "Tool"
+		}
+		phase := "completed"
+		if event.IsError {
+			phase = "failed"
+		}
+		p.activities = append(p.activities, Activity{
+			ID: activityID, Kind: "tool", Phase: phase, Label: label,
+		})
+		p.toolID = ""
 	case "message_start":
 		if event.Message == nil {
 			return false, errPiProtocolInvalid
@@ -292,7 +358,27 @@ func (p *piStreamParser) consume(source []byte) (bool, error) {
 			}
 		}
 	case "message_update":
-		if event.AssistantMessageEvent == nil || event.AssistantMessageEvent.Type != "text_delta" {
+		if event.AssistantMessageEvent == nil {
+			return false, nil
+		}
+		if event.AssistantMessageEvent.Type == "thinking_delta" ||
+			event.AssistantMessageEvent.Type == "reasoning_delta" {
+			if !p.currentAssistant || event.AssistantMessageEvent.Delta == "" {
+				return false, errPiProtocolInvalid
+			}
+			if p.reasoningID == "" {
+				p.reasoningCounter++
+				p.reasoningID = fmt.Sprintf("pi-reasoning-%d", p.reasoningCounter)
+				p.reasoningPreview = &activityTextPreview{}
+			}
+			p.reasoningPreview.append(event.AssistantMessageEvent.Delta, false)
+			p.activities = append(
+				p.activities,
+				p.reasoningPreview.project(p.reasoningID, "Thinking", false)...,
+			)
+			return false, nil
+		}
+		if event.AssistantMessageEvent.Type != "text_delta" {
 			return false, nil
 		}
 		if !p.currentAssistant {
@@ -306,6 +392,19 @@ func (p *piStreamParser) consume(source []byte) (bool, error) {
 		if event.Message.StopReason == "error" || event.Message.StopReason == "aborted" ||
 			strings.TrimSpace(event.Message.ErrorMessage) != "" {
 			return false, errPiProtocolInvalid
+		}
+		if p.reasoningID != "" {
+			if p.reasoningPreview != nil {
+				p.activities = append(
+					p.activities,
+					p.reasoningPreview.project(p.reasoningID, "Thinking", true)...,
+				)
+			}
+			p.activities = append(p.activities, Activity{
+				ID: p.reasoningID, Kind: "reasoning", Phase: "completed", Label: "Thinking",
+			})
+			p.reasoningID = ""
+			p.reasoningPreview = nil
 		}
 		var text strings.Builder
 		hasToolCall := false

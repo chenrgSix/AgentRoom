@@ -18,7 +18,8 @@ to local Runtime Adapters.
 - Maintain heartbeat, connection epoch, and reconnect backoff.
 - Persist incoming deliveries before acknowledging them.
 - Deduplicate deliveries and forward each accepted Run exactly once locally.
-- Stream sequenced status, text replies, and handoff requests to the server.
+- Stream sequenced status, safe Runtime activity, text replies, and handoff
+  requests to the server.
 - Serve an optional token-authenticated loopback Console for local enrollment,
   Runtime preset configuration, status, and process control.
 
@@ -144,6 +145,13 @@ exit code, and whether bounded stderr existed. Raw stderr remains local because
 it may
 contain prompts, provider responses, credentials, or absolute paths.
 
+`run.activity` follows the same persist-before-send and sequenced replay rules
+as other Run events. Adapters may expose only an official reasoning-summary
+stream and allowlisted tool display name/lifecycle. A 64-rune unpublished tail
+plus whole-summary redaction prevents a credential split across Runtime
+fragments from crossing the connection. Raw hidden reasoning, structured
+commands, arguments, tool input/output, and approval requests stay local.
+
 ## Verification and Tasks
 
 Tests cover client enrollment, pairing, reconnect, epoch replacement, ACK loss,
@@ -154,8 +162,14 @@ Agents, per-Agent modal/API ownership, rename-stable identity, active-work
 fencing, draft Runtime preflight, connection-only mutation and lifecycle
 preservation, status rendering, and acceptance of a Run envelope above the
 WebSocket library's hidden 32 KiB default without reconnect. Work is tracked by
-`BRG-001` through `BRG-026`
+`BRG-001` through `BRG-027`
 in `docs/TASKS.md`.
+
+`BRG-027` adds durable `run.activity` envelopes without making local execution
+internals public. The Runtime executor persists each redacted activity before
+send and replays it with the same Run sequence rules as status, output, and
+reply events. Small reasoning fragments are coalesced before persistence while
+tool lifecycle remains immediate and completion flushes the unpublished tail.
 
 `BRG-026` replaces the WebSocket library's default 32 KiB read ceiling with the
 explicit 16 MiB Bridge transport boundary. A real client/server regression uses
@@ -200,8 +214,9 @@ safe `RUNTIME_PROTOCOL_INVALID` failure instead of a completed Room reply.
 `ADP-007` advances managed Runtime presets to version 3. Normal Pi Runs inherit
 the owner's local tools, extensions, Skills, project context, approval, and
 other local arguments; the Bridge owns only JSON output, non-interactive print,
-and no-session lifecycle flags. Agent edits retain those local arguments, tool
-lifecycle events remain on the client, and explicit self-tests still replace
+and no-session lifecycle flags. Agent edits retain those local arguments; tool
+arguments/results and provider protocol remain on the client, and explicit
+self-tests still replace
 the command temporarily with a no-tool, no-project-resource probe.
 
 `ADP-008` advances managed Runtime presets to version 4. Codex presets migrate
@@ -209,8 +224,9 @@ from one-shot `exec --json` to the local App Server JSONL stdio protocol while
 preserving the owner-selected sandbox in an explicit configuration field. The
 Bridge never adds approval bypass flags: normal Runs use the configured
 `read-only` or `workspace-write` sandbox and reject interactive escalation.
-Only bounded assistant deltas and the final completed Agent message cross the
-Bridge boundary; reasoning, tool lifecycle, command output, and approval
+Bounded assistant deltas, official reasoning-summary activity, allowlisted tool
+name/lifecycle, and the final completed Agent message cross the Bridge boundary;
+raw hidden reasoning, structured commands, arguments, tool output, and approval
 requests remain local. Pi version 3 presets receive only the shared version
 marker update and retain their owner-controlled command arguments.
 

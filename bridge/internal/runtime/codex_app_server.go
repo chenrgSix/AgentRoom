@@ -72,7 +72,7 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 		return emitCodexFailure(ctx, emit, "CODEX_START_FAILED", "Codex initialization could not be sent.")
 	}
 
-	parser := newCodexAppServerParser(c.Config, request.Run.Instruction)
+	parser := newCodexAppServerParser(c.Config, runtimePrompt(request.Run))
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64*1024), maxCodexProtocolOutput)
 	total := 0
@@ -96,6 +96,16 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 			}
 		}
 		if protocolError != nil {
+			break
+		}
+		for _, activity := range parser.drainActivities() {
+			activityValue := activity
+			if err := emit(runContext, Event{Activity: &activityValue}); err != nil {
+				executionError = err
+				break
+			}
+		}
+		if executionError != nil {
 			break
 		}
 		if delta != nil {
@@ -187,10 +197,21 @@ type codexAppServerParser struct {
 	resetPending bool
 	complete     bool
 	failure      string
+	activities   []Activity
+	reasoning    map[string]*activityTextPreview
+}
+
+func (p *codexAppServerParser) drainActivities() []Activity {
+	activities := p.activities
+	p.activities = nil
+	return activities
 }
 
 func newCodexAppServerParser(configuration config.AgentConfig, instruction string) *codexAppServerParser {
-	return &codexAppServerParser{config: configuration, instruction: instruction}
+	return &codexAppServerParser{
+		config: configuration, instruction: instruction,
+		reasoning: make(map[string]*activityTextPreview),
+	}
 }
 
 func (p *codexAppServerParser) consume(source []byte) (*OutputDelta, []any, error) {
@@ -281,6 +302,32 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 
 func (p *codexAppServerParser) consumeNotification(method string, params json.RawMessage) (*OutputDelta, []any, error) {
 	switch method {
+	case "item/reasoning/summaryTextDelta":
+		var value struct {
+			ThreadID string `json:"threadId"`
+			TurnID   string `json:"turnId"`
+			ItemID   string `json:"itemId"`
+			Delta    string `json:"delta"`
+		}
+		if err := json.Unmarshal(params, &value); err != nil || value.ItemID == "" || value.Delta == "" {
+			return nil, nil, fmt.Errorf("Codex reasoning summary delta is malformed")
+		}
+		if value.ThreadID != p.threadID || (p.turnID != "" && value.TurnID != p.turnID) {
+			return nil, nil, nil
+		}
+		preview := p.reasoning[value.ItemID]
+		if preview == nil {
+			preview = &activityTextPreview{}
+			p.reasoning[value.ItemID] = preview
+		}
+		preview.append(value.Delta, false)
+		p.activities = append(p.activities, preview.project(value.ItemID, "Thinking", false)...)
+		return nil, nil, nil
+	case "item/started":
+		if err := p.consumeActivityItem(params, "started"); err != nil {
+			return nil, nil, err
+		}
+		return nil, nil, nil
 	case "item/agentMessage/delta":
 		var value struct {
 			ThreadID string `json:"threadId"`
@@ -306,6 +353,9 @@ func (p *codexAppServerParser) consumeNotification(method string, params json.Ra
 		delta, err := p.outputDelta(false)
 		return delta, nil, err
 	case "item/completed":
+		if err := p.consumeActivityItem(params, "completed"); err != nil {
+			return nil, nil, err
+		}
 		var value struct {
 			ThreadID string `json:"threadId"`
 			TurnID   string `json:"turnId"`
@@ -373,6 +423,72 @@ func (p *codexAppServerParser) consumeNotification(method string, params json.Ra
 	default:
 		return nil, nil, nil
 	}
+}
+
+func (p *codexAppServerParser) consumeActivityItem(params json.RawMessage, phase string) error {
+	var value struct {
+		ThreadID string `json:"threadId"`
+		TurnID   string `json:"turnId"`
+		Item     struct {
+			ID     string `json:"id"`
+			Type   string `json:"type"`
+			Status string `json:"status"`
+			Server string `json:"server"`
+			Tool   string `json:"tool"`
+		} `json:"item"`
+	}
+	if err := json.Unmarshal(params, &value); err != nil || value.Item.ID == "" || value.Item.Type == "" {
+		return fmt.Errorf("Codex activity item is malformed")
+	}
+	if value.ThreadID != p.threadID || (p.turnID != "" && value.TurnID != p.turnID) {
+		return nil
+	}
+	if value.Item.Type == "reasoning" {
+		if phase == "completed" {
+			if preview := p.reasoning[value.Item.ID]; preview != nil {
+				p.activities = append(p.activities, preview.project(value.Item.ID, "Thinking", true)...)
+				delete(p.reasoning, value.Item.ID)
+			}
+			p.activities = append(p.activities, Activity{
+				ID: value.Item.ID, Kind: "reasoning", Phase: "completed", Label: "Thinking",
+			})
+		}
+		return nil
+	}
+	label := ""
+	switch value.Item.Type {
+	case "commandExecution":
+		label = "Command"
+	case "fileChange":
+		label = "File change"
+	case "mcpToolCall":
+		label = "MCP tool"
+		if value.Item.Tool != "" {
+			label = value.Item.Tool
+		}
+	case "dynamicToolCall":
+		label = "Tool"
+		if value.Item.Tool != "" {
+			label = value.Item.Tool
+		}
+	case "collabAgentToolCall":
+		label = "Agent task"
+	case "webSearch":
+		label = "Web search"
+	default:
+		return nil
+	}
+	resolvedPhase := phase
+	if phase == "completed" && (value.Item.Status == "failed" || value.Item.Status == "declined") {
+		resolvedPhase = "failed"
+	}
+	if len([]rune(label)) > 120 {
+		label = string([]rune(label)[:120])
+	}
+	p.activities = append(p.activities, Activity{
+		ID: value.Item.ID, Kind: "tool", Phase: resolvedPhase, Label: label,
+	})
+	return nil
 }
 
 func (p *codexAppServerParser) outputDelta(force bool) (*OutputDelta, error) {

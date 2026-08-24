@@ -29,10 +29,15 @@ func TestCodexAdapterMapsAppServerEventsToRuntimeEvents(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if len(events) != 4 || events[1].Output == nil || events[1].Output.Content != "Implemented." ||
-		events[2].Reply != "Implemented." || events[2].Assessment == nil ||
-		events[2].Assessment.GoalSatisfied == nil || !*events[2].Assessment.GoalSatisfied ||
-		*events[3].Status != contracts.Completed {
+	if len(events) != 8 || events[1].Activity == nil ||
+		events[1].Activity.Kind != "reasoning" || events[1].Activity.Content != "Reviewing the task." ||
+		events[2].Activity == nil || events[2].Activity.Phase != "completed" ||
+		events[3].Activity == nil || events[3].Activity.Kind != "tool" ||
+		events[3].Activity.Label != "Command" || events[4].Activity == nil ||
+		events[4].Activity.Phase != "completed" || events[5].Output == nil ||
+		events[5].Output.Content != "Implemented." || events[6].Reply != "Implemented." ||
+		events[6].Assessment == nil || events[6].Assessment.GoalSatisfied == nil ||
+		!*events[6].Assessment.GoalSatisfied || *events[7].Status != contracts.Completed {
 		t.Fatalf("unexpected events: %#v", events)
 	}
 }
@@ -241,6 +246,22 @@ func runCodexAppServerFixture(t *testing.T, complete bool) {
 			if !complete {
 				continue
 			}
+			_ = encoder.Encode(map[string]any{"method": "item/reasoning/summaryTextDelta", "params": map[string]any{
+				"threadId": "019d-thread", "turnId": "turn-1", "itemId": "reasoning-1",
+				"summaryIndex": 0, "delta": "Reviewing the task.",
+			}})
+			_ = encoder.Encode(map[string]any{"method": "item/completed", "params": map[string]any{
+				"threadId": "019d-thread", "turnId": "turn-1",
+				"item": map[string]any{"id": "reasoning-1", "type": "reasoning"},
+			}})
+			_ = encoder.Encode(map[string]any{"method": "item/started", "params": map[string]any{
+				"threadId": "019d-thread", "turnId": "turn-1",
+				"item": map[string]any{"id": "command-1", "type": "commandExecution", "status": "inProgress"},
+			}})
+			_ = encoder.Encode(map[string]any{"method": "item/completed", "params": map[string]any{
+				"threadId": "019d-thread", "turnId": "turn-1",
+				"item": map[string]any{"id": "command-1", "type": "commandExecution", "status": "completed"},
+			}})
 			_ = encoder.Encode(map[string]any{"method": "item/agentMessage/delta", "params": map[string]any{
 				"threadId": "019d-thread", "turnId": "turn-1", "itemId": "item-1", "delta": "Implemented.",
 			}})

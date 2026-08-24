@@ -6,12 +6,21 @@ import test from "node:test";
 
 import Database from "better-sqlite3";
 
+import { CoreRepository } from "../src/data/core-repository.js";
+import { openDatabase } from "../src/data/database.js";
 import { prepareDatabaseDirectory } from "../src/data/database-location.js";
 import {
   defaultMigrationsDirectory,
   migrateDatabase
 } from "../src/data/migration-runner.js";
 import { DiscussionRepository } from "../src/discussion/discussion-repository.js";
+import { AgentService } from "../src/registry/agent-service.js";
+import { MemberDeviceService } from "../src/registry/member-device-service.js";
+import { RunRepository } from "../src/run/run-repository.js";
+import { RunService } from "../src/run/run-service.js";
+import { AuthService } from "../src/security/auth-service.js";
+import { MessageService } from "../src/team-room/message-service.js";
+import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
 async function temporaryDirectory(name: string): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), `agent-room-${name}-`));
@@ -25,16 +34,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 22);
+  assert.equal(first.currentVersion, 23);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -55,7 +64,7 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       )
       .get() as { count: number };
 
-    assert.equal(migrationCount.count, 22);
+    assert.equal(migrationCount.count, 23);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
   } finally {
@@ -135,7 +144,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [15, 16, 17, 18, 19, 20, 21, 22]);
+  assert.deepEqual(migrated.appliedVersions, [15, 16, 17, 18, 19, 20, 21, 22, 23]);
   const database = new Database(databasePath, { readonly: true });
   try {
     const discussion = database.prepare(`
@@ -185,6 +194,118 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
     const mapped = new DiscussionRepository(database).get("discussion_legacy");
     assert.equal(mapped?.policy.waveTimeoutSeconds, 300);
     assert.equal(mapped?.budget.agentRunsUsed, 1);
+  } finally {
+    database.close();
+  }
+});
+
+test("Runtime activity migration preserves pending reply routing intents", async () => {
+  const directory = await temporaryDirectory("activity-migration");
+  const databasePath = path.join(directory, "server.sqlite");
+  const legacyMigrations = path.join(directory, "legacy-migrations");
+  await mkdir(legacyMigrations, { recursive: true });
+  const entries = (await readdir(defaultMigrationsDirectory))
+    .filter((name) => /^[0-9]{4}_.+\.sql$/u.test(name) && name < "0023_")
+    .sort();
+  for (const entry of entries) {
+    await writeFile(
+      path.join(legacyMigrations, entry),
+      await readFile(path.join(defaultMigrationsDirectory, entry), "utf8"),
+      "utf8"
+    );
+  }
+  await migrateDatabase(databasePath, legacyMigrations);
+
+  const now = "2026-08-25T01:00:00.000Z";
+  const legacy = openDatabase(databasePath);
+  let runId = "";
+  try {
+    const core = new CoreRepository(legacy);
+    const auth = new AuthService(legacy);
+    const teams = new TeamRoomService(core, auth);
+    const registry = new MemberDeviceService(core, auth);
+    const agents = new AgentService(core, auth);
+    const messages = new MessageService(core, auth);
+    const runs = new RunRepository(legacy);
+    const runService = new RunService(core, runs, auth);
+    const created = teams.createTeamForUser({
+      userId: "user_activity_migration", userDisplayName: "Alice",
+      teamName: "Migration Team", now
+    });
+    const session = auth.issueWebSession(
+      created.owner.userId ?? "", now, "2026-08-25T02:00:00.000Z"
+    );
+    const principal = auth.authenticateWebSession(session.secret, now);
+    const room = teams.createRoom(principal, created.team.teamId, "general", now);
+    const device = registry.registerOwnDevice(
+      principal, created.team.teamId, "Migration Bridge", now
+    );
+    const agent = agents.publishAgent(principal, {
+      teamId: created.team.teamId,
+      deviceId: device.deviceId,
+      name: "Builder",
+      role: "Managed",
+      integrationMode: "managed",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      now
+    });
+    const trigger = messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "Preserve pending routing.",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: agent.agentId,
+        displayLabel: "Builder / Managed"
+      }],
+      now
+    });
+    const run = runService.createRunsForMessage(principal, trigger.messageId, now)[0];
+    assert.ok(run);
+    runId = run.runId;
+    legacy.exec(`
+      INSERT INTO run_events (
+        run_id, trace_id, sequence, event_type, status, content, output_reset,
+        error_json, assessment_json, created_at
+      ) VALUES
+        ('${run.runId}', '${run.traceId}', 1, 'status', 'delivered', NULL, 0,
+          NULL, NULL, '${now}'),
+        ('${run.runId}', '${run.traceId}', 2, 'reply', NULL,
+          'Route this reply after restart.', 0, NULL, NULL, '${now}');
+      UPDATE runs SET state = 'delivered', last_sequence = 2 WHERE run_id = '${run.runId}';
+      INSERT INTO run_reply_routing_intents (
+        parent_run_id, reply_sequence, content, state, created_at, completed_at
+      ) VALUES (
+        '${run.runId}', 2, 'Route this reply after restart.', 'pending', '${now}', NULL
+      );
+    `);
+    assert.equal((legacy.prepare(`
+      SELECT count(*) AS count FROM run_reply_routing_intents
+      WHERE parent_run_id = ?
+    `).get(runId) as { count: number }).count, 1);
+  } finally {
+    legacy.close();
+  }
+
+  const migrated = await migrateDatabase(databasePath);
+  assert.deepEqual(migrated.appliedVersions, [23]);
+  const database = openDatabase(databasePath);
+  try {
+    const runs = new RunRepository(database);
+    assert.equal(runs.listPendingReplyRoutingIntents(runId).length, 1);
+    assert.equal(runs.listEvents(runId).at(-1)?.event.type, "reply");
+    assert.equal(runs.applyEvent(runId, {
+      type: "activity",
+      sequence: 3,
+      activityId: "reasoning-1",
+      kind: "reasoning",
+      phase: "completed"
+    }, now).applied, true);
   } finally {
     database.close();
   }

@@ -69,6 +69,20 @@ boundaries, and reconstructs it from sequence zero after a reload. A final
 its place, so partial output is never inserted into message history and cannot
 appear twice. Final-only Agents retain the existing Run-card behavior.
 
+Reasoning summaries and tool lifecycle use the same event cursor but render as
+one compact disclosure inside the owning Agent flow. Active work opens by
+default; completed work can collapse. Reasoning uses the existing untrusted
+Markdown renderer, while tool rows show only the server-approved name and
+phase. The UI never labels this as hidden chain-of-thought and never receives
+structured commands, arguments, tool input/output, or approvals as activity.
+
+Team change notifications carry either a full-Team hint or changed Room IDs.
+Run-output/activity hints fetch only the selected Room's current Runs plus
+unseen events. Other selected-Room hints add messages and Discussions. Agents,
+members, Devices, and Room settings are reloaded only for full, legacy, reset,
+or reconnect reconciliation; unrelated Room hints do not trigger selected-Room
+reads.
+
 The UI uses schemas and generated types from `packages/contracts/`. Capability
 flags control whether start, resume, interrupt, handoff, or managed execution
 controls are shown.
@@ -273,6 +287,11 @@ exact Agent name before current-Room eligibility. Isolated real-browser
 acceptance proves two fake Agents each reply once without creating a Discussion,
 while light theme and 760 px and 390 px settings layouts retain zero horizontal
 overflow.
+
+`WEB-035` adds the inline activity disclosure and `WEB-036` scopes healthy
+live reconciliation to the changed Room. Reducer tests cover ordered reasoning
+and tool lifecycle, while Team-change tests cover aggregated Room hints and the
+full-refresh compatibility fallback.
 
 ## Dependencies
 

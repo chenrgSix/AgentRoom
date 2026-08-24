@@ -16,7 +16,10 @@ import { MarkdownMessage } from "./MarkdownMessage.js";
 import {
   createSingleFlight,
   mergeRoomMessages,
+  reduceRunActivities,
   reduceRunOutput,
+  teamChangeRefreshScope,
+  type RunActivityProjection,
   type RunEventRecord,
   type RunOutputProjection
 } from "./room-sync.js";
@@ -93,6 +96,7 @@ interface Message {
   senderType: "member" | "agent" | "system";
   senderId: string;
   content: string;
+  parentMessageId: string | null;
   mentions: Array<{
     targetType: "agent";
     targetAgentId: string;
@@ -125,6 +129,9 @@ interface TeamChangeCursor {
   changed: boolean;
   cursor: number;
   reset: boolean;
+  team?: boolean;
+  roomIds?: string[];
+  runRoomIds?: string[];
 }
 
 interface Device {
@@ -298,6 +305,65 @@ function runStateLabel(state: Run["state"], locale: Locale): string {
     working: "执行中"
   };
   return labels[state];
+}
+
+function AgentRunActivity({
+  projection,
+  locale,
+  active
+}: {
+  projection: RunActivityProjection | undefined;
+  locale: Locale;
+  active: boolean;
+}) {
+  if (!projection || projection.items.length === 0) return null;
+  const items = [...projection.items].sort((left, right) =>
+    left.sequence - right.sequence
+  );
+  const activeItem = [...items].reverse().find(({ phase }) =>
+    phase === "started" || phase === "updated"
+  );
+  const summary = activeItem?.kind === "reasoning"
+    ? (locale === "zh-CN" ? "正在思考" : "Thinking")
+    : activeItem?.label
+      ? (locale === "zh-CN" ? `正在使用 ${activeItem.label}` : `Using ${activeItem.label}`)
+      : locale === "zh-CN"
+        ? `${items.length} 项执行活动`
+        : `${items.length} run activities`;
+  return (
+    <details
+      className={`agent-run-activity${active ? " active" : ""}`}
+      {...(active ? { open: true } : {})}
+    >
+      <summary>
+        <span aria-hidden="true" className="agent-run-activity-pulse" />
+        <strong>{summary}</strong>
+        <span>{items.length}</span>
+      </summary>
+      <div className="agent-run-activity-body">
+        {items.map((item) => (
+          <section className={`agent-run-activity-item ${item.kind} ${item.phase}`} key={item.activityId}>
+            <header>
+              <strong>{item.kind === "reasoning"
+                ? (locale === "zh-CN" ? "思考摘要" : "Reasoning summary")
+                : item.label ?? (locale === "zh-CN" ? "工具" : "Tool")}</strong>
+              <span>{item.phase === "started" || item.phase === "updated"
+                ? (locale === "zh-CN" ? "进行中" : "Running")
+                : item.phase === "failed"
+                  ? (locale === "zh-CN" ? "失败" : "Failed")
+                  : (locale === "zh-CN" ? "完成" : "Done")}</span>
+            </header>
+            {item.kind === "reasoning" && item.content && (
+              <MarkdownMessage content={item.content} streaming={!projection.sealed} />
+            )}
+          </section>
+        ))}
+        <small>{locale === "zh-CN"
+          ? "仅展示 Runtime 公开的思考摘要、工具名称和状态；命令、参数及本地输出保持私有。"
+          : "Only public Runtime summaries, tool names, and status are shared; commands, arguments, and local output stay private."}</small>
+      </div>
+    </details>
+  );
 }
 
 function diagnosticCategoryLabel(
@@ -534,13 +600,19 @@ const activeRunStates = new Set([
 async function loadRunOutputEvents(
   roomRuns: Run[],
   current: Map<string, RunOutputProjection>,
+  currentActivities: Map<string, RunActivityProjection>,
   token?: string
 ): Promise<Map<string, RunEventRecord[]>> {
   const candidates = roomRuns.filter((run) =>
-    activeRunStates.has(run.state) || current.has(run.runId)
+    activeRunStates.has(run.state) || current.has(run.runId) ||
+    currentActivities.has(run.runId)
   );
   const batches = await Promise.all(candidates.map(async (run) => {
-    const after = current.get(run.runId)?.sequence ?? 0;
+    const knownSequences = [
+      current.get(run.runId)?.sequence,
+      currentActivities.get(run.runId)?.sequence
+    ].filter((value): value is number => value !== undefined);
+    const after = knownSequences.length > 0 ? Math.min(...knownSequences) : 0;
     const records = await jsonRequest<RunEventRecord[]>(
       `/api/runs/${run.runId}/events?after=${after}`,
       {},
@@ -725,6 +797,9 @@ export function App() {
   const [runOutputs, setRunOutputs] = useState<
     Record<string, RunOutputProjection>
   >({});
+  const [runActivities, setRunActivities] = useState<
+    Record<string, RunActivityProjection>
+  >({});
   const [runDiagnostics, setRunDiagnostics] = useState<
     Record<string, RunDiagnostic | null>
   >({});
@@ -781,6 +856,7 @@ export function App() {
   } | null>(null);
   const diagnosticRequestsRef = useRef(new Set<string>());
   const runOutputSyncRef = useRef(new Map<string, RunOutputProjection>());
+  const runActivitySyncRef = useRef(new Map<string, RunActivityProjection>());
   const selectedRoomIdRef = useRef<string | null>(selectedRoomId);
 
   const commitRunOutputEvents = (
@@ -788,12 +864,20 @@ export function App() {
     batches: Map<string, RunEventRecord[]>
   ): void => {
     const next = new Map(runOutputSyncRef.current);
+    const nextActivities = new Map(runActivitySyncRef.current);
     const visibleRunIds = new Set(roomRuns.map(({ runId }) => runId));
     for (const runId of next.keys()) {
       if (!visibleRunIds.has(runId)) next.delete(runId);
     }
+    for (const runId of nextActivities.keys()) {
+      if (!visibleRunIds.has(runId)) nextActivities.delete(runId);
+    }
     for (const [runId, records] of batches) {
       next.set(runId, reduceRunOutput(next.get(runId), records));
+      nextActivities.set(
+        runId,
+        reduceRunActivities(nextActivities.get(runId), records)
+      );
     }
     for (const run of roomRuns) {
       const projection = next.get(run.runId);
@@ -802,10 +886,14 @@ export function App() {
       }
     }
     runOutputSyncRef.current = next;
+    runActivitySyncRef.current = nextActivities;
     setRunOutputs(Object.fromEntries(
       [...next].filter(([, projection]) =>
         !projection.sealed && projection.content.length > 0
       )
+    ));
+    setRunActivities(Object.fromEntries(
+      [...nextActivities].filter(([, projection]) => projection.items.length > 0)
     ));
   };
 
@@ -1300,7 +1388,9 @@ export function App() {
       setPendingMessages([]);
       setRuns([]);
       setRunOutputs({});
+      setRunActivities({});
       runOutputSyncRef.current.clear();
+      runActivitySyncRef.current.clear();
       setRoomParticipants({ memberIds: [], agentIds: [] });
       setRunDiagnostics({});
       diagnosticRequestsRef.current.clear();
@@ -1317,7 +1407,9 @@ export function App() {
     setMessages([]);
     setRuns([]);
     setRunOutputs({});
+    setRunActivities({});
     runOutputSyncRef.current.clear();
+    runActivitySyncRef.current.clear();
     setRoomParticipants({ memberIds: [], agentIds: [] });
     setRunDiagnostics({});
     diagnosticRequestsRef.current.clear();
@@ -1344,7 +1436,8 @@ export function App() {
       )
     ]).then(async ([page, nextRuns, nextDiscussions, nextSettings]) => {
       const outputBatches = await loadRunOutputEvents(
-        nextRuns, runOutputSyncRef.current, session.token
+        nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
+        session.token
       );
       if (stopped) return;
       setMessages(page.items);
@@ -1377,8 +1470,22 @@ export function App() {
     let stopped = false;
     let activeController: AbortController | null = null;
     let retryTimer: number | null = null;
-    const refresh = async () => {
+    const refresh = async (scope: "events" | "room" | "full") => {
       try {
+        if (scope === "events") {
+          const nextRuns = await jsonRequest<Run[]>(
+            `/api/rooms/${selectedRoomId}/runs`, {}, session.token
+          );
+          const outputBatches = await loadRunOutputEvents(
+            nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
+            session.token
+          );
+          if (!stopped) {
+            setRuns(nextRuns);
+            commitRunOutputEvents(nextRuns, outputBatches);
+          }
+          return;
+        }
         const sync = messageSyncRef.current?.roomId === selectedRoomId
           ? messageSyncRef.current
           : null;
@@ -1397,40 +1504,38 @@ export function App() {
           cursor = page.nextCursor ?? page.syncCursor ?? cursor;
           if (!page.nextCursor) break;
         }
-        const [
-          nextAgents,
-          nextMembers,
-          nextDevices,
-          nextRuns,
-          nextDiscussions,
-          nextSettings
-        ] = await Promise.all([
-          jsonRequest<Agent[]>(
-            `/api/teams/${selectedTeamId}/agents`, {}, session.token
-          ),
-          jsonRequest<Member[]>(
-            `/api/teams/${selectedTeamId}/members`, {}, session.token
-          ),
-          jsonRequest<Device[]>(
-            `/api/teams/${selectedTeamId}/devices`, {}, session.token
-          ),
-          jsonRequest<Run[]>(
-            `/api/rooms/${selectedRoomId}/runs`, {}, session.token
-          ),
-          jsonRequest<DiscussionView[]>(
-            `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
-          ),
-          jsonRequest<RoomSettings>(
-            `/api/rooms/${selectedRoomId}/settings`, {}, session.token
-          )
+        const [roomState, teamState] = await Promise.all([
+          Promise.all([
+            jsonRequest<Run[]>(
+              `/api/rooms/${selectedRoomId}/runs`, {}, session.token
+            ),
+            jsonRequest<DiscussionView[]>(
+              `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
+            )
+          ]),
+          scope === "full"
+            ? Promise.all([
+                jsonRequest<Agent[]>(
+                  `/api/teams/${selectedTeamId}/agents`, {}, session.token
+                ),
+                jsonRequest<Member[]>(
+                  `/api/teams/${selectedTeamId}/members`, {}, session.token
+                ),
+                jsonRequest<Device[]>(
+                  `/api/teams/${selectedTeamId}/devices`, {}, session.token
+                ),
+                jsonRequest<RoomSettings>(
+                  `/api/rooms/${selectedRoomId}/settings`, {}, session.token
+                )
+              ])
+            : Promise.resolve(null)
         ]);
+        const [nextRuns, nextDiscussions] = roomState;
         const outputBatches = await loadRunOutputEvents(
-          nextRuns, runOutputSyncRef.current, session.token
+          nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
+          session.token
         );
         if (!stopped) {
-          setAgents(nextAgents);
-          setMembers(nextMembers);
-          setDevices(nextDevices);
           setMessages((current) => mergeRoomMessages(current, changedMessages));
           const currentSync = messageSyncRef.current;
           if (
@@ -1447,19 +1552,27 @@ export function App() {
           setRuns(nextRuns);
           commitRunOutputEvents(nextRuns, outputBatches);
           setDiscussions(nextDiscussions);
-          setRoomParticipants(nextSettings.participants);
-          setRooms((current) => current.map((room) =>
-            room.roomId === nextSettings.room.roomId ? nextSettings.room : room
-          ));
-          setMentionAgentIds((current) => current.filter((agentId) =>
-            nextSettings.participants.agentIds.includes(agentId)
-          ));
+          if (teamState) {
+            const [nextAgents, nextMembers, nextDevices, nextSettings] = teamState;
+            setAgents(nextAgents);
+            setMembers(nextMembers);
+            setDevices(nextDevices);
+            setRoomParticipants(nextSettings.participants);
+            setRooms((current) => current.map((room) =>
+              room.roomId === nextSettings.room.roomId ? nextSettings.room : room
+            ));
+            setMentionAgentIds((current) => current.filter((agentId) =>
+              nextSettings.participants.agentIds.includes(agentId)
+            ));
+          }
         }
       } catch (reason) {
         if (!stopped) setError(String(reason));
       }
     };
-    const refreshSingleFlight = createSingleFlight(refresh);
+    const refreshRoomSingleFlight = createSingleFlight(() => refresh("room"));
+    const refreshFullSingleFlight = createSingleFlight(() => refresh("full"));
+    const refreshEventsSingleFlight = createSingleFlight(() => refresh("events"));
     const delay = (milliseconds: number) => new Promise<void>((resolve) => {
       retryTimer = window.setTimeout(() => {
         retryTimer = null;
@@ -1482,13 +1595,20 @@ export function App() {
           );
           cursor = change.cursor;
           if (change.changed || change.reset) {
-            await refreshSingleFlight();
+            const refreshScope = teamChangeRefreshScope(change, selectedRoomId);
+            if (refreshScope === "full") {
+              await refreshFullSingleFlight();
+            } else if (refreshScope === "room") {
+              await refreshRoomSingleFlight();
+            } else if (refreshScope === "events") {
+              await refreshEventsSingleFlight();
+            }
           } else {
             await delay(250);
           }
         } catch (reason) {
           if (stopped || activeController?.signal.aborted) return;
-          await refreshSingleFlight();
+          await refreshFullSingleFlight();
           await delay(2_000);
         }
       }
@@ -1497,12 +1617,12 @@ export function App() {
       if (document.visibilityState === "hidden") {
         activeController?.abort();
       } else {
-        void refreshSingleFlight();
+        void refreshFullSingleFlight();
       }
     };
     document.addEventListener("visibilitychange", reconcileVisible);
     const fallbackTimer = window.setInterval(() => {
-      if (document.visibilityState !== "hidden") void refreshSingleFlight();
+      if (document.visibilityState !== "hidden") void refreshFullSingleFlight();
     }, 30_000);
     void listen();
     return () => {
@@ -2793,6 +2913,12 @@ export function App() {
               const messageRuns = runs.filter(
                 (run) => run.triggerMessageId === message.messageId
               );
+              const sourceRun = message.senderType === "agent" && message.parentMessageId
+                ? runs.find((run) =>
+                    run.triggerMessageId === message.parentMessageId &&
+                    run.targetAgentId === message.senderId
+                  )
+                : undefined;
 
               return (
                 <article className={`message ${message.senderType}-message`} key={message.messageId}>
@@ -2803,6 +2929,13 @@ export function App() {
                       <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
                     </header>
                     <MarkdownMessage content={message.content} />
+                    {sourceRun && (
+                      <AgentRunActivity
+                        active={false}
+                        locale={locale}
+                        projection={runActivities[sourceRun.runId]}
+                      />
+                    )}
                     {(message.mentions.length > 0 || messageRuns.length > 0) && (
                       <div className={`message-routing ${messageRuns.length > 0 ? "with-runs" : "mentions-only"}`}>
                         {messageRuns.length === 0 && message.mentions.map((mention) => (
@@ -2853,7 +2986,14 @@ export function App() {
                 </article>
               );
             })}
-            {Object.entries(runOutputs).map(([runId, output]) => {
+            {[...new Set([
+              ...Object.keys(runOutputs),
+              ...Object.keys(runActivities).filter((runId) => {
+                const run = runsById.get(runId);
+                return Boolean(run && activeRunStates.has(run.state));
+              })
+            ])].map((runId) => {
+              const output = runOutputs[runId];
               const run = runsById.get(runId);
               if (!run) return null;
               const senderName = agentsById.get(run.targetAgentId)?.name ?? t("agent");
@@ -2867,10 +3007,17 @@ export function App() {
                       <strong>{senderName}</strong>
                       <span className="streaming-state" role="status">{t("generating")}</span>
                     </header>
-                    <div className="streaming-content">
-                      <MarkdownMessage content={output.content} streaming />
-                      <span aria-hidden="true" className="streaming-cursor" />
-                    </div>
+                    <AgentRunActivity
+                      active
+                      locale={locale}
+                      projection={runActivities[runId]}
+                    />
+                    {output?.content && (
+                      <div className="streaming-content">
+                        <MarkdownMessage content={output.content} streaming />
+                        <span aria-hidden="true" className="streaming-cursor" />
+                      </div>
+                    )}
                   </div>
                 </article>
               );
