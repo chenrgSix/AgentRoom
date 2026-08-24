@@ -57,6 +57,14 @@ client-generated idempotency identity, remain visibly pending until
 acknowledged, and expose an explicit retry after failure without duplicating the
 server Message or its Runs.
 
+For managed Agents that publish streaming capability, the same Team change
+channel wakes cursor-based Run-event reads. The browser keeps at most one
+provisional output bubble per active Run, applies ordered additions and reset
+boundaries, and reconstructs it from sequence zero after a reload. A final
+`run.reply` removes that projection and the normal durable Room Message takes
+its place, so partial output is never inserted into message history and cannot
+appear twice. Final-only Agents retain the existing Run-card behavior.
+
 The UI uses schemas and generated types from `packages/contracts/`. Capability
 flags control whether start, resume, interrupt, handoff, or managed execution
 controls are shown.
@@ -190,6 +198,12 @@ explicit retry action that reuses the same identity; a successful response
 merges immediately and then reconciles authoritative history. Composer, Team,
 participant, and lifecycle mutations use independent pending state, so an
 unrelated control no longer freezes message entry or recovery.
+
+`WEB-029` projects authenticated `run.output_delta` events into an untrusted,
+plain-text generating bubble. It preserves one cursor per Run, ignores stale
+duplicates, clears on reset or final reply, and discards previews for Runs that
+become terminal without a reply. Reload and Team-change reconciliation use the
+same reducer, so the live and recovery paths cannot diverge.
 
 ## Dependencies
 

@@ -41,19 +41,32 @@ Codex and Generic nonzero exits include only a stable local classification,
 numeric exit code, and stderr-presence flag. The central service applies the
 same three-field allowlist before Run-event persistence; raw stderr and unknown
 detail keys never cross that boundary.
-Pi uses a dedicated parser over its non-interactive JSON event stream while
-retaining the Generic process lifecycle. Preset version 3 owns only the
+Pi uses a dedicated live parser over its non-interactive JSON event stream.
+Preset version 3 owns only the
 `--mode json`, `--print`, and `--no-session` transport and lifecycle flags;
 tools, extensions, Skills, project context, and approval remain governed by the
 owner's local Pi configuration and explicit local arguments. Bridge migration
 removes the product-authored restrictions from preset version 2 while retaining
-other owner-authored arguments from older configurations. Tool lifecycle events
-remain local and the adapter exposes only the last completed assistant message.
-The local JSON event stream is capped at 512 KB and the extracted reply remains
-capped at 20 KB. Malformed JSON, a missing assistant reply, or provider-specific
-raw tool-call markup fails the Run with `RUNTIME_PROTOCOL_INVALID`; none of that
-stdout is published to the Room. Pi does not gain resume or remote session
-claims, and the central service cannot raise local Runtime permissions.
+other owner-authored arguments from older configurations. Pi assistant
+`text_delta` events feed a bounded provisional preview; thinking, usage, tool
+calls, tool results, and provider protocol stay local. When a tool-using
+assistant message is followed by a new assistant message, the next visible
+delta resets the provisional preview so only the current answer remains. The
+last completed non-tool assistant message is still the authoritative reply.
+The local JSON event stream is capped at 512 KB and both the provisional output
+and extracted reply remain capped at 20 KB. A trailing safety window prevents
+partial credentials or the private `agentroom-assessment` envelope from
+crossing a chunk boundary. Malformed JSON, a missing assistant reply, or
+provider-specific raw tool-call markup fails the Run with
+`RUNTIME_PROTOCOL_INVALID`; none of that raw stdout is published to the Room.
+Pi does not gain resume or remote session claims, and the central service cannot
+raise local Runtime permissions.
+
+Codex remains final-only while its pinned `codex exec --json` subset exposes an
+Agent message only at `item.completed`. Generic CLI remains final-only because
+plain stdout has no stable boundary between assistant text and private control
+output. Their published streaming capability is false; support is added only
+after a runtime-specific machine contract can prove safe deltas.
 
 The first Fake Adapter lives in the central server workspace solely for the
 in-process MVP acceptance harness. It implements the same ordered request/event
@@ -83,7 +96,8 @@ Runtime, owns the resulting continue/finish decision.
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, streaming, cancellation, crash, recovery, and local permission
-inheritance. Work is tracked by `ADP-001` through `ADP-007` in `docs/TASKS.md`.
+inheritance. Work is tracked by `ADP-001` through `ADP-007` and `BRG-023` in
+`docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one
 context-cancelable `Execute` method that emits ordered semantic status or reply

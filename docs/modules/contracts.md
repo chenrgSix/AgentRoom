@@ -73,10 +73,22 @@ when the owning module explicitly supports round trips.
 ## Bridge Message Contract
 
 `schemas/bridge/messages.schema.json` defines `bridge.hello`, heartbeat, Agent
-publication/status, and the Run request, acceptance, status, reply, cancel, and
-handoff messages. Payloads carry immutable entity IDs, and every Bridge Run
-event starts with sequence 1. `run.cancel_requested` is the server-to-Bridge
-interrupt command required by the documented cancellation flow.
+publication/status, and the Run request, acceptance, status, output delta,
+reply, cancel, and handoff messages. Payloads carry immutable entity IDs, and
+every Bridge Run event starts with sequence 1. `run.cancel_requested` is the
+server-to-Bridge interrupt command required by the documented cancellation
+flow.
+
+`run.output_delta` is a Bridge-to-server preview event. It carries one bounded
+text addition and an optional `reset` flag within the same strict Run event
+sequence used by status and reply events. A reset replaces the provisional
+browser projection before applying its content; it does not delete persisted
+Run evidence. Output deltas never append Room Messages, never carry Discussion
+assessment data, and never count as a completed Agent turn. `run.reply` remains
+the sole authoritative visible reply and seals or replaces any provisional
+projection. Servers accept Bridges that never emit output deltas; deployment
+must upgrade the central service before enabling a Bridge that emits the new
+message type.
 
 `run.reply` has an additive optional `assessment` object for Discussion
 evidence: goal satisfaction, confidence, question/evidence deltas,
@@ -125,7 +137,7 @@ traces, or internal database errors.
 
 ## Task Mapping
 
-`CON-001` through `CON-004`, plus cross-language portions of `QA-001`.
+`CON-001` through `CON-005`, plus cross-language portions of `QA-001`.
 
 ## Dependencies
 

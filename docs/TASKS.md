@@ -56,6 +56,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | CON-002 | DONE | Define IDs, timestamps, versions, and error envelope | CON-001 | common schemas and positive/negative fixtures pass |
 | CON-003 | DONE | Define Bridge message schemas | CON-002 | hello, heartbeat, publish, and run schemas validate |
 | CON-004 | DONE | Generate TypeScript and Go contract types | CON-003, Go toolchain | generation is deterministic and both languages agree on fixtures |
+| CON-005 | ACTIVE | Define recoverable Runtime output deltas | CON-004, RUN-003 | schema fixtures and generated TypeScript/Go types prove bounded, sequenced `run.output_delta` events remain distinct from the final reply |
 | DATA-001 | DONE | Add SQLite migration runner and database location | GOV-004 | empty database migrates from zero |
 | DATA-002 | DONE | Add Team, Room, Message, and registry tables | DATA-001, CON-002 | repository tests persist and reload entities |
 | ADP-001 | DONE | Implement deterministic Fake Runtime Adapter | CON-002 | scripted events exercise success and failure |
@@ -109,6 +110,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | ADP-005 | DONE | Implement Generic CLI fallback | ADP-002 | stdout, exit, timeout, and cancel verified |
 | ADP-006 | DONE | Add structured Pi output boundary | ADP-005, BRG-019 | preset v2 emits Pi JSON events; the dedicated adapter exposes only the final assistant reply and fails closed on malformed streams or leaked provider tool protocol |
 | ADP-007 | DONE | Follow owner-controlled local Pi permissions | ADP-006, BRG-022 | config migration and Console edit tests prove preset v3 keeps only Bridge-owned JSON/print/session lifecycle flags while preserving local Pi policy; adapter and probe tests prove tool events remain private, final replies are delivered, and explicit self-tests temporarily disable local permissions |
+| BRG-023 | READY | Stream safe Runtime assistant output | CON-005, ADP-006, BRG-005 | Pi JSON delta fixtures and Bridge executor recovery tests prove bounded redacted previews stream in order, tool lifecycle stays local, and final replies remain authoritative; unsupported Runtimes retain final-only behavior |
 
 ## Workstream F3: Run Orchestration and Web Experience
 
@@ -120,6 +122,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | RUN-004 | DONE | Implement cancellation and terminal-state races | RUN-003 | first persisted terminal state wins |
 | RUN-005 | DONE | Implement offline queue and expiry | RUN-002, REG-003 | reconnect delivers queued work once |
 | RUN-006 | DONE | Implement guarded handoff | RUN-003 | depth, loop, and unique-agent limits pass |
+| RUN-007 | READY | Persist and expose resumable Runtime output | CON-005, BRG-023, DATA-003 | authenticated service and WebSocket tests prove output deltas persist with the Run sequence, reject gaps and foreign Devices, replay by cursor, notify the Team, and never append Room Messages |
 | WEB-002 | DONE | Implement Team Room message timeline | WEB-001, ROOM-002 | reload preserves ordered history |
 | WEB-003 | DONE | Implement structured Mention composer | WEB-002, ROOM-003 | display labels resolve to stable Agent IDs |
 | WEB-004 | DONE | Implement Agent presence panel | WEB-001, REG-003 | all integration modes render accurately |
@@ -143,6 +146,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-026 | DONE | Replace broad Room polling with event-driven reconciliation | WEB-021, OPS-002 | `team-change-service.test.ts`, the Web application tests, and Server/Web builds prove authorized monotonic Team change cursors wake selected-Room reconciliation promptly; reconnect, server restart, hidden tabs, and stream failure retain bounded HTTP fallback without a healthy two-second full refresh |
 | WEB-027 | DONE | Make Room message submission recoverable | WEB-019, WEB-026, ROOM-002 | migration 0018, Message/API regressions, the outbox unit test, onboarding component test, and Server/Web builds prove client Message IDs deduplicate ambiguous retries; pending and failed rows remain visible with same-ID retry, while message, Team, participant, and lifecycle operations use independent pending state |
 | WEB-028 | DONE | Expose recoverable Team, Room, and Agent lifecycle controls | ROOM-005, REG-004, WEB-024, WEB-025 | the onboarding component regression and Web build prove accessible Owner controls rename and archive/restore Teams and Rooms and disable/enable Agents; ordinary navigation excludes archived resources while the recovery modal retains access without deleting history |
+| WEB-029 | READY | Render recoverable in-progress Agent output | RUN-007, WEB-021, WEB-026 | component and sync tests prove one provisional bubble per active Run resumes ordered deltas, applies reset boundaries, disappears on final reply, and never duplicates the durable Agent Message |
 
 ## Workstream F4: MCP Team Participation
 
@@ -200,6 +204,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-013 | DONE | Verify managed Agent concurrency isolation | BRG-020, QA-004 | `docs/acceptance/qa-013-agent-concurrency-isolation.md` records passing race, FIFO, cross-Agent overlap, duplicate, queued-cancel, reconnect, full Go/Desktop, Node, and deterministic E2E evidence |
 | QA-014 | DONE | Publish and verify v0.2.0-rc.3 | QA-012, QA-013 | `docs/acceptance/qa-014-v0.2.0-rc.3.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification |
 | QA-015 | DONE | Publish and verify v0.2.0-rc.4 | WEB-026, WEB-027, WEB-028, BRG-022, QA-008 | `docs/acceptance/qa-015-v0.2.0-rc.4.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
+| QA-016 | READY | Verify recoverable Runtime output streaming | BRG-023, RUN-007, WEB-029 | contract, Go, Server, Web, and deterministic cross-process checks prove visible incremental Pi output, final-only fallback, reconnect replay, cancellation fencing, redaction, and one durable final Room Message |
 
 ## Deferred Beyond MVP
 
