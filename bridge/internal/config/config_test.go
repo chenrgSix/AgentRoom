@@ -167,7 +167,9 @@ func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) 
 		t.Fatalf("Codex owner fields changed during migration: %#v", loaded.Agents[0])
 	}
 	if loaded.Agents[0].RuntimeKind != "codex" ||
-		strings.Join(loaded.Agents[0].Command[1:], " ") != "exec --json --sandbox read-only -" {
+		strings.Join(loaded.Agents[0].Command[1:], " ") != "app-server --listen stdio://" ||
+		loaded.Agents[0].Sandbox != "read-only" ||
+		loaded.Agents[0].PresetVersion != CurrentPresetVersion {
 		t.Fatalf("unexpected Codex migration: %#v", loaded.Agents[0])
 	}
 	pi := loaded.Agents[1]
@@ -201,6 +203,22 @@ func TestMigrateUpgradesVersionOnePiPresetAndKeepsLocalPolicy(t *testing.T) {
 	if pi.PresetVersion != CurrentPresetVersion ||
 		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-session --no-tools" {
 		t.Fatalf("version one Pi preset was not upgraded: %#v", pi)
+	}
+}
+
+func TestMigrateVersionThreeCodexPresetKeepsOwnerSandbox(t *testing.T) {
+	configuration, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion, Agents: []AgentConfig{{
+		Name: "Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex", PresetVersion: 3,
+		Command:   []string{"/usr/local/bin/codex", "exec", "--json", "--sandbox", "read-only", "-"},
+		Workspace: t.TempDir(),
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	codex := configuration.Agents[0]
+	if codex.PresetVersion != CurrentPresetVersion || codex.Sandbox != "read-only" ||
+		strings.Join(codex.Command[1:], " ") != "app-server --listen stdio://" {
+		t.Fatalf("version three Codex preset was not upgraded safely: %#v", codex)
 	}
 }
 

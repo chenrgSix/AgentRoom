@@ -167,6 +167,16 @@ and no-session lifecycle flags. Agent edits retain those local arguments, tool
 lifecycle events remain on the client, and explicit self-tests still replace
 the command temporarily with a no-tool, no-project-resource probe.
 
+`ADP-008` advances managed Runtime presets to version 4. Codex presets migrate
+from one-shot `exec --json` to the local App Server JSONL stdio protocol while
+preserving the owner-selected sandbox in an explicit configuration field. The
+Bridge never adds approval bypass flags: normal Runs use the configured
+`read-only` or `workspace-write` sandbox and reject interactive escalation.
+Only bounded assistant deltas and the final completed Agent message cross the
+Bridge boundary; reasoning, tool lifecycle, command output, and approval
+requests remain local. Pi version 3 presets receive only the shared version
+marker update and retain their owner-controlled command arguments.
+
 `BRG-020` adds a lightweight per-Agent execution gate after durable inbox
 acceptance. Different Agent identities on one Bridge keep independent slots and
 may execute concurrently; Runs targeting one Agent wait in FIFO order with a

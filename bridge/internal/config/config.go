@@ -46,19 +46,17 @@ type AgentConfig struct {
 	PresetVersion int      `json:"presetVersion"`
 	Command       []string `json:"command"`
 	Workspace     string   `json:"workspace"`
+	Sandbox       string   `json:"sandbox,omitempty"`
 	EnvAllowlist  []string `json:"envAllowlist,omitempty"`
 }
 
 const (
 	CurrentSchemaVersion = 1
-	CurrentPresetVersion = 3
+	CurrentPresetVersion = 4
 )
 
-func CodexPresetCommand(executable, sandbox string) []string {
-	if sandbox != "read-only" && sandbox != "workspace-write" {
-		sandbox = "workspace-write"
-	}
-	return []string{executable, "exec", "--json", "--sandbox", sandbox, "-"}
+func CodexPresetCommand(executable string) []string {
+	return []string{executable, "app-server", "--listen", "stdio://"}
 }
 
 func PiPresetCommand(executable string, localPolicyArguments ...string) []string {
@@ -174,7 +172,10 @@ func Migrate(value Config) (Config, error) {
 		switch agent.RuntimeKind {
 		case "codex":
 			if len(agent.Command) > 0 {
-				agent.Command = CodexPresetCommand(agent.Command[0], codexSandbox(agent.Command))
+				if agent.Sandbox == "" {
+					agent.Sandbox = codexSandbox(agent.Command)
+				}
+				agent.Command = CodexPresetCommand(agent.Command[0])
 			}
 			agent.PresetVersion = CurrentPresetVersion
 		case "pi":
@@ -369,6 +370,9 @@ func (a AgentConfig) validate() error {
 	}
 	if a.RuntimeKind == "codex" && a.Adapter != "codex" {
 		return fmt.Errorf("codex runtimeKind requires the codex adapter")
+	}
+	if a.RuntimeKind == "codex" && a.Sandbox != "read-only" && a.Sandbox != "workspace-write" {
+		return fmt.Errorf("codex sandbox must be read-only or workspace-write")
 	}
 	if (a.RuntimeKind == "pi" || a.RuntimeKind == "generic") && a.Adapter != "generic" {
 		return fmt.Errorf("pi and generic runtimeKind require the generic adapter")

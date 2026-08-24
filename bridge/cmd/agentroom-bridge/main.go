@@ -273,8 +273,9 @@ func join(args []string) error {
 		ServerCertificateSHA256: *fingerprint,
 		DeviceName:              resolvedDevice, DataDir: resolvedDataDir,
 		Agents: []config.AgentConfig{{
-			Name: *agent, Role: *role, Adapter: "codex",
-			Command:   []string{resolvedCodex, "exec", "--json", "--sandbox", *sandbox, "-"},
+			Name: *agent, Role: *role, Adapter: "codex", RuntimeKind: "codex",
+			PresetVersion: config.CurrentPresetVersion,
+			Command:       config.CodexPresetCommand(resolvedCodex), Sandbox: *sandbox,
 			Workspace: resolvedWorkspace, EnvAllowlist: []string{"HOME", "PATH", "CODEX_HOME"},
 		}},
 	}

@@ -62,11 +62,19 @@ provider-specific raw tool-call markup fails the Run with
 Pi does not gain resume or remote session claims, and the central service cannot
 raise local Runtime permissions.
 
-Codex remains final-only while its pinned `codex exec --json` subset exposes an
-Agent message only at `item.completed`. Generic CLI remains final-only because
-plain stdout has no stable boundary between assistant text and private control
-output. Their published streaming capability is false; support is added only
-after a runtime-specific machine contract can prove safe deltas.
+Codex preset version 4 uses the local Codex App Server over JSONL stdio. The
+Bridge initializes one ephemeral Thread per Run in the fixed owner-selected
+workspace, passes the owner-selected `read-only` or `workspace-write` sandbox,
+and uses `approvalPolicy: never` so a remote Team message cannot escalate local
+permissions. It publishes only `item/agentMessage/delta`, resets provisional
+output when Codex starts a new Agent message after a tool boundary, and treats
+the last completed `agentMessage` plus `turn/completed` as authoritative. Tool,
+reasoning, command-output, and approval protocol stays local. Interactive
+server requests receive a protocol error instead of being approved. A bounded
+safety tail, redaction, protocol/output limits, process-group cancellation, and
+final-reply parsing match the Pi streaming boundary. Generic CLI remains
+final-only because plain stdout has no stable boundary between assistant text
+and private control output.
 
 The first Fake Adapter lives in the central server workspace solely for the
 in-process MVP acceptance harness. It implements the same ordered request/event
@@ -96,13 +104,13 @@ Runtime, owns the resulting continue/finish decision.
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, streaming, cancellation, crash, recovery, and local permission
-inheritance. Work is tracked by `ADP-001` through `ADP-007` and `BRG-023` in
+inheritance. Work is tracked by `ADP-001` through `ADP-008` and `BRG-023` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one
 context-cancelable `Execute` method that emits ordered semantic status or reply
 events. The deterministic Go Fake Adapter is the first contract implementation.
-The pinned Codex JSONL event subset and lifecycle limits are documented in
+The pinned Codex App Server event subset and lifecycle limits are documented in
 `docs/codex-runtime-contract.md` and guarded by Go parser fixtures.
 
 ## Dependencies

@@ -126,6 +126,13 @@ Use `--workspace`, `--agent-name`, `--device-name`, or `--codex` to override
 detected values. Existing configuration or credential files are never
 overwritten.
 
+Managed Codex preset version 4 starts the customer's local
+`codex app-server --listen stdio://` with the configured workspace and
+`read-only` or `workspace-write` sandbox. The Bridge publishes bounded
+`item/agentMessage/delta` previews and keeps the completed Agent message as the
+authoritative Room reply. It never adds approval bypass flags; reasoning, tool
+lifecycle, command output, and interactive approval requests remain local.
+
 `serverUrl` must use HTTPS except for loopback development. Each Agent declares
 an adapter, argument-array command, absolute workspace, and environment variable
 allowlist. Credentials, stable Agent identities, the durable Run inbox, and
@@ -152,7 +159,7 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
   "role": "Reviewer",
   "adapter": "generic",
   "runtimeKind": "pi",
-  "presetVersion": 3,
+  "presetVersion": 4,
   "command": [
     "/absolute/path/to/pi",
     "--mode",
@@ -176,11 +183,11 @@ the owner's names, roles, workspace, trust settings, and environment allowlist
 remain intact. The next explicit save persists the new version.
 
 This mode receives each bounded turn on stdin and exits after replying. The Pi
-adapter reads its JSON event stream, publishes only the final assistant reply,
-keeps tool lifecycle events local, and fails safely if a provider leaks raw
-tool-call markup. Explicit Runtime self-tests temporarily disable Pi tools and
-project-local resources; normal Team tasks retain the owner's policy. Pi is
-remotely wakeable through the Bridge but does not claim persistent session
-resume.
+adapter reads its JSON event stream, publishes bounded assistant text previews
+plus the final authoritative assistant reply, keeps tool lifecycle events
+local, and fails safely if a provider leaks raw tool-call markup. Explicit
+Runtime self-tests temporarily disable Pi tools and project-local resources;
+normal Team tasks retain the owner's policy. Pi is remotely wakeable through
+the Bridge but does not claim persistent session resume.
 Add only the credential environment variable actually required by the selected
 Pi provider; do not copy the full parent environment.

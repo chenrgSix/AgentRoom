@@ -984,7 +984,8 @@ func buildRuntime(runtime RuntimeInput) (config.AgentConfig, error) {
 			return config.AgentConfig{}, fmt.Errorf("Codex sandbox must be read-only or workspace-write")
 		}
 		agent.Adapter = "codex"
-		agent.Command = config.CodexPresetCommand(executablePath, sandbox)
+		agent.Command = config.CodexPresetCommand(executablePath)
+		agent.Sandbox = sandbox
 		agent.EnvAllowlist = []string{"HOME", "PATH", "CODEX_HOME"}
 	case "pi":
 		agent.Adapter = "generic"
@@ -1018,14 +1019,7 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 		if kind == "" {
 			kind = "generic"
 		}
-		sandbox := ""
-		if kind == "codex" {
-			for index, argument := range agent.Command {
-				if argument == "--sandbox" && index+1 < len(agent.Command) {
-					sandbox = agent.Command[index+1]
-				}
-			}
-		}
+		sandbox := agent.Sandbox
 		executablePath := ""
 		if len(agent.Command) > 0 {
 			executablePath = agent.Command[0]

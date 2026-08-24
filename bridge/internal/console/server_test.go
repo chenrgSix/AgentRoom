@@ -256,7 +256,8 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		loaded.Agents[1].PresetVersion != config.CurrentPresetVersion {
 		t.Fatalf("Runtime preset versions were not persisted: %#v", loaded)
 	}
-	if strings.Join(loaded.Agents[0].Command[1:], " ") != "exec --json --sandbox read-only -" {
+	if strings.Join(loaded.Agents[0].Command[1:], " ") != "app-server --listen stdio://" ||
+		loaded.Agents[0].Sandbox != "read-only" {
 		t.Fatalf("unexpected Codex command: %#v", loaded.Agents[0].Command)
 	}
 	if strings.Join(loaded.Agents[1].Command[1:], " ") != "--mode json --print --no-session" {
@@ -405,7 +406,7 @@ func TestRuntimeDraftPreflightDoesNotPersistOrRestartAndFencesConcurrentWork(t *
 		Agents: []config.AgentConfig{{
 			Name: "Existing Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex",
 			PresetVersion: config.CurrentPresetVersion,
-			Command:       config.CodexPresetCommand(executablePath, "workspace-write"), Workspace: directory,
+			Command:       config.CodexPresetCommand(executablePath), Workspace: directory, Sandbox: "workspace-write",
 		}},
 	}
 	if err := config.Save(configPath, loaded); err != nil {
@@ -548,8 +549,8 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 		Agents: []config.AgentConfig{{
 			Name: "First Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex",
 			PresetVersion: config.CurrentPresetVersion,
-			Command:       config.CodexPresetCommand(executablePath, "workspace-write"),
-			Workspace:     directory,
+			Command:       config.CodexPresetCommand(executablePath), Sandbox: "workspace-write",
+			Workspace: directory,
 		}},
 	}
 	if err := config.Save(configPath, loaded); err != nil {
