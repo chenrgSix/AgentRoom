@@ -112,6 +112,10 @@ below Room members.
 An empty installation presents a three-step Team, Room, and Agent onboarding
 flow in the main workspace. Required fields use native browser validation;
 actions remain visibly available unless a request is already in progress.
+After onboarding, an always-visible action in the desktop Team rail and mobile
+navigation opens the same accessible Team creation dialog. Successful creation
+selects the new Team immediately; creating a second Team never requires leaving
+or deleting the current Team.
 
 In trusted-team mode, an unauthenticated browser never calls the local
 bootstrap route. It renders setup only when the Server reports an empty

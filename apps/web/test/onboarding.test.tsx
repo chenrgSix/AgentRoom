@@ -44,6 +44,11 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     name: "Platform Team",
     createdAt: "2026-08-23T00:00:00.000Z"
   };
+  const secondTeam = {
+    teamId: "team_second",
+    name: "Research Team",
+    createdAt: "2026-08-23T00:10:00.000Z"
+  };
   const room = {
     roomId: "room_test",
     teamId: team.teamId,
@@ -98,6 +103,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     createdAt: "2026-08-23T00:03:00.000Z"
   };
   let messageWasSent = false;
+  let roomWasCreated = false;
   let discussionState = "";
   let discussionGoal = "确定交付恢复规则";
   const discussionRuns = [{
@@ -179,16 +185,24 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       });
     }
     if (path === "/api/teams" && method === "POST") {
-      return jsonResponse({ team });
+      const name = (JSON.parse(String(init.body)) as { name: string }).name;
+      return jsonResponse({ team: name === secondTeam.name ? secondTeam : team });
     }
     if (path === "/api/teams") {
-      const teamWasCreated = requests.some((request) =>
-        request.path === "/api/teams" && request.method === "POST"
-      );
-      return jsonResponse(teamWasCreated ? [team] : []);
+      const createdNames = requests
+        .filter((request) => request.path === "/api/teams" && request.method === "POST")
+        .map((request) => (JSON.parse(request.body ?? "{}") as { name?: string }).name);
+      return jsonResponse([
+        ...(createdNames.includes(team.name) ? [team] : []),
+        ...(createdNames.includes(secondTeam.name) ? [secondTeam] : [])
+      ]);
     }
     if (path === `/api/teams/${team.teamId}/rooms` && method === "POST") {
+      roomWasCreated = true;
       return jsonResponse(room);
+    }
+    if (path === `/api/teams/${team.teamId}/rooms`) {
+      return jsonResponse(roomWasCreated ? [room] : []);
     }
     if (
       path === `/api/teams/${team.teamId}/bridge-join-requests/approve` &&
@@ -233,8 +247,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/teams/${team.teamId}/devices`) {
       return jsonResponse([device]);
     }
+    if (path === `/api/teams/${secondTeam.teamId}/devices`) {
+      return jsonResponse([]);
+    }
     if (path === `/api/teams/${team.teamId}/members`) {
       return jsonResponse([member]);
+    }
+    if (path === `/api/teams/${secondTeam.teamId}/members`) {
+      return jsonResponse([{ ...member, memberId: "member_second", teamId: secondTeam.teamId }]);
     }
     if (path.endsWith("/agents")) {
       return jsonResponse([agent, secondAgent]);
@@ -295,6 +315,17 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
 
     fireEvent.change(roomInput, { target: { value: "general" } });
     fireEvent.click(screen.getByRole("button", { name: "创建房间" }));
+    await screen.findByRole("heading", { name: "在房间中开始对话 #general" });
+    fireEvent.click(screen.getByRole("button", { name: "新建 Team" }));
+    const teamDialog = screen.getByRole("dialog", { name: "新建 Team" });
+    fireEvent.change(within(teamDialog).getByLabelText("新 Team 名称"), {
+      target: { value: secondTeam.name }
+    });
+    fireEvent.click(within(teamDialog).getByRole("button", { name: "创建 Team" }));
+    await screen.findByRole("heading", { name: "创建一个对话房间" });
+    await waitFor(() => assert.equal(screen.queryByRole("dialog", { name: "新建 Team" }), null));
+    assert.ok(screen.getByTitle(secondTeam.name).classList.contains("active"));
+    fireEvent.click(screen.getByTitle(team.name));
     await screen.findByRole("heading", { name: "在房间中开始对话 #general" });
     assert.equal(screen.queryByLabelText("新建假智能体名称"), null);
     assert.equal(screen.queryByLabelText("新 Team 名称"), null);

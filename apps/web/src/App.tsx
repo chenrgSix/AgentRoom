@@ -646,6 +646,7 @@ export function App() {
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<WorkspaceView>("room");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
+  const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [teamName, setTeamName] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
@@ -1124,6 +1125,7 @@ export function App() {
       setTeamName("");
       await loadTeams(session);
       setSelectedTeamId(created.team.teamId);
+      setTeamDialogOpen(false);
     } catch (reason) {
       setError(String(reason));
     } finally {
@@ -1612,6 +1614,13 @@ export function App() {
               {team.name.slice(0, 2).toUpperCase()}
             </button>
           ))}
+          <button
+            aria-label={t("newTeam")}
+            className="team-add"
+            onClick={() => setTeamDialogOpen(true)}
+            title={t("newTeam")}
+            type="button"
+          >+</button>
         </div>
         {selectedTeam && (
           <div className="rail-actions">
@@ -1681,6 +1690,7 @@ export function App() {
                 <button className={activeView === "agents" ? "active" : ""} onClick={() => setActiveView("agents")} type="button">{t("agents")}</button>
               </>
             )}
+            <button aria-label={t("newTeamMobile")} onClick={() => setTeamDialogOpen(true)} type="button">＋</button>
             <button aria-label={locale === "zh-CN" ? "移动端界面语言" : "Mobile interface language"} onClick={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")} type="button">{locale === "zh-CN" ? "EN" : "中"}</button>
             <button
               aria-label={locale === "zh-CN" ? "移动端主题" : "Mobile theme"}
@@ -2333,6 +2343,42 @@ export function App() {
         )}
         {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
       </main>
+      {teamDialogOpen && (
+        <div className="modal-backdrop" onMouseDown={(event) => {
+          if (event.currentTarget === event.target) setTeamDialogOpen(false);
+        }}>
+          <section
+            aria-labelledby="new-team-dialog-title"
+            aria-modal="true"
+            className="modal-card"
+            role="dialog"
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">{t("teamSpace")}</p>
+                <h3 id="new-team-dialog-title">{t("newTeam")}</h3>
+              </div>
+              <button aria-label={t("cancel")} onClick={() => setTeamDialogOpen(false)} type="button">×</button>
+            </div>
+            <p>{t("newTeamHelp")}</p>
+            <form className="modal-form" onSubmit={createTeam}>
+              <label htmlFor="new-team-name">{t("newTeamName")}</label>
+              <input
+                autoComplete="off"
+                autoFocus
+                id="new-team-name"
+                onChange={(event) => setTeamName(event.target.value)}
+                required
+                value={teamName}
+              />
+              <div className="modal-actions">
+                <button className="secondary-action" onClick={() => setTeamDialogOpen(false)} type="button">{t("cancel")}</button>
+                <button className="primary-action" disabled={busy}>{busy ? t("creating") : t("createTeam")}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
