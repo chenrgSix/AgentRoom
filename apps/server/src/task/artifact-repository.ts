@@ -21,6 +21,16 @@ export interface TaskArtifactRecord {
   path: string | null;
   commitSha: string | null;
   branch: string | null;
+  contentMode: "reference_only" | "snapshot_blob";
+  contentId: string | null;
+  contentPublicationId: string | null;
+  contentSizeBytes: number | null;
+  contentMediaType:
+    | "text/x-diff"
+    | "text/markdown"
+    | "application/json"
+    | null;
+  contentSha256: string | null;
   title: string;
   summary: string;
   sourceRunId: string | null;
@@ -40,6 +50,12 @@ interface TaskArtifactRow {
   path_ref: string | null;
   commit_sha: string | null;
   branch_ref: string | null;
+  content_mode: TaskArtifactRecord["contentMode"];
+  content_id: string | null;
+  content_publication_id: string | null;
+  content_size_bytes: number | null;
+  content_media_type: TaskArtifactRecord["contentMediaType"];
+  content_sha256: string | null;
   title: string;
   summary: string;
   source_run_id: string | null;
@@ -60,6 +76,12 @@ function mapArtifact(row: TaskArtifactRow): TaskArtifactRecord {
     path: row.path_ref,
     commitSha: row.commit_sha,
     branch: row.branch_ref,
+    contentMode: row.content_mode,
+    contentId: row.content_id,
+    contentPublicationId: row.content_publication_id,
+    contentSizeBytes: row.content_size_bytes,
+    contentMediaType: row.content_media_type,
+    contentSha256: row.content_sha256,
     title: row.title,
     summary: row.summary,
     sourceRunId: row.source_run_id,
@@ -98,11 +120,15 @@ export class ArtifactRepository {
         INSERT INTO task_artifact_refs (
           artifact_id, artifact_revision, task_id, room_id, artifact_type, workspace_ref,
           repository_ref, path_ref, commit_sha, branch_ref, title, summary,
-          source_run_id, created_by_member_id, created_by_agent_id, created_at
+          content_mode, content_id, content_publication_id, content_size_bytes,
+          content_media_type, content_sha256, source_run_id, created_by_member_id,
+          created_by_agent_id, created_at
         ) VALUES (
           @artifactId, @artifactRevision, @taskId, @roomId, @type, @workspaceRef,
           @repository, @path, @commitSha, @branch, @title, @summary,
-          @sourceRunId, @createdByMemberId, @createdByAgentId, @createdAt
+          @contentMode, @contentId, @contentPublicationId, @contentSizeBytes,
+          @contentMediaType, @contentSha256, @sourceRunId, @createdByMemberId,
+          @createdByAgentId, @createdAt
         )
       `).run({ ...record, artifactRevision: revisionRow.artifact_revision });
       const artifact = { ...record, artifactRevision: revisionRow.artifact_revision };

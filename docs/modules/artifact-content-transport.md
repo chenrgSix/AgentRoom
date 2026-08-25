@@ -38,6 +38,8 @@ files share a filesystem so seal can fsync and atomically rename. SQLite stores
 metadata only. Migration 0036 retains immutable Team-scoped content rows and
 durable publication operations; publication metadata carries the validated
 Artifact type, file name, and media type until Task Collaboration binds it.
+Migration 0037 then links exactly one sealed publication to one new canonical
+Task Artifact without moving Artifact ownership into this module.
 
 ## Publication and Bind
 

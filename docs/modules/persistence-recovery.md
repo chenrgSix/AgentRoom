@@ -160,6 +160,12 @@ source Workspace lease scope, expiry, terminal failure, and the eventual bound
 Artifact identity remain queryable after restart. Blob bytes stay in the
 bounded local BlobStore; SQLite stores no file paths from a Bridge Workspace.
 
+Migration 0037 adds the canonical Artifact side of the binding. One immediate
+transaction inserts a content-bearing `task_artifact_refs` row, advances the
+Task artifact revision, and changes its unique sealed publication to `bound`.
+Reciprocal triggers require the exact Team/Task/Room/Run/Agent/Workspace and
+content metadata on both records; any later mutation remains prohibited.
+
 `ADR-0015` reserves two separate future linearization points for content-bearing
 Task evidence. Blob seal fsyncs and atomically installs content before sealed
 metadata commits. Canonical bind then uses one immediate SQLite transaction to

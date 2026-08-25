@@ -190,6 +190,12 @@ export class TaskArtifactService {
       path: artifactPath,
       commitSha,
       branch,
+      contentMode: "reference_only",
+      contentId: null,
+      contentPublicationId: null,
+      contentSizeBytes: null,
+      contentMediaType: null,
+      contentSha256: null,
       title: redactSensitiveText(boundedText(input.title, "Artifact title", 160)),
       summary: redactSensitiveText(
         boundedText(input.summary, "Artifact summary", 4_000)

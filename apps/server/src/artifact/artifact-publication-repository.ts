@@ -268,6 +268,35 @@ export class ArtifactPublicationRepository {
     });
   }
 
+  public bind(
+    publicationId: string,
+    contentId: string,
+    artifactId: string,
+    now: string
+  ): ArtifactPublicationRecord {
+    const existing = this.get(publicationId);
+    if (!existing) {
+      throw new Error(`Artifact publication not found: ${publicationId}`);
+    }
+    if (existing.state === "bound") {
+      if (
+        existing.contentId !== contentId || existing.artifactId !== artifactId
+      ) {
+        throw new Error("Artifact publication bind conflicts");
+      }
+      return existing;
+    }
+    const result = this.database.prepare(`
+      UPDATE artifact_publications
+      SET state = 'bound', artifact_id = ?, updated_at = ?
+      WHERE publication_id = ? AND state = 'sealed' AND content_id = ?
+    `).run(artifactId, now, publicationId, contentId);
+    if (result.changes !== 1) {
+      throw new Error("Artifact publication cannot bind from its current state");
+    }
+    return this.get(publicationId)!;
+  }
+
   public getContent(contentId: string): ArtifactContentRecord | undefined {
     const row = this.database.prepare(`
       SELECT * FROM artifact_contents WHERE content_id = ?

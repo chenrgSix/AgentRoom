@@ -16,6 +16,8 @@ import { LocalArtifactBlobStore } from
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
+import { SqliteTransactionBoundary } from
+  "../src/data/sqlite-transaction-boundary.js";
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { RunRepository } from "../src/run/run-repository.js";
@@ -24,6 +26,9 @@ import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
+import { ArtifactRepository } from "../src/task/artifact-repository.js";
+import { ArtifactContentBindingService } from
+  "../src/task/artifact-content-binding-service.js";
 import { WorkspaceLeaseRepository } from
   "../src/workspace/workspace-lease-repository.js";
 import { WorkspaceLeaseService } from
@@ -39,7 +44,8 @@ async function createFixture() {
   const blobRoot = path.join(directory, "blobs");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
-  const core = new CoreRepository(database);
+  const transactions = new SqliteTransactionBoundary(database);
+  const core = new CoreRepository(database, transactions);
   const auth = new AuthService(database);
   const teams = new TeamRoomService(core, auth);
   const registry = new MemberDeviceService(core, auth);
@@ -118,7 +124,7 @@ async function createFixture() {
     idempotencyKey: "idem_artifact_workspace_12345678",
     durationSeconds: 300
   }, now);
-  const publications = new ArtifactPublicationRepository(database);
+  const publications = new ArtifactPublicationRepository(database, transactions);
   const blobs = new LocalArtifactBlobStore(blobRoot);
   const service = new ArtifactPublicationService(
     publications,
@@ -131,11 +137,15 @@ async function createFixture() {
     blobs,
     database,
     databasePath,
+    core,
     lease,
     principal,
     publications,
     run,
-    service
+    runRepository,
+    service,
+    taskRepository,
+    transactions
   };
 }
 
@@ -339,6 +349,161 @@ test("sealed bytes deduplicate inside a Team but never bypass upload", async () 
       ).run(),
       /immutable/u
     );
+  } finally {
+    fixture.database.close();
+  }
+});
+
+test("sealed publication binds one canonical Artifact in one transaction", async () => {
+  const fixture = await createFixture();
+  try {
+    const artifacts = new ArtifactRepository(
+      fixture.database,
+      fixture.transactions
+    );
+    const unsealedSource = Buffer.from("unsealed", "utf8");
+    const unsealed = fixture.service.prepare(
+      fixture.principal,
+      prepareInput(
+        fixture,
+        unsealedSource,
+        "idem_artifact_bind_unsealed_123"
+      ),
+      now
+    );
+    const binder = new ArtifactContentBindingService(
+      fixture.transactions,
+      artifacts,
+      fixture.publications,
+      fixture.taskRepository,
+      fixture.runRepository,
+      fixture.core
+    );
+    assert.throws(
+      () => binder.bind(fixture.principal, unsealed.publicationId, now),
+      /must be sealed/u
+    );
+    assert.equal(artifacts.getRevision(fixture.run.taskId), 0);
+
+    const source = Buffer.from("diff --git a/b.ts b/b.ts\n+bound\n", "utf8");
+    const prepared = fixture.service.prepare(
+      fixture.principal,
+      prepareInput(fixture, source, "idem_artifact_bind_ready_123456"),
+      now
+    );
+    fixture.service.appendChunk(
+      fixture.principal,
+      prepared.publicationId,
+      0,
+      source,
+      chunkSha256(source),
+      now
+    );
+    const sealed = fixture.service.seal(
+      fixture.principal,
+      prepared.publicationId,
+      now
+    );
+    assert.throws(
+      () => binder.bind({
+        ...fixture.principal,
+        deviceId: "device_foreign_12345678"
+      }, prepared.publicationId, now),
+      /access denied/u
+    );
+    assert.throws(
+      () => binder.bind({
+        ...fixture.principal,
+        teamId: "team_foreign_12345678"
+      }, prepared.publicationId, now),
+      /access denied/u
+    );
+
+    const failingPublications = new ArtifactPublicationRepository(
+      fixture.database,
+      fixture.transactions
+    );
+    failingPublications.bind = () => {
+      throw new Error("simulated bind cut");
+    };
+    const cutBinder = new ArtifactContentBindingService(
+      fixture.transactions,
+      artifacts,
+      failingPublications,
+      fixture.taskRepository,
+      fixture.runRepository,
+      fixture.core
+    );
+    assert.throws(
+      () => cutBinder.bind(fixture.principal, prepared.publicationId, now),
+      /simulated bind cut/u
+    );
+    assert.equal(artifacts.getRevision(fixture.run.taskId), 0);
+    assert.equal(artifacts.listForTask(fixture.run.taskId, 10).length, 0);
+    assert.equal(
+      fixture.publications.get(prepared.publicationId)?.state,
+      "sealed"
+    );
+
+    const bound = binder.bind(fixture.principal, prepared.publicationId, now);
+    assert.equal(bound.revision, 1);
+    assert.equal(bound.artifact.contentMode, "snapshot_blob");
+    assert.equal(bound.artifact.contentId, sealed.content.contentId);
+    assert.equal(
+      bound.artifact.contentPublicationId,
+      prepared.publicationId
+    );
+    assert.equal(bound.artifact.contentSizeBytes, source.length);
+    assert.equal(bound.artifact.contentMediaType, "text/x-diff");
+    assert.equal(bound.artifact.contentSha256, sealed.content.sha256);
+    assert.equal(bound.artifact.path, "change.patch");
+    assert.equal(bound.artifact.workspaceRef, workspaceRef);
+    assert.equal(bound.artifact.sourceRunId, fixture.run.runId);
+    assert.equal(bound.artifact.createdByAgentId, fixture.agent.agentId);
+    assert.equal(
+      binder.bind(fixture.principal, prepared.publicationId, now)
+        .artifact.artifactId,
+      bound.artifact.artifactId
+    );
+    assert.equal(artifacts.getRevision(fixture.run.taskId), 1);
+    assert.equal(
+      fixture.publications.get(prepared.publicationId)?.state,
+      "bound"
+    );
+    assert.throws(
+      () => fixture.publications.bind(
+        prepared.publicationId,
+        sealed.content.contentId,
+        "artifact_conflicting_12345678",
+        now
+      ),
+      /bind conflicts/u
+    );
+
+    fixture.database.prepare(`
+      INSERT INTO teams (team_id, name, created_at)
+      VALUES ('team_foreign_content', 'Foreign Content', ?)
+    `).run(now);
+    fixture.database.prepare(`
+      INSERT INTO artifact_contents (
+        content_id, team_id, sha256, size_bytes, storage_key, sealed_at
+      ) VALUES (
+        'content_foreign_scope', 'team_foreign_content', ?, 1,
+        'sealed/team_foreign_content/cc/foreign', ?
+      )
+    `).run("c".repeat(64), now);
+    assert.throws(
+      () => artifacts.create({
+        ...bound.artifact,
+        artifactId: "artifact_foreign_content",
+        artifactRevision: 0,
+        contentId: "content_foreign_scope",
+        contentSizeBytes: 1,
+        contentSha256: "c".repeat(64)
+      }),
+      /content binding is invalid/u
+    );
+    assert.equal(artifacts.getRevision(fixture.run.taskId), 1);
   } finally {
     fixture.database.close();
   }

@@ -1,7 +1,8 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028/0029/0030/0031/0032/0033/0034, and the Web Room
+- Implementation: `apps/server/src/task/`, migrations
+  0024/0026/0027/0028/0029/0030/0031/0032/0033/0034/0037, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -23,7 +24,7 @@ and results belong to the same longer-lived goal.
 | Rolling Room checkpoint | immutable parent, contiguous input interval, through sequence, summary, provenance/digest, prompt/model version, build kind |
 | Rolling Room state | mode, latest and desired through sequences, latest checkpoint, generation, lease, bounded failure projection |
 | Long-term MemoryEntry | memoryId, Room/Task scope, typed content, active/superseded/retracted state, scope revision, supersession link, Message/Artifact/Run/Discussion provenance, Member author, timestamps |
-| ArtifactRef | artifactId, taskId, artifactRevision, type, workspaceRef, repository/path/commit/branch metadata, content mode and optional sealed content identity, title, summary, creator, optional sourceRunId, timestamp |
+| ArtifactRef | artifactId, taskId, artifactRevision, type, workspaceRef, repository/path/commit/branch metadata, content mode and optional sealed content/publication identity, title, summary, creator, optional sourceRunId, timestamp |
 | ArtifactRelation | relationId, source Artifact, target Artifact, type, creator, timestamp |
 | TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, terminal reason, timestamps |
 
@@ -74,12 +75,19 @@ artifact revision atomically.
 
 `ADR-0015` extends that same canonical record; it does not add another Artifact
 aggregate. Existing records have `contentMode=reference_only`. A new
-content-bearing record has `contentMode=snapshot_blob` plus immutable content
-ID, size, media type, and SHA-256 metadata at insertion time. A durable
+content-bearing record has `contentMode=snapshot_blob` plus immutable
+publication ID, content ID, size, media type, and SHA-256 metadata at insertion
+time. A durable
 publication operation and sealed Blob remain invisible until one immediate
 transaction inserts the canonical Artifact, advances the existing Task artifact
 revision, and marks the publication bound. An existing Artifact is never
 mutated to attach later content.
+
+Migration 0037 enforces both sides of that bind. A snapshot Artifact must name
+one unique sealed publication with the same Task, Room, Run, Agent, Workspace,
+type, file name, media type, size, digest, and Team-scoped content. The inverse
+publication transition accepts only that exact canonical Artifact. Reference-
+only Artifacts preserve their existing shape and cannot claim Blob metadata.
 
 Artifact relations are immutable Task evidence. A newly produced Artifact may
 `derive_from`, `review`, or `verify` an older in-scope Artifact. The new Artifact
