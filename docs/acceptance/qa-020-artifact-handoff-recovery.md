@@ -22,8 +22,9 @@ Bridge A publishes a content-bearing canonical Artifact A from an active Run.
 Bridge B receives A through a later Run's pinned result evidence, installs it
 outside its configured Workspace, and exposes only the verified logical alias
 to its Runtime. The Runtime reads the installed file, checks the expected
-SHA-256, writes a derived JSON result in its locally authorized output
-directory, and Bridge B publishes canonical Artifact B with an immutable
+SHA-256, creates a derived JSON result directly at the configured Workspace
+root, and Bridge B explicitly compare-and-sets the newer opaque generation
+without reconnecting before publishing canonical Artifact B with an immutable
 `verifies` relation to A.
 
 The final Task has revision 2 and exactly two Artifacts. Both explicit exact
@@ -40,6 +41,7 @@ extra revision.
 | download restart | proxy holds the second range after the first 256 KiB partial is durable, then B is terminated | the same Run and `dataDir` resume at the durable offset and install exact A bytes |
 | duplicate Run delivery | Server dispatches pending work after both hello and Agent publication | only one active handler executes for the Run; duplicate delivery cannot race the preparing transition |
 | terminal replay | the prior digest-failed Run remains in the durable inbox when B reconnects | the negative acknowledgement and terminal event replay without downloading the failed Artifact again |
+| active Workspace generation change | B's Runtime creates `derived.json` and its evidence marker at the Workspace root after Agent publication | metadata is revalidated, the opaque generation is compare-and-set under the active Run, and a matching lease is accepted without reconnecting or writing from the Server |
 | derived publication retry | B publishes the same bytes and `verifies` relation twice | both calls return Artifact B, Task revision remains 2, and one immutable B-to-A relation exists |
 
 The installed source is byte-for-byte equal to A, has mode `0400`, and resides
@@ -62,16 +64,30 @@ Focused Connection and Delivery regressions now preserve active-Run
 single-handler execution and forbid re-preparation of the deterministic
 materialization-failure terminal state.
 
+The post-review regression pass also proves:
+
+- a denied lease performs zero source-file opens or byte reads;
+- lease retry and publication prepare revalidate current Run, Task, Agent,
+  Device, Workspace identity, and generation authority;
+- a distinct Artifact observation derives a new lease attempt identity instead
+  of inheriting an expired operation;
+- a new prepare atomically expires abandoned uploads, frees both active-count
+  and reserved-byte quota, and removes regular or symlink temporary entries;
+- the two-Bridge product loop publishes a newly created root-level Artifact B
+  through an explicit opaque generation CAS rather than a reconnect workaround.
+
 ## Verification
 
-- `go test ./internal/connection ./internal/delivery` passes the focused
+- `go test ./internal/artifact ./internal/workspace ./internal/connection
+  ./internal/delivery` passes the focused authorization, generation, and
   recovery regressions.
 - `npx tsx --test tests/e2e/artifact-to-artifact-recovery.test.ts` passes the
   real-Server/two-Bridge recovery scenario.
 - `npm test` passes 127 Server, 24 Web, and 4 contract tests plus generated Go
   contract coverage and strict type checks.
 - `go test ./...` passes every ordinary Bridge package. `go vet ./...` and
-  race-detector tests for Connection, Delivery, and Runtime pass.
+  race-detector tests for Artifact, Workspace, Connection, Delivery, and
+  Runtime pass.
 - `npm run test:e2e` passes the new two-Bridge recovery scenario, the guarded
   three-Agent MCP handoff, and the paired real Go Bridge/Pi protocol scenario;
   the credentialed Codex/Pi scenario is explicitly skipped as designed.
