@@ -87,6 +87,7 @@ export interface MessageRecord {
   messageId: string;
   traceId: string;
   roomId: string;
+  taskId: string;
   sequence: number;
   senderType: "member" | "agent" | "system";
   senderId: string;
@@ -140,6 +141,7 @@ interface MessageRow {
   message_id: string;
   trace_id: string;
   room_id: string;
+  task_id: string;
   sequence: number;
   sender_type: MessageRecord["senderType"];
   sender_id: string;
@@ -165,6 +167,7 @@ function mapMessage(
     messageId: row.message_id,
     traceId: row.trace_id,
     roomId: row.room_id,
+    taskId: row.task_id,
     sequence: row.sequence,
     senderType: row.sender_type,
     senderId: row.sender_id,
@@ -368,13 +371,19 @@ export class CoreRepository {
   }
 
   public appendMessage(
-    message: Omit<MessageRecord, "sequence" | "traceId"> & { traceId?: string }
+    message: Omit<MessageRecord, "sequence" | "traceId" | "taskId"> & {
+      traceId?: string;
+      taskId?: string;
+    }
   ): MessageRecord {
     return this.appendMessageWithResult(message).message;
   }
 
   public appendMessageWithResult(
-    message: Omit<MessageRecord, "sequence" | "traceId"> & { traceId?: string }
+    message: Omit<MessageRecord, "sequence" | "traceId" | "taskId"> & {
+      traceId?: string;
+      taskId?: string;
+    }
   ): { created: boolean; message: MessageRecord } {
     const persistedMessage = {
       ...message,
@@ -389,6 +398,36 @@ export class CoreRepository {
         throw new Error(`Room not found: ${persistedMessage.roomId}`);
       }
 
+      const parentTask = persistedMessage.parentMessageId
+        ? this.database.prepare(`
+            SELECT task_id FROM messages
+            WHERE message_id = ? AND room_id = ?
+          `).get(persistedMessage.parentMessageId, persistedMessage.roomId) as
+            | { task_id: string }
+            | undefined
+        : undefined;
+      if (
+        persistedMessage.taskId && parentTask &&
+        persistedMessage.taskId !== parentTask.task_id
+      ) {
+        throw new Error("Reply Message must use its parent Task");
+      }
+      const resolvedTask = this.database.prepare(`
+        SELECT task_id, state FROM agent_tasks
+        WHERE task_id = coalesce(?, task_id) AND room_id = ?
+          AND (? IS NOT NULL OR is_default = 1)
+        ORDER BY is_default DESC
+        LIMIT 1
+      `).get(
+        persistedMessage.taskId ?? parentTask?.task_id ?? null,
+        persistedMessage.roomId,
+        persistedMessage.taskId ?? parentTask?.task_id ?? null
+      ) as { task_id: string; state: string } | undefined;
+      if (!resolvedTask) {
+        throw new Error("Message Task must belong to its Room");
+      }
+      const taskMessage = { ...persistedMessage, taskId: resolvedTask.task_id };
+
       if (persistedMessage.clientMessageId) {
         const existing = this.database.prepare(`
           SELECT * FROM messages
@@ -401,14 +440,24 @@ export class CoreRepository {
           persistedMessage.clientMessageId
         ) as MessageRow | undefined;
         if (existing) {
+          if (existing.task_id !== taskMessage.taskId) {
+            throw new Error("Client Message ID is already bound to another Task");
+          }
           return { created: false, message: mapMessage(this.database, existing) };
         }
+      }
+
+      if (
+        taskMessage.mentions.length > 0 &&
+        (resolvedTask.state === "completed" || resolvedTask.state === "canceled")
+      ) {
+        throw new Error(`Task is not runnable in state ${resolvedTask.state}`);
       }
 
       const findAgent = this.database.prepare(`
         SELECT team_id, enabled FROM agents WHERE agent_id = ?
       `);
-      for (const mention of persistedMessage.mentions) {
+      for (const mention of taskMessage.mentions) {
         const agent = findAgent.get(mention.targetAgentId) as
           | { team_id: string; enabled: number }
           | undefined;
@@ -422,26 +471,26 @@ export class CoreRepository {
         SET next_message_sequence = next_message_sequence + 1
         WHERE room_id = ?
         RETURNING next_message_sequence AS sequence
-      `).get(persistedMessage.roomId) as { sequence: number };
+      `).get(taskMessage.roomId) as { sequence: number };
 
       this.database.prepare(`
         INSERT INTO messages (
-          message_id, trace_id, room_id, sequence, sender_type, sender_id, content,
-          parent_message_id, client_message_id, created_at
+          message_id, trace_id, room_id, task_id, sequence, sender_type,
+          sender_id, content, parent_message_id, client_message_id, created_at
         ) VALUES (
-          @messageId, @traceId, @roomId, @sequence, @senderType, @senderId, @content,
-          @parentMessageId, @clientMessageId, @createdAt
+          @messageId, @traceId, @roomId, @taskId, @sequence, @senderType,
+          @senderId, @content, @parentMessageId, @clientMessageId, @createdAt
         )
-      `).run({ ...persistedMessage, sequence: sequenceRow.sequence });
+      `).run({ ...taskMessage, sequence: sequenceRow.sequence });
 
       const insertMention = this.database.prepare(`
         INSERT INTO message_mentions (
           message_id, ordinal, target_type, target_agent_id, display_label
         ) VALUES (?, ?, 'agent', ?, ?)
       `);
-      for (const [ordinal, mention] of persistedMessage.mentions.entries()) {
+      for (const [ordinal, mention] of taskMessage.mentions.entries()) {
         insertMention.run(
-          persistedMessage.messageId,
+          taskMessage.messageId,
           ordinal,
           mention.targetAgentId,
           mention.displayLabel
@@ -450,7 +499,7 @@ export class CoreRepository {
 
       return {
         created: true,
-        message: { ...persistedMessage, sequence: sequenceRow.sequence }
+        message: { ...taskMessage, sequence: sequenceRow.sequence }
       };
     }).immediate();
   }

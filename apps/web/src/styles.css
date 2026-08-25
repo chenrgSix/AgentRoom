@@ -288,8 +288,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .modal-heading > button { width: 31px; height: 31px; border: 1px solid #3e4737; border-radius: 9px; background: #20241d; color: #9da594; cursor: pointer; }
 .modal-form { display: grid; gap: 8px; margin-top: 20px; }
 .modal-form label { color: #bac2b2; font-size: 10px; font-weight: 750; }
-.modal-form input { width: 100%; padding: 11px 12px; border: 1px solid #3d4537; border-radius: 9px; outline: none; background: #11140f; color: #edf0e4; }
-.modal-form input:focus { border-color: #84994f; }
+.modal-form input, .modal-form textarea { width: 100%; padding: 11px 12px; border: 1px solid #3d4537; border-radius: 9px; outline: none; background: #11140f; color: #edf0e4; }
+.modal-form textarea { resize: vertical; line-height: 1.5; }
+.modal-form input:focus, .modal-form textarea:focus { border-color: #84994f; }
 .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .secondary-action { padding: 10px 14px; border: 1px solid #434b3c; border-radius: 9px; background: #232720; color: #aeb5a7; cursor: pointer; }
 .danger-action { padding: 10px 14px; border: 1px solid #7a4c45; border-radius: 9px; background: #3b211e; color: #f0aaa1; font-weight: 800; cursor: pointer; }
@@ -473,6 +474,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .discussion-controls button.discussion-primary { border-color: #6e8241; background: #bcd96a; color: #18200f; font-weight: 800; }
 .discussion-controls button.discussion-danger { border-color: #65443f; color: #d99a91; }
 .composer-input { position: relative; display: grid; min-width: 0; gap: 5px; }
+.task-context { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.task-context label { display: flex; align-items: center; min-width: 0; gap: 6px; color: #8f9b87; font-size: 9px; font-weight: 750; }
+.task-context select { min-width: 0; max-width: min(420px, 48vw); padding: 4px 24px 4px 7px; border: 1px solid #3f4938; border-radius: 8px; background: #171b14; color: #dce5d3; font-size: 10px; }
+.task-context > button { margin-left: auto; padding: 4px 7px; border: 1px solid #52633e; border-radius: 7px; background: #222a1c; color: #b9d47e; font-size: 9px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.task-state { padding: 2px 6px; border: 1px solid #4d5b40; border-radius: 999px; color: #9cad91; font-size: 8px; }
+.task-state.working, .task-state.review { border-color: #728446; color: #c7dd88; }
+.task-state.blocked { border-color: #876f3f; color: #e6c477; }
+.task-state.completed, .task-state.canceled { border-color: #5c6257; color: #858d7d; }
 .room-policy-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; min-width: 0; color: #74806f; font-size: 8px; }
 .room-policy-summary > span { padding: 2px 6px; border: 1px solid #333d30; border-radius: 999px; background: #151a14; white-space: nowrap; }
 .room-policy-summary .policy-mode.discussion { border-color: #52653a; color: #b9d47e; }
@@ -645,6 +654,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .composer { border-color: #c6d0bd; background: rgb(251 252 248 / 97%); box-shadow: 0 18px 50px rgb(58 73 42 / 16%); }
 :root[data-theme="light"] .room-dock { border-color: #d5dccd; background: rgb(244 246 239 / 97%); }
 :root[data-theme="light"] .composer textarea { color: #263021; }
+:root[data-theme="light"] .task-context label { color: #63705e; }
+:root[data-theme="light"] .task-context select { border-color: #c8d1c1; background: #f7f9f4; color: #33402d; }
+:root[data-theme="light"] .task-context > button { border-color: #a8ba86; background: #edf3e5; color: #526b2b; }
 :root[data-theme="light"] .room-policy-summary { color: #697564; }
 :root[data-theme="light"] .room-policy-summary > span { border-color: #d4dcd0; background: #f6f8f3; }
 :root[data-theme="light"] .room-policy-summary .policy-mode.discussion { border-color: #a9bd7d; color: #526a2a; }

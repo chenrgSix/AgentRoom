@@ -31,6 +31,7 @@ const ids = {
   message: "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
   discussion: "discussion_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
 };
+const taskId = `task_default_${ids.room.slice(5)}`;
 
 function seed(core: CoreRepository): void {
   core.createUser({ userId: ids.user, displayName: "Alice", createdAt: now });
@@ -102,6 +103,7 @@ test("Discussion aggregate versions fence duplicate turn scheduling", async () =
     const discussion: DiscussionRecord = {
       discussionId: ids.discussion,
       roomId: ids.room,
+      taskId,
       rootMessageId: ids.message,
       requesterMemberId: ids.member,
       goal: "Design cancellation semantics.",
@@ -188,6 +190,7 @@ test("Discussion decisions are atomic with aggregate updates", async () => {
     const discussion: DiscussionRecord = {
       discussionId: ids.discussion,
       roomId: ids.room,
+      taskId,
       rootMessageId: ids.message,
       requesterMemberId: ids.member,
       goal: "Design cancellation semantics.",
@@ -283,6 +286,7 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
     const discussion: DiscussionRecord = {
       discussionId: ids.discussion,
       roomId: ids.room,
+      taskId,
       rootMessageId: ids.message,
       requesterMemberId: ids.member,
       goal: "Plan one parallel contribution Wave.",
@@ -629,6 +633,7 @@ test("Run orchestration keys provide a unique durable lookup", async () => {
       runId: "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
       traceId,
       roomId: ids.room,
+      taskId,
       triggerMessageId: ids.message,
       requesterMemberId: ids.member,
       targetAgentId: ids.agent1,

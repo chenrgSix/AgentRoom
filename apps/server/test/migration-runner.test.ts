@@ -6,7 +6,6 @@ import test from "node:test";
 
 import Database from "better-sqlite3";
 
-import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { prepareDatabaseDirectory } from "../src/data/database-location.js";
 import {
@@ -14,13 +13,7 @@ import {
   migrateDatabase
 } from "../src/data/migration-runner.js";
 import { DiscussionRepository } from "../src/discussion/discussion-repository.js";
-import { AgentService } from "../src/registry/agent-service.js";
-import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { RunRepository } from "../src/run/run-repository.js";
-import { RunService } from "../src/run/run-service.js";
-import { AuthService } from "../src/security/auth-service.js";
-import { MessageService } from "../src/team-room/message-service.js";
-import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
 async function temporaryDirectory(name: string): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), `agent-room-${name}-`));
@@ -34,16 +27,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 23);
+  assert.equal(first.currentVersion, 24);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -64,7 +57,7 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       )
       .get() as { count: number };
 
-    assert.equal(migrationCount.count, 23);
+    assert.equal(migrationCount.count, 24);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
   } finally {
@@ -144,7 +137,10 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [15, 16, 17, 18, 19, 20, 21, 22, 23]);
+  assert.deepEqual(
+    migrated.appliedVersions,
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+  );
   const database = new Database(databasePath, { readonly: true });
   try {
     const discussion = database.prepare(`
@@ -218,70 +214,76 @@ test("Runtime activity migration preserves pending reply routing intents", async
 
   const now = "2026-08-25T01:00:00.000Z";
   const legacy = openDatabase(databasePath);
-  let runId = "";
+  const runId = "run_activity_migration";
   try {
-    const core = new CoreRepository(legacy);
-    const auth = new AuthService(legacy);
-    const teams = new TeamRoomService(core, auth);
-    const registry = new MemberDeviceService(core, auth);
-    const agents = new AgentService(core, auth);
-    const messages = new MessageService(core, auth);
-    const runs = new RunRepository(legacy);
-    const runService = new RunService(core, runs, auth);
-    const created = teams.createTeamForUser({
-      userId: "user_activity_migration", userDisplayName: "Alice",
-      teamName: "Migration Team", now
-    });
-    const session = auth.issueWebSession(
-      created.owner.userId ?? "", now, "2026-08-25T02:00:00.000Z"
-    );
-    const principal = auth.authenticateWebSession(session.secret, now);
-    const room = teams.createRoom(principal, created.team.teamId, "general", now);
-    const device = registry.registerOwnDevice(
-      principal, created.team.teamId, "Migration Bridge", now
-    );
-    const agent = agents.publishAgent(principal, {
-      teamId: created.team.teamId,
-      deviceId: device.deviceId,
-      name: "Builder",
-      role: "Managed",
-      integrationMode: "managed",
-      capabilities: {
-        supportsHandoff: false,
-        supportsInterrupt: true,
-        supportsResume: false,
-        supportsStart: true,
-        supportsStreaming: true
-      },
-      now
-    });
-    const trigger = messages.createMemberMessage(principal, {
-      roomId: room.roomId,
-      content: "Preserve pending routing.",
-      mentions: [{
-        targetType: "agent",
-        targetAgentId: agent.agentId,
-        displayLabel: "Builder / Managed"
-      }],
-      now
-    });
-    const run = runService.createRunsForMessage(principal, trigger.messageId, now)[0];
-    assert.ok(run);
-    runId = run.runId;
     legacy.exec(`
+      INSERT INTO web_users (user_id, display_name, created_at)
+      VALUES ('user_activity_migration', 'Alice', '${now}');
+      INSERT INTO teams (team_id, name, created_at)
+      VALUES ('team_activity_migration', 'Migration Team', '${now}');
+      INSERT INTO team_members (
+        member_id, team_id, user_id, display_name, role, created_at
+      ) VALUES (
+        'member_activity_migration', 'team_activity_migration',
+        'user_activity_migration', 'Alice', 'owner', '${now}'
+      );
+      INSERT INTO rooms (
+        room_id, team_id, name, next_message_sequence, created_at
+      ) VALUES (
+        'room_activity_migration', 'team_activity_migration', 'general', 1,
+        '${now}'
+      );
+      INSERT INTO devices (
+        device_id, team_id, owner_member_id, name, status, created_at
+      ) VALUES (
+        'device_activity_migration', 'team_activity_migration',
+        'member_activity_migration', 'Migration Bridge', 'active', '${now}'
+      );
+      INSERT INTO agents (
+        agent_id, team_id, owner_member_id, device_id, name, role,
+        integration_mode, capabilities_json, enabled, presence, created_at,
+        updated_at
+      ) VALUES (
+        'agent_activity_migration', 'team_activity_migration',
+        'member_activity_migration', 'device_activity_migration', 'Builder',
+        'Managed', 'managed',
+        '{"supportsHandoff":false,"supportsInterrupt":true,"supportsResume":false,"supportsStart":true,"supportsStreaming":true}',
+        1, 'ready', '${now}', '${now}'
+      );
+      INSERT INTO room_human_participants (room_id, member_id, added_at)
+      VALUES ('room_activity_migration', 'member_activity_migration', '${now}');
+      INSERT INTO room_agent_participants (room_id, agent_id, added_at)
+      VALUES ('room_activity_migration', 'agent_activity_migration', '${now}');
+      INSERT INTO messages (
+        message_id, trace_id, room_id, sequence, sender_type, sender_id,
+        content, parent_message_id, created_at
+      ) VALUES (
+        'msg_activity_migration', 'trace_activity_migration',
+        'room_activity_migration', 1, 'member', 'member_activity_migration',
+        'Preserve pending routing.', NULL, '${now}'
+      );
+      INSERT INTO runs (
+        run_id, trace_id, room_id, trigger_message_id, requester_member_id,
+        target_agent_id, parent_run_id, instruction, state, last_sequence,
+        deadline_at, created_at, updated_at, terminal_at
+      ) VALUES (
+        '${runId}', 'trace_activity_migration', 'room_activity_migration',
+        'msg_activity_migration', 'member_activity_migration',
+        'agent_activity_migration', NULL, 'Preserve pending routing.',
+        'delivered', 2, '2026-08-25T01:20:00.000Z', '${now}', '${now}', NULL
+      );
       INSERT INTO run_events (
         run_id, trace_id, sequence, event_type, status, content, output_reset,
         error_json, assessment_json, created_at
       ) VALUES
-        ('${run.runId}', '${run.traceId}', 1, 'status', 'delivered', NULL, 0,
+        ('${runId}', 'trace_activity_migration', 1, 'status', 'delivered', NULL, 0,
           NULL, NULL, '${now}'),
-        ('${run.runId}', '${run.traceId}', 2, 'reply', NULL,
+        ('${runId}', 'trace_activity_migration', 2, 'reply', NULL,
           'Route this reply after restart.', 0, NULL, NULL, '${now}');
-      UPDATE runs SET state = 'delivered', last_sequence = 2 WHERE run_id = '${run.runId}';
       INSERT INTO run_reply_routing_intents (
         parent_run_id, reply_sequence, content, state, created_at, completed_at
       ) VALUES (
-        '${run.runId}', 2, 'Route this reply after restart.', 'pending', '${now}', NULL
+        '${runId}', 2, 'Route this reply after restart.', 'pending', '${now}', NULL
       );
     `);
     assert.equal((legacy.prepare(`
@@ -293,7 +295,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [23]);
+  assert.deepEqual(migrated.appliedVersions, [23, 24]);
   const database = openDatabase(databasePath);
   try {
     const runs = new RunRepository(database);

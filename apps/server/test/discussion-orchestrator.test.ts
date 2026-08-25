@@ -21,6 +21,7 @@ import { RunRepository, type RunRecord } from "../src/run/run-repository.js";
 import { AuthService, type WebPrincipal } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
+import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-23T10:00:00.000Z";
 
@@ -100,7 +101,8 @@ async function fixture(
     database,
     discussions,
     orchestrator: new DiscussionOrchestrator(
-      core, messages, discussions, runs, auth, () => clock.value
+      core, messages, discussions, runs, auth,
+      new AgentTaskRepository(database), () => clock.value
     ),
     restart: () => {
       const restartedDatabase = openDatabase(databasePath);
@@ -113,6 +115,7 @@ async function fixture(
         new DiscussionRepository(restartedDatabase),
         new RunRepository(restartedDatabase),
         restartedAuth,
+        new AgentTaskRepository(restartedDatabase),
         () => clock.value
       );
     },

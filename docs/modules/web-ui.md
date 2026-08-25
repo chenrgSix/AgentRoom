@@ -30,6 +30,8 @@ without changing server-owned state.
   including headings, lists, tables, task lists, links, images, and code blocks.
 - Unified Room composer for messages, single-Agent Runs, and adaptive
   multi-Agent Discussions.
+- Current-Task selector and Task creation flow; routed Messages and Discussions
+  always submit the selected Task and terminal Tasks disable new work.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
 - Agent roster with presence and capability summaries.
 - Run cards with live status, replies, cancellation, and failure details.

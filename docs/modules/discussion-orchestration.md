@@ -57,7 +57,7 @@ as reply-only evidence. Callback arrival order cannot change the projection.
 
 | Entity | Required State |
 | --- | --- |
-| Discussion | ID, Room, root Message, goal, participants, policy, execution model, current Wave, state, reason, version |
+| Discussion | ID, Room, Task, root Message, goal, participants, policy, execution model, current Wave, state, reason, version |
 | DiscussionWave | ID, Discussion, ordinal, phase, frozen input Message, expected members, deadline, state, version |
 | DiscussionTurn | ID, Wave, member ordinal, speaker, input Message, Run, output Message, terminal reason, assessment |
 | ProgressSnapshot | version, goal coverage, open questions, decisions, evidence, disagreement, plateau count |
@@ -69,6 +69,10 @@ be open for a Discussion. Member Turns are unique by `(waveId, memberOrdinal)`
 and `(waveId, speakerAgentId)`. A decision records the exact Discussion and
 ProgressSnapshot versions it used. This fences duplicate workers and stale
 evaluators from closing a barrier or scheduling the next Wave twice.
+
+Only one nonterminal Discussion may exist per Task. Independent Tasks in the
+same Room may have active Discussions concurrently; their root Messages,
+member Runs, result anchors, and finalization remain within the owning Task.
 
 ## Agent Run Report
 

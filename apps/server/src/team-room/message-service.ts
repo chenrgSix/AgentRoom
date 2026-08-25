@@ -55,6 +55,7 @@ export class MessageService {
     principal: WebPrincipal,
     input: {
       roomId: string;
+      taskId?: string;
       content: string;
       mentions?: MentionRecord[];
       parentMessageId?: string | null;
@@ -69,6 +70,7 @@ export class MessageService {
     principal: WebPrincipal,
     input: {
       roomId: string;
+      taskId?: string;
       content: string;
       mentions?: MentionRecord[];
       parentMessageId?: string | null;
@@ -132,6 +134,7 @@ export class MessageService {
     return this.repository.appendMessageWithResult({
       messageId: createOpaqueId("msg"),
       roomId: input.roomId,
+      ...(input.taskId ? { taskId: input.taskId } : {}),
       senderType: "member",
       senderId: member.memberId,
       content: input.content,
@@ -147,6 +150,7 @@ export class MessageService {
     principal: McpPrincipal,
     input: {
       roomId: string;
+      taskId?: string;
       content: string;
       parentMessageId?: string | null;
       now: string;
@@ -177,6 +181,7 @@ export class MessageService {
     return this.repository.appendMessage({
       messageId: createOpaqueId("msg"),
       roomId: input.roomId,
+      ...(input.taskId ? { taskId: input.taskId } : {}),
       senderType: "agent",
       senderId: agent.agentId,
       content: redactSensitiveText(input.content),

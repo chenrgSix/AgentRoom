@@ -21,6 +21,7 @@ import {
 interface DiscussionRow {
   discussion_id: string;
   room_id: string;
+  task_id: string;
   root_message_id: string;
   requester_member_id: string;
   goal: string;
@@ -118,6 +119,7 @@ function mapDiscussion(row: DiscussionRow): DiscussionRecord {
   return {
     discussionId: row.discussion_id,
     roomId: row.room_id,
+    taskId: row.task_id,
     rootMessageId: row.root_message_id,
     requesterMemberId: row.requester_member_id,
     goal: row.goal,
@@ -212,17 +214,18 @@ export class DiscussionRepository {
     this.database.transaction(() => {
       this.database.prepare(`
         INSERT INTO discussions (
-          discussion_id, room_id, root_message_id, requester_member_id, goal,
-          mode, state, state_reason, output_mode, policy_json, progress_json,
-          budget_json, execution_model, current_turn, current_wave,
-          next_speaker_index, requested_action, version, deadline_at,
-          created_at, updated_at, terminal_at
+          discussion_id, room_id, task_id, root_message_id,
+          requester_member_id, goal, mode, state, state_reason, output_mode,
+          policy_json, progress_json, budget_json, execution_model,
+          current_turn, current_wave, next_speaker_index, requested_action,
+          version, deadline_at, created_at, updated_at, terminal_at
         ) VALUES (
-          @discussionId, @roomId, @rootMessageId, @requesterMemberId, @goal,
-          @mode, @state, @stateReason, @outputMode, @policyJson, @progressJson,
-          @budgetJson, @executionModel, @currentTurn, @currentWave,
-          @nextSpeakerIndex, @requestedAction, @version, @deadlineAt,
-          @createdAt, @updatedAt, @terminalAt
+          @discussionId, @roomId, @taskId, @rootMessageId,
+          @requesterMemberId, @goal, @mode, @state, @stateReason,
+          @outputMode, @policyJson, @progressJson, @budgetJson,
+          @executionModel, @currentTurn, @currentWave, @nextSpeakerIndex,
+          @requestedAction, @version, @deadlineAt, @createdAt, @updatedAt,
+          @terminalAt
         )
       `).run({
         ...discussion,

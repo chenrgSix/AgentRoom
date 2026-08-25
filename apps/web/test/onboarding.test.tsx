@@ -63,6 +63,18 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     settingsRevision: 1,
     createdAt: "2026-08-23T00:01:00.000Z"
   };
+  const roomTask = {
+    taskId: "task_default",
+    roomId: room.roomId,
+    parentTaskId: null,
+    title: "Room work",
+    goal: "Continue Room work.",
+    state: "open",
+    primaryAgentId: null,
+    isDefault: true,
+    updatedAt: "2026-08-23T00:01:00.000Z"
+  };
+  const roomTasks = [roomTask];
   const member = {
     memberId: "member_test",
     teamId: team.teamId,
@@ -93,6 +105,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   const memberMessage = {
     messageId: "message_member",
     roomId: room.roomId,
+    taskId: roomTask.taskId,
     sequence: 1,
     senderType: "member" as const,
     senderId: member.memberId,
@@ -103,6 +116,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   const agentMessage = {
     messageId: "message_agent",
     roomId: room.roomId,
+    taskId: roomTask.taskId,
     sequence: 2,
     senderType: "agent" as const,
     senderId: agent.agentId,
@@ -135,12 +149,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   let streamChangeDelivered = false;
   const discussionRuns = [{
     runId: "run_review",
+    taskId: roomTask.taskId,
     triggerMessageId: "message_wave_review",
     targetAgentId: agent.agentId,
     state: "completed" as const,
     updatedAt: "2026-08-23T00:04:01.000Z"
   }, {
     runId: "run_builder",
+    taskId: roomTask.taskId,
     triggerMessageId: "message_wave_builder",
     targetAgentId: secondAgent.agentId,
     state: "working" as const,
@@ -149,6 +165,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   const discussionView = () => ({
     discussion: {
       discussionId: "discussion_test",
+      taskId: roomTask.taskId,
       goal: discussionGoal,
       state: discussionState || "active",
       stateReason: discussionState === "stop_requested" ? "user_requested_finish" : null,
@@ -329,6 +346,22 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     }
     if (path === `/api/rooms/${room.roomId}/runs`) {
       return jsonResponse(discussionState ? discussionRuns : []);
+    }
+    if (path === `/api/rooms/${room.roomId}/tasks` && method === "POST") {
+      const body = JSON.parse(String(init.body)) as { title: string; goal: string };
+      const task = {
+        ...roomTask,
+        taskId: "task_oauth",
+        title: body.title,
+        goal: body.goal,
+        isDefault: false,
+        updatedAt: "2026-08-23T00:05:00.000Z"
+      };
+      roomTasks.push(task);
+      return jsonResponse(task);
+    }
+    if (path === `/api/rooms/${room.roomId}/tasks`) {
+      return jsonResponse(roomTasks);
     }
     if (path.startsWith("/api/runs/run_builder/events?after=")) {
       const after = Number.parseInt(path.split("after=")[1] ?? "0", 10);
@@ -643,6 +676,31 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.equal(new Headers(revokeRequest.headers).has("content-type"), false);
 
     fireEvent.click(screen.getByRole("button", { name: "对话" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ 新任务" }));
+    const taskDialog = await screen.findByRole("dialog", { name: "创建长期任务" });
+    fireEvent.change(within(taskDialog).getByLabelText("任务名称"), {
+      target: { value: "OAuth 迁移" }
+    });
+    fireEvent.change(within(taskDialog).getByLabelText("目标与完成口径"), {
+      target: { value: "完成 OAuth 迁移并通过回归测试。" }
+    });
+    fireEvent.click(within(taskDialog).getByRole("button", { name: "创建并切换" }));
+    await waitFor(() => assert.equal(
+      (screen.getByLabelText("当前任务") as HTMLSelectElement).value,
+      "task_oauth"
+    ));
+    const createTaskRequest = requests.find((candidate) =>
+      candidate.path === `/api/rooms/${room.roomId}/tasks` &&
+      candidate.method === "POST"
+    );
+    assert.deepEqual(JSON.parse(createTaskRequest?.body ?? "{}"), {
+      title: "OAuth 迁移",
+      goal: "完成 OAuth 迁移并通过回归测试。"
+    });
+    fireEvent.change(screen.getByLabelText("当前任务"), {
+      target: { value: roomTask.taskId }
+    });
+
     const roomMessageInput = screen.getByLabelText("消息");
     fireEvent.change(roomMessageInput, { target: { value: "请回答" } });
     fireEvent.click(screen.getByRole("button", { name: "发送" }));
@@ -727,6 +785,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
         candidate.method === "POST"
       );
       assert.deepEqual(JSON.parse(request?.body ?? "{}"), {
+        taskId: roomTask.taskId,
         goal: "确定交付恢复规则 @all",
         participantAgentIds: [agent.agentId, secondAgent.agentId],
         mode: "round_robin",

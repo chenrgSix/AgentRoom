@@ -4,6 +4,7 @@ import type { RunRecord, RunRepository } from "../run/run-repository.js";
 import type { AuthService, WebPrincipal } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import type { MessageService } from "../team-room/message-service.js";
+import type { AgentTaskRepository } from "../task/task-repository.js";
 import {
   grantDiscussionLease,
   inspectBudget,
@@ -114,6 +115,7 @@ export class DiscussionOrchestrator {
     private readonly repository: DiscussionRepository,
     private readonly runs: RunRepository,
     private readonly auth: AuthService,
+    private readonly tasks: AgentTaskRepository,
     private readonly clock: () => string
   ) {}
 
@@ -121,6 +123,7 @@ export class DiscussionOrchestrator {
     principal: WebPrincipal,
     input: {
       roomId: string;
+      taskId?: string;
       goal: string;
       participantAgentIds: string[];
       mode?: DiscussionMode;
@@ -152,12 +155,22 @@ export class DiscussionOrchestrator {
     if (!room.collaborationPolicy.allowDiscussion) {
       throw new Error("Room policy does not allow Agent Discussions");
     }
+    const task = input.taskId
+      ? this.tasks.get(input.taskId)
+      : this.tasks.getDefaultForRoom(input.roomId);
+    if (
+      !task || task.roomId !== input.roomId ||
+      task.state === "completed" || task.state === "canceled"
+    ) {
+      throw new Error("Discussion Task must be runnable in the target Room");
+    }
     const openDiscussion = this.repository.listForRoom(input.roomId).find(
-      ({ state }) => !terminalDiscussionStates.has(state)
+      ({ state, taskId }) => taskId === task.taskId &&
+        !terminalDiscussionStates.has(state)
     );
     if (openDiscussion) {
       throw new Error(
-        `Room already has an active Discussion: ${openDiscussion.discussionId}`
+        `Task already has an active Discussion: ${openDiscussion.discussionId}`
       );
     }
     const participantAgents = uniqueAgentIds.map((agentId) => {
@@ -186,6 +199,7 @@ export class DiscussionOrchestrator {
     }
     const rootMessage = this.messages.createMemberMessage(principal, {
       roomId: input.roomId,
+      taskId: task.taskId,
       content: goal,
       mentions: participantAgents.map((agent) => ({
         targetType: "agent" as const,
@@ -201,6 +215,7 @@ export class DiscussionOrchestrator {
     const discussion: DiscussionRecord = {
       discussionId,
       roomId: input.roomId,
+      taskId: task.taskId,
       rootMessageId: rootMessage.messageId,
       requesterMemberId: member.memberId,
       goal,
@@ -1223,6 +1238,7 @@ export class DiscussionOrchestrator {
       runId: createOpaqueId("run"),
       traceId: inputMessage.traceId,
       roomId: discussion.roomId,
+      taskId: discussion.taskId,
       triggerMessageId: turn.inputMessageId,
       requesterMemberId: discussion.requesterMemberId,
       targetAgentId: turn.speakerAgentId,
@@ -1288,6 +1304,7 @@ export class DiscussionOrchestrator {
     this.core.appendMessage({
       messageId,
       roomId: discussion.roomId,
+      taskId: discussion.taskId,
       senderType: "system",
       senderId: discussion.discussionId,
       content: "继续讨论：上一轮没有产生可复用的新输入，已创建新的执行锚点。",
@@ -1435,6 +1452,7 @@ export class DiscussionOrchestrator {
     this.core.appendMessage({
       messageId,
       roomId: discussion.roomId,
+      taskId: discussion.taskId,
       senderType: "system",
       senderId: discussion.discussionId,
       content: [`第 ${wave.ordinal} 轮已收敛。`, ...lines].join("\n"),
@@ -1516,6 +1534,7 @@ export class DiscussionOrchestrator {
     this.core.appendMessage({
       messageId: fallbackMessageId,
       roomId: discussion.roomId,
+      taskId: discussion.taskId,
       senderType: "system",
       senderId: discussion.discussionId,
       content: `讨论已停止，最终生成器未能完成。\n\n未决问题：\n${unresolved}`,

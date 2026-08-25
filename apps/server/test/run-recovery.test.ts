@@ -19,6 +19,7 @@ import { RunService } from "../src/run/run-service.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
+import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-22T10:00:00.000Z";
 
@@ -34,7 +35,9 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
   const agents = new AgentService(core, auth);
   const messages = new MessageService(core, auth);
   const runRepository = new RunRepository(database);
-  const runs = new RunService(core, runRepository, auth);
+  const runs = new RunService(
+    core, runRepository, auth, new AgentTaskRepository(database)
+  );
   const created = teams.createTeamForUser({
     userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6", userDisplayName: "Alice",
     teamName: "Recovery Team", now
@@ -119,7 +122,9 @@ test("server restart completes a partially routed Agent reply exactly once", asy
   const agents = new AgentService(core, auth);
   const messages = new MessageService(core, auth);
   const runRepository = new RunRepository(database);
-  const runs = new RunService(core, runRepository, auth);
+  const runs = new RunService(
+    core, runRepository, auth, new AgentTaskRepository(database)
+  );
   const handoffs = new HandoffService(core, runRepository);
   const created = teams.createTeamForUser({
     userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4R0UT",

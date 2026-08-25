@@ -8,8 +8,8 @@
 
 The server persistence layer owns durable Team, Room, explicit human and Agent
 Room participation, Message, Agent projection, Run, delivery, Discussion Wave,
-and audit records. SQLite is the MVP database for a single central server
-instance.
+Agent Task, and audit records. SQLite is the MVP database for a single central
+server instance.
 
 ## Storage Model
 
@@ -37,6 +37,11 @@ Turns. Member identity is unique within the Wave. Run `orchestrationKey` is a
 unique nullable recovery key; Discussion member Runs use their `turnId`.
 Existing sequential Turns migrate to singleton Waves before new parallel Waves
 are scheduled.
+
+Migration 0024 creates one default Agent Task per existing Room and adds Task
+identity to existing Messages, Runs, and Discussions. Triggers reject
+cross-Room references, and a partial unique index enforces one active
+Discussion per Task rather than per Room.
 
 After an ordinary Wave settles, Discussion Orchestration appends an idempotent
 `wave_result` system Message with an ID derived from the Wave ID. This Message is

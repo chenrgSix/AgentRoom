@@ -53,6 +53,17 @@ const room = {
   settingsRevision: 1,
   teamId: team.teamId
 };
+const task = {
+  taskId: "task_default",
+  roomId: room.roomId,
+  parentTaskId: null,
+  title: "Room work",
+  goal: "Continue Room work.",
+  state: "open",
+  primaryAgentId: null,
+  isDefault: true,
+  updatedAt: "2026-08-24T00:00:00.000Z"
+};
 const agents = [{
   agentId: "agent_solver",
   integrationMode: "managed",
@@ -80,6 +91,7 @@ function installFixture(input: {
     currentTurn: input.turns.length,
     currentWave: input.currentWave,
     discussionId: "discussion_test",
+    taskId: task.taskId,
     goal: "确定可靠的交付方案",
     progress: { confidence: 0.7, openQuestions: [], plateauCount: 0 },
     state: input.discussionState,
@@ -117,6 +129,7 @@ function installFixture(input: {
       });
     }
     if (path === `/api/rooms/${room.roomId}/runs`) return jsonResponse(input.runs);
+    if (path === `/api/rooms/${room.roomId}/tasks`) return jsonResponse([task]);
     if (path === `/api/rooms/${room.roomId}/discussions`) {
       return jsonResponse([{
         discussion,

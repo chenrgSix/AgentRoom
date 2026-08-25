@@ -66,6 +66,11 @@ import { TeamRoomService } from "./team-room/team-room-service.js";
 import { TeamChangeService } from "./team-room/team-change-service.js";
 import { MessageService } from "./team-room/message-service.js";
 import type { RoomCollaborationPolicy } from "./team-room/room-collaboration-policy.js";
+import { AgentTaskService } from "./task/agent-task-service.js";
+import {
+  AgentTaskRepository,
+  type AgentTaskState
+} from "./task/task-repository.js";
 
 export interface ServerAppOptions {
   anonymousRateLimit?: {
@@ -262,8 +267,10 @@ export async function createServerApp(
   const pairing = new BridgePairingService(database, core, auth);
   const clock = options.clock ?? (() => new Date().toISOString());
   const runRepository = new RunRepository(database);
+  const taskRepository = new AgentTaskRepository(database);
+  const tasks = new AgentTaskService(taskRepository, core, auth);
   const traces = new TraceRepository(database);
-  const runs = new RunService(core, runRepository, auth);
+  const runs = new RunService(core, runRepository, auth, taskRepository);
   const executor = new InProcessRunExecutor(core, runRepository, clock);
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
   const bridgeConnections = new BridgeConnectionRegistry();
@@ -289,6 +296,7 @@ export async function createServerApp(
     discussionRepository,
     runRepository,
     auth,
+    taskRepository,
     clock
   );
   let discussionSweepTimer: ReturnType<typeof setInterval> | undefined;
@@ -520,6 +528,10 @@ export async function createServerApp(
       if (!changedTeamId && params.agentId) {
         changedTeamId = core.getAgent(params.agentId)?.teamId;
       }
+      if (!changedTeamId && params.taskId) {
+        const task = taskRepository.get(params.taskId);
+        changedTeamId = task ? core.getRoom(task.roomId)?.teamId : undefined;
+      }
       if (changedTeamId) {
         const roomId = params.roomId;
         const roomTimelineMutation =
@@ -571,7 +583,8 @@ export async function createServerApp(
     const message = error instanceof Error ? error.message : "Unexpected error";
     const statusCode = message.includes("UNIQUE constraint failed") ||
       message === "Room settings changed; reload and retry" ||
-      message.startsWith("Room already has an active Discussion:")
+      message.startsWith("Room already has an active Discussion:") ||
+      message.startsWith("Task already has an active Discussion:")
       ? 409
       : 400;
     app.log.warn({
@@ -1273,6 +1286,73 @@ export async function createServerApp(
       request.params.roomId
     )
   );
+  app.get<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/tasks",
+    async (request) => tasks.list(principal(request), request.params.roomId)
+  );
+  app.post<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/tasks",
+    async (request) => {
+      const body = bodyObject(request);
+      return tasks.create(principal(request), {
+        roomId: request.params.roomId,
+        title: requiredString(body.title, "title", 160),
+        goal: requiredString(body.goal, "goal", 20_000),
+        ...(body.parentTaskId === undefined
+          ? {}
+          : {
+              parentTaskId: body.parentTaskId === null
+                ? null
+                : requiredString(body.parentTaskId, "parentTaskId", 140)
+            }),
+        ...(body.primaryAgentId === undefined
+          ? {}
+          : {
+              primaryAgentId: body.primaryAgentId === null
+                ? null
+                : requiredString(body.primaryAgentId, "primaryAgentId", 140)
+            }),
+        ...(body.workspaceRef === undefined
+          ? {}
+          : {
+              workspaceRef: body.workspaceRef === null
+                ? null
+                : requiredString(body.workspaceRef, "workspaceRef", 512)
+            })
+      }, clock());
+    }
+  );
+  app.patch<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId",
+    async (request) => {
+      const body = bodyObject(request);
+      return tasks.update(principal(request), request.params.taskId, {
+        ...(body.title === undefined
+          ? {}
+          : { title: requiredString(body.title, "title", 160) }),
+        ...(body.goal === undefined
+          ? {}
+          : { goal: requiredString(body.goal, "goal", 20_000) }),
+        ...(body.state === undefined
+          ? {}
+          : { state: requiredString(body.state, "state") as AgentTaskState }),
+        ...(body.primaryAgentId === undefined
+          ? {}
+          : {
+              primaryAgentId: body.primaryAgentId === null
+                ? null
+                : requiredString(body.primaryAgentId, "primaryAgentId", 140)
+            }),
+        ...(body.workspaceRef === undefined
+          ? {}
+          : {
+              workspaceRef: body.workspaceRef === null
+                ? null
+                : requiredString(body.workspaceRef, "workspaceRef", 512)
+            })
+      }, clock());
+    }
+  );
   app.put<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/participants",
     async (request) => {
@@ -1581,6 +1661,9 @@ export async function createServerApp(
       }
       const persisted = messages.createMemberMessageResult(actor, {
         roomId: request.params.roomId,
+        ...(body.taskId === undefined
+          ? {}
+          : { taskId: requiredString(body.taskId, "taskId", 140) }),
         content: requiredString(body.content, "content", 20_000),
         ...(body.clientMessageId === undefined
           ? {}
@@ -1678,6 +1761,9 @@ export async function createServerApp(
       }
       const result = discussions.create(principal(request), {
         roomId: request.params.roomId,
+        ...(body.taskId === undefined
+          ? {}
+          : { taskId: requiredString(body.taskId, "taskId", 140) }),
         goal: requiredString(body.goal, "goal", 20_000),
         participantAgentIds: body.participantAgentIds,
         ...(body.mode === undefined

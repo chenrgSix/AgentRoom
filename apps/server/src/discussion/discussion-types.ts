@@ -100,6 +100,7 @@ export interface BudgetSnapshot {
 export interface DiscussionRecord {
   discussionId: string;
   roomId: string;
+  taskId: string;
   rootMessageId: string;
   requesterMemberId: string;
   goal: string;

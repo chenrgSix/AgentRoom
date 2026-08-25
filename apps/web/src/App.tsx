@@ -92,6 +92,7 @@ interface Agent {
 interface Message {
   messageId: string;
   roomId: string;
+  taskId: string;
   sequence: number;
   senderType: "member" | "agent" | "system";
   senderId: string;
@@ -142,6 +143,7 @@ interface Device {
 
 interface Run {
   runId: string;
+  taskId: string;
   triggerMessageId: string;
   targetAgentId: string;
   state: "queued" | "delivered" | "working" | "input_required" | "completed" | "failed" | "canceled" | "expired" | "outcome_unknown";
@@ -162,6 +164,7 @@ type DiscussionState =
 interface DiscussionView {
   discussion: {
     discussionId: string;
+    taskId: string;
     goal: string;
     state: DiscussionState;
     stateReason: string | null;
@@ -202,6 +205,26 @@ interface DiscussionView {
     waveMemberOrdinal: number | null;
     terminalReason: string | null;
   }>;
+}
+
+type AgentTaskState =
+  | "open"
+  | "working"
+  | "blocked"
+  | "review"
+  | "completed"
+  | "canceled";
+
+interface AgentTask {
+  taskId: string;
+  roomId: string;
+  parentTaskId: string | null;
+  title: string;
+  goal: string;
+  state: AgentTaskState;
+  primaryAgentId: string | null;
+  isDefault: boolean;
+  updatedAt: string;
 }
 
 interface LocalSession {
@@ -804,11 +827,14 @@ export function App() {
     Record<string, RunDiagnostic | null>
   >({});
   const [discussions, setDiscussions] = useState<DiscussionView[]>([]);
+  const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
+  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<WorkspaceView>("room");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
+  const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [lifecycleDialogOpen, setLifecycleDialogOpen] = useState(false);
   const [lifecycleTeams, setLifecycleTeams] = useState<Team[]>([]);
   const [lifecycleRooms, setLifecycleRooms] = useState<Room[]>([]);
@@ -827,6 +853,8 @@ export function App() {
     number | null
   >(null);
   const [teamName, setTeamName] = useState("");
+  const [taskTitle, setTaskTitle] = useState("");
+  const [taskGoal, setTaskGoal] = useState("");
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
   const [manualAgentName, setManualAgentName] = useState("");
@@ -846,6 +874,7 @@ export function App() {
   const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [teamBusy, setTeamBusy] = useState(false);
+  const [taskBusy, setTaskBusy] = useState(false);
   const [participantBusy, setParticipantBusy] = useState(false);
   const [composerBusy, setComposerBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -905,6 +934,10 @@ export function App() {
     () => rooms.find((room) => room.roomId === selectedRoomId) ?? null,
     [rooms, selectedRoomId]
   );
+  const selectedTask = useMemo(
+    () => tasks.find((task) => task.taskId === selectedTaskId) ?? null,
+    [selectedTaskId, tasks]
+  );
   const selectedRoomPolicy = collaborationPolicyFor(selectedRoom);
   const agentsById = useMemo(
     () => new Map(agents.map((agent) => [agent.agentId, agent])),
@@ -963,12 +996,18 @@ export function App() {
     teamId === lifecycleTeamId
   ) ?? null;
   const t = (key: TranslationKey) => translate(locale, key);
-  const activeDiscussion = [...discussions].reverse().find(({ discussion }) =>
+  const taskDiscussions = discussions.filter(({ discussion }) =>
+    discussion.taskId === selectedTaskId
+  );
+  const activeDiscussion = [...taskDiscussions].reverse().find(({ discussion }) =>
     !["completed", "canceled", "terminated"].includes(discussion.state)
   ) ?? null;
   const roomHasActiveRuns = runs.some(({ state }) => activeRunStates.has(state));
-  const roomHasActiveWork = roomHasActiveRuns || activeDiscussion !== null;
-  const visibleDiscussion = activeDiscussion ?? discussions.at(-1) ?? null;
+  const roomHasActiveDiscussion = discussions.some(({ discussion }) =>
+    !["completed", "canceled", "terminated"].includes(discussion.state)
+  );
+  const roomHasActiveWork = roomHasActiveRuns || roomHasActiveDiscussion;
+  const visibleDiscussion = activeDiscussion ?? taskDiscussions.at(-1) ?? null;
   const activeWave = visibleDiscussion?.waves.find(({ ordinal, state }) =>
     state === "open" && ordinal === visibleDiscussion.discussion.currentWave
   ) ?? visibleDiscussion?.waves.findLast(({ state }) => state === "open")
@@ -1004,10 +1043,10 @@ export function App() {
   const visibleDiscussionExpanded = visibleDiscussion?.discussion.discussionId === expandedDiscussionId;
 
   useEffect(() => {
-    if (!visibleDiscussion || ["completed", "canceled", "terminated"].includes(visibleDiscussion.discussion.state)) {
-      setExpandedDiscussionId(null);
-    }
-  }, [visibleDiscussion?.discussion.discussionId, visibleDiscussion?.discussion.state]);
+    setExpandedDiscussionId((current) =>
+      current && current !== visibleDiscussion?.discussion.discussionId ? null : current
+    );
+  }, [visibleDiscussion?.discussion.discussionId]);
 
   useEffect(() => {
     setRoomActionsOpen(false);
@@ -1395,6 +1434,8 @@ export function App() {
       setRunDiagnostics({});
       diagnosticRequestsRef.current.clear();
       setDiscussions([]);
+      setTasks([]);
+      setSelectedTaskId(null);
       messageSyncRef.current = null;
       return;
     }
@@ -1413,6 +1454,8 @@ export function App() {
     setRoomParticipants({ memberIds: [], agentIds: [] });
     setRunDiagnostics({});
     diagnosticRequestsRef.current.clear();
+    setTasks([]);
+    setSelectedTaskId(null);
     void Promise.all([
       jsonRequest<RoomMessagePage>(
         `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`,
@@ -1433,8 +1476,13 @@ export function App() {
         `/api/rooms/${selectedRoomId}/settings`,
         {},
         session.token
+      ),
+      jsonRequest<AgentTask[]>(
+        `/api/rooms/${selectedRoomId}/tasks`,
+        {},
+        session.token
       )
-    ]).then(async ([page, nextRuns, nextDiscussions, nextSettings]) => {
+    ]).then(async ([page, nextRuns, nextDiscussions, nextSettings, nextTasks]) => {
       const outputBatches = await loadRunOutputEvents(
         nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
         session.token
@@ -1449,6 +1497,14 @@ export function App() {
       setRuns(nextRuns);
       commitRunOutputEvents(nextRuns, outputBatches);
       setDiscussions(nextDiscussions);
+      setTasks(nextTasks);
+      setSelectedTaskId((current) =>
+        nextTasks.some(({ taskId }) => taskId === current)
+          ? current
+          : nextTasks.find(({ state }) =>
+              state !== "completed" && state !== "canceled"
+            )?.taskId ?? nextTasks[0]?.taskId ?? null
+      );
       setRoomParticipants(nextSettings.participants);
       setRooms((current) => current.map((room) =>
         room.roomId === nextSettings.room.roomId ? nextSettings.room : room
@@ -1511,6 +1567,9 @@ export function App() {
             ),
             jsonRequest<DiscussionView[]>(
               `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
+            ),
+            jsonRequest<AgentTask[]>(
+              `/api/rooms/${selectedRoomId}/tasks`, {}, session.token
             )
           ]),
           scope === "full"
@@ -1530,7 +1589,7 @@ export function App() {
               ])
             : Promise.resolve(null)
         ]);
-        const [nextRuns, nextDiscussions] = roomState;
+        const [nextRuns, nextDiscussions, nextTasks] = roomState;
         const outputBatches = await loadRunOutputEvents(
           nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
           session.token
@@ -1552,6 +1611,14 @@ export function App() {
           setRuns(nextRuns);
           commitRunOutputEvents(nextRuns, outputBatches);
           setDiscussions(nextDiscussions);
+          setTasks(nextTasks);
+          setSelectedTaskId((current) =>
+            nextTasks.some(({ taskId }) => taskId === current)
+              ? current
+              : nextTasks.find(({ state }) =>
+                  state !== "completed" && state !== "canceled"
+                )?.taskId ?? nextTasks[0]?.taskId ?? null
+          );
           if (teamState) {
             const [nextAgents, nextMembers, nextDevices, nextSettings] = teamState;
             setAgents(nextAgents);
@@ -1700,6 +1767,34 @@ export function App() {
       setError(String(reason));
     } finally {
       setTeamBusy(false);
+    }
+  }
+
+  async function createAgentTask(event: FormEvent) {
+    event.preventDefault();
+    if (
+      !session || !selectedRoomId || !taskTitle.trim() || !taskGoal.trim()
+    ) return;
+    setTaskBusy(true);
+    setError(null);
+    try {
+      const task = await jsonRequest<AgentTask>(
+        `/api/rooms/${selectedRoomId}/tasks`,
+        {
+          method: "POST",
+          body: JSON.stringify({ title: taskTitle, goal: taskGoal })
+        },
+        session.token
+      );
+      setTasks((current) => [...current, task]);
+      setSelectedTaskId(task.taskId);
+      setTaskTitle("");
+      setTaskGoal("");
+      setTaskDialogOpen(false);
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setTaskBusy(false);
     }
   }
 
@@ -1982,7 +2077,7 @@ export function App() {
 
   async function refreshRoomState() {
     if (!session || !selectedRoomId) return;
-    const [page, nextRuns, nextDiscussions] = await Promise.all([
+    const [page, nextRuns, nextDiscussions, nextTasks] = await Promise.all([
       jsonRequest<RoomMessagePage>(
         `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`, {}, session.token
       ),
@@ -1991,6 +2086,9 @@ export function App() {
       ),
       jsonRequest<DiscussionView[]>(
         `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
+      ),
+      jsonRequest<AgentTask[]>(
+        `/api/rooms/${selectedRoomId}/tasks`, {}, session.token
       )
     ]);
     setMessages((current) => mergeRoomMessages(current, page.items));
@@ -2009,11 +2107,22 @@ export function App() {
     }
     setRuns(nextRuns);
     setDiscussions(nextDiscussions);
+    setTasks(nextTasks);
+    setSelectedTaskId((current) =>
+      nextTasks.some(({ taskId }) => taskId === current)
+        ? current
+        : nextTasks.find(({ state }) =>
+            state !== "completed" && state !== "canceled"
+          )?.taskId ?? nextTasks[0]?.taskId ?? null
+    );
   }
 
   async function submitComposer(event: FormEvent) {
     event.preventDefault();
-    if (!session || !selectedRoomId || !messageContent.trim()) return;
+    if (
+      !session || !selectedRoomId || !selectedTaskId ||
+      !messageContent.trim()
+    ) return;
     const exactCommands = resolveExactMentionCommands(
       messageContent,
       roomAgents,
@@ -2072,6 +2181,7 @@ export function App() {
           {
             method: "POST",
             body: JSON.stringify({
+              taskId: selectedTaskId,
               goal: messageContent,
               participantAgentIds: resolvedMentionAgentIds,
               mode: "round_robin",
@@ -2095,6 +2205,7 @@ export function App() {
     const pending: PendingRoomMessage = {
       clientMessageId: createClientMessageId(),
       roomId: selectedRoomId,
+      taskId: selectedTaskId,
       content: messageContent,
       ...(resolvedMentionAgentIds.length > 0
         ? { mentionAgentIds: resolvedMentionAgentIds }
@@ -2121,6 +2232,7 @@ export function App() {
         {
           method: "POST",
           body: JSON.stringify({
+            ...(pending.taskId ? { taskId: pending.taskId } : {}),
             content: pending.content,
             clientMessageId: pending.clientMessageId,
             ...(pending.mentionAgentIds?.length === 1
@@ -3210,6 +3322,33 @@ export function App() {
             )}
             <form className="composer" onSubmit={(event) => void submitComposer(event)}>
               <div className="composer-input">
+                <div className="task-context">
+                  <label>
+                    <span>{locale === "zh-CN" ? "当前任务" : "Current Task"}</span>
+                    <select
+                      aria-label={locale === "zh-CN" ? "当前任务" : "Current Task"}
+                      onChange={(event) => setSelectedTaskId(event.target.value)}
+                      value={selectedTaskId ?? ""}
+                    >
+                      {tasks.map((task) => (
+                        <option key={task.taskId} value={task.taskId}>
+                          {task.title}{task.isDefault
+                            ? (locale === "zh-CN" ? " · 默认" : " · default")
+                            : ""} · {task.state}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  {selectedTask && (
+                    <span className={`task-state ${selectedTask.state}`}>
+                      {selectedTask.state}
+                    </span>
+                  )}
+                  <button
+                    onClick={() => setTaskDialogOpen(true)}
+                    type="button"
+                  >{locale === "zh-CN" ? "+ 新任务" : "+ New Task"}</button>
+                </div>
                 <div className="room-policy-summary" aria-label={locale === "zh-CN" ? "当前房间协作策略" : "Current Room collaboration policy"}>
                   <span className={`policy-mode ${selectedRoomPolicy.allowDiscussion ? "discussion" : "single"}`}>
                     {selectedRoomPolicy.allowDiscussion
@@ -3316,13 +3455,91 @@ export function App() {
                   value={messageContent}
                 />
               </div>
-              <button className="composer-send" disabled={composerBusy}>
+              <button
+                className="composer-send"
+                disabled={composerBusy || !selectedTask ||
+                  selectedTask.state === "completed" ||
+                  selectedTask.state === "canceled"}
+              >
                 {composerBusy ? t("sending") : t("send")}
               </button>
             </form>
           </div>
         )}
       </main>
+      {taskDialogOpen && selectedRoom && (
+        <div className="modal-backdrop" onMouseDown={(event) => {
+          if (event.currentTarget === event.target && !taskBusy) {
+            setTaskDialogOpen(false);
+          }
+        }}>
+          <section
+            aria-labelledby="new-task-dialog-title"
+            aria-modal="true"
+            className="modal-card"
+            role="dialog"
+          >
+            <div className="modal-heading">
+              <div>
+                <p className="eyebrow">#{selectedRoom.name}</p>
+                <h3 id="new-task-dialog-title">
+                  {locale === "zh-CN" ? "创建长期任务" : "Create long-lived Task"}
+                </h3>
+              </div>
+              <button
+                aria-label={t("cancel")}
+                disabled={taskBusy}
+                onClick={() => setTaskDialogOpen(false)}
+                type="button"
+              >×</button>
+            </div>
+            <p>
+              {locale === "zh-CN"
+                ? "后续 Run、Discussion 和本地 Agent Session 都会归属于这个任务，避免与同一房间里的其他工作串上下文。"
+                : "Future Runs, Discussions, and local Agent Sessions use this Task scope instead of sharing unrelated Room work."}
+            </p>
+            <form className="modal-form" onSubmit={(event) => void createAgentTask(event)}>
+              <label htmlFor="new-task-title">
+                {locale === "zh-CN" ? "任务名称" : "Task title"}
+              </label>
+              <input
+                autoComplete="off"
+                autoFocus
+                id="new-task-title"
+                maxLength={160}
+                onChange={(event) => setTaskTitle(event.target.value)}
+                required
+                value={taskTitle}
+              />
+              <label htmlFor="new-task-goal">
+                {locale === "zh-CN" ? "目标与完成口径" : "Goal and completion criteria"}
+              </label>
+              <textarea
+                id="new-task-goal"
+                maxLength={20_000}
+                onChange={(event) => setTaskGoal(event.target.value)}
+                required
+                rows={4}
+                value={taskGoal}
+              />
+              <div className="modal-actions">
+                <button
+                  className="secondary-action"
+                  disabled={taskBusy}
+                  onClick={() => setTaskDialogOpen(false)}
+                  type="button"
+                >{t("cancel")}</button>
+                <button
+                  className="primary-action"
+                  disabled={taskBusy || !taskTitle.trim() || !taskGoal.trim()}
+                >{taskBusy
+                    ? (locale === "zh-CN" ? "创建中…" : "Creating…")
+                    : (locale === "zh-CN" ? "创建并切换" : "Create and switch")}</button>
+              </div>
+            </form>
+          </section>
+        </div>
+      )}
       {teamDialogOpen && (
         <div className="modal-backdrop" onMouseDown={(event) => {
           if (event.currentTarget === event.target) setTeamDialogOpen(false);

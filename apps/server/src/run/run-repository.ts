@@ -17,6 +17,7 @@ export interface RunRecord {
   runId: string;
   traceId: string;
   roomId: string;
+  taskId: string;
   triggerMessageId: string;
   requesterMemberId: string;
   targetAgentId: string;
@@ -57,6 +58,7 @@ interface RunRow {
   run_id: string;
   trace_id: string;
   room_id: string;
+  task_id: string;
   trigger_message_id: string;
   requester_member_id: string;
   target_agent_id: string;
@@ -107,6 +109,7 @@ function mapRun(row: RunRow): RunRecord {
     runId: row.run_id,
     traceId: row.trace_id,
     roomId: row.room_id,
+    taskId: row.task_id,
     triggerMessageId: row.trigger_message_id,
     requesterMemberId: row.requester_member_id,
     targetAgentId: row.target_agent_id,
@@ -191,13 +194,15 @@ export class RunRepository {
   public createRuns(runs: RunRecord[]): RunRecord[] {
     const insert = this.database.prepare(`
       INSERT INTO runs (
-        run_id, trace_id, room_id, trigger_message_id, requester_member_id,
-        target_agent_id, parent_run_id, instruction, state, last_sequence,
-        deadline_at, created_at, updated_at, terminal_at, orchestration_key
+        run_id, trace_id, room_id, task_id, trigger_message_id,
+        requester_member_id, target_agent_id, parent_run_id, instruction,
+        state, last_sequence, deadline_at, created_at, updated_at, terminal_at,
+        orchestration_key
       ) VALUES (
-        @runId, @traceId, @roomId, @triggerMessageId, @requesterMemberId,
-        @targetAgentId, @parentRunId, @instruction, @state, @lastSequence,
-        @deadlineAt, @createdAt, @updatedAt, @terminalAt, @orchestrationKey
+        @runId, @traceId, @roomId, @taskId, @triggerMessageId,
+        @requesterMemberId, @targetAgentId, @parentRunId, @instruction,
+        @state, @lastSequence, @deadlineAt, @createdAt, @updatedAt,
+        @terminalAt, @orchestrationKey
       )
     `);
     this.database.transaction(() => {

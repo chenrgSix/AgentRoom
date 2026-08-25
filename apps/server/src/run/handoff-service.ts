@@ -137,6 +137,7 @@ export class HandoffService {
       runId: createOpaqueId("run"),
       traceId: parent.traceId,
       roomId: parent.roomId,
+      taskId: parent.taskId,
       triggerMessageId: parent.triggerMessageId,
       requesterMemberId: parent.requesterMemberId,
       targetAgentId: target.agentId,

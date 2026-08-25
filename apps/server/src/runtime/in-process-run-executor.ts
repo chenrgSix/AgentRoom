@@ -102,6 +102,7 @@ export class InProcessRunExecutor {
     this.core.appendMessage({
       messageId: createOpaqueId("msg"),
       roomId: run.roomId,
+      taskId: run.taskId,
       senderType: "agent",
       senderId: run.targetAgentId,
       content: event.content,

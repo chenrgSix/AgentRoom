@@ -40,7 +40,7 @@ persisted Message before routing or realtime broadcast.
 | Room human participant | roomId, memberId, addedAt |
 | Room Agent participant | roomId, agentId, addedAt |
 | Member | referenced by Registry and Security |
-| Message | messageId, roomId, senderRef, content, mentions, parentId, createdAt |
+| Message | messageId, roomId, taskId, senderRef, content, mentions, parentId, createdAt |
 | Mention | type, targetId, displayLabel |
 
 Message content is immutable in MVP. Deletion, editing, reactions, attachments,
@@ -84,10 +84,12 @@ capability restores the chosen bound.
 1. Authenticate the actor and authorize Room membership.
 2. Validate content size, the maximum five structured Mention IDs, and the
    Room's `@all` policy when the exact reserved command is present.
-3. Verify every Agent Mention is visible to the actor in the Room.
-4. Persist Message and Mentions in one transaction.
-5. Commit before emitting `message.created`.
-6. Let Run Orchestration consume the committed event.
+3. Resolve an explicit Task or the Room's default Task and reject cross-Room or
+   terminal Task routing.
+4. Verify every Agent Mention is visible to the actor in the Room.
+5. Persist Message, Task identity, and Mentions in one transaction.
+6. Commit before emitting `message.created`.
+7. Let Run Orchestration consume the committed event.
 
 Browser member writes include a stable `clientMessageId`. Migration 0018
 enforces uniqueness per Room and sender, so an ambiguous retry returns the

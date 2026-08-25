@@ -1,7 +1,8 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Planned location: `apps/server/src/task/`
+- Implementation: `apps/server/src/task/`, migration 0024, and the Web Room
+  composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
 
@@ -25,6 +26,12 @@ Task state is `open`, `working`, `blocked`, `review`, `completed`, or
 `canceled`. A Task state is explicit aggregate state; one successful Run does
 not automatically complete a Task. Parent Tasks provide hierarchy without
 changing Run or delivery semantics.
+
+The Server exposes membership-authorized Room Task list/create operations and
+an update operation by Task ID. Every Room has one non-removable default Task
+for backward compatibility. A Task cannot enter a terminal state while it has
+an active Run or Discussion, and new routed Messages are rejected atomically
+when their Task is already terminal.
 
 ## Ownership and Boundaries
 

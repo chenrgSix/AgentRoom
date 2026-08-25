@@ -1,6 +1,7 @@
 import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { AuthService, WebPrincipal } from "../security/auth-service.js";
+import type { AgentTaskRepository } from "../task/task-repository.js";
 import type { RunRecord, RunRepository } from "./run-repository.js";
 
 const defaultRunDurationMilliseconds = 20 * 60 * 1000;
@@ -9,7 +10,8 @@ export class RunService {
   public constructor(
     private readonly core: CoreRepository,
     private readonly runs: RunRepository,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly tasks: AgentTaskRepository
   ) {}
 
   public createRunsForMessage(
@@ -29,6 +31,13 @@ export class RunService {
     if (existing.length > 0 || message.mentions.length === 0) {
       return existing;
     }
+    const task = this.tasks.get(message.taskId);
+    if (
+      !task || task.roomId !== message.roomId ||
+      task.state === "completed" || task.state === "canceled"
+    ) {
+      throw new Error("Run Task must be runnable in the Message Room");
+    }
     const deadlineAt = new Date(
       Date.parse(now) + defaultRunDurationMilliseconds
     ).toISOString();
@@ -36,6 +45,7 @@ export class RunService {
       runId: createOpaqueId("run"),
       traceId: message.traceId,
       roomId: message.roomId,
+      taskId: task.taskId,
       triggerMessageId: message.messageId,
       requesterMemberId: member.memberId,
       targetAgentId: mention.targetAgentId,

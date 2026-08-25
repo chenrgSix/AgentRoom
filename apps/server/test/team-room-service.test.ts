@@ -282,13 +282,14 @@ test("an Owner renames, archives, and restores Teams and Rooms without changing 
     });
     database.prepare(`
       INSERT INTO runs (
-        run_id, room_id, trigger_message_id, requester_member_id,
+        run_id, room_id, task_id, trigger_message_id, requester_member_id,
         target_agent_id, parent_run_id, instruction, state, deadline_at,
         created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, NULL, ?, 'queued', ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, 'queued', ?, ?, ?)
     `).run(
       "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
       room.roomId,
+      message.taskId,
       message.messageId,
       created.owner.memberId,
       "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
