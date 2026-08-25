@@ -7,6 +7,7 @@ import test from "node:test";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 
 import { createServerApp } from "../src/app.js";
+import { isBridgeTraceId } from "../src/http/bridge-socket-routes.js";
 
 const now = "2026-08-23T12:00:00.000Z";
 const agentId = "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6";
@@ -67,6 +68,18 @@ function envelope(type: string, payload: Record<string, unknown>): object {
 
 function send(socket: BridgeSocket, value: object): void {
   socket.send(JSON.stringify(value));
+}
+
+async function sendAndFlush(socket: BridgeSocket, value: object): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    socket.send(JSON.stringify(value), (error?: Error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
+  });
 }
 
 function nextMessage(socket: BridgeSocket): Promise<BridgeWireMessage> {
@@ -237,14 +250,38 @@ async function runState(fixture: BridgeFixture, expected: string): Promise<boole
 }
 
 async function acceptRun(fixture: BridgeFixture): Promise<void> {
-  send(fixture.socket, envelope("run.accepted", {
+  let rejectClosed: ((reason?: unknown) => void) | undefined;
+  const closed = new Promise<void>((_resolve, reject) => {
+    rejectClosed = reject;
+  });
+  const onClose = (code: number, reason: Buffer): void => {
+    rejectClosed?.(new Error(
+      `Bridge closed before Run acceptance: ${code} ${reason.toString()}`
+    ));
+  };
+  fixture.socket.once("close", onClose);
+  await sendAndFlush(fixture.socket, envelope("run.accepted", {
     runId: fixture.runId,
     traceId: fixture.traceId,
     agentId,
     sequence: 1
   }));
-  await waitFor(() => runState(fixture, "delivered"));
+  try {
+    await Promise.race([
+      waitFor(() => runState(fixture, "delivered")),
+      closed
+    ]);
+  } finally {
+    fixture.socket.off("close", onClose);
+  }
 }
+
+test("Bridge trace validation accepts every contract-valid base64url prefix", () => {
+  assert.equal(isBridgeTraceId("trace_-1K4Z6J7Y8N9P0Q1R2S3T4V5W6"), true);
+  assert.equal(isBridgeTraceId("trace__1K4Z6J7Y8N9P0Q1R2S3T4V5W6"), true);
+  assert.equal(isBridgeTraceId("trace_/1K4Z6J7Y8N9P0Q1R2S3T4V5W6"), false);
+  assert.equal(isBridgeTraceId("trace_short"), false);
+});
 
 test("Bridge rejects missing traceId as a processed message, not malformed JSON", async () => {
   const fixture = await createFixture();

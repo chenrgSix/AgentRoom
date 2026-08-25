@@ -21,9 +21,9 @@ type BridgeRejectionCategory =
   | "run_reply_rejected"
   | "hello_required";
 
-const bridgeTraceIdPattern = /^trace_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/u;
+const bridgeTraceIdPattern = /^trace_[A-Za-z0-9_-]{8,128}$/u;
 const bridgeLogIdentifierPattern =
-  /^(?:agent|run)_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$/u;
+  /^(?:agent|run)_[A-Za-z0-9_-]{8,128}$/u;
 const bridgeLogMessageTypes = new Set([
   "bridge.hello",
   "bridge.heartbeat",
@@ -35,7 +35,7 @@ const bridgeLogMessageTypes = new Set([
   "run.reply"
 ]);
 
-function isBridgeTraceId(value: unknown): value is string {
+export function isBridgeTraceId(value: unknown): value is string {
   return typeof value === "string" && bridgeTraceIdPattern.test(value);
 }
 
