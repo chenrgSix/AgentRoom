@@ -27,6 +27,7 @@ import {
 import { registerDiscussionRoutes } from "./http/discussion-routes.js";
 import { registerMcpRoutes } from "./http/mcp-routes.js";
 import { registerMessageRoutes } from "./http/message-routes.js";
+import { registerMemoryCandidateRoutes } from "./http/memory-candidate-routes.js";
 import { registerRegistryRoutes } from "./http/registry-routes.js";
 import type { ServerRouteContext } from "./http/route-context.js";
 import { registerRunRoutes } from "./http/run-routes.js";
@@ -87,6 +88,7 @@ import type {
 import {
   RollingRoomMemoryRepository
 } from "./memory/rolling-room-memory-repository.js";
+import { MemoryCandidateService } from "./memory/memory-candidate-service.js";
 
 export interface ServerAppOptions {
   anonymousRateLimit?: {
@@ -164,14 +166,6 @@ export async function createServerApp(
   const contextPlanner = new ContextPlanner(database, core, taskRepository);
   const memoryEntries = new MemoryEntryRepository(database, transactions);
   const rollingRoomMemory = new RollingRoomMemoryRepository(database, transactions);
-  const memoryReducer = options.memoryReducer
-    ? new MemoryReducerScheduler(
-        core,
-        rollingRoomMemory,
-        options.memoryReducer,
-        clock
-      )
-    : undefined;
   const longTermMemory = new LongTermMemoryService(
     database,
     memoryEntries,
@@ -181,6 +175,21 @@ export async function createServerApp(
     runRepository,
     auth
   );
+  const memoryCandidates = new MemoryCandidateService(
+    database,
+    transactions,
+    auth,
+    longTermMemory
+  );
+  const memoryReducer = options.memoryReducer
+    ? new MemoryReducerScheduler(
+        core,
+        rollingRoomMemory,
+        options.memoryReducer,
+        clock,
+        memoryCandidates
+      )
+    : undefined;
   const resultEvidenceConsumption = new ResultEvidenceConsumptionRepository(database);
   const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth, taskRepository);
@@ -560,6 +569,7 @@ export async function createServerApp(
     handoffs,
     limitAnonymous,
     longTermMemory,
+    memoryCandidates,
     manualRuns,
     messages,
     operationalMetrics,
@@ -593,6 +603,7 @@ export async function createServerApp(
   registerTaskRoutes(routeContext);
   registerRegistryRoutes(routeContext);
   registerMessageRoutes(routeContext);
+  registerMemoryCandidateRoutes(routeContext);
   registerDiscussionRoutes(routeContext);
   registerRunRoutes(routeContext);
 

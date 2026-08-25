@@ -131,6 +131,16 @@ while the old record remains queryable as `superseded` or `retracted`. Runtime
 or LLM output may suggest a candidate through normal Messages, but it does not
 become shared truth without an authenticated Room Member promotion.
 
+Migration 0034 stores those suggestions as non-authoritative candidates linked
+to the producing rolling checkpoint and exact source interval digest. The
+Server revalidates Room/Task scope, type, Message provenance, content bounds,
+and redaction independently of the checkpoint commit. Exact reducer retries
+deduplicate by a stable source fingerprint. Room Members may list, accept, or
+reject a pending candidate; acceptance calls the same `LongTermMemoryService`
+validation as a manual write and atomically records the resulting Memory ID.
+Review is a one-way pending transition, so it cannot silently overwrite either
+an accepted assertion or retained rejection evidence.
+
 Member-authorized Room and Task HTTP APIs expose revision-cursor reads,
 creation, supersession, and retraction. Context planning selects at most 16
 active entries per scope by stable type priority and revision, plus the newest
@@ -218,6 +228,9 @@ cross-task context.
 - Long-term Memory tests prove an early decision survives beyond the recent
   Message window; cross-Task and provenance-free writes fail, supersession and
   retraction remain visible, and a truncated active selection is explicit.
+- Candidate tests prove reducer retry dedupe, independent validation, Member-
+  only review, redaction, atomic promotion through shared Memory validation,
+  idempotent acceptance, and durable rejection without checkpoint rollback.
 - Clarification answer retries converge on one Message and continuation Run;
   cancellation, deadline expiry, unavailable Agents, and orphaned scope close
   waiting records durably; Bridge restart replays only a still-valid question

@@ -27,6 +27,7 @@ import type { BridgePairingService } from "../security/bridge-pairing-service.js
 import type { TrustedWebAccessService } from "../security/trusted-web-access-service.js";
 import type { WebAuthConfiguration } from "../security/web-auth-config.js";
 import type { MessageService } from "../team-room/message-service.js";
+import type { MemoryCandidateService } from "../memory/memory-candidate-service.js";
 import type { TeamChangeService } from "../team-room/team-change-service.js";
 import type { TeamRoomService } from "../team-room/team-room-service.js";
 import type { AgentTaskService } from "../task/agent-task-service.js";
@@ -56,6 +57,7 @@ export interface ServerRouteContext {
   limitAnonymous: (request: FastifyRequest, bucket: string) => void;
   manualRuns: ManualRunService;
   longTermMemory: LongTermMemoryService;
+  memoryCandidates: MemoryCandidateService;
   messages: MessageService;
   operationalMetrics: OperationalMetrics;
   optionalPrincipal: (request: FastifyRequest) => WebPrincipal | undefined;
