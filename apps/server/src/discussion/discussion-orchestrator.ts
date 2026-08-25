@@ -29,22 +29,26 @@ import {
   type DiscussionRecord,
   type DiscussionTurn,
   type DiscussionWave,
-  type DiscussionWaveState,
   type ProgressSnapshot
 } from "./discussion-types.js";
+import {
+  terminalDiscussionStates,
+  terminalRunStates,
+  terminalTurnStates,
+  waveCloseState
+} from "./discussion-state.js";
+import {
+  buildWavePlan,
+  selectFinalizer,
+  type WavePlan
+} from "./discussion-wave-planner.js";
 import {
   evaluateWaveProgress,
   hashDiscussionReply,
   parseAgentAssessment
 } from "./progress-evaluator.js";
 
-const terminalRunStates = new Set([
-  "completed", "failed", "canceled", "expired", "outcome_unknown"
-]);
-const terminalTurnStates = new Set(["completed", "failed", "canceled"]);
-const terminalDiscussionStates = new Set(["completed", "canceled", "terminated"]);
 const maximumParticipants = 5;
-const finalizationDurationMilliseconds = 5 * 60 * 1000;
 
 export interface DiscussionView {
   discussion: DiscussionRecord;
@@ -57,11 +61,6 @@ export interface DiscussionView {
 export interface DiscussionMutationResult extends DiscussionView {
   scheduledRuns: RunRecord[];
   cancelRunIds: string[];
-}
-
-interface WavePlan {
-  wave: DiscussionWave;
-  turns: DiscussionTurn[];
 }
 
 function requiredInteger(
@@ -479,7 +478,7 @@ export class DiscussionOrchestrator {
     wave: DiscussionWave,
     turns: DiscussionTurn[]
   ): DiscussionMutationResult {
-    const closeState = this.waveCloseState(turns);
+    const closeState = waveCloseState(turns);
     if (terminalDiscussionStates.has(discussion.state)) {
       this.repository.closeWave({
         waveId: wave.waveId,
@@ -682,7 +681,7 @@ export class DiscussionOrchestrator {
         this.repository.closeWave({
           waveId: wave.waveId,
           expectedVersion: currentWave.version,
-          state: this.waveCloseState(members),
+          state: waveCloseState(members),
           now
         });
       }
@@ -816,7 +815,7 @@ export class DiscussionOrchestrator {
       discussionStartedAt: discussion.createdAt,
       now: this.clock()
     });
-    const closeState = this.waveCloseState(turns);
+    const closeState = waveCloseState(turns);
     const outcomeCounts = {
       completed: turns.filter(({ state }) => state === "completed").length,
       failed: turns.filter(({ state }) => state === "failed").length,
@@ -886,7 +885,7 @@ export class DiscussionOrchestrator {
     const now = this.clock();
     let nextWave: WavePlan | undefined;
     if (decision.action === "continue") {
-      nextWave = this.buildWavePlan({
+      nextWave = buildWavePlan({
         discussion,
         participants: eligibleParticipants,
         inputMessageId: nextInputMessageId,
@@ -896,8 +895,8 @@ export class DiscussionOrchestrator {
     } else if (
       decision.action === "finalize" && eligibleParticipants.length > 0
     ) {
-      const finalizer = this.finalizer(eligibleParticipants);
-      nextWave = this.buildWavePlan({
+      const finalizer = selectFinalizer(eligibleParticipants);
+      nextWave = buildWavePlan({
         discussion,
         participants: [finalizer],
         inputMessageId: nextInputMessageId,
@@ -1022,7 +1021,7 @@ export class DiscussionOrchestrator {
       );
       return [];
     }
-    const finalizer = this.finalizer(participants);
+    const finalizer = selectFinalizer(participants);
     const budget = {
       ...discussion.budget,
       agentRunsUsed: discussion.budget.agentRunsUsed + 1
@@ -1062,7 +1061,7 @@ export class DiscussionOrchestrator {
       input.inputMessageId,
       now
     );
-    const plan = this.buildWavePlan({
+    const plan = buildWavePlan({
       discussion: input.discussion,
       participants: input.participants,
       inputMessageId,
@@ -1092,60 +1091,6 @@ export class DiscussionOrchestrator {
       ...(input.budgetEvents.length > 0 ? { budgetEvents: input.budgetEvents } : {})
     });
     return plan;
-  }
-
-  private buildWavePlan(input: {
-    discussion: DiscussionRecord;
-    participants: DiscussionParticipant[];
-    inputMessageId: string;
-    kind: DiscussionTurn["kind"];
-    now: string;
-  }): WavePlan {
-    if (input.participants.length === 0) {
-      throw new Error("Discussion Wave has no eligible participant");
-    }
-    const waveId = createOpaqueId("wave");
-    const waveOrdinal = (input.discussion.currentWave ?? 0) + 1;
-    const deadlineAt = input.kind === "finalization"
-      ? new Date(Date.parse(input.now) + finalizationDurationMilliseconds).toISOString()
-      : new Date(Math.min(
-          Date.parse(input.discussion.deadlineAt),
-          Date.parse(input.now) + input.discussion.policy.waveTimeoutSeconds * 1_000
-        )).toISOString();
-    const wave: DiscussionWave = {
-      waveId,
-      discussionId: input.discussion.discussionId,
-      ordinal: waveOrdinal,
-      phase: input.kind === "finalization" ? "finalization" : "contribution",
-      inputMessageId: input.inputMessageId,
-      state: "open",
-      deadlineAt,
-      expectedMembers: input.participants.length,
-      version: 1,
-      createdAt: input.now,
-      updatedAt: input.now,
-      closedAt: null
-    };
-    const turns = input.participants.map((participant, waveMemberOrdinal) => ({
-      turnId: createOpaqueId("turn"),
-      discussionId: input.discussion.discussionId,
-      ordinal: input.discussion.currentTurn + waveMemberOrdinal + 1,
-      kind: input.kind,
-      speakerAgentId: participant.agentId,
-      inputMessageId: input.inputMessageId,
-      runId: null,
-      outputMessageId: null,
-      state: "planned" as const,
-      assessment: null,
-      replyHash: null,
-      createdAt: input.now,
-      updatedAt: input.now,
-      completedAt: null,
-      waveId,
-      waveMemberOrdinal,
-      terminalReason: null
-    }));
-    return { wave, turns };
   }
 
   private persistDecision(
@@ -1468,12 +1413,6 @@ export class DiscussionOrchestrator {
     return `msg_wave_${waveId.slice(5)}`;
   }
 
-  private finalizer(participants: DiscussionParticipant[]): DiscussionParticipant {
-    const finalizer = participants.find(({ role }) => role === "reviewer") ?? participants[0];
-    if (!finalizer) throw new Error("Discussion has no finalizer");
-    return finalizer;
-  }
-
   private eligibleParticipants(
     discussion: DiscussionRecord,
     participants: DiscussionParticipant[]
@@ -1488,15 +1427,6 @@ export class DiscussionOrchestrator {
         this.core.isRoomAgent(room.roomId, agentId)
       );
     });
-  }
-
-  private waveCloseState(turns: DiscussionTurn[]): Exclude<DiscussionWaveState, "open"> {
-    const completed = turns.filter(({ state }) => state === "completed").length;
-    const canceled = turns.filter(({ state }) => state === "canceled").length;
-    if (completed === turns.length) return "completed";
-    if (canceled === turns.length) return "canceled";
-    if (completed > 0) return "partial";
-    return "failed";
   }
 
   private terminalReason(run: RunRecord, hasOutput: boolean): string {

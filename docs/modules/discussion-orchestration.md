@@ -48,6 +48,14 @@ called. A future integration may add normalized evidence or a recommendation
 for novelty, disagreement, or goal coverage. That output remains evidence only:
 it cannot select the next action, bypass policy, or mutate state.
 
+The implementation keeps persistence and cross-module coordination in
+`discussion-orchestrator.ts`, while pure terminal/barrier transitions live in
+`discussion-state.ts` and pure Wave/finalizer planning lives in
+`discussion-wave-planner.ts`. Progress evaluation, policy, semantic evidence,
+and budget arithmetic retain their standalone units. The pure planners receive
+frozen aggregate inputs and return values only; they do not read SQLite, create
+Runs, append Messages, or dispatch Bridge deliveries.
+
 The deterministic evaluator sorts successful reports by frozen participant
 ordinal, normalizes and hashes visible replies, combines valid structured
 question and evidence deltas, and treats missing or malformed assessment fields
