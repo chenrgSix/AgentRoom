@@ -242,6 +242,14 @@ test("source-read lease rejects stale snapshot and non-active Run", async () => 
       sequence: 1,
       status: "delivered"
     }, now);
+    const activeRequest = {
+      runId: run.runId,
+      agentId: agent.agentId,
+      workspaceRef,
+      workspaceGeneration,
+      idempotencyKey: "idem_workspace_live_recheck_1234"
+    };
+    const activeLease = service.issueReadSource(principal, activeRequest, now);
     assert.throws(
       () => service.issueReadSource(principal, {
         runId: run.runId,
@@ -258,6 +266,19 @@ test("source-read lease rejects stale snapshot and non-active Run", async () => 
       sequence: 2,
       status: "completed"
     }, now);
+    assert.throws(
+      () => service.issueReadSource(principal, activeRequest, now),
+      /active assigned Run/u
+    );
+    assert.throws(
+      () => service.requireActiveReadSource(
+        principal,
+        activeLease.leaseId,
+        activeRequest,
+        now
+      ),
+      /active assigned Run/u
+    );
     assert.throws(
       () => service.issueReadSource(principal, {
         runId: run.runId,

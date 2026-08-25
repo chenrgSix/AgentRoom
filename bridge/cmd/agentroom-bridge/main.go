@@ -180,7 +180,7 @@ func runArtifact(args []string) error {
 	if err != nil {
 		return err
 	}
-	source, err := bridgeartifact.Capture(
+	source, err := bridgeartifact.PlanSource(
 		selected.Workspace,
 		*file,
 		strings.TrimSpace(*artifactType),

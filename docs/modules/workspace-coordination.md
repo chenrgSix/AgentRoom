@@ -27,11 +27,13 @@ local permission or prove that a command is safe.
 
 ## Main Flows
 
-For source publication, the Bridge derives its opaque identity and generation,
-validates and opens one file within the configured Workspace, and requests a
-`read_source` lease for the assigned Run. The Server validates Run/Task/Agent/
-Device scope before issuing a bounded lease. Artifact Content Transport accepts
-only that lease and still verifies the final content digest.
+For source publication, the Bridge derives its opaque identity and generation
+and validates metadata for one file within the configured Workspace without
+opening or reading it. It then requests a `read_source` lease for the assigned
+Run. The Server validates Run/Task/Agent/Device scope before issuing a bounded
+lease. Only after the accepted lease does the Bridge open and double-read the
+file; Artifact Content Transport accepts only that lease and still verifies the
+final content digest.
 
 The implemented Device-authenticated lease endpoint accepts only the published
 opaque Workspace identity and generation. The Bridge keeps the configured root
@@ -49,6 +51,9 @@ Bridge-owned Artifact staging.
 - Expiry and release are terminal for new operations.
 - A terminal Run or revoked Device/Agent invalidates further use even if the
   stored expiry is later.
+- New Artifact observations and descriptions derive distinct lease attempt
+  identities, so expiry of one operation cannot prevent later publication by
+  the same active Run and Workspace generation.
 - Generation mismatch fails before a write operation starts; it never silently
   refreshes the requested generation.
 - The Server may reconstruct active coordination from durable rows after

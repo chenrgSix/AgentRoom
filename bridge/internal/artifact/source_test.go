@@ -33,7 +33,11 @@ func TestCaptureReturnsStablePathFreeSnapshot(t *testing.T) {
 	if err := os.WriteFile(path, sourceBytes, 0o600); err != nil {
 		t.Fatal(err)
 	}
-	source, err := Capture(root, "results/change.patch", "patch")
+	plan, err := PlanSource(root, "results/change.patch", "patch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	source, err := Capture(plan)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -75,9 +79,9 @@ func TestCaptureRejectsTraversalSymlinksAndTypeMismatch(t *testing.T) {
 		{".hidden.patch", "patch", "alias-safe"},
 		{"readme.txt", "document", "extension"},
 	} {
-		_, err := Capture(root, testCase.path, testCase.artifactType)
+		_, err := PlanSource(root, testCase.path, testCase.artifactType)
 		if err == nil || !strings.Contains(err.Error(), testCase.errorPart) {
-			t.Fatalf("Capture(%q) error = %v, want %q", testCase.path, err, testCase.errorPart)
+			t.Fatalf("PlanSource(%q) error = %v, want %q", testCase.path, err, testCase.errorPart)
 		}
 	}
 }
@@ -88,7 +92,11 @@ func TestCaptureRejectsAFileChangedDuringRead(t *testing.T) {
 	if err := os.WriteFile(target, []byte(`{"ok":true}`), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := capture(root, "result.json", "test_result", func(path string) error {
+	plan, err := PlanSource(root, "result.json", "test_result")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = capture(plan, func(path string) error {
 		return os.WriteFile(path, []byte(`{"ok":fail}`), 0o600)
 	})
 	if err == nil || !strings.Contains(err.Error(), "changed during capture") {

@@ -54,9 +54,11 @@ not a delegated shell, filesystem, Runtime, tool, or provider permission.
 
 Artifact publication requires a current `read_source` lease. Before requesting
 it, the Bridge resolves the configured Workspace and source path without
-following a final symlink, rejects traversal and special files, and opens the
-file under local owner policy. It hashes the opened stream and rejects a file
-whose identity or size changes during capture.
+following a final symlink and performs metadata-only traversal, type, size, and
+generation checks. It does not open or read the source bytes. After the Server
+accepts the lease, the Bridge revalidates that observation, opens the file under
+local owner policy, hashes the opened stream, and rejects a file whose identity,
+size, or Workspace generation changes during capture.
 
 Downloading a pinned Artifact into a Bridge-owned Run staging directory does
 not require a Workspace lease because it does not read or modify the configured

@@ -70,39 +70,11 @@ export class WorkspaceLeaseService {
       if (!sameRequest(retry, input)) {
         throw new Error("Workspace lease idempotency key conflicts");
       }
+      this.requireCurrentScope(principal, retry);
       return effectiveLease(retry, now);
     }
 
-    const run = this.runs.getRun(input.runId);
-    if (!run || !new Set(["delivered", "working"]).has(run.state)) {
-      throw new Error("Workspace source lease requires an active assigned Run");
-    }
-    if (run.targetAgentId !== input.agentId) {
-      throw new Error("Workspace source lease Agent does not match its Run");
-    }
-    const task = this.tasks.get(run.taskId);
-    if (
-      !task || task.roomId !== run.roomId ||
-      new Set(["completed", "canceled"]).has(task.state)
-    ) {
-      throw new Error("Workspace source lease Task is unavailable");
-    }
-    const agent = this.core.getAgent(input.agentId);
-    if (
-      !agent || !agent.enabled || agent.integrationMode !== "managed" ||
-      agent.teamId !== principal.teamId ||
-      agent.ownerMemberId !== principal.ownerMemberId ||
-      agent.deviceId !== principal.deviceId
-    ) {
-      throw new Error("Workspace source lease Device assignment is invalid");
-    }
-    if (
-      agent.capabilities.supportsWorkspaceLeases !== true ||
-      agent.workspaceRef !== input.workspaceRef ||
-      agent.workspaceGeneration !== input.workspaceGeneration
-    ) {
-      throw new Error("Workspace source lease snapshot is stale or unsupported");
-    }
+    const scope = this.requireCurrentScope(principal, input);
     const durationSeconds = input.durationSeconds ?? 120;
     if (
       !Number.isSafeInteger(durationSeconds) ||
@@ -118,9 +90,9 @@ export class WorkspaceLeaseService {
       leaseId: createOpaqueId("lease"),
       idempotencyKey: input.idempotencyKey,
       teamId: principal.teamId,
-      roomId: run.roomId,
-      taskId: run.taskId,
-      runId: run.runId,
+      roomId: scope.roomId,
+      taskId: scope.taskId,
+      runId: input.runId,
       agentId: input.agentId,
       deviceId: principal.deviceId,
       workspaceRef: input.workspaceRef,
@@ -162,6 +134,7 @@ export class WorkspaceLeaseService {
     ) {
       throw new Error("Workspace source lease is not active for this operation");
     }
+    this.requireCurrentScope(principal, lease);
     return lease;
   }
 
@@ -185,5 +158,43 @@ export class WorkspaceLeaseService {
     if (!idempotencyKeyPattern.test(input.idempotencyKey)) {
       throw new Error("Workspace lease idempotency key is invalid");
     }
+  }
+
+  private requireCurrentScope(
+    principal: DevicePrincipal,
+    input: Pick<IssueWorkspaceLeaseInput, "runId" | "agentId" | "workspaceRef" |
+      "workspaceGeneration">
+  ): { roomId: string; taskId: string } {
+    const run = this.runs.getRun(input.runId);
+    if (!run || !new Set(["delivered", "working"]).has(run.state)) {
+      throw new Error("Workspace source lease requires an active assigned Run");
+    }
+    if (run.targetAgentId !== input.agentId) {
+      throw new Error("Workspace source lease Agent does not match its Run");
+    }
+    const task = this.tasks.get(run.taskId);
+    if (
+      !task || task.roomId !== run.roomId ||
+      new Set(["completed", "canceled"]).has(task.state)
+    ) {
+      throw new Error("Workspace source lease Task is unavailable");
+    }
+    const agent = this.core.getAgent(input.agentId);
+    if (
+      !agent || !agent.enabled || agent.integrationMode !== "managed" ||
+      agent.teamId !== principal.teamId ||
+      agent.ownerMemberId !== principal.ownerMemberId ||
+      agent.deviceId !== principal.deviceId
+    ) {
+      throw new Error("Workspace source lease Device assignment is invalid");
+    }
+    if (
+      agent.capabilities.supportsWorkspaceLeases !== true ||
+      agent.workspaceRef !== input.workspaceRef ||
+      agent.workspaceGeneration !== input.workspaceGeneration
+    ) {
+      throw new Error("Workspace source lease snapshot is stale or unsupported");
+    }
+    return { roomId: run.roomId, taskId: run.taskId };
   }
 }

@@ -24,65 +24,115 @@ type Source struct {
 	WorkspaceGeneration string
 }
 
-func Capture(root, relativePath, artifactType string) (Source, error) {
-	return capture(root, relativePath, artifactType, nil)
+// SourcePlan contains only path metadata observed before central authorization.
+// The source bytes are not opened or read until Capture is called after an
+// accepted read_source lease.
+type SourcePlan struct {
+	FileName            string
+	MediaType           string
+	WorkspaceRef        string
+	WorkspaceGeneration string
+	artifactType        string
+	cleanRelativePath   string
+	resolvedRoot        string
+	observed            os.FileInfo
 }
 
-func capture(
-	root, relativePath, artifactType string,
-	afterFirstRead func(string) error,
-) (Source, error) {
+func PlanSource(root, relativePath, artifactType string) (SourcePlan, error) {
 	if strings.TrimSpace(relativePath) != relativePath || relativePath == "" ||
 		filepath.IsAbs(relativePath) || strings.Contains(relativePath, "\\") {
-		return Source{}, fmt.Errorf("Artifact file must be a clean Workspace-relative path")
+		return SourcePlan{}, fmt.Errorf("Artifact file must be a clean Workspace-relative path")
 	}
 	cleanRelative := filepath.Clean(relativePath)
 	if cleanRelative == "." || cleanRelative == ".." ||
 		strings.HasPrefix(cleanRelative, ".."+string(filepath.Separator)) {
-		return Source{}, fmt.Errorf("Artifact file must stay inside its Workspace")
+		return SourcePlan{}, fmt.Errorf("Artifact file must stay inside its Workspace")
 	}
 	resolvedRoot, err := filepath.Abs(filepath.Clean(root))
 	if err != nil {
-		return Source{}, fmt.Errorf("resolve Workspace: %w", err)
+		return SourcePlan{}, fmt.Errorf("resolve Workspace: %w", err)
 	}
 	resolvedRoot, err = filepath.EvalSymlinks(resolvedRoot)
 	if err != nil {
-		return Source{}, fmt.Errorf("resolve Workspace links: %w", err)
+		return SourcePlan{}, fmt.Errorf("resolve Workspace links: %w", err)
 	}
 	target := filepath.Join(resolvedRoot, cleanRelative)
 	contained, err := filepath.Rel(resolvedRoot, target)
 	if err != nil || contained == ".." ||
 		strings.HasPrefix(contained, ".."+string(filepath.Separator)) {
-		return Source{}, fmt.Errorf("Artifact file escaped its Workspace")
+		return SourcePlan{}, fmt.Errorf("Artifact file escaped its Workspace")
 	}
 	canonicalTarget, err := filepath.EvalSymlinks(target)
 	if err != nil {
-		return Source{}, fmt.Errorf("resolve Artifact file: %w", err)
+		return SourcePlan{}, fmt.Errorf("resolve Artifact file: %w", err)
 	}
 	if canonicalTarget != target {
-		return Source{}, fmt.Errorf("Artifact file must not traverse symbolic links")
+		return SourcePlan{}, fmt.Errorf("Artifact file must not traverse symbolic links")
 	}
 	fileName := filepath.Base(target)
 	if !safeFileName(fileName) {
-		return Source{}, fmt.Errorf("Artifact file name is not alias-safe")
+		return SourcePlan{}, fmt.Errorf("Artifact file name is not alias-safe")
 	}
 	mediaType, err := mediaTypeFor(artifactType, fileName)
 	if err != nil {
+		return SourcePlan{}, err
+	}
+	workspaceSnapshot, err := workspace.Inspect(resolvedRoot)
+	if err != nil {
+		return SourcePlan{}, err
+	}
+	observed, err := os.Lstat(target)
+	if err != nil {
+		return SourcePlan{}, fmt.Errorf("inspect Artifact file: %w", err)
+	}
+	if observed.Mode()&os.ModeSymlink != 0 || !observed.Mode().IsRegular() {
+		return SourcePlan{}, fmt.Errorf("Artifact source must be one regular file")
+	}
+	if observed.Size() < 1 || observed.Size() > MaximumSourceBytes {
+		return SourcePlan{}, fmt.Errorf(
+			"Artifact source must contain 1 to %d bytes",
+			MaximumSourceBytes,
+		)
+	}
+	return SourcePlan{
+		FileName:            fileName,
+		MediaType:           mediaType,
+		WorkspaceRef:        workspaceSnapshot.WorkspaceRef,
+		WorkspaceGeneration: workspaceSnapshot.Generation,
+		artifactType:        artifactType,
+		cleanRelativePath:   cleanRelative,
+		resolvedRoot:        resolvedRoot,
+		observed:            observed,
+	}, nil
+}
+
+func Capture(plan SourcePlan) (Source, error) {
+	return capture(plan, nil)
+}
+
+func capture(plan SourcePlan, afterFirstRead func(string) error) (Source, error) {
+	if err := validateSourcePlan(plan, plan.artifactType); err != nil {
 		return Source{}, err
 	}
-	beforeWorkspace, err := workspace.Inspect(resolvedRoot)
+	target := filepath.Join(plan.resolvedRoot, plan.cleanRelativePath)
+	canonicalTarget, err := filepath.EvalSymlinks(target)
+	if err != nil || canonicalTarget != target {
+		return Source{}, fmt.Errorf("Artifact source changed before capture")
+	}
+	beforeWorkspace, err := workspace.Inspect(plan.resolvedRoot)
 	if err != nil {
 		return Source{}, err
+	}
+	if beforeWorkspace.WorkspaceRef != plan.WorkspaceRef ||
+		beforeWorkspace.Generation != plan.WorkspaceGeneration {
+		return Source{}, fmt.Errorf("Workspace generation changed before Artifact capture")
 	}
 	before, err := os.Lstat(target)
-	if err != nil {
-		return Source{}, fmt.Errorf("inspect Artifact file: %w", err)
-	}
-	if before.Mode()&os.ModeSymlink != 0 || !before.Mode().IsRegular() {
-		return Source{}, fmt.Errorf("Artifact source must be one regular file")
-	}
-	if before.Size() < 1 || before.Size() > MaximumSourceBytes {
-		return Source{}, fmt.Errorf("Artifact source must contain 1 to %d bytes", MaximumSourceBytes)
+	if err != nil || !os.SameFile(plan.observed, before) ||
+		before.Size() != plan.observed.Size() ||
+		before.ModTime() != plan.observed.ModTime() ||
+		before.Mode() != plan.observed.Mode() {
+		return Source{}, fmt.Errorf("Artifact source changed before capture")
 	}
 	opened, err := os.Open(target)
 	if err != nil {
@@ -117,7 +167,7 @@ func capture(
 		before.ModTime() != after.ModTime() || before.Mode() != after.Mode() {
 		return Source{}, fmt.Errorf("Artifact source changed during capture")
 	}
-	afterWorkspace, err := workspace.Inspect(resolvedRoot)
+	afterWorkspace, err := workspace.Inspect(plan.resolvedRoot)
 	if err != nil {
 		return Source{}, err
 	}
@@ -127,12 +177,41 @@ func capture(
 	digest := sha256.Sum256(first)
 	return Source{
 		Bytes:               first,
-		FileName:            fileName,
-		MediaType:           mediaType,
+		FileName:            plan.FileName,
+		MediaType:           plan.MediaType,
 		SHA256:              hex.EncodeToString(digest[:]),
-		WorkspaceRef:        beforeWorkspace.WorkspaceRef,
-		WorkspaceGeneration: beforeWorkspace.Generation,
+		WorkspaceRef:        plan.WorkspaceRef,
+		WorkspaceGeneration: plan.WorkspaceGeneration,
 	}, nil
+}
+
+func (plan SourcePlan) leaseIdentity() string {
+	return fmt.Sprintf(
+		"%s\x00%s\x00%s\x00%d\x00%d\x00%d",
+		plan.WorkspaceRef,
+		plan.WorkspaceGeneration,
+		plan.cleanRelativePath,
+		plan.observed.Size(),
+		plan.observed.ModTime().UTC().UnixNano(),
+		plan.observed.Mode(),
+	)
+}
+
+func validateSourcePlan(plan SourcePlan, artifactType string) error {
+	if plan.observed == nil || plan.resolvedRoot == "" ||
+		plan.cleanRelativePath == "" || plan.artifactType != artifactType ||
+		!strings.HasPrefix(plan.WorkspaceRef, "workspace_") ||
+		len(plan.WorkspaceRef) != len("workspace_")+64 ||
+		!validLowerHex(strings.TrimPrefix(plan.WorkspaceRef, "workspace_"), 64) ||
+		!validLowerHex(plan.WorkspaceGeneration, 64) ||
+		strings.ContainsAny(plan.FileName, "/\\") {
+		return fmt.Errorf("Artifact source plan is invalid")
+	}
+	mediaType, err := mediaTypeFor(artifactType, plan.FileName)
+	if err != nil || mediaType != plan.MediaType {
+		return fmt.Errorf("Artifact source plan type or media type is invalid")
+	}
+	return nil
 }
 
 func safeFileName(fileName string) bool {

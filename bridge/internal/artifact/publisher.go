@@ -25,7 +25,7 @@ type PublishInput struct {
 	ArtifactType string
 	Title        string
 	Summary      string
-	Source       Source
+	Source       SourcePlan
 	Relations    []PublishRelation
 }
 
@@ -58,6 +58,7 @@ type publicationView struct {
 
 type leaseView struct {
 	LeaseID string `json:"leaseId"`
+	State   string `json:"state"`
 }
 
 type sealView struct {
@@ -97,17 +98,14 @@ func (c *Client) Publish(
 	if len(input.Title) > 160 || len(input.Summary) > 4_000 {
 		return PublishResult{}, fmt.Errorf("Artifact title or summary exceeds its bound")
 	}
-	if err := validateSource(input.Source, input.ArtifactType); err != nil {
+	if err := validateSourcePlan(input.Source, input.ArtifactType); err != nil {
 		return PublishResult{}, err
 	}
 	relations, err := normalizedPublishRelations(input.Relations)
 	if err != nil {
 		return PublishResult{}, err
 	}
-	leaseKey := idempotencyKey(
-		"lease", input.RunID, input.AgentID, input.Source.WorkspaceRef,
-		input.Source.WorkspaceGeneration,
-	)
+	leaseKey := leaseIdempotencyKey(input, relations)
 	leaseRequest := map[string]any{
 		"runId": input.RunID, "agentId": input.AgentID,
 		"workspaceRef":        input.Source.WorkspaceRef,
@@ -122,23 +120,34 @@ func (c *Client) Publish(
 	); err != nil {
 		return PublishResult{}, err
 	}
+	if lease.LeaseID == "" || lease.State != "active" {
+		return PublishResult{}, fmt.Errorf("Workspace source lease is not active")
+	}
+	source, err := Capture(input.Source)
+	if err != nil {
+		return PublishResult{}, err
+	}
+	if err := validateSource(source, input.ArtifactType); err != nil {
+		return PublishResult{}, err
+	}
 	publicationKey := idempotencyKey(
 		"publication", input.RunID, input.AgentID,
-		input.Source.WorkspaceRef, input.Source.WorkspaceGeneration,
-		input.ArtifactType, input.Source.FileName, input.Source.SHA256,
+		source.WorkspaceRef, source.WorkspaceGeneration,
+		input.ArtifactType, source.FileName, source.SHA256,
+		input.Title, input.Summary,
 		publishRelationsIdentity(relations),
 	)
 	prepareRequest := map[string]any{
 		"leaseId": lease.LeaseID, "runId": input.RunID,
 		"agentId":             input.AgentID,
-		"workspaceRef":        input.Source.WorkspaceRef,
-		"workspaceGeneration": input.Source.WorkspaceGeneration,
+		"workspaceRef":        source.WorkspaceRef,
+		"workspaceGeneration": source.WorkspaceGeneration,
 		"idempotencyKey":      publicationKey,
 		"artifactType":        input.ArtifactType,
-		"fileName":            input.Source.FileName,
-		"mediaType":           input.Source.MediaType,
+		"fileName":            source.FileName,
+		"mediaType":           source.MediaType,
 		"title":               input.Title, "summary": input.Summary,
-		"sizeBytes": len(input.Source.Bytes), "sha256": input.Source.SHA256,
+		"sizeBytes": len(source.Bytes), "sha256": source.SHA256,
 	}
 	if len(relations) > 0 {
 		prepareRequest["relations"] = relations
@@ -154,14 +163,14 @@ func (c *Client) Publish(
 		return PublishResult{}, fmt.Errorf("Artifact prepare response omitted publication identity")
 	}
 	for publication.State == "prepared" || publication.State == "receiving" {
-		if publication.ReceivedSize < 0 || publication.ReceivedSize > len(input.Source.Bytes) {
+		if publication.ReceivedSize < 0 || publication.ReceivedSize > len(source.Bytes) {
 			return PublishResult{}, fmt.Errorf("Server reported an invalid Artifact upload offset")
 		}
-		if publication.ReceivedSize == len(input.Source.Bytes) {
+		if publication.ReceivedSize == len(source.Bytes) {
 			break
 		}
-		end := min(publication.ReceivedSize+chunkBytes, len(input.Source.Bytes))
-		chunk := input.Source.Bytes[publication.ReceivedSize:end]
+		end := min(publication.ReceivedSize+chunkBytes, len(source.Bytes))
+		chunk := source.Bytes[publication.ReceivedSize:end]
 		digest := sha256.Sum256(chunk)
 		chunkRequest := map[string]any{
 			"offset":      publication.ReceivedSize,
@@ -231,7 +240,7 @@ func (c *Client) Publish(
 			PublicationID: publication.PublicationID,
 			ArtifactID:    *publication.ArtifactID,
 			ContentID:     contentID,
-			SHA256:        input.Source.SHA256,
+			SHA256:        source.SHA256,
 		}, nil
 	}
 	var bound bindView
@@ -247,7 +256,7 @@ func (c *Client) Publish(
 				PublicationID: publication.PublicationID,
 				ArtifactID:    *publication.ArtifactID,
 				ContentID:     valueOrEmpty(publication.ContentID),
-				SHA256:        input.Source.SHA256,
+				SHA256:        source.SHA256,
 			}, nil
 		}
 	}
@@ -259,7 +268,7 @@ func (c *Client) Publish(
 		ArtifactID:    bound.Artifact.ArtifactID,
 		ContentID:     valueOrEmpty(bound.Artifact.ContentID),
 		Revision:      bound.Revision,
-		SHA256:        input.Source.SHA256,
+		SHA256:        source.SHA256,
 	}, nil
 }
 
@@ -316,6 +325,17 @@ func publishRelationsIdentity(relations []PublishRelation) string {
 		parts = append(parts, relation.Type+":"+relation.TargetArtifactID)
 	}
 	return strings.Join(parts, ",")
+}
+
+func leaseIdempotencyKey(
+	input PublishInput,
+	relations []PublishRelation,
+) string {
+	return idempotencyKey(
+		"lease", input.RunID, input.AgentID, input.Source.leaseIdentity(),
+		input.ArtifactType, input.Title, input.Summary,
+		publishRelationsIdentity(relations),
+	)
 }
 
 func (c *Client) retrySameRequest(
