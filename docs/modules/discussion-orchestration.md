@@ -48,13 +48,17 @@ called. A future integration may add normalized evidence or a recommendation
 for novelty, disagreement, or goal coverage. That output remains evidence only:
 it cannot select the next action, bypass policy, or mutate state.
 
-The implementation keeps persistence and cross-module coordination in
-`discussion-orchestrator.ts`, while pure terminal/barrier transitions live in
-`discussion-state.ts` and pure Wave/finalizer planning lives in
-`discussion-wave-planner.ts`. Progress evaluation, policy, semantic evidence,
-and budget arithmetic retain their standalone units. The pure planners receive
-frozen aggregate inputs and return values only; they do not read SQLite, create
-Runs, append Messages, or dispatch Bridge deliveries.
+The implementation keeps command coordination and aggregate transitions in
+`discussion-orchestrator.ts`. Terminal Run projection is isolated in
+`wave-settlement-service.ts`; canceled/restarted and deadline recovery is owned
+by `discussion-recovery-service.ts`; bounded instructions, deterministic result
+anchors, and fallback output are owned by `discussion-evidence-service.ts`.
+Pure terminal/barrier transitions live in `discussion-state.ts`, while pure
+Wave/finalizer planning lives in `discussion-wave-planner.ts`. Progress
+evaluation, policy, semantic evidence, and budget arithmetic retain their
+standalone units. The pure planners receive frozen aggregate inputs and return
+values only; they do not read SQLite, create Runs, append Messages, or dispatch
+Bridge deliveries.
 
 The deterministic evaluator sorts successful reports by frozen participant
 ordinal, normalizes and hashes visible replies, combines valid structured
@@ -304,7 +308,8 @@ and Reviewer finalization through the Go Bridge.
 
 Sequential orchestration is tracked by `DISC-001` through `DISC-006`; parallel
 Wave delivery, presentation, and acceptance are completed by `DISC-007`,
-`WEB-020`, and `QA-010` in `docs/TASKS.md`.
+`WEB-020`, and `QA-010`. Lifecycle service extraction is tracked by `DISC-008`
+and `DISC-009` in `docs/TASKS.md`.
 
 ## Dependencies
 

@@ -1,8 +1,7 @@
-import type { CoreRepository, MessageRecord } from "../data/core-repository.js";
+import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { RunRecord, RunRepository } from "../run/run-repository.js";
 import type { AuthService, WebPrincipal } from "../security/auth-service.js";
-import { redactSensitiveText } from "../security/redaction.js";
 import type { MessageService } from "../team-room/message-service.js";
 import type { AgentTaskRepository } from "../task/task-repository.js";
 import {
@@ -43,10 +42,11 @@ import {
   type WavePlan
 } from "./discussion-wave-planner.js";
 import {
-  evaluateWaveProgress,
-  hashDiscussionReply,
-  parseAgentAssessment
+  evaluateWaveProgress
 } from "./progress-evaluator.js";
+import { DiscussionRecoveryService } from "./discussion-recovery-service.js";
+import { DiscussionEvidenceService } from "./discussion-evidence-service.js";
+import { WaveSettlementService } from "./wave-settlement-service.js";
 
 const maximumParticipants = 5;
 
@@ -108,6 +108,10 @@ function resolvePolicy(overrides?: Partial<DiscussionPolicy>): DiscussionPolicy 
 }
 
 export class DiscussionOrchestrator {
+  private readonly recovery: DiscussionRecoveryService;
+  private readonly evidence: DiscussionEvidenceService;
+  private readonly settlement: WaveSettlementService;
+
   public constructor(
     private readonly core: CoreRepository,
     private readonly messages: MessageService,
@@ -116,7 +120,11 @@ export class DiscussionOrchestrator {
     private readonly auth: AuthService,
     private readonly tasks: AgentTaskRepository,
     private readonly clock: () => string
-  ) {}
+  ) {
+    this.recovery = new DiscussionRecoveryService(repository, runs, clock);
+    this.evidence = new DiscussionEvidenceService(core, repository, runs, clock);
+    this.settlement = new WaveSettlementService(core, repository, runs);
+  }
 
   public create(
     principal: WebPrincipal,
@@ -435,42 +443,16 @@ export class DiscussionOrchestrator {
   }
 
   public onRunTerminal(runId: string): DiscussionMutationResult | null {
-    const run = this.runs.getRun(runId);
-    const existingTurn = this.repository.findTurnByRun(runId);
-    if (!run || !existingTurn || !terminalRunStates.has(run.state)) {
-      return null;
-    }
-    if (!existingTurn.waveId) {
-      throw new Error(`Discussion Turn has no Wave: ${existingTurn.turnId}`);
-    }
-    const output = this.core.findAgentReply(
-      existingTurn.inputMessageId,
-      existingTurn.speakerAgentId
-    );
-    const replyEvent = this.runs.listEvents(runId)
-      .filter(({ event }) => event.type === "reply")
-      .at(-1)?.event as { assessment?: unknown } | undefined;
-    const successful = run.state === "completed" && output !== undefined;
-    this.repository.settleTurn({
-      turnId: existingTurn.turnId,
-      outputMessageId: successful ? output.messageId : null,
-      state: successful ? "completed" : run.state === "canceled" ? "canceled" : "failed",
-      assessment: successful ? parseAgentAssessment(replyEvent?.assessment) : null,
-      replyHash: successful ? hashDiscussionReply(output.content) : null,
-      terminalReason: successful ? null : this.terminalReason(run, output !== undefined),
-      now: this.clock()
-    });
-
-    const discussion = this.requireDiscussion(existingTurn.discussionId);
-    const wave = this.repository.getWave(existingTurn.waveId);
-    if (!wave || wave.state !== "open") {
+    const settlement = this.settlement.settle(runId, this.clock());
+    if (!settlement) return null;
+    const discussion = this.requireDiscussion(settlement.discussionId);
+    if (!settlement.wave || settlement.wave.state !== "open") {
       return this.mutationResult(discussion.discussionId);
     }
-    const turns = this.repository.listTurnsForWave(wave.waveId);
-    if (turns.some(({ state }) => !terminalTurnStates.has(state))) {
-      return this.mutationResult(existingTurn.discussionId);
+    if (!settlement.ready) {
+      return this.mutationResult(settlement.discussionId);
     }
-    return this.advanceReadyWave(discussion, wave, turns);
+    return this.advanceReadyWave(discussion, settlement.wave, settlement.turns);
   }
 
   private advanceReadyWave(
@@ -494,7 +476,7 @@ export class DiscussionOrchestrator {
         ? "terminated" as const
         : "completed" as const;
       if (!finalizationSucceeded) {
-        this.appendFallbackConclusion(discussion, wave.inputMessageId);
+        this.evidence.appendFallbackConclusion(discussion, wave.inputMessageId);
       }
       this.repository.closeFinalizationAndFinish({
         discussionId: discussion.discussionId,
@@ -530,7 +512,7 @@ export class DiscussionOrchestrator {
 
   public recover(): RunRecord[] {
     const scheduled = new Map<string, RunRecord>();
-    this.recoverCanceledWaves();
+    this.recovery.closeCanceledWaves((runId) => this.onRunTerminal(runId));
     for (const run of this.expireDueWaves()) {
       scheduled.set(run.runId, run);
     }
@@ -610,7 +592,7 @@ export class DiscussionOrchestrator {
         (current.currentWave ?? 0) === 0 &&
         this.repository.listWaves(current.discussionId).length === 0
       ) {
-        this.appendFallbackConclusion(current, current.rootMessageId);
+        this.evidence.appendFallbackConclusion(current, current.rootMessageId);
         this.persistDecision(
           current,
           { ...decision, state: "terminated" },
@@ -632,95 +614,11 @@ export class DiscussionOrchestrator {
     return [];
   }
 
-  private recoverCanceledWaves(): void {
-    const now = this.clock();
-    for (const wave of this.repository.listOpenWaves()) {
-      const discussion = this.repository.get(wave.discussionId);
-      if (discussion?.state !== "canceled") continue;
-      for (const turn of this.repository.listTurnsForWave(wave.waveId)) {
-        if (terminalTurnStates.has(turn.state)) continue;
-        if (!turn.runId) {
-          this.repository.settleTurn({
-            turnId: turn.turnId,
-            outputMessageId: null,
-            state: "canceled",
-            assessment: null,
-            replyHash: null,
-            terminalReason: "discussion_canceled_before_dispatch",
-            now
-          });
-          continue;
-        }
-        let run = this.runs.getRun(turn.runId);
-        if (!run) continue;
-        if (!terminalRunStates.has(run.state)) {
-          const neverAccepted = run.state === "queued";
-          run = this.runs.applyEvent(run.runId, {
-            type: "status",
-            sequence: run.lastSequence + 1,
-            status: neverAccepted ? "canceled" : "outcome_unknown",
-            error: {
-              code: neverAccepted
-                ? "DISCUSSION_CANCELED"
-                : "DISCUSSION_CANCEL_RECOVERY_UNKNOWN",
-              message: neverAccepted
-                ? "The Discussion was canceled before this Run was accepted."
-                : "The server restarted before cancellation reached a known Runtime outcome.",
-              retryable: false
-            }
-          }, now).run;
-        }
-        this.onRunTerminal(run.runId);
-      }
-      const currentWave = this.repository.getWave(wave.waveId);
-      const members = this.repository.listTurnsForWave(wave.waveId);
-      if (
-        currentWave?.state === "open" &&
-        members.every(({ state }) => terminalTurnStates.has(state))
-      ) {
-        this.repository.closeWave({
-          waveId: wave.waveId,
-          expectedVersion: currentWave.version,
-          state: waveCloseState(members),
-          now
-        });
-      }
-    }
-  }
-
   public expireDueWaves(): RunRecord[] {
-    const now = this.clock();
-    const scheduled = new Map<string, RunRecord>();
-    const dueWaves = this.repository.listOpenWaves()
-      .filter(({ deadlineAt }) => Date.parse(deadlineAt) <= Date.parse(now));
-    for (const wave of dueWaves) {
-      for (const currentTurn of this.repository.listTurnsForWave(wave.waveId)) {
-        let run = currentTurn.runId
-          ? this.runs.getRun(currentTurn.runId)
-          : this.ensureRun(currentTurn);
-        if (!run) continue;
-        if (!terminalRunStates.has(run.state)) {
-          const accepted = run.state !== "queued";
-          run = this.runs.applyEvent(run.runId, {
-            type: "status",
-            sequence: run.lastSequence + 1,
-            status: accepted ? "outcome_unknown" : "expired",
-            error: {
-              code: accepted ? "DISCUSSION_WAVE_DEADLINE_UNKNOWN" : "RUN_EXPIRED",
-              message: accepted
-                ? "The Discussion Wave deadline passed before a terminal Runtime outcome."
-                : "The Run expired before its Discussion Wave deadline.",
-              retryable: false
-            }
-          }, now).run;
-        }
-        const result = this.onRunTerminal(run.runId);
-        for (const next of result?.scheduledRuns ?? []) {
-          if (next.state === "queued") scheduled.set(next.runId, next);
-        }
-      }
-    }
-    return [...scheduled.values()];
+    return this.recovery.expireDueWaves(
+      (turn) => this.ensureRun(turn),
+      (runId) => this.onRunTerminal(runId)
+    );
   }
 
   public reconcileDiscussion(discussionId: string): RunRecord[] {
@@ -803,7 +701,7 @@ export class DiscussionOrchestrator {
       successfulResults,
       policy: discussion.policy
     });
-    const nextInputMessageId = this.ensureWaveResultAnchor(
+    const nextInputMessageId = this.evidence.ensureWaveResultAnchor(
       discussion,
       wave,
       turns,
@@ -856,7 +754,7 @@ export class DiscussionOrchestrator {
     } else if (
       eligibleParticipants.length === 0 && decision.action === "finalize"
     ) {
-      this.appendFallbackConclusion(discussion, nextInputMessageId);
+      this.evidence.appendFallbackConclusion(discussion, nextInputMessageId);
       decision = decision.reason === "hard_budget_exhausted"
         ? {
             ...decision,
@@ -976,7 +874,7 @@ export class DiscussionOrchestrator {
     this.persistWavePlan({
       discussion,
       participants,
-      inputMessageId: this.latestOutputMessageId(discussion),
+      inputMessageId: this.evidence.latestOutputMessageId(discussion),
       kind: "discussion",
       decision: {
         action: "continue",
@@ -1002,9 +900,9 @@ export class DiscussionOrchestrator {
       this.repository.listParticipants(discussion.discussionId)
     );
     if (participants.length === 0) {
-      this.appendFallbackConclusion(
+      this.evidence.appendFallbackConclusion(
         discussion,
-        this.latestOutputMessageId(discussion)
+        this.evidence.latestOutputMessageId(discussion)
       );
       const hardBudgetExhausted = decision.reason === "hard_budget_exhausted";
       this.persistDecision(
@@ -1034,7 +932,7 @@ export class DiscussionOrchestrator {
     this.persistWavePlan({
       discussion,
       participants: [finalizer],
-      inputMessageId: this.latestOutputMessageId(discussion),
+      inputMessageId: this.evidence.latestOutputMessageId(discussion),
       kind: "finalization",
       decision,
       progress: discussion.progress,
@@ -1055,7 +953,7 @@ export class DiscussionOrchestrator {
     budgetEvents: DiscussionBudgetEvent[];
   }): WavePlan {
     const now = this.clock();
-    const inputMessageId = this.uniqueWaveAnchor(
+    const inputMessageId = this.evidence.uniqueWaveAnchor(
       input.discussion,
       input.participants,
       input.inputMessageId,
@@ -1155,7 +1053,7 @@ export class DiscussionOrchestrator {
     const collision = this.runs.findByTrigger(turn.inputMessageId)
       .find(({ targetAgentId }) => targetAgentId === turn.speakerAgentId);
     if (collision) {
-      const latestAnchor = this.latestOutputMessageId(discussion);
+      const latestAnchor = this.evidence.latestOutputMessageId(discussion);
       if (turn.waveId && latestAnchor !== turn.inputMessageId) {
         this.repository.reanchorPlannedWave(turn.waveId, latestAnchor, this.clock());
         const reanchored = this.repository.getTurn(turn.turnId);
@@ -1188,7 +1086,7 @@ export class DiscussionOrchestrator {
       requesterMemberId: discussion.requesterMemberId,
       targetAgentId: turn.speakerAgentId,
       parentRunId: previousRun,
-      instruction: this.buildInstruction(discussion, wave, turn),
+      instruction: this.evidence.buildInstruction(discussion, wave, turn),
       state: "queued",
       lastSequence: 0,
       deadlineAt: wave.deadlineAt,
@@ -1217,9 +1115,9 @@ export class DiscussionOrchestrator {
     );
     if (!hasCollision) return;
     const discussion = this.requireDiscussion(wave.discussionId);
-    const latestAnchor = this.latestOutputMessageId(discussion);
+    const latestAnchor = this.evidence.latestOutputMessageId(discussion);
     const plannedAgents = new Set(turns.map(({ speakerAgentId }) => speakerAgentId));
-    const replacement = this.uniqueWaveAnchor(
+    const replacement = this.evidence.uniqueWaveAnchor(
       discussion,
       this.repository.listParticipants(discussion.discussionId)
         .filter(({ agentId }) => plannedAgents.has(agentId)),
@@ -1227,190 +1125,6 @@ export class DiscussionOrchestrator {
       this.clock()
     );
     this.repository.reanchorPlannedWave(waveId, replacement, this.clock());
-  }
-
-  private uniqueWaveAnchor(
-    discussion: DiscussionRecord,
-    participants: DiscussionParticipant[],
-    candidateMessageId: string,
-    now: string
-  ): string {
-    const existingAgents = new Set(
-      this.runs.findByTrigger(candidateMessageId).map(({ targetAgentId }) => targetAgentId)
-    );
-    if (!participants.some(({ agentId }) => existingAgents.has(agentId))) {
-      return candidateMessageId;
-    }
-    const parent = this.core.getMessage(candidateMessageId);
-    if (!parent) {
-      throw new Error(`Discussion continuation Message not found: ${candidateMessageId}`);
-    }
-    const messageId = createOpaqueId("msg");
-    this.core.appendMessage({
-      messageId,
-      roomId: discussion.roomId,
-      taskId: discussion.taskId,
-      senderType: "system",
-      senderId: discussion.discussionId,
-      content: "继续讨论：上一轮没有产生可复用的新输入，已创建新的执行锚点。",
-      mentions: [],
-      parentMessageId: candidateMessageId,
-      traceId: parent.traceId,
-      createdAt: now
-    });
-    return messageId;
-  }
-
-  private buildInstruction(
-    discussion: DiscussionRecord,
-    wave: DiscussionWave,
-    turn: DiscussionTurn
-  ): string {
-    const participants = this.repository.listParticipants(discussion.discussionId)
-      .map((participant) => {
-        const agent = this.core.getAgent(participant.agentId);
-        return `${agent?.name ?? participant.agentId} (${participant.role})`;
-      });
-    const trigger = this.core.getMessage(turn.inputMessageId);
-    const transcript = this.discussionTranscript(discussion, wave, trigger);
-    const remainingLease = Math.max(
-      0,
-      discussion.budget.leaseEndTurn - discussion.budget.turnsUsed
-    );
-    const unresolved = discussion.progress.openQuestions.length === 0
-      ? "None recorded"
-      : discussion.progress.openQuestions
-        .map(({ question, importance }) => `- [${importance}] ${question}`)
-        .join("\n");
-    const transcriptText = transcript.map((message) =>
-      `[${this.senderName(message)}] ${redactSensitiveText(message.content)}`
-    ).join("\n");
-    const task = turn.kind === "finalization"
-      ? `Produce the final ${discussion.outputMode.replaceAll("_", " ")} now. ` +
-        "Synthesize the best supported conclusion, important unresolved issues, and next actions."
-      : "Make an independent, useful contribution for this Wave. Resolve a question, add evidence, " +
-        "or challenge the current conclusion; do not merely repeat agreement.";
-    return [
-      "# Agent Room Discussion Context",
-      `Discussion ID: ${discussion.discussionId}`,
-      `Wave: ${wave.ordinal}`,
-      `Wave member: ${(turn.waveMemberOrdinal ?? 0) + 1}/${wave.expectedMembers}`,
-      `Mode: ${discussion.mode}`,
-      `Participants: ${participants.join(", ")}`,
-      "",
-      "## Goal",
-      discussion.goal,
-      "",
-      "## Progress",
-      `Confidence: ${discussion.progress.confidence ?? "unknown"}`,
-      `Disagreement: ${discussion.progress.disagreementRemaining}`,
-      `Plateau count: ${discussion.progress.plateauCount}`,
-      "Important unresolved questions:",
-      unresolved,
-      "",
-      "## Remaining Lease",
-      `${remainingLease} ordinary waves; token and cost telemetry may be unknown.`,
-      "",
-      "## Recent Room Transcript",
-      transcriptText,
-      "",
-      "## Your Task",
-      task,
-      "Other participants in this Wave run concurrently and cannot see this reply until the next Wave.",
-      "The Orchestrator, not you, decides whether the Discussion continues. " +
-        "A plain-text reply is always valid when structured assessment is unsupported.",
-      "When supported, append one final line exactly in this form: " +
-        "<agentroom-assessment>{\"goalSatisfied\":false," +
-        "\"confidence\":0.7,\"newInformationAdded\":true," +
-        "\"recommendation\":\"continue\"}</agentroom-assessment>. " +
-        "This is evidence only; it does not control the next action."
-    ].join("\n").slice(0, 20_000);
-  }
-
-  private latestOutputMessageId(discussion: DiscussionRecord): string {
-    const latestWave = this.repository.listWaves(discussion.discussionId)
-      .filter(({ state }) => state !== "open")
-      .at(-1);
-    if (latestWave) {
-      const anchorId = this.waveResultMessageId(latestWave.waveId);
-      if (this.core.getMessage(anchorId)) return anchorId;
-    }
-    const outputs = this.repository.listTurns(discussion.discussionId)
-      .flatMap(({ outputMessageId }) => {
-        if (!outputMessageId) return [];
-        const message = this.core.getMessage(outputMessageId);
-        return message ? [message] : [];
-      })
-      .sort((left, right) => left.sequence - right.sequence);
-    return outputs.at(-1)?.messageId ?? discussion.rootMessageId;
-  }
-
-  private discussionTranscript(
-    discussion: DiscussionRecord,
-    currentWave: DiscussionWave,
-    trigger: MessageRecord | undefined
-  ): MessageRecord[] {
-    const waves = new Map(
-      this.repository.listWaves(discussion.discussionId)
-        .map((wave) => [wave.waveId, wave.ordinal])
-    );
-    const messages: MessageRecord[] = [];
-    const root = this.core.getMessage(discussion.rootMessageId);
-    if (root) messages.push(root);
-    for (const turn of this.repository.listTurns(discussion.discussionId)) {
-      const waveOrdinal = turn.waveId ? waves.get(turn.waveId) : undefined;
-      if (
-        waveOrdinal === undefined || waveOrdinal >= currentWave.ordinal ||
-        !turn.outputMessageId
-      ) {
-        continue;
-      }
-      const output = this.core.getMessage(turn.outputMessageId);
-      if (output) messages.push(output);
-    }
-    if (
-      trigger && trigger.messageId !== discussion.rootMessageId &&
-      !messages.some(({ messageId }) => messageId === trigger.messageId)
-    ) {
-      messages.push(trigger);
-    }
-    return messages.slice(-24);
-  }
-
-  private ensureWaveResultAnchor(
-    discussion: DiscussionRecord,
-    wave: DiscussionWave,
-    turns: DiscussionTurn[],
-    now: string
-  ): string {
-    const messageId = this.waveResultMessageId(wave.waveId);
-    if (this.core.getMessage(messageId)) return messageId;
-    const parent = this.core.getMessage(wave.inputMessageId);
-    const lines = [...turns]
-      .sort((left, right) =>
-        (left.waveMemberOrdinal ?? 0) - (right.waveMemberOrdinal ?? 0)
-      )
-      .map((turn) => {
-        const agentName = this.core.getAgent(turn.speakerAgentId)?.name ?? turn.speakerAgentId;
-        return `- ${agentName}: ${turn.state}`;
-      });
-    this.core.appendMessage({
-      messageId,
-      roomId: discussion.roomId,
-      taskId: discussion.taskId,
-      senderType: "system",
-      senderId: discussion.discussionId,
-      content: [`第 ${wave.ordinal} 轮已收敛。`, ...lines].join("\n"),
-      mentions: [],
-      parentMessageId: wave.inputMessageId,
-      ...(parent ? { traceId: parent.traceId } : {}),
-      createdAt: now
-    });
-    return messageId;
-  }
-
-  private waveResultMessageId(waveId: string): string {
-    return `msg_wave_${waveId.slice(5)}`;
   }
 
   private eligibleParticipants(
@@ -1426,52 +1140,6 @@ export class DiscussionOrchestrator {
         agent.teamId === room.teamId &&
         this.core.isRoomAgent(room.roomId, agentId)
       );
-    });
-  }
-
-  private terminalReason(run: RunRecord, hasOutput: boolean): string {
-    if (this.runs.listEvents(run.runId).some(({ event }) =>
-      event.type === "status" && event.status === "input_required"
-    )) {
-      return "input_required";
-    }
-    if (run.state === "completed" && !hasOutput) return "completed_without_reply";
-    return `run_${run.state}`.slice(0, 160);
-  }
-
-  private senderName(message: MessageRecord): string {
-    if (message.senderType === "agent") {
-      return this.core.getAgent(message.senderId)?.name ?? message.senderId;
-    }
-    if (message.senderType === "member") {
-      return this.core.getMember(message.senderId)?.displayName ?? message.senderId;
-    }
-    return "System";
-  }
-
-  private appendFallbackConclusion(
-    discussion: DiscussionRecord,
-    parentMessageId: string
-  ): void {
-    const fallbackMessageId = `msg_fallback_${discussion.discussionId.slice(11)}`;
-    if (this.core.getMessage(fallbackMessageId)) return;
-    const parent = this.core.getMessage(parentMessageId);
-    const unresolved = discussion.progress.openQuestions.length === 0
-      ? "暂无记录的未决问题。"
-      : discussion.progress.openQuestions
-        .map(({ question, importance }) => `- [${importance}] ${question}`)
-        .join("\n");
-    this.core.appendMessage({
-      messageId: fallbackMessageId,
-      roomId: discussion.roomId,
-      taskId: discussion.taskId,
-      senderType: "system",
-      senderId: discussion.discussionId,
-      content: `讨论已停止，最终生成器未能完成。\n\n未决问题：\n${unresolved}`,
-      mentions: [],
-      parentMessageId,
-      ...(parent ? { traceId: parent.traceId } : {}),
-      createdAt: this.clock()
     });
   }
 
