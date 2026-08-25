@@ -61,6 +61,23 @@ QA/OPS verifies every layer.
 Dependencies describe contract order, not necessarily delivery order. Fake
 implementations may stand in for an unfinished dependency during a milestone.
 
+## Server Composition Boundary
+
+`apps/server/src/app.ts` is the Server composition root. It opens the database,
+constructs shared repositories and services, installs process-wide hooks, owns
+startup recovery and timers, and passes an explicit `ServerRouteContext` to
+feature route registrars under `apps/server/src/http/`. Route registrars may
+bind HTTP, WebSocket, or MCP transport behavior for their feature, but they do
+not construct repositories, services, timers, or other cross-module state.
+Shared request parsing and cookie helpers remain transport utilities and own no
+domain state.
+
+This boundary keeps dependency construction and lifecycle authority visible in
+one place while allowing Auth, Team/Room, Registry, Message, Task, Discussion,
+Run, Bridge, MCP, and system routes to evolve behind their existing public
+contracts. Moving behavior between registrars does not change the state owner
+listed in the module map.
+
 ## Standard Module Document
 
 Every module document contains:
