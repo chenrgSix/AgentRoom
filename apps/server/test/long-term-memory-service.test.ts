@@ -148,6 +148,19 @@ test("long-term Memory preserves old provenance and explicit lifecycle", async (
     assert.equal(memoryRepository.get(roomDecision.memoryId)?.revision, 2);
     assert.equal(replacement.revision, 3);
     assert.deepEqual(
+      memoryRepository.contextScopeAtRevision("room", room.roomId, 1)?.entries
+        .map((entry) => [entry.memoryId, entry.state, entry.revision]),
+      [[roomDecision.memoryId, "active", 1]]
+    );
+    assert.deepEqual(
+      memoryRepository.contextScopeAtRevision("room", room.roomId, 3)?.entries
+        .map((entry) => [entry.memoryId, entry.state, entry.revision]),
+      [
+        [roomDecision.memoryId, "superseded", 2],
+        [replacement.memoryId, "active", 3]
+      ]
+    );
+    assert.deepEqual(
       memory.listRoom(principal, room.roomId, 1).map((entry) => entry.revision),
       [2, 3]
     );

@@ -94,6 +94,21 @@ test("one idempotent queued Run is created per structured Agent Mention", async 
     assert.deepEqual(runService.listRoomRuns(principal, room.roomId), first);
 
     const runId = first[0]?.runId ?? "";
+    assert.deepEqual(runRepository.getContextFence(runId), {
+      runId,
+      roomId: room.roomId,
+      taskId: mentioned.taskId,
+      triggerSequence: mentioned.sequence,
+      roomLongTermMemoryRevision: 0,
+      taskLongTermMemoryRevision: 0,
+      taskArtifactRevision: 0,
+      taskSummaryRevision: 0,
+      taskState: "open",
+      taskTitle: "Room work",
+      taskGoal: "Continue work in this Room.",
+      fenceKind: "captured",
+      capturedAt: now
+    });
     assert.equal(runRepository.applyEvent(runId, {
       type: "status",
       sequence: 1,

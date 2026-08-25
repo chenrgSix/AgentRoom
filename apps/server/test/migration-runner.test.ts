@@ -27,16 +27,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 32);
+  assert.equal(first.currentVersion, 33);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -63,7 +63,7 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       )
       .get() as { count: number };
 
-    assert.equal(migrationCount.count, 32);
+    assert.equal(migrationCount.count, 33);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
     assert.equal(clarificationTable.count, 1);
@@ -146,7 +146,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -302,12 +302,27 @@ test("Runtime activity migration preserves pending reply routing intents", async
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [23, 24, 25, 26, 27, 28, 29, 30, 31, 32]);
+  assert.deepEqual(migrated.appliedVersions, [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33]);
   const database = openDatabase(databasePath);
   try {
     const runs = new RunRepository(database);
     assert.equal(runs.listPendingReplyRoutingIntents(runId).length, 1);
     assert.equal(runs.listEvents(runId).at(-1)?.event.type, "reply");
+    assert.equal(runs.getContextFence(runId)?.fenceKind, "legacy");
+    assert.deepEqual(database.prepare(`
+      SELECT mode, latest_through_sequence, desired_through_sequence
+      FROM rolling_room_state
+      WHERE room_id = 'room_activity_migration'
+    `).get(), {
+      mode: "disabled",
+      latest_through_sequence: 0,
+      desired_through_sequence: 1
+    });
+    assert.equal((database.prepare(`
+      SELECT count(*) AS count
+      FROM rolling_room_checkpoints
+      WHERE room_id = 'room_activity_migration'
+    `).get() as { count: number }).count, 0);
     assert.equal(runs.applyEvent(runId, {
       type: "activity",
       sequence: 3,

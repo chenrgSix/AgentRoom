@@ -33,6 +33,22 @@ export interface RunRecord {
   orchestrationKey?: string;
 }
 
+export interface RunContextFence {
+  runId: string;
+  roomId: string;
+  taskId: string;
+  triggerSequence: number;
+  roomLongTermMemoryRevision: number;
+  taskLongTermMemoryRevision: number;
+  taskArtifactRevision: number;
+  taskSummaryRevision: number;
+  taskState: "open" | "working" | "blocked" | "review" | "completed" | "canceled";
+  taskTitle: string;
+  taskGoal: string;
+  fenceKind: "legacy" | "captured";
+  capturedAt: string;
+}
+
 export interface RunEventRecord {
   runId: string;
   traceId: string;
@@ -90,6 +106,22 @@ interface RunEventRow {
   created_at: string;
 }
 
+interface RunContextFenceRow {
+  run_id: string;
+  room_id: string;
+  task_id: string;
+  trigger_sequence: number;
+  room_long_term_memory_revision: number;
+  task_long_term_memory_revision: number;
+  task_artifact_revision: number;
+  task_summary_revision: number;
+  task_state: RunContextFence["taskState"];
+  task_title: string;
+  task_goal: string;
+  fence_kind: RunContextFence["fenceKind"];
+  captured_at: string;
+}
+
 interface RunReplyRoutingIntentRow {
   parent_run_id: string;
   reply_sequence: number;
@@ -127,6 +159,24 @@ function mapRun(row: RunRow): RunRecord {
     ...(row.orchestration_key
       ? { orchestrationKey: row.orchestration_key }
       : {})
+  };
+}
+
+function mapContextFence(row: RunContextFenceRow): RunContextFence {
+  return {
+    runId: row.run_id,
+    roomId: row.room_id,
+    taskId: row.task_id,
+    triggerSequence: row.trigger_sequence,
+    roomLongTermMemoryRevision: row.room_long_term_memory_revision,
+    taskLongTermMemoryRevision: row.task_long_term_memory_revision,
+    taskArtifactRevision: row.task_artifact_revision,
+    taskSummaryRevision: row.task_summary_revision,
+    taskState: row.task_state,
+    taskTitle: row.task_title,
+    taskGoal: row.task_goal,
+    fenceKind: row.fence_kind,
+    capturedAt: row.captured_at
   };
 }
 
@@ -236,6 +286,13 @@ export class RunRepository {
       SELECT * FROM runs WHERE run_id = ?
     `).get(runId) as RunRow | undefined;
     return row && mapRun(row);
+  }
+
+  public getContextFence(runId: string): RunContextFence | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM run_context_fences WHERE run_id = ?
+    `).get(runId) as RunContextFenceRow | undefined;
+    return row && mapContextFence(row);
   }
 
   public findByTrigger(messageId: string): RunRecord[] {

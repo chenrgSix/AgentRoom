@@ -60,6 +60,11 @@ interface MemoryEntryRow {
   updated_at: string;
 }
 
+interface MemoryEntryLifecycleRow extends MemoryEntryRow {
+  lifecycle_revision: number;
+  lifecycle_state: MemoryEntryState;
+}
+
 export interface MemoryContextScope {
   revision: number;
   activeComplete: boolean;
@@ -195,38 +200,75 @@ export class MemoryEntryRepository {
     tombstoneLimit = 8
   ): MemoryContextScope | undefined {
     const revision = this.scopeRevision(scopeKind, scopeId);
+    return this.contextScopeAtRevision(
+      scopeKind,
+      scopeId,
+      revision,
+      activeLimit,
+      tombstoneLimit
+    );
+  }
+
+  public contextScopeAtRevision(
+    scopeKind: MemoryScopeKind,
+    scopeId: string,
+    revision: number,
+    activeLimit = 16,
+    tombstoneLimit = 8
+  ): MemoryContextScope | undefined {
+    if (!Number.isSafeInteger(revision) || revision < 0) {
+      throw new Error("Memory scope revision must be a non-negative integer");
+    }
     if (revision === 0) return undefined;
-    const activeCount = this.database.prepare(`
-      SELECT count(*) AS count FROM memory_entries
-      WHERE scope_kind = ? AND scope_id = ? AND state = 'active'
-    `).get(scopeKind, scopeId) as { count: number };
-    const active = this.database.prepare(`
-      SELECT * FROM memory_entries
-      WHERE scope_kind = ? AND scope_id = ? AND state = 'active'
-      ORDER BY
-        CASE entry_type
-          WHEN 'constraint' THEN 0
-          WHEN 'goal' THEN 0
-          WHEN 'decision' THEN 1
-          WHEN 'acceptance_criterion' THEN 1
-          WHEN 'convention' THEN 2
-          WHEN 'blocker' THEN 2
-          ELSE 3
-        END,
-        revision DESC
-      LIMIT ?
-    `).all(scopeKind, scopeId, activeLimit) as MemoryEntryRow[];
-    const inactive = this.database.prepare(`
-      SELECT * FROM memory_entries
-      WHERE scope_kind = ? AND scope_id = ? AND state <> 'active'
-      ORDER BY revision DESC
-      LIMIT ?
-    `).all(scopeKind, scopeId, tombstoneLimit) as MemoryEntryRow[];
+    const rows = this.database.prepare(`
+      WITH latest_events AS (
+        SELECT memory_id, max(revision) AS revision
+        FROM memory_entry_lifecycle_events
+        WHERE scope_kind = ? AND scope_id = ? AND revision <= ?
+        GROUP BY memory_id
+      )
+      SELECT entry.*, event.revision AS lifecycle_revision,
+             event.state AS lifecycle_state
+      FROM latest_events latest
+      JOIN memory_entry_lifecycle_events event
+        ON event.memory_id = latest.memory_id AND event.revision = latest.revision
+      JOIN memory_entries entry ON entry.memory_id = latest.memory_id
+    `).all(scopeKind, scopeId, revision) as MemoryEntryLifecycleRow[];
+    const entries = rows.map((row) => mapEntry({
+      ...row,
+      revision: row.lifecycle_revision,
+      state: row.lifecycle_state
+    }));
+    const priority = (entry: MemoryEntryRecord): number => {
+      switch (entry.type) {
+        case "constraint":
+        case "goal":
+          return 0;
+        case "decision":
+        case "acceptance_criterion":
+          return 1;
+        case "convention":
+        case "blocker":
+          return 2;
+        default:
+          return 3;
+      }
+    };
+    const active = entries
+      .filter((entry) => entry.state === "active")
+      .sort((left, right) =>
+        priority(left) - priority(right) || right.revision - left.revision
+      );
+    const inactive = entries
+      .filter((entry) => entry.state !== "active")
+      .sort((left, right) => right.revision - left.revision);
     return {
       revision,
-      activeComplete: activeCount.count <= activeLimit,
-      entries: [...active, ...inactive]
-        .map(mapEntry)
+      activeComplete: active.length <= activeLimit,
+      entries: [
+        ...active.slice(0, activeLimit),
+        ...inactive.slice(0, tombstoneLimit)
+      ]
         .sort((left, right) => left.revision - right.revision)
     };
   }
