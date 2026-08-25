@@ -33,6 +33,11 @@ validates and opens one file within the configured Workspace, and requests a
 Device scope before issuing a bounded lease. Artifact Content Transport accepts
 only that lease and still verifies the final content digest.
 
+The implemented Device-authenticated lease endpoint accepts only the published
+opaque Workspace identity and generation. The Bridge keeps the configured root
+and source path local, rechecks the Workspace generation across a double-read
+capture, and sends only a basename plus immutable byte metadata downstream.
+
 For a future Workspace apply operation, `write_apply` uses compare-and-set
 against the current generation. `isolated_worktree` names a Bridge-created
 worktree bound to one Task and Run. These write modes are not prerequisites for

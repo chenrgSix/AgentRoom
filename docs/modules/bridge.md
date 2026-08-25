@@ -110,6 +110,16 @@ capability. The absolute configured Workspace remains local. The generation is
 attribution for the initial read-source lease; it is not yet the stronger Git or
 worktree CAS required for future automated writes.
 
+For `BRG-028`, a managed Agent also advertises Artifact publication support.
+The explicit `artifact publish` command selects one configured Agent and active
+assigned Run, captures one Workspace-relative Patch, Markdown document, or JSON
+test result up to 4 MiB, then drives the Device-authenticated lease, resumable
+upload, seal, and canonical bind APIs. Source traversal, symbolic links, special
+files, changing bytes or Workspace generation, mismatched type/extension, and
+digest drift fail locally. Output and server responses contain only opaque
+identities, basename, size, media type, and digest; configured paths, storage
+keys, credentials, and file contents are not logged.
+
 `GET /ws/bridge` authenticates the Device bearer credential before upgrade.
 Every connection must start with protocol `1.0` `bridge.hello`; a newer epoch
 closes the old socket, while stale epochs and identity-mismatched heartbeats are

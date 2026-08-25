@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -99,6 +100,11 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
       "  } });",
       "}, 1200);"
     ].join("\n"));
+    const artifactBytes = Buffer.from(
+      "diff --git a/verified.txt b/verified.txt\n+cross-process artifact\n",
+      "utf8"
+    );
+    await writeFile(path.join(directory, "verified.patch"), artifactBytes);
     const configPath = path.join(directory, "bridge.json");
     await writeFile(configPath, JSON.stringify({
       serverUrl,
@@ -329,6 +335,36 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
       );
       return run?.state === "working" ? run : undefined;
     });
+    stage = "publish verified Artifact through the Bridge CLI";
+    const published = await execFileAsync(bridgeBinary, [
+      "artifact", "publish",
+      "--config", configPath,
+      "--agent", "Slow Builder",
+      "--run-id", slowRunId,
+      "--type", "patch",
+      "--file", "verified.patch",
+      "--title", "Cross-process patch",
+      "--summary", "Published while the assigned Run is active."
+    ]);
+    assert.match(published.stdout, /published Artifact artifact_/u);
+    assert.equal(published.stdout.includes(directory), false);
+    const slowTaskId = slowSent.json().runs[0].taskId as string;
+    const artifactResponse = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${slowTaskId}/artifacts`,
+      headers: authorization
+    });
+    assert.equal(artifactResponse.statusCode, 200, artifactResponse.body);
+    const contentArtifact = artifactResponse.json().artifacts.find(
+      (artifact: { title: string }) => artifact.title === "Cross-process patch"
+    );
+    assert.ok(contentArtifact);
+    assert.equal(contentArtifact.contentMode, "snapshot_blob");
+    assert.equal(contentArtifact.path, "verified.patch");
+    assert.equal(
+      contentArtifact.contentSha256,
+      createHash("sha256").update(artifactBytes).digest("hex")
+    );
     const canceled = await app.inject({
       method: "POST", url: `/api/runs/${slowRunId}/cancel`, headers: authorization,
       payload: { reason: "E2E cancellation" }

@@ -89,6 +89,9 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	if capabilities["supportsWorkspaceLeases"] != true {
 		t.Fatalf("Workspace lease capability was not published: %#v", publication)
 	}
+	if capabilities["supportsArtifactPublication"] != true {
+		t.Fatalf("Artifact publication capability was not published: %#v", publication)
+	}
 	runtimeScopeID, ok := payload["runtimeScopeId"].(string)
 	if !ok || len(runtimeScopeID) != 64 {
 		t.Fatalf("Runtime scope was not published: %#v", publication)

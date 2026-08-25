@@ -1,8 +1,8 @@
 # Artifact Content Transport Module
 
 - Prefix: `ART`
-- Implementation: `apps/server/src/artifact/` and migration 0036
-- Planned Bridge implementation: `bridge/internal/artifact/`
+- Implementation: `apps/server/src/artifact/`, `apps/server/src/http/artifact-routes.ts`,
+  `bridge/internal/artifact/`, and migration 0036
 - Owns: Blob uploads, sealed content, content retention, authenticated transfer,
   and materialization receipts
 
@@ -40,6 +40,12 @@ durable publication operations; publication metadata carries the validated
 Artifact type, file name, and media type until Task Collaboration binds it.
 Migration 0037 then links exactly one sealed publication to one new canonical
 Task Artifact without moving Artifact ownership into this module.
+
+The first Bridge source client exposes an explicit `artifact publish` command.
+It captures one allowlisted typed file, requests the assigned Run's lease over
+the Device-authenticated HTTP boundary, and drives prepare, ordered chunks,
+seal, and bind. Deterministic idempotency keys plus publication status lookup
+recover response loss without inventing another Blob or Artifact identity.
 
 ## Publication and Bind
 
@@ -108,7 +114,7 @@ download. Read-only mode is not presented as an OS sandbox guarantee.
 ## Task Mapping
 
 `ART-001` owns durable upload and seal. `TASK-010` owns canonical bind,
-`CON-010` the additive wire contract, `BRG-028` source publication, `RUN-011`
+`CON-010` the additive wire contract, completed `BRG-028` source publication, `RUN-011`
 pinned delivery, `BRG-029` isolated materialization, `ADP-014` Runtime alias
 injection, `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
 two-Bridge recovery gate.

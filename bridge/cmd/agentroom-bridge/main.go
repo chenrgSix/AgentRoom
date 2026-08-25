@@ -14,11 +14,13 @@ import (
 	"syscall"
 	"time"
 
+	bridgeartifact "agentroom.dev/bridge/internal/artifact"
 	"agentroom.dev/bridge/internal/bridgecore"
 	"agentroom.dev/bridge/internal/browserlaunch"
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/console"
 	"agentroom.dev/bridge/internal/enrollment"
+	"agentroom.dev/bridge/internal/identity"
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
 	"agentroom.dev/bridge/internal/updatecheck"
@@ -35,7 +37,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("expected one of: version, console, validate-config, join, pair, run")
+		return fmt.Errorf("expected one of: version, console, validate-config, join, pair, artifact, run")
 	}
 	switch args[0] {
 	case "version":
@@ -85,6 +87,8 @@ func run(args []string) error {
 		}
 		fmt.Printf("paired device %s with Team %s\n", credential.DeviceID, credential.TeamID)
 		return nil
+	case "artifact":
+		return runArtifact(args[1:])
 	case "run":
 		command := flag.NewFlagSet("run", flag.ContinueOnError)
 		path := command.String("config", "", "path to bridge JSON configuration")
@@ -107,6 +111,107 @@ func run(args []string) error {
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runArtifact(args []string) error {
+	if len(args) == 0 || args[0] != "publish" {
+		return fmt.Errorf("artifact requires the publish subcommand")
+	}
+	command := flag.NewFlagSet("artifact publish", flag.ContinueOnError)
+	configPath := command.String("config", "", "path to bridge JSON configuration")
+	agentName := command.String("agent", "", "configured Agent name")
+	runID := command.String("run-id", "", "source Run identity")
+	artifactType := command.String("type", "", "patch, document, or test_result")
+	file := command.String("file", "", "Workspace-relative source file")
+	title := command.String("title", "", "Artifact title")
+	summary := command.String("summary", "", "Artifact summary")
+	if err := command.Parse(args[1:]); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*runID) == "" || strings.TrimSpace(*file) == "" ||
+		strings.TrimSpace(*artifactType) == "" || strings.TrimSpace(*title) == "" ||
+		strings.TrimSpace(*summary) == "" {
+		return fmt.Errorf(
+			"artifact publish requires --run-id, --type, --file, --title, and --summary",
+		)
+	}
+	resolvedConfig := *configPath
+	if resolvedConfig == "" {
+		resolvedConfig = config.DefaultPath()
+	}
+	loaded, err := config.Load(resolvedConfig)
+	if err != nil {
+		return err
+	}
+	selected, err := configuredAgent(loaded.Agents, strings.TrimSpace(*agentName))
+	if err != nil {
+		return err
+	}
+	identities, err := identity.LoadOrCreate(loaded.DataDir, loaded.Agents)
+	if err != nil {
+		return err
+	}
+	agentID := identities[selected.Name]
+	if agentID == "" {
+		return fmt.Errorf("configured Agent has no stable identity")
+	}
+	credential, err := pairing.Load(loaded.DataDir)
+	if err != nil {
+		return err
+	}
+	source, err := bridgeartifact.Capture(
+		selected.Workspace,
+		*file,
+		strings.TrimSpace(*artifactType),
+	)
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	result, err := bridgeartifact.NewClient(loaded, credential).Publish(
+		ctx,
+		bridgeartifact.PublishInput{
+			RunID: strings.TrimSpace(*runID), AgentID: agentID,
+			ArtifactType: strings.TrimSpace(*artifactType),
+			Title:        strings.TrimSpace(*title), Summary: strings.TrimSpace(*summary),
+			Source: source,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	fmt.Printf(
+		"published Artifact %s from operation %s (content %s, sha256 %s)\n",
+		result.ArtifactID,
+		result.PublicationID,
+		result.ContentID,
+		result.SHA256,
+	)
+	return nil
+}
+
+func configuredAgent(
+	agents []config.AgentConfig,
+	requestedName string,
+) (config.AgentConfig, error) {
+	if requestedName == "" {
+		if len(agents) != 1 {
+			return config.AgentConfig{}, fmt.Errorf(
+				"artifact publish requires --agent when multiple Agents are configured",
+			)
+		}
+		return agents[0], nil
+	}
+	for _, agent := range agents {
+		if agent.Name == requestedName {
+			return agent, nil
+		}
+	}
+	return config.AgentConfig{}, fmt.Errorf(
+		"configured Agent %q was not found",
+		requestedName,
+	)
 }
 
 func runConsole(args []string) error {

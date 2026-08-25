@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
+import type { ArtifactPublicationService } from
+  "../artifact/artifact-publication-service.js";
 import type { BridgeConnectionRegistry } from "../bridge/bridge-connection-registry.js";
 import type { CoreRepository } from "../data/core-repository.js";
 import type { DiscussionOrchestrator } from "../discussion/discussion-orchestrator.js";
@@ -31,14 +33,20 @@ import type { MemoryCandidateService } from "../memory/memory-candidate-service.
 import type { TeamChangeService } from "../team-room/team-change-service.js";
 import type { TeamRoomService } from "../team-room/team-room-service.js";
 import type { AgentTaskService } from "../task/agent-task-service.js";
+import type { ArtifactContentBindingService } from
+  "../task/artifact-content-binding-service.js";
 import type { LongTermMemoryService } from "../task/long-term-memory-service.js";
 import type { TaskArtifactService } from "../task/task-artifact-service.js";
 import type { TaskClarificationService } from "../task/task-clarification-service.js";
+import type { WorkspaceLeaseService } from
+  "../workspace/workspace-lease-service.js";
 
 export type PersistedRun = NonNullable<ReturnType<RunRepository["getRun"]>>;
 
 export interface ServerRouteContext {
   app: FastifyInstance;
+  artifactContentBinding: ArtifactContentBindingService;
+  artifactPublications: ArtifactPublicationService;
   advanceDiscussion: (runId: string) => Promise<void>;
   agents: AgentService;
   auth: AuthService;
@@ -80,4 +88,5 @@ export interface ServerRouteContext {
   traces: TraceRepository;
   trustedWeb?: TrustedWebAccessService;
   webAuth: WebAuthConfiguration;
+  workspaceLeases: WorkspaceLeaseService;
 }

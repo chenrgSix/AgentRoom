@@ -9,6 +9,12 @@ import Fastify, {
   type FastifyRequest
 } from "fastify";
 
+import { ArtifactPublicationRepository } from
+  "./artifact/artifact-publication-repository.js";
+import { ArtifactPublicationService } from
+  "./artifact/artifact-publication-service.js";
+import { LocalArtifactBlobStore } from
+  "./artifact/local-artifact-blob-store.js";
 import { CoreRepository } from "./data/core-repository.js";
 import { BridgeConnectionRegistry } from "./bridge/bridge-connection-registry.js";
 import { openDatabase } from "./data/database.js";
@@ -16,6 +22,7 @@ import { prepareDatabaseDirectory } from "./data/database-location.js";
 import { migrateDatabase } from "./data/migration-runner.js";
 import { SqliteTransactionBoundary } from "./data/sqlite-transaction-boundary.js";
 import { registerAuthRoutes } from "./http/auth-routes.js";
+import { registerArtifactRoutes } from "./http/artifact-routes.js";
 import { registerBridgeSocketRoutes } from "./http/bridge-socket-routes.js";
 import {
   bearerToken,
@@ -68,6 +75,8 @@ import { TeamRoomService } from "./team-room/team-room-service.js";
 import { TeamChangeService } from "./team-room/team-change-service.js";
 import { MessageService } from "./team-room/message-service.js";
 import { AgentTaskService } from "./task/agent-task-service.js";
+import { ArtifactContentBindingService } from
+  "./task/artifact-content-binding-service.js";
 import { ArtifactRepository } from "./task/artifact-repository.js";
 import { ContextPlanner } from "./task/context-planner.js";
 import { LongTermMemoryService } from "./task/long-term-memory-service.js";
@@ -89,6 +98,10 @@ import {
   RollingRoomMemoryRepository
 } from "./memory/rolling-room-memory-repository.js";
 import { MemoryCandidateService } from "./memory/memory-candidate-service.js";
+import { WorkspaceLeaseRepository } from
+  "./workspace/workspace-lease-repository.js";
+import { WorkspaceLeaseService } from
+  "./workspace/workspace-lease-service.js";
 
 export interface ServerAppOptions {
   anonymousRateLimit?: {
@@ -96,6 +109,7 @@ export interface ServerAppOptions {
     windowMilliseconds: number;
   };
   databasePath: string;
+  artifactBlobRoot?: string;
   bridgeServerToken?: string;
   clock?: () => string;
   logger?: boolean;
@@ -156,6 +170,32 @@ export async function createServerApp(
   const taskRepository = new AgentTaskRepository(database);
   const tasks = new AgentTaskService(taskRepository, core, auth);
   const artifactRepository = new ArtifactRepository(database, transactions);
+  const workspaceLeases = new WorkspaceLeaseService(
+    new WorkspaceLeaseRepository(database, transactions),
+    runRepository,
+    taskRepository,
+    core
+  );
+  const artifactPublicationRepository = new ArtifactPublicationRepository(
+    database,
+    transactions
+  );
+  const artifactPublications = new ArtifactPublicationService(
+    artifactPublicationRepository,
+    workspaceLeases,
+    new LocalArtifactBlobStore(
+      options.artifactBlobRoot ??
+        path.join(path.dirname(options.databasePath), "artifact-blobs")
+    )
+  );
+  const artifactContentBinding = new ArtifactContentBindingService(
+    transactions,
+    artifactRepository,
+    artifactPublicationRepository,
+    taskRepository,
+    runRepository,
+    core
+  );
   const taskArtifacts = new TaskArtifactService(
     artifactRepository,
     taskRepository,
@@ -556,6 +596,8 @@ export async function createServerApp(
 
   const routeContext: ServerRouteContext = {
     app,
+    artifactContentBinding,
+    artifactPublications,
     advanceDiscussion,
     agents,
     auth,
@@ -596,11 +638,13 @@ export async function createServerApp(
     teamWait,
     traces,
     webAuth,
+    workspaceLeases,
     ...(trustedWeb ? { trustedWeb } : {})
   };
 
   registerSystemRoutes(routeContext);
   registerBridgeSocketRoutes(routeContext);
+  registerArtifactRoutes(routeContext);
   registerAuthRoutes(routeContext);
 
   registerTeamRoomRoutes(routeContext);

@@ -183,6 +183,8 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		capabilities.SupportsRoomContextCoverage = &supportsRoomContextCoverage
 		supportsWorkspaceLeases := true
 		capabilities.SupportsWorkspaceLeases = &supportsWorkspaceLeases
+		supportsArtifactPublication := true
+		capabilities.SupportsArtifactPublication = &supportsArtifactPublication
 		publication := contracts.AgentPublishMessage{
 			ProtocolVersion: "1.0",
 			MessageID:       newID("msg"),

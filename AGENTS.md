@@ -36,6 +36,7 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run dev:server` — run the Fastify API on port 3000.
 - `npm run dev:web` — run the Vite browser UI with an API proxy.
 - `go run ./cmd/agentroom-bridge console` from `bridge/` — run the token-authenticated local client setup UI.
+- `go run ./cmd/agentroom-bridge artifact publish --config /path/bridge.json --agent Builder --run-id run_... --type patch --file change.patch --title "Verified patch" --summary "What changed"` from `bridge/` — publish one bounded Workspace-relative snapshot for an active assigned Run.
 - `go build -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — build the native Wails Bridge GUI for the current platform.
 - `go test -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — verify desktop-only state mapping and compile its native shell.
 - `RELEASE_TAG=v0.2.0-rc.3 GOOS=linux GOARCH=amd64 ./scripts/package-release.sh` from `bridge/` — build one portable Bridge archive.
