@@ -266,13 +266,17 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 					}
 				}
 				activeMu.Unlock()
+				if alreadyActive {
+					cancel(nil)
+					continue
+				}
 				go func() {
 					defer cancel(nil)
 					err := c.HandleRun(runContext, requested, func(sendContext context.Context, value any) error {
 						return writer.writeJSON(sendContext, value)
 					})
 					activeMu.Lock()
-					if !alreadyActive && active[requested.Payload.RunID].token == token {
+					if active[requested.Payload.RunID].token == token {
 						delete(active, requested.Payload.RunID)
 					}
 					activeMu.Unlock()

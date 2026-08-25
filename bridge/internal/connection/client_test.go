@@ -399,6 +399,97 @@ func TestRunCancelRequestUsesAnExplicitCancellationCause(t *testing.T) {
 	}
 }
 
+func TestDuplicateRunRequestDoesNotStartAConcurrentHandler(t *testing.T) {
+	handlerStarted := make(chan struct{})
+	releaseHandler := make(chan struct{})
+	duplicateStarted := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		socket, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			return
+		}
+		defer socket.CloseNow()
+		for index := 0; index < 2; index++ {
+			if _, _, err := socket.Read(request.Context()); err != nil {
+				return
+			}
+		}
+		requested := contracts.RunRequestedMessage{
+			ProtocolVersion: "1.0", MessageID: "msg_duplicate_request",
+			Timestamp: time.Now().UTC(), Type: contracts.RunRequested,
+			Payload: contracts.RunRequestedPayload{
+				RunID: "run_duplicate_request", TraceID: "trace_duplicate_request",
+				TargetAgentID: "agent_duplicate_request",
+			},
+		}
+		source, _ := json.Marshal(requested)
+		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
+			return
+		}
+		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
+			return
+		}
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+
+	var invocations atomic.Int32
+	directory := t.TempDir()
+	client := Client{
+		Config: config.Config{
+			ServerURL: server.URL, DataDir: directory,
+			Agents: []config.AgentConfig{{
+				Name: "Builder", Role: "Implementation", Adapter: "generic",
+				Command: []string{"agent"}, Workspace: directory,
+			}},
+		},
+		Credential: pairing.Credential{
+			DeviceID: "device_test", TeamID: "team_test",
+			OwnerMemberID: "member_test", Token: "device-secret",
+		},
+		HeartbeatInterval: time.Second,
+		HandleRun: func(
+			context.Context,
+			contracts.RunRequestedMessage,
+			func(context.Context, any) error,
+		) error {
+			if invocations.Add(1) == 1 {
+				close(handlerStarted)
+			} else {
+				close(duplicateStarted)
+			}
+			<-releaseHandler
+			return nil
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+	select {
+	case <-handlerStarted:
+	case <-time.After(2 * time.Second):
+		t.Fatal("timed out waiting for the first Run handler")
+	}
+	select {
+	case <-duplicateStarted:
+		t.Fatal("duplicate Run request started a concurrent handler")
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(releaseHandler)
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Bridge client did not stop")
+	}
+	if invocations.Load() != 1 {
+		t.Fatalf("duplicate Run request invoked %d handlers", invocations.Load())
+	}
+}
+
 func TestReconnectObserverReportsRealityAndResetsBackoffAfterOnline(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
