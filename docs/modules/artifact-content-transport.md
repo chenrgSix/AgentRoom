@@ -151,7 +151,7 @@ download. Read-only mode is not presented as an OS sandbox guarantee.
 completed `RUN-011`
 pinned delivery, completed `BRG-029` isolated materialization, completed `ADP-014`
 Runtime alias injection, completed `TASK-011` lineage, completed `WEB-040`
-preview, and `QA-020` the deterministic
+preview, and completed `QA-020` the deterministic
 two-Bridge recovery gate.
 
 ## Dependencies

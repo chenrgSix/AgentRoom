@@ -103,7 +103,11 @@ delivery re-enters the materializer at the exact local offset. A final file and
 matching receipt are rehashed before returning `reused`; receipt, metadata,
 permission, or digest drift fails closed. Runtime recovery revalidates receipts
 before replaying sequence 1 and never advances result-evidence consumption at
-this staging boundary.
+this staging boundary. An active Run identity admits only one Bridge handler at
+a time even when hello and Agent publication both trigger delivery. A persisted
+terminal materialization failure replays its negative acknowledgement and
+terminal event without re-downloading bytes or changing the established
+outcome.
 
 ## Recovery Policy
 
