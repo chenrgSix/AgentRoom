@@ -4,6 +4,8 @@ import type { ArtifactPublicationService } from
   "../artifact/artifact-publication-service.js";
 import type { ArtifactDeliveryService } from
   "../artifact/artifact-delivery-service.js";
+import type { ArtifactPreviewService } from
+  "../artifact/artifact-preview-service.js";
 import type { BridgeConnectionRegistry } from "../bridge/bridge-connection-registry.js";
 import type { CoreRepository } from "../data/core-repository.js";
 import type { DiscussionOrchestrator } from "../discussion/discussion-orchestrator.js";
@@ -49,6 +51,7 @@ export interface ServerRouteContext {
   app: FastifyInstance;
   artifactContentBinding: ArtifactContentBindingService;
   artifactDeliveries: ArtifactDeliveryService;
+  artifactPreviews: ArtifactPreviewService;
   artifactPublications: ArtifactPublicationService;
   advanceDiscussion: (runId: string) => Promise<void>;
   agents: AgentService;

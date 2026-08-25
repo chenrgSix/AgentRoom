@@ -48,6 +48,9 @@ without changing server-owned state.
   always submit the selected Task and terminal Tasks disable new work.
 - Task clarification card with bounded choices or a free-form authorized Room
   answer, explicitly distinguished from local Runtime permission approval.
+- Selected-Task Artifact snapshot cards and an on-demand pure-text preview for
+  verified Patch, Markdown, and JSON bytes, explicitly labeled as semantically
+  untrusted evidence.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
 - Agent roster with presence and capability summaries.
 - Run cards with live status, replies, cancellation, and failure details.
@@ -115,6 +118,16 @@ visible.
 The clarification read reconciles deadline and scope before rendering, so a
 canceled or expired record disappears from the answer surface and retains its
 durable resolution reason for history.
+
+The selected Task also loads its canonical Artifact page. Only
+`snapshot_blob` records offer preview. An on-demand Member-authorized endpoint
+re-resolves the canonical content identity, checks Team scope and the sealed
+size/SHA-256, requires valid UTF-8, and returns at most 200,000 characters with
+an explicit truncation bit. Its JSON response is `no-store` and `nosniff` and
+contains no Workspace path, Blob storage key, or source filename. The browser
+renders Patch, Markdown, and JSON bodies inside one escaped `<pre>` boundary;
+it never parses HTML or uses the normal Markdown renderer. The visible label
+keeps byte integrity distinct from trust in the Agent-authored meaning.
 
 Discussion views render the central ProgressSnapshot, Wave, member Turns, and
 OrchestrationDecision; they do not derive completion from Agent prose. The
@@ -251,6 +264,8 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
   immediate cancellation explicitly targets every active member Run.
 - Bodyless HTTP requests do not declare a JSON content type.
 - Render messages, Runtime output, and failure details as untrusted content.
+- Render Artifact snapshot previews only as escaped plain text; a verified
+  digest does not make the content trusted or executable.
 - Never expose device secrets or raw Runtime environment values.
 - Meet keyboard navigation and visible focus requirements for core workflows.
 

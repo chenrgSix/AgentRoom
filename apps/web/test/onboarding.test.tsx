@@ -366,6 +366,9 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path.startsWith("/api/tasks/") && path.endsWith("/clarifications")) {
       return jsonResponse([]);
     }
+    if (path.startsWith("/api/tasks/") && path.endsWith("/artifacts")) {
+      return jsonResponse({ revision: 0, artifacts: [] });
+    }
     if (path.startsWith("/api/runs/run_builder/events?after=")) {
       const after = Number.parseInt(path.split("after=")[1] ?? "0", 10);
       if (after === 0) {

@@ -210,6 +210,54 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
     assert.equal(retry.json().artifact.artifactId, artifactId);
     assert.equal(new ArtifactRepository(database).getRevision(run.taskId), 1);
 
+    const previewUrl =
+      `/api/tasks/${run.taskId}/artifacts/${artifactId}/preview`;
+    const preview = await app.inject({
+      method: "GET",
+      url: previewUrl,
+      headers: { authorization: `Bearer ${session.secret}` }
+    });
+    assert.equal(preview.statusCode, 200, preview.body);
+    assert.deepEqual(preview.json(), {
+      artifactId,
+      artifactRevision: 1,
+      taskId: run.taskId,
+      type: "patch",
+      title: "HTTP verified patch",
+      summary: "Published through the Device-authenticated HTTP boundary.",
+      mediaType: "text/x-diff",
+      sha256,
+      sizeBytes: source.length,
+      integrity: "verified",
+      trust: "untrusted",
+      text: source.toString("utf8"),
+      truncated: false
+    });
+    assert.equal(preview.headers["cache-control"], "no-store");
+    assert.equal(preview.headers["x-content-type-options"], "nosniff");
+    assert.equal(preview.body.includes(blobRoot), false);
+    assert.equal(preview.body.includes("storageKey"), false);
+    assert.equal(preview.body.includes("workspaceRef"), false);
+
+    const outsider = teams.createTeamForUser({
+      userId: "user_artifact_outsider_12345678",
+      userDisplayName: "Mallory",
+      teamName: "Other Artifact Team",
+      now
+    });
+    const outsiderSession = auth.issueWebSession(
+      outsider.owner.userId ?? "",
+      now,
+      "2026-08-25T11:00:00.000Z"
+    );
+    const deniedPreview = await app.inject({
+      method: "GET",
+      url: previewUrl,
+      headers: { authorization: `Bearer ${outsiderSession.secret}` }
+    });
+    assert.equal(deniedPreview.statusCode, 403);
+    assert.equal(deniedPreview.body.includes(source.toString("utf8")), false);
+
     const targetDevice = registry.registerOwnDevice(
       member,
       created.team.teamId,
@@ -274,13 +322,20 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
       core,
       auth
     );
-    artifacts.create(member, run.taskId, {
+    const referenceOnly = artifacts.create(member, run.taskId, {
       type: "document",
       workspaceRef,
       path: "later.md",
       title: "Later evidence",
       summary: "Created after the downstream delivery was frozen."
     }, now);
+    const referencePreview = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${run.taskId}/artifacts/` +
+        `${referenceOnly.artifact.artifactId}/preview`,
+      headers: { authorization: `Bearer ${session.secret}` }
+    });
+    assert.equal(referencePreview.statusCode, 400);
     const repeatedDelivery = delivery.dispatch(downstreamRun.runId);
     assert.equal(repeatedDelivery?.payloadHash, pinnedHash);
     assert.deepEqual(

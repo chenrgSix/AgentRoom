@@ -441,6 +441,31 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .memory-candidate-actions button { min-height: 32px; padding: 6px 10px; border: 1px solid #58aa90; border-radius: 9px; background: #65c3a5; color: #092118; font-size: 9px; font-weight: 850; cursor: pointer; }
 .memory-candidate-actions button.secondary { border-color: #445d55; background: transparent; color: #a4b8b1; }
 .memory-candidate-actions button:disabled { cursor: wait; opacity: .6; }
+.artifact-snapshots { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid #4b5368; border-radius: 14px; background: #1a1d28; box-shadow: 0 12px 34px rgb(0 0 0 / 18%); }
+.artifact-snapshots > header { display: flex; align-items: end; justify-content: space-between; gap: 14px; }
+.artifact-snapshots > header > div { display: grid; gap: 3px; }
+.artifact-snapshots > header strong { color: #e0e4f3; font-size: 12px; }
+.artifact-snapshots > header small { max-width: 480px; color: #959db5; font-size: 9px; line-height: 1.45; text-align: right; }
+.artifact-snapshot-kicker { color: #94a8ee; font-size: 9px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.artifact-snapshot-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 8px; }
+.artifact-snapshot-card { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; padding: 10px; border: 1px solid #343a4c; border-radius: 11px; background: #12151e; }
+.artifact-snapshot-card > div:first-child { display: grid; min-width: 0; gap: 4px; }
+.artifact-snapshot-card strong { color: #dce1f0; font-size: 11px; overflow-wrap: anywhere; }
+.artifact-snapshot-card p { margin: 0; color: #9da4b7; font-size: 9px; line-height: 1.45; overflow-wrap: anywhere; }
+.artifact-snapshot-meta { display: flex; grid-column: 1; flex-wrap: wrap; gap: 5px; }
+.artifact-snapshot-meta span, .artifact-snapshot-meta code { padding: 3px 6px; border-radius: 999px; background: #252b3c; color: #aebce5; font-family: inherit; font-size: 8px; font-weight: 750; }
+.artifact-snapshot-card > button { grid-column: 2; grid-row: 1 / span 2; align-self: center; min-height: 32px; padding: 6px 10px; border: 1px solid #687aba; border-radius: 9px; background: #8399e5; color: #11182e; font-size: 9px; font-weight: 850; cursor: pointer; white-space: nowrap; }
+.artifact-snapshot-card > button:disabled { cursor: wait; opacity: .6; }
+.artifact-preview-error { margin: 0; color: #efa198; font-size: 10px; }
+.artifact-preview { display: grid; min-width: 0; gap: 8px; padding: 10px; border: 1px solid #465377; border-radius: 11px; background: #0e1119; }
+.artifact-preview > header { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.artifact-preview > header div { display: flex; min-width: 0; align-items: baseline; flex-wrap: wrap; gap: 7px; }
+.artifact-preview > header strong { color: #e7eaf5; font-size: 11px; overflow-wrap: anywhere; }
+.artifact-preview > header span { color: #94a2c9; font-size: 8px; }
+.artifact-preview > header button { padding: 4px 7px; border: 1px solid #3e4966; border-radius: 7px; background: transparent; color: #aeb8d3; font-size: 9px; cursor: pointer; }
+.artifact-preview-warning { margin: 0; color: #a6aec2; font-size: 9px; line-height: 1.45; }
+.artifact-preview pre { max-height: min(42vh, 430px); overflow: auto; margin: 0; padding: 11px 12px; border: 1px solid #2f3546; border-radius: 9px; background: #090b11; color: #d8ddeb; font: 10px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; tab-size: 2; white-space: pre; }
+.artifact-preview > small { color: #c9a56a; font-size: 9px; }
 .task-clarification { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px 14px; border: 1px solid #806d3e; border-radius: 14px; background: #2b281a; box-shadow: 0 12px 34px rgb(0 0 0 / 18%); }
 .task-clarification-copy { display: grid; min-width: 0; gap: 4px; }
 .task-clarification-copy strong { color: #f0e3b6; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
@@ -692,6 +717,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .memory-candidate p { color: #2d443c; }
 :root[data-theme="light"] .memory-candidate-meta span { background: #dcefe8; color: #28634f; }
 :root[data-theme="light"] .memory-candidate details, :root[data-theme="light"] .memory-candidate details code { color: #657a72; }
+:root[data-theme="light"] .artifact-snapshots { border-color: #b8c1dd; background: #f1f4fc; box-shadow: 0 12px 34px rgb(55 68 107 / 10%); }
+:root[data-theme="light"] .artifact-snapshots > header strong, :root[data-theme="light"] .artifact-snapshot-card strong { color: #303b5c; }
+:root[data-theme="light"] .artifact-snapshots > header small, :root[data-theme="light"] .artifact-snapshot-card p { color: #66708b; }
+:root[data-theme="light"] .artifact-snapshot-kicker { color: #5269a9; }
+:root[data-theme="light"] .artifact-snapshot-card { border-color: #d0d6e8; background: #fbfcff; }
+:root[data-theme="light"] .artifact-snapshot-meta span, :root[data-theme="light"] .artifact-snapshot-meta code { background: #e5e9f6; color: #475b95; }
+:root[data-theme="light"] .artifact-preview { border-color: #c5cde4; background: #f9faff; }
+:root[data-theme="light"] .artifact-preview > header strong { color: #303b5c; }
+:root[data-theme="light"] .artifact-preview-warning { color: #606b86; }
 :root[data-theme="light"] .task-clarification { border-color: #d7c47f; background: #fff9e8; box-shadow: 0 12px 34px rgb(101 83 31 / 10%); }
 :root[data-theme="light"] .task-clarification-copy strong { color: #51441d; }
 :root[data-theme="light"] .task-clarification-copy small { color: #756c51; }
@@ -837,6 +871,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .memory-candidate-review > header { align-items: start; flex-direction: column; gap: 5px; }
   .memory-candidate-review > header small { text-align: left; }
   .memory-candidate-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .artifact-snapshots > header { align-items: start; flex-direction: column; gap: 5px; }
+  .artifact-snapshots > header small { text-align: left; }
+  .artifact-snapshot-card { grid-template-columns: minmax(0, 1fr); }
+  .artifact-snapshot-card > button { grid-column: 1; grid-row: auto; }
   .participant-editor-list { grid-template-columns: 1fr; }
   .room-policy-options { grid-template-columns: 1fr; }
   .lifecycle-layout { grid-template-columns: 1fr; }

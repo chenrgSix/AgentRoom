@@ -136,6 +136,9 @@ function installFixture(input: {
     if (path === `/api/tasks/${task.taskId}/clarifications`) {
       return jsonResponse(input.clarifications ?? []);
     }
+    if (path === `/api/tasks/${task.taskId}/artifacts`) {
+      return jsonResponse({ revision: 0, artifacts: [] });
+    }
     if (path.startsWith("/api/clarifications/") && path.endsWith("/answer") && method === "POST") {
       const answer = (JSON.parse(String(init.body)) as { answer: string }).answer;
       input.clarificationAnswers?.push(answer);

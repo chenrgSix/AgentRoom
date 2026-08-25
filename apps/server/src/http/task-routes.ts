@@ -4,6 +4,7 @@ import type { AgentTaskState } from "../task/task-repository.js";
 import { artifactRelationInput } from "./artifact-relation-input.js";
 import {
   bodyObject,
+  noStore,
   requiredStringArray,
   requiredString
 } from "./http-helpers.js";
@@ -11,6 +12,7 @@ import type { ServerRouteContext } from "./route-context.js";
 
 export function registerTaskRoutes({
   app,
+  artifactPreviews,
   clock,
   core,
   delivery,
@@ -149,6 +151,19 @@ export function registerTaskRoutes({
       principal(request),
       request.params.taskId
     )
+  );
+  app.get<{ Params: { taskId: string; artifactId: string } }>(
+    "/api/tasks/:taskId/artifacts/:artifactId/preview",
+    async (request, reply) => {
+      const preview = artifactPreviews.read(
+        principal(request),
+        request.params.taskId,
+        request.params.artifactId
+      );
+      noStore(reply);
+      void reply.header("x-content-type-options", "nosniff");
+      return preview;
+    }
   );
   app.post<{ Params: { taskId: string } }>(
     "/api/tasks/:taskId/artifacts",

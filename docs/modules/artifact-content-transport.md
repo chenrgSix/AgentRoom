@@ -97,6 +97,14 @@ symlinks, special files, traversal-shaped identifiers, permission drift, and a
 staging root inside the configured Workspace fail closed. No configured
 Workspace file is created or replaced.
 
+For `WEB-040`, an authenticated Room Member may request a preview only through
+the canonical Task Artifact identity. The Server rechecks the bound content
+row and sealed bytes, rejects cross-Team or reference-only records, accepts
+only valid UTF-8, and returns a `no-store`, `nosniff`, 200,000-character JSON
+projection without storage or Workspace paths. This is a separate human read
+authority; it neither weakens Device/Run delivery authorization nor marks the
+Agent-authored content as semantically trusted.
+
 Completed `ADP-014` revalidates the staged bytes, receipt, and mode immediately
 before Runtime admission, then gives Codex, Pi, or Generic a bounded local alias
 manifest. The Runtime may read the staging path only under its existing local
@@ -142,7 +150,8 @@ download. Read-only mode is not presented as an OS sandbox guarantee.
 `CON-010` the additive wire contract, completed `BRG-028` source publication,
 completed `RUN-011`
 pinned delivery, completed `BRG-029` isolated materialization, completed `ADP-014`
-Runtime alias injection, completed `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
+Runtime alias injection, completed `TASK-011` lineage, completed `WEB-040`
+preview, and `QA-020` the deterministic
 two-Bridge recovery gate.
 
 ## Dependencies

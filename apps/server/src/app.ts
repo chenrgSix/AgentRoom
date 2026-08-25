@@ -13,6 +13,8 @@ import { ArtifactPublicationRepository } from
   "./artifact/artifact-publication-repository.js";
 import { ArtifactDeliveryService } from
   "./artifact/artifact-delivery-service.js";
+import { ArtifactPreviewService } from
+  "./artifact/artifact-preview-service.js";
 import { ArtifactPublicationService } from
   "./artifact/artifact-publication-service.js";
 import { LocalArtifactBlobStore } from
@@ -195,6 +197,12 @@ export async function createServerApp(
     database,
     artifactPublicationRepository,
     artifactBlobs
+  );
+  const artifactPreviews = new ArtifactPreviewService(
+    artifactRepository,
+    artifactPublicationRepository,
+    artifactBlobs,
+    auth
   );
   const artifactContentBinding = new ArtifactContentBindingService(
     transactions,
@@ -606,6 +614,7 @@ export async function createServerApp(
     app,
     artifactContentBinding,
     artifactDeliveries,
+    artifactPreviews,
     artifactPublications,
     advanceDiscussion,
     agents,

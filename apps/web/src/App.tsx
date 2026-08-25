@@ -37,10 +37,12 @@ import {
 } from "./features/team/TeamDialogs.js";
 import { TaskClarifications } from "./features/task/TaskClarifications.js";
 import { MemoryCandidateReview } from "./features/task/MemoryCandidateReview.js";
+import { ArtifactPreviewPanel } from "./features/task/ArtifactPreviewPanel.js";
 import { TaskCreateDialog, TaskSelector } from "./features/task/TaskControls.js";
 import {
   type Agent,
   type AgentTask,
+  type ArtifactPreview,
   type AuthenticatedUser,
   type AuthGateState,
   type AuthMode,
@@ -60,6 +62,8 @@ import {
   type RoomSettings,
   type Run,
   type TaskClarification,
+  type TaskArtifact,
+  type TaskArtifactPage,
   type Team,
   type TeamChangeCursor,
   type Theme,
@@ -138,6 +142,10 @@ export function App() {
   const [discussions, setDiscussions] = useState<DiscussionView[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [clarifications, setClarifications] = useState<TaskClarification[]>([]);
+  const [artifacts, setArtifacts] = useState<TaskArtifact[]>([]);
+  const [artifactPreview, setArtifactPreview] = useState<ArtifactPreview | null>(null);
+  const [artifactPreviewBusyId, setArtifactPreviewBusyId] = useState<string | null>(null);
+  const [artifactPreviewError, setArtifactPreviewError] = useState<string | null>(null);
   const [memoryCandidates, setMemoryCandidates] = useState<MemoryCandidate[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
@@ -193,6 +201,8 @@ export function App() {
   const diagnosticRequestsRef = useRef(new Set<string>());
   const runOutputSyncRef = useRef(new Map<string, RunOutputProjection>());
   const runActivitySyncRef = useRef(new Map<string, RunActivityProjection>());
+  const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
+  selectedTaskIdRef.current = selectedTaskId;
 
   const commitRunOutputEvents = (
     roomRuns: Run[],
@@ -817,9 +827,19 @@ export function App() {
   useEffect(() => {
     if (!session || !selectedTaskId) {
       setClarifications([]);
+      setArtifacts([]);
+      setArtifactPreview(null);
+      setArtifactPreviewError(null);
       return;
     }
     let stopped = false;
+    setArtifactPreview((current) =>
+      current?.taskId === selectedTaskId ? current : null
+    );
+    setArtifacts((current) => current.every(({ taskId }) =>
+      taskId === selectedTaskId
+    ) ? current : []);
+    setArtifactPreviewError(null);
     void jsonRequest<TaskClarification[]>(
       `/api/tasks/${selectedTaskId}/clarifications`,
       {},
@@ -828,6 +848,15 @@ export function App() {
       if (!stopped) setClarifications(nextClarifications);
     }).catch((reason: unknown) => {
       if (!stopped) setError(String(reason));
+    });
+    void jsonRequest<TaskArtifactPage>(
+      `/api/tasks/${selectedTaskId}/artifacts`,
+      {},
+      session.token
+    ).then((artifactPage) => {
+      if (!stopped) setArtifacts(artifactPage.artifacts);
+    }).catch((reason: unknown) => {
+      if (!stopped) setArtifactPreviewError(String(reason));
     });
     return () => {
       stopped = true;
@@ -1500,6 +1529,27 @@ export function App() {
     }
   }
 
+  async function previewArtifact(artifact: TaskArtifact) {
+    if (!session || artifactPreviewBusyId) return;
+    setArtifactPreviewBusyId(artifact.artifactId);
+    setArtifactPreviewError(null);
+    try {
+      const preview = await jsonRequest<ArtifactPreview>(
+        `/api/tasks/${artifact.taskId}/artifacts/${artifact.artifactId}/preview`,
+        {},
+        session.token
+      );
+      if (selectedTaskIdRef.current === preview.taskId) {
+        setArtifactPreview(preview);
+      }
+    } catch (reason) {
+      setArtifactPreview(null);
+      setArtifactPreviewError(String(reason));
+    } finally {
+      setArtifactPreviewBusyId(null);
+    }
+  }
+
   async function cancelRun(runId: string) {
     if (!session) return;
     setError(null);
@@ -1958,6 +2008,15 @@ export function App() {
               onAccept={(candidate) => reviewMemoryCandidate(candidate, "accept")}
               onReject={(candidate) => reviewMemoryCandidate(candidate, "reject")}
               tasks={tasks}
+            />
+            <ArtifactPreviewPanel
+              artifacts={artifacts}
+              busyId={artifactPreviewBusyId}
+              error={artifactPreviewError}
+              locale={locale}
+              onClose={() => setArtifactPreview(null)}
+              onPreview={previewArtifact}
+              preview={artifactPreview}
             />
             <TaskClarifications
               agentsById={agentsById}

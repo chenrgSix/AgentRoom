@@ -181,6 +181,47 @@ export interface AgentTask {
   updatedAt: string;
 }
 
+export type ArtifactMediaType =
+  | "text/x-diff"
+  | "text/markdown"
+  | "application/json";
+
+export interface TaskArtifact {
+  artifactId: string;
+  artifactRevision: number;
+  taskId: string;
+  roomId: string;
+  type: "commit" | "branch" | "file" | "patch" | "test_result" | "document";
+  title: string;
+  summary: string;
+  contentMode: "reference_only" | "snapshot_blob";
+  contentMediaType: ArtifactMediaType | null;
+  contentSizeBytes: number | null;
+  contentSha256: string | null;
+  createdAt: string;
+}
+
+export interface TaskArtifactPage {
+  revision: number;
+  artifacts: TaskArtifact[];
+}
+
+export interface ArtifactPreview {
+  artifactId: string;
+  artifactRevision: number;
+  taskId: string;
+  type: "patch" | "test_result" | "document";
+  title: string;
+  summary: string;
+  mediaType: ArtifactMediaType;
+  sha256: string;
+  sizeBytes: number;
+  integrity: "verified";
+  trust: "untrusted";
+  text: string;
+  truncated: boolean;
+}
+
 export interface TaskClarification {
   clarificationId: string;
   taskId: string;
