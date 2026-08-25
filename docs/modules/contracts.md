@@ -140,13 +140,27 @@ source IDs. At least one source ID is mandatory. These entries are quoted
 provenance claims; they neither grant access nor replace the referenced central
 records.
 
+Coverage-capable requests add a `roomContextBundle` that is independent of any
+Bridge-local native Session. It names one immutable rolling checkpoint, the
+complete bounded raw interval after that checkpoint and before the trigger, and
+the target trigger sequence whose content remains the separate current request.
+The envelope includes exact counts and UTF-8 byte sizes; gaps, overlaps, future
+checkpoints, oversized tails, and provider-native state are invalid.
+
+A Bridge reports a `roomContextConsumption` only after selecting a local
+started/resumed/recreated Session, validating the complete interval, and
+reaching the Adapter-specific durable prompt-acceptance point. The receipt names
+the previous local cursor, optional checkpoint actually used, accepted raw
+interval, final coverage cursor, and acceptance disposition. A Server bundle
+never claims to know the previous local cursor.
+
 A Bridge may add a logical Session status to `run.status`: only `started`,
 `resumed`, or `recreated`, the consumed context cursor, an opaque hashed Runtime
 scope ID, and its exact consumed result-evidence revision may cross the
 boundary. The same scope ID is optionally published with the managed Agent and
 included in the Run request. Provider-native session IDs, local workspace
 paths, and local session-store keys are forbidden inside these closed objects.
-All Task Session fields are additive during the rolling transition; their
+All Task Session and Room coverage fields are additive during the rolling transition; their
 absence retains the legacy Room-scoped behavior without allowing a Task-scoped
 binding to reuse a legacy native session.
 

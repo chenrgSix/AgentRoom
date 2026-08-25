@@ -149,6 +149,24 @@ snapshot explicitly replaces prior projected Memory state; an incomplete one
 warns that omitted entries may still be active. Adapters never promote Runtime
 text directly into this central Member-authorized ledger.
 
+Coverage-bearing Room context uses a separate fail-closed path. The Server
+bundle contains a checkpoint and raw interval but no guessed local cursor. The
+Bridge reads its owner-local binding, chooses the started/resumed/recreated
+consumption plan, and verifies interval continuity, exact count, and byte bounds
+before invoking the Runtime. It never routes this data through the legacy
+12-Message truncation path. Each Adapter defines when a prompt is durably
+accepted; only then may the binding advance to the receipt's coverage cursor.
+Ambiguous provider acceptance remains explicit and cannot silently skip or
+blindly replay context.
+
+Rolling reduction is a distinct execution port, never an ordinary Coding Task
+Session. A delegated Bridge worker is explicitly owner-authorized, publishes a
+bounded capability and quota, receives redacted Room evidence, and runs without
+the Task workspace, tools, shell, or MCP. The Server remains scheduler and
+canonical commit authority. A deployment may instead opt into a Server-hosted
+runner; no ordinary Agent connection is automatically elected to summarize a
+Room.
+
 Result evidence is cursor-driven rather than inferred from the Task's global
 revision. A new local Runtime scope receives the newest bounded bootstrap page;
 resumed sessions accept only a delta whose `fromRevision` matches their
@@ -181,7 +199,7 @@ process permissions remain owner-controlled.
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, native session resume, streaming, activity, named context, cancellation, crash, recovery,
 and local permission inheritance. Work is tracked by `ADP-001` through
-`ADP-012`, `BRG-023`/`BRG-027`, and `RUN-009` in
+`ADP-012`/`ADP-013`, `BRG-023`/`BRG-027`, and `RUN-009` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one

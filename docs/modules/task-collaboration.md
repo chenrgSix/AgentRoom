@@ -1,7 +1,7 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028/0029/0030/0031/0032, and the Web Room
+- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028/0029/0030/0031/0032/0033/0034, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -18,8 +18,10 @@ and results belong to the same longer-lived goal.
 | Entity | Required State |
 | --- | --- |
 | AgentTask | taskId, roomId, parentTaskId, title, goal, state, primaryAgentId, workspaceRef, summary, memory/artifact revisions, lastRoomSequence, creator, timestamps |
-| Logical Task Session | taskId, agentId, Runtime scope ID derived from runtime kind/workspace/config fingerprints/schema version, consumed cursors |
+| Logical Task Session | taskId, agentId, Runtime scope ID derived from runtime kind/workspace/config fingerprints/schema version, acknowledged consumed cursors |
 | Task memory projection | taskId, source Room cursor, summary revision, provenance |
+| Rolling Room checkpoint | immutable parent, contiguous input interval, through sequence, summary, provenance/digest, prompt/model version, build kind |
+| Rolling Room state | mode, latest and desired through sequences, latest checkpoint, generation, lease, bounded failure projection |
 | Long-term MemoryEntry | memoryId, Room/Task scope, typed content, active/superseded/retracted state, scope revision, supersession link, Message/Artifact/Run/Discussion provenance, Member author, timestamps |
 | ArtifactRef | artifactId, taskId, artifactRevision, type, workspaceRef, repository/path/commit/branch metadata, title, summary, creator, optional sourceRunId, timestamp |
 | TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, terminal reason, timestamps |
@@ -87,6 +89,29 @@ Canonical Room and Task projections advance only when their source cursor is
 monotonic. Planning an older delayed Run produces an explicitly historical,
 Run-local projection: it is delivered as quoted context but neither replaces
 the canonical row nor advances the Bridge's consumed canonical revision.
+
+`ADR-0014` adds a separate rolling layer without changing that extractive
+contract. Immutable checkpoints prove only that contiguous Message input was
+processed from sequence 1 through their cursor. A mutable per-Room scheduler row
+owns enablement, backfill, latest and desired cursors, and an expiring worker
+lease. Old Rooms remain disabled or backfilling until the checkpoint chain is
+continuous; the existing extractive projection remains the fallback and never
+masquerades as rolling coverage.
+
+For a trigger at Room sequence `S`, the Server builds a session-independent
+bundle from one checkpoint through `K`, raw context Messages `K+1..S-1`, and
+the separate current request at `S`. The Bridge, which alone knows the local
+native Session cursor and disposition, derives the actual consumption interval.
+It either projects that interval completely or rejects the Run before Runtime
+invocation. A successful local receipt advances only to the coverage accepted
+by the provider, not blindly to the trigger sequence.
+
+A Run captures Room/Task Memory, Artifact, Task-state, and Room-sequence fences
+when its routing intent is created. Delayed planning selects only checkpoint and
+revisioned context available at that fence. Evidence records remain
+authoritative records of claims and events; an active Member-approved
+`MemoryEntry` is the canonical shared assertion, while a rolling checkpoint is
+always lossy non-authoritative context.
 
 Migration 0032 adds a separate long-term provenance layer. Room entries are
 typed as `decision`, `constraint`, `fact`, `open_question`, or `convention`;
@@ -194,8 +219,8 @@ cross-task context.
 
 ## Task Mapping
 
-`TASK-001` through `TASK-006`, with wire and Runtime work in `CON-007` and
-`ADP-012`, clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those
+`TASK-001` through `TASK-009`, with wire and Runtime work in `CON-007`,
+`CON-009`, `ADP-012`, and `ADP-013`, clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those
 behavioral milestones.
 
 ## Dependencies

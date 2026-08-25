@@ -140,6 +140,20 @@ terminal state and one for its successor; retraction allocates one new revision.
 Unique scope revisions make cursor reads lossless, while delete and evidence
 mutation triggers keep historical provenance recoverable after restart.
 
+Migration 0033 adds immutable rolling Room checkpoints, one mutable scheduler
+state row per enabled Room, and revision fences captured with each new Run.
+Incremental checkpoint parents must remain in the same Room and their processed
+intervals must be contiguous. The scheduler's latest cursor is monotonic, while
+its desired cursor is a durable work watermark: losing a lease or rejecting a
+stale commit cannot erase work when desired remains ahead of latest. Existing
+extractive projection rows are neither copied nor reinterpreted as checkpoints.
+
+Migration 0034 adds non-authoritative Memory candidates. Exact reducer retries
+converge through a source fingerprint. Candidate acceptance, existing
+LongTermMemory validation, formal Memory creation, and accepted-Memory linkage
+share one transaction; rejection and invalid candidate output cannot affect a
+valid checkpoint commit.
+
 Backups use the SQLite backup API, include schema metadata, refuse overwrite,
 and pass `quick_check`. Restore and forward-only migration rollback procedure is
 documented in `docs/backup-and-restore.md`. The Compose workflow installs host
@@ -154,7 +168,8 @@ atomic planning and closure, callback duplication, ordinary reconciliation,
 delivery recovery, backup, restore, and corrupted input rejection. `QA-010`
 reopens SQLite at planned-member, partially settled barrier, and
 committed-next-Wave cut points, and verifies deterministic-anchor retry.
-Persistence work is tracked by `DATA-001` through `DATA-006`; parallel recovery
+Persistence work is tracked by `DATA-001` through `DATA-006` and `TASK-007`
+through `TASK-009`; parallel recovery
 is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
 
 ## Dependencies
