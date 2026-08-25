@@ -79,6 +79,11 @@ Task Messages, de-duplicates them in Room order, and keeps the current request
 as the separate Run instruction. Identical inputs retain the same revision;
 changed source or Task state advances it.
 
+Canonical Room and Task projections advance only when their source cursor is
+monotonic. Planning an older delayed Run produces an explicitly historical,
+Run-local projection: it is delivered as quoted context but neither replaces
+the canonical row nor advances the Bridge's consumed canonical revision.
+
 A new native Session receives bounded Room memory, Task memory, relevant recent
 events, result evidence, and the current request. A resumed Session receives
 only Room events after its last consumed cursor, Task-memory/result revisions

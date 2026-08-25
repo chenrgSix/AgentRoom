@@ -136,10 +136,12 @@ func contextDeltaForSession(
 	}
 	plan := *run.ContextPlan
 	if plan.RoomMemory != nil &&
+		!isHistoricalProjection(plan.RoomMemory.ProjectionKind) &&
 		plan.RoomMemory.Revision <= binding.RoomMemoryRevision {
 		plan.RoomMemory = nil
 	}
 	if plan.TaskMemory != nil &&
+		!isHistoricalProjection(plan.TaskMemory.ProjectionKind) &&
 		plan.TaskMemory.Revision <= binding.TaskMemoryRevision {
 		plan.TaskMemory = nil
 	}
@@ -163,11 +165,13 @@ func contextRevisions(
 		return 0, 0, 0
 	}
 	roomRevision := int64(0)
-	if run.ContextPlan.RoomMemory != nil {
+	if run.ContextPlan.RoomMemory != nil &&
+		!isHistoricalProjection(run.ContextPlan.RoomMemory.ProjectionKind) {
 		roomRevision = run.ContextPlan.RoomMemory.Revision
 	}
 	taskRevision := int64(0)
-	if run.ContextPlan.TaskMemory != nil {
+	if run.ContextPlan.TaskMemory != nil &&
+		!isHistoricalProjection(run.ContextPlan.TaskMemory.ProjectionKind) {
 		taskRevision = run.ContextPlan.TaskMemory.Revision
 	}
 	resultRevision := int64(0)
@@ -175,6 +179,10 @@ func contextRevisions(
 		resultRevision = run.ContextPlan.ResultEvidence.Revision
 	}
 	return roomRevision, taskRevision, resultRevision
+}
+
+func isHistoricalProjection(kind *contracts.ProjectionKind) bool {
+	return kind != nil && *kind == contracts.Historical
 }
 
 func sessionStatus(

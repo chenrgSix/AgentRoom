@@ -224,6 +224,7 @@
               "summary": "Room: engineering\nEarlier Room evidence:\n- [sequence 12; Alice] Keep compatibility.",
               "sourceCursor": 12,
               "revision": 3,
+              "projectionKind": "historical",
               "sourceMessageIds": [
                 "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W9"
               ]
@@ -271,6 +272,18 @@
         }
       },
       "valid": true
+    },
+    {
+      "name": "Memory projection rejects an unknown projection kind",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/contextMemoryProjection",
+      "instance": {
+        "summary": "Older Room evidence",
+        "sourceCursor": 12,
+        "revision": 3,
+        "projectionKind": "stale",
+        "sourceMessageIds": []
+      },
+      "valid": false
     },
     {
       "name": "Run request rejects an empty context projection delta",

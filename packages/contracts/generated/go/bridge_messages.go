@@ -201,17 +201,19 @@ type ArtifactReference struct {
 }
 
 type RoomMemoryClass struct {
-	Revision         int64    `json:"revision"`
-	SourceCursor     int64    `json:"sourceCursor"`
-	SourceMessageIDS []string `json:"sourceMessageIds"`
-	Summary          string   `json:"summary"`
+	ProjectionKind   *ProjectionKind `json:"projectionKind,omitempty"`
+	Revision         int64           `json:"revision"`
+	SourceCursor     int64           `json:"sourceCursor"`
+	SourceMessageIDS []string        `json:"sourceMessageIds"`
+	Summary          string          `json:"summary"`
 }
 
 type TaskMemoryClass struct {
-	Revision         int64    `json:"revision"`
-	SourceCursor     int64    `json:"sourceCursor"`
-	SourceMessageIDS []string `json:"sourceMessageIds"`
-	Summary          string   `json:"summary"`
+	ProjectionKind   *ProjectionKind `json:"projectionKind,omitempty"`
+	Revision         int64           `json:"revision"`
+	SourceCursor     int64           `json:"sourceCursor"`
+	SourceMessageIDS []string        `json:"sourceMessageIds"`
+	Summary          string          `json:"summary"`
 }
 
 type RoutingAgent struct {
@@ -480,6 +482,13 @@ const (
 	File       ArtifactReferenceType = "file"
 	Patch      ArtifactReferenceType = "patch"
 	TestResult ArtifactReferenceType = "test_result"
+)
+
+type ProjectionKind string
+
+const (
+	Canonical  ProjectionKind = "canonical"
+	Historical ProjectionKind = "historical"
 )
 
 type ResumePolicy string

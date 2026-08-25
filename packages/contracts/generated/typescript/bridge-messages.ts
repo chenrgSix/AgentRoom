@@ -278,13 +278,17 @@ export interface ArtifactReference {
 export type ArtifactReferenceType = "commit" | "branch" | "file" | "patch" | "test_result" | "document";
 
 export interface RoomMemoryClass {
+  projectionKind?:  ProjectionKind;
   revision:         number;
   sourceCursor:     number;
   sourceMessageIds: string[];
   summary:          string;
 }
 
+export type ProjectionKind = "canonical" | "historical";
+
 export interface TaskMemoryClass {
+  projectionKind?:  ProjectionKind;
   revision:         number;
   sourceCursor:     number;
   sourceMessageIds: string[];

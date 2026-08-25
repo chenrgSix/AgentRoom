@@ -121,6 +121,34 @@ func TestTaskSessionContextKeepsOnlyUnconsumedMemoryRevisions(t *testing.T) {
 	}
 }
 
+func TestTaskSessionContextKeepsHistoricalProjectionWithoutAdvancingCanonicalRevision(t *testing.T) {
+	historical := contracts.Historical
+	run := contracts.RunRequestedPayload{
+		ContextPlan: &contracts.RuntimeContextPlan{
+			RoomMemory: &contracts.RoomMemoryClass{
+				Revision: 8, SourceCursor: 20, Summary: "Historical room evidence",
+				ProjectionKind: &historical,
+			},
+			TaskMemory: &contracts.TaskMemoryClass{
+				Revision: 9, SourceCursor: 21, Summary: "Historical task evidence",
+				ProjectionKind: &historical,
+			},
+		},
+	}
+	delta := contextDeltaForSession(run, RuntimeSessionBinding{
+		RoomMemoryRevision: 8,
+		TaskMemoryRevision: 9,
+	})
+	if delta.ContextPlan == nil || delta.ContextPlan.RoomMemory == nil ||
+		delta.ContextPlan.TaskMemory == nil {
+		t.Fatalf("historical projection was filtered as canonical: %#v", delta.ContextPlan)
+	}
+	roomRevision, taskRevision, _ := contextRevisions(delta)
+	if roomRevision != 0 || taskRevision != 0 {
+		t.Fatalf("historical projection advanced canonical revisions: %d %d", roomRevision, taskRevision)
+	}
+}
+
 func TestRuntimeSessionKeyRollsOnWorkspaceAndSemanticConfig(t *testing.T) {
 	configuration := config.AgentConfig{
 		RuntimeKind: "codex", Adapter: "codex", Workspace: t.TempDir(),

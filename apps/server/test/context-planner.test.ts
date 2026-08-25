@@ -165,6 +165,46 @@ test("Context Planner builds stable provenance projections and bounded relevant 
       persistedTask?.summaryProvenanceMessageIds,
       advanced.contextPlan.taskMemory.sourceMessageIds
     );
+
+    const historical = planner.plan({
+      roomId: room.roomId,
+      taskId: task.taskId,
+      throughSequence: trigger.sequence,
+      triggerMessageId: trigger.messageId
+    }, now);
+    assert.equal(historical.contextPlan.roomMemory.projectionKind, "historical");
+    assert.equal(historical.contextPlan.taskMemory.projectionKind, "historical");
+    assert.ok(
+      historical.contextPlan.roomMemory.sourceCursor <
+        advanced.contextPlan.roomMemory.sourceCursor
+    );
+    assert.ok(
+      historical.contextPlan.taskMemory.sourceCursor <
+        advanced.contextPlan.taskMemory.sourceCursor
+    );
+    const canonicalRoom = database.prepare(`
+      SELECT source_sequence, revision FROM room_memory_projections
+      WHERE room_id = ?
+    `).get(room.roomId) as { source_sequence: number; revision: number };
+    assert.deepEqual(canonicalRoom, {
+      source_sequence: advanced.contextPlan.roomMemory.sourceCursor,
+      revision: advanced.contextPlan.roomMemory.revision
+    });
+    const canonicalTask = taskRepository.get(task.taskId);
+    assert.equal(
+      canonicalTask?.summarySourceSequence,
+      advanced.contextPlan.taskMemory.sourceCursor
+    );
+    assert.equal(
+      canonicalTask?.summaryRevision,
+      advanced.contextPlan.taskMemory.revision
+    );
+    assert.throws(() => database.prepare(`
+      UPDATE room_memory_projections SET source_sequence = 0 WHERE room_id = ?
+    `).run(room.roomId), /cannot regress/u);
+    assert.throws(() => database.prepare(`
+      UPDATE agent_tasks SET summary_source_sequence = 0 WHERE task_id = ?
+    `).run(task.taskId), /cannot regress/u);
   } finally {
     database.close();
   }

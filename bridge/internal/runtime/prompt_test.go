@@ -100,6 +100,22 @@ func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
 	}
 }
 
+func TestRuntimePromptLabelsHistoricalMemoryAsRunLocal(t *testing.T) {
+	historical := contracts.Historical
+	prompt := runtimePrompt(contracts.RunRequestedPayload{
+		Instruction: "Handle the delayed request.",
+		ContextPlan: &contracts.RuntimeContextPlan{
+			RoomMemory: &contracts.RoomMemoryClass{
+				Revision: 5, SourceCursor: 10, Summary: "Older room evidence",
+				ProjectionKind: &historical,
+			},
+		},
+	})
+	if !strings.Contains(prompt, "Historical Room context (run-local; canonical revision is not advanced)") {
+		t.Fatalf("historical projection was not labeled safely:\n%s", prompt)
+	}
+}
+
 func TestTaskSessionContextKeepsOnlyUnconsumedRoomDeltas(t *testing.T) {
 	sequence41 := int64(41)
 	sequence42 := int64(42)

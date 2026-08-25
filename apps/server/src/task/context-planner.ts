@@ -27,6 +27,7 @@ export interface ContextMemoryProjection {
   sourceCursor: number;
   revision: number;
   sourceMessageIds: string[];
+  projectionKind?: "historical";
 }
 
 export interface ContextArtifactRef {
@@ -226,7 +227,8 @@ export class ContextPlanner {
         provenance_json = excluded.provenance_json,
         fingerprint = excluded.fingerprint,
         updated_at = excluded.updated_at
-      WHERE room_memory_projections.fingerprint <> excluded.fingerprint
+      WHERE excluded.source_sequence >= room_memory_projections.source_sequence
+        AND room_memory_projections.fingerprint <> excluded.fingerprint
     `).run({
       roomId,
       summary,
@@ -238,6 +240,15 @@ export class ContextPlanner {
     const row = this.database.prepare(`
       SELECT * FROM room_memory_projections WHERE room_id = ?
     `).get(roomId) as RoomProjectionRow;
+    if (row.source_sequence > sourceCursor) {
+      return {
+        summary,
+        sourceCursor,
+        revision: row.revision,
+        sourceMessageIds,
+        projectionKind: "historical"
+      };
+    }
     return {
       summary: row.summary,
       sourceCursor: row.source_sequence,
@@ -276,6 +287,15 @@ export class ContextPlanner {
       fingerprint,
       updatedAt: now
     });
+    if (updated.summarySourceSequence > sourceCursor) {
+      return {
+        summary,
+        sourceCursor,
+        revision: updated.summaryRevision,
+        sourceMessageIds,
+        projectionKind: "historical"
+      };
+    }
     return {
       summary: updated.summary,
       sourceCursor: updated.summarySourceSequence,

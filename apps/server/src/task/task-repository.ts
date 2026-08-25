@@ -181,7 +181,9 @@ export class AgentTaskRepository {
           summary_provenance_json = @provenanceJson,
           summary_fingerprint = @fingerprint,
           updated_at = @updatedAt
-      WHERE task_id = @taskId AND summary_fingerprint <> @fingerprint
+      WHERE task_id = @taskId
+        AND @sourceSequence >= summary_source_sequence
+        AND summary_fingerprint <> @fingerprint
     `).run({
       taskId,
       ...input,

@@ -759,6 +759,12 @@
           "type": "integer",
           "minimum": 1
         },
+        "projectionKind": {
+          "enum": [
+            "canonical",
+            "historical"
+          ]
+        },
         "sourceMessageIds": {
           "type": "array",
           "maxItems": 20,

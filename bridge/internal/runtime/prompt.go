@@ -112,8 +112,12 @@ func projectedRoomMemory(memory *contracts.RoomMemoryClass) string {
 	if memory == nil || strings.TrimSpace(memory.Summary) == "" {
 		return ""
 	}
+	label := "Shared Room memory"
+	if isHistoricalProjection(memory.ProjectionKind) {
+		label = "Historical Room context (run-local; canonical revision is not advanced)"
+	}
 	return projectedMemory(
-		"Shared Room memory", memory.Summary, memory.Revision,
+		label, memory.Summary, memory.Revision,
 		memory.SourceCursor, memory.SourceMessageIDS,
 	)
 }
@@ -122,8 +126,12 @@ func projectedTaskMemory(memory *contracts.TaskMemoryClass) string {
 	if memory == nil || strings.TrimSpace(memory.Summary) == "" {
 		return ""
 	}
+	label := "Shared Task memory"
+	if isHistoricalProjection(memory.ProjectionKind) {
+		label = "Historical Task context (run-local; canonical revision is not advanced)"
+	}
 	return projectedMemory(
-		"Shared Task memory", memory.Summary, memory.Revision,
+		label, memory.Summary, memory.Revision,
 		memory.SourceCursor, memory.SourceMessageIDS,
 	)
 }
