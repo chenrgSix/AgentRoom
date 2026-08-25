@@ -281,12 +281,16 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 			sessionBinding.LastRoomSequence = plan.ContextCursor
 		}
 		sessionBinding.LastRunID = request.Run.RunID
-		roomMemoryRevision, taskMemoryRevision := contextMemoryRevisions(request.Run)
+		roomMemoryRevision, taskMemoryRevision, resultEvidenceRevision :=
+			contextRevisions(request.Run)
 		if roomMemoryRevision > sessionBinding.RoomMemoryRevision {
 			sessionBinding.RoomMemoryRevision = roomMemoryRevision
 		}
 		if taskMemoryRevision > sessionBinding.TaskMemoryRevision {
 			sessionBinding.TaskMemoryRevision = taskMemoryRevision
+		}
+		if resultEvidenceRevision > sessionBinding.ResultEvidenceRevision {
+			sessionBinding.ResultEvidenceRevision = resultEvidenceRevision
 		}
 		sessionBinding.UpdatedAt = now
 		if err := p.Sessions.Save(sessionBinding); err != nil {

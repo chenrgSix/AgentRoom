@@ -143,7 +143,12 @@ func contextDeltaForSession(
 		plan.TaskMemory.Revision <= binding.TaskMemoryRevision {
 		plan.TaskMemory = nil
 	}
-	if plan.RoomMemory == nil && plan.TaskMemory == nil {
+	if plan.ResultEvidence != nil &&
+		plan.ResultEvidence.Revision <= binding.ResultEvidenceRevision {
+		plan.ResultEvidence = nil
+	}
+	if plan.RoomMemory == nil && plan.TaskMemory == nil &&
+		plan.ResultEvidence == nil {
 		run.ContextPlan = nil
 	} else {
 		run.ContextPlan = &plan
@@ -151,11 +156,11 @@ func contextDeltaForSession(
 	return run
 }
 
-func contextMemoryRevisions(
+func contextRevisions(
 	run contracts.RunRequestedPayload,
-) (int64, int64) {
+) (int64, int64, int64) {
 	if run.ContextPlan == nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	roomRevision := int64(0)
 	if run.ContextPlan.RoomMemory != nil {
@@ -165,7 +170,11 @@ func contextMemoryRevisions(
 	if run.ContextPlan.TaskMemory != nil {
 		taskRevision = run.ContextPlan.TaskMemory.Revision
 	}
-	return roomRevision, taskRevision
+	resultRevision := int64(0)
+	if run.ContextPlan.ResultEvidence != nil {
+		resultRevision = run.ContextPlan.ResultEvidence.Revision
+	}
+	return roomRevision, taskRevision, resultRevision
 }
 
 func sessionStatus(

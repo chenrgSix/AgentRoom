@@ -127,6 +127,13 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 			TaskMemory: &contracts.TaskMemoryClass{
 				Revision: 4, SourceCursor: 4, Summary: "Task memory",
 			},
+			ResultEvidence: &contracts.TaskResultEvidence{
+				Revision: 5,
+				ArtifactRefs: []contracts.ArtifactReference{{
+					ArtifactID: "artifact_pi_12345678", Type: contracts.Commit,
+					Title: "Pi result", Summary: "Verify locally",
+				}},
+			},
 		},
 	}}
 	plan, eligible, err := planRuntimeSession("pi", configuration, request.Run)
@@ -158,7 +165,8 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 	binding, found, err := store.Load(plan.Key)
 	if err != nil || !found || binding.SessionID != expectedSessionID ||
 		binding.LastRoomSequence != 7 || binding.LastRunID != request.Run.RunID ||
-		binding.RoomMemoryRevision != 2 || binding.TaskMemoryRevision != 4 {
+		binding.RoomMemoryRevision != 2 || binding.TaskMemoryRevision != 4 ||
+		binding.ResultEvidenceRevision != 5 {
 		t.Fatalf("Pi Task Session was not persisted: %#v found=%t err=%v", binding, found, err)
 	}
 	request.Run.RunID = "run_second"

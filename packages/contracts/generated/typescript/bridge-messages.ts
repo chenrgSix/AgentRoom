@@ -246,9 +246,36 @@ export interface ContextMessage {
 }
 
 export interface RuntimeContextPlan {
-  roomMemory?: RoomMemoryClass;
-  taskMemory?: TaskMemoryClass;
+  resultEvidence?: TaskResultEvidence;
+  roomMemory?:     RoomMemoryClass;
+  taskMemory?:     TaskMemoryClass;
 }
+
+export interface TaskResultEvidence {
+  artifactRefs: [ArtifactReference, ...ArtifactReference[]];
+  revision:     number;
+}
+
+export interface ArtifactReference {
+  artifactId: string;
+  branch?:    string;
+  commitSha?: string;
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  createdAt:          string;
+  createdByAgentId?:  string;
+  createdByMemberId?: string;
+  path?:              string;
+  repository?:        string;
+  sourceRunId?:       string;
+  summary:            string;
+  title:              string;
+  type:               ArtifactReferenceType;
+  workspaceRef?:      string;
+}
+
+export type ArtifactReferenceType = "commit" | "branch" | "file" | "patch" | "test_result" | "document";
 
 export interface RoomMemoryClass {
   revision:         number;

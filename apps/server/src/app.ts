@@ -67,7 +67,12 @@ import { TeamChangeService } from "./team-room/team-change-service.js";
 import { MessageService } from "./team-room/message-service.js";
 import type { RoomCollaborationPolicy } from "./team-room/room-collaboration-policy.js";
 import { AgentTaskService } from "./task/agent-task-service.js";
+import {
+  ArtifactRepository,
+  type ArtifactType
+} from "./task/artifact-repository.js";
 import { ContextPlanner } from "./task/context-planner.js";
+import { TaskArtifactService } from "./task/task-artifact-service.js";
 import {
   AgentTaskRepository,
   type AgentTaskState
@@ -270,6 +275,14 @@ export async function createServerApp(
   const runRepository = new RunRepository(database);
   const taskRepository = new AgentTaskRepository(database);
   const tasks = new AgentTaskService(taskRepository, core, auth);
+  const artifactRepository = new ArtifactRepository(database);
+  const taskArtifacts = new TaskArtifactService(
+    artifactRepository,
+    taskRepository,
+    runRepository,
+    core,
+    auth
+  );
   const contextPlanner = new ContextPlanner(database, core, taskRepository);
   const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth, taskRepository);
@@ -1373,6 +1386,66 @@ export async function createServerApp(
       }, clock());
     }
   );
+  app.get<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId/artifacts",
+    async (request) => taskArtifacts.list(
+      principal(request),
+      request.params.taskId
+    )
+  );
+  app.post<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId/artifacts",
+    async (request) => {
+      const body = bodyObject(request);
+      return taskArtifacts.create(principal(request), request.params.taskId, {
+        type: requiredString(body.type, "type") as ArtifactType,
+        title: requiredString(body.title, "title", 160),
+        summary: requiredString(body.summary, "summary", 4_000),
+        ...(body.workspaceRef === undefined
+          ? {}
+          : {
+              workspaceRef: body.workspaceRef === null
+                ? null
+                : requiredString(body.workspaceRef, "workspaceRef", 512)
+            }),
+        ...(body.repository === undefined
+          ? {}
+          : {
+              repository: body.repository === null
+                ? null
+                : requiredString(body.repository, "repository", 512)
+            }),
+        ...(body.path === undefined
+          ? {}
+          : {
+              path: body.path === null
+                ? null
+                : requiredString(body.path, "path", 1024)
+            }),
+        ...(body.commitSha === undefined
+          ? {}
+          : {
+              commitSha: body.commitSha === null
+                ? null
+                : requiredString(body.commitSha, "commitSha", 64)
+            }),
+        ...(body.branch === undefined
+          ? {}
+          : {
+              branch: body.branch === null
+                ? null
+                : requiredString(body.branch, "branch", 255)
+            }),
+        ...(body.sourceRunId === undefined
+          ? {}
+          : {
+              sourceRunId: body.sourceRunId === null
+                ? null
+                : requiredString(body.sourceRunId, "sourceRunId", 140)
+            })
+      }, clock());
+    }
+  );
   app.put<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/participants",
     async (request) => {
@@ -1922,6 +1995,7 @@ export async function createServerApp(
       handoffs,
       manualRuns,
       messages,
+      taskArtifacts,
       wait: teamWait
     });
     const transportOptions = {

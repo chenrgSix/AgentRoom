@@ -24,12 +24,13 @@ func TestFileRuntimeSessionStorePersistsTaskScopedBinding(t *testing.T) {
 		t.Fatalf("unexpected empty session lookup: found=%t err=%v", found, err)
 	}
 	if err := store.Save(RuntimeSessionBinding{
-		RuntimeSessionKey:  key,
-		SessionID:          "thread_alpha",
-		LastRoomSequence:   42,
-		RoomMemoryRevision: 3,
-		TaskMemoryRevision: 4,
-		LastRunID:          "run_alpha",
+		RuntimeSessionKey:      key,
+		SessionID:              "thread_alpha",
+		LastRoomSequence:       42,
+		RoomMemoryRevision:     3,
+		TaskMemoryRevision:     4,
+		ResultEvidenceRevision: 5,
+		LastRunID:              "run_alpha",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -37,6 +38,7 @@ func TestFileRuntimeSessionStorePersistsTaskScopedBinding(t *testing.T) {
 	if err != nil || !found || binding.SessionID != "thread_alpha" ||
 		binding.LastRoomSequence != 42 || binding.LastRunID != "run_alpha" ||
 		binding.RoomMemoryRevision != 3 || binding.TaskMemoryRevision != 4 ||
+		binding.ResultEvidenceRevision != 5 ||
 		binding.CreatedAt.IsZero() || binding.UpdatedAt.IsZero() {
 		t.Fatalf("unexpected persisted session: %#v found=%t err=%v", binding, found, err)
 	}
@@ -93,10 +95,18 @@ func TestTaskSessionContextKeepsOnlyUnconsumedMemoryRevisions(t *testing.T) {
 			TaskMemory: &contracts.TaskMemoryClass{
 				Revision: 5, SourceCursor: 31, Summary: "Task revision five",
 			},
+			ResultEvidence: &contracts.TaskResultEvidence{
+				Revision: 2,
+				ArtifactRefs: []contracts.ArtifactReference{{
+					ArtifactID: "artifact_delta_12345678", Type: contracts.Commit,
+					Title: "Delta", Summary: "Verify the commit",
+				}},
+			},
 		},
 	}
 	delta := contextDeltaForSession(run, RuntimeSessionBinding{
 		LastRoomSequence: 42, RoomMemoryRevision: 3, TaskMemoryRevision: 4,
+		ResultEvidenceRevision: 1,
 	})
 	if len(delta.ContextMessages) != 1 ||
 		delta.ContextMessages[0].MessageID != "msg_new_12345678" {
@@ -104,7 +114,9 @@ func TestTaskSessionContextKeepsOnlyUnconsumedMemoryRevisions(t *testing.T) {
 	}
 	if delta.ContextPlan == nil || delta.ContextPlan.RoomMemory != nil ||
 		delta.ContextPlan.TaskMemory == nil ||
-		delta.ContextPlan.TaskMemory.Revision != 5 {
+		delta.ContextPlan.TaskMemory.Revision != 5 ||
+		delta.ContextPlan.ResultEvidence == nil ||
+		delta.ContextPlan.ResultEvidence.Revision != 2 {
 		t.Fatalf("memory revision delta was not filtered: %#v", delta.ContextPlan)
 	}
 }

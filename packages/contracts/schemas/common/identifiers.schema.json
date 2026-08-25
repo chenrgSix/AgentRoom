@@ -41,6 +41,10 @@
       "type": "string",
       "pattern": "^task_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
     },
+    "artifactId": {
+      "type": "string",
+      "pattern": "^artifact_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+    },
     "traceId": {
       "type": "string",
       "pattern": "^trace_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"

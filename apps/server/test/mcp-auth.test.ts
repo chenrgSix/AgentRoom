@@ -285,6 +285,60 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       }
     });
     assert.equal(completed.json().result.structuredContent.run.state, "completed");
+    const reportedArtifact = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 11,
+        method: "tools/call",
+        params: {
+          name: "team.report_task_artifact",
+          arguments: {
+            taskId: assignedRun.taskId,
+            type: "commit",
+            workspaceRef: "workspace_manual_agent",
+            repository: "agent-room/network",
+            commitSha: "21f9e8c",
+            title: "Completed MCP change",
+            summary: "Manual Agent reports a commit for independent verification.",
+            sourceRunId: assignedRun.runId
+          }
+        }
+      }
+    });
+    assert.equal(reportedArtifact.statusCode, 200);
+    assert.equal(
+      reportedArtifact.json().result.structuredContent.artifact.createdByAgentId,
+      manualAgentId
+    );
+    const listedArtifacts = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 12,
+        method: "tools/call",
+        params: {
+          name: "team.list_task_artifacts",
+          arguments: { taskId: assignedRun.taskId }
+        }
+      }
+    });
+    assert.equal(listedArtifacts.statusCode, 200);
+    assert.equal(listedArtifacts.json().result.structuredContent.revision, 1);
+    assert.equal(
+      listedArtifacts.json().result.structuredContent.artifacts[0].sourceRunId,
+      assignedRun.runId
+    );
     const timeline = await app.inject({
       method: "GET",
       url: `/api/rooms/${roomId}/messages?limit=100`,

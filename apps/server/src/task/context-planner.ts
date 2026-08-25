@@ -10,6 +10,11 @@ import type {
   AgentTaskRecord,
   AgentTaskRepository
 } from "./task-repository.js";
+import {
+  ArtifactRepository,
+  type ArtifactType,
+  type TaskArtifactRecord
+} from "./artifact-repository.js";
 
 const recentRoomMessageLimit = 12;
 const recentTaskMessageLimit = 18;
@@ -24,10 +29,30 @@ export interface ContextMemoryProjection {
   sourceMessageIds: string[];
 }
 
+export interface ContextArtifactRef {
+  artifactId: string;
+  type: ArtifactType;
+  workspaceRef?: string;
+  repository?: string;
+  path?: string;
+  commitSha?: string;
+  branch?: string;
+  title: string;
+  summary: string;
+  sourceRunId?: string;
+  createdByMemberId?: string;
+  createdByAgentId?: string;
+  createdAt: string;
+}
+
 export interface PlannedRuntimeContext {
   contextPlan: {
     roomMemory: ContextMemoryProjection;
     taskMemory: ContextMemoryProjection;
+    resultEvidence?: {
+      revision: number;
+      artifactRefs: ContextArtifactRef[];
+    };
   };
   contextMessages: MessageRecord[];
 }
@@ -65,11 +90,15 @@ function fingerprintProjection(input: {
 }
 
 export class ContextPlanner {
+  private readonly artifacts: ArtifactRepository;
+
   public constructor(
     private readonly database: Database.Database,
     private readonly core: CoreRepository,
     private readonly tasks: AgentTaskRepository
-  ) {}
+  ) {
+    this.artifacts = new ArtifactRepository(database);
+  }
 
   public plan(
     input: {
@@ -109,6 +138,7 @@ export class ContextPlanner {
       input.throughSequence
     );
 
+    const artifactRefs = this.artifacts.listForTask(task.taskId, 20);
     return {
       contextPlan: {
         roomMemory: this.projectRoom(
@@ -117,7 +147,17 @@ export class ContextPlanner {
           roomSourceCursor,
           now
         ),
-        taskMemory: this.projectTask(task, taskSourceCursor, now)
+        taskMemory: this.projectTask(task, taskSourceCursor, now),
+        ...(artifactRefs.length > 0
+          ? {
+              resultEvidence: {
+                revision: task.artifactRevision,
+                artifactRefs: artifactRefs.map((artifact) =>
+                  this.contextArtifact(artifact)
+                )
+              }
+            }
+          : {})
       },
       contextMessages
     };
@@ -253,5 +293,27 @@ export class ContextPlanner {
     return `- [sequence ${message.sequence}; ${normalizedExcerpt(sender)}] ${
       normalizedExcerpt(message.content)
     }`;
+  }
+
+  private contextArtifact(artifact: TaskArtifactRecord): ContextArtifactRef {
+    return {
+      artifactId: artifact.artifactId,
+      type: artifact.type,
+      ...(artifact.workspaceRef ? { workspaceRef: artifact.workspaceRef } : {}),
+      ...(artifact.repository ? { repository: artifact.repository } : {}),
+      ...(artifact.path ? { path: artifact.path } : {}),
+      ...(artifact.commitSha ? { commitSha: artifact.commitSha } : {}),
+      ...(artifact.branch ? { branch: artifact.branch } : {}),
+      title: artifact.title,
+      summary: artifact.summary,
+      ...(artifact.sourceRunId ? { sourceRunId: artifact.sourceRunId } : {}),
+      ...(artifact.createdByMemberId
+        ? { createdByMemberId: artifact.createdByMemberId }
+        : {}),
+      ...(artifact.createdByAgentId
+        ? { createdByAgentId: artifact.createdByAgentId }
+        : {}),
+      createdAt: artifact.createdAt
+    };
   }
 }

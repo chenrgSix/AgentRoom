@@ -55,6 +55,12 @@ Messages or Task state advance it, and every claim remains traceable to the
 stored Message log or explicit Task fields. Rebuilding a projection cannot
 replace or delete its source history.
 
+Migration 0027 adds immutable Task ArtifactRefs and a monotonic artifact
+revision on Agent Tasks. Artifact insert and revision advance share one
+immediate transaction. Composite Task/Room references and a source-Run trigger
+prevent evidence from crossing Task history; exactly one authenticated Member
+or Agent creator is retained for attribution.
+
 After an ordinary Wave settles, Discussion Orchestration appends an idempotent
 `wave_result` system Message with an ID derived from the Wave ID. This Message is
 the next Wave's stable input anchor. It is deliberately written before the

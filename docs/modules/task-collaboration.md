@@ -1,7 +1,7 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Implementation: `apps/server/src/task/`, migrations 0024/0026, and the Web Room
+- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -17,10 +17,10 @@ and results belong to the same longer-lived goal.
 
 | Entity | Required State |
 | --- | --- |
-| AgentTask | taskId, roomId, parentTaskId, title, goal, state, primaryAgentId, workspaceRef, summary, lastRoomSequence, creator, timestamps |
+| AgentTask | taskId, roomId, parentTaskId, title, goal, state, primaryAgentId, workspaceRef, summary, memory/artifact revisions, lastRoomSequence, creator, timestamps |
 | Logical Task Session | taskId, agentId, runtime kind, workspace fingerprint, config fingerprint, schema version |
 | Task memory projection | taskId, source Room cursor, summary revision, provenance |
-| ArtifactRef | taskId, type, workspaceRef, repository/path/commit/branch metadata, title, summary |
+| ArtifactRef | artifactId, taskId, type, workspaceRef, repository/path/commit/branch metadata, title, summary, creator, optional sourceRunId, timestamp |
 
 Task state is `open`, `working`, `blocked`, `review`, `completed`, or
 `canceled`. A Task state is explicit aggregate state; one successful Run does
@@ -54,6 +54,14 @@ when their Task is already terminal.
 - Workspace and Artifact references are identifiers and verification metadata,
   not a central shared filesystem or permission grant.
 
+`TASK-003` stores immutable ArtifactRefs for commits, branches, files, patches,
+test results, and documents. Member HTTP and authenticated manual-Agent MCP
+writes use the same Task/Room authorization; an Agent may cite only a Run
+assigned to itself. File-like references must be workspace-relative, commit
+hashes and branches are syntactically bounded, and no Artifact operation reads
+or transfers the referenced content. Each successful append advances one Task
+artifact revision atomically.
+
 ## Shared Memory
 
 Room history and Task events are authoritative. Room and Task summaries are
@@ -73,6 +81,9 @@ events, result evidence, and the current request. A resumed Session receives
 only Room events after its last consumed cursor, Task-memory/result revisions
 it has not consumed, and the current request. The Bridge prompt labels every
 projection and Message as quoted, untrusted collaboration context.
+The newest 20 ArtifactRefs form a separately revisioned result-evidence delta;
+their summaries are claims to verify against the named workspace evidence, not
+proof that a commit, test, or file exists.
 
 ## Migration and Compatibility
 
@@ -93,6 +104,9 @@ cross-task context.
   authenticated Member and validates primary Agent membership.
 - Cross-Room parent Tasks, Agents, Runs, Discussions, and ArtifactRefs are
   rejected.
+- Absolute host paths, parent traversal, credential-bearing repository URLs,
+  malformed commit hashes, and invalid Git branch references are rejected
+  before Artifact persistence.
 - Existing migration data remains reachable and does not duplicate execution.
 - Two Tasks in one Room and Agent resolve to different native Sessions.
 - Runtime semantic configuration changes create a new native Session without

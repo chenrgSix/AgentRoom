@@ -8,6 +8,7 @@ import type { ManualRunService } from "../run/manual-run-service.js";
 import type { McpPrincipal } from "../security/auth-service.js";
 import type { MessageService } from "../team-room/message-service.js";
 import type { TeamWaitService } from "./team-wait-service.js";
+import type { TaskArtifactService } from "../task/task-artifact-service.js";
 
 interface TeamMcpDependencies {
   clock: () => string;
@@ -16,6 +17,7 @@ interface TeamMcpDependencies {
   handoffs: HandoffService;
   manualRuns: ManualRunService;
   messages: MessageService;
+  taskArtifacts: TaskArtifactService;
   wait: TeamWaitService;
 }
 
@@ -127,6 +129,48 @@ export function createTeamMcpServer(
   }, async ({ runId }) => toolResult({
     run: dependencies.manualRuns.get(principal, runId)
   }));
+  server.registerTool("team.list_task_artifacts", {
+    description: "List structured result evidence for one authorized Task.",
+    inputSchema: {
+      taskId: z.string().min(1),
+      limit: z.number().int().min(1).max(100).default(50)
+    }
+  }, async ({ taskId, limit }) => toolResult(
+    dependencies.taskArtifacts.list(principal, taskId, limit)
+  ));
+  server.registerTool("team.report_task_artifact", {
+    description: "Publish a workspace-local result reference for one authorized Task.",
+    inputSchema: {
+      taskId: z.string().min(1),
+      type: z.enum(["commit", "branch", "file", "patch", "test_result", "document"]),
+      workspaceRef: z.string().min(1).max(512).optional(),
+      repository: z.string().min(1).max(512).optional(),
+      path: z.string().min(1).max(1024).optional(),
+      commitSha: z.string().min(7).max(64).optional(),
+      branch: z.string().min(1).max(255).optional(),
+      title: z.string().min(1).max(160),
+      summary: z.string().min(1).max(4_000),
+      sourceRunId: z.string().min(1).optional()
+    }
+  }, async ({
+    taskId, type, title, summary, workspaceRef, repository, path,
+    commitSha, branch, sourceRunId
+  }) => toolResult(dependencies.taskArtifacts.create(
+    principal,
+    taskId,
+    {
+      type,
+      title,
+      summary,
+      ...(workspaceRef === undefined ? {} : { workspaceRef }),
+      ...(repository === undefined ? {} : { repository }),
+      ...(path === undefined ? {} : { path }),
+      ...(commitSha === undefined ? {} : { commitSha }),
+      ...(branch === undefined ? {} : { branch }),
+      ...(sourceRunId === undefined ? {} : { sourceRunId })
+    },
+    dependencies.clock()
+  )));
   server.registerTool("team.claim_run", {
     description: "Mark one queued manual Agent Run as working.",
     inputSchema: { runId: z.string().min(1) }

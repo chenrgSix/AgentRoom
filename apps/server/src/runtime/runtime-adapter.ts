@@ -17,6 +17,10 @@ export interface RuntimeRequest {
   contextPlan?: {
     roomMemory: RuntimeContextMemoryProjection;
     taskMemory: RuntimeContextMemoryProjection;
+    resultEvidence?: {
+      revision: number;
+      artifactRefs: RuntimeContextArtifactRef[];
+    };
   };
   contextMessages: Array<{
     messageId: string;
@@ -31,6 +35,22 @@ export interface RuntimeContextMemoryProjection {
   sourceCursor: number;
   revision: number;
   sourceMessageIds: string[];
+}
+
+export interface RuntimeContextArtifactRef {
+  artifactId: string;
+  type: "commit" | "branch" | "file" | "patch" | "test_result" | "document";
+  workspaceRef?: string;
+  repository?: string;
+  path?: string;
+  commitSha?: string;
+  branch?: string;
+  title: string;
+  summary: string;
+  sourceRunId?: string;
+  createdByMemberId?: string;
+  createdByAgentId?: string;
+  createdAt: string;
 }
 
 export type RuntimeEvent =

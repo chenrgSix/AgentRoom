@@ -21,6 +21,7 @@ export interface AgentTaskRecord {
   summaryRevision: number;
   summarySourceSequence: number;
   summaryProvenanceMessageIds: string[];
+  artifactRevision: number;
   lastRoomSequence: number;
   createdByMemberId: string;
   isDefault: boolean;
@@ -42,6 +43,7 @@ interface AgentTaskRow {
   summary_source_sequence: number;
   summary_provenance_json: string;
   summary_fingerprint: string;
+  artifact_revision: number;
   last_room_sequence: number;
   created_by_member_id: string;
   is_default: 0 | 1;
@@ -65,6 +67,7 @@ function mapTask(row: AgentTaskRow): AgentTaskRecord {
     summaryProvenanceMessageIds: JSON.parse(
       row.summary_provenance_json
     ) as string[],
+    artifactRevision: row.artifact_revision,
     lastRoomSequence: row.last_room_sequence,
     createdByMemberId: row.created_by_member_id,
     isDefault: row.is_default === 1,
@@ -82,12 +85,13 @@ export class AgentTaskRepository {
         task_id, room_id, parent_task_id, title, goal, state,
         primary_agent_id, workspace_ref, summary, summary_revision,
         summary_source_sequence, summary_provenance_json, summary_fingerprint,
-        last_room_sequence,
+        artifact_revision, last_room_sequence,
         created_by_member_id, is_default, created_at, updated_at
       ) VALUES (
         @taskId, @roomId, @parentTaskId, @title, @goal, @state,
         @primaryAgentId, @workspaceRef, @summary, @summaryRevision,
-        @summarySourceSequence, @summaryProvenanceJson, '', @lastRoomSequence,
+        @summarySourceSequence, @summaryProvenanceJson, '', @artifactRevision,
+        @lastRoomSequence,
         @createdByMemberId, @isDefault, @createdAt, @updatedAt
       )
     `).run({

@@ -7,11 +7,14 @@ import test from "node:test";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
+import { RunRepository } from "../src/run/run-repository.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 import { AgentTaskService } from "../src/task/agent-task-service.js";
+import { ArtifactRepository } from "../src/task/artifact-repository.js";
 import { ContextPlanner } from "../src/task/context-planner.js";
+import { TaskArtifactService } from "../src/task/task-artifact-service.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-25T12:00:00.000Z";
@@ -28,6 +31,13 @@ test("Context Planner builds stable provenance projections and bounded relevant 
     const messages = new MessageService(core, auth);
     const taskRepository = new AgentTaskRepository(database);
     const tasks = new AgentTaskService(taskRepository, core, auth);
+    const artifacts = new TaskArtifactService(
+      new ArtifactRepository(database),
+      taskRepository,
+      new RunRepository(database),
+      core,
+      auth
+    );
     const planner = new ContextPlanner(database, core, taskRepository);
     const created = teams.createTeamForUser({
       userId: "user_context_owner",
@@ -99,6 +109,15 @@ test("Context Planner builds stable provenance projections and bounded relevant 
       message.taskId === task.taskId && message.messageId !== trigger.messageId
     ));
 
+    artifacts.create(principal, task.taskId, {
+      type: "commit",
+      workspaceRef: "workspace_oauth",
+      repository: "agent-room/network",
+      commitSha: "21f9e8c",
+      title: "OAuth implementation",
+      summary: "Focused OAuth tests passed."
+    }, now);
+
     const repeated = planner.plan({
       roomId: room.roomId,
       taskId: task.taskId,
@@ -107,6 +126,24 @@ test("Context Planner builds stable provenance projections and bounded relevant 
     }, now);
     assert.equal(repeated.contextPlan.roomMemory.revision, 1);
     assert.equal(repeated.contextPlan.taskMemory.revision, 1);
+    const resultEvidence = repeated.contextPlan.resultEvidence;
+    assert.ok(resultEvidence);
+    assert.equal(resultEvidence.revision, 1);
+    assert.deepEqual(resultEvidence.artifactRefs[0], {
+      artifactId: resultEvidence.artifactRefs[0]?.artifactId,
+      type: "commit",
+      workspaceRef: "workspace_oauth",
+      repository: "agent-room/network",
+      commitSha: "21f9e8c",
+      title: "OAuth implementation",
+      summary: "Focused OAuth tests passed.",
+      createdByMemberId: created.owner.memberId,
+      createdAt: now
+    });
+    assert.throws(() => database.prepare(`
+      UPDATE task_artifact_refs SET summary = 'rewritten'
+      WHERE artifact_id = ?
+    `).run(resultEvidence.artifactRefs[0]?.artifactId), /immutable/u);
 
     const nextTrigger = messages.createMemberMessage(principal, {
       roomId: room.roomId,

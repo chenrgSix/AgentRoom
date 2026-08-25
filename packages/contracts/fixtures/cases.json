@@ -215,6 +215,23 @@
               "sourceCursor": 12,
               "revision": 2,
               "sourceMessageIds": []
+            },
+            "resultEvidence": {
+              "revision": 1,
+              "artifactRefs": [
+                {
+                  "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+                  "type": "commit",
+                  "workspaceRef": "workspace_oauth",
+                  "repository": "agent-room/network",
+                  "commitSha": "21f9e8c",
+                  "title": "OAuth migration",
+                  "summary": "Eight files changed and focused tests passed.",
+                  "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+                  "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+                  "createdAt": "2026-08-22T10:00:03Z"
+                }
+              ]
             }
           },
           "contextMessages": [

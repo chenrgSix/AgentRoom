@@ -137,8 +137,10 @@ for obvious credentials and sensitive local paths before leaving the machine.
 Managed Task Runs may also carry independently revisioned Room and Task memory
 projections. The prompt identifies their source cursor and evidence Message IDs
 and treats their content as untrusted collaboration context. A persisted native
-session filters already-consumed Room sequences and projection revisions; a new
-or recreated Codex Thread receives the complete bootstrap plan.
+session filters already-consumed Room sequences, projection revisions, and
+structured result-evidence revisions; a new or recreated Codex Thread receives
+the complete bootstrap plan. Artifact summaries remain verification hints and
+never grant access to a referenced workspace path.
 
 Codex and Generic CLI adapters also recognize an optional final
 `agentroom-assessment` XML-style envelope containing JSON. A valid envelope is

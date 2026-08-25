@@ -70,6 +70,45 @@ test("Agent Tasks scope Runs and allow independent Room Discussions", async () =
     const completedTaskId = completedTaskResponse.json().taskId as string;
     assert.notEqual(oauthTaskId, ciTaskId);
 
+    const artifact = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${oauthTaskId}/artifacts`,
+      headers: { authorization },
+      payload: {
+        type: "file",
+        workspaceRef: "workspace_oauth",
+        repository: "agent-room/network",
+        path: "src/oauth/migration.ts",
+        title: "OAuth migration source",
+        summary: "Workspace-relative implementation reference."
+      }
+    });
+    assert.equal(artifact.statusCode, 200);
+    assert.equal(artifact.json().revision, 1);
+    assert.equal(artifact.json().artifact.type, "file");
+    assert.ok(artifact.json().artifact.createdByMemberId);
+    const unsafeArtifact = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${oauthTaskId}/artifacts`,
+      headers: { authorization },
+      payload: {
+        type: "file",
+        path: "/Users/alice/private/oauth.ts",
+        title: "Unsafe local path",
+        summary: "Must not cross the Server boundary."
+      }
+    });
+    assert.equal(unsafeArtifact.statusCode, 400);
+    assert.match(unsafeArtifact.json().error.message, /workspace-relative/u);
+    const artifactList = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${oauthTaskId}/artifacts`,
+      headers: { authorization }
+    });
+    assert.equal(artifactList.statusCode, 200);
+    assert.equal(artifactList.json().revision, 1);
+    assert.equal(artifactList.json().artifacts.length, 1);
+
     const agentIds: string[] = [];
     for (const name of ["Coder", "Reviewer"]) {
       const agent = await app.inject({
@@ -134,6 +173,20 @@ test("Agent Tasks scope Runs and allow independent Room Discussions", async () =
     assert.equal(routed.statusCode, 200);
     assert.equal(routed.json().message.taskId, oauthTaskId);
     assert.equal(routed.json().runs[0].taskId, oauthTaskId);
+    const crossTaskArtifact = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${ciTaskId}/artifacts`,
+      headers: { authorization },
+      payload: {
+        type: "test_result",
+        workspaceRef: "workspace_ci",
+        title: "Misattributed test result",
+        summary: "Must not cite another Task's Run.",
+        sourceRunId: routed.json().runs[0].runId
+      }
+    });
+    assert.equal(crossTaskArtifact.statusCode, 400);
+    assert.match(crossTaskArtifact.json().error.message, /source Run/u);
 
     const startDiscussion = async (taskId: string, goal: string) => app.inject({
       method: "POST",

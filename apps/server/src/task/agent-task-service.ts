@@ -86,6 +86,7 @@ export class AgentTaskService {
       summaryRevision: 0,
       summarySourceSequence: 0,
       summaryProvenanceMessageIds: [],
+      artifactRevision: 0,
       lastRoomSequence: 0,
       createdByMemberId: member.memberId,
       isDefault: false,

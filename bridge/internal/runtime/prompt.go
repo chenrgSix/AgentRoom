@@ -51,6 +51,11 @@ func runtimePrompt(run contracts.RunRequestedPayload) string {
 		if memory := projectedTaskMemory(run.ContextPlan.TaskMemory); memory != "" {
 			sections = append(sections, memory)
 		}
+		if evidence := projectedResultEvidence(
+			run.ContextPlan.ResultEvidence,
+		); evidence != "" {
+			sections = append(sections, evidence)
+		}
 	}
 	if context := projectedContext(run); context != "" {
 		sections = append(sections,
@@ -59,6 +64,44 @@ func runtimePrompt(run contracts.RunRequestedPayload) string {
 	}
 	sections = append(sections, "Current request:\n"+instruction)
 	return strings.Join(sections, "\n\n")
+}
+
+func projectedResultEvidence(evidence *contracts.TaskResultEvidence) string {
+	if evidence == nil || len(evidence.ArtifactRefs) == 0 {
+		return ""
+	}
+	lines := []string{fmt.Sprintf(
+		"Structured Task result evidence (revision %d; references require local verification):",
+		evidence.Revision,
+	)}
+	for _, artifact := range evidence.ArtifactRefs {
+		locators := make([]string, 0, 5)
+		if artifact.WorkspaceRef != nil {
+			locators = append(locators, "workspace="+*artifact.WorkspaceRef)
+		}
+		if artifact.Repository != nil {
+			locators = append(locators, "repository="+*artifact.Repository)
+		}
+		if artifact.Path != nil {
+			locators = append(locators, "path="+*artifact.Path)
+		}
+		if artifact.CommitSHA != nil {
+			locators = append(locators, "commit="+*artifact.CommitSHA)
+		}
+		if artifact.Branch != nil {
+			locators = append(locators, "branch="+*artifact.Branch)
+		}
+		locatorText := "no locator"
+		if len(locators) > 0 {
+			locatorText = strings.Join(locators, "; ")
+		}
+		lines = append(lines, fmt.Sprintf(
+			"- [%s; %s] %s | %s | %s",
+			artifact.ArtifactID, artifact.Type, cleanPromptName(artifact.Title),
+			locatorText, strings.TrimSpace(artifact.Summary),
+		))
+	}
+	return truncateUTF8(strings.Join(lines, "\n"), maxProjectedMemoryBytes)
 }
 
 func projectedRoomMemory(memory *contracts.RoomMemoryClass) string {

@@ -121,6 +121,11 @@ authoritative source Room cursor and a unique list of source Message IDs, and
 contains no provider-native state. A full bootstrap carries both projections;
 a resumed Bridge may retain only the projection whose revision is newer. An
 empty plan is invalid, and omission remains compatible with older peers.
+The same plan may include a revisioned non-empty `resultEvidence` delta with at
+most 20 ArtifactRefs. References identify commit, branch, relative file/patch,
+test-result, or document evidence and retain creator plus optional source Run;
+they never embed file bytes, tool output, provider sessions, or permission
+grants.
 
 A Bridge may add a logical Session status to `run.status`: only
 `started`, `resumed`, or `recreated` plus the consumed context cursor may cross

@@ -7,6 +7,7 @@ import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
 import type {
+  ContextArtifactRef,
   ContextMemoryProjection,
   ContextPlanner
 } from "../task/context-planner.js";
@@ -33,6 +34,10 @@ interface DeliveryPayload {
   contextPlan: {
     roomMemory: ContextMemoryProjection;
     taskMemory: ContextMemoryProjection;
+    resultEvidence?: {
+      revision: number;
+      artifactRefs: ContextArtifactRef[];
+    };
   };
   contextMessages: Array<{
     messageId: string;

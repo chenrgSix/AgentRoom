@@ -61,6 +61,7 @@ func TestRuntimePromptPreservesLegacyInstructionWithoutProjection(t *testing.T) 
 }
 
 func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
+	commitSHA := "21f9e8c"
 	prompt := runtimePrompt(contracts.RunRequestedPayload{
 		Instruction: "Continue the migration.",
 		ContextPlan: &contracts.RuntimeContextPlan{
@@ -74,12 +75,23 @@ func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
 				SourceMessageIDS: []string{"msg_task_12345678"},
 				Summary:          "Task: OAuth migration\nState: working",
 			},
+			ResultEvidence: &contracts.TaskResultEvidence{
+				Revision: 5,
+				ArtifactRefs: []contracts.ArtifactReference{{
+					ArtifactID: "artifact_commit_12345678", Type: contracts.Commit,
+					Title: "OAuth migration", Summary: "Focused tests passed.",
+					CommitSHA: &commitSHA,
+				}},
+			},
 		},
 	})
 	for _, expected := range []string{
 		"Shared memory is a rebuildable projection",
 		"Shared Room memory (revision 2; source cursor 20; evidence message IDs: msg_room_12345678)",
 		"Shared Task memory (revision 4; source cursor 21; evidence message IDs: msg_task_12345678)",
+		"Structured Task result evidence (revision 5; references require local verification)",
+		"artifact_commit_12345678; commit",
+		"commit=21f9e8c",
 		"Current request:\nContinue the migration.",
 	} {
 		if !strings.Contains(prompt, expected) {

@@ -173,8 +173,31 @@ type ContextMessage struct {
 }
 
 type RuntimeContextPlan struct {
-	RoomMemory *RoomMemoryClass `json:"roomMemory,omitempty"`
-	TaskMemory *TaskMemoryClass `json:"taskMemory,omitempty"`
+	ResultEvidence *TaskResultEvidence `json:"resultEvidence,omitempty"`
+	RoomMemory     *RoomMemoryClass    `json:"roomMemory,omitempty"`
+	TaskMemory     *TaskMemoryClass    `json:"taskMemory,omitempty"`
+}
+
+type TaskResultEvidence struct {
+	ArtifactRefs []ArtifactReference `json:"artifactRefs"`
+	Revision     int64               `json:"revision"`
+}
+
+type ArtifactReference struct {
+	ArtifactID string  `json:"artifactId"`
+	Branch     *string `json:"branch,omitempty"`
+	CommitSHA  *string `json:"commitSha,omitempty"`
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	CreatedAt         time.Time             `json:"createdAt"`
+	CreatedByAgentID  *string               `json:"createdByAgentId,omitempty"`
+	CreatedByMemberID *string               `json:"createdByMemberId,omitempty"`
+	Path              *string               `json:"path,omitempty"`
+	Repository        *string               `json:"repository,omitempty"`
+	SourceRunID       *string               `json:"sourceRunId,omitempty"`
+	Summary           string                `json:"summary"`
+	Title             string                `json:"title"`
+	Type              ArtifactReferenceType `json:"type"`
+	WorkspaceRef      *string               `json:"workspaceRef,omitempty"`
 }
 
 type RoomMemoryClass struct {
@@ -439,6 +462,17 @@ type AgentStatusMessageType string
 
 const (
 	AgentStatus AgentStatusMessageType = "agent.status"
+)
+
+type ArtifactReferenceType string
+
+const (
+	Branch     ArtifactReferenceType = "branch"
+	Commit     ArtifactReferenceType = "commit"
+	Document   ArtifactReferenceType = "document"
+	File       ArtifactReferenceType = "file"
+	Patch      ArtifactReferenceType = "patch"
+	TestResult ArtifactReferenceType = "test_result"
 )
 
 type ResumePolicy string
