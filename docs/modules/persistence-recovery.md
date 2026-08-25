@@ -154,6 +154,12 @@ LongTermMemory validation, formal Memory creation, and accepted-Memory linkage
 share one transaction; rejection and invalid candidate output cannot affect a
 valid checkpoint commit.
 
+Migration 0036 adds immutable Team-scoped Blob content metadata and retained
+Artifact publication operations. Ordered chunk progress, request fingerprints,
+source Workspace lease scope, expiry, terminal failure, and the eventual bound
+Artifact identity remain queryable after restart. Blob bytes stay in the
+bounded local BlobStore; SQLite stores no file paths from a Bridge Workspace.
+
 `ADR-0015` reserves two separate future linearization points for content-bearing
 Task evidence. Blob seal fsyncs and atomically installs content before sealed
 metadata commits. Canonical bind then uses one immediate SQLite transaction to
@@ -177,8 +183,8 @@ atomic planning and closure, callback duplication, ordinary reconciliation,
 delivery recovery, backup, restore, and corrupted input rejection. `QA-010`
 reopens SQLite at planned-member, partially settled barrier, and
 committed-next-Wave cut points, and verifies deterministic-anchor retry.
-Persistence work is tracked by `DATA-001` through `DATA-006` and `TASK-007`
-through `TASK-009`; parallel recovery
+Persistence work is tracked by `DATA-001` through `DATA-006`, `TASK-007`
+through `TASK-009`, and `ART-001`; parallel recovery
 is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
 
 ## Dependencies

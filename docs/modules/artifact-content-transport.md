@@ -1,8 +1,8 @@
 # Artifact Content Transport Module
 
 - Prefix: `ART`
-- Planned implementation: `apps/server/src/artifact/` and
-  `bridge/internal/artifact/`
+- Implementation: `apps/server/src/artifact/` and migration 0036
+- Planned Bridge implementation: `bridge/internal/artifact/`
 - Owns: Blob uploads, sealed content, content retention, authenticated transfer,
   and materialization receipts
 
@@ -30,12 +30,14 @@ decides whether those bytes become canonical Team evidence.
 | Entity | Required State |
 | --- | --- |
 | Blob upload | upload/publication identity, Team and Device scope, idempotency key, declared size/digest/media type, received offset, state, expiry |
-| Artifact content | contentId, Team scope, SHA-256, size, media type, storage key, sealed timestamp, retention state |
+| Artifact content | contentId, Team scope, SHA-256, size, storage key, sealed timestamp |
 | Materialization receipt | target Run/Device, Artifact/content IDs, logical alias, digest, state, timestamp |
 
 The first BlobStore is a bounded local-filesystem adapter. Temporary and sealed
 files share a filesystem so seal can fsync and atomically rename. SQLite stores
-metadata only.
+metadata only. Migration 0036 retains immutable Team-scoped content rows and
+durable publication operations; publication metadata carries the validated
+Artifact type, file name, and media type until Task Collaboration binds it.
 
 ## Publication and Bind
 
@@ -47,8 +49,12 @@ prepare -> receive ordered bounded chunks -> seal bytes
 Chunk append requires the exact current offset, bounded size, and publication
 identity. Exact replay is idempotent; overlap, gap, conflicting digest, or quota
 excess fails closed. Seal verifies the complete stream and records a
-content-addressed identity. Bind inserts one immutable Task Artifact and advances
-its revision in the same SQLite transaction that closes the publication.
+content-addressed identity. A missing temporary file plus a matching sealed Blob
+is accepted only when that same publication already records its full declared
+length, closing the rename-before-database crash window without allowing a
+known digest to bypass upload. Bind inserts one immutable Task Artifact and
+advances its revision in the same SQLite transaction that closes the
+publication.
 
 Only bound canonical Artifacts enter Context Planner, Web preview, Memory
 provenance, or Run delivery. Sealed-but-unbound content is recoverable storage,
