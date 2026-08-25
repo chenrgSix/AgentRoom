@@ -219,6 +219,18 @@ names, versions, archive layouts, launchers, licenses, and checksums before
 upload, then downloads the candidate and repeats the same verifier. Existing
 assets are never silently replaced.
 
+For `v0.2.0`, stable release admission means the version-aligned Server, Web,
+contracts, and Bridge are the supported baseline for trusted small Teams, the
+P0-P17 exit tasks are complete, and exact-source automated correctness,
+security, migration, recovery, and packaging gates have no known blocker. It
+does not claim signed or notarized macOS packages, automatic updates, public
+internet-scale identity, high availability, credentialed provider execution in
+ordinary CI, or production readiness for every environment. `BRG-013` real
+macOS login-restart evidence and `QA-002` two-physical-machine evidence remain
+tracked post-release operational acceptance. Their open state is visible and
+must not be rewritten as passing evidence, but it does not block publishing the
+trusted-small-Team stable baseline.
+
 The first v0.2 candidate and continuous quality-gate evidence is recorded in
 `docs/acceptance/qa-009-v0.2.0-rc.1.md`. It includes the failed-safe preflight,
 the corrective workflow permission change, successful main CI and Release run
