@@ -8,6 +8,10 @@ import type {
 } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import {
+  type ArtifactRelationInput,
+  normalizeArtifactRelations
+} from "./artifact-lineage.js";
+import {
   type ArtifactRepository,
   type ArtifactType,
   type TaskArtifactRecord
@@ -28,6 +32,7 @@ export interface CreateArtifactInput {
   title: string;
   summary: string;
   sourceRunId?: string | null;
+  relations?: ArtifactRelationInput[];
 }
 
 function boundedText(value: string, label: string, maximum: number): string {
@@ -179,6 +184,7 @@ export class TaskArtifactService {
     }
     const member = this.auth.requireRoomMember(principal, task.roomId);
     const agentId = "agentId" in principal ? principal.agentId : null;
+    const relations = normalizeArtifactRelations(input.relations);
     const record: TaskArtifactRecord = {
       artifactId: createOpaqueId("artifact"),
       artifactRevision: 0,
@@ -203,9 +209,10 @@ export class TaskArtifactService {
       sourceRunId,
       createdByMemberId: agentId ? null : member.memberId,
       createdByAgentId: agentId,
-      createdAt: now
+      createdAt: now,
+      relations: []
     };
-    return this.artifacts.create(record);
+    return this.artifacts.create(record, relations);
   }
 
   private requireTaskAccess(

@@ -150,11 +150,15 @@ export function createTeamMcpServer(
       branch: z.string().min(1).max(255).optional(),
       title: z.string().min(1).max(160),
       summary: z.string().min(1).max(4_000),
-      sourceRunId: z.string().min(1).optional()
+      sourceRunId: z.string().min(1).optional(),
+      relations: z.array(z.object({
+        type: z.enum(["derives_from", "reviews", "verifies"]),
+        targetArtifactId: z.string().min(1).max(140)
+      }).strict()).max(20).optional()
     }
   }, async ({
     taskId, type, title, summary, workspaceRef, repository, path,
-    commitSha, branch, sourceRunId
+    commitSha, branch, sourceRunId, relations
   }) => toolResult(dependencies.taskArtifacts.create(
     principal,
     taskId,
@@ -167,7 +171,8 @@ export function createTeamMcpServer(
       ...(path === undefined ? {} : { path }),
       ...(commitSha === undefined ? {} : { commitSha }),
       ...(branch === undefined ? {} : { branch }),
-      ...(sourceRunId === undefined ? {} : { sourceRunId })
+      ...(sourceRunId === undefined ? {} : { sourceRunId }),
+      ...(relations === undefined ? {} : { relations })
     },
     dependencies.clock()
   )));

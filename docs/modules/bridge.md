@@ -119,6 +119,11 @@ files, changing bytes or Workspace generation, mismatched type/extension, and
 digest drift fail locally. Output and server responses contain only opaque
 identities, basename, size, media type, and digest; configured paths, storage
 keys, credentials, and file contents are not logged.
+For `TASK-011`, repeatable `--derives-from`, `--reviews`, and `--verifies`
+flags attach bounded older canonical Artifact targets to the new publication.
+The Bridge sorts and de-duplicates the closed relation set and includes it in
+the deterministic publication key and prepare request, so retry cannot silently
+change Artifact B's lineage.
 
 For `BRG-029`, a managed Runtime Agent also advertises isolated Artifact
 materialization. Before sending `run.accepted` or invoking a Runtime, the Bridge

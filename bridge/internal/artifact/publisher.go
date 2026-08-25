@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strings"
 
 	"agentroom.dev/bridge/internal/config"
@@ -25,6 +26,12 @@ type PublishInput struct {
 	Title        string
 	Summary      string
 	Source       Source
+	Relations    []PublishRelation
+}
+
+type PublishRelation struct {
+	Type             string `json:"type"`
+	TargetArtifactID string `json:"targetArtifactId"`
 }
 
 type PublishResult struct {
@@ -93,6 +100,10 @@ func (c *Client) Publish(
 	if err := validateSource(input.Source, input.ArtifactType); err != nil {
 		return PublishResult{}, err
 	}
+	relations, err := normalizedPublishRelations(input.Relations)
+	if err != nil {
+		return PublishResult{}, err
+	}
 	leaseKey := idempotencyKey(
 		"lease", input.RunID, input.AgentID, input.Source.WorkspaceRef,
 		input.Source.WorkspaceGeneration,
@@ -115,6 +126,7 @@ func (c *Client) Publish(
 		"publication", input.RunID, input.AgentID,
 		input.Source.WorkspaceRef, input.Source.WorkspaceGeneration,
 		input.ArtifactType, input.Source.FileName, input.Source.SHA256,
+		publishRelationsIdentity(relations),
 	)
 	prepareRequest := map[string]any{
 		"leaseId": lease.LeaseID, "runId": input.RunID,
@@ -127,6 +139,9 @@ func (c *Client) Publish(
 		"mediaType":           input.Source.MediaType,
 		"title":               input.Title, "summary": input.Summary,
 		"sizeBytes": len(input.Source.Bytes), "sha256": input.Source.SHA256,
+	}
+	if len(relations) > 0 {
+		prepareRequest["relations"] = relations
 	}
 	var publication publicationView
 	if err := c.retrySameRequest(
@@ -220,7 +235,7 @@ func (c *Client) Publish(
 		}, nil
 	}
 	var bound bindView
-	err := c.request(
+	err = c.request(
 		ctx, http.MethodPost,
 		"/api/bridge/artifact-publications/"+publication.PublicationID+"/bind",
 		map[string]any{}, &bound,
@@ -246,6 +261,61 @@ func (c *Client) Publish(
 		Revision:      bound.Revision,
 		SHA256:        input.Source.SHA256,
 	}, nil
+}
+
+func normalizedPublishRelations(
+	input []PublishRelation,
+) ([]PublishRelation, error) {
+	if len(input) > 20 {
+		return nil, fmt.Errorf("Artifact publication supports at most 20 relations")
+	}
+	relations := append([]PublishRelation(nil), input...)
+	sort.Slice(relations, func(left, right int) bool {
+		if relations[left].TargetArtifactID == relations[right].TargetArtifactID {
+			return relations[left].Type < relations[right].Type
+		}
+		return relations[left].TargetArtifactID < relations[right].TargetArtifactID
+	})
+	identities := make(map[string]bool, len(relations))
+	for _, relation := range relations {
+		if (relation.Type != "derives_from" && relation.Type != "reviews" &&
+			relation.Type != "verifies") ||
+			!validPublicationArtifactID(relation.TargetArtifactID) {
+			return nil, fmt.Errorf("Artifact publication relation is invalid")
+		}
+		identity := relation.TargetArtifactID + "\x00" + relation.Type
+		if identities[identity] {
+			return nil, fmt.Errorf("Artifact publication relations must be unique")
+		}
+		identities[identity] = true
+	}
+	return relations, nil
+}
+
+func validPublicationArtifactID(value string) bool {
+	if !strings.HasPrefix(value, "artifact_") {
+		return false
+	}
+	suffix := strings.TrimPrefix(value, "artifact_")
+	if len(suffix) < 8 || len(suffix) > 128 {
+		return false
+	}
+	for _, character := range suffix {
+		if (character < 'A' || character > 'Z') &&
+			(character < 'a' || character > 'z') &&
+			(character < '0' || character > '9') && character != '_' && character != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func publishRelationsIdentity(relations []PublishRelation) string {
+	parts := make([]string, 0, len(relations))
+	for _, relation := range relations {
+		parts = append(parts, relation.Type+":"+relation.TargetArtifactID)
+	}
+	return strings.Join(parts, ",")
 }
 
 func (c *Client) retrySameRequest(

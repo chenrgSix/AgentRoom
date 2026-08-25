@@ -86,6 +86,11 @@ func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
 					ArtifactID: "artifact_commit_12345678", Type: contracts.Commit,
 					Title: "OAuth migration", Summary: "Focused tests passed.",
 					CommitSHA: &commitSHA, ArtifactRevision: &artifactRevision,
+					Relations: []contracts.ArtifactRelationReference{{
+						RelationID:       "relation_verify_12345678",
+						Type:             contracts.Verifies,
+						TargetArtifactID: "artifact_source_12345678",
+					}},
 				}},
 			},
 		},
@@ -97,6 +102,7 @@ func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
 		"Structured Task result evidence (delta revisions 5-5; references require local verification)",
 		"revision 5; artifact_commit_12345678; commit",
 		"commit=21f9e8c",
+		"lineage=verifies:artifact_source_12345678",
 		"Current request:\nContinue the migration.",
 	} {
 		if !strings.Contains(prompt, expected) {

@@ -336,6 +336,7 @@ export interface ArtifactReference {
   createdByAgentId?:  string;
   createdByMemberId?: string;
   path?:              string;
+  relations?:         ArtifactRelationReference[];
   repository?:        string;
   sourceRunId?:       string;
   summary:            string;
@@ -356,6 +357,17 @@ export interface PinnedArtifactContent {
 }
 
 export type MediaType = "text/x-diff" | "text/markdown" | "application/json";
+
+/**
+ * Immutable lineage from the containing source Artifact to older Task evidence.
+ */
+export interface ArtifactRelationReference {
+  relationId:       string;
+  targetArtifactId: string;
+  type:             RelationType;
+}
+
+export type RelationType = "derives_from" | "reviews" | "verifies";
 
 export type ArtifactReferenceType = "commit" | "branch" | "file" | "patch" | "test_result" | "document";
 

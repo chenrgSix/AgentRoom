@@ -166,7 +166,7 @@ test("Context Planner builds stable provenance projections and bounded relevant 
       ({ messageId }) => messageId !== trigger.messageId
     ));
 
-    artifacts.create(principal, task.taskId, {
+    const sourceArtifact = artifacts.create(principal, task.taskId, {
       type: "commit",
       workspaceRef: "workspace_oauth",
       repository: "agent-room/network",
@@ -219,7 +219,15 @@ test("Context Planner builds stable provenance projections and bounded relevant 
         type: "test_result",
         workspaceRef: "workspace_oauth",
         title: `OAuth verification ${index}`,
-        summary: `Verification evidence ${index}.`
+        summary: `Verification evidence ${index}.`,
+        ...(index === 2
+          ? {
+              relations: [{
+                type: "derives_from" as const,
+                targetArtifactId: sourceArtifact.artifact.artifactId
+              }]
+            }
+          : {})
       }, now);
     }
     const firstDelta = planner.plan({
@@ -230,6 +238,39 @@ test("Context Planner builds stable provenance projections and bounded relevant 
       resultEvidenceAfterRevision: 1
     }, now).contextPlan.resultEvidence;
     assert.ok(firstDelta);
+    assert.deepEqual(
+      firstDelta.artifactRefs[0]?.relations?.map((relation) => ({
+        type: relation.type,
+        targetArtifactId: relation.targetArtifactId
+      })),
+      [{
+        type: "derives_from",
+        targetArtifactId: sourceArtifact.artifact.artifactId
+      }]
+    );
+    const relationId = firstDelta.artifactRefs[0]?.relations?.[0]?.relationId;
+    assert.ok(relationId);
+    assert.throws(() => database.prepare(`
+      UPDATE task_artifact_relations SET relation_type = 'reviews'
+      WHERE relation_id = ?
+    `).run(relationId), /immutable/u);
+    assert.throws(() => database.prepare(`
+      DELETE FROM task_artifact_relations WHERE relation_id = ?
+    `).run(relationId), /immutable/u);
+    assert.throws(() => database.prepare(`
+      INSERT INTO task_artifact_relations (
+        relation_id, source_artifact_id, target_artifact_id, task_id, room_id,
+        relation_type, created_by_member_id, created_by_agent_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'reviews', ?, NULL, ?)
+    `).run(
+      "relation_reverse_12345678",
+      sourceArtifact.artifact.artifactId,
+      firstDelta.artifactRefs[0]?.artifactId,
+      task.taskId,
+      room.roomId,
+      created.owner.memberId,
+      now
+    ), /older evidence/u);
     assert.deepEqual({
       deliveryKind: firstDelta.deliveryKind,
       fromRevision: firstDelta.fromRevision,

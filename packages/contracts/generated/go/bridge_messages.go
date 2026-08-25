@@ -249,16 +249,17 @@ type ArtifactReference struct {
 	// Immutable content metadata and a path-free logical alias pinned into one Run delivery.
 	Content *PinnedArtifactContent `json:"content,omitempty"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
-	CreatedAt         time.Time             `json:"createdAt"`
-	CreatedByAgentID  *string               `json:"createdByAgentId,omitempty"`
-	CreatedByMemberID *string               `json:"createdByMemberId,omitempty"`
-	Path              *string               `json:"path,omitempty"`
-	Repository        *string               `json:"repository,omitempty"`
-	SourceRunID       *string               `json:"sourceRunId,omitempty"`
-	Summary           string                `json:"summary"`
-	Title             string                `json:"title"`
-	Type              ArtifactReferenceType `json:"type"`
-	WorkspaceRef      *string               `json:"workspaceRef,omitempty"`
+	CreatedAt         time.Time                   `json:"createdAt"`
+	CreatedByAgentID  *string                     `json:"createdByAgentId,omitempty"`
+	CreatedByMemberID *string                     `json:"createdByMemberId,omitempty"`
+	Path              *string                     `json:"path,omitempty"`
+	Relations         []ArtifactRelationReference `json:"relations,omitempty"`
+	Repository        *string                     `json:"repository,omitempty"`
+	SourceRunID       *string                     `json:"sourceRunId,omitempty"`
+	Summary           string                      `json:"summary"`
+	Title             string                      `json:"title"`
+	Type              ArtifactReferenceType       `json:"type"`
+	WorkspaceRef      *string                     `json:"workspaceRef,omitempty"`
 }
 
 // Immutable content metadata and a path-free logical alias pinned into one Run delivery.
@@ -268,6 +269,13 @@ type PinnedArtifactContent struct {
 	MediaType    MediaType `json:"mediaType"`
 	Sha256       string    `json:"sha256"`
 	SizeBytes    int64     `json:"sizeBytes"`
+}
+
+// Immutable lineage from the containing source Artifact to older Task evidence.
+type ArtifactRelationReference struct {
+	RelationID       string       `json:"relationId"`
+	TargetArtifactID string       `json:"targetArtifactId"`
+	Type             RelationType `json:"type"`
 }
 
 type RoomMemoryClass struct {
@@ -653,6 +661,14 @@ const (
 	ApplicationJSON MediaType = "application/json"
 	TextMarkdown    MediaType = "text/markdown"
 	TextXDiff       MediaType = "text/x-diff"
+)
+
+type RelationType string
+
+const (
+	DerivesFrom RelationType = "derives_from"
+	Reviews     RelationType = "reviews"
+	Verifies    RelationType = "verifies"
 )
 
 type ArtifactReferenceType string

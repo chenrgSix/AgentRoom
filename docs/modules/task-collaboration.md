@@ -2,7 +2,7 @@
 
 - Prefix: `TASK`
 - Implementation: `apps/server/src/task/`, migrations
-  0024/0026/0027/0028/0029/0030/0031/0032/0033/0034/0037, and the Web Room
+  0024/0026/0027/0028/0029/0030/0031/0032/0033/0034/0037/0038, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -89,9 +89,14 @@ type, file name, media type, size, digest, and Team-scoped content. The inverse
 publication transition accepts only that exact canonical Artifact. Reference-
 only Artifacts preserve their existing shape and cannot claim Blob metadata.
 
-Artifact relations are immutable Task evidence. A newly produced Artifact may
-`derive_from`, `review`, or `verify` an older in-scope Artifact. The new Artifact
-still occupies the ordinary Task result-evidence cursor; a text reply does not
+Migration 0038 makes Artifact lineage part of the same canonical append. A
+newly produced Artifact may `derives_from`, `reviews`, or `verifies` an older
+Artifact in the same Task and Room. Artifact B and its normalized, bounded
+relations are inserted in one immediate transaction, so B still advances the
+ordinary Task artifact revision exactly once and no observer can see B without
+its lineage. Relation creator and timestamp equal B's creator and timestamp;
+the source, target, type, scope, and provenance cannot be updated or deleted.
+There is deliberately no post-hoc relation API and a text reply does not
 substitute for the lineage record.
 
 ## Shared Memory
@@ -197,6 +202,10 @@ accepts only the exact `throughRevision` found in that Run's durable Delivery;
 forged, skipped, stale-scope, and out-of-order acknowledgements cannot advance
 the cursor. Artifact summaries are claims to verify against the named
 workspace evidence, not proof that a commit, test, or file exists.
+Each projected ArtifactRef includes its canonical relation IDs, closed type,
+and target Artifact IDs. A relation may target evidence outside the current
+bounded page; its opaque target ID preserves lineage without expanding or
+silently reordering the result-evidence cursor.
 
 For a content-bearing Artifact, Context Planner projects only the sealed content
 identity already bound to the canonical record. Run Orchestration freezes that

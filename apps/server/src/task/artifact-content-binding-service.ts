@@ -13,6 +13,7 @@ import type {
   TaskArtifactRecord
 } from "./artifact-repository.js";
 import type { AgentTaskRepository } from "./task-repository.js";
+import { normalizeArtifactRelations } from "./artifact-lineage.js";
 
 export class ArtifactContentBindingService {
   public constructor(
@@ -86,9 +87,10 @@ export class ArtifactContentBindingService {
         sourceRunId: publication.runId,
         createdByMemberId: null,
         createdByAgentId: publication.agentId,
-        createdAt: now
+        createdAt: now,
+        relations: []
       };
-      const created = this.artifacts.create(record);
+      const created = this.artifacts.create(record, publication.relations);
       this.publications.bind(
         publication.publicationId,
         content.contentId,
@@ -118,7 +120,9 @@ export class ArtifactContentBindingService {
       artifact.contentMediaType !== publication.mediaType ||
       artifact.contentSha256 !== publication.declaredSha256 ||
       artifact.sourceRunId !== publication.runId ||
-      artifact.createdByAgentId !== publication.agentId
+      artifact.createdByAgentId !== publication.agentId ||
+      JSON.stringify(normalizeArtifactRelations(artifact.relations)) !==
+        JSON.stringify(normalizeArtifactRelations(publication.relations))
     ) {
       throw new Error("Bound Artifact publication is inconsistent");
     }

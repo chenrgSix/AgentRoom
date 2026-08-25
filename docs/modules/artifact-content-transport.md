@@ -2,7 +2,7 @@
 
 - Prefix: `ART`
 - Implementation: `apps/server/src/artifact/`, `apps/server/src/http/artifact-routes.ts`,
-  `bridge/internal/artifact/`, and migrations 0036-0037
+  `bridge/internal/artifact/`, and migrations 0036-0038
 - Owns: Blob uploads, sealed content, content retention, authenticated transfer,
   and materialization receipts
 
@@ -31,6 +31,7 @@ decides whether those bytes become canonical Team evidence.
 | --- | --- |
 | Blob upload | upload/publication identity, Team and Device scope, idempotency key, declared size/digest/media type, received offset, state, expiry |
 | Artifact content | contentId, Team scope, SHA-256, size, storage key, sealed timestamp |
+| Publication lineage request | bounded normalized relation type and older target Artifact ID pairs included in the prepare fingerprint |
 | Materialization receipt | target Run/Device delivery scope, Artifact/content IDs, logical alias, media type, size, digest, and verified/reused state; no local path |
 
 The first BlobStore is a bounded local-filesystem adapter. Temporary and sealed
@@ -40,12 +41,19 @@ durable publication operations; publication metadata carries the validated
 Artifact type, file name, and media type until Task Collaboration binds it.
 Migration 0037 then links exactly one sealed publication to one new canonical
 Task Artifact without moving Artifact ownership into this module.
+Migration 0038 retains the normalized lineage request on the publication and
+requires a bound publication's canonical Artifact relations to match it
+exactly. Task Collaboration still owns the relation records and their revision
+semantics.
 
 The first Bridge source client exposes an explicit `artifact publish` command.
 It captures one allowlisted typed file, requests the assigned Run's lease over
 the Device-authenticated HTTP boundary, and drives prepare, ordered chunks,
 seal, and bind. Deterministic idempotency keys plus publication status lookup
 recover response loss without inventing another Blob or Artifact identity.
+Optional repeatable `--derives-from`, `--reviews`, and `--verifies` flags are
+normalized into that same publication identity; changing lineage under an
+existing idempotency key is a conflicting request rather than a retry.
 
 ## Publication and Bind
 
@@ -63,6 +71,11 @@ length, closing the rename-before-database crash window without allowing a
 known digest to bypass upload. Bind inserts one immutable Task Artifact and
 advances its revision in the same SQLite transaction that closes the
 publication.
+The bind transaction also appends the requested canonical relations. It rejects
+unknown, duplicate, cross-Task, cross-Room, self, or non-older targets before B
+becomes visible. A bound response-loss retry compares the requested relation
+specification with B's retained canonical lineage and returns the existing
+identity only on an exact match.
 
 Only bound canonical Artifacts enter Context Planner, Web preview, Memory
 provenance, or Run delivery. Sealed-but-unbound content is recoverable storage,
@@ -129,7 +142,7 @@ download. Read-only mode is not presented as an OS sandbox guarantee.
 `CON-010` the additive wire contract, completed `BRG-028` source publication,
 completed `RUN-011`
 pinned delivery, completed `BRG-029` isolated materialization, completed `ADP-014`
-Runtime alias injection, `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
+Runtime alias injection, completed `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
 two-Bridge recovery gate.
 
 ## Dependencies

@@ -1,6 +1,10 @@
 import type Database from "better-sqlite3";
 
 import { SqliteTransactionBoundary } from "../data/sqlite-transaction-boundary.js";
+import {
+  type ArtifactRelationInput,
+  normalizeArtifactRelations
+} from "../task/artifact-lineage.js";
 
 export type ArtifactPublicationState =
   | "prepared"
@@ -48,6 +52,7 @@ export interface ArtifactPublicationRecord {
   expiresAt: string;
   createdAt: string;
   updatedAt: string;
+  relations: ArtifactRelationInput[];
 }
 
 interface ArtifactPublicationRow {
@@ -79,6 +84,7 @@ interface ArtifactPublicationRow {
   expires_at: string;
   created_at: string;
   updated_at: string;
+  relations_json: string;
 }
 
 interface ArtifactContentRow {
@@ -119,7 +125,10 @@ function mapPublication(row: ArtifactPublicationRow): ArtifactPublicationRecord 
     failureCode: row.failure_code,
     expiresAt: row.expires_at,
     createdAt: row.created_at,
-    updatedAt: row.updated_at
+    updatedAt: row.updated_at,
+    relations: normalizeArtifactRelations(
+      JSON.parse(row.relations_json) as ArtifactRelationInput[]
+    )
   };
 }
 
@@ -172,16 +181,16 @@ export class ArtifactPublicationRepository {
           workspace_ref, workspace_generation, artifact_type, file_name,
           media_type, title, summary, declared_size, declared_sha256,
           received_size, state, temp_storage_key, content_id, artifact_id,
-          failure_code, expires_at, created_at, updated_at
+          failure_code, expires_at, created_at, updated_at, relations_json
         ) VALUES (
           @publicationId, @requestFingerprint, @idempotencyKey, @teamId,
           @deviceId, @leaseId, @roomId, @taskId, @runId, @agentId,
           @workspaceRef, @workspaceGeneration, @artifactType, @fileName,
           @mediaType, @title, @summary, @declaredSize, @declaredSha256,
           @receivedSize, @state, @tempStorageKey, @contentId, @artifactId,
-          @failureCode, @expiresAt, @createdAt, @updatedAt
+          @failureCode, @expiresAt, @createdAt, @updatedAt, @relationsJson
         )
-      `).run(record);
+      `).run({ ...record, relationsJson: JSON.stringify(record.relations) });
       return record;
     });
   }

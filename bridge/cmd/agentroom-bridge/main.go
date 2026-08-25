@@ -28,6 +28,21 @@ import (
 
 var version = "dev"
 
+type repeatedStringFlag []string
+
+func (values *repeatedStringFlag) String() string {
+	return strings.Join(*values, ",")
+}
+
+func (values *repeatedStringFlag) Set(value string) error {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return fmt.Errorf("Artifact relation target cannot be empty")
+	}
+	*values = append(*values, trimmed)
+	return nil
+}
+
 func main() {
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "agentroom-bridge:", err)
@@ -125,6 +140,12 @@ func runArtifact(args []string) error {
 	file := command.String("file", "", "Workspace-relative source file")
 	title := command.String("title", "", "Artifact title")
 	summary := command.String("summary", "", "Artifact summary")
+	var derivesFrom repeatedStringFlag
+	var reviews repeatedStringFlag
+	var verifies repeatedStringFlag
+	command.Var(&derivesFrom, "derives-from", "older Artifact identity consumed by this result (repeatable)")
+	command.Var(&reviews, "reviews", "older Artifact identity reviewed by this result (repeatable)")
+	command.Var(&verifies, "verifies", "older Artifact identity verified by this result (repeatable)")
 	if err := command.Parse(args[1:]); err != nil {
 		return err
 	}
@@ -169,13 +190,30 @@ func runArtifact(args []string) error {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	relations := make([]bridgeartifact.PublishRelation, 0,
+		len(derivesFrom)+len(reviews)+len(verifies))
+	for _, targetArtifactID := range derivesFrom {
+		relations = append(relations, bridgeartifact.PublishRelation{
+			Type: "derives_from", TargetArtifactID: targetArtifactID,
+		})
+	}
+	for _, targetArtifactID := range reviews {
+		relations = append(relations, bridgeartifact.PublishRelation{
+			Type: "reviews", TargetArtifactID: targetArtifactID,
+		})
+	}
+	for _, targetArtifactID := range verifies {
+		relations = append(relations, bridgeartifact.PublishRelation{
+			Type: "verifies", TargetArtifactID: targetArtifactID,
+		})
+	}
 	result, err := bridgeartifact.NewClient(loaded, credential).Publish(
 		ctx,
 		bridgeartifact.PublishInput{
 			RunID: strings.TrimSpace(*runID), AgentID: agentID,
 			ArtifactType: strings.TrimSpace(*artifactType),
 			Title:        strings.TrimSpace(*title), Summary: strings.TrimSpace(*summary),
-			Source: source,
+			Source: source, Relations: relations,
 		},
 	)
 	if err != nil {

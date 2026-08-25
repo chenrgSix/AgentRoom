@@ -27,16 +27,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 37);
+  assert.equal(first.currentVersion, 38);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -75,13 +75,20 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
         "WHERE type = 'table' AND name = 'artifact_publications'"
       )
       .get() as { count: number };
+    const artifactRelationTable = database
+      .prepare(
+        "SELECT count(*) AS count FROM sqlite_master " +
+        "WHERE type = 'table' AND name = 'task_artifact_relations'"
+      )
+      .get() as { count: number };
 
-    assert.equal(migrationCount.count, 37);
+    assert.equal(migrationCount.count, 38);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
     assert.equal(clarificationTable.count, 1);
     assert.equal(workspaceLeaseTable.count, 1);
     assert.equal(artifactPublicationTable.count, 1);
+    assert.equal(artifactRelationTable.count, 1);
   } finally {
     database.close();
   }
@@ -161,7 +168,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -319,7 +326,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37]
+    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38]
   );
   const database = openDatabase(databasePath);
   try {

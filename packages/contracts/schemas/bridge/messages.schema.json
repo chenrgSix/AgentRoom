@@ -1021,6 +1021,29 @@
         }
       }
     },
+    "artifactRelationRef": {
+      "title": "Artifact Relation Reference",
+      "description": "Immutable lineage from the containing source Artifact to older Task evidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "relationId",
+        "type",
+        "targetArtifactId"
+      ],
+      "properties": {
+        "relationId": {
+          "type": "string",
+          "pattern": "^relation_[A-Za-z0-9_-]{8,128}$"
+        },
+        "type": {
+          "enum": ["derives_from", "reviews", "verifies"]
+        },
+        "targetArtifactId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
+        }
+      }
+    },
     "artifactRef": {
       "title": "Artifact Reference",
       "type": "object",
@@ -1100,6 +1123,14 @@
         "artifactRevision": {
           "type": "integer",
           "minimum": 1
+        },
+        "relations": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/artifactRelationRef"
+          }
         },
         "type": {
           "enum": [

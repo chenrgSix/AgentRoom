@@ -272,10 +272,20 @@ func projectedResultEvidence(evidence *contracts.TaskResultEvidence) string {
 		if artifact.ArtifactRevision != nil {
 			ordinal = fmt.Sprintf("revision %d; ", *artifact.ArtifactRevision)
 		}
+		lineage := ""
+		if len(artifact.Relations) > 0 {
+			relations := make([]string, 0, len(artifact.Relations))
+			for _, relation := range artifact.Relations {
+				relations = append(relations, fmt.Sprintf(
+					"%s:%s", relation.Type, relation.TargetArtifactID,
+				))
+			}
+			lineage = " | lineage=" + strings.Join(relations, ",")
+		}
 		lines = append(lines, fmt.Sprintf(
-			"- [%s%s; %s] %s | %s | %s",
+			"- [%s%s; %s] %s | %s | %s%s",
 			ordinal, artifact.ArtifactID, artifact.Type, cleanPromptName(artifact.Title),
-			locatorText, strings.TrimSpace(artifact.Summary),
+			locatorText, strings.TrimSpace(artifact.Summary), lineage,
 		))
 	}
 	return truncateUTF8(strings.Join(lines, "\n"), maxProjectedMemoryBytes)

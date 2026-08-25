@@ -176,6 +176,17 @@ Task artifact revision, and changes its unique sealed publication to `bound`.
 Reciprocal triggers require the exact Team/Task/Room/Run/Agent/Workspace and
 content metadata on both records; any later mutation remains prohibited.
 
+Migration 0038 adds immutable canonical Artifact relations and the retained
+publication lineage request. A relation's source and older target must remain
+in the same Task and Room, and its creator and timestamp must equal the source
+Artifact. Artifact B, all requested relations, its Task revision increment,
+and an optional publication bind share one immediate transaction. Database
+triggers reject relation update/delete, cross-scope or forward targets, more
+than 20 relations, and a bound publication whose retained request differs from
+the canonical relation set. Response-loss recovery therefore returns B only
+after exact lineage comparison; it never reconstructs or appends relations
+later.
+
 `ADR-0015` reserves two separate future linearization points for content-bearing
 Task evidence. Blob seal fsyncs and atomically installs content before sealed
 metadata commits. Canonical bind then uses one immediate SQLite transaction to

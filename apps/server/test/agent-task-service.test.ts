@@ -108,6 +108,55 @@ test("Agent Tasks scope Runs and allow independent Room Discussions", async () =
     assert.equal(artifactList.statusCode, 200);
     assert.equal(artifactList.json().revision, 1);
     assert.equal(artifactList.json().artifacts.length, 1);
+    const sourceArtifactId = artifact.json().artifact.artifactId as string;
+    const derivedArtifact = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${oauthTaskId}/artifacts`,
+      headers: { authorization },
+      payload: {
+        type: "test_result",
+        workspaceRef: "workspace_oauth",
+        title: "OAuth migration verification",
+        summary: "Verification derived from the implementation Artifact.",
+        relations: [{
+          type: "verifies",
+          targetArtifactId: sourceArtifactId
+        }]
+      }
+    });
+    assert.equal(derivedArtifact.statusCode, 200);
+    assert.equal(derivedArtifact.json().revision, 2);
+    assert.deepEqual(
+      derivedArtifact.json().artifact.relations.map((relation: {
+        type: string;
+        targetArtifactId: string;
+      }) => ({ type: relation.type, targetArtifactId: relation.targetArtifactId })),
+      [{ type: "verifies", targetArtifactId: sourceArtifactId }]
+    );
+    const crossTaskRelation = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${ciTaskId}/artifacts`,
+      headers: { authorization },
+      payload: {
+        type: "test_result",
+        workspaceRef: "workspace_ci",
+        title: "Cross-Task verification",
+        summary: "Must not enter a different Task history.",
+        relations: [{
+          type: "verifies",
+          targetArtifactId: sourceArtifactId
+        }]
+      }
+    });
+    assert.equal(crossTaskRelation.statusCode, 400);
+    assert.match(crossTaskRelation.json().error.message, /same Task history/u);
+    const lineageList = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${oauthTaskId}/artifacts`,
+      headers: { authorization }
+    });
+    assert.equal(lineageList.json().revision, 2);
+    assert.equal(lineageList.json().artifacts[0].relations.length, 1);
 
     const agentIds: string[] = [];
     for (const name of ["Coder", "Reviewer"]) {

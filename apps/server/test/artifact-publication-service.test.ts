@@ -480,6 +480,70 @@ test("sealed publication binds one canonical Artifact in one transaction", async
       /bind conflicts/u
     );
 
+    const derivedSource = Buffer.from(
+      "diff --git a/b.test.ts b/b.test.ts\n+verified\n",
+      "utf8"
+    );
+    const derivedInput: PrepareArtifactPublicationInput = {
+      ...prepareInput(
+        fixture,
+        derivedSource,
+        "idem_artifact_bind_lineage_1234"
+      ),
+      fileName: "verification.patch",
+      title: "Verified derived patch",
+      relations: [{
+        type: "verifies",
+        targetArtifactId: bound.artifact.artifactId
+      }]
+    };
+    const derivedPrepared = fixture.service.prepare(
+      fixture.principal,
+      derivedInput,
+      now
+    );
+    assert.throws(
+      () => fixture.service.prepare(fixture.principal, {
+        ...derivedInput,
+        relations: [{
+          type: "reviews",
+          targetArtifactId: bound.artifact.artifactId
+        }]
+      }, now),
+      /idempotency key conflicts/u
+    );
+    fixture.service.appendChunk(
+      fixture.principal,
+      derivedPrepared.publicationId,
+      0,
+      derivedSource,
+      chunkSha256(derivedSource),
+      now
+    );
+    fixture.service.seal(
+      fixture.principal,
+      derivedPrepared.publicationId,
+      now
+    );
+    const derived = binder.bind(
+      fixture.principal,
+      derivedPrepared.publicationId,
+      now
+    );
+    assert.equal(derived.revision, 2);
+    assert.deepEqual(
+      derived.artifact.relations.map(({ type, targetArtifactId }) => ({
+        type,
+        targetArtifactId
+      })),
+      [{ type: "verifies", targetArtifactId: bound.artifact.artifactId }]
+    );
+    assert.equal(
+      binder.bind(fixture.principal, derivedPrepared.publicationId, now)
+        .artifact.relations[0]?.relationId,
+      derived.artifact.relations[0]?.relationId
+    );
+
     fixture.database.prepare(`
       INSERT INTO teams (team_id, name, created_at)
       VALUES ('team_foreign_content', 'Foreign Content', ?)
@@ -503,7 +567,7 @@ test("sealed publication binds one canonical Artifact in one transaction", async
       }),
       /content binding is invalid/u
     );
-    assert.equal(artifacts.getRevision(fixture.run.taskId), 1);
+    assert.equal(artifacts.getRevision(fixture.run.taskId), 2);
   } finally {
     fixture.database.close();
   }

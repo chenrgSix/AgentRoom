@@ -44,6 +44,11 @@ export interface ContextArtifactRef {
   artifactId: string;
   artifactRevision: number;
   type: ArtifactType;
+  relations?: Array<{
+    relationId: string;
+    type: "derives_from" | "reviews" | "verifies";
+    targetArtifactId: string;
+  }>;
   workspaceRef?: string;
   repository?: string;
   path?: string;
@@ -530,6 +535,15 @@ export class ContextPlanner {
       artifactId: artifact.artifactId,
       artifactRevision: artifact.artifactRevision,
       type: artifact.type,
+      ...(artifact.relations.length > 0
+        ? {
+            relations: artifact.relations.map((relation) => ({
+              relationId: relation.relationId,
+              type: relation.type,
+              targetArtifactId: relation.targetArtifactId
+            }))
+          }
+        : {}),
       ...(artifact.workspaceRef ? { workspaceRef: artifact.workspaceRef } : {}),
       ...(artifact.repository ? { repository: artifact.repository } : {}),
       ...(artifact.path ? { path: artifact.path } : {}),

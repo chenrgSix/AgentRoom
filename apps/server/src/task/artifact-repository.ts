@@ -1,6 +1,12 @@
 import type Database from "better-sqlite3";
 
 import { SqliteTransactionBoundary } from "../data/sqlite-transaction-boundary.js";
+import { createOpaqueId } from "../domain/identifiers.js";
+import {
+  type ArtifactRelationInput,
+  normalizeArtifactRelations,
+  type TaskArtifactRelationRecord
+} from "./artifact-lineage.js";
 
 export type ArtifactType =
   | "commit"
@@ -37,6 +43,7 @@ export interface TaskArtifactRecord {
   createdByMemberId: string | null;
   createdByAgentId: string | null;
   createdAt: string;
+  relations: TaskArtifactRelationRecord[];
 }
 
 interface TaskArtifactRow {
@@ -64,6 +71,32 @@ interface TaskArtifactRow {
   created_at: string;
 }
 
+interface TaskArtifactRelationRow {
+  relation_id: string;
+  source_artifact_id: string;
+  target_artifact_id: string;
+  task_id: string;
+  room_id: string;
+  relation_type: TaskArtifactRelationRecord["type"];
+  created_by_member_id: string | null;
+  created_by_agent_id: string | null;
+  created_at: string;
+}
+
+function mapRelation(row: TaskArtifactRelationRow): TaskArtifactRelationRecord {
+  return {
+    relationId: row.relation_id,
+    sourceArtifactId: row.source_artifact_id,
+    targetArtifactId: row.target_artifact_id,
+    taskId: row.task_id,
+    roomId: row.room_id,
+    type: row.relation_type,
+    createdByMemberId: row.created_by_member_id,
+    createdByAgentId: row.created_by_agent_id,
+    createdAt: row.created_at
+  };
+}
+
 function mapArtifact(row: TaskArtifactRow): TaskArtifactRecord {
   return {
     artifactId: row.artifact_id,
@@ -87,7 +120,8 @@ function mapArtifact(row: TaskArtifactRow): TaskArtifactRecord {
     sourceRunId: row.source_run_id,
     createdByMemberId: row.created_by_member_id,
     createdByAgentId: row.created_by_agent_id,
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    relations: []
   };
 }
 
@@ -101,13 +135,17 @@ export class ArtifactRepository {
     const row = this.database.prepare(`
       SELECT * FROM task_artifact_refs WHERE artifact_id = ?
     `).get(artifactId) as TaskArtifactRow | undefined;
-    return row && mapArtifact(row);
+    return row && this.withRelations(mapArtifact(row));
   }
 
-  public create(record: TaskArtifactRecord): {
+  public create(
+    record: TaskArtifactRecord,
+    requestedRelations: readonly ArtifactRelationInput[] = []
+  ): {
     artifact: TaskArtifactRecord;
     revision: number;
   } {
+    const relationInputs = normalizeArtifactRelations(requestedRelations);
     return this.transactions.immediate(() => {
       const revisionRow = this.database.prepare(`
         UPDATE agent_tasks
@@ -131,7 +169,35 @@ export class ArtifactRepository {
           @createdByAgentId, @createdAt
         )
       `).run({ ...record, artifactRevision: revisionRow.artifact_revision });
-      const artifact = { ...record, artifactRevision: revisionRow.artifact_revision };
+      const artifact = {
+        ...record,
+        artifactRevision: revisionRow.artifact_revision,
+        relations: relationInputs.map((relation) => {
+          const created: TaskArtifactRelationRecord = {
+            relationId: createOpaqueId("relation"),
+            sourceArtifactId: record.artifactId,
+            targetArtifactId: relation.targetArtifactId,
+            taskId: record.taskId,
+            roomId: record.roomId,
+            type: relation.type,
+            createdByMemberId: record.createdByMemberId,
+            createdByAgentId: record.createdByAgentId,
+            createdAt: record.createdAt
+          };
+          this.database.prepare(`
+            INSERT INTO task_artifact_relations (
+              relation_id, source_artifact_id, target_artifact_id,
+              task_id, room_id, relation_type, created_by_member_id,
+              created_by_agent_id, created_at
+            ) VALUES (
+              @relationId, @sourceArtifactId, @targetArtifactId,
+              @taskId, @roomId, @type, @createdByMemberId,
+              @createdByAgentId, @createdAt
+            )
+          `).run(created);
+          return created;
+        })
+      };
       return { artifact, revision: artifact.artifactRevision };
     });
   }
@@ -150,7 +216,7 @@ export class ArtifactRepository {
       taskId,
       throughRevision ?? Number.MAX_SAFE_INTEGER,
       limit
-    ) as TaskArtifactRow[]).map(mapArtifact);
+    ) as TaskArtifactRow[]).map((row) => this.withRelations(mapArtifact(row)));
   }
 
   public listAfterRevision(
@@ -169,7 +235,7 @@ export class ArtifactRepository {
       afterRevision,
       throughRevision ?? Number.MAX_SAFE_INTEGER,
       limit
-    ) as TaskArtifactRow[]).map(mapArtifact);
+    ) as TaskArtifactRow[]).map((row) => this.withRelations(mapArtifact(row)));
   }
 
   public getRevision(taskId: string): number {
@@ -178,5 +244,14 @@ export class ArtifactRepository {
     `).get(taskId) as { artifact_revision: number } | undefined;
     if (!row) throw new Error(`Task not found: ${taskId}`);
     return row.artifact_revision;
+  }
+
+  private withRelations(artifact: TaskArtifactRecord): TaskArtifactRecord {
+    const rows = this.database.prepare(`
+      SELECT * FROM task_artifact_relations
+      WHERE source_artifact_id = ?
+      ORDER BY target_artifact_id, relation_type, relation_id
+    `).all(artifact.artifactId) as TaskArtifactRelationRow[];
+    return { ...artifact, relations: rows.map(mapRelation) };
   }
 }

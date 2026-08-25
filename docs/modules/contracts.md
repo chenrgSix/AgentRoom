@@ -134,7 +134,10 @@ most 20 ArtifactRefs. Additive `deliveryKind`, `fromRevision`,
 window from a strict ascending continuation page; every new reference also has
 a Task-local `artifactRevision`. References identify commit, branch, relative
 file/patch, test-result, or document evidence and retain creator plus optional
-source Run. A content-bearing Patch, Markdown document, or JSON test result adds
+source Run. A reference may also carry at most 20 immutable lineage references,
+each with a relation ID, the closed `derives_from`/`reviews`/`verifies` type,
+and one opaque target Artifact ID. The target need not be duplicated into the
+same bounded page. A content-bearing Patch, Markdown document, or JSON test result adds
 one closed descriptor with content ID, bounded size, exact media type and
 SHA-256, plus an `artifact://` logical alias. It never embeds file bytes, a
 local path, tool output, provider session, or permission grant.

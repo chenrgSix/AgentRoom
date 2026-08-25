@@ -1,6 +1,7 @@
 import type { ArtifactType } from "../task/artifact-repository.js";
 import type { MemoryEntryType } from "../task/memory-entry-repository.js";
 import type { AgentTaskState } from "../task/task-repository.js";
+import { artifactRelationInput } from "./artifact-relation-input.js";
 import {
   bodyObject,
   requiredStringArray,
@@ -198,7 +199,10 @@ export function registerTaskRoutes({
               sourceRunId: body.sourceRunId === null
                 ? null
                 : requiredString(body.sourceRunId, "sourceRunId", 140)
-            })
+            }),
+        ...(body.relations === undefined
+          ? {}
+          : { relations: artifactRelationInput(body.relations) })
       }, clock());
     }
   );

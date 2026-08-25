@@ -6,6 +6,10 @@ import type { DevicePrincipal } from "../security/auth-service.js";
 import type { WorkspaceLeaseService } from
   "../workspace/workspace-lease-service.js";
 import {
+  type ArtifactRelationInput,
+  normalizeArtifactRelations
+} from "../task/artifact-lineage.js";
+import {
   type ArtifactContentRecord,
   type ArtifactPublicationRecord,
   ArtifactPublicationRepository
@@ -33,6 +37,7 @@ export interface PrepareArtifactPublicationInput {
   summary: string;
   sizeBytes: number;
   sha256: string;
+  relations?: ArtifactRelationInput[];
 }
 
 function boundedText(
@@ -61,7 +66,8 @@ function requestFingerprint(input: PrepareArtifactPublicationInput): string {
     input.title,
     input.summary,
     input.sizeBytes,
-    input.sha256
+    input.sha256,
+    input.relations ?? []
   ])).digest("hex");
 }
 
@@ -169,7 +175,8 @@ export class ArtifactPublicationService {
         nowMilliseconds + publicationLifetimeMilliseconds
       ).toISOString(),
       createdAt: now,
-      updatedAt: now
+      updatedAt: now,
+      relations: normalized.relations ?? []
     };
     try {
       const created = this.publications.create(record);
@@ -369,7 +376,8 @@ export class ArtifactPublicationService {
     return {
       ...input,
       title: boundedText(input.title, "Artifact title", 160),
-      summary: boundedText(input.summary, "Artifact summary", 4_000)
+      summary: boundedText(input.summary, "Artifact summary", 4_000),
+      relations: normalizeArtifactRelations(input.relations)
     };
   }
 }

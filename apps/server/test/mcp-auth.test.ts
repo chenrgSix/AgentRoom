@@ -316,7 +316,9 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       reportedArtifact.json().result.structuredContent.artifact.createdByAgentId,
       manualAgentId
     );
-    const listedArtifacts = await app.inject({
+    const sourceArtifactId = reportedArtifact.json().result.structuredContent
+      .artifact.artifactId as string;
+    const verifiedArtifact = await app.inject({
       method: "POST",
       url: "/mcp",
       headers: {
@@ -328,16 +330,55 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
         id: 12,
         method: "tools/call",
         params: {
+          name: "team.report_task_artifact",
+          arguments: {
+            taskId: assignedRun.taskId,
+            type: "test_result",
+            workspaceRef: "workspace_manual_agent",
+            title: "MCP verification result",
+            summary: "Manual Agent verifies its earlier canonical evidence.",
+            sourceRunId: assignedRun.runId,
+            relations: [{
+              type: "verifies",
+              targetArtifactId: sourceArtifactId
+            }]
+          }
+        }
+      }
+    });
+    assert.equal(verifiedArtifact.statusCode, 200);
+    assert.equal(
+      verifiedArtifact.json().result.structuredContent.artifact.relations[0]
+        .targetArtifactId,
+      sourceArtifactId
+    );
+    const listedArtifacts = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 13,
+        method: "tools/call",
+        params: {
           name: "team.list_task_artifacts",
           arguments: { taskId: assignedRun.taskId }
         }
       }
     });
     assert.equal(listedArtifacts.statusCode, 200);
-    assert.equal(listedArtifacts.json().result.structuredContent.revision, 1);
+    assert.equal(listedArtifacts.json().result.structuredContent.revision, 2);
     assert.equal(
       listedArtifacts.json().result.structuredContent.artifacts[0].sourceRunId,
       assignedRun.runId
+    );
+    assert.equal(
+      listedArtifacts.json().result.structuredContent.artifacts[0].relations[0]
+        .type,
+      "verifies"
     );
     const timeline = await app.inject({
       method: "GET",

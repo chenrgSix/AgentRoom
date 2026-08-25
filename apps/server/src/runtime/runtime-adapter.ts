@@ -49,6 +49,11 @@ export interface RuntimeContextArtifactRef {
   artifactId: string;
   artifactRevision?: number;
   type: "commit" | "branch" | "file" | "patch" | "test_result" | "document";
+  relations?: Array<{
+    relationId: string;
+    type: "derives_from" | "reviews" | "verifies";
+    targetArtifactId: string;
+  }>;
   workspaceRef?: string;
   repository?: string;
   path?: string;

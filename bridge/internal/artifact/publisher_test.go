@@ -77,6 +77,12 @@ func TestPublisherRecoversLostResponsesWithoutSendingLocalPaths(t *testing.T) {
 			if body["fileName"] != "change.patch" {
 				t.Errorf("unsafe or missing file name: %#v", body["fileName"])
 			}
+			relations, ok := body["relations"].([]any)
+			if !ok || len(relations) != 1 ||
+				relations[0].(map[string]any)["type"] != "derives_from" ||
+				relations[0].(map[string]any)["targetArtifactId"] != "artifact_source_12345678" {
+				t.Errorf("missing canonical Artifact lineage: %#v", body["relations"])
+			}
 			if prepareCalls == 1 {
 				closeResponse(t, writer)
 				return
@@ -130,6 +136,9 @@ func TestPublisherRecoversLostResponsesWithoutSendingLocalPaths(t *testing.T) {
 			WorkspaceRef:        "workspace_" + strings.Repeat("b", 64),
 			WorkspaceGeneration: strings.Repeat("c", 64),
 		},
+		Relations: []PublishRelation{{
+			Type: "derives_from", TargetArtifactID: "artifact_source_12345678",
+		}},
 	}
 	result, err := client.Publish(context.Background(), input)
 	if err != nil {
@@ -153,6 +162,30 @@ func TestPublisherRecoversLostResponsesWithoutSendingLocalPaths(t *testing.T) {
 		if strings.Contains(body, localPath) || strings.Contains(body, "private/project") {
 			t.Fatalf("request exposed a local path: %s", body)
 		}
+	}
+}
+
+func TestPublisherNormalizesAndRejectsInvalidRelations(t *testing.T) {
+	relations, err := normalizedPublishRelations([]PublishRelation{{
+		Type: "verifies", TargetArtifactID: "artifact_z_source_12345678",
+	}, {
+		Type: "derives_from", TargetArtifactID: "artifact_a_source_12345678",
+	}})
+	if err != nil || len(relations) != 2 || relations[0].Type != "derives_from" {
+		t.Fatalf("relations=%#v err=%v", relations, err)
+	}
+	if _, err := normalizedPublishRelations([]PublishRelation{{
+		Type: "invalid", TargetArtifactID: "artifact_source_12345678",
+	}}); err == nil {
+		t.Fatal("invalid Artifact relation type was accepted")
+	}
+	duplicate := PublishRelation{
+		Type: "reviews", TargetArtifactID: "artifact_source_12345678",
+	}
+	if _, err := normalizedPublishRelations([]PublishRelation{
+		duplicate, duplicate,
+	}); err == nil {
+		t.Fatal("duplicate Artifact relation was accepted")
 	}
 }
 

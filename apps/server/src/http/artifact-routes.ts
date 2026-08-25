@@ -9,6 +9,7 @@ import {
   requiredString
 } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
+import { artifactRelationInput } from "./artifact-relation-input.js";
 
 function publicationView(publication: ArtifactPublicationRecord) {
   return {
@@ -34,7 +35,8 @@ function publicationView(publication: ArtifactPublicationRecord) {
     failureCode: publication.failureCode,
     expiresAt: publication.expiresAt,
     createdAt: publication.createdAt,
-    updatedAt: publication.updatedAt
+    updatedAt: publication.updatedAt,
+    relations: publication.relations
   };
 }
 
@@ -148,7 +150,10 @@ export function registerArtifactRoutes({
       title: requiredString(body.title, "title", 160),
       summary: requiredString(body.summary, "summary", 4_000),
       sizeBytes: requiredPositiveInteger(body.sizeBytes, "sizeBytes"),
-      sha256: requiredString(body.sha256, "sha256", 64)
+      sha256: requiredString(body.sha256, "sha256", 64),
+      ...(body.relations === undefined
+        ? {}
+        : { relations: artifactRelationInput(body.relations) })
     }, clock());
     noStore(reply);
     return publicationView(publication);
