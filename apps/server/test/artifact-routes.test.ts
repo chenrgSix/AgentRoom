@@ -6,16 +6,21 @@ import path from "node:path";
 import test from "node:test";
 
 import { createServerApp } from "../src/app.js";
+import { BridgeConnectionRegistry } from
+  "../src/bridge/bridge-connection-registry.js";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { RunRepository } from "../src/run/run-repository.js";
 import { RunService } from "../src/run/run-service.js";
+import { DeliveryService } from "../src/run/delivery-service.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 import { ArtifactRepository } from "../src/task/artifact-repository.js";
+import { ContextPlanner } from "../src/task/context-planner.js";
+import { TaskArtifactService } from "../src/task/task-artifact-service.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-25T10:00:00.000Z";
@@ -193,6 +198,7 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
     assert.equal(bindResponse.json().revision, 1);
     assert.equal(bindResponse.json().artifact.contentSha256, sha256);
     const artifactId = bindResponse.json().artifact.artifactId as string;
+    const contentId = bindResponse.json().artifact.contentId as string;
 
     const retry = await app.inject({
       method: "POST",
@@ -203,6 +209,185 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
     assert.equal(retry.statusCode, 200);
     assert.equal(retry.json().artifact.artifactId, artifactId);
     assert.equal(new ArtifactRepository(database).getRevision(run.taskId), 1);
+
+    const targetDevice = registry.registerOwnDevice(
+      member,
+      created.team.teamId,
+      "Reviewer Mac",
+      now
+    );
+    const targetAgent = agents.publishAgent(member, {
+      teamId: created.team.teamId,
+      deviceId: targetDevice.deviceId,
+      name: "Reviewer",
+      role: "Managed",
+      integrationMode: "managed",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: true,
+        supportsStart: true,
+        supportsStreaming: true,
+        supportsArtifactMaterialization: true
+      },
+      now
+    });
+    const downstreamMessage = messages.createMemberMessage(member, {
+      roomId: room.roomId,
+      content: "Review the pinned patch.",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: targetAgent.agentId,
+        displayLabel: "Reviewer / Managed"
+      }],
+      now
+    });
+    const downstreamRun = runs.createRunsForMessage(
+      member,
+      downstreamMessage.messageId,
+      now
+    )[0];
+    assert.ok(downstreamRun);
+    const delivery = new DeliveryService(
+      database,
+      core,
+      runRepository,
+      new ContextPlanner(database, core, taskRepository),
+      new BridgeConnectionRegistry(),
+      () => now
+    );
+    const pinnedDelivery = delivery.dispatch(downstreamRun.runId);
+    const pinnedArtifact = pinnedDelivery?.payload.contextPlan.resultEvidence
+      ?.artifactRefs.find((candidate) => candidate.artifactId === artifactId);
+    assert.deepEqual(pinnedArtifact?.content, {
+      contentId,
+      logicalAlias: `artifact://${artifactId}/change.patch`,
+      mediaType: "text/x-diff",
+      sha256,
+      sizeBytes: source.length
+    });
+    const pinnedHash = pinnedDelivery?.payloadHash;
+    const artifacts = new TaskArtifactService(
+      new ArtifactRepository(database),
+      taskRepository,
+      runRepository,
+      core,
+      auth
+    );
+    artifacts.create(member, run.taskId, {
+      type: "document",
+      workspaceRef,
+      path: "later.md",
+      title: "Later evidence",
+      summary: "Created after the downstream delivery was frozen."
+    }, now);
+    const repeatedDelivery = delivery.dispatch(downstreamRun.runId);
+    assert.equal(repeatedDelivery?.payloadHash, pinnedHash);
+    assert.deepEqual(
+      repeatedDelivery?.payload.contextPlan.resultEvidence,
+      pinnedDelivery?.payload.contextPlan.resultEvidence
+    );
+    const reopened = openDatabase(databasePath);
+    try {
+      const recovered = new DeliveryService(
+        reopened,
+        new CoreRepository(reopened),
+        new RunRepository(reopened),
+        new ContextPlanner(
+          reopened,
+          new CoreRepository(reopened),
+          new AgentTaskRepository(reopened)
+        ),
+        new BridgeConnectionRegistry(),
+        () => now
+      ).getByRun(downstreamRun.runId);
+      assert.equal(recovered?.payloadHash, pinnedHash);
+      assert.deepEqual(
+        recovered?.payload.contextPlan.resultEvidence,
+        pinnedDelivery?.payload.contextPlan.resultEvidence
+      );
+    } finally {
+      reopened.close();
+    }
+
+    const targetCredential = auth.issueDeviceCredential(targetDevice.deviceId, now);
+    const targetHeaders = {
+      authorization: `Bearer ${targetCredential.secret}`,
+      "x-agentroom-server-token": serverToken
+    };
+    const downloadUrl =
+      `/api/bridge/runs/${downstreamRun.runId}/artifacts/${artifactId}` +
+      `/contents/${contentId}`;
+    const download = await app.inject({
+      method: "GET",
+      url: downloadUrl,
+      headers: targetHeaders
+    });
+    assert.equal(download.statusCode, 200, download.body);
+    assert.deepEqual(download.rawPayload, source);
+    assert.equal(download.headers["x-agentroom-content-id"], contentId);
+    assert.equal(download.headers["x-agentroom-content-sha256"], sha256);
+    assert.equal(
+      download.headers["x-agentroom-logical-alias"],
+      `artifact://${artifactId}/change.patch`
+    );
+    assert.equal(download.body.includes(blobRoot), false);
+
+    const wrongDevice = await app.inject({
+      method: "GET",
+      url: downloadUrl,
+      headers
+    });
+    assert.equal(wrongDevice.statusCode, 403);
+    const unpinnedContent = await app.inject({
+      method: "GET",
+      url: downloadUrl.replace(contentId, "content_unpinned_12345678"),
+      headers: targetHeaders
+    });
+    assert.equal(unpinnedContent.statusCode, 403);
+
+    const legacyAgent = agents.publishAgent(member, {
+      teamId: created.team.teamId,
+      deviceId: targetDevice.deviceId,
+      name: "Legacy Reviewer",
+      role: "Managed",
+      integrationMode: "managed",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      now
+    });
+    const legacyMessage = messages.createMemberMessage(member, {
+      roomId: room.roomId,
+      content: "Read reference-only evidence.",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: legacyAgent.agentId,
+        displayLabel: "Legacy Reviewer / Managed"
+      }],
+      now
+    });
+    const legacyRun = runs.createRunsForMessage(
+      member,
+      legacyMessage.messageId,
+      now
+    )[0];
+    assert.ok(legacyRun);
+    const legacyDelivery = delivery.dispatch(legacyRun.runId);
+    const legacyArtifact = legacyDelivery?.payload.contextPlan.resultEvidence
+      ?.artifactRefs.find((candidate) => candidate.artifactId === artifactId);
+    assert.ok(legacyArtifact);
+    assert.equal(legacyArtifact.content, undefined);
+    const legacyDownload = await app.inject({
+      method: "GET",
+      url: downloadUrl.replace(downstreamRun.runId, legacyRun.runId),
+      headers: targetHeaders
+    });
+    assert.equal(legacyDownload.statusCode, 403);
 
     const status = await app.inject({
       method: "GET",

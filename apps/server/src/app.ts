@@ -11,6 +11,8 @@ import Fastify, {
 
 import { ArtifactPublicationRepository } from
   "./artifact/artifact-publication-repository.js";
+import { ArtifactDeliveryService } from
+  "./artifact/artifact-delivery-service.js";
 import { ArtifactPublicationService } from
   "./artifact/artifact-publication-service.js";
 import { LocalArtifactBlobStore } from
@@ -180,13 +182,19 @@ export async function createServerApp(
     database,
     transactions
   );
+  const artifactBlobs = new LocalArtifactBlobStore(
+    options.artifactBlobRoot ??
+      path.join(path.dirname(options.databasePath), "artifact-blobs")
+  );
   const artifactPublications = new ArtifactPublicationService(
     artifactPublicationRepository,
     workspaceLeases,
-    new LocalArtifactBlobStore(
-      options.artifactBlobRoot ??
-        path.join(path.dirname(options.databasePath), "artifact-blobs")
-    )
+    artifactBlobs
+  );
+  const artifactDeliveries = new ArtifactDeliveryService(
+    database,
+    artifactPublicationRepository,
+    artifactBlobs
   );
   const artifactContentBinding = new ArtifactContentBindingService(
     transactions,
@@ -597,6 +605,7 @@ export async function createServerApp(
   const routeContext: ServerRouteContext = {
     app,
     artifactContentBinding,
+    artifactDeliveries,
     artifactPublications,
     advanceDiscussion,
     agents,

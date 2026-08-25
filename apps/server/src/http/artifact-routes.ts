@@ -52,6 +52,7 @@ function exactBase64(value: string): Buffer {
 export function registerArtifactRoutes({
   app,
   artifactContentBinding,
+  artifactDeliveries,
   artifactPublications,
   auth,
   clock,
@@ -206,6 +207,26 @@ export function registerArtifactRoutes({
       });
       noStore(reply);
       return result;
+    }
+  );
+
+  app.get<{
+    Params: { runId: string; artifactId: string; contentId: string };
+  }>(
+    "/api/bridge/runs/:runId/artifacts/:artifactId/contents/:contentId",
+    async (request, reply) => {
+      const principal = devicePrincipal(request);
+      const result = artifactDeliveries.readForDelivery(
+        principal,
+        request.params.runId,
+        request.params.artifactId,
+        request.params.contentId
+      );
+      noStore(reply);
+      reply.header("x-agentroom-content-id", result.content.contentId);
+      reply.header("x-agentroom-content-sha256", result.content.sha256);
+      reply.header("x-agentroom-logical-alias", result.content.logicalAlias);
+      return reply.type(result.content.mediaType).send(result.bytes);
     }
   );
 }

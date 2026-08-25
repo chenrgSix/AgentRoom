@@ -49,6 +49,13 @@ export interface ContextArtifactRef {
   path?: string;
   commitSha?: string;
   branch?: string;
+  content?: {
+    contentId: string;
+    logicalAlias: string;
+    mediaType: "text/x-diff" | "text/markdown" | "application/json";
+    sha256: string;
+    sizeBytes: number;
+  };
   title: string;
   summary: string;
   sourceRunId?: string;
@@ -516,6 +523,9 @@ export class ContextPlanner {
   }
 
   private contextArtifact(artifact: TaskArtifactRecord): ContextArtifactRef {
+    const content = artifact.contentMode === "snapshot_blob"
+      ? this.pinnedArtifactContent(artifact)
+      : undefined;
     return {
       artifactId: artifact.artifactId,
       artifactRevision: artifact.artifactRevision,
@@ -525,6 +535,7 @@ export class ContextPlanner {
       ...(artifact.path ? { path: artifact.path } : {}),
       ...(artifact.commitSha ? { commitSha: artifact.commitSha } : {}),
       ...(artifact.branch ? { branch: artifact.branch } : {}),
+      ...(content ? { content } : {}),
       title: artifact.title,
       summary: artifact.summary,
       ...(artifact.sourceRunId ? { sourceRunId: artifact.sourceRunId } : {}),
@@ -535,6 +546,25 @@ export class ContextPlanner {
         ? { createdByAgentId: artifact.createdByAgentId }
         : {}),
       createdAt: artifact.createdAt
+    };
+  }
+
+  private pinnedArtifactContent(
+    artifact: TaskArtifactRecord
+  ): NonNullable<ContextArtifactRef["content"]> {
+    if (
+      !artifact.contentId || !artifact.path || !artifact.contentMediaType ||
+      !artifact.contentSha256 || artifact.contentSizeBytes === null ||
+      !/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/u.test(artifact.path)
+    ) {
+      throw new Error("Canonical Artifact content metadata is incomplete");
+    }
+    return {
+      contentId: artifact.contentId,
+      sizeBytes: artifact.contentSizeBytes,
+      mediaType: artifact.contentMediaType,
+      sha256: artifact.contentSha256,
+      logicalAlias: `artifact://${artifact.artifactId}/${artifact.path}`
     };
   }
 

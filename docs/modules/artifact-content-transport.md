@@ -72,10 +72,13 @@ not a result.
 
 A durable Run payload pins Artifact ID/revision plus content ID, media type,
 size, and digest. The authenticated target Device downloads only content named
-by its pending or accepted delivery. It writes a temporary file under a
-Bridge-owned Run directory, checks bounds and digest, fsyncs, atomically renames,
-removes executable bits, and exposes an `artifact://` alias. No configured
-Workspace file is created or replaced.
+by its pending or accepted delivery. The implemented content endpoint resolves
+authorization from that frozen payload and verifies the immutable sealed Blob
+before returning bytes; a same-Team source or sibling Device is not sufficient.
+The next Bridge slice writes those bytes to a temporary file under a
+Bridge-owned Run directory, checks bounds and digest, fsyncs, atomically
+renames, removes executable bits, and exposes the pinned `artifact://` alias.
+No configured Workspace file is created or replaced.
 
 The Runtime receives a bounded alias manifest. It may read the staged files
 under its existing local sandbox policy. Result-evidence consumption advances
@@ -114,7 +117,8 @@ download. Read-only mode is not presented as an OS sandbox guarantee.
 ## Task Mapping
 
 `ART-001` owns durable upload and seal. `TASK-010` owns canonical bind,
-`CON-010` the additive wire contract, completed `BRG-028` source publication, `RUN-011`
+`CON-010` the additive wire contract, completed `BRG-028` source publication,
+completed `RUN-011`
 pinned delivery, `BRG-029` isolated materialization, `ADP-014` Runtime alias
 injection, `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
 two-Bridge recovery gate.

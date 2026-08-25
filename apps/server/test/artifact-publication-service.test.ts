@@ -513,6 +513,17 @@ test("digest mismatch, expiry, symlink, and active-upload quota fail closed", as
   const fixture = await createFixture();
   try {
     const source = Buffer.from("unsafe bytes", "utf8");
+    assert.throws(
+      () => fixture.service.prepare(fixture.principal, {
+        ...prepareInput(
+          fixture,
+          source,
+          "idem_artifact_hidden_name_1234"
+        ),
+        fileName: ".hidden.patch"
+      }, now),
+      /type, name, or media type/u
+    );
     const mismatch = fixture.service.prepare(
       fixture.principal,
       prepareInput(

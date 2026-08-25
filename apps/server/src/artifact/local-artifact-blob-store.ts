@@ -153,6 +153,43 @@ export class LocalArtifactBlobStore {
     }
   }
 
+  public readVerified(
+    storageKey: string,
+    expectedSha256: string,
+    expectedSize: number
+  ): Buffer {
+    const target = this.resolve(storageKey);
+    this.requireRegular(target);
+    const descriptor = openSync(target, constants.O_RDONLY | noFollow);
+    try {
+      const info = fstatSync(descriptor);
+      if (!info.isFile() || info.size !== expectedSize) {
+        throw new Error("Artifact Blob size does not match its sealed metadata");
+      }
+      const source = Buffer.alloc(expectedSize);
+      let offset = 0;
+      while (offset < source.length) {
+        const count = readSync(
+          descriptor,
+          source,
+          offset,
+          source.length - offset,
+          offset
+        );
+        if (count === 0) {
+          throw new Error("Artifact Blob changed while it was being read");
+        }
+        offset += count;
+      }
+      if (createHash("sha256").update(source).digest("hex") !== expectedSha256) {
+        throw new Error("Artifact Blob digest does not match its sealed metadata");
+      }
+      return source;
+    } finally {
+      closeSync(descriptor);
+    }
+  }
+
   public seal(
     temporaryStorageKey: string,
     sealedStorageKey: string,

@@ -201,10 +201,13 @@ workspace evidence, not proof that a commit, test, or file exists.
 For a content-bearing Artifact, Context Planner projects only the sealed content
 identity already bound to the canonical record. Run Orchestration freezes that
 identity, size, media type, and digest into the existing durable Delivery
-payload. Live publication state is never resolved during a retry. The Bridge
-must stage required content before invoking the Runtime, while the existing
-Runtime acceptance receipt remains the result-evidence cursor advancement
-point.
+payload when the target Agent supports isolated materialization. The descriptor
+also contains an `artifact://<artifactId>/<safe-basename>` alias; the basename
+is constrained at publication and never contains a source or staging path.
+Live publication state is never resolved during a retry. A legacy target keeps
+the same ArtifactRef without a content descriptor. The Bridge must stage
+required content before invoking the Runtime, while the existing Runtime
+acceptance receipt remains the result-evidence cursor advancement point.
 
 ## Human Clarification
 

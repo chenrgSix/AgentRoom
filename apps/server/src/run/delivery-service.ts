@@ -339,6 +339,21 @@ export class DeliveryService {
     const roomContextBundle = agent.capabilities.supportsRoomContextCoverage
       ? plannedContext.roomContextBundle
       : undefined;
+    const contextPlan = agent.capabilities.supportsArtifactMaterialization
+      ? plannedContext.contextPlan
+      : {
+          ...plannedContext.contextPlan,
+          ...(plannedContext.contextPlan.resultEvidence
+            ? {
+                resultEvidence: {
+                  ...plannedContext.contextPlan.resultEvidence,
+                  artifactRefs: plannedContext.contextPlan.resultEvidence.artifactRefs.map(
+                    ({ content: _content, ...reference }) => reference
+                  )
+                }
+              }
+            : {})
+        };
     const payload: DeliveryPayload = {
       runId: run.runId,
       traceId: run.traceId,
@@ -358,7 +373,7 @@ export class DeliveryService {
       idempotencyKey,
       ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
       instruction: run.instruction,
-      contextPlan: plannedContext.contextPlan,
+      contextPlan,
       contextMessages: roomContextBundle
         ? []
         : plannedContext.contextMessages.map((message) =>

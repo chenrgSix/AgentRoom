@@ -83,6 +83,16 @@ Result-evidence consumption still advances only after the Runtime accepts the
 turn under the existing Task Session contract. An ambiguous provider acceptance
 does not advance the cursor, even when staging completed locally.
 
+`RUN-011` persists that descriptor only for a target Agent that advertised
+Artifact materialization support. The Device-authenticated content endpoint
+authorizes against the stored pending or accepted Delivery payload, exact Run,
+Artifact, content ID, Team, and target Device. It then reads the immutable
+content row and verifies the sealed Blob's size and digest. It never consults a
+live publication operation, so retry and Server reopen preserve the same
+payload hash and access decision. A legacy Agent receives the ordinary
+reference-only projection and cannot use its Device credential to infer or
+download the content.
+
 The triggering Message creates the authoritative `traceId`. The Run, Delivery,
 Bridge request, Runtime events, projected Agent reply, and any child handoff
 Run inherit it. Bridge-supplied trace values cannot replace this authority.

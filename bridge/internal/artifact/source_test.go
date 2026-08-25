@@ -59,6 +59,12 @@ func TestCaptureRejectsTraversalSymlinksAndTypeMismatch(t *testing.T) {
 	if err := os.Mkdir(filepath.Join(root, "folder.patch"), 0o700); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, ".hidden.patch"), []byte("hidden"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "readme.txt"), []byte("text"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	for _, testCase := range []struct {
 		path, artifactType, errorPart string
 	}{
@@ -66,7 +72,8 @@ func TestCaptureRejectsTraversalSymlinksAndTypeMismatch(t *testing.T) {
 		{outside, "patch", "Workspace-relative"},
 		{"linked.patch", "patch", "symbolic links"},
 		{"folder.patch", "patch", "regular file"},
-		{".git", "document", "extension"},
+		{".hidden.patch", "patch", "alias-safe"},
+		{"readme.txt", "document", "extension"},
 	} {
 		_, err := Capture(root, testCase.path, testCase.artifactType)
 		if err == nil || !strings.Contains(err.Error(), testCase.errorPart) {

@@ -82,7 +82,7 @@ function validFileName(
   if (
     fileName.length === 0 || fileName.length > 255 ||
     fileName === "." || fileName === ".." ||
-    /[\\/\p{Cc}]/u.test(fileName)
+    !/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/u.test(fileName)
   ) return false;
   const lower = fileName.toLowerCase();
   if (artifactType === "patch") return lower.endsWith(".patch") || lower.endsWith(".diff");

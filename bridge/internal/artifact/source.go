@@ -63,6 +63,9 @@ func capture(
 		return Source{}, fmt.Errorf("Artifact file must not traverse symbolic links")
 	}
 	fileName := filepath.Base(target)
+	if !safeFileName(fileName) {
+		return Source{}, fmt.Errorf("Artifact file name is not alias-safe")
+	}
 	mediaType, err := mediaTypeFor(artifactType, fileName)
 	if err != nil {
 		return Source{}, err
@@ -130,6 +133,21 @@ func capture(
 		WorkspaceRef:        beforeWorkspace.WorkspaceRef,
 		WorkspaceGeneration: beforeWorkspace.Generation,
 	}, nil
+}
+
+func safeFileName(fileName string) bool {
+	if len(fileName) < 1 || len(fileName) > 255 {
+		return false
+	}
+	for index, value := range []byte(fileName) {
+		if (value >= 'a' && value <= 'z') || (value >= 'A' && value <= 'Z') ||
+			(value >= '0' && value <= '9') ||
+			(index > 0 && (value == '.' || value == '_' || value == '-')) {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func mediaTypeFor(artifactType, fileName string) (string, error) {
