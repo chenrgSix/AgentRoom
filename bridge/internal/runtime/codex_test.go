@@ -127,6 +127,7 @@ func TestCodexAppServerParserResumesAndReplacesMissingThread(t *testing.T) {
 	parser.binding = binding
 	parser.logicalTaskSession = true
 	parser.sessionDisposition = contracts.Resumed
+	parser.bootstrapInstruction = "full recreated Task bootstrap"
 	parser.contextCursor = 43
 	parser.runID = "run_recreated"
 	_, messages, err := parser.consume([]byte(`{"id":1,"result":{"userAgent":"fixture"}}`))
@@ -141,6 +142,9 @@ func TestCodexAppServerParserResumesAndReplacesMissingThread(t *testing.T) {
 	}
 	if _, found, err := store.Load(key); err != nil || found {
 		t.Fatalf("stale Codex binding remained: found=%t err=%v", found, err)
+	}
+	if parser.instruction != "full recreated Task bootstrap" {
+		t.Fatalf("recreated Codex Thread retained a resume delta: %q", parser.instruction)
 	}
 	consumeCodexFixture(t, parser, `{"id":2,"result":{"thread":{"id":"thread-new","ephemeral":false}}}`)
 	binding, found, err = store.Load(key)

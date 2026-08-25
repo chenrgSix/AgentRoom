@@ -18,6 +18,9 @@ export interface AgentTaskRecord {
   primaryAgentId: string | null;
   workspaceRef: string | null;
   summary: string;
+  summaryRevision: number;
+  summarySourceSequence: number;
+  summaryProvenanceMessageIds: string[];
   lastRoomSequence: number;
   createdByMemberId: string;
   isDefault: boolean;
@@ -35,6 +38,10 @@ interface AgentTaskRow {
   primary_agent_id: string | null;
   workspace_ref: string | null;
   summary: string;
+  summary_revision: number;
+  summary_source_sequence: number;
+  summary_provenance_json: string;
+  summary_fingerprint: string;
   last_room_sequence: number;
   created_by_member_id: string;
   is_default: 0 | 1;
@@ -53,6 +60,11 @@ function mapTask(row: AgentTaskRow): AgentTaskRecord {
     primaryAgentId: row.primary_agent_id,
     workspaceRef: row.workspace_ref,
     summary: row.summary,
+    summaryRevision: row.summary_revision,
+    summarySourceSequence: row.summary_source_sequence,
+    summaryProvenanceMessageIds: JSON.parse(
+      row.summary_provenance_json
+    ) as string[],
     lastRoomSequence: row.last_room_sequence,
     createdByMemberId: row.created_by_member_id,
     isDefault: row.is_default === 1,
@@ -68,14 +80,21 @@ export class AgentTaskRepository {
     this.database.prepare(`
       INSERT INTO agent_tasks (
         task_id, room_id, parent_task_id, title, goal, state,
-        primary_agent_id, workspace_ref, summary, last_room_sequence,
+        primary_agent_id, workspace_ref, summary, summary_revision,
+        summary_source_sequence, summary_provenance_json, summary_fingerprint,
+        last_room_sequence,
         created_by_member_id, is_default, created_at, updated_at
       ) VALUES (
         @taskId, @roomId, @parentTaskId, @title, @goal, @state,
-        @primaryAgentId, @workspaceRef, @summary, @lastRoomSequence,
+        @primaryAgentId, @workspaceRef, @summary, @summaryRevision,
+        @summarySourceSequence, @summaryProvenanceJson, '', @lastRoomSequence,
         @createdByMemberId, @isDefault, @createdAt, @updatedAt
       )
-    `).run({ ...task, isDefault: task.isDefault ? 1 : 0 });
+    `).run({
+      ...task,
+      summaryProvenanceJson: JSON.stringify(task.summaryProvenanceMessageIds),
+      isDefault: task.isDefault ? 1 : 0
+    });
     return task;
   }
 
@@ -137,6 +156,36 @@ export class AgentTaskRepository {
       WHERE task_id = @taskId
     `).run({ taskId, ...input });
     if (result.changes !== 1) throw new Error(`Task not found: ${taskId}`);
+    return this.get(taskId)!;
+  }
+
+  public updateSummaryProjection(
+    taskId: string,
+    input: {
+      summary: string;
+      sourceSequence: number;
+      provenanceMessageIds: string[];
+      fingerprint: string;
+      updatedAt: string;
+    }
+  ): AgentTaskRecord {
+    const result = this.database.prepare(`
+      UPDATE agent_tasks
+      SET summary = @summary,
+          summary_revision = summary_revision + 1,
+          summary_source_sequence = @sourceSequence,
+          summary_provenance_json = @provenanceJson,
+          summary_fingerprint = @fingerprint,
+          updated_at = @updatedAt
+      WHERE task_id = @taskId AND summary_fingerprint <> @fingerprint
+    `).run({
+      taskId,
+      ...input,
+      provenanceJson: JSON.stringify(input.provenanceMessageIds)
+    });
+    if (result.changes === 0 && !this.get(taskId)) {
+      throw new Error(`Task not found: ${taskId}`);
+    }
     return this.get(taskId)!;
   }
 }

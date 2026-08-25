@@ -6,6 +6,10 @@ import type { BridgeConnectionRegistry } from "../bridge/bridge-connection-regis
 import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
+import type {
+  ContextMemoryProjection,
+  ContextPlanner
+} from "../task/context-planner.js";
 import type { RunRecord, RunRepository } from "./run-repository.js";
 
 interface DeliveryPayload {
@@ -26,6 +30,10 @@ interface DeliveryPayload {
   idempotencyKey: string;
   parentRunId?: string;
   instruction: string;
+  contextPlan: {
+    roomMemory: ContextMemoryProjection;
+    taskMemory: ContextMemoryProjection;
+  };
   contextMessages: Array<{
     messageId: string;
     sequence: number;
@@ -89,6 +97,7 @@ export class DeliveryService {
     private readonly database: Database.Database,
     private readonly core: CoreRepository,
     private readonly runs: RunRepository,
+    private readonly contextPlanner: ContextPlanner,
     private readonly connections: BridgeConnectionRegistry,
     private readonly clock: () => string
   ) {}
@@ -200,6 +209,12 @@ export class DeliveryService {
     }
     const deliveryAttemptId = createOpaqueId("delivery");
     const idempotencyKey = createOpaqueId("idem");
+    const plannedContext = this.contextPlanner.plan({
+      roomId: run.roomId,
+      taskId: run.taskId,
+      throughSequence: trigger.sequence,
+      triggerMessageId: trigger.messageId
+    }, this.clock());
     const payload: DeliveryPayload = {
       runId: run.runId,
       traceId: run.traceId,
@@ -218,8 +233,8 @@ export class DeliveryService {
       idempotencyKey,
       ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
       instruction: run.instruction,
-      contextMessages: this.core
-        .listMessagesThrough(run.roomId, trigger.sequence, 50)
+      contextPlan: plannedContext.contextPlan,
+      contextMessages: plannedContext.contextMessages
         .map((message) => ({
           messageId: message.messageId,
           sequence: message.sequence,

@@ -123,6 +123,51 @@ func contextAfterCursor(
 	return filtered
 }
 
+func contextDeltaForSession(
+	run contracts.RunRequestedPayload,
+	binding RuntimeSessionBinding,
+) contracts.RunRequestedPayload {
+	run.ContextMessages = contextAfterCursor(
+		run.ContextMessages,
+		binding.LastRoomSequence,
+	)
+	if run.ContextPlan == nil {
+		return run
+	}
+	plan := *run.ContextPlan
+	if plan.RoomMemory != nil &&
+		plan.RoomMemory.Revision <= binding.RoomMemoryRevision {
+		plan.RoomMemory = nil
+	}
+	if plan.TaskMemory != nil &&
+		plan.TaskMemory.Revision <= binding.TaskMemoryRevision {
+		plan.TaskMemory = nil
+	}
+	if plan.RoomMemory == nil && plan.TaskMemory == nil {
+		run.ContextPlan = nil
+	} else {
+		run.ContextPlan = &plan
+	}
+	return run
+}
+
+func contextMemoryRevisions(
+	run contracts.RunRequestedPayload,
+) (int64, int64) {
+	if run.ContextPlan == nil {
+		return 0, 0
+	}
+	roomRevision := int64(0)
+	if run.ContextPlan.RoomMemory != nil {
+		roomRevision = run.ContextPlan.RoomMemory.Revision
+	}
+	taskRevision := int64(0)
+	if run.ContextPlan.TaskMemory != nil {
+		taskRevision = run.ContextPlan.TaskMemory.Revision
+	}
+	return roomRevision, taskRevision
+}
+
 func sessionStatus(
 	disposition contracts.Disposition,
 	contextCursor int64,

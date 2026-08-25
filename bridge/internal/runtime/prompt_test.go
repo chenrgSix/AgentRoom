@@ -60,6 +60,34 @@ func TestRuntimePromptPreservesLegacyInstructionWithoutProjection(t *testing.T) 
 	}
 }
 
+func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
+	prompt := runtimePrompt(contracts.RunRequestedPayload{
+		Instruction: "Continue the migration.",
+		ContextPlan: &contracts.RuntimeContextPlan{
+			RoomMemory: &contracts.RoomMemoryClass{
+				Revision: 2, SourceCursor: 20,
+				SourceMessageIDS: []string{"msg_room_12345678"},
+				Summary:          "Room: engineering\nKeep compatibility.",
+			},
+			TaskMemory: &contracts.TaskMemoryClass{
+				Revision: 4, SourceCursor: 21,
+				SourceMessageIDS: []string{"msg_task_12345678"},
+				Summary:          "Task: OAuth migration\nState: working",
+			},
+		},
+	})
+	for _, expected := range []string{
+		"Shared memory is a rebuildable projection",
+		"Shared Room memory (revision 2; source cursor 20; evidence message IDs: msg_room_12345678)",
+		"Shared Task memory (revision 4; source cursor 21; evidence message IDs: msg_task_12345678)",
+		"Current request:\nContinue the migration.",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("memory prompt omitted %q:\n%s", expected, prompt)
+		}
+	}
+}
+
 func TestTaskSessionContextKeepsOnlyUnconsumedRoomDeltas(t *testing.T) {
 	sequence41 := int64(41)
 	sequence42 := int64(42)

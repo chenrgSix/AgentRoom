@@ -19,6 +19,7 @@ import { RunService } from "../src/run/run-service.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
+import { ContextPlanner } from "../src/task/context-planner.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-22T10:00:00.000Z";
@@ -42,8 +43,9 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
     const agents = new AgentService(core, auth);
     const messages = new MessageService(core, auth);
     const runRepository = new RunRepository(database);
+    const taskRepository = new AgentTaskRepository(database);
     const runs = new RunService(
-      core, runRepository, auth, new AgentTaskRepository(database)
+      core, runRepository, auth, taskRepository
     );
     const created = teams.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
@@ -108,6 +110,7 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       database,
       core,
       runRepository,
+      new ContextPlanner(database, core, taskRepository),
       connections,
       () => currentTime
     );
@@ -126,6 +129,10 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
           contextCursor?: number;
         };
         targetAgentName?: string;
+        contextPlan?: {
+          roomMemory?: { revision?: number; sourceMessageIds?: string[] };
+          taskMemory?: { revision?: number; summary?: string };
+        };
         contextMessages?: Array<{ sequence?: number; senderName?: string }>;
         routingAgents?: Array<{ agentId: string; name: string }>;
       };
@@ -137,6 +144,15 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       contextCursor: message.sequence
     });
     assert.equal(requested.payload?.targetAgentName, "Builder");
+    assert.equal(requested.payload?.contextPlan?.roomMemory?.revision, 1);
+    assert.deepEqual(
+      requested.payload?.contextPlan?.roomMemory?.sourceMessageIds,
+      []
+    );
+    assert.match(
+      requested.payload?.contextPlan?.taskMemory?.summary ?? "",
+      /Task: Room work/u
+    );
     assert.equal(requested.payload?.contextMessages?.at(-1)?.sequence, message.sequence);
     assert.equal(requested.payload?.contextMessages?.at(-1)?.senderName, "Alice");
     assert.deepEqual(requested.payload?.routingAgents, [{

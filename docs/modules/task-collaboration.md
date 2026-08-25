@@ -1,7 +1,7 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Implementation: `apps/server/src/task/`, migration 0024, and the Web Room
+- Implementation: `apps/server/src/task/`, migrations 0024/0026, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -60,11 +60,19 @@ Room history and Task events are authoritative. Room and Task summaries are
 bounded, rebuildable projections with a source cursor and revision; they never
 replace Messages, Runs, decisions, or ArtifactRefs as evidence.
 
+The `TASK-002` Context Planner builds an extractive baseline rather than
+claiming inferred facts: each projection names its source cursor and up to 16
+authoritative Message IDs, while the Task projection also carries the explicit
+title, goal, and state. It selects at most 12 recent Room Messages and 18 recent
+Task Messages, de-duplicates them in Room order, and keeps the current request
+as the separate Run instruction. Identical inputs retain the same revision;
+changed source or Task state advances it.
+
 A new native Session receives bounded Room memory, Task memory, relevant recent
 events, result evidence, and the current request. A resumed Session receives
 only Room events after its last consumed cursor, Task-memory/result revisions
-it has not consumed, and the current request. Context construction fails closed
-to a bounded recent projection when a summary is unavailable or stale.
+it has not consumed, and the current request. The Bridge prompt labels every
+projection and Message as quoted, untrusted collaboration context.
 
 ## Migration and Compatibility
 

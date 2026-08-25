@@ -67,6 +67,7 @@ import { TeamChangeService } from "./team-room/team-change-service.js";
 import { MessageService } from "./team-room/message-service.js";
 import type { RoomCollaborationPolicy } from "./team-room/room-collaboration-policy.js";
 import { AgentTaskService } from "./task/agent-task-service.js";
+import { ContextPlanner } from "./task/context-planner.js";
 import {
   AgentTaskRepository,
   type AgentTaskState
@@ -269,9 +270,15 @@ export async function createServerApp(
   const runRepository = new RunRepository(database);
   const taskRepository = new AgentTaskRepository(database);
   const tasks = new AgentTaskService(taskRepository, core, auth);
+  const contextPlanner = new ContextPlanner(database, core, taskRepository);
   const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth, taskRepository);
-  const executor = new InProcessRunExecutor(core, runRepository, clock);
+  const executor = new InProcessRunExecutor(
+    core,
+    runRepository,
+    contextPlanner,
+    clock
+  );
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
   const bridgeConnections = new BridgeConnectionRegistry();
   const operationalMetrics = new OperationalMetrics(
@@ -281,6 +288,7 @@ export async function createServerApp(
     database,
     core,
     runRepository,
+    contextPlanner,
     bridgeConnections,
     clock
   );

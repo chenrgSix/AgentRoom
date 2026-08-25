@@ -211,6 +211,7 @@ export interface RunRequestedMessage {
 
 export interface RunRequestedPayload {
   contextMessages: ContextMessage[];
+  contextPlan?:    RuntimeContextPlan;
   /**
    * RFC 3339 date-time normalized to the UTC Z suffix.
    */
@@ -242,6 +243,25 @@ export interface ContextMessage {
   senderName?: string;
   sequence?:   number;
   [property: string]: unknown;
+}
+
+export interface RuntimeContextPlan {
+  roomMemory?: RoomMemoryClass;
+  taskMemory?: TaskMemoryClass;
+}
+
+export interface RoomMemoryClass {
+  revision:         number;
+  sourceCursor:     number;
+  sourceMessageIds: string[];
+  summary:          string;
+}
+
+export interface TaskMemoryClass {
+  revision:         number;
+  sourceCursor:     number;
+  sourceMessageIds: string[];
+  summary:          string;
 }
 
 export interface RoutingAgent {

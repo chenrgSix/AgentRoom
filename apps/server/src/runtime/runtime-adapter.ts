@@ -14,12 +14,23 @@ export interface RuntimeRequest {
   agentId: string;
   instruction: string;
   contextCursor: number;
+  contextPlan?: {
+    roomMemory: RuntimeContextMemoryProjection;
+    taskMemory: RuntimeContextMemoryProjection;
+  };
   contextMessages: Array<{
     messageId: string;
     sequence: number;
     senderId: string;
     content: string;
   }>;
+}
+
+export interface RuntimeContextMemoryProjection {
+  summary: string;
+  sourceCursor: number;
+  revision: number;
+  sourceMessageIds: string[];
 }
 
 export type RuntimeEvent =

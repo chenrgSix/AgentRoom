@@ -48,6 +48,13 @@ Run events. The Server validates disposition and bounds the reported cursor by
 the triggering Message sequence, advances the Task's monotonic Room cursor,
 and never stores a provider-native session ID.
 
+Migration 0026 adds Room memory projections and Task summary revision,
+source-sequence, provenance, and fingerprint metadata. These records are
+derived caches: identical inputs keep their revision, changed authoritative
+Messages or Task state advance it, and every claim remains traceable to the
+stored Message log or explicit Task fields. Rebuilding a projection cannot
+replace or delete its source history.
+
 After an ordinary Wave settles, Discussion Orchestration appends an idempotent
 `wave_result` system Message with an ID derived from the Wave ID. This Message is
 the next Wave's stable input anchor. It is deliberately written before the

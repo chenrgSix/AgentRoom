@@ -735,6 +735,54 @@
         }
       }
     },
+    "contextMemoryProjection": {
+      "title": "Context Memory Projection",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "sourceCursor",
+        "revision",
+        "sourceMessageIds"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "sourceCursor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceMessageIds": {
+          "type": "array",
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
+          }
+        }
+      }
+    },
+    "runtimeContextPlan": {
+      "title": "Runtime Context Plan",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "roomMemory": {
+          "$ref": "#/$defs/contextMemoryProjection"
+        },
+        "taskMemory": {
+          "$ref": "#/$defs/contextMemoryProjection"
+        }
+      }
+    },
     "runRequestedPayload": {
       "type": "object",
       "additionalProperties": true,
@@ -804,6 +852,9 @@
           "items": {
             "$ref": "#/$defs/contextMessage"
           }
+        },
+        "contextPlan": {
+          "$ref": "#/$defs/runtimeContextPlan"
         },
         "routingAgents": {
           "type": "array",

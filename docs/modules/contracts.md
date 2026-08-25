@@ -115,6 +115,13 @@ before trace propagation is not a recoverable protocol 1.0 record and is
 handled by the Bridge's incompatible-record policy rather than inferred by the
 server.
 
+Task-capable requests may carry a `contextPlan` with independently revisioned
+Room and Task memory projections. Each projection is bounded, includes the
+authoritative source Room cursor and a unique list of source Message IDs, and
+contains no provider-native state. A full bootstrap carries both projections;
+a resumed Bridge may retain only the projection whose revision is newer. An
+empty plan is invalid, and omission remains compatible with older peers.
+
 A Bridge may add a logical Session status to `run.status`: only
 `started`, `resumed`, or `recreated` plus the consumed context cursor may cross
 the boundary. Provider-native session IDs, local workspace paths, and local

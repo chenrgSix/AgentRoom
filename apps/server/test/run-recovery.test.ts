@@ -19,6 +19,7 @@ import { RunService } from "../src/run/run-service.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
+import { ContextPlanner } from "../src/task/context-planner.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-22T10:00:00.000Z";
@@ -35,9 +36,8 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
   const agents = new AgentService(core, auth);
   const messages = new MessageService(core, auth);
   const runRepository = new RunRepository(database);
-  const runs = new RunService(
-    core, runRepository, auth, new AgentTaskRepository(database)
-  );
+  const taskRepository = new AgentTaskRepository(database);
+  const runs = new RunService(core, runRepository, auth, taskRepository);
   const created = teams.createTeamForUser({
     userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6", userDisplayName: "Alice",
     teamName: "Recovery Team", now
@@ -64,7 +64,12 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
   assert.ok(run);
   const credential = auth.issueDeviceCredential(device.deviceId, now);
   const delivery = new DeliveryService(
-    database, core, runRepository, new BridgeConnectionRegistry(), () => now
+    database,
+    core,
+    runRepository,
+    new ContextPlanner(database, core, taskRepository),
+    new BridgeConnectionRegistry(),
+    () => now
   );
   const persistedDelivery = delivery.dispatch(run.runId);
   assert.ok(persistedDelivery);
@@ -85,8 +90,14 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
     const recoveredCore = new CoreRepository(database);
     const recoveredAuth = new AuthService(database);
     const recoveredRuns = new RunRepository(database);
+    const recoveredTasks = new AgentTaskRepository(database);
     const recoveredDelivery = new DeliveryService(
-      database, recoveredCore, recoveredRuns, new BridgeConnectionRegistry(), () => now
+      database,
+      recoveredCore,
+      recoveredRuns,
+      new ContextPlanner(database, recoveredCore, recoveredTasks),
+      new BridgeConnectionRegistry(),
+      () => now
     );
     assert.equal(recoveredRuns.getRun(run.runId)?.state, "working");
     assert.equal(recoveredRuns.getRun(run.runId)?.lastSequence, 3);

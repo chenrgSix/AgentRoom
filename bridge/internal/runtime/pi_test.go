@@ -120,6 +120,14 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 		Session: &contracts.LogicalSessionRequest{
 			Scope: contracts.Task, ResumePolicy: contracts.ResumeOrStart, ContextCursor: 7,
 		},
+		ContextPlan: &contracts.RuntimeContextPlan{
+			RoomMemory: &contracts.RoomMemoryClass{
+				Revision: 2, SourceCursor: 3, Summary: "Room memory",
+			},
+			TaskMemory: &contracts.TaskMemoryClass{
+				Revision: 4, SourceCursor: 4, Summary: "Task memory",
+			},
+		},
 	}}
 	plan, eligible, err := planRuntimeSession("pi", configuration, request.Run)
 	if err != nil || !eligible {
@@ -149,7 +157,8 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 	}
 	binding, found, err := store.Load(plan.Key)
 	if err != nil || !found || binding.SessionID != expectedSessionID ||
-		binding.LastRoomSequence != 7 || binding.LastRunID != request.Run.RunID {
+		binding.LastRoomSequence != 7 || binding.LastRunID != request.Run.RunID ||
+		binding.RoomMemoryRevision != 2 || binding.TaskMemoryRevision != 4 {
 		t.Fatalf("Pi Task Session was not persisted: %#v found=%t err=%v", binding, found, err)
 	}
 	request.Run.RunID = "run_second"

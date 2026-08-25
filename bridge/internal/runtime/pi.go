@@ -73,10 +73,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 			nativeSessionID = sessionBinding.SessionID
 			sessionDisposition = contracts.Resumed
 			if plan.LogicalTask {
-				promptRun.ContextMessages = contextAfterCursor(
-					request.Run.ContextMessages,
-					sessionBinding.LastRoomSequence,
-				)
+				promptRun = contextDeltaForSession(request.Run, sessionBinding)
 			}
 		} else {
 			nativeSessionID = piSessionID(key, request.Run.RunID)
@@ -284,6 +281,13 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 			sessionBinding.LastRoomSequence = plan.ContextCursor
 		}
 		sessionBinding.LastRunID = request.Run.RunID
+		roomMemoryRevision, taskMemoryRevision := contextMemoryRevisions(request.Run)
+		if roomMemoryRevision > sessionBinding.RoomMemoryRevision {
+			sessionBinding.RoomMemoryRevision = roomMemoryRevision
+		}
+		if taskMemoryRevision > sessionBinding.TaskMemoryRevision {
+			sessionBinding.TaskMemoryRevision = taskMemoryRevision
+		}
 		sessionBinding.UpdatedAt = now
 		if err := p.Sessions.Save(sessionBinding); err != nil {
 			return emitPiSessionFailure(ctx, emit)

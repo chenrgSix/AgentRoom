@@ -1,0 +1,257 @@
+import { createHash } from "node:crypto";
+
+import type Database from "better-sqlite3";
+
+import type {
+  CoreRepository,
+  MessageRecord
+} from "../data/core-repository.js";
+import type {
+  AgentTaskRecord,
+  AgentTaskRepository
+} from "./task-repository.js";
+
+const recentRoomMessageLimit = 12;
+const recentTaskMessageLimit = 18;
+const projectionMessageLimit = 16;
+const projectionSummaryLimit = 8_000;
+const projectionExcerptLimit = 320;
+
+export interface ContextMemoryProjection {
+  summary: string;
+  sourceCursor: number;
+  revision: number;
+  sourceMessageIds: string[];
+}
+
+export interface PlannedRuntimeContext {
+  contextPlan: {
+    roomMemory: ContextMemoryProjection;
+    taskMemory: ContextMemoryProjection;
+  };
+  contextMessages: MessageRecord[];
+}
+
+interface RoomProjectionRow {
+  room_id: string;
+  summary: string;
+  source_sequence: number;
+  revision: number;
+  provenance_json: string;
+  fingerprint: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function normalizedExcerpt(value: string): string {
+  const normalized = value.replace(/\s+/gu, " ").trim();
+  return normalized.length <= projectionExcerptLimit
+    ? normalized
+    : `${normalized.slice(0, projectionExcerptLimit - 1)}…`;
+}
+
+function boundedSummary(lines: string[]): string {
+  const summary = lines.filter((line) => line.trim().length > 0).join("\n");
+  if (summary.length <= projectionSummaryLimit) return summary;
+  return `${summary.slice(0, projectionSummaryLimit - 1)}…`;
+}
+
+function fingerprintProjection(input: {
+  summary: string;
+  sourceCursor: number;
+  sourceMessageIds: string[];
+}): string {
+  return createHash("sha256").update(JSON.stringify(input)).digest("hex");
+}
+
+export class ContextPlanner {
+  public constructor(
+    private readonly database: Database.Database,
+    private readonly core: CoreRepository,
+    private readonly tasks: AgentTaskRepository
+  ) {}
+
+  public plan(
+    input: {
+      roomId: string;
+      taskId: string;
+      throughSequence: number;
+      triggerMessageId: string;
+    },
+    now: string
+  ): PlannedRuntimeContext {
+    const task = this.tasks.get(input.taskId);
+    if (!task || task.roomId !== input.roomId) {
+      throw new Error("Runtime context Task must belong to its Room");
+    }
+    const room = this.core.getRoom(input.roomId);
+    if (!room) throw new Error(`Room not found: ${input.roomId}`);
+
+    const recentRoom = this.core.listMessagesThrough(
+      input.roomId,
+      input.throughSequence,
+      recentRoomMessageLimit
+    );
+    const recentTask = this.core.listTaskMessagesThrough(
+      input.taskId,
+      input.throughSequence,
+      recentTaskMessageLimit
+    );
+    const contextMessages = this.mergeRecentMessages(recentRoom, recentTask);
+    const roomSourceCursor = this.projectionCursor(
+      recentRoom,
+      input.triggerMessageId,
+      input.throughSequence
+    );
+    const taskSourceCursor = this.projectionCursor(
+      recentTask,
+      input.triggerMessageId,
+      input.throughSequence
+    );
+
+    return {
+      contextPlan: {
+        roomMemory: this.projectRoom(
+          room.roomId,
+          room.name,
+          roomSourceCursor,
+          now
+        ),
+        taskMemory: this.projectTask(task, taskSourceCursor, now)
+      },
+      contextMessages
+    };
+  }
+
+  private mergeRecentMessages(
+    roomMessages: MessageRecord[],
+    taskMessages: MessageRecord[]
+  ): MessageRecord[] {
+    const byId = new Map<string, MessageRecord>();
+    for (const message of [...roomMessages, ...taskMessages]) {
+      byId.set(message.messageId, message);
+    }
+    return [...byId.values()].sort((left, right) =>
+      left.sequence - right.sequence || left.messageId.localeCompare(right.messageId)
+    );
+  }
+
+  private projectionCursor(
+    recent: MessageRecord[],
+    triggerMessageId: string,
+    throughSequence: number
+  ): number {
+    const firstPrior = recent.find((message) =>
+      message.messageId !== triggerMessageId
+    );
+    return firstPrior
+      ? Math.max(0, firstPrior.sequence - 1)
+      : Math.max(0, throughSequence - 1);
+  }
+
+  private projectRoom(
+    roomId: string,
+    roomName: string,
+    sourceCursor: number,
+    now: string
+  ): ContextMemoryProjection {
+    const messages = this.core.listMessagesThrough(
+      roomId,
+      sourceCursor,
+      projectionMessageLimit
+    );
+    const summary = boundedSummary([
+      `Room: ${normalizedExcerpt(roomName)}`,
+      ...(messages.length > 0 ? ["Earlier Room evidence:"] : []),
+      ...messages.map((message) => this.evidenceLine(message))
+    ]);
+    const sourceMessageIds = messages.map((message) => message.messageId);
+    const fingerprint = fingerprintProjection({
+      summary,
+      sourceCursor,
+      sourceMessageIds
+    });
+    this.database.prepare(`
+      INSERT INTO room_memory_projections (
+        room_id, summary, source_sequence, revision, provenance_json,
+        fingerprint, created_at, updated_at
+      ) VALUES (
+        @roomId, @summary, @sourceCursor, 1, @provenanceJson,
+        @fingerprint, @now, @now
+      )
+      ON CONFLICT(room_id) DO UPDATE SET
+        summary = excluded.summary,
+        source_sequence = excluded.source_sequence,
+        revision = room_memory_projections.revision + 1,
+        provenance_json = excluded.provenance_json,
+        fingerprint = excluded.fingerprint,
+        updated_at = excluded.updated_at
+      WHERE room_memory_projections.fingerprint <> excluded.fingerprint
+    `).run({
+      roomId,
+      summary,
+      sourceCursor,
+      provenanceJson: JSON.stringify(sourceMessageIds),
+      fingerprint,
+      now
+    });
+    const row = this.database.prepare(`
+      SELECT * FROM room_memory_projections WHERE room_id = ?
+    `).get(roomId) as RoomProjectionRow;
+    return {
+      summary: row.summary,
+      sourceCursor: row.source_sequence,
+      revision: row.revision,
+      sourceMessageIds: JSON.parse(row.provenance_json) as string[]
+    };
+  }
+
+  private projectTask(
+    task: AgentTaskRecord,
+    sourceCursor: number,
+    now: string
+  ): ContextMemoryProjection {
+    const messages = this.core.listTaskMessagesThrough(
+      task.taskId,
+      sourceCursor,
+      projectionMessageLimit
+    );
+    const summary = boundedSummary([
+      `Task: ${normalizedExcerpt(task.title)}`,
+      `Goal: ${normalizedExcerpt(task.goal)}`,
+      `State: ${task.state}`,
+      ...(messages.length > 0 ? ["Earlier Task evidence:"] : []),
+      ...messages.map((message) => this.evidenceLine(message))
+    ]);
+    const sourceMessageIds = messages.map((message) => message.messageId);
+    const fingerprint = fingerprintProjection({
+      summary,
+      sourceCursor,
+      sourceMessageIds
+    });
+    const updated = this.tasks.updateSummaryProjection(task.taskId, {
+      summary,
+      sourceSequence: sourceCursor,
+      provenanceMessageIds: sourceMessageIds,
+      fingerprint,
+      updatedAt: now
+    });
+    return {
+      summary: updated.summary,
+      sourceCursor: updated.summarySourceSequence,
+      revision: updated.summaryRevision,
+      sourceMessageIds: updated.summaryProvenanceMessageIds
+    };
+  }
+
+  private evidenceLine(message: MessageRecord): string {
+    const sender = message.senderType === "member"
+      ? this.core.getMember(message.senderId)?.displayName ?? "Member"
+      : message.senderType === "agent"
+        ? this.core.getAgent(message.senderId)?.name ?? "Agent"
+        : "Agent Room";
+    return `- [sequence ${message.sequence}; ${normalizedExcerpt(sender)}] ${
+      normalizedExcerpt(message.content)
+    }`;
+  }
+}

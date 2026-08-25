@@ -998,6 +998,22 @@ export class CoreRepository {
     return rows.map((row) => mapMessage(this.database, row));
   }
 
+  public listTaskMessagesThrough(
+    taskId: string,
+    sequence: number,
+    limit: number
+  ): MessageRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM (
+        SELECT * FROM messages
+        WHERE task_id = ? AND sequence <= ?
+        ORDER BY sequence DESC
+        LIMIT ?
+      ) ORDER BY sequence
+    `).all(taskId, sequence, limit) as MessageRow[];
+    return rows.map((row) => mapMessage(this.database, row));
+  }
+
   public latestMessageSequence(roomId: string): number {
     const row = this.database.prepare(`
       SELECT next_message_sequence AS sequence FROM rooms WHERE room_id = ?

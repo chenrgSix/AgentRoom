@@ -26,11 +26,13 @@ type RuntimeSessionKey struct {
 
 type RuntimeSessionBinding struct {
 	RuntimeSessionKey
-	SessionID        string    `json:"sessionId"`
-	LastRoomSequence int64     `json:"lastRoomSequence"`
-	LastRunID        string    `json:"lastRunId,omitempty"`
-	CreatedAt        time.Time `json:"createdAt"`
-	UpdatedAt        time.Time `json:"updatedAt"`
+	SessionID          string    `json:"sessionId"`
+	LastRoomSequence   int64     `json:"lastRoomSequence"`
+	RoomMemoryRevision int64     `json:"roomMemoryRevision"`
+	TaskMemoryRevision int64     `json:"taskMemoryRevision"`
+	LastRunID          string    `json:"lastRunId,omitempty"`
+	CreatedAt          time.Time `json:"createdAt"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
 type RuntimeSessionStore interface {
@@ -77,7 +79,9 @@ func (s *FileRuntimeSessionStore) Load(key RuntimeSessionKey) (RuntimeSessionBin
 		return RuntimeSessionBinding{}, false, fmt.Errorf("decode Runtime session binding: trailing data")
 	}
 	if binding.RuntimeSessionKey != key || strings.TrimSpace(binding.SessionID) == "" ||
-		binding.LastRoomSequence < 0 || binding.CreatedAt.IsZero() || binding.UpdatedAt.IsZero() {
+		binding.LastRoomSequence < 0 || binding.RoomMemoryRevision < 0 ||
+		binding.TaskMemoryRevision < 0 || binding.CreatedAt.IsZero() ||
+		binding.UpdatedAt.IsZero() {
 		return RuntimeSessionBinding{}, false, fmt.Errorf("Runtime session binding does not match its key")
 	}
 	return binding, true, nil
@@ -93,6 +97,9 @@ func (s *FileRuntimeSessionStore) Save(binding RuntimeSessionBinding) error {
 	}
 	if binding.LastRoomSequence < 0 {
 		return fmt.Errorf("Runtime session cursor cannot be negative")
+	}
+	if binding.RoomMemoryRevision < 0 || binding.TaskMemoryRevision < 0 {
+		return fmt.Errorf("Runtime session memory revision cannot be negative")
 	}
 	now := time.Now().UTC()
 	if binding.CreatedAt.IsZero() {

@@ -10,6 +10,7 @@ import type {
   RuntimeEvent,
   RuntimeRequest
 } from "./runtime-adapter.js";
+import type { ContextPlanner } from "../task/context-planner.js";
 
 const terminalStates = new Set([
   "completed",
@@ -23,6 +24,7 @@ export class InProcessRunExecutor {
   public constructor(
     private readonly core: CoreRepository,
     private readonly runs: RunRepository,
+    private readonly contextPlanner: ContextPlanner,
     private readonly clock: () => string
   ) {}
 
@@ -47,14 +49,20 @@ export class InProcessRunExecutor {
     }
 
     this.core.updateAgentPresence(agent.agentId, "busy", this.clock());
+    const plannedContext = this.contextPlanner.plan({
+      roomId: initial.roomId,
+      taskId: initial.taskId,
+      throughSequence: trigger.sequence,
+      triggerMessageId: trigger.messageId
+    }, this.clock());
     const request: RuntimeRequest = {
       runId: initial.runId,
       taskId: initial.taskId,
       agentId: agent.agentId,
       instruction: initial.instruction,
       contextCursor: trigger.sequence,
-      contextMessages: this.core
-        .listMessagesThrough(initial.roomId, trigger.sequence, 50)
+      contextPlan: plannedContext.contextPlan,
+      contextMessages: plannedContext.contextMessages
         .map((message) => ({
           messageId: message.messageId,
           sequence: message.sequence,

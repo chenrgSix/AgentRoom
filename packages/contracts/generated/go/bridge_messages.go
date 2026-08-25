@@ -143,7 +143,8 @@ type RunRequestedMessage struct {
 }
 
 type RunRequestedPayload struct {
-	ContextMessages []ContextMessage `json:"contextMessages"`
+	ContextMessages []ContextMessage    `json:"contextMessages"`
+	ContextPlan     *RuntimeContextPlan `json:"contextPlan,omitempty"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
 	Deadline          time.Time              `json:"deadline"`
 	DeliveryAttemptID string                 `json:"deliveryAttemptId"`
@@ -169,6 +170,25 @@ type ContextMessage struct {
 	SenderID   string  `json:"senderId"`
 	SenderName *string `json:"senderName,omitempty"`
 	Sequence   *int64  `json:"sequence,omitempty"`
+}
+
+type RuntimeContextPlan struct {
+	RoomMemory *RoomMemoryClass `json:"roomMemory,omitempty"`
+	TaskMemory *TaskMemoryClass `json:"taskMemory,omitempty"`
+}
+
+type RoomMemoryClass struct {
+	Revision         int64    `json:"revision"`
+	SourceCursor     int64    `json:"sourceCursor"`
+	SourceMessageIDS []string `json:"sourceMessageIds"`
+	Summary          string   `json:"summary"`
+}
+
+type TaskMemoryClass struct {
+	Revision         int64    `json:"revision"`
+	SourceCursor     int64    `json:"sourceCursor"`
+	SourceMessageIDS []string `json:"sourceMessageIds"`
+	Summary          string   `json:"summary"`
 }
 
 type RoutingAgent struct {

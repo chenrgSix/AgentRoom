@@ -24,16 +24,19 @@ func TestFileRuntimeSessionStorePersistsTaskScopedBinding(t *testing.T) {
 		t.Fatalf("unexpected empty session lookup: found=%t err=%v", found, err)
 	}
 	if err := store.Save(RuntimeSessionBinding{
-		RuntimeSessionKey: key,
-		SessionID:         "thread_alpha",
-		LastRoomSequence:  42,
-		LastRunID:         "run_alpha",
+		RuntimeSessionKey:  key,
+		SessionID:          "thread_alpha",
+		LastRoomSequence:   42,
+		RoomMemoryRevision: 3,
+		TaskMemoryRevision: 4,
+		LastRunID:          "run_alpha",
 	}); err != nil {
 		t.Fatal(err)
 	}
 	binding, found, err := store.Load(key)
 	if err != nil || !found || binding.SessionID != "thread_alpha" ||
 		binding.LastRoomSequence != 42 || binding.LastRunID != "run_alpha" ||
+		binding.RoomMemoryRevision != 3 || binding.TaskMemoryRevision != 4 ||
 		binding.CreatedAt.IsZero() || binding.UpdatedAt.IsZero() {
 		t.Fatalf("unexpected persisted session: %#v found=%t err=%v", binding, found, err)
 	}
@@ -72,6 +75,37 @@ func TestFileRuntimeSessionStorePersistsTaskScopedBinding(t *testing.T) {
 	}
 	if _, found, err := store.Load(key); err != nil || found {
 		t.Fatalf("deleted session remained visible: found=%t err=%v", found, err)
+	}
+}
+
+func TestTaskSessionContextKeepsOnlyUnconsumedMemoryRevisions(t *testing.T) {
+	sequence41 := int64(41)
+	sequence43 := int64(43)
+	run := contracts.RunRequestedPayload{
+		ContextMessages: []contracts.ContextMessage{
+			{MessageID: "msg_old_12345678", Sequence: &sequence41, Content: "old"},
+			{MessageID: "msg_new_12345678", Sequence: &sequence43, Content: "new"},
+		},
+		ContextPlan: &contracts.RuntimeContextPlan{
+			RoomMemory: &contracts.RoomMemoryClass{
+				Revision: 3, SourceCursor: 30, Summary: "Room revision three",
+			},
+			TaskMemory: &contracts.TaskMemoryClass{
+				Revision: 5, SourceCursor: 31, Summary: "Task revision five",
+			},
+		},
+	}
+	delta := contextDeltaForSession(run, RuntimeSessionBinding{
+		LastRoomSequence: 42, RoomMemoryRevision: 3, TaskMemoryRevision: 4,
+	})
+	if len(delta.ContextMessages) != 1 ||
+		delta.ContextMessages[0].MessageID != "msg_new_12345678" {
+		t.Fatalf("Room delta was not filtered: %#v", delta.ContextMessages)
+	}
+	if delta.ContextPlan == nil || delta.ContextPlan.RoomMemory != nil ||
+		delta.ContextPlan.TaskMemory == nil ||
+		delta.ContextPlan.TaskMemory.Revision != 5 {
+		t.Fatalf("memory revision delta was not filtered: %#v", delta.ContextPlan)
 	}
 }
 
