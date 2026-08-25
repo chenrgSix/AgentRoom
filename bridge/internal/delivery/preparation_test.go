@@ -336,13 +336,16 @@ func TestMaterializationFailureAckLossReplaysDeterministicTerminalState(t *testi
 	if record.State != StateFailed || record.LastSequence != 2 || len(record.Events) != 1 {
 		t.Fatalf("failure was not durable before ACK: %#v", record)
 	}
+	prepareCalls := 0
 	executor.Prepare = func(
 		context.Context,
 		contracts.RunRequestedPayload,
 	) ([]contracts.VerifiedArtifactMaterializationReceipt, error) {
-		return nil, failure
+		prepareCalls++
+		return []contracts.VerifiedArtifactMaterializationReceipt{
+			verifiedMaterializationReceipt(),
+		}, nil
 	}
-	executor.IsPrepareRetryable = func(error) bool { return false }
 	var recovered []any
 	if err := executor.Recover(context.Background(), func(
 		_ context.Context,
@@ -355,6 +358,9 @@ func TestMaterializationFailureAckLossReplaysDeterministicTerminalState(t *testi
 	}
 	if len(recovered) != 2 {
 		t.Fatalf("recovery sent %d messages: %#v", len(recovered), recovered)
+	}
+	if prepareCalls != 0 {
+		t.Fatalf("terminal materialization failure was retried %d times", prepareCalls)
 	}
 	accepted, ok := recovered[0].(contracts.RunAcceptedMessage)
 	if !ok || accepted.Payload.ArtifactMaterializationError == nil {

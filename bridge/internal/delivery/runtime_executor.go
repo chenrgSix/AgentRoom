@@ -510,7 +510,9 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 		}
 		var materializations []contracts.VerifiedArtifactMaterializationReceipt
 		var prepareErr error
-		if e.Prepare != nil {
+		if hasPersistedMaterializationFailure(record) {
+			prepareErr = fmt.Errorf("persisted Artifact materialization failure")
+		} else if e.Prepare != nil {
 			materializations, prepareErr = e.Prepare(ctx, record.Request)
 			if prepareErr != nil && e.IsPrepareRetryable != nil &&
 				e.IsPrepareRetryable(prepareErr) {
@@ -562,6 +564,29 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 		}
 	}
 	return nil
+}
+
+func hasPersistedMaterializationFailure(record Record) bool {
+	if record.State != StateFailed {
+		return false
+	}
+	for index := len(record.Events) - 1; index >= 0; index-- {
+		var envelope struct {
+			Type    string `json:"type"`
+			Payload struct {
+				Status contracts.RunExecutionStatus `json:"status"`
+				Error  *contracts.AgentRoomError    `json:"error"`
+			} `json:"payload"`
+		}
+		if err := json.Unmarshal(record.Events[index], &envelope); err != nil {
+			continue
+		}
+		return envelope.Type == string(contracts.RunStatus) &&
+			envelope.Payload.Status == contracts.Failed &&
+			envelope.Payload.Error != nil &&
+			envelope.Payload.Error.Code == "ARTIFACT_MATERIALIZATION_FAILED"
+	}
+	return false
 }
 
 func validateRecoveryRecord(record Record) error {
