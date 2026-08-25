@@ -247,9 +247,57 @@ export interface ContextMessage {
 }
 
 export interface RuntimeContextPlan {
+  longTermMemory?: LongTermProvenanceMemoryPlan;
   resultEvidence?: TaskResultEvidence;
   roomMemory?:     RoomMemoryClass;
   taskMemory?:     TaskMemoryClass;
+}
+
+export interface LongTermProvenanceMemoryPlan {
+  room?: RoomClass;
+  task?: TaskClass;
+}
+
+export interface RoomClass {
+  activeComplete: boolean;
+  entries:        [RoomProvenanceMemoryEntry, ...RoomProvenanceMemoryEntry[]];
+  revision:       number;
+}
+
+export interface RoomProvenanceMemoryEntry {
+  content:             string;
+  memoryId:            string;
+  revision:            number;
+  sourceArtifactIds:   [string, ...string[]];
+  sourceDiscussionIds: [string, ...string[]];
+  sourceMessageIds:    [string, ...string[]];
+  sourceRunIds:        [string, ...string[]];
+  state:               State;
+  supersedesMemoryId?: string;
+  type:                ProvenanceMemoryEntryType;
+}
+
+export type State = "active" | "superseded" | "retracted";
+
+export type ProvenanceMemoryEntryType = "decision" | "constraint" | "fact" | "open_question" | "convention" | "goal" | "acceptance_criterion" | "plan" | "progress" | "blocker" | "result";
+
+export interface TaskClass {
+  activeComplete: boolean;
+  entries:        [TaskProvenanceMemoryEntry, ...TaskProvenanceMemoryEntry[]];
+  revision:       number;
+}
+
+export interface TaskProvenanceMemoryEntry {
+  content:             string;
+  memoryId:            string;
+  revision:            number;
+  sourceArtifactIds:   [string, ...string[]];
+  sourceDiscussionIds: [string, ...string[]];
+  sourceMessageIds:    [string, ...string[]];
+  sourceRunIds:        [string, ...string[]];
+  state:               State;
+  supersedesMemoryId?: string;
+  type:                ProvenanceMemoryEntryType;
 }
 
 export interface TaskResultEvidence {

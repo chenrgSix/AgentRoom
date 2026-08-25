@@ -1,7 +1,7 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028/0029/0030/0031, and the Web Room
+- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028/0029/0030/0031/0032, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -20,6 +20,7 @@ and results belong to the same longer-lived goal.
 | AgentTask | taskId, roomId, parentTaskId, title, goal, state, primaryAgentId, workspaceRef, summary, memory/artifact revisions, lastRoomSequence, creator, timestamps |
 | Logical Task Session | taskId, agentId, Runtime scope ID derived from runtime kind/workspace/config fingerprints/schema version, consumed cursors |
 | Task memory projection | taskId, source Room cursor, summary revision, provenance |
+| Long-term MemoryEntry | memoryId, Room/Task scope, typed content, active/superseded/retracted state, scope revision, supersession link, Message/Artifact/Run/Discussion provenance, Member author, timestamps |
 | ArtifactRef | artifactId, taskId, artifactRevision, type, workspaceRef, repository/path/commit/branch metadata, title, summary, creator, optional sourceRunId, timestamp |
 | TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, terminal reason, timestamps |
 
@@ -87,11 +88,34 @@ monotonic. Planning an older delayed Run produces an explicitly historical,
 Run-local projection: it is delivered as quoted context but neither replaces
 the canonical row nor advances the Bridge's consumed canonical revision.
 
+Migration 0032 adds a separate long-term provenance layer. Room entries are
+typed as `decision`, `constraint`, `fact`, `open_question`, or `convention`;
+Task entries are `goal`, `acceptance_criterion`, `plan`, `progress`, `blocker`,
+`decision`, or `result`. Every entry requires at least one in-scope Message,
+ArtifactRef, Run, or Discussion ID. Content and provenance are immutable;
+Members may replace one active entry with a linked successor or retract it,
+while the old record remains queryable as `superseded` or `retracted`. Runtime
+or LLM output may suggest a candidate through normal Messages, but it does not
+become shared truth without an authenticated Room Member promotion.
+
+Member-authorized Room and Task HTTP APIs expose revision-cursor reads,
+creation, supersession, and retraction. Context planning selects at most 16
+active entries per scope by stable type priority and revision, plus the newest
+8 lifecycle tombstones. `activeComplete` says whether the active snapshot is
+complete; when false, omitted entries may remain active and the prompt states
+that explicitly. This is a bounded retrieval/compaction contract, not a free
+text summary: users compact by superseding or retracting evidence, and the full
+revisioned ledger remains available through the API.
+
 A new native Session receives bounded Room memory, Task memory, relevant recent
 events, result evidence, and the current request. A resumed Session receives
 only Room events after its last consumed cursor, Task-memory/result revisions
 it has not consumed, and the current request. The Bridge prompt labels every
 projection and Message as quoted, untrusted collaboration context.
+The Bridge independently tracks Room and Task long-term Memory scope revisions.
+It projects changed snapshots with lifecycle and source IDs, labels them as
+claims rather than instructions, and treats a complete active snapshot as the
+replacement for previously projected Memory state.
 On a new Runtime scope, the newest 20 ArtifactRefs form a bounded bootstrap
 page in ascending artifact-revision order. After the Bridge confirms that page
 in a Run status, later deliveries start strictly after the durable consumed
@@ -158,6 +182,9 @@ cross-task context.
   rejection of a discontinuous page.
 - Summary and Artifact consumers can trace claims back to authoritative source
   events or external workspace evidence.
+- Long-term Memory tests prove an early decision survives beyond the recent
+  Message window; cross-Task and provenance-free writes fail, supersession and
+  retraction remain visible, and a truncated active selection is explicit.
 - Clarification answer retries converge on one Message and continuation Run;
   cancellation, deadline expiry, unavailable Agents, and orphaned scope close
   waiting records durably; Bridge restart replays only a still-valid question
@@ -167,7 +194,7 @@ cross-task context.
 
 ## Task Mapping
 
-`TASK-001` through `TASK-005`, with wire and Runtime work in `CON-007` and
+`TASK-001` through `TASK-006`, with wire and Runtime work in `CON-007` and
 `ADP-012`, clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those
 behavioral milestones.
 

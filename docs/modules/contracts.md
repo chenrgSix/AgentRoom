@@ -132,6 +132,14 @@ file/patch, test-result, or document evidence and retain creator plus optional
 source Run; they never embed file bytes, tool output, provider sessions, or
 permission grants.
 
+An optional `longTermMemory` plan carries independently revisioned Room and
+Task snapshots. Each scope contains at most 24 typed entries, an
+`activeComplete` flag, immutable content, lifecycle state, optional
+supersession link, and bounded arrays of Message, Artifact, Run, and Discussion
+source IDs. At least one source ID is mandatory. These entries are quoted
+provenance claims; they neither grant access nor replace the referenced central
+records.
+
 A Bridge may add a logical Session status to `run.status`: only `started`,
 `resumed`, or `recreated`, the consumed context cursor, an opaque hashed Runtime
 scope ID, and its exact consumed result-evidence revision may cross the

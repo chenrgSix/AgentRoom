@@ -115,6 +115,8 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	parser.runtimeScopeID = plan.ScopeID
 	parser.roomMemoryRevision, parser.taskMemoryRevision,
 		parser.resultEvidenceRevision = contextRevisions(request.Run)
+	parser.roomLongTermMemoryRevision, parser.taskLongTermMemoryRevision =
+		longTermMemoryRevisions(request.Run)
 	parser.runID = request.Run.RunID
 	parser.logicalTaskSession = logicalTaskSession
 	parser.sessionDisposition = sessionDisposition
@@ -242,33 +244,35 @@ type codexAppServerMessage struct {
 }
 
 type codexAppServerParser struct {
-	config                 config.AgentConfig
-	instruction            string
-	bootstrapInstruction   string
-	sessions               RuntimeSessionStore
-	sessionKey             *RuntimeSessionKey
-	resumeID               string
-	resumeFailed           bool
-	threadID               string
-	turnID                 string
-	currentItem            string
-	currentText            strings.Builder
-	emittedText            string
-	reply                  string
-	resetPending           bool
-	complete               bool
-	failure                string
-	activities             []Activity
-	reasoning              map[string]*activityTextPreview
-	binding                RuntimeSessionBinding
-	contextCursor          int64
-	roomMemoryRevision     int64
-	taskMemoryRevision     int64
-	resultEvidenceRevision int64
-	runID                  string
-	logicalTaskSession     bool
-	runtimeScopeID         string
-	sessionDisposition     contracts.Disposition
+	config                     config.AgentConfig
+	instruction                string
+	bootstrapInstruction       string
+	sessions                   RuntimeSessionStore
+	sessionKey                 *RuntimeSessionKey
+	resumeID                   string
+	resumeFailed               bool
+	threadID                   string
+	turnID                     string
+	currentItem                string
+	currentText                strings.Builder
+	emittedText                string
+	reply                      string
+	resetPending               bool
+	complete                   bool
+	failure                    string
+	activities                 []Activity
+	reasoning                  map[string]*activityTextPreview
+	binding                    RuntimeSessionBinding
+	contextCursor              int64
+	roomMemoryRevision         int64
+	taskMemoryRevision         int64
+	resultEvidenceRevision     int64
+	roomLongTermMemoryRevision int64
+	taskLongTermMemoryRevision int64
+	runID                      string
+	logicalTaskSession         bool
+	runtimeScopeID             string
+	sessionDisposition         contracts.Disposition
 }
 
 func (p *codexAppServerParser) drainActivities() []Activity {
@@ -416,6 +420,12 @@ func (p *codexAppServerParser) saveSessionBinding(consumed bool) error {
 		}
 		if p.taskMemoryRevision > binding.TaskMemoryRevision {
 			binding.TaskMemoryRevision = p.taskMemoryRevision
+		}
+		if p.roomLongTermMemoryRevision > binding.RoomLongTermMemoryRevision {
+			binding.RoomLongTermMemoryRevision = p.roomLongTermMemoryRevision
+		}
+		if p.taskLongTermMemoryRevision > binding.TaskLongTermMemoryRevision {
+			binding.TaskLongTermMemoryRevision = p.taskLongTermMemoryRevision
 		}
 		if p.resultEvidenceRevision > binding.ResultEvidenceRevision {
 			binding.ResultEvidenceRevision = p.resultEvidenceRevision

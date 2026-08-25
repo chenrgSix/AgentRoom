@@ -1,7 +1,9 @@
 import type { ArtifactType } from "../task/artifact-repository.js";
+import type { MemoryEntryType } from "../task/memory-entry-repository.js";
 import type { AgentTaskState } from "../task/task-repository.js";
 import {
   bodyObject,
+  requiredStringArray,
   requiredString
 } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
@@ -11,12 +13,68 @@ export function registerTaskRoutes({
   clock,
   core,
   delivery,
+  longTermMemory,
   principal,
   taskArtifacts,
   taskClarifications,
   tasks,
   teamChanges
 }: ServerRouteContext): void {
+  const memoryInput = (body: Record<string, unknown>) => ({
+    type: requiredString(body.type, "type") as MemoryEntryType,
+    content: requiredString(body.content, "content", 2_000),
+    ...(body.supersedesMemoryId === undefined
+      ? {}
+      : {
+          supersedesMemoryId: body.supersedesMemoryId === null
+            ? null
+            : requiredString(
+                body.supersedesMemoryId,
+                "supersedesMemoryId",
+                160
+              )
+        }),
+    ...(body.sourceMessageIds === undefined
+      ? {}
+      : {
+          sourceMessageIds: requiredStringArray(
+            body.sourceMessageIds,
+            "sourceMessageIds"
+          )
+        }),
+    ...(body.sourceArtifactIds === undefined
+      ? {}
+      : {
+          sourceArtifactIds: requiredStringArray(
+            body.sourceArtifactIds,
+            "sourceArtifactIds"
+          )
+        }),
+    ...(body.sourceRunIds === undefined
+      ? {}
+      : {
+          sourceRunIds: requiredStringArray(body.sourceRunIds, "sourceRunIds")
+        }),
+    ...(body.sourceDiscussionIds === undefined
+      ? {}
+      : {
+          sourceDiscussionIds: requiredStringArray(
+            body.sourceDiscussionIds,
+            "sourceDiscussionIds"
+          )
+        })
+  });
+  const memoryCursor = (query: { after?: string; limit?: string }) => {
+    const after = query.after === undefined ? 0 : Number.parseInt(query.after, 10);
+    const limit = query.limit === undefined ? 100 : Number.parseInt(query.limit, 10);
+    if (!Number.isSafeInteger(after) || after < 0) {
+      throw new Error("Memory revision cursor must be a non-negative integer");
+    }
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("Memory page limit must be from 1 to 100");
+    }
+    return { after, limit };
+  };
   app.get<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/tasks",
     async (request) => tasks.list(principal(request), request.params.roomId)
@@ -142,6 +200,63 @@ export function registerTaskRoutes({
                 : requiredString(body.sourceRunId, "sourceRunId", 140)
             })
       }, clock());
+    }
+  );
+  app.get<{
+    Params: { roomId: string };
+    Querystring: { after?: string; limit?: string };
+  }>("/api/rooms/:roomId/memory-entries", async (request) => {
+    const cursor = memoryCursor(request.query);
+    return longTermMemory.listRoom(
+      principal(request), request.params.roomId, cursor.after, cursor.limit
+    );
+  });
+  app.post<{ Params: { roomId: string } }>(
+    "/api/rooms/:roomId/memory-entries",
+    async (request) => {
+      const entry = longTermMemory.createRoom(
+        principal(request),
+        request.params.roomId,
+        memoryInput(bodyObject(request)),
+        clock()
+      );
+      const room = core.getRoom(entry.roomId);
+      if (room) teamChanges.notify(room.teamId, { kind: "room", roomId: room.roomId });
+      return entry;
+    }
+  );
+  app.get<{
+    Params: { taskId: string };
+    Querystring: { after?: string; limit?: string };
+  }>("/api/tasks/:taskId/memory-entries", async (request) => {
+    const cursor = memoryCursor(request.query);
+    return longTermMemory.listTask(
+      principal(request), request.params.taskId, cursor.after, cursor.limit
+    );
+  });
+  app.post<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId/memory-entries",
+    async (request) => {
+      const entry = longTermMemory.createTask(
+        principal(request),
+        request.params.taskId,
+        memoryInput(bodyObject(request)),
+        clock()
+      );
+      const room = core.getRoom(entry.roomId);
+      if (room) teamChanges.notify(room.teamId, { kind: "room", roomId: room.roomId });
+      return entry;
+    }
+  );
+  app.post<{ Params: { memoryId: string } }>(
+    "/api/memory-entries/:memoryId/retract",
+    async (request) => {
+      const entry = longTermMemory.retract(
+        principal(request), request.params.memoryId, clock()
+      );
+      const room = core.getRoom(entry.roomId);
+      if (room) teamChanges.notify(room.teamId, { kind: "room", roomId: room.roomId });
+      return entry;
     }
   );
   app.get<{ Params: { taskId: string } }>(

@@ -25,6 +25,10 @@ export interface RuntimeRequest {
       hasMore?: boolean;
       artifactRefs: RuntimeContextArtifactRef[];
     };
+    longTermMemory?: {
+      room?: RuntimeLongTermMemoryScope;
+      task?: RuntimeLongTermMemoryScope;
+    };
   };
   contextMessages: Array<{
     messageId: string;
@@ -56,6 +60,26 @@ export interface RuntimeContextArtifactRef {
   createdByMemberId?: string;
   createdByAgentId?: string;
   createdAt: string;
+}
+
+export interface RuntimeLongTermMemoryScope {
+  revision: number;
+  activeComplete: boolean;
+  entries: Array<{
+    memoryId: string;
+    type:
+      | "decision" | "constraint" | "fact" | "open_question" | "convention"
+      | "goal" | "acceptance_criterion" | "plan" | "progress" | "blocker"
+      | "result";
+    content: string;
+    state: "active" | "superseded" | "retracted";
+    revision: number;
+    supersedesMemoryId?: string;
+    sourceMessageIds: string[];
+    sourceArtifactIds: string[];
+    sourceRunIds: string[];
+    sourceDiscussionIds: string[];
+  }>;
 }
 
 export interface RuntimeTaskClarification {

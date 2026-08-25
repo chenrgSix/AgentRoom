@@ -69,6 +69,8 @@ import { MessageService } from "./team-room/message-service.js";
 import { AgentTaskService } from "./task/agent-task-service.js";
 import { ArtifactRepository } from "./task/artifact-repository.js";
 import { ContextPlanner } from "./task/context-planner.js";
+import { LongTermMemoryService } from "./task/long-term-memory-service.js";
+import { MemoryEntryRepository } from "./task/memory-entry-repository.js";
 import {
   ResultEvidenceConsumptionRepository
 } from "./task/result-evidence-consumption-repository.js";
@@ -137,6 +139,16 @@ export async function createServerApp(
     auth
   );
   const contextPlanner = new ContextPlanner(database, core, taskRepository);
+  const memoryEntries = new MemoryEntryRepository(database, transactions);
+  const longTermMemory = new LongTermMemoryService(
+    database,
+    memoryEntries,
+    artifactRepository,
+    taskRepository,
+    core,
+    runRepository,
+    auth
+  );
   const resultEvidenceConsumption = new ResultEvidenceConsumptionRepository(database);
   const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth, taskRepository);
@@ -511,6 +523,7 @@ export async function createServerApp(
     fakeAdapters,
     handoffs,
     limitAnonymous,
+    longTermMemory,
     manualRuns,
     messages,
     operationalMetrics,

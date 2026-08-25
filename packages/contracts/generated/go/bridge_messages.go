@@ -174,9 +174,53 @@ type ContextMessage struct {
 }
 
 type RuntimeContextPlan struct {
-	ResultEvidence *TaskResultEvidence `json:"resultEvidence,omitempty"`
-	RoomMemory     *RoomMemoryClass    `json:"roomMemory,omitempty"`
-	TaskMemory     *TaskMemoryClass    `json:"taskMemory,omitempty"`
+	LongTermMemory *LongTermProvenanceMemoryPlan `json:"longTermMemory,omitempty"`
+	ResultEvidence *TaskResultEvidence           `json:"resultEvidence,omitempty"`
+	RoomMemory     *RoomMemoryClass              `json:"roomMemory,omitempty"`
+	TaskMemory     *TaskMemoryClass              `json:"taskMemory,omitempty"`
+}
+
+type LongTermProvenanceMemoryPlan struct {
+	Room *RoomClass `json:"room,omitempty"`
+	Task *TaskClass `json:"task,omitempty"`
+}
+
+type RoomClass struct {
+	ActiveComplete bool                        `json:"activeComplete"`
+	Entries        []RoomProvenanceMemoryEntry `json:"entries"`
+	Revision       int64                       `json:"revision"`
+}
+
+type RoomProvenanceMemoryEntry struct {
+	Content             string                    `json:"content"`
+	MemoryID            string                    `json:"memoryId"`
+	Revision            int64                     `json:"revision"`
+	SourceArtifactIDS   []string                  `json:"sourceArtifactIds"`
+	SourceDiscussionIDS []string                  `json:"sourceDiscussionIds"`
+	SourceMessageIDS    []string                  `json:"sourceMessageIds"`
+	SourceRunIDS        []string                  `json:"sourceRunIds"`
+	State               State                     `json:"state"`
+	SupersedesMemoryID  *string                   `json:"supersedesMemoryId,omitempty"`
+	Type                ProvenanceMemoryEntryType `json:"type"`
+}
+
+type TaskClass struct {
+	ActiveComplete bool                        `json:"activeComplete"`
+	Entries        []TaskProvenanceMemoryEntry `json:"entries"`
+	Revision       int64                       `json:"revision"`
+}
+
+type TaskProvenanceMemoryEntry struct {
+	Content             string                    `json:"content"`
+	MemoryID            string                    `json:"memoryId"`
+	Revision            int64                     `json:"revision"`
+	SourceArtifactIDS   []string                  `json:"sourceArtifactIds"`
+	SourceDiscussionIDS []string                  `json:"sourceDiscussionIds"`
+	SourceMessageIDS    []string                  `json:"sourceMessageIds"`
+	SourceRunIDS        []string                  `json:"sourceRunIds"`
+	State               State                     `json:"state"`
+	SupersedesMemoryID  *string                   `json:"supersedesMemoryId,omitempty"`
+	Type                ProvenanceMemoryEntryType `json:"type"`
 }
 
 type TaskResultEvidence struct {
@@ -322,13 +366,13 @@ type Assessment struct {
 	GoalSatisfied         *bool                  `json:"goalSatisfied,omitempty"`
 	NewEvidenceRefs       []string               `json:"newEvidenceRefs,omitempty"`
 	NewInformationAdded   *bool                  `json:"newInformationAdded,omitempty"`
-	OpenQuestions         []OpenQuestion         `json:"openQuestions,omitempty"`
+	OpenQuestions         []OpenQuestionElement  `json:"openQuestions,omitempty"`
 	Recommendation        *Recommendation        `json:"recommendation,omitempty"`
 	ResolvedQuestionIDS   []string               `json:"resolvedQuestionIds,omitempty"`
 	ReviewerApproved      *bool                  `json:"reviewerApproved,omitempty"`
 }
 
-type OpenQuestion struct {
+type OpenQuestionElement struct {
 	ID         string     `json:"id"`
 	Importance Importance `json:"importance"`
 	Question   string     `json:"question"`
@@ -480,6 +524,30 @@ type AgentStatusMessageType string
 
 const (
 	AgentStatus AgentStatusMessageType = "agent.status"
+)
+
+type State string
+
+const (
+	Active     State = "active"
+	Retracted  State = "retracted"
+	Superseded State = "superseded"
+)
+
+type ProvenanceMemoryEntryType string
+
+const (
+	AcceptanceCriterion ProvenanceMemoryEntryType = "acceptance_criterion"
+	Blocker             ProvenanceMemoryEntryType = "blocker"
+	Constraint          ProvenanceMemoryEntryType = "constraint"
+	Convention          ProvenanceMemoryEntryType = "convention"
+	Decision            ProvenanceMemoryEntryType = "decision"
+	Fact                ProvenanceMemoryEntryType = "fact"
+	Goal                ProvenanceMemoryEntryType = "goal"
+	OpenQuestion        ProvenanceMemoryEntryType = "open_question"
+	Plan                ProvenanceMemoryEntryType = "plan"
+	Progress            ProvenanceMemoryEntryType = "progress"
+	Result              ProvenanceMemoryEntryType = "result"
 )
 
 type ArtifactReferenceType string

@@ -258,6 +258,27 @@
                   "createdAt": "2026-08-22T10:00:03Z"
                 }
               ]
+            },
+            "longTermMemory": {
+              "room": {
+                "revision": 3,
+                "activeComplete": true,
+                "entries": [
+                  {
+                    "memoryId": "memory_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+                    "type": "constraint",
+                    "content": "Keep wire compatibility during the migration.",
+                    "state": "active",
+                    "revision": 3,
+                    "sourceMessageIds": [
+                      "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W9"
+                    ],
+                    "sourceArtifactIds": [],
+                    "sourceRunIds": [],
+                    "sourceDiscussionIds": []
+                  }
+                ]
+              }
             }
           },
           "contextMessages": [
@@ -289,6 +310,22 @@
         "revision": 3,
         "projectionKind": "stale",
         "sourceMessageIds": []
+      },
+      "valid": false
+    },
+    {
+      "name": "Long-term memory requires authoritative provenance",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/longTermMemoryEntry",
+      "instance": {
+        "memoryId": "memory_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "type": "decision",
+        "content": "Use PostgreSQL.",
+        "state": "active",
+        "revision": 1,
+        "sourceMessageIds": [],
+        "sourceArtifactIds": [],
+        "sourceRunIds": [],
+        "sourceDiscussionIds": []
       },
       "valid": false
     },

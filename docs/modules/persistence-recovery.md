@@ -134,6 +134,12 @@ as its requesting Run's terminal transition. Startup reconciliation handles
 preexisting deadline, Agent-assignment, Task, and question-scope invalidation;
 it never revives or silently deletes the evidence record.
 
+Migration 0032 adds immutable Room/Task Memory entries and monotonic scope
+revision counters. Supersession allocates one revision for the old entry's
+terminal state and one for its successor; retraction allocates one new revision.
+Unique scope revisions make cursor reads lossless, while delete and evidence
+mutation triggers keep historical provenance recoverable after restart.
+
 Backups use the SQLite backup API, include schema metadata, refuse overwrite,
 and pass `quick_check`. Restore and forward-only migration rollback procedure is
 documented in `docs/backup-and-restore.md`. The Compose workflow installs host

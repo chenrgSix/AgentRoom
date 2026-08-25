@@ -142,6 +142,13 @@ structured result-evidence revisions; a new or recreated Codex Thread receives
 the complete bootstrap plan. Artifact summaries remain verification hints and
 never grant access to a referenced workspace path.
 
+The persisted native binding also tracks long-term Room and Task Memory scope
+revisions. A changed scope projects a bounded active snapshot plus recent
+superseded/retracted tombstones, with every source ID retained. A complete
+snapshot explicitly replaces prior projected Memory state; an incomplete one
+warns that omitted entries may still be active. Adapters never promote Runtime
+text directly into this central Member-authorized ledger.
+
 Result evidence is cursor-driven rather than inferred from the Task's global
 revision. A new local Runtime scope receives the newest bounded bootstrap page;
 resumed sessions accept only a delta whose `fromRevision` matches their

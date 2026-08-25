@@ -218,6 +218,52 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
     assert.equal(routed.message.sequence, 1);
     assert.equal(routed.runs[0]?.targetAgentId, agent.agentId);
     assert.equal(routed.runs[0]?.state, "completed");
+    const roomTasks = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${room.roomId}/tasks`,
+      headers: { authorization }
+    });
+    const defaultTaskId = roomTasks.json()[0].taskId as string;
+    const roomMemory = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${room.roomId}/memory-entries`,
+      headers: { authorization },
+      payload: {
+        type: "decision",
+        content: "Keep the fake-Agent API behavior stable.",
+        sourceMessageIds: [routed.message.messageId]
+      }
+    });
+    assert.equal(roomMemory.statusCode, 200);
+    assert.equal(roomMemory.json().revision, 1);
+    const taskMemory = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${defaultTaskId}/memory-entries`,
+      headers: { authorization },
+      payload: {
+        type: "result",
+        content: "The fake Agent completed the requested work.",
+        sourceMessageIds: [routed.message.messageId],
+        sourceRunIds: [routed.runs[0]?.runId]
+      }
+    });
+    assert.equal(taskMemory.statusCode, 200);
+    const listedMemory = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${room.roomId}/memory-entries?after=0&limit=10`,
+      headers: { authorization }
+    });
+    assert.deepEqual(
+      listedMemory.json().map((entry: { memoryId: string }) => entry.memoryId),
+      [roomMemory.json().memoryId]
+    );
+    const retractedMemory = await app.inject({
+      method: "POST",
+      url: `/api/memory-entries/${roomMemory.json().memoryId as string}/retract`,
+      headers: { authorization }
+    });
+    assert.equal(retractedMemory.json().state, "retracted");
+    assert.equal(retractedMemory.json().revision, 2);
     const retryMessage = await app.inject({
       method: "POST",
       url: `/api/rooms/${room.roomId}/messages`,

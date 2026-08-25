@@ -8,6 +8,7 @@ import { createOpaqueId } from "../domain/identifiers.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
 import type {
   ContextArtifactRef,
+  ContextLongTermMemoryScope,
   ContextMemoryProjection,
   ContextPlanner
 } from "../task/context-planner.js";
@@ -45,6 +46,10 @@ interface DeliveryPayload {
       throughRevision: number;
       hasMore: boolean;
       artifactRefs: ContextArtifactRef[];
+    };
+    longTermMemory?: {
+      room?: ContextLongTermMemoryScope;
+      task?: ContextLongTermMemoryScope;
     };
   };
   contextMessages: Array<{

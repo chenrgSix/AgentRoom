@@ -185,6 +185,22 @@ func contextDeltaForSession(
 		plan.TaskMemory.Revision <= binding.TaskMemoryRevision {
 		plan.TaskMemory = nil
 	}
+	if plan.LongTermMemory != nil {
+		memory := *plan.LongTermMemory
+		if memory.Room != nil &&
+			memory.Room.Revision <= binding.RoomLongTermMemoryRevision {
+			memory.Room = nil
+		}
+		if memory.Task != nil &&
+			memory.Task.Revision <= binding.TaskLongTermMemoryRevision {
+			memory.Task = nil
+		}
+		if memory.Room == nil && memory.Task == nil {
+			plan.LongTermMemory = nil
+		} else {
+			plan.LongTermMemory = &memory
+		}
+	}
 	if plan.ResultEvidence != nil {
 		evidence := plan.ResultEvidence
 		if evidence.DeliveryKind != nil && *evidence.DeliveryKind == contracts.Delta {
@@ -199,12 +215,29 @@ func contextDeltaForSession(
 		}
 	}
 	if plan.RoomMemory == nil && plan.TaskMemory == nil &&
-		plan.ResultEvidence == nil {
+		plan.ResultEvidence == nil && plan.LongTermMemory == nil {
 		run.ContextPlan = nil
 	} else {
 		run.ContextPlan = &plan
 	}
 	return run
+}
+
+func longTermMemoryRevisions(
+	run contracts.RunRequestedPayload,
+) (int64, int64) {
+	if run.ContextPlan == nil || run.ContextPlan.LongTermMemory == nil {
+		return 0, 0
+	}
+	roomRevision := int64(0)
+	if run.ContextPlan.LongTermMemory.Room != nil {
+		roomRevision = run.ContextPlan.LongTermMemory.Room.Revision
+	}
+	taskRevision := int64(0)
+	if run.ContextPlan.LongTermMemory.Task != nil {
+		taskRevision = run.ContextPlan.LongTermMemory.Task.Revision
+	}
+	return roomRevision, taskRevision
 }
 
 func contextRevisions(

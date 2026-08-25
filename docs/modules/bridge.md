@@ -267,6 +267,13 @@ without advancing the binding. Accepted status events report the scope and
 exact consumed `throughRevision`, which the Server fences against the durable
 Run Delivery before moving its cursor.
 
+`TASK-006` extends the owner-only binding with independent Room and Task
+long-term Memory revisions. Changed snapshots project structured lifecycle and
+Message/Artifact/Run/Discussion provenance into Codex and Pi prompts; unchanged
+scopes are filtered locally. The Bridge cannot create or mutate central Memory
+entries and receives no additional filesystem authority from their evidence
+references.
+
 `ADP-009` adds an optional `outputProtocol` field only for owner-authored
 Generic Runtime configurations. Omitting it preserves bounded, final-only
 stdout behavior. Selecting `agentroom-jsonl-v1` opts the Runtime into the

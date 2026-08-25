@@ -121,6 +121,38 @@ func TestRuntimePromptLabelsHistoricalMemoryAsRunLocal(t *testing.T) {
 	}
 }
 
+func TestRuntimePromptProjectsLongTermMemoryWithLifecycleAndProvenance(t *testing.T) {
+	supersedes := "memory_old_12345678"
+	prompt := runtimePrompt(contracts.RunRequestedPayload{
+		Instruction: "Continue the durable migration.",
+		ContextPlan: &contracts.RuntimeContextPlan{
+			LongTermMemory: &contracts.LongTermProvenanceMemoryPlan{
+				Room: &contracts.RoomClass{
+					Revision: 4, ActiveComplete: true,
+					Entries: []contracts.RoomProvenanceMemoryEntry{{
+						MemoryID: "memory_new_12345678", Type: contracts.Decision,
+						Content: "Use PostgreSQL 18.", State: contracts.Active,
+						Revision: 4, SupersedesMemoryID: &supersedes,
+						SourceMessageIDS:  []string{"msg_decision_12345678"},
+						SourceArtifactIDS: []string{"artifact_schema_12345678"},
+					}},
+				},
+			},
+		},
+	})
+	for _, expected := range []string{
+		"Long-term Room provenance memory (scope revision 4; complete active snapshot)",
+		"snapshot replaces prior memory state only where it is complete",
+		"memory_new_12345678; decision; active; revision 4; supersedes=memory_old_12345678",
+		"messages=msg_decision_12345678",
+		"artifacts=artifact_schema_12345678",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("long-term Memory prompt omitted %q:\n%s", expected, prompt)
+		}
+	}
+}
+
 func TestTaskSessionContextKeepsOnlyUnconsumedRoomDeltas(t *testing.T) {
 	sequence41 := int64(41)
 	sequence42 := int64(42)

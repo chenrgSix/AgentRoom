@@ -55,6 +55,18 @@ func runtimePrompt(run contracts.RunRequestedPayload) string {
 		if memory := projectedTaskMemory(run.ContextPlan.TaskMemory); memory != "" {
 			sections = append(sections, memory)
 		}
+		if run.ContextPlan.LongTermMemory != nil {
+			if memory := projectedRoomLongTermMemory(
+				run.ContextPlan.LongTermMemory.Room,
+			); memory != "" {
+				sections = append(sections, memory)
+			}
+			if memory := projectedTaskLongTermMemory(
+				run.ContextPlan.LongTermMemory.Task,
+			); memory != "" {
+				sections = append(sections, memory)
+			}
+		}
 		if evidence := projectedResultEvidence(
 			run.ContextPlan.ResultEvidence,
 		); evidence != "" {
@@ -68,6 +80,103 @@ func runtimePrompt(run contracts.RunRequestedPayload) string {
 	}
 	sections = append(sections, "Current request:\n"+instruction)
 	return strings.Join(sections, "\n\n")
+}
+
+type promptMemoryEntry struct {
+	memoryID            string
+	entryType           contracts.ProvenanceMemoryEntryType
+	content             string
+	state               contracts.State
+	revision            int64
+	supersedesMemoryID  *string
+	sourceMessageIDs    []string
+	sourceArtifactIDs   []string
+	sourceRunIDs        []string
+	sourceDiscussionIDs []string
+}
+
+func projectedRoomLongTermMemory(memory *contracts.RoomClass) string {
+	if memory == nil || len(memory.Entries) == 0 {
+		return ""
+	}
+	entries := make([]promptMemoryEntry, 0, len(memory.Entries))
+	for _, entry := range memory.Entries {
+		entries = append(entries, promptMemoryEntry{
+			memoryID: entry.MemoryID, entryType: entry.Type,
+			content: entry.Content, state: entry.State, revision: entry.Revision,
+			supersedesMemoryID:  entry.SupersedesMemoryID,
+			sourceMessageIDs:    entry.SourceMessageIDS,
+			sourceArtifactIDs:   entry.SourceArtifactIDS,
+			sourceRunIDs:        entry.SourceRunIDS,
+			sourceDiscussionIDs: entry.SourceDiscussionIDS,
+		})
+	}
+	return projectedLongTermMemory("Room", memory.Revision, memory.ActiveComplete, entries)
+}
+
+func projectedTaskLongTermMemory(memory *contracts.TaskClass) string {
+	if memory == nil || len(memory.Entries) == 0 {
+		return ""
+	}
+	entries := make([]promptMemoryEntry, 0, len(memory.Entries))
+	for _, entry := range memory.Entries {
+		entries = append(entries, promptMemoryEntry{
+			memoryID: entry.MemoryID, entryType: entry.Type,
+			content: entry.Content, state: entry.State, revision: entry.Revision,
+			supersedesMemoryID:  entry.SupersedesMemoryID,
+			sourceMessageIDs:    entry.SourceMessageIDS,
+			sourceArtifactIDs:   entry.SourceArtifactIDS,
+			sourceRunIDs:        entry.SourceRunIDS,
+			sourceDiscussionIDs: entry.SourceDiscussionIDS,
+		})
+	}
+	return projectedLongTermMemory("Task", memory.Revision, memory.ActiveComplete, entries)
+}
+
+func projectedLongTermMemory(
+	label string,
+	revision int64,
+	activeComplete bool,
+	entries []promptMemoryEntry,
+) string {
+	completeness := "complete active snapshot"
+	if !activeComplete {
+		completeness = "bounded active selection; omitted entries may still be active"
+	}
+	lines := []string{fmt.Sprintf(
+		"Long-term %s provenance memory (scope revision %d; %s). "+
+			"This snapshot replaces prior memory state only where it is complete; "+
+			"every entry remains a claim to verify against its source IDs:",
+		label, revision, completeness,
+	)}
+	for _, entry := range entries {
+		provenance := make([]string, 0, 4)
+		if len(entry.sourceMessageIDs) > 0 {
+			provenance = append(provenance, "messages="+strings.Join(entry.sourceMessageIDs, ","))
+		}
+		if len(entry.sourceArtifactIDs) > 0 {
+			provenance = append(provenance, "artifacts="+strings.Join(entry.sourceArtifactIDs, ","))
+		}
+		if len(entry.sourceRunIDs) > 0 {
+			provenance = append(provenance, "runs="+strings.Join(entry.sourceRunIDs, ","))
+		}
+		if len(entry.sourceDiscussionIDs) > 0 {
+			provenance = append(
+				provenance,
+				"discussions="+strings.Join(entry.sourceDiscussionIDs, ","),
+			)
+		}
+		supersedes := ""
+		if entry.supersedesMemoryID != nil {
+			supersedes = "; supersedes=" + *entry.supersedesMemoryID
+		}
+		lines = append(lines, fmt.Sprintf(
+			"- [%s; %s; %s; revision %d%s] %s | %s",
+			entry.memoryID, entry.entryType, entry.state, entry.revision,
+			supersedes, strings.TrimSpace(entry.content), strings.Join(provenance, "; "),
+		))
+	}
+	return truncateUTF8(strings.Join(lines, "\n"), maxProjectedMemoryBytes)
 }
 
 func projectedResultEvidence(evidence *contracts.TaskResultEvidence) string {

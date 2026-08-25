@@ -30,6 +30,7 @@ import type { MessageService } from "../team-room/message-service.js";
 import type { TeamChangeService } from "../team-room/team-change-service.js";
 import type { TeamRoomService } from "../team-room/team-room-service.js";
 import type { AgentTaskService } from "../task/agent-task-service.js";
+import type { LongTermMemoryService } from "../task/long-term-memory-service.js";
 import type { TaskArtifactService } from "../task/task-artifact-service.js";
 import type { TaskClarificationService } from "../task/task-clarification-service.js";
 
@@ -54,6 +55,7 @@ export interface ServerRouteContext {
   handoffs: HandoffService;
   limitAnonymous: (request: FastifyRequest, bucket: string) => void;
   manualRuns: ManualRunService;
+  longTermMemory: LongTermMemoryService;
   messages: MessageService;
   operationalMetrics: OperationalMetrics;
   optionalPrincipal: (request: FastifyRequest) => WebPrincipal | undefined;

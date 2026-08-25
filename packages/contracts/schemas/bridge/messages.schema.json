@@ -923,6 +923,180 @@
         }
       }
     },
+    "longTermMemoryEntry": {
+      "title": "Provenance Memory Entry",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "memoryId",
+        "type",
+        "content",
+        "state",
+        "revision",
+        "sourceMessageIds",
+        "sourceArtifactIds",
+        "sourceRunIds",
+        "sourceDiscussionIds"
+      ],
+      "anyOf": [
+        { "properties": { "sourceMessageIds": { "$ref": "#/$defs/nonEmptyMemoryMessageIds" } } },
+        { "properties": { "sourceArtifactIds": { "$ref": "#/$defs/nonEmptyMemoryArtifactIds" } } },
+        { "properties": { "sourceRunIds": { "$ref": "#/$defs/nonEmptyMemoryRunIds" } } },
+        { "properties": { "sourceDiscussionIds": { "$ref": "#/$defs/nonEmptyMemoryDiscussionIds" } } }
+      ],
+      "properties": {
+        "memoryId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/opaqueId"
+        },
+        "type": {
+          "enum": [
+            "decision",
+            "constraint",
+            "fact",
+            "open_question",
+            "convention",
+            "goal",
+            "acceptance_criterion",
+            "plan",
+            "progress",
+            "blocker",
+            "result"
+          ]
+        },
+        "content": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "state": {
+          "enum": ["active", "superseded", "retracted"]
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "supersedesMemoryId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/opaqueId"
+        },
+        "sourceMessageIds": {
+          "$ref": "#/$defs/memoryMessageIds"
+        },
+        "sourceArtifactIds": {
+          "$ref": "#/$defs/memoryArtifactIds"
+        },
+        "sourceRunIds": {
+          "$ref": "#/$defs/memoryRunIds"
+        },
+        "sourceDiscussionIds": {
+          "$ref": "#/$defs/memoryDiscussionIds"
+        }
+      }
+    },
+    "memoryMessageIds": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
+      }
+    },
+    "nonEmptyMemoryMessageIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
+      }
+    },
+    "memoryArtifactIds": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
+      }
+    },
+    "nonEmptyMemoryArtifactIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
+      }
+    },
+    "memoryRunIds": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+      }
+    },
+    "nonEmptyMemoryRunIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+      }
+    },
+    "memoryDiscussionIds": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/opaqueId"
+      }
+    },
+    "nonEmptyMemoryDiscussionIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/opaqueId"
+      }
+    },
+    "longTermMemoryScope": {
+      "title": "Long-term Memory Scope Snapshot",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revision", "activeComplete", "entries"],
+      "properties": {
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "activeComplete": {
+          "type": "boolean"
+        },
+        "entries": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 24,
+          "items": {
+            "$ref": "#/$defs/longTermMemoryEntry"
+          }
+        }
+      }
+    },
+    "longTermMemoryPlan": {
+      "title": "Long-term Provenance Memory Plan",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "room": {
+          "$ref": "#/$defs/longTermMemoryScope"
+        },
+        "task": {
+          "$ref": "#/$defs/longTermMemoryScope"
+        }
+      }
+    },
     "runtimeContextPlan": {
       "title": "Runtime Context Plan",
       "type": "object",
@@ -937,6 +1111,9 @@
         },
         "resultEvidence": {
           "$ref": "#/$defs/taskResultEvidence"
+        },
+        "longTermMemory": {
+          "$ref": "#/$defs/longTermMemoryPlan"
         }
       }
     },

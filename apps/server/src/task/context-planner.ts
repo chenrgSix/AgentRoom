@@ -15,6 +15,10 @@ import {
   type ArtifactType,
   type TaskArtifactRecord
 } from "./artifact-repository.js";
+import {
+  MemoryEntryRepository,
+  type MemoryEntryRecord
+} from "./memory-entry-repository.js";
 
 const recentRoomMessageLimit = 12;
 const recentTaskMessageLimit = 18;
@@ -47,6 +51,25 @@ export interface ContextArtifactRef {
   createdAt: string;
 }
 
+export interface ContextLongTermMemoryEntry {
+  memoryId: string;
+  type: MemoryEntryRecord["type"];
+  content: string;
+  state: MemoryEntryRecord["state"];
+  revision: number;
+  supersedesMemoryId?: string;
+  sourceMessageIds: string[];
+  sourceArtifactIds: string[];
+  sourceRunIds: string[];
+  sourceDiscussionIds: string[];
+}
+
+export interface ContextLongTermMemoryScope {
+  revision: number;
+  activeComplete: boolean;
+  entries: ContextLongTermMemoryEntry[];
+}
+
 export interface PlannedRuntimeContext {
   contextPlan: {
     roomMemory: ContextMemoryProjection;
@@ -58,6 +81,10 @@ export interface PlannedRuntimeContext {
       throughRevision: number;
       hasMore: boolean;
       artifactRefs: ContextArtifactRef[];
+    };
+    longTermMemory?: {
+      room?: ContextLongTermMemoryScope;
+      task?: ContextLongTermMemoryScope;
     };
   };
   contextMessages: MessageRecord[];
@@ -97,6 +124,7 @@ function fingerprintProjection(input: {
 
 export class ContextPlanner {
   private readonly artifacts: ArtifactRepository;
+  private readonly memoryEntries: MemoryEntryRepository;
 
   public constructor(
     private readonly database: Database.Database,
@@ -104,6 +132,7 @@ export class ContextPlanner {
     private readonly tasks: AgentTaskRepository
   ) {
     this.artifacts = new ArtifactRepository(database);
+    this.memoryEntries = new MemoryEntryRepository(database);
   }
 
   public plan(
@@ -149,6 +178,8 @@ export class ContextPlanner {
       task,
       input.resultEvidenceAfterRevision
     );
+    const roomLongTermMemory = this.memoryEntries.contextScope("room", room.roomId);
+    const taskLongTermMemory = this.memoryEntries.contextScope("task", task.taskId);
     return {
       contextPlan: {
         roomMemory: this.projectRoom(
@@ -158,7 +189,19 @@ export class ContextPlanner {
           now
         ),
         taskMemory: this.projectTask(task, taskSourceCursor, now),
-        ...(resultEvidence ? { resultEvidence } : {})
+        ...(resultEvidence ? { resultEvidence } : {}),
+        ...(roomLongTermMemory || taskLongTermMemory
+          ? {
+              longTermMemory: {
+                ...(roomLongTermMemory
+                  ? { room: this.contextLongTermMemory(roomLongTermMemory) }
+                  : {}),
+                ...(taskLongTermMemory
+                  ? { task: this.contextLongTermMemory(taskLongTermMemory) }
+                  : {})
+              }
+            }
+          : {})
       },
       contextMessages
     };
@@ -335,6 +378,31 @@ export class ContextPlanner {
         ? { createdByAgentId: artifact.createdByAgentId }
         : {}),
       createdAt: artifact.createdAt
+    };
+  }
+
+  private contextLongTermMemory(input: {
+    revision: number;
+    activeComplete: boolean;
+    entries: MemoryEntryRecord[];
+  }): ContextLongTermMemoryScope {
+    return {
+      revision: input.revision,
+      activeComplete: input.activeComplete,
+      entries: input.entries.map((entry) => ({
+        memoryId: entry.memoryId,
+        type: entry.type,
+        content: entry.content,
+        state: entry.state,
+        revision: entry.revision,
+        ...(entry.supersedesMemoryId
+          ? { supersedesMemoryId: entry.supersedesMemoryId }
+          : {}),
+        sourceMessageIds: entry.sourceMessageIds,
+        sourceArtifactIds: entry.sourceArtifactIds,
+        sourceRunIds: entry.sourceRunIds,
+        sourceDiscussionIds: entry.sourceDiscussionIds
+      }))
     };
   }
 

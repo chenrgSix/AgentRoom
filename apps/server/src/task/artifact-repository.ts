@@ -75,6 +75,13 @@ export class ArtifactRepository {
     private readonly transactions = new SqliteTransactionBoundary(database)
   ) {}
 
+  public get(artifactId: string): TaskArtifactRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM task_artifact_refs WHERE artifact_id = ?
+    `).get(artifactId) as TaskArtifactRow | undefined;
+    return row && mapArtifact(row);
+  }
+
   public create(record: TaskArtifactRecord): {
     artifact: TaskArtifactRecord;
     revision: number;

@@ -24,13 +24,15 @@ func TestFileRuntimeSessionStorePersistsTaskScopedBinding(t *testing.T) {
 		t.Fatalf("unexpected empty session lookup: found=%t err=%v", found, err)
 	}
 	if err := store.Save(RuntimeSessionBinding{
-		RuntimeSessionKey:      key,
-		SessionID:              "thread_alpha",
-		LastRoomSequence:       42,
-		RoomMemoryRevision:     3,
-		TaskMemoryRevision:     4,
-		ResultEvidenceRevision: 5,
-		LastRunID:              "run_alpha",
+		RuntimeSessionKey:          key,
+		SessionID:                  "thread_alpha",
+		LastRoomSequence:           42,
+		RoomMemoryRevision:         3,
+		TaskMemoryRevision:         4,
+		RoomLongTermMemoryRevision: 6,
+		TaskLongTermMemoryRevision: 7,
+		ResultEvidenceRevision:     5,
+		LastRunID:                  "run_alpha",
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -38,6 +40,8 @@ func TestFileRuntimeSessionStorePersistsTaskScopedBinding(t *testing.T) {
 	if err != nil || !found || binding.SessionID != "thread_alpha" ||
 		binding.LastRoomSequence != 42 || binding.LastRunID != "run_alpha" ||
 		binding.RoomMemoryRevision != 3 || binding.TaskMemoryRevision != 4 ||
+		binding.RoomLongTermMemoryRevision != 6 ||
+		binding.TaskLongTermMemoryRevision != 7 ||
 		binding.ResultEvidenceRevision != 5 ||
 		binding.CreatedAt.IsZero() || binding.UpdatedAt.IsZero() {
 		t.Fatalf("unexpected persisted session: %#v found=%t err=%v", binding, found, err)
@@ -77,6 +81,44 @@ func TestFileRuntimeSessionStorePersistsTaskScopedBinding(t *testing.T) {
 	}
 	if _, found, err := store.Load(key); err != nil || found {
 		t.Fatalf("deleted session remained visible: found=%t err=%v", found, err)
+	}
+}
+
+func TestTaskSessionContextFiltersLongTermMemoryByScopeRevision(t *testing.T) {
+	run := contracts.RunRequestedPayload{
+		ContextPlan: &contracts.RuntimeContextPlan{
+			LongTermMemory: &contracts.LongTermProvenanceMemoryPlan{
+				Room: &contracts.RoomClass{
+					Revision: 2, ActiveComplete: true,
+					Entries: []contracts.RoomProvenanceMemoryEntry{{
+						MemoryID: "memory_room_12345678", Type: contracts.Constraint,
+						Content: "Keep compatibility", State: contracts.Active, Revision: 2,
+						SourceMessageIDS: []string{"msg_room_memory_12345678"},
+					}},
+				},
+				Task: &contracts.TaskClass{
+					Revision: 3, ActiveComplete: true,
+					Entries: []contracts.TaskProvenanceMemoryEntry{{
+						MemoryID: "memory_task_12345678", Type: contracts.Goal,
+						Content: "Complete migration", State: contracts.Active, Revision: 3,
+						SourceMessageIDS: []string{"msg_task_memory_12345678"},
+					}},
+				},
+			},
+		},
+	}
+	delta := contextDeltaForSession(run, RuntimeSessionBinding{
+		RoomLongTermMemoryRevision: 2,
+		TaskLongTermMemoryRevision: 2,
+	})
+	if delta.ContextPlan == nil || delta.ContextPlan.LongTermMemory == nil ||
+		delta.ContextPlan.LongTermMemory.Room != nil ||
+		delta.ContextPlan.LongTermMemory.Task == nil {
+		t.Fatalf("long-term Memory scope delta was not filtered: %#v", delta.ContextPlan)
+	}
+	roomRevision, taskRevision := longTermMemoryRevisions(delta)
+	if roomRevision != 0 || taskRevision != 3 {
+		t.Fatalf("unexpected long-term Memory revisions: %d %d", roomRevision, taskRevision)
 	}
 }
 
