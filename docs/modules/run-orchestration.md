@@ -16,6 +16,10 @@ budgets, Wave barriers, and next-Wave decisions belong to Discussion
 Orchestration. One ordinary Discussion Wave may request one Run per member, but
 it cannot bypass Run delivery, idempotency, or cancellation rules.
 
+Every Run belongs to one durable Agent Task. Task Collaboration owns the
+long-lived goal and shared result state; Run Orchestration continues to own only
+the bounded attempt, delivery, event sequence, and terminal result.
+
 ## Responsibilities
 
 - Create one Run per valid target Mention on the normal message path, or per
@@ -27,6 +31,8 @@ it cannot bypass Run delivery, idempotency, or cancellation rules.
 - Validate and create child Runs for handoff.
 - Publish Run projections for Web and MCP.
 - Bind an optional `orchestrationKey` to one Run for aggregate-owned recovery.
+- Preserve the authoritative `taskId` across Mention routing, Discussion Waves,
+  handoff, retry, and recovery.
 
 ## State Machine
 

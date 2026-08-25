@@ -23,6 +23,7 @@ document and the task list in the same commit.
 | --- | --- | --- | --- | --- |
 | CON | [Contracts](contracts.md) | Wire schemas and compatibility | `packages/contracts/` | none |
 | ROOM | [Team and Room](team-room.md) | Team, Room, Message | `apps/server/` | CON, DATA, SEC, REG |
+| TASK | [Task Collaboration](task-collaboration.md) | Task, shared memory, result evidence | `apps/server/` | CON, ROOM, REG, DATA, SEC |
 | REG | [Registry and Presence](agent-registry.md) | Member, Device, Agent, Presence | `apps/server/` | CON, DATA, SEC |
 | RUN | [Run Orchestration](run-orchestration.md) | Run, delivery, handoff | `apps/server/` | CON, ROOM, REG, BRG, DATA |
 | DISC | [Discussion Orchestration](discussion-orchestration.md) | Discussion, progress, budget, policy | `apps/server/src/discussion/` | CON, ROOM, RUN, ADP, DATA, SEC |
@@ -46,6 +47,8 @@ CON
     └── ADP
 
 ROOM + REG + BRG + DATA
+          ├── TASK
+          │   └── RUN
           └── RUN
               ├── MCP
               ├── DISC

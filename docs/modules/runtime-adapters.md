@@ -63,16 +63,18 @@ partial credentials or the private `agentroom-assessment` envelope from
 crossing a chunk boundary. Malformed JSON, a missing assistant reply, or
 provider-specific raw tool-call markup fails the Run with
 `RUNTIME_PROTOCOL_INVALID`; none of that raw stdout is published to the Room.
-Normal managed Runs therefore append to one native Pi session per Room, Agent, and workspace
-across Bridge restarts. The session receives a bounded local display name; Pi's
+Normal managed Runs therefore append to one native Pi session per Task, Agent,
+Runtime semantic configuration, and workspace across Bridge restarts. The
+session receives a bounded local display name; Pi's
 own session directory and provider configuration remain owner-controlled. The
 explicit Runtime probe still adds `--no-session`, so diagnostics never pollute
 normal history. Unscoped Codex probes likewise use an ephemeral Thread. The
 central service cannot raise local Runtime permissions.
 
 Codex preset version 5 uses the local Codex App Server over JSONL stdio. The
-Bridge creates one persisted Thread per Room and Agent in the fixed owner-selected
-workspace, records only its opaque Thread id under the owner-only Bridge data
+Bridge creates one persisted Thread per Task and Agent in the fixed
+owner-selected workspace and Runtime semantic configuration, records only its
+opaque Thread id under the owner-only Bridge data
 directory, and calls `thread/resume` on later Runs. A missing or invalid stored
 Thread is discarded and replaced once with a fresh persisted Thread. The Bridge
 passes the owner-selected `read-only` or `workspace-write` sandbox,
@@ -112,8 +114,10 @@ server-provided shell string. They must isolate process groups, bound output,
 propagate cancellation, and clean up children. Existing Runtime command, file,
 network, and approval policies remain authoritative.
 
-Before execution, managed adapters project at most the newest 12 prior Room
-messages into a 12 KiB named transcript and include the target plus exact
+Before execution, a new managed native Session projects at most the newest 12
+prior Room messages into a 12 KiB named transcript. A resumed Task Session
+projects only Messages after its owner-only consumed Room cursor. Both include
+the target plus exact
 eligible peer Agent names. The Runtime is instructed to use complete
 case-sensitive `@Agent name` commands with no fuzzy role or prefix matching.
 This improves handoff intent, but the server still parses,
@@ -121,8 +125,9 @@ authorizes, depth-limits, and persists every resulting child Run.
 
 ## Events and Replies
 
-Adapter events carry `runId`, `sessionRef`, sequence, timestamp, and schema
-version. Text replies and structured handoff requests are filtered
+Adapter events carry `runId`, logical Task Session disposition, sequence,
+timestamp, and schema version. Native session references stay local. Text
+replies and structured handoff requests are filtered
 for obvious credentials and sensitive local paths before leaving the machine.
 
 Codex and Generic CLI adapters also recognize an optional final

@@ -28,6 +28,8 @@ persisted Message before routing or realtime broadcast.
 - Browser presentation belongs to Web UI.
 - Runtime context construction beyond selecting Room messages belongs to the
   caller, subject to Room access policy.
+- Long-lived Task identity, summaries, and result evidence belong to Task
+  Collaboration; Room history remains their authoritative source.
 
 ## Core State
 

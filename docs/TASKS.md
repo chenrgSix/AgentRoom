@@ -35,6 +35,12 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | P7 | Three Agents complete a guarded handoff | RUN-006, QA-003 |
 | P8 | A second Runtime mode joins the Team | ADP-005 |
 | P9 | Adaptive Agent Discussion reaches a governed conclusion | DISC-006, WEB-017, QA-007 |
+| P10 | Long-lived work has a first-class Task identity | TASK-001 |
+| P11 | Native Runtime sessions and context deltas are Task-scoped | CON-007, ADP-012 |
+| P12 | Shared Room and Task memory bootstraps new participants | TASK-002 |
+| P13 | Agents exchange structured result evidence | TASK-003 |
+| P14 | Human clarification resumes work without remote permission approval | RUN-009 |
+| P15 | Large composition roots are split behind stable behavior | DISC-008, DATA-006, WEB-037, GOV-008 |
 
 ## Milestone G0: Governance and Architecture
 
@@ -226,6 +232,21 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-016 | DONE | Verify recoverable Runtime output streaming | BRG-023, RUN-007, WEB-029 | `docs/acceptance/qa-016-runtime-output-streaming.md` records passing contract, Go, Server, Web, race, Desktop, and deterministic real-Bridge checks for incremental Pi output, final-only fallback, reconnect replay, cancellation fencing, redaction, and one durable final Room Message |
 | QA-017 | DONE | Publish and verify v0.2.0-rc.5 | QA-016, WEB-032, WEB-033, WEB-034, QA-008 | `docs/acceptance/qa-017-v0.2.0-rc.5.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
 | QA-018 | DONE | Publish and verify v0.2.0-rc.6 | ROOM-006, ROOM-007, BRG-024, BRG-025, QA-008 | `docs/acceptance/qa-018-v0.2.0-rc.6.md` records a zero-blocker audit, exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
+
+## Workstream F7: Task Continuity and Shared Results
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| TASK-001 | ACTIVE | Add first-class Agent Tasks | ROOM-005, RUN-006, DISC-007, DATA-003 | migration, service/API, Web, Run, handoff, and Discussion tests prove every execution belongs to one authorized Task; existing data receives a recoverable default Task; one Room may hold independent active Discussions per Task |
+| CON-007 | PLANNED | Define logical Task Session and context cursor fields | TASK-001, CON-006 | additive fixtures and generated TypeScript/Go types carry Task identity, task scope, resume policy, an inclusive Room cursor, and safe session disposition without exposing native session IDs |
+| ADP-012 | PLANNED | Scope persistent managed Runtime sessions to Task semantics | CON-007, ADP-011 | Codex and Pi tests prove Task isolation, workspace/config fingerprint rollover, started/resumed/recreated reporting, cursor-only Room delta injection, legacy-safe fallback, and owner-only persistence across restart |
+| TASK-002 | PLANNED | Build provenance-preserving Room and Task context planning | ADP-012, ROOM-002 | new Sessions receive bounded Room memory, Task memory, relevant events, and current request; resumed Sessions receive only cursor/revision deltas; summaries are rebuildable projections rather than authoritative history |
+| TASK-003 | PLANNED | Persist structured Task result evidence | TASK-002, FUT-004 | authorized ArtifactRefs for commits, branches, files, patches, tests, and documents preserve workspace locality and let another Agent verify results without replaying private tool output |
+| RUN-009 | PLANNED | Resume Task clarification without remote permission approval | TASK-001, ADP-012, RUN-004 | task clarification suspends and resumes the same logical Session after an authorized Room answer, while filesystem, shell, network, and Runtime approval requests remain local-only and cannot be approved by the Server |
+| DISC-008 | PLANNED | Extract Discussion transitions and planners | RUN-009, DISC-007 | pure transition, Wave planning/barrier, progress, budget, recovery, and finalization units preserve the full deterministic Discussion regression and restart matrix |
+| DATA-006 | PLANNED | Split aggregate repositories behind shared transactions | TASK-003, DATA-003 | Team, Room, Message, Agent, Device, and Task repositories retain existing atomic write/recovery tests under one explicit transaction boundary |
+| WEB-037 | PLANNED | Split the Web shell by product feature | TASK-003, RUN-009 | Auth, Team, Room, Agent, Run, Discussion, Bridge, and Task feature boundaries preserve component, browser, responsive, and accessibility evidence while `App.tsx` retains only routing, auth gate, and layout composition |
+| GOV-008 | PLANNED | Reduce the Server composition root to module registration | DISC-008, DATA-006 | route plugins own no cross-module state, `app.ts` remains a composition root, and all Server/API/E2E behavior remains unchanged |
 
 ## Deferred Beyond MVP
 
