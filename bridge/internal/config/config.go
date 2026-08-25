@@ -54,7 +54,7 @@ type AgentConfig struct {
 
 const (
 	CurrentSchemaVersion           = 2
-	CurrentPresetVersion           = 4
+	CurrentPresetVersion           = 5
 	OutputProtocolAgentRoomJSONLV1 = "agentroom-jsonl-v1"
 	ServerTokenHeader              = "X-AgentRoom-Server-Token"
 )
@@ -64,14 +64,14 @@ func CodexPresetCommand(executable string) []string {
 }
 
 func PiPresetCommand(executable string, localPolicyArguments ...string) []string {
-	command := []string{executable, "--mode", "json", "--print", "--no-session"}
+	command := []string{executable, "--mode", "json", "--print"}
 	return append(command, localPolicyArguments...)
 }
 
 func PiProbeCommand(executable string) []string {
 	return PiPresetCommand(
 		executable,
-		"--no-tools", "--no-extensions", "--no-skills", "--no-context-files", "--no-approve",
+		"--no-session", "--no-tools", "--no-extensions", "--no-skills", "--no-context-files", "--no-approve",
 	)
 }
 
@@ -183,14 +183,13 @@ func Migrate(value Config) (Config, error) {
 			}
 			agent.PresetVersion = CurrentPresetVersion
 		case "pi":
-			// Preset version 4 changes only the Codex transport. A Pi preset
-			// already at version 3 must keep its owner-authored command byte for
-			// byte while sharing the new repository-wide version marker.
 			if agent.PresetVersion < 3 && len(agent.Command) > 0 {
 				agent.Command = PiPresetCommand(
 					agent.Command[0],
 					PiLocalPolicyArguments(agent.Command, agent.PresetVersion)...,
 				)
+			} else if len(agent.Command) > 0 {
+				agent.Command = piPersistentSessionCommand(agent.Command)
 			}
 			agent.PresetVersion = CurrentPresetVersion
 		case "generic":
@@ -202,24 +201,33 @@ func Migrate(value Config) (Config, error) {
 	return value, nil
 }
 
-// PiLocalPolicyArguments removes only the transport and lifecycle flags owned
-// by Bridge. Version two also carried product-authored restrictions that are
+// PiLocalPolicyArguments removes only the transport and session lifecycle flags
+// owned by Bridge. Version two also carried product-authored restrictions that are
 // intentionally retired by version three. Everything else remains under the
 // local owner's Pi configuration, including future extension-defined flags.
 func PiLocalPolicyArguments(command []string, presetVersion int) []string {
 	arguments := make([]string, 0, len(command))
 	for index := 1; index < len(command); index++ {
 		argument := command[index]
+		if argument == "--" {
+			arguments = append(arguments, command[index:]...)
+			break
+		}
 		switch argument {
-		case "--mode":
+		case "--mode", "--session", "--session-id", "--fork", "--session-dir", "--name", "-n":
 			if index+1 < len(command) {
 				index++
 			}
 			continue
-		case "--print", "-p", "--no-session":
+		case "--print", "-p", "--no-session", "--continue", "-c", "--resume", "-r":
 			continue
 		}
-		if strings.HasPrefix(argument, "--mode=") {
+		if strings.HasPrefix(argument, "--mode=") ||
+			strings.HasPrefix(argument, "--session=") ||
+			strings.HasPrefix(argument, "--session-id=") ||
+			strings.HasPrefix(argument, "--fork=") ||
+			strings.HasPrefix(argument, "--session-dir=") ||
+			strings.HasPrefix(argument, "--name=") {
 			continue
 		}
 		if presetVersion == 2 && piVersionTwoRestriction(argument) {
@@ -228,6 +236,38 @@ func PiLocalPolicyArguments(command []string, presetVersion int) []string {
 		arguments = append(arguments, argument)
 	}
 	return arguments
+}
+
+func piPersistentSessionCommand(command []string) []string {
+	if len(command) == 0 {
+		return nil
+	}
+	result := []string{command[0]}
+	for index := 1; index < len(command); index++ {
+		argument := command[index]
+		if argument == "--" {
+			result = append(result, command[index:]...)
+			break
+		}
+		switch argument {
+		case "--session", "--session-id", "--fork", "--session-dir", "--name", "-n":
+			if index+1 < len(command) {
+				index++
+			}
+			continue
+		case "--no-session", "--continue", "-c", "--resume", "-r":
+			continue
+		}
+		if strings.HasPrefix(argument, "--session=") ||
+			strings.HasPrefix(argument, "--session-id=") ||
+			strings.HasPrefix(argument, "--fork=") ||
+			strings.HasPrefix(argument, "--session-dir=") ||
+			strings.HasPrefix(argument, "--name=") {
+			continue
+		}
+		result = append(result, argument)
+	}
+	return result
 }
 
 func piVersionTwoRestriction(argument string) bool {

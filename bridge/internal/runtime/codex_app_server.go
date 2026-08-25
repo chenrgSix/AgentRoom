@@ -26,6 +26,24 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	if err := validateCodexCommand(c.Config.Command); err != nil {
 		return emitCodexFailure(ctx, emit, "CODEX_COMMAND_INVALID", err.Error())
 	}
+	var sessionKey *RuntimeSessionKey
+	resumeThreadID := ""
+	if c.Sessions != nil && request.Run.RoomID != "" && request.Run.TargetAgentID != "" {
+		key := RuntimeSessionKey{
+			RuntimeKind: "codex",
+			RoomID:      request.Run.RoomID,
+			AgentID:     request.Run.TargetAgentID,
+			Workspace:   c.Config.Workspace,
+		}
+		binding, found, err := c.Sessions.Load(key)
+		if err != nil {
+			return emitCodexFailure(ctx, emit, "CODEX_SESSION_STATE_INVALID", "Codex session state could not be loaded.")
+		}
+		if found {
+			resumeThreadID = binding.SessionID
+		}
+		sessionKey = &key
+	}
 
 	runContext := ctx
 	cancelDeadline := func() {}
@@ -72,7 +90,9 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 		return emitCodexFailure(ctx, emit, "CODEX_START_FAILED", "Codex initialization could not be sent.")
 	}
 
-	parser := newCodexAppServerParser(c.Config, runtimePrompt(request.Run))
+	parser := newCodexAppServerSessionParser(
+		c.Config, runtimePrompt(request.Run), c.Sessions, sessionKey, resumeThreadID,
+	)
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64*1024), maxCodexProtocolOutput)
 	total := 0
@@ -188,6 +208,10 @@ type codexAppServerMessage struct {
 type codexAppServerParser struct {
 	config       config.AgentConfig
 	instruction  string
+	sessions     RuntimeSessionStore
+	sessionKey   *RuntimeSessionKey
+	resumeID     string
+	resumeFailed bool
 	threadID     string
 	turnID       string
 	currentItem  string
@@ -208,8 +232,19 @@ func (p *codexAppServerParser) drainActivities() []Activity {
 }
 
 func newCodexAppServerParser(configuration config.AgentConfig, instruction string) *codexAppServerParser {
+	return newCodexAppServerSessionParser(configuration, instruction, nil, nil, "")
+}
+
+func newCodexAppServerSessionParser(
+	configuration config.AgentConfig,
+	instruction string,
+	sessions RuntimeSessionStore,
+	sessionKey *RuntimeSessionKey,
+	resumeID string,
+) *codexAppServerParser {
 	return &codexAppServerParser{
-		config: configuration, instruction: instruction,
+		config: configuration, instruction: instruction, sessions: sessions,
+		sessionKey: sessionKey, resumeID: resumeID,
 		reasoning: make(map[string]*activityTextPreview),
 	}
 }
@@ -247,6 +282,16 @@ func (p *codexAppServerParser) consume(source []byte) (*OutputDelta, []any, erro
 
 func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*OutputDelta, []any, error) {
 	if message.Error != nil {
+		if string(message.ID) == "2" && p.resumeID != "" && !p.resumeFailed {
+			if p.sessions != nil && p.sessionKey != nil {
+				if err := p.sessions.Delete(*p.sessionKey); err != nil {
+					return nil, nil, err
+				}
+			}
+			p.resumeID = ""
+			p.resumeFailed = true
+			return nil, []any{p.threadRequest()}, nil
+		}
 		return nil, nil, fmt.Errorf("Codex app-server request failed: %s", message.Error.Message)
 	}
 	switch string(message.ID) {
@@ -254,18 +299,9 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 		if len(message.Result) == 0 {
 			return nil, nil, fmt.Errorf("Codex initialize response omitted result")
 		}
-		sandbox := p.config.Sandbox
-		if sandbox == "" {
-			sandbox = "workspace-write"
-		}
 		return nil, []any{
 			map[string]any{"method": "initialized", "params": map[string]any{}},
-			map[string]any{
-				"id": 2, "method": "thread/start",
-				"params": map[string]any{
-					"cwd": p.config.Workspace, "sandbox": sandbox, "approvalPolicy": "never", "ephemeral": true,
-				},
-			},
+			p.threadRequest(),
 		}, nil
 	case "2":
 		var result struct {
@@ -274,9 +310,17 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 			} `json:"thread"`
 		}
 		if err := json.Unmarshal(message.Result, &result); err != nil || result.Thread.ID == "" {
-			return nil, nil, fmt.Errorf("Codex thread/start response omitted thread id")
+			return nil, nil, fmt.Errorf("Codex thread open response omitted thread id")
 		}
 		p.threadID = result.Thread.ID
+		if p.sessions != nil && p.sessionKey != nil {
+			if err := p.sessions.Save(RuntimeSessionBinding{
+				RuntimeSessionKey: *p.sessionKey,
+				SessionID:         p.threadID,
+			}); err != nil {
+				return nil, nil, err
+			}
+		}
 		return nil, []any{map[string]any{
 			"id": 3, "method": "turn/start",
 			"params": map[string]any{
@@ -298,6 +342,24 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 	default:
 		return nil, nil, nil
 	}
+}
+
+func (p *codexAppServerParser) threadRequest() map[string]any {
+	sandbox := p.config.Sandbox
+	if sandbox == "" {
+		sandbox = "workspace-write"
+	}
+	params := map[string]any{
+		"cwd": p.config.Workspace, "sandbox": sandbox, "approvalPolicy": "never",
+	}
+	method := "thread/start"
+	if p.resumeID != "" {
+		method = "thread/resume"
+		params["threadId"] = p.resumeID
+	} else if p.sessionKey == nil {
+		params["ephemeral"] = true
+	}
+	return map[string]any{"id": 2, "method": method, "params": params}
 }
 
 func (p *codexAppServerParser) consumeNotification(method string, params json.RawMessage) (*OutputDelta, []any, error) {

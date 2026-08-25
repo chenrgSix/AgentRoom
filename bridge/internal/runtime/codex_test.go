@@ -42,6 +42,35 @@ func TestCodexAdapterMapsAppServerEventsToRuntimeEvents(t *testing.T) {
 	}
 }
 
+func TestCodexAdapterResumesStoredRoomAgentThread(t *testing.T) {
+	t.Setenv("AGENTROOM_CODEX_HELPER", "resume")
+	workspace := t.TempDir()
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	key := RuntimeSessionKey{
+		RuntimeKind: "codex", RoomID: "room_alpha", AgentID: "agent_builder",
+		Workspace: workspace,
+	}
+	if err := store.Save(RuntimeSessionBinding{RuntimeSessionKey: key, SessionID: "019d-thread"}); err != nil {
+		t.Fatal(err)
+	}
+	adapter := CodexAdapter{Config: config.AgentConfig{
+		Command:   []string{os.Args[0], "-test.run=TestCodexHelperProcess", "--", "app-server", "--listen", "stdio://"},
+		Workspace: workspace, Sandbox: "workspace-write", EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER"},
+	}, Sessions: store}
+	var terminal Event
+	if err := adapter.Execute(context.Background(), Request{Run: contracts.RunRequestedPayload{
+		RoomID: "room_alpha", TargetAgentID: "agent_builder", Instruction: "implement it",
+	}}, func(_ context.Context, event Event) error {
+		terminal = event
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Status == nil || *terminal.Status != contracts.Completed {
+		t.Fatalf("stored Codex thread did not resume: %#v", terminal)
+	}
+}
+
 func TestCodexAppServerParserStreamsAndResetsAcrossAgentMessages(t *testing.T) {
 	parser := newCodexAppServerParser(config.AgentConfig{
 		Workspace: t.TempDir(), Sandbox: "workspace-write",
@@ -61,6 +90,38 @@ func TestCodexAppServerParserStreamsAndResetsAcrossAgentMessages(t *testing.T) {
 		strings.Repeat("B", 80)+`"}}`)
 	if second == nil || !second.Reset || second.Content != strings.Repeat("B", 16) {
 		t.Fatalf("unexpected reset Codex preview: %#v", second)
+	}
+}
+
+func TestCodexAppServerParserResumesAndReplacesMissingThread(t *testing.T) {
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	key := RuntimeSessionKey{
+		RuntimeKind: "codex", RoomID: "room_alpha", AgentID: "agent_builder",
+		Workspace: t.TempDir(),
+	}
+	if err := store.Save(RuntimeSessionBinding{RuntimeSessionKey: key, SessionID: "thread-old"}); err != nil {
+		t.Fatal(err)
+	}
+	parser := newCodexAppServerSessionParser(config.AgentConfig{
+		Workspace: key.Workspace, Sandbox: "workspace-write",
+	}, "continue it", store, &key, "thread-old")
+	_, messages, err := parser.consume([]byte(`{"id":1,"result":{"userAgent":"fixture"}}`))
+	if err != nil || len(messages) != 2 || !strings.Contains(fmt.Sprint(messages[1]), "thread/resume") ||
+		!strings.Contains(fmt.Sprint(messages[1]), "thread-old") {
+		t.Fatalf("Codex did not resume the stored thread: %#v, %v", messages, err)
+	}
+	_, messages, err = parser.consume([]byte(`{"id":2,"error":{"code":-32001,"message":"not found"}}`))
+	if err != nil || len(messages) != 1 || !strings.Contains(fmt.Sprint(messages[0]), "thread/start") ||
+		strings.Contains(fmt.Sprint(messages[0]), "ephemeral") {
+		t.Fatalf("Codex did not replace the missing thread: %#v, %v", messages, err)
+	}
+	if _, found, err := store.Load(key); err != nil || found {
+		t.Fatalf("stale Codex binding remained: found=%t err=%v", found, err)
+	}
+	consumeCodexFixture(t, parser, `{"id":2,"result":{"thread":{"id":"thread-new","ephemeral":false}}}`)
+	binding, found, err := store.Load(key)
+	if err != nil || !found || binding.SessionID != "thread-new" {
+		t.Fatalf("replacement Codex thread was not persisted: %#v found=%t err=%v", binding, found, err)
 	}
 }
 
@@ -180,10 +241,13 @@ func TestCodexAdapterClassifiesExitWithoutLeakingStderr(t *testing.T) {
 func TestCodexHelperProcess(t *testing.T) {
 	switch os.Getenv("AGENTROOM_CODEX_HELPER") {
 	case "success":
-		runCodexAppServerFixture(t, true)
+		runCodexAppServerFixture(t, true, "thread/start", true)
+		return
+	case "resume":
+		runCodexAppServerFixture(t, true, "thread/resume", false)
 		return
 	case "hang":
-		runCodexAppServerFixture(t, false)
+		runCodexAppServerFixture(t, false, "thread/start", true)
 		return
 	case "malformed":
 		fmt.Println(`not-json`)
@@ -196,7 +260,7 @@ func TestCodexHelperProcess(t *testing.T) {
 	}
 }
 
-func runCodexAppServerFixture(t *testing.T, complete bool) {
+func runCodexAppServerFixture(t *testing.T, complete bool, expectedOpen string, expectedEphemeral bool) {
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 	for scanner.Scan() {
@@ -217,9 +281,14 @@ func runCodexAppServerFixture(t *testing.T, complete bool) {
 				Sandbox        string `json:"sandbox"`
 				ApprovalPolicy string `json:"approvalPolicy"`
 				Ephemeral      bool   `json:"ephemeral"`
+				ThreadID       string `json:"threadId"`
 			}
-			if json.Unmarshal(request.Params, &params) != nil || params.Cwd == "" ||
-				params.Sandbox != "workspace-write" || params.ApprovalPolicy != "never" || !params.Ephemeral {
+			if request.Method != expectedOpen || json.Unmarshal(request.Params, &params) != nil ||
+				params.Cwd == "" || params.Sandbox != "workspace-write" ||
+				params.ApprovalPolicy != "never" || params.Ephemeral != expectedEphemeral {
+				os.Exit(3)
+			}
+			if expectedOpen == "thread/resume" && params.ThreadID != "019d-thread" {
 				os.Exit(3)
 			}
 			_ = encoder.Encode(map[string]any{"id": 2, "result": map[string]any{

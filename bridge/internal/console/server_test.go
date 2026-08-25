@@ -272,7 +272,7 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		loaded.Agents[0].Sandbox != "read-only" {
 		t.Fatalf("unexpected Codex command: %#v", loaded.Agents[0].Command)
 	}
-	if strings.Join(loaded.Agents[1].Command[1:], " ") != "--mode json --print --no-session" {
+	if strings.Join(loaded.Agents[1].Command[1:], " ") != "--mode json --print" {
 		t.Fatalf("unexpected Pi command: %#v", loaded.Agents[1].Command)
 	}
 	if !contains(loaded.Agents[1].EnvAllowlist, "ANTHROPIC_API_KEY") {
@@ -904,7 +904,7 @@ func TestAgentEditPreservesOwnerControlledPiPolicy(t *testing.T) {
 		t.Fatal(err)
 	}
 	if strings.Join(persisted.Agents[0].Command[1:], " ") !=
-		"--mode json --print --no-session --approve --tools read,grep,find,ls" {
+		"--mode json --print --approve --tools read,grep,find,ls" {
 		t.Fatalf("Pi edit changed owner-controlled policy: %#v", persisted.Agents[0].Command)
 	}
 }

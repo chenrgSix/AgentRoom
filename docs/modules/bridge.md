@@ -230,6 +230,15 @@ raw hidden reasoning, structured commands, arguments, tool output, and approval
 requests remain local. Pi version 3 presets receive only the shared version
 marker update and retain their owner-controlled command arguments.
 
+`ADP-011` advances managed Runtime presets to version 5. Codex now stores one
+opaque App Server Thread binding per Room, Agent, and workspace under `dataDir`
+and resumes it on later Runs; a stale binding falls back once to a fresh persisted
+Thread. Pi removes `--no-session` and conflicting session selectors from the
+managed preset, then receives a stable Room-Agent-workspace `--session-id` and bounded local
+display name at execution. Runtime probes remain explicitly ephemeral. The
+Bridge publishes `supportsResume` only for these managed adapters, while the
+central service still cannot alter local tools, approval, or sandbox policy.
+
 `ADP-009` adds an optional `outputProtocol` field only for owner-authored
 Generic Runtime configurations. Omitting it preserves bounded, final-only
 stdout behavior. Selecting `agentroom-jsonl-v1` opts the Runtime into the

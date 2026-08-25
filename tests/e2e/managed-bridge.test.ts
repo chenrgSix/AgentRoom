@@ -82,6 +82,10 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     const piHelperPath = path.join(directory, "pi-helper.mjs");
     await writeFile(piHelperPath, [
       `const reply = ${JSON.stringify(piReply)};`,
+      "const sessionIndex = process.argv.indexOf('--session-id');",
+      "const nameIndex = process.argv.indexOf('--name');",
+      "if (sessionIndex < 0 || !/^[0-9a-f-]{36}$/.test(process.argv[sessionIndex + 1] ?? '') ||",
+      "    nameIndex < 0 || !(process.argv[nameIndex + 1] ?? '').startsWith('AgentRoom · Pi Builder · ')) process.exit(2);",
       "const send = (event) => process.stdout.write(`${JSON.stringify(event)}\\n`);",
       "send({ type: 'message_start', message: { role: 'assistant', content: [] } });",
       `send({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: ${JSON.stringify(`${piReasoning} token=split`)} } });`,
@@ -210,10 +214,12 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
         agentId: string;
         name: string;
         presence: string;
+        capabilities: { supportsResume: boolean };
       }>).find((candidate) =>
         candidate.name === "Pi Builder" && candidate.presence === "ready"
       );
     });
+    assert.equal(piAgent.capabilities.supportsResume, true);
     const piSent = await app.inject({
       method: "POST", url: `/api/rooms/${roomId}/messages`, headers: authorization,
       payload: { content: "Stream through real Bridge", mentionAgentId: piAgent.agentId }

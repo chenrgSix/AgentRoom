@@ -197,7 +197,7 @@ func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) 
 		t.Fatalf("Pi owner fields changed during migration: %#v", pi)
 	}
 	if pi.RuntimeKind != "pi" || pi.PresetVersion != CurrentPresetVersion ||
-		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-session --approve" {
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --approve" {
 		t.Fatalf("legacy Pi transport changed owner permissions: %#v", pi)
 	}
 	onDisk, err := os.ReadFile(path)
@@ -220,7 +220,7 @@ func TestMigrateUpgradesVersionOnePiPresetAndKeepsLocalPolicy(t *testing.T) {
 	}
 	pi := configuration.Agents[0]
 	if pi.PresetVersion != CurrentPresetVersion ||
-		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-session --no-tools" {
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-tools" {
 		t.Fatalf("version one Pi preset was not upgraded: %#v", pi)
 	}
 }
@@ -241,7 +241,7 @@ func TestMigrateVersionThreeCodexPresetKeepsOwnerSandbox(t *testing.T) {
 	}
 }
 
-func TestMigrateVersionThreePiPresetOnlyAdvancesMarker(t *testing.T) {
+func TestMigrateVersionThreePiPresetPreservesCustomTransport(t *testing.T) {
 	command := []string{"/custom/pi-protocol-helper", "--owner-flag", "custom value"}
 	configuration, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion, Agents: []AgentConfig{{
 		Name: "Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi", PresetVersion: 3,
@@ -252,7 +252,7 @@ func TestMigrateVersionThreePiPresetOnlyAdvancesMarker(t *testing.T) {
 	}
 	pi := configuration.Agents[0]
 	if pi.PresetVersion != CurrentPresetVersion || !slices.Equal(pi.Command, command) {
-		t.Fatalf("version three Pi command changed during marker-only migration: %#v", pi)
+		t.Fatalf("version three Pi custom transport changed during migration: %#v", pi)
 	}
 }
 
@@ -270,8 +270,49 @@ func TestMigrateVersionTwoPiPresetDropsProductRestrictionsOnly(t *testing.T) {
 	}
 	pi := configuration.Agents[0]
 	if pi.PresetVersion != CurrentPresetVersion ||
-		strings.Join(pi.Command[1:], " ") != "--mode json --print --no-session --approve --tools read,grep" {
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --approve --tools read,grep" {
 		t.Fatalf("version two Pi restrictions were not retired safely: %#v", pi)
+	}
+}
+
+func TestMigrateVersionFourPiPresetReplacesConflictingSessionFlags(t *testing.T) {
+	configuration, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion, Agents: []AgentConfig{{
+		Name: "Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi", PresetVersion: 4,
+		Command: []string{
+			"/usr/local/bin/pi", "--mode", "json", "--print", "--no-session",
+			"--session-id", "owner-session", "--name=Owner session", "--approve",
+		},
+		Workspace: t.TempDir(),
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pi := configuration.Agents[0]
+	if pi.PresetVersion != CurrentPresetVersion ||
+		strings.Join(pi.Command[1:], " ") != "--mode json --print --approve" {
+		t.Fatalf("version four Pi session flags were not replaced safely: %#v", pi)
+	}
+}
+
+func TestMigrateVersionFourPiPresetPreservesArgumentsAfterOptionTerminator(t *testing.T) {
+	command := []string{
+		"/custom/pi-helper", "--mode", "json", "--print", "--no-session",
+		"--", "--session-id", "helper-value", "--name=Helper value",
+	}
+	configuration, err := Migrate(Config{SchemaVersion: CurrentSchemaVersion, Agents: []AgentConfig{{
+		Name: "Pi", Role: "Reviewer", Adapter: "generic", RuntimeKind: "pi", PresetVersion: 4,
+		Command: command, Workspace: t.TempDir(),
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pi := configuration.Agents[0]
+	expected := []string{
+		"/custom/pi-helper", "--mode", "json", "--print",
+		"--", "--session-id", "helper-value", "--name=Helper value",
+	}
+	if !slices.Equal(pi.Command, expected) {
+		t.Fatalf("Pi helper arguments after -- changed during migration: %#v", pi.Command)
 	}
 }
 

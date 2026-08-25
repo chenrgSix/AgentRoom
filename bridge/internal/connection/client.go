@@ -42,6 +42,7 @@ type Client struct {
 	Observer            operations.Observer
 	RetryInitial        time.Duration
 	RetryMaximum        time.Duration
+	ResumeAgentNames    map[string]bool
 	StreamingAgentNames map[string]bool
 }
 
@@ -162,7 +163,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			InvocationMode:    contracts.Managed,
 			SupportsHandoff:   false,
 			SupportsInterrupt: true,
-			SupportsResume:    false,
+			SupportsResume:    c.ResumeAgentNames[configured.Name],
 			SupportsStart:     true,
 			SupportsStreaming: c.StreamingAgentNames[configured.Name],
 		}

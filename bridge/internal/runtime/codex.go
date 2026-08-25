@@ -10,13 +10,14 @@ import (
 )
 
 type CodexAdapter struct {
-	Config config.AgentConfig
+	Config   config.AgentConfig
+	Sessions RuntimeSessionStore
 }
 
 func (c CodexAdapter) Name() string { return "codex" }
 
 func (c CodexAdapter) Capabilities() Capabilities {
-	return Capabilities{SupportsStreaming: true, SupportsInterrupt: true}
+	return Capabilities{SupportsResume: true, SupportsStreaming: true, SupportsInterrupt: true}
 }
 
 func (c CodexAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) error {

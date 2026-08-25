@@ -131,14 +131,17 @@ Use `--workspace`, `--agent-name`, `--device-name`, or `--codex` to override
 detected values. Existing configuration or credential files are never
 overwritten.
 
-Managed Codex preset version 4 starts the customer's local
+Managed Codex preset version 5 starts the customer's local
 `codex app-server --listen stdio://` with the configured workspace and
 `read-only` or `workspace-write` sandbox. The Bridge publishes bounded
 `item/agentMessage/delta` previews and keeps the completed Agent message as the
 authoritative Room reply. It never adds approval bypass flags. Official
 reasoning-summary activity and allowlisted tool name/lifecycle may cross, while raw hidden
 reasoning, structured commands, arguments, tool output, and interactive approval
-requests remain local.
+requests remain local. One persisted App Server Thread is retained per Room,
+Agent, and workspace; later Runs resume it, while a rejected stale binding is
+replaced once with a fresh Thread. Opaque Thread bindings live under `dataDir`
+with owner-only permissions.
 
 `serverUrl` must use HTTPS except for loopback development. Each Agent declares
 an adapter, argument-array command, absolute workspace, and environment variable
@@ -174,13 +177,12 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
   "role": "Reviewer",
   "adapter": "generic",
   "runtimeKind": "pi",
-  "presetVersion": 4,
+  "presetVersion": 5,
   "command": [
     "/absolute/path/to/pi",
     "--mode",
     "json",
-    "--print",
-    "--no-session"
+    "--print"
   ],
   "workspace": "/absolute/path/to/project",
   "envAllowlist": ["HOME", "PATH", "PI_CODING_AGENT_DIR"]
@@ -205,8 +207,10 @@ summary deltas and tool name/lifecycle appear as safe activity; usage,
 structured tool records, arguments/results, and provider protocol remain local. It fails safely
 if a provider leaks raw tool-call markup. Explicit
 Runtime self-tests temporarily disable Pi tools and project-local resources;
-normal Team tasks retain the owner's policy. Pi is remotely wakeable through
-the Bridge but does not claim persistent session resume.
+normal Team tasks retain the owner's policy and append to one native Pi session
+per Room, Agent, and workspace through a stable `--session-id`. The probe alone adds
+`--no-session`, so it remains ephemeral. Pi is remotely wakeable through the
+Bridge and publishes persistent resume capability.
 Add only the credential environment variable actually required by the selected
 Pi provider; do not copy the full parent environment.
 

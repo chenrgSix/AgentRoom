@@ -42,12 +42,14 @@ numeric exit code, and stderr-presence flag. The central service applies the
 same three-field allowlist before Run-event persistence; raw stderr and unknown
 detail keys never cross that boundary.
 Pi uses a dedicated live parser over its non-interactive JSON event stream.
-Preset version 3 owns only the
-`--mode json`, `--print`, and `--no-session` transport and lifecycle flags;
+Preset version 5 owns only the
+`--mode json` and `--print` transport flags plus the per-Run session selector;
 tools, extensions, Skills, project context, and approval remain governed by the
 owner's local Pi configuration and explicit local arguments. Bridge migration
 removes the product-authored restrictions from preset version 2 while retaining
-other owner-authored arguments from older configurations. Pi assistant
+other owner-authored arguments from older configurations, and removes conflicting
+owner session selectors before the Bridge adds a stable `--session-id` derived
+from the Room, Agent identity, and workspace. Pi assistant
 `text_delta` events feed a bounded provisional preview. Explicit
 `thinking_delta`/`reasoning_delta` summary text and tool execution name/phase
 feed the separate activity stream; usage, structured command/tool records,
@@ -61,12 +63,19 @@ partial credentials or the private `agentroom-assessment` envelope from
 crossing a chunk boundary. Malformed JSON, a missing assistant reply, or
 provider-specific raw tool-call markup fails the Run with
 `RUNTIME_PROTOCOL_INVALID`; none of that raw stdout is published to the Room.
-Pi does not gain resume or remote session claims, and the central service cannot
-raise local Runtime permissions.
+Normal managed Runs therefore append to one native Pi session per Room, Agent, and workspace
+across Bridge restarts. The session receives a bounded local display name; Pi's
+own session directory and provider configuration remain owner-controlled. The
+explicit Runtime probe still adds `--no-session`, so diagnostics never pollute
+normal history. Unscoped Codex probes likewise use an ephemeral Thread. The
+central service cannot raise local Runtime permissions.
 
-Codex preset version 4 uses the local Codex App Server over JSONL stdio. The
-Bridge initializes one ephemeral Thread per Run in the fixed owner-selected
-workspace, passes the owner-selected `read-only` or `workspace-write` sandbox,
+Codex preset version 5 uses the local Codex App Server over JSONL stdio. The
+Bridge creates one persisted Thread per Room and Agent in the fixed owner-selected
+workspace, records only its opaque Thread id under the owner-only Bridge data
+directory, and calls `thread/resume` on later Runs. A missing or invalid stored
+Thread is discarded and replaced once with a fresh persisted Thread. The Bridge
+passes the owner-selected `read-only` or `workspace-write` sandbox,
 and uses `approvalPolicy: never` so a remote Team message cannot escalate local
 permissions. It publishes `item/agentMessage/delta`, resets provisional
 output when Codex starts a new Agent message after a tool boundary, and treats
@@ -125,9 +134,9 @@ Runtime, owns the resulting continue/finish decision.
 ## Verification and Tasks
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
-startup, streaming, activity, named context, cancellation, crash, recovery,
+startup, native session resume, streaming, activity, named context, cancellation, crash, recovery,
 and local permission inheritance. Work is tracked by `ADP-001` through
-`ADP-010` and `BRG-023`/`BRG-027` in
+`ADP-011` and `BRG-023`/`BRG-027` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one

@@ -67,6 +67,7 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 		},
 		BridgeVersion:       "test",
 		HeartbeatInterval:   10 * time.Millisecond,
+		ResumeAgentNames:    map[string]bool{"Builder": true},
 		StreamingAgentNames: map[string]bool{"Builder": true},
 	}
 	done := make(chan error, 1)
@@ -82,8 +83,8 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 		t.Fatalf("unexpected publication payload: %#v", publication)
 	}
 	capabilities, ok := payload["capabilities"].(map[string]any)
-	if !ok || capabilities["supportsStreaming"] != true {
-		t.Fatalf("streaming capability was not published: %#v", publication)
+	if !ok || capabilities["supportsStreaming"] != true || capabilities["supportsResume"] != true {
+		t.Fatalf("Runtime capabilities were not published: %#v", publication)
 	}
 	cancel()
 	select {

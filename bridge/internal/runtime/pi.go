@@ -3,6 +3,7 @@ package runtime
 import (
 	"bufio"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,7 +35,7 @@ type PiAdapter struct {
 func (p PiAdapter) Name() string { return "pi" }
 
 func (p PiAdapter) Capabilities() Capabilities {
-	return Capabilities{SupportsStreaming: true, SupportsInterrupt: true}
+	return Capabilities{SupportsResume: true, SupportsStreaming: true, SupportsInterrupt: true}
 }
 
 func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) error {
@@ -50,7 +51,16 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 	defer cancelDeadline()
 	processContext, cancelProcess := context.WithCancel(runContext)
 	defer cancelProcess()
-	command := exec.CommandContext(processContext, p.Config.Command[0], p.Config.Command[1:]...)
+	commandArguments := append([]string(nil), p.Config.Command[1:]...)
+	if p.Config.RuntimeKind == "pi" && p.Config.PresetVersion >= config.CurrentPresetVersion &&
+		request.Run.RoomID != "" && request.Run.TargetAgentID != "" {
+		commandArguments = insertPiSessionArguments(
+			commandArguments,
+			"--session-id", piSessionID(request.Run.RoomID, request.Run.TargetAgentID, p.Config.Workspace),
+			"--name", piSessionName(request.Run),
+		)
+	}
+	command := exec.CommandContext(processContext, p.Config.Command[0], commandArguments...)
 	configureRuntimeCommand(command)
 	command.Dir = p.Config.Workspace
 	command.Env = allowedEnvironment(p.Config.EnvAllowlist)
@@ -223,6 +233,44 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 	}
 	completed := contracts.Completed
 	return emit(ctx, Event{Status: &completed})
+}
+
+func insertPiSessionArguments(arguments []string, sessionArguments ...string) []string {
+	for index, argument := range arguments {
+		if argument == "--" {
+			result := make([]string, 0, len(arguments)+len(sessionArguments))
+			result = append(result, arguments[:index]...)
+			result = append(result, sessionArguments...)
+			return append(result, arguments[index:]...)
+		}
+	}
+	return append(arguments, sessionArguments...)
+}
+
+func piSessionID(roomID, agentID, workspace string) string {
+	digest := sha256.Sum256([]byte(
+		"agentroom/pi/v1\x00" + roomID + "\x00" + agentID + "\x00" + workspace,
+	))
+	digest[6] = (digest[6] & 0x0f) | 0x50
+	digest[8] = (digest[8] & 0x3f) | 0x80
+	return fmt.Sprintf(
+		"%x-%x-%x-%x-%x",
+		digest[0:4], digest[4:6], digest[6:8], digest[8:10], digest[10:16],
+	)
+}
+
+func piSessionName(run contracts.RunRequestedPayload) string {
+	name := "Agent"
+	if run.TargetAgentName != nil && strings.TrimSpace(*run.TargetAgentName) != "" {
+		name = strings.Join(strings.Fields(*run.TargetAgentName), " ")
+	}
+	roomDigest := sha256.Sum256([]byte(run.RoomID))
+	value := fmt.Sprintf("AgentRoom · %s · %x", name, roomDigest[:4])
+	runes := []rune(value)
+	if len(runes) > 120 {
+		value = string(runes[:120])
+	}
+	return value
 }
 
 func emitPiStartFailure(ctx context.Context, emit EmitFunc) error {

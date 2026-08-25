@@ -17,15 +17,19 @@ The adapter consumes newline-delimited events and recognizes this minimum
 additive contract:
 
 1. `initialize` / `initialized` establishes the local client connection.
-2. `thread/start` creates an ephemeral Thread in the configured workspace and
-   owner-selected sandbox with remote escalation disabled.
-3. `turn/start` submits the bounded Run instruction.
-4. `item/agentMessage/delta` supplies safe provisional assistant text.
-5. `item/reasoning/summaryTextDelta` supplies an official public reasoning
+2. `thread/start` creates a persisted Thread in the configured workspace and
+   owner-selected sandbox with remote escalation disabled. The Bridge stores the
+   opaque Thread id under its owner-only data directory.
+3. Later Runs for the same Room, Agent, and workspace call `thread/resume`. A
+   rejected stale binding is removed and retried once with `thread/start`.
+   An unscoped Bridge Runtime probe instead starts an ephemeral Thread.
+4. `turn/start` submits the bounded Run instruction.
+5. `item/agentMessage/delta` supplies safe provisional assistant text.
+6. `item/reasoning/summaryTextDelta` supplies an official public reasoning
    summary; supported tool items supply only their name/category and lifecycle.
-6. `item/completed` with `item.type = agentMessage` supplies the authoritative
+7. `item/completed` with `item.type = agentMessage` supplies the authoritative
    latest reply.
-7. `turn/completed` confirms a known terminal outcome; a failed or interrupted
+8. `turn/completed` confirms a known terminal outcome; a failed or interrupted
    status produces a safe failed Run.
 
 Unknown event types are ignored for forward compatibility. Malformed JSON,
@@ -44,9 +48,10 @@ and other App Server events remain local.
 
 ## Lifecycle Limits
 
-Context cancellation interrupts the App Server process group. Session resume,
+Context cancellation interrupts the App Server process group. Native Thread
+resume is advertised; attaching an arbitrary pre-existing user Thread,
 interactive approval forwarding, structured artifacts, and handoff are not
-advertised in this baseline. App Server requests that require local user input
+supported in this baseline. App Server requests that require local user input
 receive a protocol error and are never approved remotely. If this contract
 fails against a later Codex version, the Run fails closed while the generated
 schema and pinned parser fixtures are updated.
@@ -59,7 +64,7 @@ Example Bridge Agent configuration:
   "role": "Codex implementer",
   "adapter": "codex",
   "runtimeKind": "codex",
-  "presetVersion": 4,
+  "presetVersion": 5,
   "command": ["codex", "app-server", "--listen", "stdio://"],
   "workspace": "/absolute/path/to/repository",
   "sandbox": "workspace-write",

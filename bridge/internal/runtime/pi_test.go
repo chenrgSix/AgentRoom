@@ -3,14 +3,21 @@ package runtime
 import (
 	"context"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"agentroom.dev/bridge/internal/config"
 	contracts "agentroom.dev/contracts/generated/go"
+)
+
+var (
+	piHelperSessionID   = flag.String("session-id", "", "Pi helper session id")
+	piHelperSessionName = flag.String("name", "", "Pi helper session name")
 )
 
 func TestPiAdapterExtractsFinalAssistantReplyAndAssessment(t *testing.T) {
@@ -69,7 +76,7 @@ func TestPiAdapterProjectsExplicitThinkingDeltas(t *testing.T) {
 func TestPiAdapterEmitsPreviewBeforeFinalReply(t *testing.T) {
 	t.Setenv("AGENTROOM_PI_HELPER", "stream")
 	adapter := PiAdapter{Config: config.AgentConfig{
-		Command:   []string{os.Args[0], "-test.run=TestPiHelperProcess"},
+		Command:   []string{os.Args[0], "-test.run=TestPiHelperProcess", "--"},
 		Workspace: t.TempDir(), EnvAllowlist: []string{"AGENTROOM_PI_HELPER"},
 	}}
 	var previewAt time.Time
@@ -90,7 +97,63 @@ func TestPiAdapterEmitsPreviewBeforeFinalReply(t *testing.T) {
 	}
 }
 
+func TestPiAdapterUsesStableRoomAgentSession(t *testing.T) {
+	t.Setenv("AGENTROOM_PI_HELPER", "session")
+	workspace := t.TempDir()
+	t.Setenv("AGENTROOM_PI_WORKSPACE", workspace)
+	name := "我的 Pi"
+	adapter := PiAdapter{Config: config.AgentConfig{
+		Command:   []string{os.Args[0], "-test.run=TestPiHelperProcess"},
+		Workspace: workspace, EnvAllowlist: []string{"AGENTROOM_PI_HELPER", "AGENTROOM_PI_WORKSPACE"},
+		RuntimeKind: "pi", PresetVersion: config.CurrentPresetVersion,
+	}}
+	request := Request{Run: contracts.RunRequestedPayload{
+		RoomID: "room_alpha", TargetAgentID: "agent_pi", TargetAgentName: &name,
+	}}
+	var reply string
+	if err := adapter.Execute(context.Background(), request, func(_ context.Context, event Event) error {
+		if event.Reply != "" {
+			reply = event.Reply
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if reply != "Session resumed." {
+		t.Fatalf("unexpected Pi session reply: %q", reply)
+	}
+	first := piSessionID("room_alpha", "agent_pi", workspace)
+	if first != piSessionID("room_alpha", "agent_pi", workspace) ||
+		first == piSessionID("room_beta", "agent_pi", workspace) ||
+		first == piSessionID("room_alpha", "agent_other", workspace) ||
+		first == piSessionID("room_alpha", "agent_pi", t.TempDir()) {
+		t.Fatalf("Pi session identity is not stable and scoped: %q", first)
+	}
+}
+
+func TestInsertPiSessionArgumentsPrecedesOptionTerminator(t *testing.T) {
+	arguments := insertPiSessionArguments(
+		[]string{"--mode", "json", "--", "literal-message"},
+		"--session-id", "session-id",
+	)
+	expected := []string{"--mode", "json", "--session-id", "session-id", "--", "literal-message"}
+	if !slices.Equal(arguments, expected) {
+		t.Fatalf("Pi session selector was not inserted before --: %#v", arguments)
+	}
+}
+
 func TestPiHelperProcess(t *testing.T) {
+	if os.Getenv("AGENTROOM_PI_HELPER") == "session" {
+		expectedID := piSessionID("room_alpha", "agent_pi", os.Getenv("AGENTROOM_PI_WORKSPACE"))
+		expectedName := piSessionName(contracts.RunRequestedPayload{
+			RoomID: "room_alpha", TargetAgentName: stringPointer("我的 Pi"),
+		})
+		if *piHelperSessionID != expectedID || *piHelperSessionName != expectedName {
+			os.Exit(3)
+		}
+		fmt.Println(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Session resumed."}],"stopReason":"stop"}}`)
+		os.Exit(0)
+	}
 	if os.Getenv("AGENTROOM_PI_HELPER") != "stream" {
 		return
 	}
@@ -106,6 +169,10 @@ func TestPiHelperProcess(t *testing.T) {
 	fmt.Println(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":` +
 		string(encoded) + `}],"stopReason":"stop"}}`)
 	os.Exit(0)
+}
+
+func stringPointer(value string) *string {
+	return &value
 }
 
 func TestPiStreamParserBatchesTextAndResetsAfterToolUse(t *testing.T) {
