@@ -81,6 +81,11 @@ every Bridge Run event starts with sequence 1. `run.cancel_requested` is the
 server-to-Bridge interrupt command required by the documented cancellation
 flow.
 
+`WSP-001` adds optional opaque `workspaceRef` and `workspaceGeneration` fields
+to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free
+comparison identities, not Runtime scope IDs or permission grants. Older
+Bridges omit them and remain limited to reference-only Artifact evidence.
+
 `run.output_delta` is a Bridge-to-server preview event. It carries one bounded
 text addition and an optional `reset` flag within the same strict Run event
 sequence used by status and reply events. A reset replaces the provisional

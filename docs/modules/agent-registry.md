@@ -45,6 +45,8 @@ credential or queued managed work.
 - `managed` requires an active Bridge and an Adapter that supports start.
 - `manual` may exist without an active Bridge.
 - Capabilities are validated against the Contracts schema.
+- A managed Agent that advertises Workspace leases must also publish one opaque
+  Workspace reference and observed generation; neither may contain a path.
 - Disabled or revoked Agents remain addressable in history but cannot receive
   new Runs.
 

@@ -1,7 +1,7 @@
 # Workspace Coordination Module
 
 - Prefix: `WSP`
-- Planned implementation: `apps/server/src/workspace/` and
+- Implementation: `apps/server/src/workspace/`, migration 0035, and
   `bridge/internal/workspace/`
 - Owns: opaque Workspace identity, generation snapshots, and Run-scoped access
   leases
@@ -58,7 +58,7 @@ are rejected locally. Logs expose only lease and opaque scope IDs.
 
 ## Task Mapping
 
-`WSP-001` defines and implements the first `read_source` lease. Write and
+`WSP-001` implements the first `read_source` lease. Write and
 worktree modes remain contract-reserved until a later Scheduler milestone.
 
 ## Dependencies

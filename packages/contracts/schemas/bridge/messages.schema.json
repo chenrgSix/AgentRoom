@@ -264,6 +264,14 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
+    "workspaceRef": {
+      "type": "string",
+      "pattern": "^workspace_[0-9a-f]{64}$"
+    },
+    "workspaceGeneration": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "connectionEpoch": {
       "type": "integer",
       "minimum": 1
@@ -516,6 +524,9 @@
         },
         "supportsRoomContextCoverage": {
           "type": "boolean"
+        },
+        "supportsWorkspaceLeases": {
+          "type": "boolean"
         }
       },
       "allOf": [
@@ -632,6 +643,12 @@
         },
         "runtimeScopeId": {
           "$ref": "#/$defs/runtimeScopeId"
+        },
+        "workspaceRef": {
+          "$ref": "#/$defs/workspaceRef"
+        },
+        "workspaceGeneration": {
+          "$ref": "#/$defs/workspaceGeneration"
         }
       }
     },

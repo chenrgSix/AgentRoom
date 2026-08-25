@@ -226,8 +226,16 @@ export function registerBridgeSocketRoutes({
               supportsStart: capabilities.supportsStart === true,
               supportsStreaming: capabilities.supportsStreaming === true,
               supportsRoomContextCoverage:
-                capabilities.supportsRoomContextCoverage === true
+                capabilities.supportsRoomContextCoverage === true,
+              supportsWorkspaceLeases:
+                capabilities.supportsWorkspaceLeases === true
             },
+            ...(typeof message.payload.workspaceRef === "string"
+              ? { workspaceRef: message.payload.workspaceRef }
+              : {}),
+            ...(typeof message.payload.workspaceGeneration === "string"
+              ? { workspaceGeneration: message.payload.workspaceGeneration }
+              : {}),
             now: clock()
           });
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);

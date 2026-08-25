@@ -166,13 +166,16 @@
           "name": "Bob",
           "role": "Backend",
           "runtimeScopeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "workspaceGeneration": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           "capabilities": {
             "invocationMode": "managed",
             "supportsStart": true,
             "supportsResume": true,
             "supportsStreaming": true,
             "supportsInterrupt": true,
-            "supportsHandoff": true
+            "supportsHandoff": true,
+            "supportsWorkspaceLeases": true
           }
         }
       },
@@ -469,6 +472,12 @@
       "name": "Runtime scope rejects a non-digest value",
       "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/runtimeScopeId",
       "instance": "scope-short",
+      "valid": false
+    },
+    {
+      "name": "Workspace reference rejects a local path",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/workspaceRef",
+      "instance": "/Users/alice/project",
       "valid": false
     },
     {

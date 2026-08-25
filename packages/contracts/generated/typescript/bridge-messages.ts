@@ -136,14 +136,16 @@ export interface AgentPublishMessage {
 }
 
 export interface AgentPublishPayload {
-  agentId:         string;
-  capabilities:    Capabilities;
-  deviceId:        string;
-  name:            string;
-  ownerMemberId:   string;
-  role:            string;
-  runtimeScopeId?: string;
-  teamId:          string;
+  agentId:              string;
+  capabilities:         Capabilities;
+  deviceId:             string;
+  name:                 string;
+  ownerMemberId:        string;
+  role:                 string;
+  runtimeScopeId?:      string;
+  teamId:               string;
+  workspaceGeneration?: string;
+  workspaceRef?:        string;
   [property: string]: unknown;
 }
 
@@ -155,6 +157,7 @@ export interface Capabilities {
   supportsRoomContextCoverage?: boolean;
   supportsStart:                boolean;
   supportsStreaming:            boolean;
+  supportsWorkspaceLeases?:     boolean;
   [property: string]: unknown;
 }
 

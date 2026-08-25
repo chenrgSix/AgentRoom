@@ -19,6 +19,8 @@ export interface PublishAgentInput {
   integrationMode: "managed" | "manual" | "fake";
   capabilities: AgentCapabilities;
   runtimeScopeId?: string | null;
+  workspaceRef?: string | null;
+  workspaceGeneration?: string | null;
   now: string;
 }
 
@@ -36,6 +38,21 @@ function validateCapabilities(input: PublishAgentInput): void {
     !/^[0-9a-f]{64}$/u.test(input.runtimeScopeId)
   ) {
     throw new Error("Runtime scope ID is invalid");
+  }
+  if (
+    (input.workspaceRef == null) !== (input.workspaceGeneration == null) ||
+    (input.workspaceRef != null &&
+      !/^workspace_[0-9a-f]{64}$/u.test(input.workspaceRef)) ||
+    (input.workspaceGeneration != null &&
+      !/^[0-9a-f]{64}$/u.test(input.workspaceGeneration))
+  ) {
+    throw new Error("Workspace snapshot identity is invalid");
+  }
+  if (
+    input.capabilities.supportsWorkspaceLeases === true &&
+    input.workspaceRef == null
+  ) {
+    throw new Error("Workspace lease capability requires a snapshot identity");
   }
   if (input.integrationMode === "managed" || input.integrationMode === "fake") {
     if (!input.deviceId || !input.capabilities.supportsStart) {
@@ -88,6 +105,8 @@ export class AgentService {
       integrationMode: input.integrationMode,
       capabilities: input.capabilities,
       runtimeScopeId: input.runtimeScopeId ?? null,
+      workspaceRef: input.workspaceRef ?? null,
+      workspaceGeneration: input.workspaceGeneration ?? null,
       enabled: true,
       presence: input.integrationMode === "manual" ? "manual" : "offline",
       createdAt: input.now,
@@ -113,6 +132,8 @@ export class AgentService {
       role: string;
       capabilities: AgentCapabilities;
       runtimeScopeId?: string;
+      workspaceRef?: string;
+      workspaceGeneration?: string;
       now: string;
     }
   ): AgentRecord {
@@ -127,6 +148,22 @@ export class AgentService {
       !/^[0-9a-f]{64}$/u.test(input.runtimeScopeId)
     ) {
       throw new Error("Bridge Runtime scope ID is invalid");
+    }
+    if (
+      (input.workspaceRef === undefined) !==
+        (input.workspaceGeneration === undefined) ||
+      (input.workspaceRef !== undefined &&
+        !/^workspace_[0-9a-f]{64}$/u.test(input.workspaceRef)) ||
+      (input.workspaceGeneration !== undefined &&
+        !/^[0-9a-f]{64}$/u.test(input.workspaceGeneration))
+    ) {
+      throw new Error("Bridge Workspace snapshot identity is invalid");
+    }
+    if (
+      input.capabilities.supportsWorkspaceLeases === true &&
+      input.workspaceRef === undefined
+    ) {
+      throw new Error("Bridge Workspace lease capability requires a snapshot");
     }
     const existing = this.repository.getAgent(input.agentId);
     if (
@@ -150,6 +187,9 @@ export class AgentService {
       integrationMode: "managed",
       capabilities: input.capabilities,
       runtimeScopeId: input.runtimeScopeId ?? existing?.runtimeScopeId ?? null,
+      workspaceRef: input.workspaceRef ?? existing?.workspaceRef ?? null,
+      workspaceGeneration: input.workspaceGeneration ??
+        existing?.workspaceGeneration ?? null,
       enabled: existing?.enabled ?? true,
       presence: existing?.enabled === false ? "offline" : "ready",
       createdAt: existing?.createdAt ?? input.now,

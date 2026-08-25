@@ -94,14 +94,16 @@ type AgentPublishMessage struct {
 }
 
 type AgentPublishPayload struct {
-	AgentID        string       `json:"agentId"`
-	Capabilities   Capabilities `json:"capabilities"`
-	DeviceID       string       `json:"deviceId"`
-	Name           string       `json:"name"`
-	OwnerMemberID  string       `json:"ownerMemberId"`
-	Role           string       `json:"role"`
-	RuntimeScopeID *string      `json:"runtimeScopeId,omitempty"`
-	TeamID         string       `json:"teamId"`
+	AgentID             string       `json:"agentId"`
+	Capabilities        Capabilities `json:"capabilities"`
+	DeviceID            string       `json:"deviceId"`
+	Name                string       `json:"name"`
+	OwnerMemberID       string       `json:"ownerMemberId"`
+	Role                string       `json:"role"`
+	RuntimeScopeID      *string      `json:"runtimeScopeId,omitempty"`
+	TeamID              string       `json:"teamId"`
+	WorkspaceGeneration *string      `json:"workspaceGeneration,omitempty"`
+	WorkspaceRef        *string      `json:"workspaceRef,omitempty"`
 }
 
 type Capabilities struct {
@@ -112,6 +114,7 @@ type Capabilities struct {
 	SupportsRoomContextCoverage *bool          `json:"supportsRoomContextCoverage,omitempty"`
 	SupportsStart               bool           `json:"supportsStart"`
 	SupportsStreaming           bool           `json:"supportsStreaming"`
+	SupportsWorkspaceLeases     *bool          `json:"supportsWorkspaceLeases,omitempty"`
 }
 
 // Fields shared by versioned cross-process messages.

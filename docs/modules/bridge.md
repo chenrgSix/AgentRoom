@@ -15,6 +15,8 @@ to local Runtime Adapters.
 - Request Team enrollment, store the approved credential, and establish the
   outbound channel.
 - Publish local Agents and Runtime capabilities.
+- Publish one path-free Workspace identity and observed generation for Agents
+  that support source-read leases.
 - Maintain heartbeat, connection epoch, and reconnect backoff.
 - Persist incoming deliveries before acknowledging them.
 - Deduplicate deliveries and forward each accepted Run exactly once locally.
@@ -101,6 +103,12 @@ incompatibility or revocation error.
 Only the newest authenticated epoch may deliver work. Reconnect uses capped
 exponential backoff with jitter, republishes capabilities, and resumes from the
 last acknowledged server cursor.
+
+For `WSP-001`, each managed Agent also publishes a stable opaque Workspace
+identity, an observed generation digest, and an additive Workspace-lease
+capability. The absolute configured Workspace remains local. The generation is
+attribution for the initial read-source lease; it is not yet the stronger Git or
+worktree CAS required for future automated writes.
 
 `GET /ws/bridge` authenticates the Device bearer credential before upgrade.
 Every connection must start with protocol `1.0` `bridge.hello`; a newer epoch

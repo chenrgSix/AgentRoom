@@ -63,6 +63,7 @@ export interface AgentCapabilities {
   supportsStart: boolean;
   supportsStreaming: boolean;
   supportsRoomContextCoverage?: boolean;
+  supportsWorkspaceLeases?: boolean;
 }
 
 export interface AgentRecord {
@@ -75,6 +76,8 @@ export interface AgentRecord {
   integrationMode: "managed" | "manual" | "fake";
   capabilities: AgentCapabilities;
   runtimeScopeId?: string | null;
+  workspaceRef?: string | null;
+  workspaceGeneration?: string | null;
   enabled: boolean;
   presence: "ready" | "busy" | "degraded" | "manual" | "offline";
   createdAt: string;

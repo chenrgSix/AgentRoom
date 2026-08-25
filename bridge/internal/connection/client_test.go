@@ -86,9 +86,19 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	if !ok || capabilities["supportsStreaming"] != true || capabilities["supportsResume"] != true {
 		t.Fatalf("Runtime capabilities were not published: %#v", publication)
 	}
+	if capabilities["supportsWorkspaceLeases"] != true {
+		t.Fatalf("Workspace lease capability was not published: %#v", publication)
+	}
 	runtimeScopeID, ok := payload["runtimeScopeId"].(string)
 	if !ok || len(runtimeScopeID) != 64 {
 		t.Fatalf("Runtime scope was not published: %#v", publication)
+	}
+	workspaceRef, workspaceRefOK := payload["workspaceRef"].(string)
+	workspaceGeneration, generationOK := payload["workspaceGeneration"].(string)
+	if !workspaceRefOK || !strings.HasPrefix(workspaceRef, "workspace_") ||
+		!generationOK || len(workspaceGeneration) != 64 ||
+		strings.Contains(workspaceRef, directory) || strings.Contains(workspaceGeneration, directory) {
+		t.Fatalf("opaque Workspace snapshot was not published safely: %#v", publication)
 	}
 	cancel()
 	select {

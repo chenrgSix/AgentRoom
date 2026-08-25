@@ -21,6 +21,7 @@ import (
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
 	bridgeruntime "agentroom.dev/bridge/internal/runtime"
+	"agentroom.dev/bridge/internal/workspace"
 	contracts "agentroom.dev/contracts/generated/go"
 	"github.com/coder/websocket"
 )
@@ -165,6 +166,10 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		if err != nil {
 			return false, fmt.Errorf("resolve Agent Runtime scope: %w", err)
 		}
+		workspaceSnapshot, err := workspace.Inspect(configured.Workspace)
+		if err != nil {
+			return false, fmt.Errorf("resolve Agent Workspace snapshot: %w", err)
+		}
 		capabilities := contracts.Capabilities{
 			InvocationMode:    contracts.Managed,
 			SupportsHandoff:   false,
@@ -176,20 +181,24 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		supportsRoomContextCoverage :=
 			c.RoomContextCoverageAgentNames[configured.Name]
 		capabilities.SupportsRoomContextCoverage = &supportsRoomContextCoverage
+		supportsWorkspaceLeases := true
+		capabilities.SupportsWorkspaceLeases = &supportsWorkspaceLeases
 		publication := contracts.AgentPublishMessage{
 			ProtocolVersion: "1.0",
 			MessageID:       newID("msg"),
 			Timestamp:       time.Now().UTC(),
 			Type:            contracts.AgentPublish,
 			Payload: contracts.AgentPublishPayload{
-				AgentID:        agentID,
-				Capabilities:   capabilities,
-				DeviceID:       c.Credential.DeviceID,
-				Name:           configured.Name,
-				OwnerMemberID:  c.Credential.OwnerMemberID,
-				Role:           configured.Role,
-				RuntimeScopeID: &runtimeScopeID,
-				TeamID:         c.Credential.TeamID,
+				AgentID:             agentID,
+				Capabilities:        capabilities,
+				DeviceID:            c.Credential.DeviceID,
+				Name:                configured.Name,
+				OwnerMemberID:       c.Credential.OwnerMemberID,
+				Role:                configured.Role,
+				RuntimeScopeID:      &runtimeScopeID,
+				WorkspaceRef:        &workspaceSnapshot.WorkspaceRef,
+				WorkspaceGeneration: &workspaceSnapshot.Generation,
+				TeamID:              c.Credential.TeamID,
 			},
 		}
 		if err := writer.writeJSON(ctx, publication); err != nil {
