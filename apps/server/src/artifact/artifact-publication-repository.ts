@@ -222,6 +222,22 @@ export class ArtifactPublicationRepository {
     return this.get(publicationId)!;
   }
 
+  public expireDueUploads(
+    teamId: string,
+    now: string
+  ): ArtifactPublicationRecord[] {
+    return this.transactions.immediate(() => {
+      const rows = this.database.prepare(`
+        UPDATE artifact_publications
+        SET state = 'expired', updated_at = ?
+        WHERE team_id = ? AND state IN ('prepared', 'receiving')
+          AND expires_at <= ?
+        RETURNING *
+      `).all(now, teamId, now) as ArtifactPublicationRow[];
+      return rows.map(mapPublication);
+    });
+  }
+
   public markFailed(
     publicationId: string,
     failureCode: string,

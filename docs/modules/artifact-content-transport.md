@@ -73,6 +73,11 @@ length, closing the rename-before-database crash window without allowing a
 known digest to bypass upload. Bind inserts one immutable Task Artifact and
 advances its revision in the same SQLite transaction that closes the
 publication.
+Before each new prepare, the Server atomically marks every due `prepared` or
+`receiving` operation for that Team as `expired`, then removes its final
+temporary entry without following symbolic links. Quota admission therefore
+counts only live uploads; an abandoned client cannot retain slots or declared
+bytes indefinitely.
 The bind transaction also appends the requested canonical relations. It rejects
 unknown, duplicate, cross-Task, cross-Room, self, or non-older targets before B
 becomes visible. A bound response-loss retry compares the requested relation

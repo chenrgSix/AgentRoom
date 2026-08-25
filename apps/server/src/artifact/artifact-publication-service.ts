@@ -109,6 +109,16 @@ export class ArtifactPublicationService {
     now: string
   ): ArtifactPublicationRecord {
     const normalized = this.validatePrepareInput(input);
+    const nowMilliseconds = Date.parse(now);
+    if (!Number.isFinite(nowMilliseconds)) {
+      throw new Error("Artifact publication time is invalid");
+    }
+    for (const expired of this.publications.expireDueUploads(
+      principal.teamId,
+      now
+    )) {
+      this.blobs.discardExpiredUpload(expired.tempStorageKey);
+    }
     const fingerprint = requestFingerprint(normalized);
     const retry = this.publications.getByIdempotency(
       principal.deviceId,
@@ -140,11 +150,6 @@ export class ArtifactPublicationService {
     const publicationId = createOpaqueId("publication");
     const tempStorageKey = `tmp/${publicationId}.upload`;
     this.blobs.ensureUpload(tempStorageKey);
-    const nowMilliseconds = Date.parse(now);
-    if (!Number.isFinite(nowMilliseconds)) {
-      this.blobs.discardUpload(tempStorageKey);
-      throw new Error("Artifact publication time is invalid");
-    }
     const record: ArtifactPublicationRecord = {
       publicationId,
       requestFingerprint: fingerprint,

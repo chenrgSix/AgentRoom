@@ -230,6 +230,17 @@ export class LocalArtifactBlobStore {
     this.syncDirectory(path.dirname(target));
   }
 
+  public discardExpiredUpload(storageKey: string): void {
+    const target = this.resolve(storageKey);
+    if (!existsSync(target)) return;
+    const info = lstatSync(target);
+    if (info.isDirectory()) {
+      throw new Error("Expired Artifact upload entry must not be a directory");
+    }
+    rmSync(target);
+    this.syncDirectory(path.dirname(target));
+  }
+
   private assertDigest(
     storageKey: string,
     expectedSha256: string,

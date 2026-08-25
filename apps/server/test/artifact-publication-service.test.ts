@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -145,7 +145,8 @@ async function createFixture() {
     runRepository,
     service,
     taskRepository,
-    transactions
+    transactions,
+    workspaceLeases
   };
 }
 
@@ -676,6 +677,37 @@ test("digest mismatch, expiry, symlink, and active-upload quota fail closed", as
       ),
       /quota exceeded/u
     );
+
+    const afterExpiry = "2026-08-25T10:16:00.000Z";
+    const renewedLease = fixture.workspaceLeases.issueReadSource(
+      fixture.principal,
+      {
+        runId: fixture.run.runId,
+        agentId: fixture.agent.agentId,
+        workspaceRef,
+        workspaceGeneration,
+        idempotencyKey: "idem_artifact_workspace_renewed_1234",
+        durationSeconds: 300
+      },
+      afterExpiry
+    );
+    const reclaimed = fixture.service.prepare(
+      fixture.principal,
+      {
+        ...prepareInput(
+          fixture,
+          Buffer.from("fresh"),
+          "idem_artifact_quota_reclaimed_12"
+        ),
+        leaseId: renewedLease.leaseId
+      },
+      afterExpiry
+    );
+    assert.equal(reclaimed.state, "prepared");
+    assert.equal(fixture.publications.activeUploadCount(linked.teamId), 1);
+    assert.equal(fixture.publications.reservedBytes(linked.teamId), 5);
+    assert.equal(fixture.publications.get(linked.publicationId)?.state, "expired");
+    await assert.rejects(lstat(temporaryPath), /ENOENT/u);
   } finally {
     fixture.database.close();
   }
