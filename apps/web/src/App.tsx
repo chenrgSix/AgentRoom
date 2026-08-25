@@ -227,6 +227,20 @@ interface AgentTask {
   updatedAt: string;
 }
 
+interface TaskClarification {
+  clarificationId: string;
+  taskId: string;
+  roomId: string;
+  requestingRunId: string;
+  targetAgentId: string;
+  question: string;
+  choices: string[];
+  state: "waiting" | "resumed" | "canceled";
+  questionMessageId: string;
+  answerMessageId: string | null;
+  continuationRunId: string | null;
+}
+
 interface LocalSession {
   userId: string;
   displayName: string;
@@ -828,6 +842,7 @@ export function App() {
   >({});
   const [discussions, setDiscussions] = useState<DiscussionView[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
+  const [clarifications, setClarifications] = useState<TaskClarification[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -855,6 +870,9 @@ export function App() {
   const [teamName, setTeamName] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskGoal, setTaskGoal] = useState("");
+  const [clarificationAnswers, setClarificationAnswers] = useState<
+    Record<string, string>
+  >({});
   const [roomName, setRoomName] = useState("");
   const [agentName, setAgentName] = useState("");
   const [manualAgentName, setManualAgentName] = useState("");
@@ -875,6 +893,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [teamBusy, setTeamBusy] = useState(false);
   const [taskBusy, setTaskBusy] = useState(false);
+  const [clarificationBusyId, setClarificationBusyId] = useState<string | null>(null);
   const [participantBusy, setParticipantBusy] = useState(false);
   const [composerBusy, setComposerBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -937,6 +956,9 @@ export function App() {
   const selectedTask = useMemo(
     () => tasks.find((task) => task.taskId === selectedTaskId) ?? null,
     [selectedTaskId, tasks]
+  );
+  const waitingClarifications = clarifications.filter(
+    ({ state }) => state === "waiting"
   );
   const selectedRoomPolicy = collaborationPolicyFor(selectedRoom);
   const agentsById = useMemo(
@@ -1435,6 +1457,8 @@ export function App() {
       diagnosticRequestsRef.current.clear();
       setDiscussions([]);
       setTasks([]);
+      setClarifications([]);
+      setClarificationAnswers({});
       setSelectedTaskId(null);
       messageSyncRef.current = null;
       return;
@@ -1455,6 +1479,8 @@ export function App() {
     setRunDiagnostics({});
     diagnosticRequestsRef.current.clear();
     setTasks([]);
+    setClarifications([]);
+    setClarificationAnswers({});
     setSelectedTaskId(null);
     void Promise.all([
       jsonRequest<RoomMessagePage>(
@@ -1520,6 +1546,26 @@ export function App() {
       stopped = true;
     };
   }, [selectedRoomId, session]);
+
+  useEffect(() => {
+    if (!session || !selectedTaskId) {
+      setClarifications([]);
+      return;
+    }
+    let stopped = false;
+    void jsonRequest<TaskClarification[]>(
+      `/api/tasks/${selectedTaskId}/clarifications`,
+      {},
+      session.token
+    ).then((nextClarifications) => {
+      if (!stopped) setClarifications(nextClarifications);
+    }).catch((reason: unknown) => {
+      if (!stopped) setError(String(reason));
+    });
+    return () => {
+      stopped = true;
+    };
+  }, [runs, selectedTaskId, session]);
 
   useEffect(() => {
     if (!session || !selectedTeamId || !selectedRoomId) return;
@@ -2115,6 +2161,44 @@ export function App() {
             state !== "completed" && state !== "canceled"
           )?.taskId ?? nextTasks[0]?.taskId ?? null
     );
+  }
+
+  async function answerTaskClarification(
+    event: FormEvent,
+    clarification: TaskClarification
+  ) {
+    event.preventDefault();
+    if (!session || clarificationBusyId) return;
+    const answer = clarificationAnswers[clarification.clarificationId]?.trim();
+    if (!answer) return;
+    setClarificationBusyId(clarification.clarificationId);
+    setError(null);
+    try {
+      const resumed = await jsonRequest<{
+        clarification: TaskClarification;
+        message: Message;
+        run: Run;
+      }>(
+        `/api/clarifications/${clarification.clarificationId}/answer`,
+        { method: "POST", body: JSON.stringify({ answer }) },
+        session.token
+      );
+      setClarifications((current) => current.map((item) =>
+        item.clarificationId === resumed.clarification.clarificationId
+          ? resumed.clarification
+          : item
+      ));
+      setClarificationAnswers((current) => {
+        const next = { ...current };
+        delete next[clarification.clarificationId];
+        return next;
+      });
+      await refreshRoomState();
+    } catch (reason) {
+      setError(String(reason));
+    } finally {
+      setClarificationBusyId(null);
+    }
   }
 
   async function submitComposer(event: FormEvent) {
@@ -3320,6 +3404,65 @@ export function App() {
                 )}
               </section>
             )}
+            {waitingClarifications.map((clarification) => {
+              const target = agentsById.get(clarification.targetAgentId);
+              const draft = clarificationAnswers[clarification.clarificationId] ?? "";
+              const isBusy = clarificationBusyId === clarification.clarificationId;
+              return (
+                <form
+                  className="task-clarification"
+                  key={clarification.clarificationId}
+                  onSubmit={(event) => void answerTaskClarification(event, clarification)}
+                >
+                  <div className="task-clarification-copy">
+                    <span className="task-clarification-label">
+                      {locale === "zh-CN" ? "任务信息待补充" : "Task clarification required"}
+                      {target ? ` · ${target.name}` : ""}
+                    </span>
+                    <strong>{clarification.question}</strong>
+                    <small>
+                      {locale === "zh-CN"
+                        ? "你的回答会作为房间消息写入当前任务，并在同一任务会话中继续；这不是本地权限审批。"
+                        : "Your answer becomes a Room message and continues the same Task session. It is not a local permission approval."}
+                    </small>
+                  </div>
+                  {clarification.choices.length > 0 && (
+                    <div className="task-clarification-choices">
+                      {clarification.choices.map((choice) => (
+                        <button
+                          aria-pressed={draft === choice}
+                          key={choice}
+                          onClick={() => setClarificationAnswers((current) => ({
+                            ...current,
+                            [clarification.clarificationId]: choice
+                          }))}
+                          type="button"
+                        >{choice}</button>
+                      ))}
+                    </div>
+                  )}
+                  <div className="task-clarification-answer">
+                    <textarea
+                      aria-label={locale === "zh-CN" ? "任务补充信息" : "Task clarification answer"}
+                      disabled={isBusy}
+                      onChange={(event) => setClarificationAnswers((current) => ({
+                        ...current,
+                        [clarification.clarificationId]: event.currentTarget.value
+                      }))}
+                      placeholder={locale === "zh-CN" ? "输入补充信息" : "Provide the missing information"}
+                      required
+                      rows={2}
+                      value={draft}
+                    />
+                    <button disabled={isBusy || !draft.trim()}>
+                      {isBusy
+                        ? (locale === "zh-CN" ? "继续中…" : "Resuming…")
+                        : (locale === "zh-CN" ? "回答并继续" : "Answer and resume")}
+                    </button>
+                  </div>
+                </form>
+              );
+            })}
             <form className="composer" onSubmit={(event) => void submitComposer(event)}>
               <div className="composer-input">
                 <div className="task-context">

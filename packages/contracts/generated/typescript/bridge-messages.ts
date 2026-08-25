@@ -355,10 +355,11 @@ export interface RunStatusMessage {
 }
 
 export interface RunStatusPayload {
-  agentId:  string;
-  runId:    string;
-  sequence: number;
-  traceId:  string;
+  agentId:        string;
+  runId:          string;
+  sequence:       number;
+  traceId:        string;
+  clarification?: TaskClarificationRequest;
   /**
    * Stable, client-safe error returned at a protocol boundary.
    */
@@ -366,6 +367,12 @@ export interface RunStatusPayload {
   session?: LogicalSessionStatus;
   status:   RunExecutionStatus;
   [property: string]: unknown;
+}
+
+export interface TaskClarificationRequest {
+  choices?: [string, string, ...string[]];
+  kind:     Scope;
+  question: string;
 }
 
 /**

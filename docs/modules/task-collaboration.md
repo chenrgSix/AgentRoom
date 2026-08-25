@@ -1,7 +1,7 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027, and the Web Room
+- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -21,6 +21,7 @@ and results belong to the same longer-lived goal.
 | Logical Task Session | taskId, agentId, runtime kind, workspace fingerprint, config fingerprint, schema version |
 | Task memory projection | taskId, source Room cursor, summary revision, provenance |
 | ArtifactRef | artifactId, taskId, type, workspaceRef, repository/path/commit/branch metadata, title, summary, creator, optional sourceRunId, timestamp |
+| TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, timestamps |
 
 Task state is `open`, `working`, `blocked`, `review`, `completed`, or
 `canceled`. A Task state is explicit aggregate state; one successful Run does
@@ -53,6 +54,8 @@ when their Task is already terminal.
   repeats context rather than skipping unseen history.
 - Workspace and Artifact references are identifiers and verification metadata,
   not a central shared filesystem or permission grant.
+- Task clarification is missing domain context, not local authorization. Its
+  answer is a Room Message; the Server owns no Runtime approval operation.
 
 `TASK-003` stores immutable ArtifactRefs for commits, branches, files, patches,
 test results, and documents. Member HTTP and authenticated manual-Agent MCP
@@ -85,6 +88,21 @@ The newest 20 ArtifactRefs form a separately revisioned result-evidence delta;
 their summaries are claims to verify against the named workspace evidence, not
 proof that a commit, test, or file exists.
 
+## Human Clarification
+
+A managed Runtime may end a bounded ordinary Run with one structured Task
+clarification. The question becomes an Agent-authored Room Message and a
+membership-authorized HTTP read exposes its `waiting` state. The Web renders
+the question above the composer, labels it as Task information rather than
+permission approval, and offers bounded choices or a free-form answer.
+
+Answering appends one member Message under the question and creates one
+continuation Run for the same Agent and Task. That Run resumes the existing
+Task Session through the normal `resume_or_start` delivery contract. The
+clarification record links both Runs and both Messages, so retries and recovery
+retain evidence without pretending that one Run stayed alive across a human
+pause.
+
 ## Migration and Compatibility
 
 Existing Runs and Discussions are assigned to one recoverable default Task per
@@ -115,6 +133,10 @@ cross-task context.
   Messages and never skip a committed delta that is present in the delivery.
 - Summary and Artifact consumers can trace claims back to authoritative source
   events or external workspace evidence.
+- Clarification answer retries converge on one Message and continuation Run;
+  Bridge restart replays the question without re-executing the suspended Run.
+- Permission-shaped fields are rejected by the wire contract, and interactive
+  local Runtime requests never reach the clarification API.
 
 ## Task Mapping
 

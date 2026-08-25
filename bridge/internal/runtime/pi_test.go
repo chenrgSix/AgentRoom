@@ -38,6 +38,17 @@ func TestPiAdapterExtractsFinalAssistantReplyAndAssessment(t *testing.T) {
 	}
 }
 
+func TestPiAdapterEmitsTaskClarificationWithoutReply(t *testing.T) {
+	output := `{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"<agentroom-clarification>{\"kind\":\"task\",\"question\":\"Which region?\"}</agentroom-clarification>"}],"stopReason":"stop"}}`
+	events := executePiFixture(t, output)
+	if len(events) != 2 || events[1].Status == nil ||
+		*events[1].Status != contracts.InputRequired ||
+		events[1].Clarification == nil ||
+		events[1].Clarification.Question != "Which region?" || events[1].Reply != "" {
+		t.Fatalf("unexpected Pi clarification events: %#v", events)
+	}
+}
+
 func TestPiAdapterProjectsBoundedToolLifecycleAndReturnsFinalReply(t *testing.T) {
 	output := strings.Join([]string{
 		`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"I will inspect it."},{"type":"toolCall","name":"read"}],"stopReason":"toolUse"}}`,

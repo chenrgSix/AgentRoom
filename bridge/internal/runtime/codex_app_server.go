@@ -208,7 +208,15 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	if len([]byte(parser.reply)) > maxRuntimeOutput {
 		return emitCodexFailure(ctx, emit, "CODEX_REPLY_LIMIT", "Codex reply exceeded 20000 bytes.")
 	}
-	reply, assessment := parseAssessmentEnvelope(parser.reply)
+	reply, clarification := parseTaskClarificationEnvelope(parser.reply)
+	if clarification != nil {
+		inputRequired := contracts.InputRequired
+		return emit(ctx, Event{
+			Status: &inputRequired, Clarification: clarification,
+			Session: parser.logicalSessionStatus(),
+		})
+	}
+	reply, assessment := parseAssessmentEnvelope(reply)
 	if reply != "" {
 		if err := emit(ctx, Event{Reply: reply, Assessment: assessment}); err != nil {
 			return err
@@ -636,10 +644,7 @@ func (p *codexAppServerParser) consumeActivityItem(params json.RawMessage, phase
 }
 
 func (p *codexAppServerParser) outputDelta(force bool) (*OutputDelta, error) {
-	visible := p.currentText.String()
-	if marker := strings.Index(visible, assessmentOpen); marker >= 0 {
-		visible = strings.TrimSpace(visible[:marker])
-	}
+	visible := stripPrivateEnvelopePreview(p.currentText.String())
 	if len([]byte(visible)) > maxRuntimeOutput {
 		return nil, fmt.Errorf("Codex assistant output exceeded limit")
 	}

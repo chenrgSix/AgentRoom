@@ -33,6 +33,8 @@ the bounded attempt, delivery, event sequence, and terminal result.
 - Bind an optional `orchestrationKey` to one Run for aggregate-owned recovery.
 - Preserve the authoritative `taskId` across Mention routing, Discussion Waves,
   handoff, retry, and recovery.
+- Persist safe Task clarification requests and create one authorized
+  continuation Run after a Room answer.
 
 ## State Machine
 
@@ -126,6 +128,27 @@ unknown outcome with durable reason `input_required`, waits for the other Wave
 members, and only then applies Discussion policy. This preserves the all-settled
 rule and prevents restart from stranding the barrier.
 
+For an ordinary Task Run, `input_required` may carry a closed Task
+clarification. The Server atomically persists the status, an Agent-authored
+question Message, and a `waiting` clarification record. The Bridge treats that
+event as a durable local execution boundary and replays it after reconnect or
+restart without starting the Runtime again. It does not keep a process waiting
+for a remote answer.
+
+The first authorized Room answer appends one idempotent member Message in the
+same Task, terminalizes the requesting Run as `outcome_unknown` with reason
+`TASK_CLARIFICATION_CONTINUED`, and creates one new bounded continuation Run
+for the same Agent. The continuation has a new Run ID but the same `taskId`, so
+the Task-scoped Bridge binding resumes the same logical/native Session. A
+repeated answer returns the existing Message and continuation; it cannot create
+a second Run. Discussion Runs retain the Wave behavior above and cannot open
+this ordinary-Run clarification flow.
+
+Clarification answers are collaboration context only. They cannot approve a
+filesystem, shell, network, tool, sandbox, or Runtime request. Codex App Server
+interactive requests still receive a local protocol error, and all Runtime
+permission policy stays on the Bridge host.
+
 ## Handoff
 
 A handoff request contains parent Run, target Agent, summary, and optional
@@ -184,10 +207,12 @@ resolves its own first-terminal race under the rules above.
 - Deadline tests distinguish queued `expired` from accepted
   `outcome_unknown`; `input_required` does not advance policy before the
   barrier.
+- Task clarification recovery replays one question, accepts one Room-authorized
+  answer, closes the original Run, and creates one same-Task continuation Run.
 
 ## Task Mapping
 
-`RUN-001` through `RUN-006`, plus the in-process harness `QA-001`, recovery
+`RUN-001` through `RUN-009`, plus the in-process harness `QA-001`, recovery
 tasks `DATA-003` and `QA-004`, and parallel Wave verification `QA-010`.
 
 ## Dependencies

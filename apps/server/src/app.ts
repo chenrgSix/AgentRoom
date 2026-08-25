@@ -72,7 +72,9 @@ import {
   type ArtifactType
 } from "./task/artifact-repository.js";
 import { ContextPlanner } from "./task/context-planner.js";
+import { ClarificationRepository } from "./task/clarification-repository.js";
 import { TaskArtifactService } from "./task/task-artifact-service.js";
+import { TaskClarificationService } from "./task/task-clarification-service.js";
 import {
   AgentTaskRepository,
   type AgentTaskState
@@ -286,6 +288,17 @@ export async function createServerApp(
   const contextPlanner = new ContextPlanner(database, core, taskRepository);
   const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth, taskRepository);
+  const clarificationRepository = new ClarificationRepository(database);
+  const taskClarifications = new TaskClarificationService(
+    database,
+    clarificationRepository,
+    taskRepository,
+    core,
+    runRepository,
+    runs,
+    messages,
+    auth
+  );
   const executor = new InProcessRunExecutor(
     core,
     runRepository,
@@ -854,13 +867,18 @@ export async function createServerApp(
         if (message.type === "run.status" && registeredEpoch !== undefined) {
           const error = message.payload.error;
           const session = message.payload.session;
+          const clarification = message.payload.clarification;
           if (
             typeof message.payload.runId !== "string" ||
             typeof message.payload.agentId !== "string" ||
             !Number.isSafeInteger(message.payload.sequence) ||
             typeof message.payload.status !== "string" ||
             (error !== undefined && (typeof error !== "object" || error === null)) ||
-            (session !== undefined && (typeof session !== "object" || session === null))
+            (session !== undefined && (typeof session !== "object" || session === null)) ||
+            (clarification !== undefined && (
+              typeof clarification !== "object" || clarification === null ||
+              Array.isArray(clarification)
+            ))
           ) {
             rejectMessage("run_status_rejected");
             return;
@@ -871,6 +889,25 @@ export async function createServerApp(
           }
           const runtimeError = error as Record<string, unknown> | undefined;
           const runtimeSession = session as Record<string, unknown> | undefined;
+          const runtimeClarification = clarification as
+            | Record<string, unknown>
+            | undefined;
+          if (runtimeClarification && (
+            Object.keys(runtimeClarification).some((key) =>
+              !new Set(["kind", "question", "choices"]).has(key)
+            ) ||
+            typeof runtimeClarification.kind !== "string" ||
+            typeof runtimeClarification.question !== "string" ||
+            (runtimeClarification.choices !== undefined && (
+              !Array.isArray(runtimeClarification.choices) ||
+              runtimeClarification.choices.some((choice) =>
+                typeof choice !== "string"
+              )
+            ))
+          )) {
+            rejectMessage("run_status_rejected");
+            return;
+          }
           const applied = bridgeRunEvents.applyStatus(devicePrincipal, {
             runId: message.payload.runId,
             traceId: message.payload.traceId,
@@ -897,6 +934,21 @@ export async function createServerApp(
                     disposition: String(runtimeSession.disposition ?? "") as
                       "started" | "resumed" | "recreated",
                     contextCursor: Number(runtimeSession.contextCursor)
+                  }
+                }
+              : {}),
+            ...(runtimeClarification
+              ? {
+                  clarification: {
+                    kind: String(runtimeClarification.kind ?? "") as "task",
+                    question: String(runtimeClarification.question ?? ""),
+                    ...(runtimeClarification.choices === undefined
+                      ? {}
+                      : {
+                          choices: Array.isArray(runtimeClarification.choices)
+                            ? runtimeClarification.choices as string[]
+                            : [""]
+                        })
                   }
                 }
               : {})
@@ -1444,6 +1496,46 @@ export async function createServerApp(
                 : requiredString(body.sourceRunId, "sourceRunId", 140)
             })
       }, clock());
+    }
+  );
+  app.get<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId/clarifications",
+    async (request) => taskClarifications.list(
+      principal(request),
+      request.params.taskId
+    )
+  );
+  app.post<{ Params: { clarificationId: string } }>(
+    "/api/clarifications/:clarificationId/answer",
+    async (request) => {
+      const body = bodyObject(request);
+      const resumed = taskClarifications.answer(
+        principal(request),
+        request.params.clarificationId,
+        requiredString(body.answer, "answer", 20_000),
+        clock()
+      );
+      const dispatched = delivery.dispatch(resumed.run.runId);
+      app.log.info({
+        event: "task.clarification.resumed",
+        traceId: resumed.run.traceId,
+        taskId: resumed.clarification.taskId,
+        clarificationId: resumed.clarification.clarificationId,
+        requestingRunId: resumed.clarification.requestingRunId,
+        continuationRunId: resumed.run.runId,
+        agentId: resumed.run.targetAgentId,
+        deviceId: dispatched?.deviceId ?? null,
+        sendCount: dispatched?.sendCount ?? 0,
+        sent: (dispatched?.sendCount ?? 0) > 0
+      }, "Task clarification resumed");
+      const room = core.getRoom(resumed.clarification.roomId);
+      if (room) {
+        teamChanges.notify(room.teamId, {
+          kind: "room",
+          roomId: resumed.clarification.roomId
+        });
+      }
+      return resumed;
     }
   );
   app.put<{ Params: { roomId: string } }>(

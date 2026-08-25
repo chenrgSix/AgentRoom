@@ -79,6 +79,8 @@ const agents = [{
 }];
 
 function installFixture(input: {
+  clarificationAnswers?: string[];
+  clarifications?: Array<Record<string, unknown>>;
   discussionState: "waiting_human" | "completed";
   currentWave: number;
   messages?: unknown[];
@@ -97,8 +99,9 @@ function installFixture(input: {
     state: input.discussionState,
     stateReason: input.discussionState === "completed" ? "finalized" : "all_runs_failed"
   };
-  globalThis.fetch = async (request) => {
+  globalThis.fetch = async (request, init = {}) => {
     const path = typeof request === "string" ? request : request.url;
+    const method = init.method ?? "GET";
     if (path === "/api/auth/status") {
       return jsonResponse({
         mode: "trusted-team",
@@ -130,6 +133,36 @@ function installFixture(input: {
     }
     if (path === `/api/rooms/${room.roomId}/runs`) return jsonResponse(input.runs);
     if (path === `/api/rooms/${room.roomId}/tasks`) return jsonResponse([task]);
+    if (path === `/api/tasks/${task.taskId}/clarifications`) {
+      return jsonResponse(input.clarifications ?? []);
+    }
+    if (path.startsWith("/api/clarifications/") && path.endsWith("/answer") && method === "POST") {
+      const answer = (JSON.parse(String(init.body)) as { answer: string }).answer;
+      input.clarificationAnswers?.push(answer);
+      const clarificationId = path.split("/")[3] ?? "clarification_test";
+      const clarification = input.clarifications?.find(
+        (candidate) => candidate.clarificationId === clarificationId
+      );
+      if (!clarification) throw new Error("Unknown clarification");
+      clarification.state = "resumed";
+      clarification.answerMessageId = "message_answer";
+      clarification.continuationRunId = "run_continuation";
+      return jsonResponse({
+        clarification,
+        message: {
+          messageId: "message_answer", roomId: room.roomId, taskId: task.taskId,
+          sequence: 5, senderType: "member", senderId: owner.memberId,
+          content: answer, parentMessageId: clarification.questionMessageId,
+          mentions: [], createdAt: "2026-08-25T10:01:00.000Z"
+        },
+        run: {
+          runId: "run_continuation", taskId: task.taskId,
+          targetAgentId: clarification.targetAgentId,
+          triggerMessageId: "message_answer", state: "queued",
+          updatedAt: "2026-08-25T10:01:00.000Z"
+        }
+      });
+    }
     if (path === `/api/rooms/${room.roomId}/discussions`) {
       return jsonResponse([{
         discussion,
@@ -238,6 +271,49 @@ test("Room dock participates in layout instead of overlaying the timeline", asyn
   assert.match(dockRule, /flex:\s*0 0 auto/u);
   assert.match(statusRule, /overflow:\s*hidden/u);
   assert.match(toggleRule, /min-height:\s*44px/u);
+});
+
+test("Task clarification is visibly distinct from local approval and resumes by answer", async () => {
+  const dom = installDom();
+  const answers: string[] = [];
+  installFixture({
+    clarificationAnswers: answers,
+    clarifications: [{
+      clarificationId: "clarification_region",
+      taskId: task.taskId,
+      roomId: room.roomId,
+      requestingRunId: "run_requesting",
+      targetAgentId: agents[0]!.agentId,
+      question: "部署应使用哪个区域？",
+      choices: ["eu-west-1", "eu-central-1"],
+      state: "waiting",
+      questionMessageId: "message_question",
+      answerMessageId: null,
+      continuationRunId: null
+    }],
+    currentWave: 1,
+    discussionState: "completed",
+    runs: [],
+    turns: [],
+    waves: []
+  });
+
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    const view = render(<App />);
+    const label = await view.findByText(/任务信息待补充/u);
+    const form = label.closest("form");
+    assert.ok(form);
+    within(form).getByText("部署应使用哪个区域？");
+    within(form).getByText(/这不是本地权限审批/u);
+    fireEvent.click(within(form).getByRole("button", { name: "eu-west-1" }));
+    fireEvent.click(within(form).getByRole("button", { name: "回答并继续" }));
+    await waitFor(() => assert.deepEqual(answers, ["eu-west-1"]));
+    await waitFor(() => assert.equal(view.queryByText(/任务信息待补充/u), null));
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
 });
 
 test("Run status replaces duplicate Mention metadata in a Member message", async () => {

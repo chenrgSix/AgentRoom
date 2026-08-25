@@ -71,6 +71,48 @@ func TestInboxRejectsNewRunsWithoutTraceIdentity(t *testing.T) {
 	}
 }
 
+func TestInboxRejectsUnsafeRunIdentity(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, runID := range []string{"run_short", "run_/abcdefg", "room_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"} {
+		request := contracts.RunRequestedPayload{
+			RunID: runID, TraceID: "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+			TargetAgentID:     "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+			DeliveryAttemptID: "delivery_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+			IdempotencyKey:    "idem_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+		}
+		if _, _, err := inbox.Accept(request, time.Now()); err == nil {
+			t.Fatalf("accepted unsafe Run ID %q", runID)
+		}
+	}
+}
+
+func TestInboxAcceptsBase64URLIdentifiersWithLeadingSymbols(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for index, identifiers := range []struct {
+		runID   string
+		traceID string
+	}{
+		{runID: "run_-abcdefg", traceID: "trace__abcdefg"},
+		{runID: "run__abcdefg", traceID: "trace_-abcdefg"},
+	} {
+		request := contracts.RunRequestedPayload{
+			RunID: identifiers.runID, TraceID: identifiers.traceID,
+			TargetAgentID:     "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+			DeliveryAttemptID: "delivery_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+			IdempotencyKey:    "idem_01K4Z6J7Y8N9P0Q1R2S3T4V5W6_" + string(rune('a'+index)),
+		}
+		if _, duplicate, err := inbox.Accept(request, time.Now()); err != nil || duplicate {
+			t.Fatalf("base64url identifiers were rejected: duplicate=%v err=%v", duplicate, err)
+		}
+	}
+}
+
 func TestInboxOpenProtectsDirectoryAndListRejectsUnsafeEntries(t *testing.T) {
 	t.Run("directory permissions", func(t *testing.T) {
 		directory := filepath.Join(t.TempDir(), "inbox")

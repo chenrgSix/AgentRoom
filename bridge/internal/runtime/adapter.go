@@ -18,13 +18,14 @@ type Request struct {
 }
 
 type Event struct {
-	Status     *contracts.RunExecutionStatus
-	Activity   *Activity
-	Output     *OutputDelta
-	Reply      string
-	Assessment *contracts.Assessment
-	Error      *contracts.AgentRoomError
-	Session    *contracts.LogicalSessionStatus
+	Status        *contracts.RunExecutionStatus
+	Activity      *Activity
+	Output        *OutputDelta
+	Reply         string
+	Assessment    *contracts.Assessment
+	Clarification *contracts.TaskClarificationRequest
+	Error         *contracts.AgentRoomError
+	Session       *contracts.LogicalSessionStatus
 }
 
 type Activity struct {

@@ -7,59 +7,59 @@
   "$defs": {
     "opaqueId": {
       "type": "string",
-      "pattern": "^[a-z][a-z0-9]*_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^[a-z][a-z0-9]*_[A-Za-z0-9_-]{8,128}$"
     },
     "teamId": {
       "type": "string",
-      "pattern": "^team_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^team_[A-Za-z0-9_-]{8,128}$"
     },
     "roomId": {
       "type": "string",
-      "pattern": "^room_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
     },
     "memberId": {
       "type": "string",
-      "pattern": "^member_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
     },
     "deviceId": {
       "type": "string",
-      "pattern": "^device_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^device_[A-Za-z0-9_-]{8,128}$"
     },
     "agentId": {
       "type": "string",
-      "pattern": "^agent_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
     },
     "messageId": {
       "type": "string",
-      "pattern": "^msg_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^msg_[A-Za-z0-9_-]{8,128}$"
     },
     "runId": {
       "type": "string",
-      "pattern": "^run_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^run_[A-Za-z0-9_-]{8,128}$"
     },
     "taskId": {
       "type": "string",
-      "pattern": "^task_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
     },
     "artifactId": {
       "type": "string",
-      "pattern": "^artifact_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^artifact_[A-Za-z0-9_-]{8,128}$"
     },
     "traceId": {
       "type": "string",
-      "pattern": "^trace_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^trace_[A-Za-z0-9_-]{8,128}$"
     },
     "deliveryAttemptId": {
       "type": "string",
-      "pattern": "^delivery_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^delivery_[A-Za-z0-9_-]{8,128}$"
     },
     "handoffId": {
       "type": "string",
-      "pattern": "^handoff_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^handoff_[A-Za-z0-9_-]{8,128}$"
     },
     "sessionId": {
       "type": "string",
-      "pattern": "^session_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$"
+      "pattern": "^session_[A-Za-z0-9_-]{8,128}$"
     }
   }
 }

@@ -363,6 +363,9 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/rooms/${room.roomId}/tasks`) {
       return jsonResponse(roomTasks);
     }
+    if (path.startsWith("/api/tasks/") && path.endsWith("/clarifications")) {
+      return jsonResponse([]);
+    }
     if (path.startsWith("/api/runs/run_builder/events?after=")) {
       const after = Number.parseInt(path.split("after=")[1] ?? "0", 10);
       if (after === 0) {

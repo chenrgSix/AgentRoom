@@ -8,9 +8,27 @@
       "valid": true
     },
     {
+      "name": "valid opaque identifier with leading base64url hyphen",
+      "schemaId": "https://agentroom.dev/schemas/common/identifiers.schema.json",
+      "instance": "custom_-1K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      "valid": true
+    },
+    {
+      "name": "valid typed Run identifier with leading base64url underscore",
+      "schemaId": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId",
+      "instance": "run__1K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+      "valid": true
+    },
+    {
       "name": "identifier suffix is too short",
       "schemaId": "https://agentroom.dev/schemas/common/identifiers.schema.json",
       "instance": "agent_short",
+      "valid": false
+    },
+    {
+      "name": "identifier suffix rejects a path separator",
+      "schemaId": "https://agentroom.dev/schemas/common/identifiers.schema.json",
+      "instance": "custom_/1K4Z6J7Y8N9P0Q1R2S3T4V5W6",
       "valid": false
     },
     {
@@ -336,6 +354,81 @@
             "disposition": "started",
             "contextCursor": 42,
             "nativeSessionId": "thread_private"
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "valid Task clarification Run status",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4VC1",
+        "timestamp": "2026-08-22T10:00:06Z",
+        "type": "run.status",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 3,
+          "status": "input_required",
+          "clarification": {
+            "kind": "task",
+            "question": "Which deployment region should this Task target?",
+            "choices": [
+              "eu-west-1",
+              "eu-central-1"
+            ]
+          },
+          "session": {
+            "disposition": "resumed",
+            "contextCursor": 42
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "Task clarification rejects permission approval fields",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4VC2",
+        "timestamp": "2026-08-22T10:00:06Z",
+        "type": "run.status",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 3,
+          "status": "input_required",
+          "clarification": {
+            "kind": "task",
+            "question": "May I run the shell command?",
+            "approvalKind": "shell"
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Task clarification cannot accompany working status",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4VC3",
+        "timestamp": "2026-08-22T10:00:06Z",
+        "type": "run.status",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 3,
+          "status": "working",
+          "clarification": {
+            "kind": "task",
+            "question": "Which deployment region should this Task target?"
           }
         }
       },

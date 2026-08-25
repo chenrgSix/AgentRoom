@@ -75,6 +75,6 @@ func (f *FakeAdapter) Requests() []Request {
 }
 
 func isTerminal(status contracts.RunExecutionStatus) bool {
-	return status == contracts.Completed || status == contracts.Failed ||
+	return status == contracts.InputRequired || status == contracts.Completed || status == contracts.Failed ||
 		status == contracts.Canceled || status == contracts.OutcomeUnknown
 }

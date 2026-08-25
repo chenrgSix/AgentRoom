@@ -334,12 +334,20 @@ func runCodexAppServerFixture(t *testing.T, complete bool, expectedOpen string, 
 					Text string `json:"text"`
 				} `json:"input"`
 			}
+			if json.Unmarshal(request.Params, &params) != nil || params.ThreadID != "019d-thread" {
+				os.Exit(4)
+			}
 			expectedInput := "implement it"
 			if !complete {
 				expectedInput = "wait"
 			}
-			if json.Unmarshal(request.Params, &params) != nil || params.ThreadID != "019d-thread" ||
-				len(params.Input) != 1 || params.Input[0].Text != expectedInput {
+			validInput := len(params.Input) == 1 && params.Input[0].Text == expectedInput
+			if expectedOpen == "thread/resume" && len(params.Input) == 1 {
+				validInput = strings.Contains(params.Input[0].Text, "Current request:\n"+expectedInput) &&
+					strings.Contains(params.Input[0].Text, "permission approval") &&
+					!strings.Contains(params.Input[0].Text, "do not inject this twice")
+			}
+			if !validInput {
 				os.Exit(4)
 			}
 			_ = encoder.Encode(map[string]any{"id": 3, "result": map[string]any{

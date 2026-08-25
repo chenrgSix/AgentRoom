@@ -2,7 +2,10 @@ import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
-import type { RuntimeStatus } from "../runtime/runtime-adapter.js";
+import type {
+  RuntimeStatus,
+  RuntimeTaskClarification
+} from "../runtime/runtime-adapter.js";
 import { parseAgentAssessment } from "../discussion/progress-evaluator.js";
 import type {
   AppliedRunEvent,
@@ -80,6 +83,7 @@ export class BridgeRunEventService {
         disposition: "started" | "resumed" | "recreated";
         contextCursor: number;
       };
+      clarification?: RuntimeTaskClarification;
     },
     now: string
   ): AppliedRunEvent {
@@ -112,6 +116,30 @@ export class BridgeRunEventService {
         throw new Error("Invalid logical Runtime session status");
       }
     }
+    if (input.clarification) {
+      const choices = input.clarification.choices ?? [];
+      if (
+        Object.keys(input.clarification).some((key) =>
+          !new Set(["kind", "question", "choices"]).has(key)
+        ) ||
+        input.status !== "input_required" ||
+        input.clarification.kind !== "task" ||
+        typeof input.clarification.question !== "string" ||
+        input.clarification.question.trim().length === 0 ||
+        input.clarification.question.length > 2_000 ||
+        (input.clarification.choices !== undefined && choices.length < 2) ||
+        choices.length > 8 ||
+        choices.some((choice) =>
+          typeof choice !== "string" ||
+          choice.trim().length === 0 || choice.length > 240
+        ) ||
+        new Set(choices).size !== choices.length ||
+        input.error !== undefined ||
+        run.orchestrationKey !== undefined
+      ) {
+        throw new Error("Invalid Task clarification status");
+      }
+    }
     const safeDetails = safeRuntimeFailureDetails(input.error?.details);
     const applied = this.runs.applyEvent(run.runId, {
       type: "status",
@@ -127,12 +155,29 @@ export class BridgeRunEventService {
             }
           }
         : {}),
-      ...(input.session ? { session: input.session } : {})
+      ...(input.session ? { session: input.session } : {}),
+      ...(input.clarification
+        ? {
+            clarification: {
+              kind: "task" as const,
+              question: redactSensitiveText(input.clarification.question.trim()),
+              ...(input.clarification.choices
+                ? {
+                    choices: input.clarification.choices.map((choice) =>
+                      redactSensitiveText(choice.trim())
+                    )
+                  }
+                : {})
+            }
+          }
+        : {})
     }, now);
     if (applied.applied) {
       this.core.updateAgentPresence(
         run.targetAgentId,
-        terminalStatuses.has(input.status) ? "ready" : "busy",
+        terminalStatuses.has(input.status) || input.status === "input_required"
+          ? "ready"
+          : "busy",
         now
       );
     }

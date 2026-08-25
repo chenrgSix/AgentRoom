@@ -20,6 +20,7 @@ type State string
 const (
 	StateAccepted       State = "accepted"
 	StateWorking        State = "working"
+	StateInputRequired  State = "input_required"
 	StateCompleted      State = "completed"
 	StateFailed         State = "failed"
 	StateCanceled       State = "canceled"
@@ -29,8 +30,8 @@ const (
 const incompatibleTraceQuarantineDirectory = "quarantine-incompatible-trace"
 
 var (
-	runIDPattern   = regexp.MustCompile(`^run_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$`)
-	traceIDPattern = regexp.MustCompile(`^trace_[A-Za-z0-9][A-Za-z0-9_-]{7,127}$`)
+	runIDPattern   = regexp.MustCompile(`^run_[A-Za-z0-9_-]{8,128}$`)
+	traceIDPattern = regexp.MustCompile(`^trace_[A-Za-z0-9_-]{8,128}$`)
 )
 
 func isContractRunID(value string) bool {

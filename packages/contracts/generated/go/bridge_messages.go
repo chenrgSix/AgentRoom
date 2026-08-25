@@ -255,14 +255,21 @@ type RunStatusMessage struct {
 }
 
 type RunStatusPayload struct {
-	AgentID  string `json:"agentId"`
-	RunID    string `json:"runId"`
-	Sequence int64  `json:"sequence"`
-	TraceID  string `json:"traceId"`
+	AgentID       string                    `json:"agentId"`
+	RunID         string                    `json:"runId"`
+	Sequence      int64                     `json:"sequence"`
+	TraceID       string                    `json:"traceId"`
+	Clarification *TaskClarificationRequest `json:"clarification,omitempty"`
 	// Stable, client-safe error returned at a protocol boundary.
 	Error   *AgentRoomError       `json:"error,omitempty"`
 	Session *LogicalSessionStatus `json:"session,omitempty"`
 	Status  RunExecutionStatus    `json:"status"`
+}
+
+type TaskClarificationRequest struct {
+	Choices  []string `json:"choices,omitempty"`
+	Kind     Scope    `json:"kind"`
+	Question string   `json:"question"`
 }
 
 // Stable, client-safe error returned at a protocol boundary.

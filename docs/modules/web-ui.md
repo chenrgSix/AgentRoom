@@ -32,6 +32,8 @@ without changing server-owned state.
   multi-Agent Discussions.
 - Current-Task selector and Task creation flow; routed Messages and Discussions
   always submit the selected Task and terminal Tasks disable new work.
+- Task clarification card with bounded choices or a free-form authorized Room
+  answer, explicitly distinguished from local Runtime permission approval.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
 - Agent roster with presence and capability summaries.
 - Run cards with live status, replies, cancellation, and failure details.
@@ -88,6 +90,14 @@ reads.
 The UI uses schemas and generated types from `packages/contracts/`. Capability
 flags control whether start, resume, interrupt, handoff, or managed execution
 controls are shown.
+
+The selected Task loads its clarification records independently of message and
+Run projections. Each waiting question appears in normal dock layout above the
+composer, names the requesting Agent, and explains that the answer becomes a
+Room Message and same-Task continuation rather than a local permission grant.
+Submitting an answer is single-flight, replaces the waiting record with the
+Server result, and reconciles the Room so the new bounded Run and Messages are
+visible.
 
 Discussion views render the central ProgressSnapshot, Wave, member Turns, and
 OrchestrationDecision; they do not derive completion from Agent prose. The

@@ -152,6 +152,14 @@ plus whole-summary redaction prevents a credential split across Runtime
 fragments from crossing the connection. Raw hidden reasoning, structured
 commands, arguments, tool input/output, and approval requests stay local.
 
+A valid Task clarification is also persisted before send, but it closes the
+local execution attempt in `input_required` rather than holding a Runtime
+process open. Recovery replays the same safe question. The eventual answer
+arrives only inside a new same-Task Run; it never answers a provider-native
+interactive request. Codex interactive requests still receive a protocol
+error, and the central Server has no filesystem, shell, network, tool, sandbox,
+or Runtime approval command.
+
 ## Verification and Tasks
 
 Tests cover client enrollment, pairing, reconnect, epoch replacement, ACK loss,

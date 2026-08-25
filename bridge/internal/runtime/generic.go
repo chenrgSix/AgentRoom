@@ -103,7 +103,12 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 			),
 		})
 	}
-	reply, assessment := parseAssessmentEnvelope(stdout.String())
+	reply, clarification := parseTaskClarificationEnvelope(stdout.String())
+	if clarification != nil {
+		inputRequired := contracts.InputRequired
+		return emit(ctx, Event{Status: &inputRequired, Clarification: clarification})
+	}
+	reply, assessment := parseAssessmentEnvelope(reply)
 	if reply != "" {
 		if err := emit(ctx, Event{Reply: reply, Assessment: assessment}); err != nil {
 			return err

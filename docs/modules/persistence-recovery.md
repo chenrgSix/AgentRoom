@@ -110,6 +110,15 @@ and terminal reason is durable; all-member failure converges to
 `input_required` member is represented as a terminal unknown outcome with its
 reason, so it cannot leave the recovered barrier permanently open.
 
+An ordinary Task clarification uses migration 0028 to persist the sequenced
+Run event, Agent question Message, and waiting clarification in one SQLite
+transaction. The Bridge stores `input_required` as a replayable local terminal
+boundary rather than an unfinished process. An authorized answer transaction
+appends one idempotent member Message, closes the old Run, creates one queued
+same-Task continuation, and links those identities before commit. Answer retry
+returns the existing continuation, while normal queued-delivery recovery sends
+it after Bridge reconnect.
+
 Backups use the SQLite backup API, include schema metadata, refuse overwrite,
 and pass `quick_check`. Restore and forward-only migration rollback procedure is
 documented in `docs/backup-and-restore.md`. The Compose workflow installs host

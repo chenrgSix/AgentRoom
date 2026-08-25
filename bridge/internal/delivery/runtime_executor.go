@@ -61,6 +61,9 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			case contracts.Canceled:
 				finished.State = operations.RuntimeIdle
 				finished.ErrorCode = ""
+			case contracts.InputRequired:
+				finished.State = operations.RuntimeIdle
+				finished.ErrorCode = ""
 			case contracts.Failed, contracts.OutcomeUnknown:
 				finished.State = operations.RuntimeError
 			}
@@ -72,7 +75,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 					TraceID:  record.Request.TraceID,
 					Sequence: sequence, Status: *event.Status, Error: event.Error,
-					Session: event.Session,
+					Session: event.Session, Clarification: event.Clarification,
 				},
 			}
 			if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
@@ -194,7 +197,7 @@ func (e RuntimeExecutor) now() time.Time {
 }
 
 func isTerminalState(state State) bool {
-	return state == StateCompleted || state == StateFailed ||
+	return state == StateInputRequired || state == StateCompleted || state == StateFailed ||
 		state == StateCanceled || state == StateOutcomeUnknown
 }
 
@@ -372,8 +375,10 @@ func validateRecoveryRecord(record Record) error {
 
 func stateForStatus(status contracts.RunExecutionStatus) State {
 	switch status {
-	case contracts.Working, contracts.InputRequired:
+	case contracts.Working:
 		return StateWorking
+	case contracts.InputRequired:
+		return StateInputRequired
 	case contracts.Completed:
 		return StateCompleted
 	case contracts.Failed:

@@ -148,12 +148,26 @@ removed from the visible reply and sent as structured evidence; malformed or
 unsupported output remains a normal reply. The Orchestrator, not the Adapter or
 Runtime, owns the resulting continue/finish decision.
 
+Task-scoped managed prompts also describe a separate terminal
+`agentroom-clarification` envelope. Codex, Pi, and Generic adapters parse its
+closed JSON shape, remove the private marker from provisional output, and emit
+`input_required` without a visible reply or `completed` status. The Bridge
+persists this as `StateInputRequired`, considers the local execution slot idle,
+and replays the event unchanged after restart. A later same-Task Run resumes
+through the existing native Session binding.
+
+The envelope is allowed only for missing human Task information. Unknown
+fields fail parsing, so permission or approval-shaped objects remain ordinary
+text and never become an actionable Server request. Codex interactive App
+Server requests continue to receive `-32601`; Pi/local tools and Generic
+process permissions remain owner-controlled.
+
 ## Verification and Tasks
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, native session resume, streaming, activity, named context, cancellation, crash, recovery,
 and local permission inheritance. Work is tracked by `ADP-001` through
-`ADP-012` and `BRG-023`/`BRG-027` in
+`ADP-012`, `BRG-023`/`BRG-027`, and `RUN-009` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one

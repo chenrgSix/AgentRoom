@@ -64,7 +64,9 @@ suite through Ajv and the Go Draft 2020-12 validator.
 ```
 
 IDs are opaque strings with a lowercase type prefix such as `team_`, `agent_`,
-or `run_`; the suffix carries no business meaning. Timestamps use RFC 3339 and
+or `run_`; the suffix is base64url-compatible from its first character and
+carries no business meaning. This includes leading `-` and `_` suffix characters
+emitted by the Server's random base64url generator. Timestamps use RFC 3339 and
 must be normalized to an uppercase `Z` UTC suffix. Protocol versions use
 `major.minor` without a `v` prefix. Unknown message types are rejected by the
 owning message schema. Unknown optional fields are ignored and preserved only
@@ -135,6 +137,13 @@ fields are additive during the rolling transition; their absence retains the
 legacy Room-scoped behavior without allowing a Task-scoped binding to reuse a
 legacy native session.
 
+An `input_required` status may add one closed `clarification` object containing
+only `kind: task`, a bounded question, and optional bounded answer choices. It
+cannot carry an approval kind, command, path, tool input, capability grant, or
+provider request ID. The object asks for missing Task-domain information; it
+is not a transport for Runtime permission approval. A clarification object on
+any other status is contract-invalid.
+
 The request may also include the target Agent name, named context senders, and
 the exact enabled Room peers eligible for reply routing. These are display and
 prompt-projection fields; stable IDs and server-side eligibility remain routing
@@ -173,7 +182,7 @@ traces, or internal database errors.
 
 ## Task Mapping
 
-`CON-001` through `CON-006`, plus cross-language portions of `QA-001`.
+`CON-001` through `CON-008`, plus cross-language portions of `QA-001`.
 
 ## Dependencies
 

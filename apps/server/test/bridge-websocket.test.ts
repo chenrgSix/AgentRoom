@@ -534,6 +534,103 @@ test("Bridge persists only allowlisted Runtime failure details", async () => {
   }
 });
 
+test("Bridge Task clarification resumes through one authorized same-Task Run", async () => {
+  const fixture = await createFixture();
+  try {
+    await acceptRun(fixture);
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 2,
+      status: "working"
+    }));
+    await waitFor(() => runState(fixture, "working"));
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 3,
+      status: "input_required",
+      clarification: {
+        kind: "task",
+        question: "Which region should this deployment use?",
+        choices: ["eu-west-1", "eu-central-1"]
+      },
+      session: {
+        disposition: "started",
+        contextCursor: 1
+      }
+    }));
+    await waitFor(() => runState(fixture, "input_required"));
+    const tasks = await fixture.app.inject({
+      method: "GET",
+      url: `/api/rooms/${fixture.roomId}/tasks`,
+      headers: fixture.authorization
+    });
+    const taskId = tasks.json()[0].taskId as string;
+    const waiting = await fixture.app.inject({
+      method: "GET",
+      url: `/api/tasks/${taskId}/clarifications`,
+      headers: fixture.authorization
+    });
+    assert.equal(waiting.statusCode, 200);
+    assert.equal(waiting.json().length, 1);
+    assert.equal(waiting.json()[0].state, "waiting");
+    assert.deepEqual(waiting.json()[0].choices, ["eu-west-1", "eu-central-1"]);
+
+    const continuationRequest = nextMessage(fixture.socket);
+    const answered = await fixture.app.inject({
+      method: "POST",
+      url: `/api/clarifications/${waiting.json()[0].clarificationId as string}/answer`,
+      headers: fixture.authorization,
+      payload: { answer: "Use eu-west-1." }
+    });
+    assert.equal(answered.statusCode, 200);
+    assert.equal(answered.json().clarification.state, "resumed");
+    assert.equal(answered.json().run.taskId, taskId);
+    assert.notEqual(answered.json().run.runId, fixture.runId);
+    assert.equal(await runState(fixture, "outcome_unknown"), true);
+    const requested = await continuationRequest;
+    assert.equal(requested.type, "run.requested");
+    assert.equal(requested.payload.runId, answered.json().run.runId);
+    assert.equal(requested.payload.taskId, taskId);
+    assert.deepEqual(requested.payload.session, {
+      scope: "task",
+      resumePolicy: "resume_or_start",
+      contextCursor: 3
+    });
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("Bridge rejects permission-shaped Task clarification fields", async () => {
+  const fixture = await createFixture();
+  try {
+    await acceptRun(fixture);
+    const closed = nextClose(fixture.socket);
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 2,
+      status: "input_required",
+      clarification: {
+        kind: "task",
+        question: "May I run this command?",
+        approvalKind: "shell"
+      }
+    }));
+    assert.deepEqual(await closed, {
+      code: 4_008,
+      reason: "Bridge message rejected: run_status_rejected"
+    });
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
 test("Bridge reserves close code 4007 for malformed JSON", async () => {
   const logs: CapturedLog[] = [];
   const fixture = await createFixture(capturingLogger(logs));

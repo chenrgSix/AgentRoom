@@ -36,6 +36,26 @@ func TestGenericAdapterPassesInstructionOnStdin(t *testing.T) {
 	}
 }
 
+func TestGenericAdapterEmitsTaskClarificationWithoutReply(t *testing.T) {
+	envelope := `<agentroom-clarification>{"kind":"task","question":"Which region?","choices":["EU","US"]}</agentroom-clarification>`
+	adapter := GenericAdapter{Config: config.AgentConfig{
+		Command: []string{"/usr/bin/printf", "%s", envelope}, Workspace: t.TempDir(),
+	}}
+	var events []Event
+	if err := adapter.Execute(context.Background(), Request{}, func(_ context.Context, event Event) error {
+		events = append(events, event)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(events) != 2 || events[0].Status == nil ||
+		*events[0].Status != contracts.Working || events[1].Status == nil ||
+		*events[1].Status != contracts.InputRequired || events[1].Clarification == nil ||
+		events[1].Clarification.Question != "Which region?" || events[1].Reply != "" {
+		t.Fatalf("unexpected clarification events: %#v", events)
+	}
+}
+
 func TestGenericAdapterStreamsOptInStructuredOutput(t *testing.T) {
 	text := strings.Repeat("streaming ", 12)
 	firstLine := `{"type":"assistant.delta","delta":` + quotedJSON(t, text) + `}`

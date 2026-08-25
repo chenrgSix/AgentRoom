@@ -262,6 +262,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 	if reply == "" || containsLeakedToolProtocol(reply) {
 		return emitPiProtocolFailure(ctx, emit)
 	}
+	reply, clarification := parseTaskClarificationEnvelope(reply)
 	reply, assessment := parseAssessmentEnvelope(reply)
 	if len([]byte(reply)) > maxRuntimeOutput {
 		failed := contracts.Failed
@@ -302,6 +303,13 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 				sessionBinding.LastRoomSequence,
 			)
 		}
+	}
+	if clarification != nil {
+		inputRequired := contracts.InputRequired
+		return emit(ctx, Event{
+			Status: &inputRequired, Clarification: clarification,
+			Session: logicalStatus,
+		})
 	}
 	if err := emit(ctx, Event{Reply: reply, Assessment: assessment}); err != nil {
 		return err
@@ -567,10 +575,7 @@ func (p *piStreamParser) consume(source []byte) (bool, error) {
 }
 
 func (p *piStreamParser) outputDelta(force bool) (*OutputDelta, error) {
-	visible := p.currentText.String()
-	if marker := strings.Index(visible, assessmentOpen); marker >= 0 {
-		visible = strings.TrimSpace(visible[:marker])
-	}
+	visible := stripPrivateEnvelopePreview(p.currentText.String())
 	if containsLeakedToolProtocol(visible) {
 		return nil, errPiProtocolInvalid
 	}

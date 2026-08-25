@@ -172,6 +172,74 @@ func TestRuntimeExecutorCanceledProjectionIsIdleWithoutError(t *testing.T) {
 	}
 }
 
+func TestRuntimeExecutorPersistsClarificationAsRecoverableBoundary(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Date(2026, 8, 25, 12, 0, 0, 0, time.UTC)
+	request := contracts.RunRequestedPayload{
+		RunID: "run_clarification_12345678", TargetAgentID: "agent_clarification_12345678",
+		TraceID:           "trace_clarification_12345678",
+		DeliveryAttemptID: "delivery_clarification_12345678",
+		IdempotencyKey:    "idem_clarification_12345678",
+	}
+	record, _, err := inbox.Accept(request, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	working := contracts.Working
+	inputRequired := contracts.InputRequired
+	adapter := &bridgeruntime.FakeAdapter{}
+	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
+		{Status: &working},
+		{Status: &inputRequired, Clarification: &contracts.TaskClarificationRequest{
+			Kind: contracts.Task, Question: "Which region?", Choices: []string{"EU", "US"},
+		}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	var runtimeEvents []operations.RuntimeEvent
+	executor := RuntimeExecutor{
+		Inbox: inbox, Now: func() time.Time { return now },
+		Adapters: map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+		Observer: operations.Observer{OnRuntime: func(event operations.RuntimeEvent) {
+			runtimeEvents = append(runtimeEvents, event)
+		}},
+	}
+	var sent []any
+	if err := executor.Execute(context.Background(), record, func(_ context.Context, value any) error {
+		sent = append(sent, value)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	status, ok := sent[1].(contracts.RunStatusMessage)
+	if len(sent) != 2 || !ok || status.Payload.Clarification == nil ||
+		status.Payload.Clarification.Question != "Which region?" ||
+		len(runtimeEvents) != 2 || runtimeEvents[1].State != operations.RuntimeIdle ||
+		runtimeEvents[1].ErrorCode != "" {
+		t.Fatalf("Task clarification was not projected safely: sent=%#v runtime=%#v", sent, runtimeEvents)
+	}
+	latest, err := inbox.Get(request.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest.State != StateInputRequired || latest.LastSequence != 3 {
+		t.Fatalf("clarification boundary was not durable: %#v", latest)
+	}
+	var replayed []any
+	if err := executor.Recover(context.Background(), func(_ context.Context, value any) error {
+		replayed = append(replayed, value)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := inbox.Get(request.RunID); after.LastSequence != 3 || len(replayed) != 3 {
+		t.Fatalf("recovery replaced Task clarification with an unknown outcome: %#v %#v", after, replayed)
+	}
+}
+
 func TestRuntimeExecutorRecoversUnfinishedRunAsUnknown(t *testing.T) {
 	inbox, err := Open(t.TempDir())
 	if err != nil {

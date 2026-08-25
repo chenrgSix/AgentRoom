@@ -1053,10 +1053,62 @@
             },
             "session": {
               "$ref": "#/$defs/logicalSessionStatus"
+            },
+            "clarification": {
+              "$ref": "#/$defs/taskClarificationRequest"
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "required": [
+                  "clarification"
+                ],
+                "properties": {
+                  "clarification": {}
+                }
+              },
+              "then": {
+                "properties": {
+                  "status": {
+                    "const": "input_required"
+                  }
+                }
+              }
+            }
+          ]
         }
       ]
+    },
+    "taskClarificationRequest": {
+      "title": "Task Clarification Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "question"
+      ],
+      "properties": {
+        "kind": {
+          "const": "task"
+        },
+        "question": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "choices": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 240
+          }
+        }
+      }
     },
     "agentAssessment": {
       "type": "object",

@@ -422,6 +422,18 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .run-state.failed, .run-state.expired, .run-state.outcome_unknown { border-color: #83514a; color: #f0aaa1; }
 .run-state.queued { border-color: #4a5045; color: #aeb5a7; }
 .room-dock { display: grid; flex: 0 0 auto; gap: 9px; padding: 12px max(24px, calc((100% - 1080px) / 2)) 22px; border-top: 1px solid #252a27; background: linear-gradient(180deg, rgb(13 16 15 / 88%), rgb(13 16 15 / 98%)); backdrop-filter: blur(18px); }
+.task-clarification { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px 14px; border: 1px solid #806d3e; border-radius: 14px; background: #2b281a; box-shadow: 0 12px 34px rgb(0 0 0 / 18%); }
+.task-clarification-copy { display: grid; min-width: 0; gap: 4px; }
+.task-clarification-copy strong { color: #f0e3b6; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.task-clarification-copy small { color: #a99f82; font-size: 9px; line-height: 1.45; }
+.task-clarification-label { color: #e7c86e; font-size: 9px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.task-clarification-choices { display: flex; flex-wrap: wrap; gap: 5px; }
+.task-clarification-choices button { padding: 5px 8px; border: 1px solid #655b3c; border-radius: 999px; background: #232116; color: #c9bea0; font-size: 9px; cursor: pointer; }
+.task-clarification-choices button[aria-pressed="true"] { border-color: #c0a852; background: #4a4124; color: #fff0b0; }
+.task-clarification-answer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 8px; }
+.task-clarification-answer textarea { width: 100%; min-height: 50px; resize: vertical; padding: 8px 10px; border: 1px solid #5c553a; border-radius: 10px; outline: none; background: #18170f; color: #f0ead8; font-size: 11px; line-height: 1.45; }
+.task-clarification-answer textarea:focus { border-color: #b49b48; box-shadow: 0 0 0 3px rgb(205 177 83 / 10%); }
+.task-clarification-answer button { min-height: 38px; padding: 8px 12px; border: 1px solid #b79e4d; border-radius: 10px; background: #d8bb5e; color: #28200b; font-size: 10px; font-weight: 850; cursor: pointer; white-space: nowrap; }
 .composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 12px; width: 100%; padding: 10px 10px 10px 16px; border: 1px solid #3b463e; border-radius: 18px; background: rgb(24 29 26 / 98%); box-shadow: 0 16px 48px rgb(0 0 0 / 25%); transition: border-color .16s ease, box-shadow .16s ease; }
 .composer:focus-within { border-color: #718e47; box-shadow: 0 18px 52px rgb(0 0 0 / 28%), 0 0 0 3px rgb(176 218 102 / 7%); }
 .discussion-status { display: grid; overflow: hidden; border: 1px solid #3e4931; border-radius: 12px; background: #20261b; }
@@ -653,6 +665,13 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .run-diagnostic > small { color: #6f7869; }
 :root[data-theme="light"] .composer { border-color: #c6d0bd; background: rgb(251 252 248 / 97%); box-shadow: 0 18px 50px rgb(58 73 42 / 16%); }
 :root[data-theme="light"] .room-dock { border-color: #d5dccd; background: rgb(244 246 239 / 97%); }
+:root[data-theme="light"] .task-clarification { border-color: #d7c47f; background: #fff9e8; box-shadow: 0 12px 34px rgb(101 83 31 / 10%); }
+:root[data-theme="light"] .task-clarification-copy strong { color: #51441d; }
+:root[data-theme="light"] .task-clarification-copy small { color: #756c51; }
+:root[data-theme="light"] .task-clarification-label { color: #806b24; }
+:root[data-theme="light"] .task-clarification-choices button { border-color: #d8cda9; background: #fffdf5; color: #665b3d; }
+:root[data-theme="light"] .task-clarification-choices button[aria-pressed="true"] { border-color: #a78e3e; background: #efe2ae; color: #4e3e0c; }
+:root[data-theme="light"] .task-clarification-answer textarea { border-color: #d6caa2; background: #fffdf7; color: #40391f; }
 :root[data-theme="light"] .composer textarea { color: #263021; }
 :root[data-theme="light"] .task-context label { color: #63705e; }
 :root[data-theme="light"] .task-context select { border-color: #c8d1c1; background: #f7f9f4; color: #33402d; }
@@ -800,6 +819,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .discussion-wave { min-width: 0; }
   .discussion-goal-editor { min-width: 0; }
   .discussion-controls { justify-content: flex-start; }
+  .task-clarification { grid-template-columns: 1fr; }
+  .task-clarification-answer { grid-column: 1; }
   .timeline { gap: 18px; padding: 20px 12px 28px; }
   .message { grid-template-columns: 30px minmax(0, 1fr); gap: 8px; }
   .message .avatar { width: 30px; height: 30px; border-radius: 9px; }

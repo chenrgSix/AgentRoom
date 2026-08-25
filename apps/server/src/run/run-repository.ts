@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 
+import { createOpaqueId } from "../domain/identifiers.js";
 import type { RuntimeEvent } from "../runtime/runtime-adapter.js";
 
 export type RunState =
@@ -85,6 +86,7 @@ interface RunEventRow {
   activity_json: string | null;
   error_json: string | null;
   session_json: string | null;
+  clarification_json: string | null;
   created_at: string;
 }
 
@@ -170,6 +172,13 @@ function mapRunEvent(row: RunEventRow): RunEventRecord {
           ? { session: JSON.parse(row.session_json) as {
               disposition: "started" | "resumed" | "recreated";
               contextCursor: number;
+            } }
+          : {}),
+        ...(row.clarification_json
+          ? { clarification: JSON.parse(row.clarification_json) as {
+              kind: "task";
+              question: string;
+              choices?: string[];
             } }
           : {})
       };
@@ -297,8 +306,9 @@ export class RunRepository {
       this.database.prepare(`
         INSERT INTO run_events (
           run_id, trace_id, sequence, event_type, status, content, output_reset,
-          error_json, assessment_json, activity_json, session_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          error_json, assessment_json, activity_json, session_json,
+          clarification_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         runId,
         current.traceId,
@@ -326,8 +336,66 @@ export class RunRepository {
         event.type === "status" && event.session
           ? JSON.stringify(event.session)
           : null,
+        event.type === "status" && event.clarification
+          ? JSON.stringify(event.clarification)
+          : null,
         now
       );
+      if (event.type === "status" && event.clarification) {
+        if (event.status !== "input_required" || current.orchestrationKey) {
+          throw new Error(
+            "Task clarification is allowed only for a non-Discussion input-required Run"
+          );
+        }
+        if (this.database.prepare(`
+          SELECT 1 FROM task_clarifications WHERE requesting_run_id = ?
+        `).get(runId)) {
+          throw new Error("Run already owns a Task clarification");
+        }
+        const questionMessageId = createOpaqueId("msg");
+        const clarificationId = createOpaqueId("clarification");
+        const sequenceRow = this.database.prepare(`
+          UPDATE rooms
+          SET next_message_sequence = next_message_sequence + 1
+          WHERE room_id = ?
+          RETURNING next_message_sequence AS sequence
+        `).get(current.roomId) as { sequence: number };
+        this.database.prepare(`
+          INSERT INTO messages (
+            message_id, trace_id, room_id, task_id, sequence, sender_type,
+            sender_id, content, parent_message_id, client_message_id, created_at
+          ) VALUES (?, ?, ?, ?, ?, 'agent', ?, ?, ?, NULL, ?)
+        `).run(
+          questionMessageId,
+          current.traceId,
+          current.roomId,
+          current.taskId,
+          sequenceRow.sequence,
+          current.targetAgentId,
+          event.clarification.question,
+          current.triggerMessageId,
+          now
+        );
+        this.database.prepare(`
+          INSERT INTO task_clarifications (
+            clarification_id, task_id, room_id, requesting_run_id,
+            target_agent_id, question, choices_json, state,
+            question_message_id, created_at
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, 'waiting', ?, ?)
+        `).run(
+          clarificationId,
+          current.taskId,
+          current.roomId,
+          current.runId,
+          current.targetAgentId,
+          event.clarification.question,
+          event.clarification.choices
+            ? JSON.stringify(event.clarification.choices)
+            : null,
+          questionMessageId,
+          now
+        );
+      }
       if (event.type === "status" && event.session) {
         this.database.prepare(`
           UPDATE agent_tasks

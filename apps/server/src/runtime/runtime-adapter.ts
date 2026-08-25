@@ -53,6 +53,12 @@ export interface RuntimeContextArtifactRef {
   createdAt: string;
 }
 
+export interface RuntimeTaskClarification {
+  kind: "task";
+  question: string;
+  choices?: string[];
+}
+
 export type RuntimeEvent =
   | {
       type: "status";
@@ -68,6 +74,7 @@ export type RuntimeEvent =
         disposition: "started" | "resumed" | "recreated";
         contextCursor: number;
       };
+      clarification?: RuntimeTaskClarification;
     }
   | {
       type: "activity";

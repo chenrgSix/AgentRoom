@@ -15,11 +15,15 @@ const maxProjectedMemoryBytes = 8 * 1024
 func runtimePrompt(run contracts.RunRequestedPayload) string {
 	instruction := strings.TrimSpace(run.Instruction)
 	if run.TargetAgentName == nil && len(run.RoutingAgents) == 0 &&
-		len(run.ContextMessages) == 0 && run.ContextPlan == nil {
+		len(run.ContextMessages) == 0 && run.ContextPlan == nil &&
+		run.TaskID == nil && run.Session == nil {
 		return instruction
 	}
 	sections := []string{
 		"You are handling one AgentRoom task in a shared Room.",
+		"If a specific piece of human domain information is required to continue, return only " +
+			"<agentroom-clarification>{\"kind\":\"task\",\"question\":\"...\",\"choices\":[\"...\",\"...\"]}</agentroom-clarification>. " +
+			"Omit choices for an open answer. Never use this for filesystem, shell, network, tool, Runtime, or permission approval; those decisions stay local.",
 	}
 	if run.TargetAgentName != nil && strings.TrimSpace(*run.TargetAgentName) != "" {
 		sections = append(sections, "Your Agent name is "+cleanPromptName(*run.TargetAgentName)+".")

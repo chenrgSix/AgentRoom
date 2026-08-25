@@ -130,7 +130,12 @@ func (g GenericAdapter) executeStructured(ctx context.Context, request Request, 
 	if !parser.finalSeen || parser.finalReply == "" || containsLeakedToolProtocol(parser.finalReply) {
 		return emitGenericProtocolFailure(ctx, emit)
 	}
-	reply, assessment := parseAssessmentEnvelope(parser.finalReply)
+	reply, clarification := parseTaskClarificationEnvelope(parser.finalReply)
+	if clarification != nil {
+		inputRequired := contracts.InputRequired
+		return emit(ctx, Event{Status: &inputRequired, Clarification: clarification})
+	}
+	reply, assessment := parseAssessmentEnvelope(reply)
 	if len([]byte(reply)) > maxRuntimeOutput {
 		failed := contracts.Failed
 		return emit(ctx, Event{Status: &failed, Error: runtimeError(
@@ -277,10 +282,7 @@ func (p *genericStreamParser) consume(source []byte) (*OutputDelta, error) {
 }
 
 func (p *genericStreamParser) outputDelta(force bool) (*OutputDelta, error) {
-	visible := p.currentText.String()
-	if marker := strings.Index(visible, assessmentOpen); marker >= 0 {
-		visible = strings.TrimSpace(visible[:marker])
-	}
+	visible := stripPrivateEnvelopePreview(p.currentText.String())
 	if containsLeakedToolProtocol(visible) {
 		return nil, errGenericProtocolInvalid
 	}
