@@ -7,6 +7,9 @@ import test from "node:test";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
+import {
+  RollingRoomMemoryRepository
+} from "../src/memory/rolling-room-memory-repository.js";
 import { RunRepository } from "../src/run/run-repository.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
@@ -79,6 +82,36 @@ test("Context Planner builds stable provenance projections and bounded relevant 
         now
       });
     }
+    const rollingMemory = new RollingRoomMemoryRepository(database);
+    rollingMemory.enable(room.roomId, now);
+    const lease = rollingMemory.acquireLease({
+      roomId: room.roomId,
+      leaseToken: "lease_context_planner_0001",
+      now,
+      leaseExpiresAt: "2026-08-25T12:05:00.000Z"
+    });
+    assert.ok(lease);
+    const checkpointMessages = core.listMessagesRange(room.roomId, 0, 30, 30);
+    rollingMemory.commitCheckpoint({
+      checkpoint: {
+        checkpointId: "checkpoint_context_planner_0001",
+        roomId: room.roomId,
+        parentCheckpointId: null,
+        inputFromSequenceExclusive: 0,
+        throughSequence: 30,
+        summary: "OAuth work and CI repair are both in progress.",
+        provenance: [checkpointMessages[0]!.messageId],
+        sourceMessageCount: 30,
+        sourceDigest: "a".repeat(64),
+        promptVersion: 1,
+        modelFingerprint: "test-reducer-v1",
+        buildKind: "incremental",
+        createdAt: now
+      },
+      expectedGeneration: lease.generation,
+      leaseToken: lease.leaseToken!,
+      now
+    });
     const trigger = messages.createMemberMessage(principal, {
       roomId: room.roomId,
       taskId: task.taskId,
@@ -107,6 +140,30 @@ test("Context Planner builds stable provenance projections and bounded relevant 
     ));
     assert.ok(first.contextMessages.some((message) =>
       message.taskId === task.taskId && message.messageId !== trigger.messageId
+    ));
+    assert.deepEqual({
+      target: first.roomContextBundle?.targetThroughSequence,
+      prior: first.roomContextBundle?.priorContextThroughSequence,
+      requestMessageId: first.roomContextBundle?.requestMessageId,
+      checkpointThrough: first.roomContextBundle?.checkpoint.throughSequence,
+      rawFrom: first.roomContextBundle?.rawTail.fromSequenceExclusive,
+      rawThrough: first.roomContextBundle?.rawTail.throughSequenceInclusive,
+      rawCount: first.roomContextBundle?.rawTail.messageCount,
+      rawSequences: first.roomContextBundle?.rawTail.messages.map(
+        ({ sequence }) => sequence
+      )
+    }, {
+      target: trigger.sequence,
+      prior: trigger.sequence - 1,
+      requestMessageId: trigger.messageId,
+      checkpointThrough: 30,
+      rawFrom: 30,
+      rawThrough: 40,
+      rawCount: 10,
+      rawSequences: Array.from({ length: 10 }, (_, index) => index + 31)
+    });
+    assert.ok(first.roomContextBundle?.rawTail.messages.every(
+      ({ messageId }) => messageId !== trigger.messageId
     ));
 
     artifacts.create(principal, task.taskId, {
@@ -263,6 +320,75 @@ test("Context Planner builds stable provenance projections and bounded relevant 
     assert.equal(
       canonicalTask?.summaryRevision,
       advanced.contextPlan.taskMemory.revision
+    );
+    const laterLease = rollingMemory.acquireLease({
+      roomId: room.roomId,
+      leaseToken: "lease_context_planner_0002",
+      now,
+      leaseExpiresAt: "2026-08-25T12:05:00.000Z"
+    });
+    assert.ok(laterLease);
+    rollingMemory.commitCheckpoint({
+      checkpoint: {
+        checkpointId: "checkpoint_context_planner_0002",
+        roomId: room.roomId,
+        parentCheckpointId: "checkpoint_context_planner_0001",
+        inputFromSequenceExclusive: 30,
+        throughSequence: 35,
+        summary: "A newer checkpoint that an older Run must not observe.",
+        provenance: [core.listMessagesRange(room.roomId, 30, 35, 5)[0]!.messageId],
+        sourceMessageCount: 5,
+        sourceDigest: "c".repeat(64),
+        promptVersion: 1,
+        modelFingerprint: "test-reducer-v1",
+        buildKind: "incremental",
+        createdAt: "2026-08-25T12:01:00.000Z"
+      },
+      expectedGeneration: laterLease.generation,
+      leaseToken: laterLease.leaseToken!,
+      now: "2026-08-25T12:01:00.000Z"
+    });
+    taskRepository.update(task.taskId, {
+      title: "Newer task title",
+      goal: "A newer goal must not leak into an older Run.",
+      state: "review",
+      primaryAgentId: task.primaryAgentId,
+      workspaceRef: task.workspaceRef,
+      updatedAt: "2026-08-25T12:01:00.000Z"
+    });
+    const fenced = planner.plan({
+      roomId: room.roomId,
+      taskId: task.taskId,
+      throughSequence: trigger.sequence,
+      triggerMessageId: trigger.messageId,
+      contextFence: {
+        runId: "run_context_fence_test_0001",
+        roomId: room.roomId,
+        taskId: task.taskId,
+        triggerSequence: trigger.sequence,
+        roomLongTermMemoryRevision: 0,
+        taskLongTermMemoryRevision: 0,
+        taskArtifactRevision: 1,
+        taskSummaryRevision: 1,
+        taskState: task.state,
+        taskTitle: task.title,
+        taskGoal: task.goal,
+        fenceKind: "captured",
+        capturedAt: now
+      }
+    }, "2026-08-25T12:02:00.000Z");
+    assert.match(fenced.contextPlan.taskMemory.summary, /OAuth migration/u);
+    assert.doesNotMatch(fenced.contextPlan.taskMemory.summary, /Newer task title/u);
+    assert.equal(fenced.contextPlan.taskMemory.projectionKind, "historical");
+    assert.deepEqual(
+      fenced.contextPlan.resultEvidence?.artifactRefs.map(
+        ({ artifactRevision }) => artifactRevision
+      ),
+      [1]
+    );
+    assert.equal(
+      fenced.roomContextBundle?.checkpoint.checkpointId,
+      "checkpoint_context_planner_0001"
     );
     assert.throws(() => database.prepare(`
       UPDATE room_memory_projections SET source_sequence = 0 WHERE room_id = ?

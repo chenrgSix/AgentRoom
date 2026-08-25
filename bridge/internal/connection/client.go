@@ -34,17 +34,18 @@ var ErrRunCancelRequested = errors.New("Run cancellation requested")
 const maxBridgeIncomingMessageBytes int64 = 16 << 20
 
 type Client struct {
-	Config              config.Config
-	Credential          pairing.Credential
-	BridgeVersion       string
-	HeartbeatInterval   time.Duration
-	HandleRun           func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
-	RecoverRuns         func(context.Context, func(context.Context, any) error) error
-	Observer            operations.Observer
-	RetryInitial        time.Duration
-	RetryMaximum        time.Duration
-	ResumeAgentNames    map[string]bool
-	StreamingAgentNames map[string]bool
+	Config                        config.Config
+	Credential                    pairing.Credential
+	BridgeVersion                 string
+	HeartbeatInterval             time.Duration
+	HandleRun                     func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
+	RecoverRuns                   func(context.Context, func(context.Context, any) error) error
+	Observer                      operations.Observer
+	RetryInitial                  time.Duration
+	RetryMaximum                  time.Duration
+	ResumeAgentNames              map[string]bool
+	StreamingAgentNames           map[string]bool
+	RoomContextCoverageAgentNames map[string]bool
 }
 
 func (c Client) Run(ctx context.Context) error {
@@ -172,6 +173,9 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			SupportsStart:     true,
 			SupportsStreaming: c.StreamingAgentNames[configured.Name],
 		}
+		supportsRoomContextCoverage :=
+			c.RoomContextCoverageAgentNames[configured.Name]
+		capabilities.SupportsRoomContextCoverage = &supportsRoomContextCoverage
 		publication := contracts.AgentPublishMessage{
 			ProtocolVersion: "1.0",
 			MessageID:       newID("msg"),

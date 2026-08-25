@@ -105,12 +105,13 @@ type AgentPublishPayload struct {
 }
 
 type Capabilities struct {
-	InvocationMode    InvocationMode `json:"invocationMode"`
-	SupportsHandoff   bool           `json:"supportsHandoff"`
-	SupportsInterrupt bool           `json:"supportsInterrupt"`
-	SupportsResume    bool           `json:"supportsResume"`
-	SupportsStart     bool           `json:"supportsStart"`
-	SupportsStreaming bool           `json:"supportsStreaming"`
+	InvocationMode              InvocationMode `json:"invocationMode"`
+	SupportsHandoff             bool           `json:"supportsHandoff"`
+	SupportsInterrupt           bool           `json:"supportsInterrupt"`
+	SupportsResume              bool           `json:"supportsResume"`
+	SupportsRoomContextCoverage *bool          `json:"supportsRoomContextCoverage,omitempty"`
+	SupportsStart               bool           `json:"supportsStart"`
+	SupportsStreaming           bool           `json:"supportsStreaming"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -147,21 +148,24 @@ type RunRequestedPayload struct {
 	ContextMessages []ContextMessage    `json:"contextMessages"`
 	ContextPlan     *RuntimeContextPlan `json:"contextPlan,omitempty"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
-	Deadline          time.Time              `json:"deadline"`
-	DeliveryAttemptID string                 `json:"deliveryAttemptId"`
-	IdempotencyKey    string                 `json:"idempotencyKey"`
-	Instruction       string                 `json:"instruction"`
-	ParentRunID       *string                `json:"parentRunId,omitempty"`
-	RequesterMemberID string                 `json:"requesterMemberId"`
-	RoomID            string                 `json:"roomId"`
-	RoutingAgents     []RoutingAgent         `json:"routingAgents,omitempty"`
-	RunID             string                 `json:"runId"`
-	Session           *LogicalSessionRequest `json:"session,omitempty"`
-	TargetAgentID     string                 `json:"targetAgentId"`
-	TargetAgentName   *string                `json:"targetAgentName,omitempty"`
-	TaskID            *string                `json:"taskId,omitempty"`
-	TraceID           string                 `json:"traceId"`
-	TriggerMessageID  string                 `json:"triggerMessageId"`
+	Deadline          time.Time `json:"deadline"`
+	DeliveryAttemptID string    `json:"deliveryAttemptId"`
+	IdempotencyKey    string    `json:"idempotencyKey"`
+	Instruction       string    `json:"instruction"`
+	ParentRunID       *string   `json:"parentRunId,omitempty"`
+	RequesterMemberID string    `json:"requesterMemberId"`
+	// Server-owned coverage ending with one separate current request. Bridge derives
+	// session-local consumption from this bundle.
+	RoomContextBundle *ServerRoomContextBundle `json:"roomContextBundle,omitempty"`
+	RoomID            string                   `json:"roomId"`
+	RoutingAgents     []RoutingAgent           `json:"routingAgents,omitempty"`
+	RunID             string                   `json:"runId"`
+	Session           *LogicalSessionRequest   `json:"session,omitempty"`
+	TargetAgentID     string                   `json:"targetAgentId"`
+	TargetAgentName   *string                  `json:"targetAgentName,omitempty"`
+	TaskID            *string                  `json:"taskId,omitempty"`
+	TraceID           string                   `json:"traceId"`
+	TriggerMessageID  string                   `json:"triggerMessageId"`
 }
 
 type ContextMessage struct {
@@ -266,6 +270,46 @@ type TaskMemoryClass struct {
 	Summary          string          `json:"summary"`
 }
 
+// Server-owned coverage ending with one separate current request. Bridge derives
+// session-local consumption from this bundle.
+type ServerRoomContextBundle struct {
+	Checkpoint                  *RollingRoomCheckpoint `json:"checkpoint,omitempty"`
+	PriorContextThroughSequence int64                  `json:"priorContextThroughSequence"`
+	RawTail                     RoomContextRawTail     `json:"rawTail"`
+	RequestMessageID            string                 `json:"requestMessageId"`
+	TargetThroughSequence       int64                  `json:"targetThroughSequence"`
+}
+
+type RollingRoomCheckpoint struct {
+	BuildKind             BuildKind `json:"buildKind"`
+	CheckpointID          string    `json:"checkpointId"`
+	FromSequenceExclusive int64     `json:"fromSequenceExclusive"`
+	ModelFingerprint      string    `json:"modelFingerprint"`
+	PromptVersion         string    `json:"promptVersion"`
+	ProvenanceMessageIDS  []string  `json:"provenanceMessageIds"`
+	SourceDigest          string    `json:"sourceDigest"`
+	SourceMessageCount    int64     `json:"sourceMessageCount"`
+	Summary               string    `json:"summary"`
+	ThroughSequence       int64     `json:"throughSequence"`
+}
+
+type RoomContextRawTail struct {
+	FromSequenceExclusive    int64     `json:"fromSequenceExclusive"`
+	MessageCount             int64     `json:"messageCount"`
+	Messages                 []Message `json:"messages"`
+	ThroughSequenceInclusive int64     `json:"throughSequenceInclusive"`
+	Utf8Bytes                int64     `json:"utf8Bytes"`
+}
+
+type Message struct {
+	Content   string `json:"content"`
+	MessageID string `json:"messageId"`
+	// Opaque identifier with a lowercase type prefix and non-semantic suffix.
+	SenderID   string  `json:"senderId"`
+	SenderName *string `json:"senderName,omitempty"`
+	Sequence   *int64  `json:"sequence,omitempty"`
+}
+
 type RoutingAgent struct {
 	AgentID string `json:"agentId"`
 	Name    string `json:"name"`
@@ -337,7 +381,21 @@ type LogicalSessionStatus struct {
 	ContextCursor          int64       `json:"contextCursor"`
 	Disposition            Disposition `json:"disposition"`
 	ResultEvidenceRevision *int64      `json:"resultEvidenceRevision,omitempty"`
-	RuntimeScopeID         *string     `json:"runtimeScopeId,omitempty"`
+	// Bridge-owned receipt for the exact checkpoint and raw interval accepted by one logical
+	// Runtime session.
+	RoomContextConsumption *BridgeRoomContextConsumption `json:"roomContextConsumption,omitempty"`
+	RuntimeScopeID         *string                       `json:"runtimeScopeId,omitempty"`
+}
+
+// Bridge-owned receipt for the exact checkpoint and raw interval accepted by one logical
+// Runtime session.
+type BridgeRoomContextConsumption struct {
+	BaseContextCursor           int64   `json:"baseContextCursor"`
+	CheckpointID                *string `json:"checkpointId,omitempty"`
+	CoverageThroughSequence     int64   `json:"coverageThroughSequence"`
+	RawFromSequenceExclusive    int64   `json:"rawFromSequenceExclusive"`
+	RawMessageCount             int64   `json:"rawMessageCount"`
+	RawThroughSequenceInclusive int64   `json:"rawThroughSequenceInclusive"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -573,6 +631,13 @@ type ProjectionKind string
 const (
 	Canonical  ProjectionKind = "canonical"
 	Historical ProjectionKind = "historical"
+)
+
+type BuildKind string
+
+const (
+	Incremental BuildKind = "incremental"
+	Rebase      BuildKind = "rebase"
 )
 
 type ResumePolicy string

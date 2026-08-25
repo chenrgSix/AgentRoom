@@ -11,6 +11,9 @@ import {
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
+import {
+  RollingRoomMemoryRepository
+} from "../src/memory/rolling-room-memory-repository.js";
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { DeliveryService } from "../src/run/delivery-service.js";
@@ -79,7 +82,8 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
         supportsInterrupt: true,
         supportsResume: false,
         supportsStart: true,
-        supportsStreaming: true
+        supportsStreaming: true,
+        supportsRoomContextCoverage: true
       },
       now
     });
@@ -206,6 +210,35 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       ),
       Array.from({ length: 20 }, (_, index) => index + 6)
     );
+    const rollingMemory = new RollingRoomMemoryRepository(database);
+    rollingMemory.enable(room.roomId, now);
+    const roomLease = rollingMemory.acquireLease({
+      roomId: room.roomId,
+      leaseToken: "lease_delivery_context_0001",
+      now,
+      leaseExpiresAt: "2026-08-22T10:05:00.000Z"
+    });
+    assert.ok(roomLease);
+    rollingMemory.commitCheckpoint({
+      checkpoint: {
+        checkpointId: "checkpoint_delivery_context_0001",
+        roomId: room.roomId,
+        parentCheckpointId: null,
+        inputFromSequenceExclusive: 0,
+        throughSequence: message.sequence,
+        summary: "The owner requested delivery implementation.",
+        provenance: [message.messageId],
+        sourceMessageCount: 1,
+        sourceDigest: "b".repeat(64),
+        promptVersion: 1,
+        modelFingerprint: "test-reducer-v1",
+        buildKind: "incremental",
+        createdAt: now
+      },
+      expectedGeneration: roomLease.generation,
+      leaseToken: roomLease.leaseToken!,
+      now
+    });
     const consumption = new ResultEvidenceConsumptionRepository(database);
     assert.throws(() => consumption.acknowledge({
       runId: run.runId,
@@ -247,7 +280,64 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       now
     )[0];
     assert.ok(deltaRun);
-    const firstDelta = delivery.dispatch(deltaRun.runId)?.payload.contextPlan.resultEvidence;
+    const firstDeltaDelivery = delivery.dispatch(deltaRun.runId)?.payload;
+    const firstDelta = firstDeltaDelivery?.contextPlan.resultEvidence;
+    assert.deepEqual({
+      legacyContextCount: firstDeltaDelivery?.contextMessages.length,
+      target: firstDeltaDelivery?.roomContextBundle?.targetThroughSequence,
+      prior: firstDeltaDelivery?.roomContextBundle?.priorContextThroughSequence,
+      requestMessageId: firstDeltaDelivery?.roomContextBundle?.requestMessageId,
+      checkpointThrough:
+        firstDeltaDelivery?.roomContextBundle?.checkpoint.throughSequence,
+      rawCount: firstDeltaDelivery?.roomContextBundle?.rawTail.messageCount,
+      rawThrough:
+        firstDeltaDelivery?.roomContextBundle?.rawTail.throughSequenceInclusive
+    }, {
+      legacyContextCount: 0,
+      target: deltaMessage.sequence,
+      prior: message.sequence,
+      requestMessageId: deltaMessage.messageId,
+      checkpointThrough: message.sequence,
+      rawCount: 0,
+      rawThrough: message.sequence
+    });
+    delivery.validateRoomContextConsumption(
+      deltaRun.runId,
+      "resumed",
+      deltaMessage.sequence,
+      {
+        baseContextCursor: message.sequence,
+        rawFromSequenceExclusive: message.sequence,
+        rawThroughSequenceInclusive: message.sequence,
+        rawMessageCount: 0,
+        coverageThroughSequence: deltaMessage.sequence
+      }
+    );
+    assert.throws(() => delivery.validateRoomContextConsumption(
+      deltaRun.runId,
+      "resumed",
+      deltaMessage.sequence,
+      {
+        baseContextCursor: message.sequence,
+        checkpointId: "checkpoint_delivery_context_0001",
+        rawFromSequenceExclusive: message.sequence,
+        rawThroughSequenceInclusive: message.sequence,
+        rawMessageCount: 0,
+        coverageThroughSequence: deltaMessage.sequence
+      }
+    ), /checkpoint receipt/u);
+    assert.throws(() => delivery.validateRoomContextConsumption(
+      deltaRun.runId,
+      "resumed",
+      deltaMessage.sequence,
+      {
+        baseContextCursor: message.sequence,
+        rawFromSequenceExclusive: 0,
+        rawThroughSequenceInclusive: message.sequence,
+        rawMessageCount: 0,
+        coverageThroughSequence: deltaMessage.sequence
+      }
+    ), /delivered interval/u);
     assert.deepEqual({
       deliveryKind: firstDelta?.deliveryKind,
       fromRevision: firstDelta?.fromRevision,

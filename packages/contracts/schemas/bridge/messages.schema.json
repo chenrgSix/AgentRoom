@@ -513,6 +513,9 @@
         },
         "supportsHandoff": {
           "type": "boolean"
+        },
+        "supportsRoomContextCoverage": {
+          "type": "boolean"
         }
       },
       "allOf": [
@@ -695,6 +698,182 @@
         }
       }
     },
+    "rollingRoomCheckpoint": {
+      "title": "Rolling Room Checkpoint",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "checkpointId",
+        "fromSequenceExclusive",
+        "throughSequence",
+        "summary",
+        "sourceMessageCount",
+        "sourceDigest",
+        "promptVersion",
+        "modelFingerprint",
+        "buildKind",
+        "provenanceMessageIds"
+      ],
+      "properties": {
+        "checkpointId": {
+          "type": "string",
+          "pattern": "^checkpoint_[A-Za-z0-9_-]{8,128}$"
+        },
+        "fromSequenceExclusive": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "throughSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 12000
+        },
+        "sourceMessageCount": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "promptVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "modelFingerprint": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "buildKind": {
+          "enum": ["incremental", "rebase"]
+        },
+        "provenanceMessageIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
+          }
+        }
+      }
+    },
+    "roomContextRawTail": {
+      "title": "Room Context Raw Tail",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fromSequenceExclusive",
+        "throughSequenceInclusive",
+        "messageCount",
+        "utf8Bytes",
+        "messages"
+      ],
+      "properties": {
+        "fromSequenceExclusive": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "throughSequenceInclusive": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "messageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 12
+        },
+        "utf8Bytes": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10240
+        },
+        "messages": {
+          "type": "array",
+          "maxItems": 12,
+          "items": {
+            "$ref": "#/$defs/contextMessage"
+          }
+        }
+      }
+    },
+    "roomContextBundle": {
+      "title": "Server Room Context Bundle",
+      "description": "Server-owned coverage ending with one separate current request. Bridge derives session-local consumption from this bundle.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "targetThroughSequence",
+        "priorContextThroughSequence",
+        "requestMessageId",
+        "rawTail"
+      ],
+      "properties": {
+        "targetThroughSequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "priorContextThroughSequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requestMessageId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
+        },
+        "checkpoint": {
+          "$ref": "#/$defs/rollingRoomCheckpoint"
+        },
+        "rawTail": {
+          "$ref": "#/$defs/roomContextRawTail"
+        }
+      }
+    },
+    "roomContextConsumption": {
+      "title": "Bridge Room Context Consumption",
+      "description": "Bridge-owned receipt for the exact checkpoint and raw interval accepted by one logical Runtime session.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseContextCursor",
+        "rawFromSequenceExclusive",
+        "rawThroughSequenceInclusive",
+        "rawMessageCount",
+        "coverageThroughSequence"
+      ],
+      "properties": {
+        "baseContextCursor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "checkpointId": {
+          "type": "string",
+          "pattern": "^checkpoint_[A-Za-z0-9_-]{8,128}$"
+        },
+        "rawFromSequenceExclusive": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rawThroughSequenceInclusive": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rawMessageCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 12
+        },
+        "coverageThroughSequence": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
     "logicalSessionRequest": {
       "title": "Logical Session Request",
       "type": "object",
@@ -749,6 +928,9 @@
         "resultEvidenceRevision": {
           "type": "integer",
           "minimum": 0
+        },
+        "roomContextConsumption": {
+          "$ref": "#/$defs/roomContextConsumption"
         }
       }
     },
@@ -1186,6 +1368,9 @@
           "items": {
             "$ref": "#/$defs/contextMessage"
           }
+        },
+        "roomContextBundle": {
+          "$ref": "#/$defs/roomContextBundle"
         },
         "contextPlan": {
           "$ref": "#/$defs/runtimeContextPlan"

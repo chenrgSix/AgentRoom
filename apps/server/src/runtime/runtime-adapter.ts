@@ -82,6 +82,15 @@ export interface RuntimeLongTermMemoryScope {
   }>;
 }
 
+export interface RuntimeRoomContextConsumption {
+  baseContextCursor: number;
+  checkpointId?: string;
+  rawFromSequenceExclusive: number;
+  rawThroughSequenceInclusive: number;
+  rawMessageCount: number;
+  coverageThroughSequence: number;
+}
+
 export interface RuntimeTaskClarification {
   kind: "task";
   question: string;
@@ -104,6 +113,7 @@ export type RuntimeEvent =
         contextCursor: number;
         runtimeScopeId?: string;
         resultEvidenceRevision?: number;
+        roomContextConsumption?: RuntimeRoomContextConsumption;
       };
       clarification?: RuntimeTaskClarification;
     }

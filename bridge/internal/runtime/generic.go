@@ -31,6 +31,13 @@ func (g GenericAdapter) Capabilities() Capabilities {
 }
 
 func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) error {
+	if request.Run.RoomContextBundle != nil {
+		failed := contracts.Failed
+		return emit(ctx, Event{Status: &failed, Error: runtimeError(
+			"ROOM_CONTEXT_UNSUPPORTED",
+			"This Runtime adapter does not support Room context coverage.",
+		)})
+	}
 	working := contracts.Working
 	if err := emit(ctx, Event{Status: &working}); err != nil {
 		return err

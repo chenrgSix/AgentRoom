@@ -185,7 +185,8 @@ export async function createServerApp(
   const bridgeRunEvents = new BridgeRunEventService(
     core,
     runRepository,
-    resultEvidenceConsumption
+    resultEvidenceConsumption,
+    delivery
   );
   const handoffs = new HandoffService(core, runRepository);
   const cancellations = new CancellationService(

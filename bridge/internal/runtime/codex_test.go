@@ -60,18 +60,20 @@ func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 	adapter := CodexAdapter{Config: configuration, Sessions: store}
 	var terminal Event
 	taskID := "task_alpha"
-	consumedSequence := int64(41)
-	if err := adapter.Execute(context.Background(), Request{Run: contracts.RunRequestedPayload{
-		RoomID: "room_alpha", TargetAgentID: "agent_builder", TaskID: &taskID,
-		Instruction: "implement it", RunID: "run_next",
-		ContextMessages: []contracts.ContextMessage{{
-			MessageID: "msg_consumed", Content: "do not inject this twice",
-			Sequence: &consumedSequence,
-		}},
-		Session: &contracts.LogicalSessionRequest{
-			Scope: contracts.Task, ResumePolicy: contracts.ResumeOrStart, ContextCursor: 42,
-		},
-	}}, func(_ context.Context, event Event) error {
+	run := roomContextFixture()
+	run.RoomID = "room_alpha"
+	run.TargetAgentID = "agent_builder"
+	run.TaskID = &taskID
+	run.Instruction = "implement it"
+	run.RunID = "run_next"
+	run.Session.ContextCursor = 42
+	run.RoomContextBundle.TargetThroughSequence = 42
+	run.RoomContextBundle.PriorContextThroughSequence = 41
+	run.RoomContextBundle.RawTail.Messages = run.RoomContextBundle.RawTail.Messages[:1]
+	run.RoomContextBundle.RawTail.ThroughSequenceInclusive = 41
+	run.RoomContextBundle.RawTail.MessageCount = 1
+	run.RoomContextBundle.RawTail.Utf8Bytes = int64(len("message forty-one"))
+	if err := adapter.Execute(context.Background(), Request{Run: run}, func(_ context.Context, event Event) error {
 		terminal = event
 		return nil
 	}); err != nil {
@@ -79,7 +81,12 @@ func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 	}
 	if terminal.Status == nil || *terminal.Status != contracts.Completed ||
 		terminal.Session == nil || terminal.Session.Disposition != contracts.Resumed ||
-		terminal.Session.ContextCursor != 42 {
+		terminal.Session.ContextCursor != 42 ||
+		terminal.Session.RoomContextConsumption == nil ||
+		terminal.Session.RoomContextConsumption.BaseContextCursor != 41 ||
+		terminal.Session.RoomContextConsumption.CheckpointID != nil ||
+		terminal.Session.RoomContextConsumption.RawMessageCount != 0 ||
+		terminal.Session.RoomContextConsumption.CoverageThroughSequence != 42 {
 		t.Fatalf("stored Codex thread did not resume: %#v", terminal)
 	}
 }
@@ -206,22 +213,39 @@ func TestCodexAdapterRejectsIncompatibleAppServerStream(t *testing.T) {
 
 func TestCodexAdapterTerminatesAppServerAtDeadline(t *testing.T) {
 	t.Setenv("AGENTROOM_CODEX_HELPER", "hang")
-	adapter := CodexAdapter{Config: config.AgentConfig{
+	t.Setenv("AGENTROOM_CODEX_COVERAGE_PROMPT", "1")
+	configuration := config.AgentConfig{
 		Command:   []string{os.Args[0], "-test.run=TestCodexHelperProcess", "--", "app-server", "--listen", "stdio://"},
-		Workspace: t.TempDir(), Sandbox: "workspace-write", EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER"},
-	}}
+		Workspace: t.TempDir(), Sandbox: "workspace-write",
+		EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER", "AGENTROOM_CODEX_COVERAGE_PROMPT"},
+		RuntimeKind:  "codex", Adapter: "codex",
+	}
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	adapter := CodexAdapter{Config: configuration, Sessions: store}
 	var terminal Event
-	if err := adapter.Execute(context.Background(), Request{Run: contracts.RunRequestedPayload{
-		Instruction: "wait", Deadline: time.Now().Add(150 * time.Millisecond),
-	}}, func(_ context.Context, event Event) error {
+	run := roomContextFixture()
+	run.Instruction = "wait"
+	run.Deadline = time.Now().Add(150 * time.Millisecond)
+	if err := adapter.Execute(context.Background(), Request{Run: run}, func(_ context.Context, event Event) error {
 		terminal = event
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
 	if terminal.Status == nil || *terminal.Status != contracts.Failed ||
-		terminal.Error == nil || terminal.Error.Code != "CODEX_TIMEOUT" {
-		t.Fatalf("unexpected Codex deadline result: %#v", terminal)
+		terminal.Error == nil || terminal.Error.Code != "CODEX_TIMEOUT" ||
+		terminal.Session == nil || terminal.Session.RoomContextConsumption == nil ||
+		terminal.Session.RoomContextConsumption.CoverageThroughSequence != 43 {
+		t.Fatalf("unexpected Codex deadline result: %#v error=%#v", terminal, terminal.Error)
+	}
+	plan, eligible, err := planRuntimeSession("codex", configuration, run)
+	if err != nil || !eligible {
+		t.Fatalf("coverage Session could not be planned: eligible=%t err=%v", eligible, err)
+	}
+	binding, found, err := store.Load(plan.Key)
+	if err != nil || !found || binding.LastRoomSequence != 43 ||
+		binding.LastRunID != run.RunID {
+		t.Fatalf("accepted timeout did not retain its consumption cursor: %#v found=%t err=%v", binding, found, err)
 	}
 }
 
@@ -259,7 +283,7 @@ func TestCodexAdapterClassifiesExitWithoutLeakingStderr(t *testing.T) {
 	if terminal.Error == nil || terminal.Error.Code != "CODEX_EXIT_FAILED" ||
 		terminal.Error.Details["exitCode"] != 23 ||
 		terminal.Error.Details["category"] != "configuration" ||
-		terminal.Error.Details["stderrCaptured"] != true {
+		terminal.Error.Details["stderrCaptured"] != true || terminal.Session != nil {
 		t.Fatalf("unexpected safe Codex failure: %#v", terminal)
 	}
 	encoded, err := json.Marshal(terminal.Error)
@@ -280,7 +304,12 @@ func TestCodexHelperProcess(t *testing.T) {
 		runCodexAppServerFixture(t, true, "thread/resume", false)
 		return
 	case "hang":
-		runCodexAppServerFixture(t, false, "thread/start", true)
+		runCodexAppServerFixture(
+			t,
+			false,
+			"thread/start",
+			os.Getenv("AGENTROOM_CODEX_COVERAGE_PROMPT") != "1",
+		)
 		return
 	case "malformed":
 		fmt.Println(`not-json`)
@@ -342,6 +371,10 @@ func runCodexAppServerFixture(t *testing.T, complete bool, expectedOpen string, 
 				expectedInput = "wait"
 			}
 			validInput := len(params.Input) == 1 && params.Input[0].Text == expectedInput
+			if os.Getenv("AGENTROOM_CODEX_COVERAGE_PROMPT") == "1" && len(params.Input) == 1 {
+				validInput = strings.Contains(params.Input[0].Text, "Current request:\n"+expectedInput) &&
+					strings.Contains(params.Input[0].Text, "Rolling Room context checkpoint")
+			}
 			if expectedOpen == "thread/resume" && len(params.Input) == 1 {
 				validInput = strings.Contains(params.Input[0].Text, "Current request:\n"+expectedInput) &&
 					strings.Contains(params.Input[0].Text, "permission approval") &&

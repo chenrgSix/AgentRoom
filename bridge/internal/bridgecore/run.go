@@ -48,6 +48,7 @@ func RunObserved(
 	agentNames := make(map[string]string, len(loaded.Agents))
 	resumeAgentNames := make(map[string]bool, len(loaded.Agents))
 	streamingAgentNames := make(map[string]bool, len(loaded.Agents))
+	roomContextCoverageAgentNames := make(map[string]bool, len(loaded.Agents))
 	sessions := bridgeruntime.NewFileRuntimeSessionStore(loaded.DataDir)
 	for _, configured := range loaded.Agents {
 		agentID := identities[configured.Name]
@@ -69,6 +70,8 @@ func RunObserved(
 		if adapters[agentID] != nil {
 			resumeAgentNames[configured.Name] = adapters[agentID].Capabilities().SupportsResume
 			streamingAgentNames[configured.Name] = adapters[agentID].Capabilities().SupportsStreaming
+			roomContextCoverageAgentNames[configured.Name] =
+				adapters[agentID].Capabilities().SupportsRoomContextCoverage
 		}
 	}
 	runtimeObserver := observer
@@ -88,6 +91,7 @@ func RunObserved(
 	return (connection.Client{
 		Config: loaded, Credential: credential, BridgeVersion: bridgeVersion, Observer: observer,
 		ResumeAgentNames: resumeAgentNames, StreamingAgentNames: streamingAgentNames,
+		RoomContextCoverageAgentNames: roomContextCoverageAgentNames,
 		RecoverRuns: func(ctx context.Context, send func(context.Context, any) error) error {
 			return executor.Recover(ctx, delivery.Sender(send))
 		},

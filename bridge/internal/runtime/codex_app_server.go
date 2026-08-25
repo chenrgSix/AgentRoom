@@ -56,6 +56,18 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 		logicalTaskSession = plan.LogicalTask
 		sessionKey = &key
 	}
+	bootstrapRun, bootstrapConsumption, contextErr := prepareRoomContextForSession(
+		request.Run, RuntimeSessionBinding{}, contracts.Recreated,
+	)
+	if contextErr != nil {
+		return emitCodexFailure(ctx, emit, "ROOM_CONTEXT_INVALID", "Room context coverage is invalid.")
+	}
+	promptRun, roomContextConsumption, contextErr := prepareRoomContextForSession(
+		promptRun, sessionBinding, sessionDisposition,
+	)
+	if contextErr != nil {
+		return emitCodexFailure(ctx, emit, "ROOM_CONTEXT_INVALID", "Room context coverage is invalid.")
+	}
 	working := contracts.Working
 	if err := emit(ctx, Event{Status: &working}); err != nil {
 		return err
@@ -109,9 +121,18 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	parser := newCodexAppServerSessionParser(
 		c.Config, runtimePrompt(promptRun), c.Sessions, sessionKey, resumeThreadID,
 	)
-	parser.bootstrapInstruction = runtimePrompt(request.Run)
+	parser.bootstrapInstruction = runtimePrompt(bootstrapRun)
 	parser.binding = sessionBinding
 	parser.contextCursor = plan.ContextCursor
+	parser.bootstrapContextCursor = plan.ContextCursor
+	parser.roomContextConsumption = roomContextConsumption
+	parser.bootstrapRoomContextConsumption = bootstrapConsumption
+	if roomContextConsumption != nil {
+		parser.contextCursor = roomContextConsumption.CoverageThroughSequence
+	}
+	if bootstrapConsumption != nil {
+		parser.bootstrapContextCursor = bootstrapConsumption.CoverageThroughSequence
+	}
 	parser.runtimeScopeID = plan.ScopeID
 	parser.roomMemoryRevision, parser.taskMemoryRevision,
 		parser.resultEvidenceRevision = contextRevisions(request.Run)
@@ -182,10 +203,16 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 			code = "CODEX_TIMEOUT"
 			message = "Codex execution exceeded its deadline."
 		}
-		return emit(ctx, Event{Status: &status, Error: runtimeError(code, message)})
+		return emit(ctx, Event{
+			Status: &status, Error: runtimeError(code, message),
+			Session: parser.acceptedLogicalSessionStatus(),
+		})
 	}
 	if protocolError != nil {
-		return emitCodexFailure(ctx, emit, "CODEX_PROTOCOL_INVALID", "Codex emitted an incompatible app-server event stream.")
+		return emitCodexFailureAfterAcceptance(
+			ctx, emit, parser, "CODEX_PROTOCOL_INVALID",
+			"Codex emitted an incompatible app-server event stream.", nil,
+		)
 	}
 	if !parser.complete {
 		if waitError != nil {
@@ -195,21 +222,21 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 				exitCode = exitError.ExitCode()
 			}
 			stderrText := stderr.String()
-			return emitCodexFailureWithDetails(ctx, emit, "CODEX_EXIT_FAILED", "Codex process exited unsuccessfully.", map[string]interface{}{
+			return emitCodexFailureAfterAcceptance(ctx, emit, parser, "CODEX_EXIT_FAILED", "Codex process exited unsuccessfully.", map[string]interface{}{
 				"category": classifyRuntimeFailure(stderrText), "exitCode": exitCode,
 				"stderrCaptured": strings.TrimSpace(stderrText) != "",
 			})
 		}
-		return emitCodexFailure(ctx, emit, "CODEX_OUTCOME_UNKNOWN", "Codex exited without a complete turn envelope.")
+		return emitCodexFailureAfterAcceptance(ctx, emit, parser, "CODEX_OUTCOME_UNKNOWN", "Codex exited without a complete turn envelope.", nil)
 	}
 	if parser.failure != "" {
-		return emitCodexFailure(ctx, emit, "CODEX_TURN_FAILED", "Codex reported an unsuccessful turn.")
+		return emitCodexFailureAfterAcceptance(ctx, emit, parser, "CODEX_TURN_FAILED", "Codex reported an unsuccessful turn.", nil)
 	}
 	if parser.reply == "" {
-		return emitCodexFailure(ctx, emit, "CODEX_OUTCOME_UNKNOWN", "Codex completed without an assistant reply.")
+		return emitCodexFailureAfterAcceptance(ctx, emit, parser, "CODEX_OUTCOME_UNKNOWN", "Codex completed without an assistant reply.", nil)
 	}
 	if len([]byte(parser.reply)) > maxRuntimeOutput {
-		return emitCodexFailure(ctx, emit, "CODEX_REPLY_LIMIT", "Codex reply exceeded 20000 bytes.")
+		return emitCodexFailureAfterAcceptance(ctx, emit, parser, "CODEX_REPLY_LIMIT", "Codex reply exceeded 20000 bytes.", nil)
 	}
 	reply, clarification := parseTaskClarificationEnvelope(parser.reply)
 	if clarification != nil {
@@ -244,35 +271,38 @@ type codexAppServerMessage struct {
 }
 
 type codexAppServerParser struct {
-	config                     config.AgentConfig
-	instruction                string
-	bootstrapInstruction       string
-	sessions                   RuntimeSessionStore
-	sessionKey                 *RuntimeSessionKey
-	resumeID                   string
-	resumeFailed               bool
-	threadID                   string
-	turnID                     string
-	currentItem                string
-	currentText                strings.Builder
-	emittedText                string
-	reply                      string
-	resetPending               bool
-	complete                   bool
-	failure                    string
-	activities                 []Activity
-	reasoning                  map[string]*activityTextPreview
-	binding                    RuntimeSessionBinding
-	contextCursor              int64
-	roomMemoryRevision         int64
-	taskMemoryRevision         int64
-	resultEvidenceRevision     int64
-	roomLongTermMemoryRevision int64
-	taskLongTermMemoryRevision int64
-	runID                      string
-	logicalTaskSession         bool
-	runtimeScopeID             string
-	sessionDisposition         contracts.Disposition
+	config                          config.AgentConfig
+	instruction                     string
+	bootstrapInstruction            string
+	sessions                        RuntimeSessionStore
+	sessionKey                      *RuntimeSessionKey
+	resumeID                        string
+	resumeFailed                    bool
+	threadID                        string
+	turnID                          string
+	currentItem                     string
+	currentText                     strings.Builder
+	emittedText                     string
+	reply                           string
+	resetPending                    bool
+	complete                        bool
+	failure                         string
+	activities                      []Activity
+	reasoning                       map[string]*activityTextPreview
+	binding                         RuntimeSessionBinding
+	contextCursor                   int64
+	bootstrapContextCursor          int64
+	roomContextConsumption          *contracts.BridgeRoomContextConsumption
+	bootstrapRoomContextConsumption *contracts.BridgeRoomContextConsumption
+	roomMemoryRevision              int64
+	taskMemoryRevision              int64
+	resultEvidenceRevision          int64
+	roomLongTermMemoryRevision      int64
+	taskLongTermMemoryRevision      int64
+	runID                           string
+	logicalTaskSession              bool
+	runtimeScopeID                  string
+	sessionDisposition              contracts.Disposition
 }
 
 func (p *codexAppServerParser) drainActivities() []Activity {
@@ -345,6 +375,10 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 			p.binding = RuntimeSessionBinding{}
 			if p.logicalTaskSession {
 				p.sessionDisposition = contracts.Recreated
+			}
+			if p.bootstrapRoomContextConsumption != nil {
+				p.contextCursor = p.bootstrapContextCursor
+				p.roomContextConsumption = p.bootstrapRoomContextConsumption
 			}
 			return nil, []any{p.threadRequest()}, nil
 		}
@@ -448,7 +482,34 @@ func (p *codexAppServerParser) logicalSessionStatus() *contracts.LogicalSessionS
 		p.binding.LastRoomSequence,
 		p.runtimeScopeID,
 		p.binding.ResultEvidenceRevision,
+		p.roomContextConsumption,
 	)
+}
+
+func (p *codexAppServerParser) acceptedLogicalSessionStatus() *contracts.LogicalSessionStatus {
+	if p.binding.LastRunID != p.runID {
+		return nil
+	}
+	return p.logicalSessionStatus()
+}
+
+func emitCodexFailureAfterAcceptance(
+	ctx context.Context,
+	emit EmitFunc,
+	parser *codexAppServerParser,
+	code string,
+	message string,
+	details map[string]interface{},
+) error {
+	failed := contracts.Failed
+	errorValue := runtimeError(code, message)
+	if details != nil {
+		errorValue = runtimeErrorWithDetails(code, message, details)
+	}
+	return emit(ctx, Event{
+		Status: &failed, Error: errorValue,
+		Session: parser.acceptedLogicalSessionStatus(),
+	})
 }
 
 func (p *codexAppServerParser) threadRequest() map[string]any {

@@ -10,7 +10,8 @@ import type {
   ContextArtifactRef,
   ContextLongTermMemoryScope,
   ContextMemoryProjection,
-  ContextPlanner
+  ContextPlanner,
+  PlannedRoomContextBundle
 } from "../task/context-planner.js";
 import {
   ResultEvidenceConsumptionRepository
@@ -59,6 +60,17 @@ interface DeliveryPayload {
     senderName?: string;
     content: string;
   }>;
+  roomContextBundle?: Omit<PlannedRoomContextBundle, "rawTail"> & {
+    rawTail: Omit<PlannedRoomContextBundle["rawTail"], "messages"> & {
+      messages: Array<{
+        messageId: string;
+        sequence: number;
+        senderId: string;
+        senderName?: string;
+        content: string;
+      }>;
+    };
+  };
   routingAgents?: Array<{ agentId: string; name: string }>;
   deadline: string;
 }
@@ -91,6 +103,15 @@ export interface DeliveryRecord {
   createdAt: string;
   lastSentAt: string | null;
   acceptedAt: string | null;
+}
+
+export interface RoomContextConsumptionReceipt {
+  baseContextCursor: number;
+  checkpointId?: string;
+  rawFromSequenceExclusive: number;
+  rawThroughSequenceInclusive: number;
+  rawMessageCount: number;
+  coverageThroughSequence: number;
 }
 
 function mapDelivery(row: DeliveryRow): DeliveryRecord {
@@ -207,6 +228,75 @@ export class DeliveryService {
     return row && mapDelivery(row);
   }
 
+  public validateRoomContextConsumption(
+    runId: string,
+    disposition: "started" | "resumed" | "recreated",
+    contextCursor: number,
+    receipt: RoomContextConsumptionReceipt
+  ): void {
+    const bundle = this.getByRun(runId)?.payload.roomContextBundle;
+    const run = this.runs.getRun(runId);
+    const agent = run && this.core.getAgent(run.targetAgentId);
+    if (!bundle || !run || !agent?.capabilities.supportsRoomContextCoverage) {
+      throw new Error("Run was not delivered with Room context coverage");
+    }
+    const values = [
+      contextCursor,
+      receipt.baseContextCursor,
+      receipt.rawFromSequenceExclusive,
+      receipt.rawThroughSequenceInclusive,
+      receipt.rawMessageCount,
+      receipt.coverageThroughSequence
+    ];
+    if (values.some((value) => !Number.isSafeInteger(value) || value < 0)) {
+      throw new Error("Room context consumption cursors are invalid");
+    }
+    if (
+      receipt.rawMessageCount > 12 ||
+      receipt.rawThroughSequenceInclusive !==
+        bundle.rawTail.throughSequenceInclusive ||
+      receipt.rawThroughSequenceInclusive - receipt.rawFromSequenceExclusive !==
+        receipt.rawMessageCount ||
+      contextCursor !== receipt.coverageThroughSequence ||
+      receipt.coverageThroughSequence !== Math.max(
+        receipt.baseContextCursor,
+        bundle.targetThroughSequence
+      ) ||
+      receipt.coverageThroughSequence < bundle.targetThroughSequence ||
+      receipt.coverageThroughSequence > this.core.latestMessageSequence(run.roomId)
+    ) {
+      throw new Error("Room context consumption does not match its delivered interval");
+    }
+    if (
+      (disposition === "started" || disposition === "recreated") &&
+      receipt.baseContextCursor !== 0
+    ) {
+      throw new Error("A new Runtime session cannot inherit a Room context cursor");
+    }
+    const checkpoint = bundle.checkpoint;
+    const shouldConsumeCheckpoint = checkpoint !== undefined &&
+      (disposition !== "resumed" ||
+        checkpoint.throughSequence > receipt.baseContextCursor);
+    if (
+      (shouldConsumeCheckpoint && receipt.checkpointId !== checkpoint?.checkpointId) ||
+      (!shouldConsumeCheckpoint && receipt.checkpointId !== undefined)
+    ) {
+      throw new Error("Room context checkpoint receipt does not match delivery");
+    }
+    const expectedRawFrom = shouldConsumeCheckpoint
+      ? bundle.rawTail.fromSequenceExclusive
+      : Math.min(
+          Math.max(
+            receipt.baseContextCursor,
+            bundle.rawTail.fromSequenceExclusive
+          ),
+          bundle.rawTail.throughSequenceInclusive
+        );
+    if (receipt.rawFromSequenceExclusive !== expectedRawFrom) {
+      throw new Error("Room context raw receipt does not match delivery");
+    }
+  }
+
   private ensure(runId: string): DeliveryRecord | undefined {
     const existing = this.getByRun(runId);
     if (existing) {
@@ -233,8 +323,9 @@ export class DeliveryService {
           run.taskId,
           agent.agentId,
           agent.runtimeScopeId
-        )
+      )
       : undefined;
+    const contextFence = this.runs.getContextFence(run.runId);
     const plannedContext = this.contextPlanner.plan({
       roomId: run.roomId,
       taskId: run.taskId,
@@ -242,8 +333,12 @@ export class DeliveryService {
       triggerMessageId: trigger.messageId,
       ...(evidenceAfterRevision !== undefined
         ? { resultEvidenceAfterRevision: evidenceAfterRevision }
-        : {})
+        : {}),
+      ...(contextFence ? { contextFence } : {})
     }, this.clock());
+    const roomContextBundle = agent.capabilities.supportsRoomContextCoverage
+      ? plannedContext.roomContextBundle
+      : undefined;
     const payload: DeliveryPayload = {
       runId: run.runId,
       traceId: run.traceId,
@@ -264,18 +359,24 @@ export class DeliveryService {
       ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
       instruction: run.instruction,
       contextPlan: plannedContext.contextPlan,
-      contextMessages: plannedContext.contextMessages
-        .map((message) => ({
-          messageId: message.messageId,
-          sequence: message.sequence,
-          senderId: message.senderId,
-          senderName: message.senderType === "member"
-            ? this.core.getMember(message.senderId)?.displayName ?? "Member"
-            : message.senderType === "agent"
-              ? this.core.getAgent(message.senderId)?.name ?? "Agent"
-              : "Agent Room",
-          content: message.content
-        })),
+      contextMessages: roomContextBundle
+        ? []
+        : plannedContext.contextMessages.map((message) =>
+            this.contextMessage(message)
+          ),
+      ...(roomContextBundle
+        ? {
+            roomContextBundle: {
+              ...roomContextBundle,
+              rawTail: {
+                ...roomContextBundle.rawTail,
+                messages: roomContextBundle.rawTail.messages.map((message) =>
+                  this.contextMessage(message)
+                )
+              }
+            }
+          }
+        : {}),
       routingAgents: this.core.getRoom(run.roomId)?.collaborationPolicy
         .allowAgentMentions
         ? this.core.listAgents(agent.teamId)
@@ -314,5 +415,31 @@ export class DeliveryService {
       this.clock()
     );
     return this.getByRun(runId);
+  }
+
+  private contextMessage(message: {
+    messageId: string;
+    sequence: number;
+    senderType: "member" | "agent" | "system";
+    senderId: string;
+    content: string;
+  }): {
+    messageId: string;
+    sequence: number;
+    senderId: string;
+    senderName: string;
+    content: string;
+  } {
+    return {
+      messageId: message.messageId,
+      sequence: message.sequence,
+      senderId: message.senderId,
+      senderName: message.senderType === "member"
+        ? this.core.getMember(message.senderId)?.displayName ?? "Member"
+        : message.senderType === "agent"
+          ? this.core.getAgent(message.senderId)?.name ?? "Agent"
+          : "Agent Room",
+      content: message.content
+    };
   }
 }

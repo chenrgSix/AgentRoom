@@ -4,8 +4,10 @@ import type { DevicePrincipal } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import type {
   RuntimeStatus,
+  RuntimeRoomContextConsumption,
   RuntimeTaskClarification
 } from "../runtime/runtime-adapter.js";
+import type { DeliveryService } from "./delivery-service.js";
 import { parseAgentAssessment } from "../discussion/progress-evaluator.js";
 import type {
   AppliedRunEvent,
@@ -66,7 +68,8 @@ export class BridgeRunEventService {
   public constructor(
     private readonly core: CoreRepository,
     private readonly runs: RunRepository,
-    private readonly evidenceConsumption?: ResultEvidenceConsumptionRepository
+    private readonly evidenceConsumption?: ResultEvidenceConsumptionRepository,
+    private readonly delivery?: Pick<DeliveryService, "validateRoomContextConsumption">
   ) {}
 
   public applyStatus(
@@ -88,6 +91,7 @@ export class BridgeRunEventService {
         contextCursor: number;
         runtimeScopeId?: string;
         resultEvidenceRevision?: number;
+        roomContextConsumption?: RuntimeRoomContextConsumption;
       };
       clarification?: RuntimeTaskClarification;
     },
@@ -117,11 +121,14 @@ export class BridgeRunEventService {
       const hasEvidenceCursor =
         input.session.runtimeScopeId !== undefined ||
         input.session.resultEvidenceRevision !== undefined;
+      const hasRoomContextReceipt =
+        input.session.roomContextConsumption !== undefined;
       if (
         !sessionDispositions.has(input.session.disposition) ||
         !Number.isSafeInteger(input.session.contextCursor) ||
         input.session.contextCursor < 0 ||
-        !trigger || input.session.contextCursor > trigger.sequence ||
+        !trigger || (!hasRoomContextReceipt &&
+          input.session.contextCursor > trigger.sequence) ||
         (hasEvidenceCursor && (
           typeof input.session.runtimeScopeId !== "string" ||
           !/^[0-9a-f]{64}$/u.test(input.session.runtimeScopeId) ||
@@ -131,6 +138,17 @@ export class BridgeRunEventService {
         ))
       ) {
         throw new Error("Invalid logical Runtime session status");
+      }
+      if (input.session.roomContextConsumption) {
+        if (!this.delivery) {
+          throw new Error("Room context consumption validation is unavailable");
+        }
+        this.delivery.validateRoomContextConsumption(
+          run.runId,
+          input.session.disposition,
+          input.session.contextCursor,
+          input.session.roomContextConsumption
+        );
       }
     }
     if (input.clarification) {

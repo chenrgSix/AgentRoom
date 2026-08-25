@@ -224,7 +224,9 @@ export function registerBridgeSocketRoutes({
               supportsInterrupt: capabilities.supportsInterrupt === true,
               supportsResume: capabilities.supportsResume === true,
               supportsStart: capabilities.supportsStart === true,
-              supportsStreaming: capabilities.supportsStreaming === true
+              supportsStreaming: capabilities.supportsStreaming === true,
+              supportsRoomContextCoverage:
+                capabilities.supportsRoomContextCoverage === true
             },
             now: clock()
           });
@@ -291,6 +293,9 @@ export function registerBridgeSocketRoutes({
           }
           const runtimeError = error as Record<string, unknown> | undefined;
           const runtimeSession = session as Record<string, unknown> | undefined;
+          const roomContextConsumption = runtimeSession?.roomContextConsumption as
+            | Record<string, unknown>
+            | undefined;
           const runtimeClarification = clarification as
             | Record<string, unknown>
             | undefined;
@@ -345,6 +350,34 @@ export function registerBridgeSocketRoutes({
                           resultEvidenceRevision: Number(
                             runtimeSession.resultEvidenceRevision
                           )
+                        }),
+                    ...(roomContextConsumption === undefined
+                      ? {}
+                      : {
+                          roomContextConsumption: {
+                            baseContextCursor: Number(
+                              roomContextConsumption.baseContextCursor
+                            ),
+                            ...(typeof roomContextConsumption.checkpointId ===
+                              "string"
+                              ? {
+                                  checkpointId:
+                                    roomContextConsumption.checkpointId
+                                }
+                              : {}),
+                            rawFromSequenceExclusive: Number(
+                              roomContextConsumption.rawFromSequenceExclusive
+                            ),
+                            rawThroughSequenceInclusive: Number(
+                              roomContextConsumption.rawThroughSequenceInclusive
+                            ),
+                            rawMessageCount: Number(
+                              roomContextConsumption.rawMessageCount
+                            ),
+                            coverageThroughSequence: Number(
+                              roomContextConsumption.coverageThroughSequence
+                            )
+                          }
                         })
                   }
                 }

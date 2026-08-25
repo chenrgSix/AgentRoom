@@ -6,6 +6,10 @@ import type {
   CoreRepository,
   MessageRecord
 } from "../data/core-repository.js";
+import {
+  RollingRoomMemoryRepository
+} from "../memory/rolling-room-memory-repository.js";
+import type { RunContextFence } from "../run/run-repository.js";
 import type {
   AgentTaskRecord,
   AgentTaskRepository
@@ -25,6 +29,8 @@ const recentTaskMessageLimit = 18;
 const projectionMessageLimit = 16;
 const projectionSummaryLimit = 8_000;
 const projectionExcerptLimit = 320;
+const rawRoomTailMessageLimit = 12;
+const rawRoomTailUtf8ByteLimit = 10_240;
 
 export interface ContextMemoryProjection {
   summary: string;
@@ -70,6 +76,31 @@ export interface ContextLongTermMemoryScope {
   entries: ContextLongTermMemoryEntry[];
 }
 
+export interface PlannedRoomContextBundle {
+  targetThroughSequence: number;
+  priorContextThroughSequence: number;
+  requestMessageId: string;
+  checkpoint: {
+    checkpointId: string;
+    fromSequenceExclusive: number;
+    throughSequence: number;
+    summary: string;
+    sourceMessageCount: number;
+    sourceDigest: string;
+    promptVersion: string;
+    modelFingerprint: string;
+    buildKind: "incremental" | "rebase";
+    provenanceMessageIds: string[];
+  };
+  rawTail: {
+    fromSequenceExclusive: number;
+    throughSequenceInclusive: number;
+    messageCount: number;
+    utf8Bytes: number;
+    messages: MessageRecord[];
+  };
+}
+
 export interface PlannedRuntimeContext {
   contextPlan: {
     roomMemory: ContextMemoryProjection;
@@ -88,6 +119,7 @@ export interface PlannedRuntimeContext {
     };
   };
   contextMessages: MessageRecord[];
+  roomContextBundle?: PlannedRoomContextBundle;
 }
 
 interface RoomProjectionRow {
@@ -125,6 +157,7 @@ function fingerprintProjection(input: {
 export class ContextPlanner {
   private readonly artifacts: ArtifactRepository;
   private readonly memoryEntries: MemoryEntryRepository;
+  private readonly rollingRoomMemory: RollingRoomMemoryRepository;
 
   public constructor(
     private readonly database: Database.Database,
@@ -133,6 +166,7 @@ export class ContextPlanner {
   ) {
     this.artifacts = new ArtifactRepository(database);
     this.memoryEntries = new MemoryEntryRepository(database);
+    this.rollingRoomMemory = new RollingRoomMemoryRepository(database);
   }
 
   public plan(
@@ -142,6 +176,7 @@ export class ContextPlanner {
       throughSequence: number;
       triggerMessageId: string;
       resultEvidenceAfterRevision?: number;
+      contextFence?: RunContextFence;
     },
     now: string
   ): PlannedRuntimeContext {
@@ -151,6 +186,29 @@ export class ContextPlanner {
     }
     const room = this.core.getRoom(input.roomId);
     if (!room) throw new Error(`Room not found: ${input.roomId}`);
+    if (
+      input.contextFence &&
+      (
+        input.contextFence.roomId !== input.roomId ||
+        input.contextFence.taskId !== input.taskId ||
+        input.contextFence.triggerSequence !== input.throughSequence
+      )
+    ) {
+      throw new Error("Runtime context fence does not match its Run");
+    }
+
+    const historicalFence = input.contextFence?.fenceKind === "captured"
+      ? input.contextFence
+      : undefined;
+    const contextTask = historicalFence
+      ? {
+          ...task,
+          title: historicalFence.taskTitle,
+          goal: historicalFence.taskGoal,
+          state: historicalFence.taskState,
+          artifactRevision: historicalFence.taskArtifactRevision
+        }
+      : task;
 
     const recentRoom = this.core.listMessagesThrough(
       input.roomId,
@@ -175,11 +233,30 @@ export class ContextPlanner {
     );
 
     const resultEvidence = this.planResultEvidence(
-      task,
-      input.resultEvidenceAfterRevision
+      contextTask,
+      input.resultEvidenceAfterRevision,
+      historicalFence?.taskArtifactRevision
     );
-    const roomLongTermMemory = this.memoryEntries.contextScope("room", room.roomId);
-    const taskLongTermMemory = this.memoryEntries.contextScope("task", task.taskId);
+    const roomLongTermMemory = historicalFence
+      ? this.memoryEntries.contextScopeAtRevision(
+          "room",
+          room.roomId,
+          historicalFence.roomLongTermMemoryRevision
+        )
+      : this.memoryEntries.contextScope("room", room.roomId);
+    const taskLongTermMemory = historicalFence
+      ? this.memoryEntries.contextScopeAtRevision(
+          "task",
+          task.taskId,
+          historicalFence.taskLongTermMemoryRevision
+        )
+      : this.memoryEntries.contextScope("task", task.taskId);
+    const roomContextBundle = this.planRoomContextBundle(
+      input.roomId,
+      input.throughSequence,
+      input.triggerMessageId,
+      historicalFence?.capturedAt
+    );
     return {
       contextPlan: {
         roomMemory: this.projectRoom(
@@ -188,7 +265,12 @@ export class ContextPlanner {
           roomSourceCursor,
           now
         ),
-        taskMemory: this.projectTask(task, taskSourceCursor, now),
+        taskMemory: this.projectTask(
+          contextTask,
+          taskSourceCursor,
+          now,
+          historicalFence?.taskSummaryRevision
+        ),
         ...(resultEvidence ? { resultEvidence } : {}),
         ...(roomLongTermMemory || taskLongTermMemory
           ? {
@@ -203,7 +285,72 @@ export class ContextPlanner {
             }
           : {})
       },
-      contextMessages
+      contextMessages,
+      ...(roomContextBundle ? { roomContextBundle } : {})
+    };
+  }
+
+  private planRoomContextBundle(
+    roomId: string,
+    targetThroughSequence: number,
+    requestMessageId: string,
+    checkpointCreatedAtOrBefore?: string
+  ): PlannedRoomContextBundle | undefined {
+    const state = this.rollingRoomMemory.getState(roomId);
+    if (state?.mode !== "ready") return undefined;
+    const priorContextThroughSequence = targetThroughSequence - 1;
+    if (priorContextThroughSequence < 1) return undefined;
+    const checkpoint = this.rollingRoomMemory.latestAtOrBefore(
+      roomId,
+      priorContextThroughSequence,
+      checkpointCreatedAtOrBefore
+    );
+    if (!checkpoint) return undefined;
+    const messages = this.core.listMessagesRange(
+      roomId,
+      checkpoint.throughSequence,
+      priorContextThroughSequence,
+      rawRoomTailMessageLimit + 1
+    );
+    const expectedCount = priorContextThroughSequence - checkpoint.throughSequence;
+    if (
+      messages.length !== expectedCount ||
+      messages.length > rawRoomTailMessageLimit ||
+      messages.some((message, index) =>
+        message.sequence !== checkpoint.throughSequence + index + 1 ||
+        message.messageId === requestMessageId
+      )
+    ) {
+      return undefined;
+    }
+    const utf8Bytes = messages.reduce(
+      (total, message) => total + Buffer.byteLength(message.content, "utf8"),
+      0
+    );
+    if (utf8Bytes > rawRoomTailUtf8ByteLimit) return undefined;
+    return {
+      targetThroughSequence,
+      priorContextThroughSequence,
+      requestMessageId,
+      checkpoint: {
+        checkpointId: checkpoint.checkpointId,
+        fromSequenceExclusive: checkpoint.inputFromSequenceExclusive,
+        throughSequence: checkpoint.throughSequence,
+        summary: checkpoint.summary,
+        sourceMessageCount: checkpoint.sourceMessageCount,
+        sourceDigest: checkpoint.sourceDigest,
+        promptVersion: `room-memory-v${checkpoint.promptVersion}`,
+        modelFingerprint: checkpoint.modelFingerprint,
+        buildKind: checkpoint.buildKind,
+        provenanceMessageIds: checkpoint.provenance
+      },
+      rawTail: {
+        fromSequenceExclusive: checkpoint.throughSequence,
+        throughSequenceInclusive: priorContextThroughSequence,
+        messageCount: messages.length,
+        utf8Bytes,
+        messages
+      }
     };
   }
 
@@ -303,7 +450,8 @@ export class ContextPlanner {
   private projectTask(
     task: AgentTaskRecord,
     sourceCursor: number,
-    now: string
+    now: string,
+    historicalRevision?: number
   ): ContextMemoryProjection {
     const messages = this.core.listTaskMessagesThrough(
       task.taskId,
@@ -323,6 +471,15 @@ export class ContextPlanner {
       sourceCursor,
       sourceMessageIds
     });
+    if (historicalRevision !== undefined) {
+      return {
+        summary,
+        sourceCursor,
+        revision: Math.max(1, historicalRevision),
+        sourceMessageIds,
+        projectionKind: "historical"
+      };
+    }
     const updated = this.tasks.updateSummaryProjection(task.taskId, {
       summary,
       sourceSequence: sourceCursor,
@@ -408,33 +565,43 @@ export class ContextPlanner {
 
   private planResultEvidence(
     task: AgentTaskRecord,
-    afterRevision: number | undefined
+    afterRevision: number | undefined,
+    throughRevision = task.artifactRevision
   ): PlannedRuntimeContext["contextPlan"]["resultEvidence"] | undefined {
-    if (task.artifactRevision === 0) return undefined;
+    if (throughRevision === 0) return undefined;
     if (
       afterRevision !== undefined &&
       afterRevision >= 0 &&
-      afterRevision <= task.artifactRevision
+      afterRevision <= throughRevision
     ) {
-      const artifacts = this.artifacts.listAfterRevision(task.taskId, afterRevision, 20);
+      const artifacts = this.artifacts.listAfterRevision(
+        task.taskId,
+        afterRevision,
+        20,
+        throughRevision
+      );
       if (artifacts.length === 0) return undefined;
-      const throughRevision = artifacts.at(-1)!.artifactRevision;
+      const deliveredThroughRevision = artifacts.at(-1)!.artifactRevision;
       return {
-        revision: throughRevision,
+        revision: deliveredThroughRevision,
         deliveryKind: "delta",
         fromRevision: afterRevision,
-        throughRevision,
-        hasMore: throughRevision < task.artifactRevision,
+        throughRevision: deliveredThroughRevision,
+        hasMore: deliveredThroughRevision < throughRevision,
         artifactRefs: artifacts.map((artifact) => this.contextArtifact(artifact))
       };
     }
-    const artifacts = this.artifacts.listForTask(task.taskId, 20).reverse();
+    const artifacts = this.artifacts.listForTask(
+      task.taskId,
+      20,
+      throughRevision
+    ).reverse();
     if (artifacts.length === 0) return undefined;
     return {
-      revision: task.artifactRevision,
+      revision: throughRevision,
       deliveryKind: "bootstrap",
       fromRevision: artifacts[0]!.artifactRevision - 1,
-      throughRevision: task.artifactRevision,
+      throughRevision,
       hasMore: false,
       artifactRefs: artifacts.map((artifact) => this.contextArtifact(artifact))
     };

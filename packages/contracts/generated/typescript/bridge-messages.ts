@@ -148,12 +148,13 @@ export interface AgentPublishPayload {
 }
 
 export interface Capabilities {
-  invocationMode:    InvocationMode;
-  supportsHandoff:   boolean;
-  supportsInterrupt: boolean;
-  supportsResume:    boolean;
-  supportsStart:     boolean;
-  supportsStreaming: boolean;
+  invocationMode:               InvocationMode;
+  supportsHandoff:              boolean;
+  supportsInterrupt:            boolean;
+  supportsResume:               boolean;
+  supportsRoomContextCoverage?: boolean;
+  supportsStart:                boolean;
+  supportsStreaming:            boolean;
   [property: string]: unknown;
 }
 
@@ -222,15 +223,20 @@ export interface RunRequestedPayload {
   instruction:       string;
   parentRunId?:      string;
   requesterMemberId: string;
-  roomId:            string;
-  routingAgents?:    RoutingAgent[];
-  runId:             string;
-  session?:          LogicalSessionRequest;
-  targetAgentId:     string;
-  targetAgentName?:  string;
-  taskId?:           string;
-  traceId:           string;
-  triggerMessageId:  string;
+  /**
+   * Server-owned coverage ending with one separate current request. Bridge derives
+   * session-local consumption from this bundle.
+   */
+  roomContextBundle?: ServerRoomContextBundle;
+  roomId:             string;
+  routingAgents?:     RoutingAgent[];
+  runId:              string;
+  session?:           LogicalSessionRequest;
+  targetAgentId:      string;
+  targetAgentName?:   string;
+  taskId?:            string;
+  traceId:            string;
+  triggerMessageId:   string;
   [property: string]: unknown;
 }
 
@@ -351,6 +357,53 @@ export interface TaskMemoryClass {
   summary:          string;
 }
 
+/**
+ * Server-owned coverage ending with one separate current request. Bridge derives
+ * session-local consumption from this bundle.
+ */
+export interface ServerRoomContextBundle {
+  checkpoint?:                 RollingRoomCheckpoint;
+  priorContextThroughSequence: number;
+  rawTail:                     RoomContextRawTail;
+  requestMessageId:            string;
+  targetThroughSequence:       number;
+}
+
+export interface RollingRoomCheckpoint {
+  buildKind:             BuildKind;
+  checkpointId:          string;
+  fromSequenceExclusive: number;
+  modelFingerprint:      string;
+  promptVersion:         string;
+  provenanceMessageIds:  [string, ...string[]];
+  sourceDigest:          string;
+  sourceMessageCount:    number;
+  summary:               string;
+  throughSequence:       number;
+}
+
+export type BuildKind = "incremental" | "rebase";
+
+export interface RoomContextRawTail {
+  fromSequenceExclusive:    number;
+  messageCount:             number;
+  messages:                 Message[];
+  throughSequenceInclusive: number;
+  utf8Bytes:                number;
+}
+
+export interface Message {
+  content:   string;
+  messageId: string;
+  /**
+   * Opaque identifier with a lowercase type prefix and non-semantic suffix.
+   */
+  senderId:    string;
+  senderName?: string;
+  sequence?:   number;
+  [property: string]: unknown;
+}
+
 export interface RoutingAgent {
   agentId: string;
   name:    string;
@@ -451,10 +504,28 @@ export interface LogicalSessionStatus {
   contextCursor:           number;
   disposition:             Disposition;
   resultEvidenceRevision?: number;
+  /**
+   * Bridge-owned receipt for the exact checkpoint and raw interval accepted by one logical
+   * Runtime session.
+   */
+  roomContextConsumption?: BridgeRoomContextConsumption;
   runtimeScopeId?:         string;
 }
 
 export type Disposition = "started" | "resumed" | "recreated";
+
+/**
+ * Bridge-owned receipt for the exact checkpoint and raw interval accepted by one logical
+ * Runtime session.
+ */
+export interface BridgeRoomContextConsumption {
+  baseContextCursor:           number;
+  checkpointId?:               string;
+  coverageThroughSequence:     number;
+  rawFromSequenceExclusive:    number;
+  rawMessageCount:             number;
+  rawThroughSequenceInclusive: number;
+}
 
 export type RunExecutionStatus = "working" | "input_required" | "completed" | "failed" | "canceled" | "outcome_unknown";
 

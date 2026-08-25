@@ -7,10 +7,11 @@ import (
 )
 
 type Capabilities struct {
-	SupportsResume    bool
-	SupportsStreaming bool
-	SupportsInterrupt bool
-	SupportsHandoff   bool
+	SupportsResume              bool
+	SupportsStreaming           bool
+	SupportsInterrupt           bool
+	SupportsHandoff             bool
+	SupportsRoomContextCoverage bool
 }
 
 type Request struct {

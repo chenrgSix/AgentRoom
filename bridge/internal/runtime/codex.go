@@ -17,7 +17,10 @@ type CodexAdapter struct {
 func (c CodexAdapter) Name() string { return "codex" }
 
 func (c CodexAdapter) Capabilities() Capabilities {
-	return Capabilities{SupportsResume: true, SupportsStreaming: true, SupportsInterrupt: true}
+	return Capabilities{
+		SupportsResume: true, SupportsStreaming: true, SupportsInterrupt: true,
+		SupportsRoomContextCoverage: true,
+	}
 }
 
 func (c CodexAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) error {

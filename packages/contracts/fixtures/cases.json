@@ -221,6 +221,40 @@
           "deliveryAttemptId": "delivery_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "idempotencyKey": "idem_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "instruction": "Review the Room request and reply with a plan.",
+          "roomContextBundle": {
+            "targetThroughSequence": 42,
+            "priorContextThroughSequence": 41,
+            "requestMessageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WB",
+            "checkpoint": {
+              "checkpointId": "checkpoint_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "fromSequenceExclusive": 0,
+              "throughSequence": 40,
+              "summary": "The Room agreed to keep the wire protocol compatible.",
+              "sourceMessageCount": 40,
+              "sourceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "promptVersion": "room-memory-v1",
+              "modelFingerprint": "configured-reducer-v1",
+              "buildKind": "incremental",
+              "provenanceMessageIds": [
+                "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W8"
+              ]
+            },
+            "rawTail": {
+              "fromSequenceExclusive": 40,
+              "throughSequenceInclusive": 41,
+              "messageCount": 1,
+              "utf8Bytes": 24,
+              "messages": [
+                {
+                  "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W9",
+                  "sequence": 41,
+                  "senderId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+                  "senderName": "Alice",
+                  "content": "Keep wire compatibility."
+                }
+              ]
+            }
+          },
           "contextPlan": {
             "roomMemory": {
               "summary": "Room: engineering\nEarlier Room evidence:\n- [sequence 12; Alice] Keep compatibility.",
@@ -281,15 +315,7 @@
               }
             }
           },
-          "contextMessages": [
-            {
-              "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WB",
-              "sequence": 42,
-              "senderId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
-              "senderName": "Alice",
-              "content": "Please review the API boundary."
-            }
-          ],
+          "contextMessages": [],
           "routingAgents": [
             {
               "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
@@ -389,11 +415,55 @@
             "disposition": "resumed",
             "contextCursor": 42,
             "runtimeScopeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-            "resultEvidenceRevision": 1
+            "resultEvidenceRevision": 1,
+            "roomContextConsumption": {
+              "baseContextCursor": 0,
+              "checkpointId": "checkpoint_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "rawFromSequenceExclusive": 40,
+              "rawThroughSequenceInclusive": 41,
+              "rawMessageCount": 1,
+              "coverageThroughSequence": 42
+            }
           }
         }
       },
       "valid": true
+    },
+    {
+      "name": "Room context raw tail rejects bytes beyond the delivery bound",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/roomContextRawTail",
+      "instance": {
+        "fromSequenceExclusive": 40,
+        "throughSequenceInclusive": 41,
+        "messageCount": 1,
+        "utf8Bytes": 10241,
+        "messages": [
+          {
+            "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W9",
+            "sequence": 41,
+            "senderId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "content": "Keep wire compatibility."
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "Rolling Room checkpoint requires bounded provenance",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/rollingRoomCheckpoint",
+      "instance": {
+        "checkpointId": "checkpoint_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "fromSequenceExclusive": 0,
+        "throughSequence": 40,
+        "summary": "The Room agreed to keep wire compatibility.",
+        "sourceMessageCount": 40,
+        "sourceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "promptVersion": "room-memory-v1",
+        "modelFingerprint": "configured-reducer-v1",
+        "buildKind": "incremental",
+        "provenanceMessageIds": []
+      },
+      "valid": false
     },
     {
       "name": "Runtime scope rejects a non-digest value",

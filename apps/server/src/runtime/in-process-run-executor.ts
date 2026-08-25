@@ -49,11 +49,13 @@ export class InProcessRunExecutor {
     }
 
     this.core.updateAgentPresence(agent.agentId, "busy", this.clock());
+    const contextFence = this.runs.getContextFence(initial.runId);
     const plannedContext = this.contextPlanner.plan({
       roomId: initial.roomId,
       taskId: initial.taskId,
       throughSequence: trigger.sequence,
-      triggerMessageId: trigger.messageId
+      triggerMessageId: trigger.messageId,
+      ...(contextFence ? { contextFence } : {})
     }, this.clock());
     const request: RuntimeRequest = {
       runId: initial.runId,

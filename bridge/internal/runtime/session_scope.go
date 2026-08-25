@@ -223,6 +223,152 @@ func contextDeltaForSession(
 	return run
 }
 
+func prepareRoomContextForSession(
+	run contracts.RunRequestedPayload,
+	binding RuntimeSessionBinding,
+	disposition contracts.Disposition,
+) (contracts.RunRequestedPayload, *contracts.BridgeRoomContextConsumption, error) {
+	bundleSource := run.RoomContextBundle
+	if bundleSource == nil {
+		return run, nil, nil
+	}
+	if run.TaskID == nil || strings.TrimSpace(*run.TaskID) == "" || run.Session == nil ||
+		run.Session.Scope != contracts.Task {
+		return run, nil, fmt.Errorf("Room context coverage requires a logical Task Session")
+	}
+	bundle := *bundleSource
+	raw := bundle.RawTail
+	raw.Messages = append([]contracts.Message(nil), raw.Messages...)
+	if bundle.TargetThroughSequence < 1 ||
+		bundle.TargetThroughSequence != run.Session.ContextCursor ||
+		bundle.PriorContextThroughSequence != bundle.TargetThroughSequence-1 ||
+		bundle.RequestMessageID != run.TriggerMessageID || len(run.ContextMessages) != 0 {
+		return run, nil, fmt.Errorf("Room context bundle does not match the current request")
+	}
+	if raw.FromSequenceExclusive < 0 || raw.ThroughSequenceInclusive < 0 ||
+		raw.ThroughSequenceInclusive != bundle.PriorContextThroughSequence ||
+		raw.MessageCount != int64(len(raw.Messages)) || raw.MessageCount > 12 ||
+		raw.Utf8Bytes < 0 || raw.Utf8Bytes > 10_240 {
+		return run, nil, fmt.Errorf("Room context raw tail is outside its bounds")
+	}
+	checkpointThrough := int64(0)
+	if bundle.Checkpoint != nil {
+		checkpoint := bundle.Checkpoint
+		checkpointThrough = checkpoint.ThroughSequence
+		if checkpoint.FromSequenceExclusive < 0 || checkpoint.ThroughSequence < 1 ||
+			checkpoint.FromSequenceExclusive >= checkpoint.ThroughSequence ||
+			checkpoint.ThroughSequence > bundle.PriorContextThroughSequence ||
+			checkpoint.SourceMessageCount != checkpoint.ThroughSequence-checkpoint.FromSequenceExclusive ||
+			strings.TrimSpace(checkpoint.Summary) == "" || len([]rune(checkpoint.Summary)) > 12_000 ||
+			len(checkpoint.ProvenanceMessageIDS) == 0 || len(checkpoint.ProvenanceMessageIDS) > 64 ||
+			!lowerHexDigest(checkpoint.SourceDigest) ||
+			(checkpoint.BuildKind != contracts.Incremental && checkpoint.BuildKind != contracts.Rebase) {
+			return run, nil, fmt.Errorf("Room context checkpoint is invalid")
+		}
+		seen := make(map[string]struct{}, len(checkpoint.ProvenanceMessageIDS))
+		for _, messageID := range checkpoint.ProvenanceMessageIDS {
+			if strings.TrimSpace(messageID) == "" {
+				return run, nil, fmt.Errorf("Room context checkpoint provenance is invalid")
+			}
+			if _, duplicate := seen[messageID]; duplicate {
+				return run, nil, fmt.Errorf("Room context checkpoint provenance is duplicated")
+			}
+			seen[messageID] = struct{}{}
+		}
+	} else if bundle.PriorContextThroughSequence != 0 {
+		return run, nil, fmt.Errorf("Room context bundle omitted its checkpoint")
+	}
+	if raw.FromSequenceExclusive != checkpointThrough ||
+		raw.ThroughSequenceInclusive-raw.FromSequenceExclusive != raw.MessageCount {
+		return run, nil, fmt.Errorf("Room context checkpoint and raw tail are discontinuous")
+	}
+	utf8Bytes := int64(0)
+	messageIDs := make(map[string]struct{}, len(raw.Messages))
+	for index, message := range raw.Messages {
+		expectedSequence := raw.FromSequenceExclusive + int64(index) + 1
+		if message.Sequence == nil || *message.Sequence != expectedSequence ||
+			message.MessageID == run.TriggerMessageID || strings.TrimSpace(message.MessageID) == "" {
+			return run, nil, fmt.Errorf("Room context raw tail has a gap or overlap")
+		}
+		if _, duplicate := messageIDs[message.MessageID]; duplicate {
+			return run, nil, fmt.Errorf("Room context raw tail repeats a Message")
+		}
+		messageIDs[message.MessageID] = struct{}{}
+		utf8Bytes += int64(len([]byte(message.Content)))
+	}
+	if utf8Bytes != raw.Utf8Bytes {
+		return run, nil, fmt.Errorf("Room context raw tail byte count does not match")
+	}
+
+	baseCursor := int64(0)
+	if disposition == contracts.Resumed {
+		baseCursor = binding.LastRoomSequence
+	}
+	if baseCursor < 0 {
+		return run, nil, fmt.Errorf("Room context base cursor cannot be negative")
+	}
+	includeCheckpoint := bundle.Checkpoint != nil &&
+		(disposition != contracts.Resumed || checkpointThrough > baseCursor)
+	if !includeCheckpoint {
+		bundle.Checkpoint = nil
+		selectedFrom := baseCursor
+		if selectedFrom < checkpointThrough {
+			selectedFrom = checkpointThrough
+		}
+		if selectedFrom > raw.ThroughSequenceInclusive {
+			selectedFrom = raw.ThroughSequenceInclusive
+		}
+		selected := make([]contracts.Message, 0, len(raw.Messages))
+		for _, message := range raw.Messages {
+			if message.Sequence != nil && *message.Sequence > selectedFrom {
+				selected = append(selected, message)
+			}
+		}
+		raw.FromSequenceExclusive = selectedFrom
+		raw.Messages = selected
+		raw.MessageCount = int64(len(selected))
+		raw.Utf8Bytes = messageContentBytes(selected)
+	}
+	bundle.RawTail = raw
+	run.RoomContextBundle = &bundle
+	coverageCursor := bundle.TargetThroughSequence
+	if baseCursor > coverageCursor {
+		coverageCursor = baseCursor
+	}
+	receipt := &contracts.BridgeRoomContextConsumption{
+		BaseContextCursor:           baseCursor,
+		RawFromSequenceExclusive:    raw.FromSequenceExclusive,
+		RawThroughSequenceInclusive: raw.ThroughSequenceInclusive,
+		RawMessageCount:             raw.MessageCount,
+		CoverageThroughSequence:     coverageCursor,
+	}
+	if includeCheckpoint {
+		checkpointID := bundle.Checkpoint.CheckpointID
+		receipt.CheckpointID = &checkpointID
+	}
+	return run, receipt, nil
+}
+
+func messageContentBytes(messages []contracts.Message) int64 {
+	total := int64(0)
+	for _, message := range messages {
+		total += int64(len([]byte(message.Content)))
+	}
+	return total
+}
+
+func lowerHexDigest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	for _, character := range value {
+		if (character < '0' || character > '9') && (character < 'a' || character > 'f') {
+			return false
+		}
+	}
+	return true
+}
+
 func longTermMemoryRevisions(
 	run contracts.RunRequestedPayload,
 ) (int64, int64) {
@@ -276,11 +422,13 @@ func sessionStatus(
 	contextCursor int64,
 	runtimeScopeID string,
 	resultEvidenceRevision int64,
+	roomContextConsumption *contracts.BridgeRoomContextConsumption,
 ) *contracts.LogicalSessionStatus {
 	return &contracts.LogicalSessionStatus{
 		Disposition:            disposition,
 		ContextCursor:          contextCursor,
 		RuntimeScopeID:         &runtimeScopeID,
 		ResultEvidenceRevision: &resultEvidenceRevision,
+		RoomContextConsumption: roomContextConsumption,
 	}
 }

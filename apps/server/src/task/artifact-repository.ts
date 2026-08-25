@@ -110,26 +110,40 @@ export class ArtifactRepository {
     });
   }
 
-  public listForTask(taskId: string, limit: number): TaskArtifactRecord[] {
+  public listForTask(
+    taskId: string,
+    limit: number,
+    throughRevision?: number
+  ): TaskArtifactRecord[] {
     return (this.database.prepare(`
       SELECT * FROM task_artifact_refs
-      WHERE task_id = ?
+      WHERE task_id = ? AND artifact_revision <= ?
       ORDER BY artifact_revision DESC
       LIMIT ?
-    `).all(taskId, limit) as TaskArtifactRow[]).map(mapArtifact);
+    `).all(
+      taskId,
+      throughRevision ?? Number.MAX_SAFE_INTEGER,
+      limit
+    ) as TaskArtifactRow[]).map(mapArtifact);
   }
 
   public listAfterRevision(
     taskId: string,
     afterRevision: number,
-    limit: number
+    limit: number,
+    throughRevision?: number
   ): TaskArtifactRecord[] {
     return (this.database.prepare(`
       SELECT * FROM task_artifact_refs
-      WHERE task_id = ? AND artifact_revision > ?
+      WHERE task_id = ? AND artifact_revision > ? AND artifact_revision <= ?
       ORDER BY artifact_revision
       LIMIT ?
-    `).all(taskId, afterRevision, limit) as TaskArtifactRow[]).map(mapArtifact);
+    `).all(
+      taskId,
+      afterRevision,
+      throughRevision ?? Number.MAX_SAFE_INTEGER,
+      limit
+    ) as TaskArtifactRow[]).map(mapArtifact);
   }
 
   public getRevision(taskId: string): number {

@@ -62,6 +62,7 @@ export interface AgentCapabilities {
   supportsResume: boolean;
   supportsStart: boolean;
   supportsStreaming: boolean;
+  supportsRoomContextCoverage?: boolean;
 }
 
 export interface AgentRecord {
@@ -333,6 +334,20 @@ export class CoreRepository {
     limit: number
   ): MessageRecord[] {
     return this.messages.listAfter(roomId, sequence, limit);
+  }
+
+  public listMessagesRange(
+    roomId: string,
+    fromSequenceExclusive: number,
+    throughSequenceInclusive: number,
+    limit: number
+  ): MessageRecord[] {
+    return this.messages.listRange(
+      roomId,
+      fromSequenceExclusive,
+      throughSequenceInclusive,
+      limit
+    );
   }
 
   public listMessagesThrough(

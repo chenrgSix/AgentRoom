@@ -49,7 +49,8 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       teamId: created.team.teamId, deviceId: device.deviceId, name: "Builder", role: "Managed",
       integrationMode: "managed", capabilities: {
         supportsHandoff: false, supportsInterrupt: true, supportsResume: false,
-        supportsStart: true, supportsStreaming: true
+        supportsStart: true, supportsStreaming: true,
+        supportsRoomContextCoverage: true
       }, runtimeScopeId, now
     });
     const trigger = messages.createMemberMessage(principal, {
@@ -62,7 +63,17 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     runRepository.applyEvent(run.runId, { type: "status", sequence: 1, status: "delivered" }, now);
     const credential = auth.issueDeviceCredential(device.deviceId, now);
     const devicePrincipal = auth.authenticateDevice(credential.secret, now);
-    const service = new BridgeRunEventService(core, runRepository);
+    const validatedRoomContextReceipts: unknown[] = [];
+    const service = new BridgeRunEventService(
+      core,
+      runRepository,
+      undefined,
+      {
+        validateRoomContextConsumption: (...input) => {
+          validatedRoomContextReceipts.push(input);
+        }
+      }
+    );
 
     assert.throws(() => service.applyStatus(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
@@ -128,7 +139,15 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
         disposition: "resumed",
         contextCursor: trigger.sequence,
         runtimeScopeId,
-        resultEvidenceRevision: 0
+        resultEvidenceRevision: 0,
+        roomContextConsumption: {
+          baseContextCursor: 0,
+          checkpointId: "checkpoint_event_context_12345678",
+          rawFromSequenceExclusive: 0,
+          rawThroughSequenceInclusive: 0,
+          rawMessageCount: 0,
+          coverageThroughSequence: trigger.sequence
+        }
       }
     }, now).run.state, "completed");
     const terminalEvent = runRepository.listEvents(run.runId).at(-1)?.event;
@@ -136,9 +155,19 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       terminalEvent?.type === "status" ? terminalEvent.session : null,
       {
         disposition: "resumed", contextCursor: trigger.sequence,
-        runtimeScopeId, resultEvidenceRevision: 0
+        runtimeScopeId,
+        resultEvidenceRevision: 0,
+        roomContextConsumption: {
+          baseContextCursor: 0,
+          checkpointId: "checkpoint_event_context_12345678",
+          rawFromSequenceExclusive: 0,
+          rawThroughSequenceInclusive: 0,
+          rawMessageCount: 0,
+          coverageThroughSequence: trigger.sequence
+        }
       }
     );
+    assert.equal(validatedRoomContextReceipts.length, 1);
     assert.equal(
       taskRepository.get(run.taskId)?.lastRoomSequence,
       trigger.sequence

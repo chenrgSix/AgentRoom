@@ -224,6 +224,14 @@ function mapRunEvent(row: RunEventRow): RunEventRecord {
               contextCursor: number;
               runtimeScopeId?: string;
               resultEvidenceRevision?: number;
+              roomContextConsumption?: {
+                baseContextCursor: number;
+                checkpointId?: string;
+                rawFromSequenceExclusive: number;
+                rawThroughSequenceInclusive: number;
+                rawMessageCount: number;
+                coverageThroughSequence: number;
+              };
             } }
           : {}),
         ...(row.clarification_json

@@ -280,14 +280,19 @@ export class RollingRoomMemoryRepository {
 
   public latestAtOrBefore(
     roomId: string,
-    throughSequence: number
+    throughSequence: number,
+    createdAtOrBefore?: string
   ): RollingRoomCheckpoint | undefined {
     const row = this.database.prepare(`
       SELECT * FROM rolling_room_checkpoints
-      WHERE room_id = ? AND through_sequence <= ?
+      WHERE room_id = ? AND through_sequence <= ? AND created_at <= ?
       ORDER BY through_sequence DESC, created_at DESC, checkpoint_id DESC
       LIMIT 1
-    `).get(roomId, throughSequence) as RollingRoomCheckpointRow | undefined;
+    `).get(
+      roomId,
+      throughSequence,
+      createdAtOrBefore ?? "9999-12-31T23:59:59.999Z"
+    ) as RollingRoomCheckpointRow | undefined;
     return row && mapCheckpoint(row);
   }
 

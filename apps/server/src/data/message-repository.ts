@@ -191,6 +191,26 @@ export class MessageRepository {
     return rows.map((row) => this.map(row));
   }
 
+  public listRange(
+    roomId: string,
+    fromSequenceExclusive: number,
+    throughSequenceInclusive: number,
+    limit: number
+  ): MessageRecord[] {
+    const rows = this.database.prepare(`
+      SELECT * FROM messages
+      WHERE room_id = ? AND sequence > ? AND sequence <= ?
+      ORDER BY sequence
+      LIMIT ?
+    `).all(
+      roomId,
+      fromSequenceExclusive,
+      throughSequenceInclusive,
+      limit
+    ) as MessageRow[];
+    return rows.map((row) => this.map(row));
+  }
+
   public listThrough(
     roomId: string,
     sequence: number,

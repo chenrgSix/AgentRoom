@@ -182,15 +182,29 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 	}
 	request.Run.RunID = "run_second"
 	request.Run.Session.ContextCursor = 9
-	consumedSequence := int64(7)
 	newSequence := int64(8)
-	request.Run.ContextMessages = []contracts.ContextMessage{{
-		MessageID: "msg_consumed", Content: "already-consumed-context",
-		Sequence: &consumedSequence,
-	}, {
-		MessageID: "msg_new", Content: "new-room-delta",
-		Sequence: &newSequence,
-	}}
+	request.Run.TriggerMessageID = "msg_current_pi_12345678"
+	request.Run.ContextMessages = []contracts.ContextMessage{}
+	request.Run.RoomContextBundle = &contracts.ServerRoomContextBundle{
+		TargetThroughSequence: 9, PriorContextThroughSequence: 8,
+		RequestMessageID: request.Run.TriggerMessageID,
+		Checkpoint: &contracts.RollingRoomCheckpoint{
+			CheckpointID:          "checkpoint_pi_context_12345678",
+			FromSequenceExclusive: 0, ThroughSequence: 7,
+			Summary: "already-consumed-context", SourceMessageCount: 7,
+			SourceDigest: strings.Repeat("d", 64), PromptVersion: "room-memory-v1",
+			ModelFingerprint: "test-model-v1", BuildKind: contracts.Incremental,
+			ProvenanceMessageIDS: []string{"msg_pi_provenance_12345678"},
+		},
+		RawTail: contracts.RoomContextRawTail{
+			FromSequenceExclusive: 7, ThroughSequenceInclusive: 8,
+			MessageCount: 1, Utf8Bytes: int64(len("new-room-delta")),
+			Messages: []contracts.Message{{
+				MessageID: "msg_new_pi_12345678", SenderID: "member_pi",
+				Content: "new-room-delta", Sequence: &newSequence,
+			}},
+		},
+	}
 	t.Setenv("AGENTROOM_PI_REQUIRED_CONTEXT", "new-room-delta")
 	t.Setenv("AGENTROOM_PI_FORBIDDEN_CONTEXT", "already-consumed-context")
 	terminal = Event{}
@@ -203,7 +217,12 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	if terminal.Session == nil || terminal.Session.Disposition != contracts.Resumed ||
-		terminal.Session.ContextCursor != 9 {
+		terminal.Session.ContextCursor != 9 ||
+		terminal.Session.RoomContextConsumption == nil ||
+		terminal.Session.RoomContextConsumption.BaseContextCursor != 7 ||
+		terminal.Session.RoomContextConsumption.CheckpointID != nil ||
+		terminal.Session.RoomContextConsumption.RawMessageCount != 1 ||
+		terminal.Session.RoomContextConsumption.CoverageThroughSequence != 9 {
 		t.Fatalf("existing Pi Task Session was not resumed: %#v", terminal)
 	}
 	otherTaskID := "task_beta"
@@ -212,6 +231,40 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 	if err != nil || !eligible || otherPlan.Key == plan.Key ||
 		piSessionID(otherPlan.Key, request.Run.RunID) == expectedSessionID {
 		t.Fatal("Pi native session identity crossed Task scope")
+	}
+}
+
+func TestPiAmbiguousTimeoutDoesNotAdvanceRoomCoverage(t *testing.T) {
+	t.Setenv("AGENTROOM_PI_HELPER", "hang")
+	configuration := config.AgentConfig{
+		Command:   []string{os.Args[0], "-test.run=TestPiHelperProcess"},
+		Workspace: t.TempDir(), EnvAllowlist: []string{"AGENTROOM_PI_HELPER"},
+		RuntimeKind: "pi", PresetVersion: config.CurrentPresetVersion,
+	}
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	adapter := PiAdapter{Config: configuration, Sessions: store}
+	run := roomContextFixture()
+	run.Deadline = time.Now().Add(150 * time.Millisecond)
+	var terminal Event
+	if err := adapter.Execute(context.Background(), Request{Run: run}, func(_ context.Context, event Event) error {
+		if event.Status != nil {
+			terminal = event
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Status == nil || *terminal.Status != contracts.Failed ||
+		terminal.Error == nil || terminal.Error.Code != "RUNTIME_TIMEOUT" ||
+		terminal.Session != nil {
+		t.Fatalf("ambiguous Pi timeout advanced coverage: %#v", terminal)
+	}
+	plan, eligible, err := planRuntimeSession("pi", configuration, run)
+	if err != nil || !eligible {
+		t.Fatalf("Pi coverage Session could not be planned: eligible=%t err=%v", eligible, err)
+	}
+	if binding, found, err := store.Load(plan.Key); err != nil || found {
+		t.Fatalf("ambiguous Pi timeout persisted a cursor: %#v found=%t err=%v", binding, found, err)
 	}
 }
 
@@ -227,6 +280,15 @@ func TestInsertPiSessionArgumentsPrecedesOptionTerminator(t *testing.T) {
 }
 
 func TestPiHelperProcess(t *testing.T) {
+	if os.Getenv("AGENTROOM_PI_HELPER") == "hang" {
+		if _, err := io.ReadAll(os.Stdin); err != nil {
+			os.Exit(2)
+		}
+		fmt.Println(`{"type":"session","version":3}`)
+		_ = os.Stdout.Sync()
+		time.Sleep(5 * time.Second)
+		os.Exit(0)
+	}
 	if os.Getenv("AGENTROOM_PI_HELPER") == "session" {
 		expectedID := os.Getenv("AGENTROOM_PI_EXPECTED_SESSION_ID")
 		expectedName := piSessionName(contracts.RunRequestedPayload{

@@ -36,7 +36,10 @@ type PiAdapter struct {
 func (p PiAdapter) Name() string { return "pi" }
 
 func (p PiAdapter) Capabilities() Capabilities {
-	return Capabilities{SupportsResume: true, SupportsStreaming: true, SupportsInterrupt: true}
+	return Capabilities{
+		SupportsResume: true, SupportsStreaming: true, SupportsInterrupt: true,
+		SupportsRoomContextCoverage: true,
+	}
 }
 
 func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) error {
@@ -80,6 +83,15 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 		}
 		logicalTaskSession = plan.LogicalTask
 		sessionKey = &key
+	}
+	promptRun, roomContextConsumption, contextErr := prepareRoomContextForSession(
+		promptRun, sessionBinding, sessionDisposition,
+	)
+	if contextErr != nil {
+		failed := contracts.Failed
+		return emit(ctx, Event{Status: &failed, Error: runtimeError(
+			"ROOM_CONTEXT_INVALID", "Room context coverage is invalid.",
+		)})
 	}
 	working := contracts.Working
 	if err := emit(ctx, Event{Status: &working}); err != nil {
@@ -278,8 +290,12 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 		if sessionBinding.CreatedAt.IsZero() {
 			sessionBinding.CreatedAt = now
 		}
-		if logicalTaskSession && plan.ContextCursor > sessionBinding.LastRoomSequence {
-			sessionBinding.LastRoomSequence = plan.ContextCursor
+		acceptedContextCursor := plan.ContextCursor
+		if roomContextConsumption != nil {
+			acceptedContextCursor = roomContextConsumption.CoverageThroughSequence
+		}
+		if logicalTaskSession && acceptedContextCursor > sessionBinding.LastRoomSequence {
+			sessionBinding.LastRoomSequence = acceptedContextCursor
 		}
 		sessionBinding.LastRunID = request.Run.RunID
 		roomMemoryRevision, taskMemoryRevision, resultEvidenceRevision :=
@@ -311,6 +327,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 				sessionBinding.LastRoomSequence,
 				plan.ScopeID,
 				sessionBinding.ResultEvidenceRevision,
+				roomContextConsumption,
 			)
 		}
 	}
