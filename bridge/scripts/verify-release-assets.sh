@@ -97,7 +97,9 @@ assert_safe_members() {
 
 assert_binary_version() {
   local binary=$1
-  if ! strings "${binary}" | grep -Fx "${release_tag}" >/dev/null; then
+  local escaped_release_tag=${release_tag//./\\.}
+  if ! strings "${binary}" |
+    grep -E "${escaped_release_tag}([^0-9A-Za-z._-]|$)" >/dev/null; then
     echo "Binary does not contain the injected release version ${release_tag}: ${binary}" >&2
     exit 1
   fi
