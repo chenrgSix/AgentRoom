@@ -195,6 +195,25 @@ export interface TaskClarification {
   continuationRunId: string | null;
 }
 
+export interface MemoryCandidate {
+  candidateId: string;
+  roomId: string;
+  scopeKind: "room" | "task";
+  scopeId: string;
+  taskId: string | null;
+  type: string;
+  content: string;
+  sourceMessageIds: string[];
+  checkpointId: string;
+  sourceDigest: string;
+  state: "pending" | "accepted" | "rejected";
+  acceptedMemoryId: string | null;
+  reviewedByMemberId: string | null;
+  rejectionReason: string | null;
+  createdAt: string;
+  reviewedAt: string | null;
+}
+
 export interface LocalSession {
   userId: string;
   displayName: string;

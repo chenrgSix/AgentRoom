@@ -124,7 +124,8 @@ export class MemoryCandidateService implements MemoryCandidateSink {
     private readonly database: Database.Database,
     private readonly transactions: SqliteTransactionBoundary,
     private readonly auth: AuthService,
-    private readonly longTermMemory: LongTermMemoryService
+    private readonly longTermMemory: LongTermMemoryService,
+    private readonly onCandidatesChanged?: (roomId: string) => void
   ) {}
 
   public persistSuggestions(input: {
@@ -146,11 +147,14 @@ export class MemoryCandidateService implements MemoryCandidateSink {
       throw new Error("Memory candidate checkpoint provenance does not match");
     }
 
-    this.transactions.immediate(() => {
+    const created = this.transactions.immediate(() => {
+      let count = 0;
       for (const suggestion of input.suggestions) {
-        this.persistOne(input, checkpoint, suggestion);
+        if (this.persistOne(input, checkpoint, suggestion)) count += 1;
       }
+      return count;
     });
+    if (created > 0) this.onCandidatesChanged?.(input.roomId);
   }
 
   public listRoom(
@@ -256,7 +260,7 @@ export class MemoryCandidateService implements MemoryCandidateSink {
     },
     checkpoint: CheckpointIntervalRow,
     suggestion: MemoryCandidateSuggestion
-  ): void {
+  ): boolean {
     const content = redactSensitiveText(suggestion.content.trim());
     if (
       content.length === 0 || suggestion.content.length > 2_000 ||
@@ -311,7 +315,7 @@ export class MemoryCandidateService implements MemoryCandidateSink {
       content,
       sourceMessageIds
     });
-    this.database.prepare(`
+    return this.database.prepare(`
       INSERT INTO memory_candidates (
         candidate_id, room_id, scope_kind, scope_id, task_id, entry_type,
         content, source_message_ids_json, checkpoint_id, source_digest,
@@ -334,7 +338,7 @@ export class MemoryCandidateService implements MemoryCandidateSink {
       input.sourceDigest,
       fingerprint,
       input.now
-    );
+    ).changes === 1;
   }
 
   private requireCandidate(candidateId: string): MemoryCandidateRecord {

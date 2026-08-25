@@ -36,6 +36,7 @@ import {
   TeamCreateDialog
 } from "./features/team/TeamDialogs.js";
 import { TaskClarifications } from "./features/task/TaskClarifications.js";
+import { MemoryCandidateReview } from "./features/task/MemoryCandidateReview.js";
 import { TaskCreateDialog, TaskSelector } from "./features/task/TaskControls.js";
 import {
   type Agent,
@@ -50,6 +51,7 @@ import {
   type LocalSession,
   type Member,
   type MemberInvitation,
+  type MemoryCandidate,
   type Message,
   type Room,
   type RoomCollaborationPolicy,
@@ -82,6 +84,20 @@ import {
 
 function collaborationPolicyFor(room: Room | null): RoomCollaborationPolicy {
   return room?.collaborationPolicy ?? defaultRoomCollaborationPolicy;
+}
+
+async function loadPendingMemoryCandidates(
+  roomId: string,
+  token?: string
+): Promise<MemoryCandidate[]> {
+  try {
+    return await jsonRequest<MemoryCandidate[]>(
+      `/api/rooms/${roomId}/memory-candidates`, {}, token
+    );
+  } catch {
+    // Candidate review is additive and must not block the Room timeline.
+    return [];
+  }
 }
 const localeKey = "agent-room.locale";
 const themeKey = "agent-room.theme";
@@ -122,6 +138,7 @@ export function App() {
   const [discussions, setDiscussions] = useState<DiscussionView[]>([]);
   const [tasks, setTasks] = useState<AgentTask[]>([]);
   const [clarifications, setClarifications] = useState<TaskClarification[]>([]);
+  const [memoryCandidates, setMemoryCandidates] = useState<MemoryCandidate[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -165,6 +182,7 @@ export function App() {
   const [teamBusy, setTeamBusy] = useState(false);
   const [taskBusy, setTaskBusy] = useState(false);
   const [clarificationBusyId, setClarificationBusyId] = useState<string | null>(null);
+  const [memoryCandidateBusyId, setMemoryCandidateBusyId] = useState<string | null>(null);
   const [participantBusy, setParticipantBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messageSyncRef = useRef<{
@@ -698,6 +716,7 @@ export function App() {
       setDiscussions([]);
       setTasks([]);
       setClarifications([]);
+      setMemoryCandidates([]);
       setClarificationAnswers({});
       setSelectedTaskId(null);
       messageSyncRef.current = null;
@@ -720,6 +739,7 @@ export function App() {
     diagnosticRequestsRef.current.clear();
     setTasks([]);
     setClarifications([]);
+    setMemoryCandidates([]);
     setClarificationAnswers({});
     setSelectedTaskId(null);
     void Promise.all([
@@ -747,8 +767,16 @@ export function App() {
         `/api/rooms/${selectedRoomId}/tasks`,
         {},
         session.token
-      )
-    ]).then(async ([page, nextRuns, nextDiscussions, nextSettings, nextTasks]) => {
+      ),
+      loadPendingMemoryCandidates(selectedRoomId, session.token)
+    ]).then(async ([
+      page,
+      nextRuns,
+      nextDiscussions,
+      nextSettings,
+      nextTasks,
+      nextMemoryCandidates
+    ]) => {
       const outputBatches = await loadRunOutputEvents(
         nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
         session.token
@@ -764,6 +792,7 @@ export function App() {
       commitRunOutputEvents(nextRuns, outputBatches);
       setDiscussions(nextDiscussions);
       setTasks(nextTasks);
+      setMemoryCandidates(nextMemoryCandidates);
       setSelectedTaskId((current) =>
         nextTasks.some(({ taskId }) => taskId === current)
           ? current
@@ -854,7 +883,8 @@ export function App() {
             ),
             jsonRequest<AgentTask[]>(
               `/api/rooms/${selectedRoomId}/tasks`, {}, session.token
-            )
+            ),
+            loadPendingMemoryCandidates(selectedRoomId, session.token)
           ]),
           scope === "full"
             ? Promise.all([
@@ -873,7 +903,7 @@ export function App() {
               ])
             : Promise.resolve(null)
         ]);
-        const [nextRuns, nextDiscussions, nextTasks] = roomState;
+        const [nextRuns, nextDiscussions, nextTasks, nextMemoryCandidates] = roomState;
         const outputBatches = await loadRunOutputEvents(
           nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
           session.token
@@ -896,6 +926,7 @@ export function App() {
           commitRunOutputEvents(nextRuns, outputBatches);
           setDiscussions(nextDiscussions);
           setTasks(nextTasks);
+          setMemoryCandidates(nextMemoryCandidates);
           setSelectedTaskId((current) =>
             nextTasks.some(({ taskId }) => taskId === current)
               ? current
@@ -1357,7 +1388,7 @@ export function App() {
 
   async function refreshRoomState() {
     if (!session || !selectedRoomId) return;
-    const [page, nextRuns, nextDiscussions, nextTasks] = await Promise.all([
+    const [page, nextRuns, nextDiscussions, nextTasks, nextMemoryCandidates] = await Promise.all([
       jsonRequest<RoomMessagePage>(
         `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`, {}, session.token
       ),
@@ -1369,7 +1400,8 @@ export function App() {
       ),
       jsonRequest<AgentTask[]>(
         `/api/rooms/${selectedRoomId}/tasks`, {}, session.token
-      )
+      ),
+      loadPendingMemoryCandidates(selectedRoomId, session.token)
     ]);
     setMessages((current) => mergeRoomMessages(current, page.items));
     const sequence = page.items.at(-1)?.sequence ?? 0;
@@ -1388,6 +1420,7 @@ export function App() {
     setRuns(nextRuns);
     setDiscussions(nextDiscussions);
     setTasks(nextTasks);
+    setMemoryCandidates(nextMemoryCandidates);
     setSelectedTaskId((current) =>
       nextTasks.some(({ taskId }) => taskId === current)
         ? current
@@ -1432,6 +1465,38 @@ export function App() {
       setError(String(reason));
     } finally {
       setClarificationBusyId(null);
+    }
+  }
+
+  async function reviewMemoryCandidate(
+    candidate: MemoryCandidate,
+    action: "accept" | "reject"
+  ) {
+    if (!session || memoryCandidateBusyId) return;
+    setMemoryCandidateBusyId(candidate.candidateId);
+    setError(null);
+    try {
+      const reviewed = await jsonRequest<MemoryCandidate>(
+        `/api/memory-candidates/${candidate.candidateId}/${action}`,
+        { method: "POST", body: JSON.stringify({}) },
+        session.token
+      );
+      setMemoryCandidates((current) => current.filter(({ candidateId }) =>
+        candidateId !== reviewed.candidateId
+      ));
+    } catch (reason) {
+      setError(String(reason));
+      if (selectedRoomId) {
+        try {
+          setMemoryCandidates(await jsonRequest<MemoryCandidate[]>(
+            `/api/rooms/${selectedRoomId}/memory-candidates`, {}, session.token
+          ));
+        } catch {
+          // Preserve the original review error while converging when possible.
+        }
+      }
+    } finally {
+      setMemoryCandidateBusyId(null);
     }
   }
 
@@ -1886,6 +1951,14 @@ export function App() {
                 visibleDiscussion={visibleDiscussion}
               />
             )}
+            <MemoryCandidateReview
+              busyId={memoryCandidateBusyId}
+              candidates={memoryCandidates}
+              locale={locale}
+              onAccept={(candidate) => reviewMemoryCandidate(candidate, "accept")}
+              onReject={(candidate) => reviewMemoryCandidate(candidate, "reject")}
+              tasks={tasks}
+            />
             <TaskClarifications
               agentsById={agentsById}
               answers={clarificationAnswers}

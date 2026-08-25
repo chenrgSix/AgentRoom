@@ -179,7 +179,11 @@ export async function createServerApp(
     database,
     transactions,
     auth,
-    longTermMemory
+    longTermMemory,
+    (roomId) => {
+      const room = core.getRoom(roomId);
+      if (room) teamChanges.notify(room.teamId, { kind: "room", roomId });
+    }
   );
   const memoryReducer = options.memoryReducer
     ? new MemoryReducerScheduler(

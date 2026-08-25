@@ -141,6 +141,13 @@ validation as a manual write and atomically records the resulting Memory ID.
 Review is a one-way pending transition, so it cannot silently overwrite either
 an accepted assertion or retained rejection evidence.
 
+The Room UI presents pending candidates in a separate non-authoritative review
+surface with scope, type, source Message IDs, and checkpoint provenance. A
+candidate insert publishes a Room change hint so asynchronous reducer output
+converges in open clients. Accept and reject controls use the transactional API
+and remove a card only after the Server returns its reviewed state; review
+failure reloads the pending list without disturbing the Room timeline.
+
 Member-authorized Room and Task HTTP APIs expose revision-cursor reads,
 creation, supersession, and retraction. Context planning selects at most 16
 active entries per scope by stable type priority and revision, plus the newest

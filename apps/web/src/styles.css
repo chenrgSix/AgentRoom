@@ -422,6 +422,25 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .run-state.failed, .run-state.expired, .run-state.outcome_unknown { border-color: #83514a; color: #f0aaa1; }
 .run-state.queued { border-color: #4a5045; color: #aeb5a7; }
 .room-dock { display: grid; flex: 0 0 auto; gap: 9px; padding: 12px max(24px, calc((100% - 1080px) / 2)) 22px; border-top: 1px solid #252a27; background: linear-gradient(180deg, rgb(13 16 15 / 88%), rgb(13 16 15 / 98%)); backdrop-filter: blur(18px); }
+.memory-candidate-review { display: grid; gap: 10px; padding: 12px 14px; border: 1px solid #365f55; border-radius: 14px; background: #172521; box-shadow: 0 12px 34px rgb(0 0 0 / 18%); }
+.memory-candidate-review > header { display: flex; align-items: end; justify-content: space-between; gap: 14px; }
+.memory-candidate-review > header div { display: grid; gap: 3px; }
+.memory-candidate-review > header strong { color: #d8eee6; font-size: 12px; }
+.memory-candidate-review > header small { color: #88a49b; font-size: 9px; text-align: right; }
+.memory-candidate-kicker { color: #6ed4b4; font-size: 9px; font-weight: 850; letter-spacing: .04em; text-transform: uppercase; }
+.memory-candidate-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(280px, 100%), 1fr)); gap: 8px; }
+.memory-candidate { display: grid; min-width: 0; gap: 8px; padding: 10px; border: 1px solid #2e4b43; border-radius: 11px; background: #111b18; }
+.memory-candidate p { margin: 0; color: #d6e4df; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
+.memory-candidate-meta { display: flex; flex-wrap: wrap; gap: 5px; }
+.memory-candidate-meta span { padding: 3px 7px; border-radius: 999px; background: #223b34; color: #9ddbc7; font-size: 8px; font-weight: 750; }
+.memory-candidate details { display: grid; gap: 4px; color: #7f9a92; font-size: 9px; }
+.memory-candidate details summary { cursor: pointer; }
+.memory-candidate details code { display: block; margin-top: 4px; color: #9ab1aa; white-space: normal; overflow-wrap: anywhere; }
+.memory-candidate details small { display: block; margin-top: 3px; }
+.memory-candidate-actions { display: flex; justify-content: flex-end; gap: 7px; }
+.memory-candidate-actions button { min-height: 32px; padding: 6px 10px; border: 1px solid #58aa90; border-radius: 9px; background: #65c3a5; color: #092118; font-size: 9px; font-weight: 850; cursor: pointer; }
+.memory-candidate-actions button.secondary { border-color: #445d55; background: transparent; color: #a4b8b1; }
+.memory-candidate-actions button:disabled { cursor: wait; opacity: .6; }
 .task-clarification { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 12px 14px; border: 1px solid #806d3e; border-radius: 14px; background: #2b281a; box-shadow: 0 12px 34px rgb(0 0 0 / 18%); }
 .task-clarification-copy { display: grid; min-width: 0; gap: 4px; }
 .task-clarification-copy strong { color: #f0e3b6; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
@@ -665,6 +684,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .run-diagnostic > small { color: #6f7869; }
 :root[data-theme="light"] .composer { border-color: #c6d0bd; background: rgb(251 252 248 / 97%); box-shadow: 0 18px 50px rgb(58 73 42 / 16%); }
 :root[data-theme="light"] .room-dock { border-color: #d5dccd; background: rgb(244 246 239 / 97%); }
+:root[data-theme="light"] .memory-candidate-review { border-color: #a8cfc2; background: #eef8f4; box-shadow: 0 12px 34px rgb(41 92 75 / 10%); }
+:root[data-theme="light"] .memory-candidate-review > header strong { color: #24483c; }
+:root[data-theme="light"] .memory-candidate-review > header small { color: #647d74; }
+:root[data-theme="light"] .memory-candidate-kicker { color: #26785f; }
+:root[data-theme="light"] .memory-candidate { border-color: #c5ddd5; background: #fbfffd; }
+:root[data-theme="light"] .memory-candidate p { color: #2d443c; }
+:root[data-theme="light"] .memory-candidate-meta span { background: #dcefe8; color: #28634f; }
+:root[data-theme="light"] .memory-candidate details, :root[data-theme="light"] .memory-candidate details code { color: #657a72; }
 :root[data-theme="light"] .task-clarification { border-color: #d7c47f; background: #fff9e8; box-shadow: 0 12px 34px rgb(101 83 31 / 10%); }
 :root[data-theme="light"] .task-clarification-copy strong { color: #51441d; }
 :root[data-theme="light"] .task-clarification-copy small { color: #756c51; }
@@ -807,6 +834,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .agent-card-grid { grid-template-columns: 1fr; }
   .control-panel { padding: 15px; }
   .room-dock { padding: 8px 12px 12px; }
+  .memory-candidate-review > header { align-items: start; flex-direction: column; gap: 5px; }
+  .memory-candidate-review > header small { text-align: left; }
+  .memory-candidate-actions { display: grid; grid-template-columns: 1fr 1fr; }
   .participant-editor-list { grid-template-columns: 1fr; }
   .room-policy-options { grid-template-columns: 1fr; }
   .lifecycle-layout { grid-template-columns: 1fr; }
