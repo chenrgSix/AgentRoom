@@ -45,6 +45,10 @@
       "type": "string",
       "pattern": "^artifact_[A-Za-z0-9_-]{8,128}$"
     },
+    "contentId": {
+      "type": "string",
+      "pattern": "^content_[A-Za-z0-9_-]{8,128}$"
+    },
     "traceId": {
       "type": "string",
       "pattern": "^trace_[A-Za-z0-9_-]{8,128}$"

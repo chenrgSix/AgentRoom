@@ -527,6 +527,12 @@
         },
         "supportsWorkspaceLeases": {
           "type": "boolean"
+        },
+        "supportsArtifactPublication": {
+          "type": "boolean"
+        },
+        "supportsArtifactMaterialization": {
+          "type": "boolean"
         }
       },
       "allOf": [
@@ -1016,6 +1022,53 @@
           "required": ["createdByAgentId"]
         }
       ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "content": {}
+            },
+            "required": ["content"]
+          },
+          "then": {
+            "oneOf": [
+              {
+                "properties": {
+                  "type": { "const": "patch" },
+                  "content": {
+                    "type": "object",
+                    "properties": {
+                      "mediaType": { "const": "text/x-diff" }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "type": { "const": "document" },
+                  "content": {
+                    "type": "object",
+                    "properties": {
+                      "mediaType": { "const": "text/markdown" }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "type": { "const": "test_result" },
+                  "content": {
+                    "type": "object",
+                    "properties": {
+                      "mediaType": { "const": "application/json" }
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      ],
       "properties": {
         "artifactId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
@@ -1058,6 +1111,9 @@
           "minLength": 1,
           "maxLength": 255
         },
+        "content": {
+          "$ref": "#/$defs/artifactContentDescriptor"
+        },
         "title": {
           "type": "string",
           "minLength": 1,
@@ -1079,6 +1135,90 @@
         },
         "createdAt": {
           "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "artifactContentDescriptor": {
+      "title": "Pinned Artifact Content",
+      "description": "Immutable content metadata and a path-free logical alias pinned into one Run delivery.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contentId",
+        "sizeBytes",
+        "mediaType",
+        "sha256",
+        "logicalAlias"
+      ],
+      "properties": {
+        "contentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/contentId"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4194304
+        },
+        "mediaType": {
+          "enum": [
+            "text/x-diff",
+            "text/markdown",
+            "application/json"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "logicalAlias": {
+          "type": "string",
+          "pattern": "^artifact://artifact_[A-Za-z0-9_-]{8,128}/[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"
+        }
+      }
+    },
+    "artifactMaterializationReceipt": {
+      "title": "Verified Artifact Materialization Receipt",
+      "description": "Bridge-owned receipt for verified isolated staging; it never contains a local path.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactId",
+        "contentId",
+        "sizeBytes",
+        "mediaType",
+        "sha256",
+        "logicalAlias",
+        "materializationState"
+      ],
+      "properties": {
+        "artifactId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
+        },
+        "contentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/contentId"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4194304
+        },
+        "mediaType": {
+          "enum": [
+            "text/x-diff",
+            "text/markdown",
+            "application/json"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "logicalAlias": {
+          "type": "string",
+          "pattern": "^artifact://artifact_[A-Za-z0-9_-]{8,128}/[A-Za-z0-9][A-Za-z0-9._-]{0,254}$"
+        },
+        "materializationState": {
+          "enum": ["verified", "reused"]
         }
       }
     },
@@ -1447,7 +1587,24 @@
       }
     },
     "runAcceptedPayload": {
-      "$ref": "#/$defs/runEventBase"
+      "allOf": [
+        {
+          "$ref": "#/$defs/runEventBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "artifactMaterializations": {
+              "type": "array",
+              "maxItems": 20,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/artifactMaterializationReceipt"
+              }
+            }
+          }
+        }
+      ]
     },
     "runStatusPayload": {
       "allOf": [

@@ -228,7 +228,11 @@ export function registerBridgeSocketRoutes({
               supportsRoomContextCoverage:
                 capabilities.supportsRoomContextCoverage === true,
               supportsWorkspaceLeases:
-                capabilities.supportsWorkspaceLeases === true
+                capabilities.supportsWorkspaceLeases === true,
+              supportsArtifactPublication:
+                capabilities.supportsArtifactPublication === true,
+              supportsArtifactMaterialization:
+                capabilities.supportsArtifactMaterialization === true
             },
             ...(typeof message.payload.workspaceRef === "string"
               ? { workspaceRef: message.payload.workspaceRef }

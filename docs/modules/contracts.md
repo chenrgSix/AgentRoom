@@ -1,7 +1,7 @@
 # Contracts Module
 
 - Prefix: `CON`
-- Planned location: `packages/contracts/`
+- Implementation: `packages/contracts/`
 - Owns: cross-language wire schemas and compatibility policy
 
 ## Purpose
@@ -134,8 +134,18 @@ most 20 ArtifactRefs. Additive `deliveryKind`, `fromRevision`,
 window from a strict ascending continuation page; every new reference also has
 a Task-local `artifactRevision`. References identify commit, branch, relative
 file/patch, test-result, or document evidence and retain creator plus optional
-source Run; they never embed file bytes, tool output, provider sessions, or
-permission grants.
+source Run. A content-bearing Patch, Markdown document, or JSON test result adds
+one closed descriptor with content ID, bounded size, exact media type and
+SHA-256, plus an `artifact://` logical alias. It never embeds file bytes, a
+local path, tool output, provider session, or permission grant.
+
+Managed Agent capabilities may independently advertise Artifact publication
+and isolated materialization. Publication requires the existing Workspace lease
+capability; neither optional flag grants access by itself. After isolated bytes
+are verified, `run.accepted` may carry at most 20 closed materialization
+receipts. Each repeats the pinned Artifact/content IDs, size, digest, logical
+alias, and only the bounded `verified` or `reused` state; additional local or
+provider-native fields are contract-invalid.
 
 An optional `longTermMemory` plan carries independently revisioned Room and
 Task snapshots. Each scope contains at most 24 typed entries, an
@@ -214,7 +224,7 @@ traces, or internal database errors.
 
 ## Task Mapping
 
-`CON-001` through `CON-008`, plus cross-language portions of `QA-001`.
+`CON-001` through `CON-010`, plus cross-language portions of `QA-001`.
 
 ## Dependencies
 

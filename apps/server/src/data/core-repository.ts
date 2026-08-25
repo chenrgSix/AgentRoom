@@ -64,6 +64,8 @@ export interface AgentCapabilities {
   supportsStreaming: boolean;
   supportsRoomContextCoverage?: boolean;
   supportsWorkspaceLeases?: boolean;
+  supportsArtifactPublication?: boolean;
+  supportsArtifactMaterialization?: boolean;
 }
 
 export interface AgentRecord {

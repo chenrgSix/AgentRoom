@@ -54,6 +54,12 @@ function validateCapabilities(input: PublishAgentInput): void {
   ) {
     throw new Error("Workspace lease capability requires a snapshot identity");
   }
+  if (
+    input.capabilities.supportsArtifactPublication === true &&
+    input.capabilities.supportsWorkspaceLeases !== true
+  ) {
+    throw new Error("Artifact publication capability requires Workspace leases");
+  }
   if (input.integrationMode === "managed" || input.integrationMode === "fake") {
     if (!input.deviceId || !input.capabilities.supportsStart) {
       throw new Error("Managed and Fake Agents require a Device and start capability");
@@ -66,7 +72,9 @@ function validateCapabilities(input: PublishAgentInput): void {
   if (
     input.capabilities.supportsStart ||
     input.capabilities.supportsResume ||
-    input.capabilities.supportsInterrupt
+    input.capabilities.supportsInterrupt ||
+    input.capabilities.supportsArtifactPublication ||
+    input.capabilities.supportsArtifactMaterialization
   ) {
     throw new Error("Manual Agents cannot advertise managed lifecycle capabilities");
   }
@@ -164,6 +172,14 @@ export class AgentService {
       input.workspaceRef === undefined
     ) {
       throw new Error("Bridge Workspace lease capability requires a snapshot");
+    }
+    if (
+      input.capabilities.supportsArtifactPublication === true &&
+      input.capabilities.supportsWorkspaceLeases !== true
+    ) {
+      throw new Error(
+        "Bridge Artifact publication capability requires Workspace leases"
+      );
     }
     const existing = this.repository.getAgent(input.agentId);
     if (

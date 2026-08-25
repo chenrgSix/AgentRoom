@@ -175,7 +175,9 @@
             "supportsStreaming": true,
             "supportsInterrupt": true,
             "supportsHandoff": true,
-            "supportsWorkspaceLeases": true
+            "supportsWorkspaceLeases": true,
+            "supportsArtifactPublication": true,
+            "supportsArtifactMaterialization": true
           }
         }
       },
@@ -827,6 +829,119 @@
         "credential": {
           "expiresAt": null
         }
+      },
+      "valid": false
+    },
+    {
+      "name": "valid pinned Artifact content descriptor",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "patch",
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "change.patch",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "text/x-diff",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/change.patch"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "Patch Artifact content rejects a mismatched media type",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "type": "patch",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/change.patch"
+        },
+        "title": "Mismatched content",
+        "summary": "Must fail type and media validation.",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "Artifact content rejects a local path as its logical alias",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactContentDescriptor",
+      "instance": {
+        "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "sizeBytes": 1024,
+        "mediaType": "text/x-diff",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "logicalAlias": "/Users/alice/project/change.patch"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid Run acceptance with verified Artifact receipt",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5YZ",
+        "timestamp": "2026-08-22T10:00:12Z",
+        "type": "run.accepted",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 1,
+          "artifactMaterializations": [
+            {
+              "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "sizeBytes": 1024,
+              "mediaType": "text/x-diff",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/change.patch",
+              "materializationState": "verified"
+            }
+          ]
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "Artifact receipt rejects a local staging path",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactMaterializationReceipt",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "sizeBytes": 1024,
+        "mediaType": "text/x-diff",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/change.patch",
+        "materializationState": "verified",
+        "localPath": "/tmp/agent-room/change.patch"
+      },
+      "valid": false
+    },
+    {
+      "name": "Artifact receipt rejects an unbounded lifecycle state",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactMaterializationReceipt",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "sizeBytes": 1024,
+        "mediaType": "text/x-diff",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/change.patch",
+        "materializationState": "downloaded"
       },
       "valid": false
     }

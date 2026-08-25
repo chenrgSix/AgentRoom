@@ -150,14 +150,16 @@ export interface AgentPublishPayload {
 }
 
 export interface Capabilities {
-  invocationMode:               InvocationMode;
-  supportsHandoff:              boolean;
-  supportsInterrupt:            boolean;
-  supportsResume:               boolean;
-  supportsRoomContextCoverage?: boolean;
-  supportsStart:                boolean;
-  supportsStreaming:            boolean;
-  supportsWorkspaceLeases?:     boolean;
+  invocationMode:                   InvocationMode;
+  supportsArtifactMaterialization?: boolean;
+  supportsArtifactPublication?:     boolean;
+  supportsHandoff:                  boolean;
+  supportsInterrupt:                boolean;
+  supportsResume:                   boolean;
+  supportsRoomContextCoverage?:     boolean;
+  supportsStart:                    boolean;
+  supportsStreaming:                boolean;
+  supportsWorkspaceLeases?:         boolean;
   [property: string]: unknown;
 }
 
@@ -324,6 +326,10 @@ export interface ArtifactReference {
   branch?:           string;
   commitSha?:        string;
   /**
+   * Immutable content metadata and a path-free logical alias pinned into one Run delivery.
+   */
+  content?: PinnedArtifactContent;
+  /**
    * RFC 3339 date-time normalized to the UTC Z suffix.
    */
   createdAt:          string;
@@ -337,6 +343,19 @@ export interface ArtifactReference {
   type:               ArtifactReferenceType;
   workspaceRef?:      string;
 }
+
+/**
+ * Immutable content metadata and a path-free logical alias pinned into one Run delivery.
+ */
+export interface PinnedArtifactContent {
+  contentId:    string;
+  logicalAlias: string;
+  mediaType:    MediaType;
+  sha256:       string;
+  sizeBytes:    number;
+}
+
+export type MediaType = "text/x-diff" | "text/markdown" | "application/json";
 
 export type ArtifactReferenceType = "commit" | "branch" | "file" | "patch" | "test_result" | "document";
 
@@ -444,12 +463,28 @@ export interface RunAcceptedMessage {
 }
 
 export interface RunAcceptedPayload {
-  agentId:  string;
-  runId:    string;
-  sequence: number;
-  traceId:  string;
+  agentId:                   string;
+  runId:                     string;
+  sequence:                  number;
+  traceId:                   string;
+  artifactMaterializations?: VerifiedArtifactMaterializationReceipt[];
   [property: string]: unknown;
 }
+
+/**
+ * Bridge-owned receipt for verified isolated staging; it never contains a local path.
+ */
+export interface VerifiedArtifactMaterializationReceipt {
+  artifactId:           string;
+  contentId:            string;
+  logicalAlias:         string;
+  materializationState: MaterializationState;
+  mediaType:            MediaType;
+  sha256:               string;
+  sizeBytes:            number;
+}
+
+export type MaterializationState = "verified" | "reused";
 
 export type RunAcceptedMessageType = "run.accepted";
 

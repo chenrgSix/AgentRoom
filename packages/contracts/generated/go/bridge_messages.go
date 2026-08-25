@@ -107,14 +107,16 @@ type AgentPublishPayload struct {
 }
 
 type Capabilities struct {
-	InvocationMode              InvocationMode `json:"invocationMode"`
-	SupportsHandoff             bool           `json:"supportsHandoff"`
-	SupportsInterrupt           bool           `json:"supportsInterrupt"`
-	SupportsResume              bool           `json:"supportsResume"`
-	SupportsRoomContextCoverage *bool          `json:"supportsRoomContextCoverage,omitempty"`
-	SupportsStart               bool           `json:"supportsStart"`
-	SupportsStreaming           bool           `json:"supportsStreaming"`
-	SupportsWorkspaceLeases     *bool          `json:"supportsWorkspaceLeases,omitempty"`
+	InvocationMode                  InvocationMode `json:"invocationMode"`
+	SupportsArtifactMaterialization *bool          `json:"supportsArtifactMaterialization,omitempty"`
+	SupportsArtifactPublication     *bool          `json:"supportsArtifactPublication,omitempty"`
+	SupportsHandoff                 bool           `json:"supportsHandoff"`
+	SupportsInterrupt               bool           `json:"supportsInterrupt"`
+	SupportsResume                  bool           `json:"supportsResume"`
+	SupportsRoomContextCoverage     *bool          `json:"supportsRoomContextCoverage,omitempty"`
+	SupportsStart                   bool           `json:"supportsStart"`
+	SupportsStreaming               bool           `json:"supportsStreaming"`
+	SupportsWorkspaceLeases         *bool          `json:"supportsWorkspaceLeases,omitempty"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -244,6 +246,8 @@ type ArtifactReference struct {
 	ArtifactRevision *int64  `json:"artifactRevision,omitempty"`
 	Branch           *string `json:"branch,omitempty"`
 	CommitSHA        *string `json:"commitSha,omitempty"`
+	// Immutable content metadata and a path-free logical alias pinned into one Run delivery.
+	Content *PinnedArtifactContent `json:"content,omitempty"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
 	CreatedAt         time.Time             `json:"createdAt"`
 	CreatedByAgentID  *string               `json:"createdByAgentId,omitempty"`
@@ -255,6 +259,15 @@ type ArtifactReference struct {
 	Title             string                `json:"title"`
 	Type              ArtifactReferenceType `json:"type"`
 	WorkspaceRef      *string               `json:"workspaceRef,omitempty"`
+}
+
+// Immutable content metadata and a path-free logical alias pinned into one Run delivery.
+type PinnedArtifactContent struct {
+	ContentID    string    `json:"contentId"`
+	LogicalAlias string    `json:"logicalAlias"`
+	MediaType    MediaType `json:"mediaType"`
+	Sha256       string    `json:"sha256"`
+	SizeBytes    int64     `json:"sizeBytes"`
 }
 
 type RoomMemoryClass struct {
@@ -337,10 +350,22 @@ type RunAcceptedMessage struct {
 }
 
 type RunAcceptedPayload struct {
-	AgentID  string `json:"agentId"`
-	RunID    string `json:"runId"`
-	Sequence int64  `json:"sequence"`
-	TraceID  string `json:"traceId"`
+	AgentID                  string                                   `json:"agentId"`
+	RunID                    string                                   `json:"runId"`
+	Sequence                 int64                                    `json:"sequence"`
+	TraceID                  string                                   `json:"traceId"`
+	ArtifactMaterializations []VerifiedArtifactMaterializationReceipt `json:"artifactMaterializations,omitempty"`
+}
+
+// Bridge-owned receipt for verified isolated staging; it never contains a local path.
+type VerifiedArtifactMaterializationReceipt struct {
+	ArtifactID           string               `json:"artifactId"`
+	ContentID            string               `json:"contentId"`
+	LogicalAlias         string               `json:"logicalAlias"`
+	MaterializationState MaterializationState `json:"materializationState"`
+	MediaType            MediaType            `json:"mediaType"`
+	Sha256               string               `json:"sha256"`
+	SizeBytes            int64                `json:"sizeBytes"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -611,6 +636,14 @@ const (
 	Result              ProvenanceMemoryEntryType = "result"
 )
 
+type MediaType string
+
+const (
+	ApplicationJSON MediaType = "application/json"
+	TextMarkdown    MediaType = "text/markdown"
+	TextXDiff       MediaType = "text/x-diff"
+)
+
 type ArtifactReferenceType string
 
 const (
@@ -660,6 +693,13 @@ type RunRequestedMessageType string
 
 const (
 	RunRequested RunRequestedMessageType = "run.requested"
+)
+
+type MaterializationState string
+
+const (
+	Reused   MaterializationState = "reused"
+	Verified MaterializationState = "verified"
 )
 
 type RunAcceptedMessageType string

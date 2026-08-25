@@ -150,6 +150,36 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
       },
       now
     }), /Manual Agents cannot advertise/);
+    assert.throws(() => agents.publishDeviceAgent(devicePrincipal, {
+      agentId: "agent_artifact_capability_12345678",
+      name: "Invalid Publisher",
+      role: "Managed",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: false,
+        supportsArtifactPublication: true
+      },
+      now
+    }), /requires Workspace leases/u);
+    assert.throws(() => agents.publishAgent(principal, {
+      teamId: created.team.teamId,
+      deviceId: null,
+      name: "Invalid Materializer",
+      role: "Manual",
+      integrationMode: "manual",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: false,
+        supportsResume: false,
+        supportsStart: false,
+        supportsStreaming: false,
+        supportsArtifactMaterialization: true
+      },
+      now
+    }), /Manual Agents cannot advertise/u);
   } finally {
     database.close();
   }
