@@ -6,6 +6,9 @@ import {
   loadWebAuthConfiguration
 } from "./security/web-auth-config.js";
 import { normalizeBridgeServerToken } from "./security/bridge-server-token.js";
+import {
+  ExtractiveMemoryReducerRunner
+} from "./memory/memory-reducer-runner.js";
 
 const port = Number.parseInt(process.env.AGENT_ROOM_PORT ?? "3000", 10);
 if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
@@ -30,11 +33,24 @@ if (
   throw new Error("AGENT_ROOM_TRUST_PROXY_HOPS must be an integer from 0 to 4");
 }
 assertWebAuthListener(webAuth, host, trustProxyHops);
+const memoryReducerKind = process.env.AGENT_ROOM_MEMORY_REDUCER?.trim();
+if (
+  memoryReducerKind !== undefined && memoryReducerKind !== "" &&
+  memoryReducerKind !== "extractive-v1"
+) {
+  throw new Error(
+    "AGENT_ROOM_MEMORY_REDUCER must be empty or extractive-v1"
+  );
+}
+const memoryReducer = memoryReducerKind === "extractive-v1"
+  ? new ExtractiveMemoryReducerRunner()
+  : undefined;
 
 const app = await createServerApp({
   databasePath: resolveDatabasePath(),
   logger: true,
   webAuth,
+  ...(memoryReducer ? { memoryReducer } : {}),
   ...(bridgeServerToken === undefined ? {} : { bridgeServerToken }),
   ...(trustProxyHops === undefined ? {} : { trustProxyHops }),
   ...(process.env.AGENT_ROOM_WEB_ROOT

@@ -115,6 +115,36 @@ export class RollingRoomMemoryRepository {
     return row && mapState(row);
   }
 
+  public listPending(limit = 8): RollingRoomState[] {
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      throw new Error("Rolling Room pending limit must be between 1 and 100");
+    }
+    return (this.database.prepare(`
+      SELECT * FROM rolling_room_state
+      WHERE mode <> 'disabled'
+        AND desired_through_sequence > latest_through_sequence
+      ORDER BY
+        desired_through_sequence - latest_through_sequence DESC,
+        updated_at,
+        room_id
+      LIMIT ?
+    `).all(limit) as RollingRoomStateRow[]).map(mapState);
+  }
+
+  public enableAll(now: string): number {
+    requireIsoTimestamp(now, "now");
+    return this.database.prepare(`
+      UPDATE rolling_room_state
+      SET mode = CASE
+            WHEN latest_checkpoint_id IS NULL THEN 'backfilling'
+            ELSE 'ready'
+          END,
+          last_error = NULL,
+          updated_at = max(updated_at, ?)
+      WHERE mode = 'disabled'
+    `).run(now).changes;
+  }
+
   public enable(roomId: string, now: string): RollingRoomState {
     requireIsoTimestamp(now, "now");
     const changed = this.database.prepare(`

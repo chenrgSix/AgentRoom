@@ -98,6 +98,14 @@ lease. Old Rooms remain disabled or backfilling until the checkpoint chain is
 continuous; the existing extractive projection remains the fallback and never
 masquerades as rolling coverage.
 
+Reduction stays disabled unless the deployment supplies a
+`MemoryReducerRunner`. `AGENT_ROOM_MEMORY_REDUCER=extractive-v1` opts into the
+bounded extractive baseline: the Server enables Room scheduler rows, scans the
+durable desired watermark, leases one Room at a time, redacts input before the
+runner, and commits only contiguous validated output. The extractive baseline
+is operational evidence for recovery and coverage, not a semantic-quality
+claim; richer runners use the same port and must pass separate quality gates.
+
 For a trigger at Room sequence `S`, the Server builds a session-independent
 bundle from one checkpoint through `K`, raw context Messages `K+1..S-1`, and
 the separate current request at `S`. The Bridge, which alone knows the local

@@ -78,6 +78,15 @@ import { ClarificationRepository } from "./task/clarification-repository.js";
 import { TaskArtifactService } from "./task/task-artifact-service.js";
 import { TaskClarificationService } from "./task/task-clarification-service.js";
 import { AgentTaskRepository } from "./task/task-repository.js";
+import {
+  MemoryReducerScheduler
+} from "./memory/memory-reducer-scheduler.js";
+import type {
+  MemoryReducerRunner
+} from "./memory/memory-reducer-runner.js";
+import {
+  RollingRoomMemoryRepository
+} from "./memory/rolling-room-memory-repository.js";
 
 export interface ServerAppOptions {
   anonymousRateLimit?: {
@@ -89,6 +98,8 @@ export interface ServerAppOptions {
   clock?: () => string;
   logger?: boolean;
   loggerInstance?: FastifyBaseLogger;
+  memoryReducer?: MemoryReducerRunner;
+  memoryReducerSweepMilliseconds?: number;
   trustProxyHops?: number;
   webAuth?: WebAuthConfiguration;
   webRoot?: string;
@@ -97,6 +108,18 @@ export interface ServerAppOptions {
 export async function createServerApp(
   options: ServerAppOptions
 ): Promise<FastifyInstance> {
+  const memoryReducerSweepMilliseconds =
+    options.memoryReducerSweepMilliseconds ?? 1_000;
+  if (
+    options.memoryReducer &&
+    (!Number.isSafeInteger(memoryReducerSweepMilliseconds) ||
+      memoryReducerSweepMilliseconds < 100 ||
+      memoryReducerSweepMilliseconds > 60_000)
+  ) {
+    throw new Error(
+      "Memory reducer sweep interval must be between 100 and 60000 milliseconds"
+    );
+  }
   await prepareDatabaseDirectory(options.databasePath);
   await migrateDatabase(options.databasePath);
   const database = openDatabase(options.databasePath);
@@ -140,6 +163,15 @@ export async function createServerApp(
   );
   const contextPlanner = new ContextPlanner(database, core, taskRepository);
   const memoryEntries = new MemoryEntryRepository(database, transactions);
+  const rollingRoomMemory = new RollingRoomMemoryRepository(database, transactions);
+  const memoryReducer = options.memoryReducer
+    ? new MemoryReducerScheduler(
+        core,
+        rollingRoomMemory,
+        options.memoryReducer,
+        clock
+      )
+    : undefined;
   const longTermMemory = new LongTermMemoryService(
     database,
     memoryEntries,
@@ -204,6 +236,8 @@ export async function createServerApp(
   );
   let discussionSweepTimer: ReturnType<typeof setInterval> | undefined;
   let discussionSweepInFlight = false;
+  let memoryReducerSweepTimer: ReturnType<typeof setInterval> | undefined;
+  let memoryReducerSweepInFlight = false;
   const dispatchDiscussionRun = async (run: ReturnType<RunRepository["getRun"]>) => {
     if (!run) return;
     const agent = core.getAgent(run.targetAgentId);
@@ -451,6 +485,7 @@ export async function createServerApp(
 
   app.addHook("onClose", (_instance, done) => {
     if (discussionSweepTimer) clearInterval(discussionSweepTimer);
+    if (memoryReducerSweepTimer) clearInterval(memoryReducerSweepTimer);
     database.close();
     done();
   });
@@ -581,6 +616,29 @@ export async function createServerApp(
     });
   }, 1_000);
   discussionSweepTimer.unref();
+
+  if (memoryReducer) {
+    memoryReducer.enableAllRooms();
+    const sweepMemory = async (): Promise<void> => {
+      if (memoryReducerSweepInFlight) return;
+      memoryReducerSweepInFlight = true;
+      try {
+        await memoryReducer.sweep();
+      } finally {
+        memoryReducerSweepInFlight = false;
+      }
+    };
+    await sweepMemory();
+    memoryReducerSweepTimer = setInterval(() => {
+      void sweepMemory().catch((error: unknown) => {
+        app.log.error({
+          event: "memory.reducer.sweep_failed",
+          error: error instanceof Error ? error.message : "Unexpected error"
+        }, "Memory reducer sweep failed");
+      });
+    }, memoryReducerSweepMilliseconds);
+    memoryReducerSweepTimer.unref();
+  }
 
   if (options.webRoot) {
     await app.register(fastifyStatic, {
