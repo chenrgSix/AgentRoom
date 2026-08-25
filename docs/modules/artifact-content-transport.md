@@ -84,9 +84,14 @@ symlinks, special files, traversal-shaped identifiers, permission drift, and a
 staging root inside the configured Workspace fail closed. No configured
 Workspace file is created or replaced.
 
-`ADP-014` will give the Runtime a bounded alias manifest. It may read the staged files
-under its existing local sandbox policy. Result-evidence consumption advances
-only at the existing durable Runtime acceptance point.
+Completed `ADP-014` revalidates the staged bytes, receipt, and mode immediately
+before Runtime admission, then gives Codex, Pi, or Generic a bounded local alias
+manifest. The Runtime may read the staging path only under its existing local
+sandbox policy. Exact paths never enter the wire or durable inbox: every
+Runtime text boundary replaces them with the pinned logical alias, including
+split streaming output. Result-evidence consumption advances only at the
+existing durable Runtime acceptance point, and a delta cursor gap fails before
+execution.
 
 ## Recovery Matrix
 
@@ -123,8 +128,8 @@ download. Read-only mode is not presented as an OS sandbox guarantee.
 `ART-001` owns durable upload and seal. `TASK-010` owns canonical bind,
 `CON-010` the additive wire contract, completed `BRG-028` source publication,
 completed `RUN-011`
-pinned delivery, completed `BRG-029` isolated materialization, `ADP-014` Runtime alias
-injection, `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
+pinned delivery, completed `BRG-029` isolated materialization, completed `ADP-014`
+Runtime alias injection, `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
 two-Bridge recovery gate.
 
 ## Dependencies

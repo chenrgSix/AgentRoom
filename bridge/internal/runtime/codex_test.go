@@ -16,14 +16,19 @@ import (
 
 func TestCodexAdapterMapsAppServerEventsToRuntimeEvents(t *testing.T) {
 	t.Setenv("AGENTROOM_CODEX_HELPER", "success")
+	run, artifactAlias := artifactAliasFixture()
+	run.Instruction = "implement it"
+	t.Setenv("AGENTROOM_CODEX_REQUIRED_CONTEXT", artifactAlias.LocalPath)
 	adapter := CodexAdapter{Config: config.AgentConfig{
 		Command:   []string{os.Args[0], "-test.run=TestCodexHelperProcess", "--", "app-server", "--listen", "stdio://"},
-		Workspace: t.TempDir(), Sandbox: "workspace-write", EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER"},
+		Workspace: t.TempDir(), Sandbox: "workspace-write", EnvAllowlist: []string{
+			"AGENTROOM_CODEX_HELPER", "AGENTROOM_CODEX_REQUIRED_CONTEXT",
+		},
 	}}
 	var events []Event
-	if err := adapter.Execute(context.Background(), Request{Run: contracts.RunRequestedPayload{
-		Instruction: "implement it",
-	}}, func(_ context.Context, event Event) error {
+	if err := adapter.Execute(context.Background(), Request{
+		Run: run, Artifacts: []VerifiedArtifactAlias{artifactAlias},
+	}, func(_ context.Context, event Event) error {
 		events = append(events, event)
 		return nil
 	}); err != nil {
@@ -42,6 +47,65 @@ func TestCodexAdapterMapsAppServerEventsToRuntimeEvents(t *testing.T) {
 	}
 }
 
+func TestCodexTaskSessionRejectsResultEvidenceCursorGapBeforeRuntime(t *testing.T) {
+	t.Setenv("AGENTROOM_CODEX_HELPER", "resume")
+	configuration := config.AgentConfig{
+		Command: []string{
+			os.Args[0], "-test.run=TestCodexHelperProcess", "--", "app-server", "--listen", "stdio://",
+		},
+		Workspace: t.TempDir(), Sandbox: "workspace-write",
+		EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER"},
+		RuntimeKind:  "codex", Adapter: "codex",
+	}
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	taskID := "task_result_gap"
+	key := testRuntimeSessionKey(t, configuration, taskID)
+	if err := store.Save(RuntimeSessionBinding{
+		RuntimeSessionKey: key, SessionID: "019d-thread",
+		ResultEvidenceRevision: 5,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	deliveryKind := contracts.Delta
+	fromRevision := int64(4)
+	throughRevision := int64(6)
+	run, artifactAlias := artifactAliasFixture()
+	run.RunID = "run_codex_result_gap"
+	run.RoomID = "room_codex_result_gap"
+	run.TaskID = &taskID
+	run.TargetAgentID = "agent_codex_result_gap"
+	run.Instruction = "continue after accepted evidence"
+	run.Session = &contracts.LogicalSessionRequest{
+		Scope: contracts.Task, ResumePolicy: contracts.ResumeOrStart,
+		ContextCursor: 1,
+	}
+	run.ContextPlan.ResultEvidence.Revision = 6
+	run.ContextPlan.ResultEvidence.DeliveryKind = &deliveryKind
+	run.ContextPlan.ResultEvidence.FromRevision = &fromRevision
+	run.ContextPlan.ResultEvidence.ThroughRevision = &throughRevision
+	adapter := CodexAdapter{Config: configuration, Sessions: store}
+	var terminal Event
+	if err := adapter.Execute(context.Background(), Request{
+		Run: run, Artifacts: []VerifiedArtifactAlias{artifactAlias},
+	}, func(_ context.Context, event Event) error {
+		if event.Status != nil {
+			terminal = event
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Status == nil || *terminal.Status != contracts.Failed ||
+		terminal.Error == nil || terminal.Error.Code != "RESULT_EVIDENCE_CURSOR_GAP" ||
+		terminal.Session != nil {
+		t.Fatalf("Codex accepted discontinuous result evidence: %#v", terminal)
+	}
+	if binding, found, err := store.Load(key); err != nil || !found ||
+		binding.ResultEvidenceRevision != 5 {
+		t.Fatalf("Codex cursor advanced across gap: %#v found=%t err=%v", binding, found, err)
+	}
+}
+
 func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 	t.Setenv("AGENTROOM_CODEX_HELPER", "resume")
 	workspace := t.TempDir()
@@ -54,6 +118,7 @@ func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 	key := testRuntimeSessionKey(t, configuration, "task_alpha")
 	if err := store.Save(RuntimeSessionBinding{
 		RuntimeSessionKey: key, SessionID: "019d-thread", LastRoomSequence: 41,
+		ResultEvidenceRevision: 5,
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -73,6 +138,19 @@ func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 	run.RoomContextBundle.RawTail.ThroughSequenceInclusive = 41
 	run.RoomContextBundle.RawTail.MessageCount = 1
 	run.RoomContextBundle.RawTail.Utf8Bytes = int64(len("message forty-one"))
+	deliveryKind := contracts.Delta
+	fromRevision := int64(5)
+	throughRevision := int64(6)
+	run.ContextPlan = &contracts.RuntimeContextPlan{
+		ResultEvidence: &contracts.TaskResultEvidence{
+			Revision: 6, DeliveryKind: &deliveryKind,
+			FromRevision: &fromRevision, ThroughRevision: &throughRevision,
+			ArtifactRefs: []contracts.ArtifactReference{{
+				ArtifactID: "artifact_codex_cursor_12345678", Type: contracts.Commit,
+				Title: "accepted evidence", Summary: "continue after revision five",
+			}},
+		},
+	}
 	if err := adapter.Execute(context.Background(), Request{Run: run}, func(_ context.Context, event Event) error {
 		terminal = event
 		return nil
@@ -86,8 +164,14 @@ func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 		terminal.Session.RoomContextConsumption.BaseContextCursor != 41 ||
 		terminal.Session.RoomContextConsumption.CheckpointID != nil ||
 		terminal.Session.RoomContextConsumption.RawMessageCount != 0 ||
-		terminal.Session.RoomContextConsumption.CoverageThroughSequence != 42 {
+		terminal.Session.RoomContextConsumption.CoverageThroughSequence != 42 ||
+		terminal.Session.ResultEvidenceRevision == nil ||
+		*terminal.Session.ResultEvidenceRevision != 6 {
 		t.Fatalf("stored Codex thread did not resume: %#v", terminal)
+	}
+	binding, found, err := store.Load(key)
+	if err != nil || !found || binding.ResultEvidenceRevision != 6 {
+		t.Fatalf("Codex did not persist accepted result evidence cursor: %#v found=%t err=%v", binding, found, err)
 	}
 }
 
@@ -371,6 +455,10 @@ func runCodexAppServerFixture(t *testing.T, complete bool, expectedOpen string, 
 				expectedInput = "wait"
 			}
 			validInput := len(params.Input) == 1 && params.Input[0].Text == expectedInput
+			if os.Getenv("AGENTROOM_CODEX_REQUIRED_CONTEXT") != "" && len(params.Input) == 1 {
+				validInput = strings.Contains(params.Input[0].Text, "Current request:\n"+expectedInput) &&
+					strings.Contains(params.Input[0].Text, os.Getenv("AGENTROOM_CODEX_REQUIRED_CONTEXT"))
+			}
 			if os.Getenv("AGENTROOM_CODEX_COVERAGE_PROMPT") == "1" && len(params.Input) == 1 {
 				validInput = strings.Contains(params.Input[0].Text, "Current request:\n"+expectedInput) &&
 					strings.Contains(params.Input[0].Text, "Rolling Room context checkpoint")

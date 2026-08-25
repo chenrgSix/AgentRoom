@@ -55,7 +55,10 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 	configureRuntimeCommand(command)
 	command.Dir = g.Config.Workspace
 	command.Env = allowedEnvironment(g.Config.EnvAllowlist)
-	command.Stdin = strings.NewReader(runtimePrompt(request.Run))
+	command.Stdin = strings.NewReader(runtimePromptWithArtifacts(
+		request.Run,
+		request.Artifacts,
+	))
 	outputLimit := g.outputLimit
 	if outputLimit <= 0 {
 		outputLimit = maxRuntimeOutput

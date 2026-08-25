@@ -12,13 +12,14 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
-	"runtime"
+	stdruntime "runtime"
 	"strconv"
 	"strings"
 	"sync"
 
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/pairing"
+	bridgeruntime "agentroom.dev/bridge/internal/runtime"
 	contracts "agentroom.dev/contracts/generated/go"
 )
 
@@ -120,6 +121,57 @@ func (m *Materializer) Materialize(
 		receipts = append(receipts, receipt)
 	}
 	return receipts, nil
+}
+
+// RuntimeArtifacts revalidates installed files and local receipts immediately
+// before Runtime admission. It is the only boundary that reveals local staging
+// paths, and those paths remain inside the Bridge process and Runtime prompt.
+func (m *Materializer) RuntimeArtifacts(
+	request contracts.RunRequestedPayload,
+) ([]bridgeruntime.VerifiedArtifactAlias, error) {
+	if !validMaterializationID(request.RunID, "run_") ||
+		!validMaterializationID(request.TargetAgentID, "agent_") {
+		return nil, materializationFailure("invalid_run_descriptor", false)
+	}
+	targets, err := materializationTargets(request)
+	if err != nil || len(targets) == 0 {
+		return nil, err
+	}
+	release := m.acquireRun(request.RunID)
+	defer release()
+	root, err := m.isolatedRoot(request.TargetAgentID)
+	if err != nil {
+		return nil, err
+	}
+	runDirectory := filepath.Join(root, request.RunID)
+	aliases := make([]bridgeruntime.VerifiedArtifactAlias, 0, len(targets))
+	for _, target := range targets {
+		artifactDirectory := filepath.Join(runDirectory, target.ArtifactID)
+		fileName := strings.TrimPrefix(
+			target.Content.LogicalAlias,
+			"artifact://"+target.ArtifactID+"/",
+		)
+		finalPath := filepath.Join(artifactDirectory, fileName)
+		receiptPath := filepath.Join(artifactDirectory, ".receipt.json")
+		receipt, ok, err := reusableMaterialization(
+			finalPath,
+			receiptPath,
+			receiptFile(target),
+		)
+		if err != nil {
+			return nil, err
+		}
+		if !ok || len([]byte(finalPath)) > bridgeruntime.MaximumArtifactPathBytes {
+			return nil, materializationFailure("verified_alias_unavailable", false)
+		}
+		aliases = append(aliases, bridgeruntime.VerifiedArtifactAlias{
+			ArtifactID: receipt.ArtifactID, ContentID: receipt.ContentID,
+			LogicalAlias: receipt.LogicalAlias, LocalPath: finalPath,
+			MediaType: receipt.MediaType, SHA256: receipt.SHA256,
+			SizeBytes: receipt.SizeBytes,
+		})
+	}
+	return aliases, nil
 }
 
 func (m *Materializer) materializeOne(
@@ -516,7 +568,7 @@ func writeReceipt(path string, receipt materializationReceiptFile) error {
 }
 
 func syncDirectory(path string) error {
-	if runtime.GOOS == "windows" {
+	if stdruntime.GOOS == "windows" {
 		return nil
 	}
 	directory, err := os.Open(path)

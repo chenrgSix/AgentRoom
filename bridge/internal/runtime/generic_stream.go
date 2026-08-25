@@ -14,7 +14,6 @@ import (
 )
 
 const maxGenericProtocolOutput = 512 * 1024
-const genericPreviewSafetyRunes = 64
 
 var errGenericProtocolInvalid = errors.New("Generic Runtime returned an incompatible event stream")
 var errGenericOutputLimit = errors.New("Generic Runtime assistant output exceeded its safe limit")
@@ -33,7 +32,10 @@ func (g GenericAdapter) executeStructured(ctx context.Context, request Request, 
 	configureRuntimeCommand(command)
 	command.Dir = g.Config.Workspace
 	command.Env = allowedEnvironment(g.Config.EnvAllowlist)
-	command.Stdin = strings.NewReader(runtimePrompt(request.Run))
+	command.Stdin = strings.NewReader(runtimePromptWithArtifacts(
+		request.Run,
+		request.Artifacts,
+	))
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return emitGenericStartFailure(ctx, emit)
@@ -44,7 +46,7 @@ func (g GenericAdapter) executeStructured(ctx context.Context, request Request, 
 		return emitGenericStartFailure(ctx, emit)
 	}
 
-	parser := &genericStreamParser{}
+	parser := &genericStreamParser{artifacts: request.Artifacts}
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64*1024), maxGenericProtocolOutput)
 	total := 0
@@ -183,6 +185,7 @@ type genericStreamParser struct {
 	finalSeen    bool
 	activities   []Activity
 	reasoning    map[string]*activityTextPreview
+	artifacts    []VerifiedArtifactAlias
 }
 
 func (p *genericStreamParser) drainActivities() []Activity {
@@ -218,7 +221,7 @@ func (p *genericStreamParser) consume(source []byte) (*OutputDelta, error) {
 		}
 		preview := p.reasoning[event.ID]
 		if preview == nil {
-			preview = &activityTextPreview{}
+			preview = &activityTextPreview{artifacts: p.artifacts}
 			p.reasoning[event.ID] = preview
 		}
 		preview.append(event.Delta, event.Reset)
@@ -289,13 +292,14 @@ func (p *genericStreamParser) outputDelta(force bool) (*OutputDelta, error) {
 	if len([]byte(visible)) > maxRuntimeOutput {
 		return nil, errGenericOutputLimit
 	}
-	visible = RedactSensitiveText(visible)
+	visible = RedactRuntimeText(visible, p.artifacts)
 	if !force {
 		runes := []rune(visible)
-		if len(runes) <= genericPreviewSafetyRunes {
+		safetyRunes := artifactPreviewSafetyRunes(p.artifacts)
+		if len(runes) <= safetyRunes {
 			visible = ""
 		} else {
-			visible = string(runes[:len(runes)-genericPreviewSafetyRunes])
+			visible = string(runes[:len(runes)-safetyRunes])
 		}
 	}
 	if visible == p.emittedText {

@@ -119,12 +119,25 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 		Workspace: workspace, EnvAllowlist: []string{
 			"AGENTROOM_PI_HELPER", "AGENTROOM_PI_WORKSPACE", "AGENTROOM_PI_EXPECTED_SESSION_ID",
 			"AGENTROOM_PI_REQUIRED_CONTEXT", "AGENTROOM_PI_FORBIDDEN_CONTEXT",
+			"AGENTROOM_PI_FORBIDDEN_ARTIFACT",
 		},
 		RuntimeKind: "pi", PresetVersion: config.CurrentPresetVersion,
 	}
 	store := NewFileRuntimeSessionStore(t.TempDir())
 	adapter := PiAdapter{Config: configuration, Sessions: store}
 	taskID := "task_alpha"
+	content := contracts.PinnedArtifactContent{
+		ContentID:    "content_pi_runtime_12345678",
+		LogicalAlias: "artifact://artifact_pi_12345678/result.patch",
+		MediaType:    contracts.TextXDiff,
+		Sha256:       strings.Repeat("e", 64), SizeBytes: 19,
+	}
+	artifactAlias := VerifiedArtifactAlias{
+		ArtifactID: "artifact_pi_12345678", ContentID: content.ContentID,
+		LogicalAlias: content.LogicalAlias,
+		LocalPath:    "/private/tmp/agentroom/pi/result.patch",
+		MediaType:    content.MediaType, SHA256: content.Sha256, SizeBytes: content.SizeBytes,
+	}
 	request := Request{Run: contracts.RunRequestedPayload{
 		RunID: "run_first", RoomID: "room_alpha", TaskID: &taskID,
 		TargetAgentID: "agent_pi", TargetAgentName: &name,
@@ -142,17 +155,18 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 				Revision: 5,
 				ArtifactRefs: []contracts.ArtifactReference{{
 					ArtifactID: "artifact_pi_12345678", Type: contracts.Commit,
-					Title: "Pi result", Summary: "Verify locally",
+					Title: "Pi result", Summary: "Verify locally", Content: &content,
 				}},
 			},
 		},
-	}}
+	}, Artifacts: []VerifiedArtifactAlias{artifactAlias}}
 	plan, eligible, err := planRuntimeSession("pi", configuration, request.Run)
 	if err != nil || !eligible {
 		t.Fatalf("could not plan Pi Task Session: eligible=%t err=%v", eligible, err)
 	}
 	expectedSessionID := piSessionID(plan.Key, request.Run.RunID)
 	t.Setenv("AGENTROOM_PI_EXPECTED_SESSION_ID", expectedSessionID)
+	t.Setenv("AGENTROOM_PI_REQUIRED_CONTEXT", artifactAlias.LocalPath)
 	var reply string
 	var terminal Event
 	if err := adapter.Execute(context.Background(), request, func(_ context.Context, event Event) error {
@@ -207,6 +221,7 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 	}
 	t.Setenv("AGENTROOM_PI_REQUIRED_CONTEXT", "new-room-delta")
 	t.Setenv("AGENTROOM_PI_FORBIDDEN_CONTEXT", "already-consumed-context")
+	t.Setenv("AGENTROOM_PI_FORBIDDEN_ARTIFACT", artifactAlias.LocalPath)
 	terminal = Event{}
 	if err := adapter.Execute(context.Background(), request, func(_ context.Context, event Event) error {
 		if event.Status != nil {
@@ -224,6 +239,39 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 		terminal.Session.RoomContextConsumption.RawMessageCount != 1 ||
 		terminal.Session.RoomContextConsumption.CoverageThroughSequence != 9 {
 		t.Fatalf("existing Pi Task Session was not resumed: %#v", terminal)
+	}
+	deliveryKind := contracts.Delta
+	fromRevision := int64(4)
+	throughRevision := int64(6)
+	request.Run.RunID = "run_result_gap"
+	request.Run.RoomContextBundle = nil
+	request.Run.ContextPlan = &contracts.RuntimeContextPlan{
+		ResultEvidence: &contracts.TaskResultEvidence{
+			Revision: 6, DeliveryKind: &deliveryKind,
+			FromRevision: &fromRevision, ThroughRevision: &throughRevision,
+			ArtifactRefs: []contracts.ArtifactReference{{
+				ArtifactID: artifactAlias.ArtifactID, Type: contracts.Commit,
+				Content: &content,
+			}},
+		},
+	}
+	terminal = Event{}
+	if err := adapter.Execute(context.Background(), request, func(_ context.Context, event Event) error {
+		if event.Status != nil {
+			terminal = event
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Status == nil || *terminal.Status != contracts.Failed ||
+		terminal.Error == nil || terminal.Error.Code != "RESULT_EVIDENCE_CURSOR_GAP" ||
+		terminal.Session != nil {
+		t.Fatalf("Pi accepted discontinuous result evidence: %#v", terminal)
+	}
+	if afterGap, found, err := store.Load(plan.Key); err != nil || !found ||
+		afterGap.ResultEvidenceRevision != 5 {
+		t.Fatalf("Pi cursor advanced across gap: %#v found=%t err=%v", afterGap, found, err)
 	}
 	otherTaskID := "task_beta"
 	request.Run.TaskID = &otherTaskID
@@ -302,7 +350,9 @@ func TestPiHelperProcess(t *testing.T) {
 			(os.Getenv("AGENTROOM_PI_REQUIRED_CONTEXT") != "" &&
 				!strings.Contains(string(prompt), os.Getenv("AGENTROOM_PI_REQUIRED_CONTEXT"))) ||
 			(os.Getenv("AGENTROOM_PI_FORBIDDEN_CONTEXT") != "" &&
-				strings.Contains(string(prompt), os.Getenv("AGENTROOM_PI_FORBIDDEN_CONTEXT"))) {
+				strings.Contains(string(prompt), os.Getenv("AGENTROOM_PI_FORBIDDEN_CONTEXT"))) ||
+			(os.Getenv("AGENTROOM_PI_FORBIDDEN_ARTIFACT") != "" &&
+				strings.Contains(string(prompt), os.Getenv("AGENTROOM_PI_FORBIDDEN_ARTIFACT"))) {
 			os.Exit(4)
 		}
 		fmt.Println(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Session resumed."}],"stopReason":"stop"}}`)

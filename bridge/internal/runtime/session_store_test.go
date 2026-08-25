@@ -183,15 +183,21 @@ func TestTaskSessionContextRejectsResultEvidenceCursorGap(t *testing.T) {
 			},
 		},
 	}
-	delta := contextDeltaForSession(run, RuntimeSessionBinding{
-		ResultEvidenceRevision: 3,
-	})
+	binding := RuntimeSessionBinding{ResultEvidenceRevision: 3}
+	if !hasResultEvidenceCursorGap(run, binding) {
+		t.Fatal("discontinuous result evidence was not classified as a cursor gap")
+	}
+	delta := contextDeltaForSession(run, binding)
 	if delta.ContextPlan != nil {
 		t.Fatalf("discontinuous result evidence was accepted: %#v", delta.ContextPlan)
 	}
 	_, _, resultRevision := contextRevisions(delta)
 	if resultRevision != 0 {
 		t.Fatalf("discontinuous page advanced result evidence cursor: %d", resultRevision)
+	}
+	binding.ResultEvidenceRevision = 6
+	if hasResultEvidenceCursorGap(run, binding) {
+		t.Fatal("an already-consumed result evidence page was misclassified as a gap")
 	}
 }
 

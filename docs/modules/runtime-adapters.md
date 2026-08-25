@@ -117,6 +117,18 @@ server-provided shell string. They must isolate process groups, bound output,
 propagate cancellation, and clean up children. Existing Runtime command, file,
 network, and approval policies remain authoritative.
 
+Immediately before a managed Runtime starts, the Bridge rechecks every pinned
+content descriptor against the owner-only materialization receipt, immutable
+size and SHA-256, regular-file type, and read-only mode. The resulting local
+manifest is bounded by the wire limit of 20 Artifact references and a 1024-byte
+absolute path per entry. Each entry exposes the canonical `artifact://` alias,
+the Bridge-owned staging `readPath`, media type, size, and digest, and labels the
+snapshot as read-only untrusted data rather than instructions. An absent,
+extra, stale, or metadata-mismatched alias fails the Run before the Adapter is
+called. This local path is not added to the wire contract and does not grant a
+new sandbox permission; Codex, Pi, and Generic can read it only when the
+owner-selected Runtime policy already permits that access.
+
 Before execution, a new managed native Session projects at most the newest 12
 prior Room messages into a 12 KiB named transcript. A resumed Task Session
 projects only Messages after its owner-only consumed Room cursor. Both include
@@ -141,6 +153,23 @@ session filters already-consumed Room sequences, projection revisions, and
 structured result-evidence revisions; a new or recreated Codex Thread receives
 the complete bootstrap plan. Artifact summaries remain verification hints and
 never grant access to a referenced workspace path.
+
+Content-bearing evidence is injected only when its exact pinned descriptor is
+still present in the context page accepted by that native Session. A resumed
+Task Session therefore omits both an already-consumed evidence page and its
+local alias manifest. A discontinuous delta fails with
+`RESULT_EVIDENCE_CURSOR_GAP` before process or turn start. Codex advances the
+owner-only evidence cursor only after a successful `turn/start` response; Pi
+advances it only after its accepted non-interactive execution completes. A
+recreated Codex Thread switches both its prompt and revision bookkeeping to the
+full bootstrap projection.
+
+Before any Runtime-originated reply, output delta, activity, clarification,
+assessment text, or safe error detail is persisted or sent, the Bridge replaces
+every admitted staging path with its logical `artifact://` alias. Streaming
+parsers retain a safety tail at least as long as the longest local path, so a
+path split across deltas cannot leak a prefix. No configured Workspace file is
+created or overwritten by alias injection.
 
 The persisted native binding also tracks long-term Room and Task Memory scope
 revisions. A changed scope projects a bounded active snapshot plus recent
@@ -199,7 +228,7 @@ process permissions remain owner-controlled.
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, native session resume, streaming, activity, named context, cancellation, crash, recovery,
 and local permission inheritance. Work is tracked by `ADP-001` through
-`ADP-012`/`ADP-013`, `BRG-023`/`BRG-027`, and `RUN-009` in
+`ADP-014` (completed), `BRG-023`/`BRG-027`, and `RUN-009` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one

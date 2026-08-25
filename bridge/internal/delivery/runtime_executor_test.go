@@ -23,6 +23,185 @@ func rawRunEvent(t *testing.T, value any) json.RawMessage {
 	return json.RawMessage(source)
 }
 
+func runtimeArtifactFixture() (contracts.RunRequestedPayload, bridgeruntime.VerifiedArtifactAlias) {
+	content := contracts.PinnedArtifactContent{
+		ContentID:    "content_executor_alias_12345678",
+		LogicalAlias: "artifact://artifact_executor_alias_12345678/result.patch",
+		MediaType:    contracts.TextXDiff,
+		Sha256:       strings.Repeat("c", 64), SizeBytes: 44,
+	}
+	request := contracts.RunRequestedPayload{
+		RunID:             "run_executor_alias_12345678",
+		TargetAgentID:     "agent_executor_alias_12345678",
+		TraceID:           "trace_executor_alias_12345678",
+		DeliveryAttemptID: "delivery_executor_alias_12345678",
+		IdempotencyKey:    "idem_executor_alias_12345678",
+		ContextPlan: &contracts.RuntimeContextPlan{
+			ResultEvidence: &contracts.TaskResultEvidence{
+				ArtifactRefs: []contracts.ArtifactReference{{
+					ArtifactID: "artifact_executor_alias_12345678",
+					Type:       contracts.Patch, Content: &content,
+				}},
+			},
+		},
+	}
+	alias := bridgeruntime.VerifiedArtifactAlias{
+		ArtifactID: "artifact_executor_alias_12345678",
+		ContentID:  content.ContentID, LogicalAlias: content.LogicalAlias,
+		LocalPath: "/private/tmp/agentroom/materialized/result.patch",
+		MediaType: content.MediaType, SHA256: content.Sha256,
+		SizeBytes: content.SizeBytes,
+	}
+	return request, alias
+}
+
+func TestRuntimeExecutorRejectsPinnedContentWithoutVerifiedAliasResolver(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, _ := runtimeArtifactFixture()
+	record, _, err := inbox.Accept(request, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	completed := contracts.Completed
+	adapter := &bridgeruntime.FakeAdapter{}
+	if err := adapter.Enqueue(bridgeruntime.FakeScript{
+		Events: []bridgeruntime.Event{{Status: &completed}},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	var sent []any
+	executor := RuntimeExecutor{
+		Inbox:    inbox,
+		Adapters: map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+	}
+	if err := executor.Execute(context.Background(), record, func(_ context.Context, value any) error {
+		sent = append(sent, value)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(sent) != 1 {
+		t.Fatalf("alias admission sent %d messages, want 1: %#v", len(sent), sent)
+	}
+	failed, ok := sent[0].(contracts.RunStatusMessage)
+	if !ok || failed.Payload.Status != contracts.Failed ||
+		failed.Payload.Error == nil ||
+		failed.Payload.Error.Code != "ARTIFACT_RUNTIME_ALIAS_INVALID" ||
+		len(adapter.Requests()) != 0 {
+		t.Fatalf("unverified alias admission sent=%#v requests=%#v", sent, adapter.Requests())
+	}
+	latest, err := inbox.Get(request.RunID)
+	if err != nil || latest.State != StateFailed || latest.LastSequence != 2 {
+		t.Fatalf("alias admission failure was not durable: %#v err=%v", latest, err)
+	}
+}
+
+func TestRuntimeExecutorAdmitsExactAliasesAndRedactsEveryRuntimeTextBoundary(t *testing.T) {
+	inbox, err := Open(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	request, alias := runtimeArtifactFixture()
+	record, _, err := inbox.Accept(request, time.Now().UTC())
+	if err != nil {
+		t.Fatal(err)
+	}
+	working := contracts.Working
+	inputRequired := contracts.InputRequired
+	goalSatisfied := true
+	adapter := &bridgeruntime.FakeAdapter{}
+	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
+		{Status: &working},
+		{Activity: &bridgeruntime.Activity{
+			ID: alias.LocalPath, Kind: "tool", Phase: "completed",
+			Label: "read " + alias.LocalPath, Content: "checked " + alias.LocalPath,
+		}},
+		{Output: &bridgeruntime.OutputDelta{Content: "stream " + alias.LocalPath}},
+		{Reply: "used " + alias.LocalPath, Assessment: &contracts.Assessment{
+			GoalSatisfied:   &goalSatisfied,
+			NewEvidenceRefs: []string{alias.LocalPath},
+			OpenQuestions: []contracts.OpenQuestionElement{{
+				ID: alias.LocalPath, Importance: contracts.ImportanceLow,
+				Question: "review " + alias.LocalPath,
+			}},
+			ResolvedQuestionIDS: []string{alias.LocalPath},
+		}},
+		{Status: &inputRequired, Clarification: &contracts.TaskClarificationRequest{
+			Kind: contracts.Task, Question: "approve " + alias.LocalPath,
+			Choices: []string{"accept " + alias.LocalPath},
+		}},
+	}}); err != nil {
+		t.Fatal(err)
+	}
+	executor := RuntimeExecutor{
+		Inbox:    inbox,
+		Adapters: map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+		ResolveArtifacts: func(run contracts.RunRequestedPayload) ([]bridgeruntime.VerifiedArtifactAlias, error) {
+			if run.RunID != request.RunID {
+				t.Fatalf("resolver received wrong Run: %#v", run)
+			}
+			return []bridgeruntime.VerifiedArtifactAlias{alias}, nil
+		},
+	}
+	var sent []any
+	if err := executor.Execute(context.Background(), record, func(_ context.Context, value any) error {
+		sent = append(sent, value)
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if len(sent) != 5 || len(adapter.Requests()) != 1 ||
+		len(adapter.Requests()[0].Artifacts) != 1 ||
+		adapter.Requests()[0].Artifacts[0] != alias {
+		t.Fatalf("verified alias did not reach Runtime: sent=%d requests=%#v", len(sent), adapter.Requests())
+	}
+	aliasMentions := 0
+	for _, value := range sent {
+		source, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(source), alias.LocalPath) {
+			t.Fatalf("local staging path crossed Bridge boundary: %s", source)
+		}
+		aliasMentions += strings.Count(string(source), alias.LogicalAlias)
+	}
+	if aliasMentions < 7 {
+		t.Fatalf("logical alias did not replace every Runtime path: %#v", sent)
+	}
+	latest, err := inbox.Get(request.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range latest.Events {
+		if strings.Contains(string(event), alias.LocalPath) {
+			t.Fatalf("local staging path entered durable inbox: %s", event)
+		}
+	}
+}
+
+func TestRuntimeErrorDetailsReplaceNestedLocalArtifactPaths(t *testing.T) {
+	_, alias := runtimeArtifactFixture()
+	redacted := redactRuntimeError(&contracts.AgentRoomError{
+		Code: "RUNTIME_FAILED", Message: "failed at " + alias.LocalPath,
+		Details: map[string]interface{}{
+			alias.LocalPath: alias.LocalPath,
+			"nested":        []interface{}{map[string]interface{}{"path": alias.LocalPath}},
+		},
+	}, []bridgeruntime.VerifiedArtifactAlias{alias})
+	source, err := json.Marshal(redacted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(source), alias.LocalPath) ||
+		strings.Count(string(source), alias.LogicalAlias) != 4 {
+		t.Fatalf("Runtime error was not safely projected: %s", source)
+	}
+}
+
 func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	inbox, err := Open(t.TempDir())
 	if err != nil {

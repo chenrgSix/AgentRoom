@@ -223,6 +223,25 @@ func contextDeltaForSession(
 	return run
 }
 
+func hasResultEvidenceCursorGap(
+	run contracts.RunRequestedPayload,
+	binding RuntimeSessionBinding,
+) bool {
+	if run.ContextPlan == nil || run.ContextPlan.ResultEvidence == nil {
+		return false
+	}
+	evidence := run.ContextPlan.ResultEvidence
+	if evidence.DeliveryKind == nil || *evidence.DeliveryKind != contracts.Delta {
+		return false
+	}
+	if evidence.ThroughRevision != nil &&
+		*evidence.ThroughRevision <= binding.ResultEvidenceRevision {
+		return false
+	}
+	return evidence.FromRevision == nil || evidence.ThroughRevision == nil ||
+		*evidence.FromRevision != binding.ResultEvidenceRevision
+}
+
 func prepareRoomContextForSession(
 	run contracts.RunRequestedPayload,
 	binding RuntimeSessionBinding,

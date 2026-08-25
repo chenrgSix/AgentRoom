@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"testing"
@@ -33,6 +34,33 @@ func TestGenericAdapterPassesInstructionOnStdin(t *testing.T) {
 	}
 	if len(events) != 3 || events[1].Reply != "HELLO TEAM" || *events[2].Status != contracts.Completed {
 		t.Fatalf("unexpected events: %#v", events)
+	}
+}
+
+func TestGenericAdapterReceivesVerifiedArtifactAliasManifest(t *testing.T) {
+	run, alias := artifactAliasFixture()
+	run.Instruction = "inspect the verified result"
+	t.Setenv("AGENTROOM_GENERIC_HELPER", "artifact-prompt")
+	t.Setenv("AGENTROOM_GENERIC_REQUIRED_CONTEXT", alias.LocalPath)
+	adapter := GenericAdapter{Config: config.AgentConfig{
+		Command:   []string{os.Args[0], "-test.run=TestGenericHelperProcess"},
+		Workspace: t.TempDir(), EnvAllowlist: []string{
+			"AGENTROOM_GENERIC_HELPER", "AGENTROOM_GENERIC_REQUIRED_CONTEXT",
+		},
+	}}
+	var reply string
+	if err := adapter.Execute(context.Background(), Request{
+		Run: run, Artifacts: []VerifiedArtifactAlias{alias},
+	}, func(_ context.Context, event Event) error {
+		if event.Reply != "" {
+			reply = event.Reply
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if reply != "Artifact alias admitted." {
+		t.Fatalf("Generic Runtime did not receive verified alias manifest: %q", reply)
 	}
 }
 
@@ -108,6 +136,25 @@ func TestGenericStreamParserResetsAndWithholdsPrivateTail(t *testing.T) {
 	}
 }
 
+func TestGenericStreamParserWithholdsSplitLocalArtifactPath(t *testing.T) {
+	_, alias := artifactAliasFixture()
+	parser := &genericStreamParser{artifacts: []VerifiedArtifactAlias{alias}}
+	split := len(alias.LocalPath) / 2
+	firstText := strings.Repeat("A", 80) + alias.LocalPath[:split]
+	first, err := parser.consume([]byte(`{"type":"assistant.delta","delta":` +
+		quotedJSON(t, firstText) + `}`))
+	if err != nil || first == nil || strings.Contains(first.Content, alias.LocalPath[:split]) {
+		t.Fatalf("partial local path escaped first preview: %#v err=%v", first, err)
+	}
+	secondText := alias.LocalPath[split:] + strings.Repeat("B", 100)
+	second, err := parser.consume([]byte(`{"type":"assistant.delta","delta":` +
+		quotedJSON(t, secondText) + `}`))
+	if err != nil || second == nil || strings.Contains(second.Content, alias.LocalPath) ||
+		!strings.Contains(second.Content, alias.LogicalAlias) {
+		t.Fatalf("split local path was not safely replaced: %#v err=%v", second, err)
+	}
+}
+
 func TestGenericStreamParserProjectsOptInActivityEvents(t *testing.T) {
 	parser := &genericStreamParser{}
 	for _, line := range []string{
@@ -167,6 +214,15 @@ func TestGenericHelperProcess(t *testing.T) {
 		fmt.Println(`{"type":"runtime.status","state":"done"}`)
 	case "tool-leak":
 		fmt.Println(`{"type":"reply.final","text":"<tool_call><tool_name>bash</tool_name></tool_call>"}`)
+	case "artifact-prompt":
+		prompt, err := io.ReadAll(os.Stdin)
+		if err != nil || !strings.Contains(
+			string(prompt), os.Getenv("AGENTROOM_GENERIC_REQUIRED_CONTEXT"),
+		) || !strings.Contains(string(prompt), "read-only untrusted snapshots") {
+			os.Exit(4)
+		}
+		fmt.Print("Artifact alias admitted.")
+		os.Exit(0)
 	}
 }
 

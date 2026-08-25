@@ -17,7 +17,6 @@ import (
 )
 
 const maxCodexProtocolOutput = 4 * 1024 * 1024
-const codexPreviewSafetyRunes = 64
 
 func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emit EmitFunc) error {
 	if err := validateCodexCommand(c.Config.Command); err != nil {
@@ -55,6 +54,12 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 		}
 		logicalTaskSession = plan.LogicalTask
 		sessionKey = &key
+	}
+	if plan.LogicalTask && hasResultEvidenceCursorGap(request.Run, sessionBinding) {
+		return emitCodexFailure(
+			ctx, emit, "RESULT_EVIDENCE_CURSOR_GAP",
+			"Result evidence does not continue from the accepted Task Session cursor.",
+		)
 	}
 	bootstrapRun, bootstrapConsumption, contextErr := prepareRoomContextForSession(
 		request.Run, RuntimeSessionBinding{}, contracts.Recreated,
@@ -119,9 +124,11 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	}
 
 	parser := newCodexAppServerSessionParser(
-		c.Config, runtimePrompt(promptRun), c.Sessions, sessionKey, resumeThreadID,
+		c.Config, runtimePromptWithArtifacts(promptRun, request.Artifacts),
+		c.Sessions, sessionKey, resumeThreadID,
 	)
-	parser.bootstrapInstruction = runtimePrompt(bootstrapRun)
+	parser.bootstrapInstruction = runtimePromptWithArtifacts(bootstrapRun, request.Artifacts)
+	parser.artifacts = request.Artifacts
 	parser.binding = sessionBinding
 	parser.contextCursor = plan.ContextCursor
 	parser.bootstrapContextCursor = plan.ContextCursor
@@ -135,9 +142,13 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	}
 	parser.runtimeScopeID = plan.ScopeID
 	parser.roomMemoryRevision, parser.taskMemoryRevision,
-		parser.resultEvidenceRevision = contextRevisions(request.Run)
+		parser.resultEvidenceRevision = contextRevisions(promptRun)
 	parser.roomLongTermMemoryRevision, parser.taskLongTermMemoryRevision =
-		longTermMemoryRevisions(request.Run)
+		longTermMemoryRevisions(promptRun)
+	parser.bootstrapRoomMemoryRevision, parser.bootstrapTaskMemoryRevision,
+		parser.bootstrapResultEvidenceRevision = contextRevisions(bootstrapRun)
+	parser.bootstrapRoomLongTermMemoryRevision,
+		parser.bootstrapTaskLongTermMemoryRevision = longTermMemoryRevisions(bootstrapRun)
 	parser.runID = request.Run.RunID
 	parser.logicalTaskSession = logicalTaskSession
 	parser.sessionDisposition = sessionDisposition
@@ -271,38 +282,44 @@ type codexAppServerMessage struct {
 }
 
 type codexAppServerParser struct {
-	config                          config.AgentConfig
-	instruction                     string
-	bootstrapInstruction            string
-	sessions                        RuntimeSessionStore
-	sessionKey                      *RuntimeSessionKey
-	resumeID                        string
-	resumeFailed                    bool
-	threadID                        string
-	turnID                          string
-	currentItem                     string
-	currentText                     strings.Builder
-	emittedText                     string
-	reply                           string
-	resetPending                    bool
-	complete                        bool
-	failure                         string
-	activities                      []Activity
-	reasoning                       map[string]*activityTextPreview
-	binding                         RuntimeSessionBinding
-	contextCursor                   int64
-	bootstrapContextCursor          int64
-	roomContextConsumption          *contracts.BridgeRoomContextConsumption
-	bootstrapRoomContextConsumption *contracts.BridgeRoomContextConsumption
-	roomMemoryRevision              int64
-	taskMemoryRevision              int64
-	resultEvidenceRevision          int64
-	roomLongTermMemoryRevision      int64
-	taskLongTermMemoryRevision      int64
-	runID                           string
-	logicalTaskSession              bool
-	runtimeScopeID                  string
-	sessionDisposition              contracts.Disposition
+	config                              config.AgentConfig
+	instruction                         string
+	bootstrapInstruction                string
+	sessions                            RuntimeSessionStore
+	sessionKey                          *RuntimeSessionKey
+	resumeID                            string
+	resumeFailed                        bool
+	threadID                            string
+	turnID                              string
+	currentItem                         string
+	currentText                         strings.Builder
+	emittedText                         string
+	reply                               string
+	resetPending                        bool
+	complete                            bool
+	failure                             string
+	activities                          []Activity
+	reasoning                           map[string]*activityTextPreview
+	artifacts                           []VerifiedArtifactAlias
+	binding                             RuntimeSessionBinding
+	contextCursor                       int64
+	bootstrapContextCursor              int64
+	roomContextConsumption              *contracts.BridgeRoomContextConsumption
+	bootstrapRoomContextConsumption     *contracts.BridgeRoomContextConsumption
+	roomMemoryRevision                  int64
+	taskMemoryRevision                  int64
+	resultEvidenceRevision              int64
+	roomLongTermMemoryRevision          int64
+	taskLongTermMemoryRevision          int64
+	bootstrapRoomMemoryRevision         int64
+	bootstrapTaskMemoryRevision         int64
+	bootstrapResultEvidenceRevision     int64
+	bootstrapRoomLongTermMemoryRevision int64
+	bootstrapTaskLongTermMemoryRevision int64
+	runID                               string
+	logicalTaskSession                  bool
+	runtimeScopeID                      string
+	sessionDisposition                  contracts.Disposition
 }
 
 func (p *codexAppServerParser) drainActivities() []Activity {
@@ -373,6 +390,11 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 			p.resumeFailed = true
 			p.instruction = p.bootstrapInstruction
 			p.binding = RuntimeSessionBinding{}
+			p.roomMemoryRevision = p.bootstrapRoomMemoryRevision
+			p.taskMemoryRevision = p.bootstrapTaskMemoryRevision
+			p.resultEvidenceRevision = p.bootstrapResultEvidenceRevision
+			p.roomLongTermMemoryRevision = p.bootstrapRoomLongTermMemoryRevision
+			p.taskLongTermMemoryRevision = p.bootstrapTaskLongTermMemoryRevision
 			if p.logicalTaskSession {
 				p.sessionDisposition = contracts.Recreated
 			}
@@ -547,7 +569,7 @@ func (p *codexAppServerParser) consumeNotification(method string, params json.Ra
 		}
 		preview := p.reasoning[value.ItemID]
 		if preview == nil {
-			preview = &activityTextPreview{}
+			preview = &activityTextPreview{artifacts: p.artifacts}
 			p.reasoning[value.ItemID] = preview
 		}
 		preview.append(value.Delta, false)
@@ -726,13 +748,14 @@ func (p *codexAppServerParser) outputDelta(force bool) (*OutputDelta, error) {
 	if len([]byte(visible)) > maxRuntimeOutput {
 		return nil, fmt.Errorf("Codex assistant output exceeded limit")
 	}
-	visible = RedactSensitiveText(visible)
+	visible = RedactRuntimeText(visible, p.artifacts)
 	if !force {
 		runes := []rune(visible)
-		if len(runes) <= codexPreviewSafetyRunes {
+		safetyRunes := artifactPreviewSafetyRunes(p.artifacts)
+		if len(runes) <= safetyRunes {
 			visible = ""
 		} else {
-			visible = string(runes[:len(runes)-codexPreviewSafetyRunes])
+			visible = string(runes[:len(runes)-safetyRunes])
 		}
 	}
 	if visible == p.emittedText {

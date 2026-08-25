@@ -18,7 +18,6 @@ import (
 )
 
 const maxPiProtocolOutput = 512 * 1024
-const piPreviewSafetyRunes = 64
 const piPreviewFlushInterval = 75 * time.Millisecond
 
 var errPiProtocolInvalid = errors.New("Pi returned an incompatible event stream")
@@ -84,6 +83,13 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 		logicalTaskSession = plan.LogicalTask
 		sessionKey = &key
 	}
+	if plan.LogicalTask && hasResultEvidenceCursorGap(request.Run, sessionBinding) {
+		failed := contracts.Failed
+		return emit(ctx, Event{Status: &failed, Error: runtimeError(
+			"RESULT_EVIDENCE_CURSOR_GAP",
+			"Result evidence does not continue from the accepted Task Session cursor.",
+		)})
+	}
 	promptRun, roomContextConsumption, contextErr := prepareRoomContextForSession(
 		promptRun, sessionBinding, sessionDisposition,
 	)
@@ -117,7 +123,10 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 	configureRuntimeCommand(command)
 	command.Dir = p.Config.Workspace
 	command.Env = allowedEnvironment(p.Config.EnvAllowlist)
-	command.Stdin = strings.NewReader(runtimePrompt(promptRun))
+	command.Stdin = strings.NewReader(runtimePromptWithArtifacts(
+		promptRun,
+		request.Artifacts,
+	))
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return emitPiStartFailure(ctx, emit)
@@ -151,7 +160,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 		}
 	}()
 
-	parser := &piStreamParser{}
+	parser := &piStreamParser{artifacts: request.Artifacts}
 	ticker := time.NewTicker(piPreviewFlushInterval)
 	defer ticker.Stop()
 	total := 0
@@ -299,9 +308,9 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 		}
 		sessionBinding.LastRunID = request.Run.RunID
 		roomMemoryRevision, taskMemoryRevision, resultEvidenceRevision :=
-			contextRevisions(request.Run)
+			contextRevisions(promptRun)
 		roomLongTermMemoryRevision, taskLongTermMemoryRevision :=
-			longTermMemoryRevisions(request.Run)
+			longTermMemoryRevisions(promptRun)
 		if roomMemoryRevision > sessionBinding.RoomMemoryRevision {
 			sessionBinding.RoomMemoryRevision = roomMemoryRevision
 		}
@@ -451,6 +460,7 @@ type piStreamParser struct {
 	reasoningID      string
 	reasoningCounter int
 	reasoningPreview *activityTextPreview
+	artifacts        []VerifiedArtifactAlias
 	toolID           string
 	toolCounter      int
 }
@@ -537,7 +547,7 @@ func (p *piStreamParser) consume(source []byte) (bool, error) {
 			if p.reasoningID == "" {
 				p.reasoningCounter++
 				p.reasoningID = fmt.Sprintf("pi-reasoning-%d", p.reasoningCounter)
-				p.reasoningPreview = &activityTextPreview{}
+				p.reasoningPreview = &activityTextPreview{artifacts: p.artifacts}
 			}
 			p.reasoningPreview.append(event.AssistantMessageEvent.Delta, false)
 			p.activities = append(
@@ -609,13 +619,14 @@ func (p *piStreamParser) outputDelta(force bool) (*OutputDelta, error) {
 	if len([]byte(visible)) > maxRuntimeOutput {
 		return nil, errPiOutputLimit
 	}
-	visible = RedactSensitiveText(visible)
+	visible = RedactRuntimeText(visible, p.artifacts)
 	if !force {
 		runes := []rune(visible)
-		if len(runes) <= piPreviewSafetyRunes {
+		safetyRunes := artifactPreviewSafetyRunes(p.artifacts)
+		if len(runes) <= safetyRunes {
 			visible = ""
 		} else {
-			visible = string(runes[:len(runes)-piPreviewSafetyRunes])
+			visible = string(runes[:len(runes)-safetyRunes])
 		}
 	}
 	if visible == p.emittedText {

@@ -13,6 +13,13 @@ const maxProjectedContextMessages = 12
 const maxProjectedMemoryBytes = 8 * 1024
 
 func runtimePrompt(run contracts.RunRequestedPayload) string {
+	return runtimePromptWithArtifacts(run, nil)
+}
+
+func runtimePromptWithArtifacts(
+	run contracts.RunRequestedPayload,
+	artifacts []VerifiedArtifactAlias,
+) string {
 	instruction := strings.TrimSpace(run.Instruction)
 	if run.TargetAgentName == nil && len(run.RoutingAgents) == 0 &&
 		len(run.ContextMessages) == 0 && run.ContextPlan == nil &&
@@ -71,6 +78,9 @@ func runtimePrompt(run contracts.RunRequestedPayload) string {
 			run.ContextPlan.ResultEvidence,
 		); evidence != "" {
 			sections = append(sections, evidence)
+		}
+		if aliases := projectedArtifactAliases(run, artifacts); aliases != "" {
+			sections = append(sections, aliases)
 		}
 	}
 	if context := projectedRoomContextBundle(run.RoomContextBundle); context != "" {

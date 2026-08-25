@@ -15,7 +15,8 @@ type Capabilities struct {
 }
 
 type Request struct {
-	Run contracts.RunRequestedPayload
+	Run       contracts.RunRequestedPayload
+	Artifacts []VerifiedArtifactAlias
 }
 
 type Event struct {

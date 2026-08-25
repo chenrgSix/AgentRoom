@@ -2,7 +2,6 @@ package runtime
 
 import "strings"
 
-const activityPreviewSafetyRunes = 64
 const activityEventRunes = 1_000
 const activityPreviewMinimumRunes = 48
 
@@ -14,6 +13,7 @@ type activityTextPreview struct {
 	current      strings.Builder
 	emitted      string
 	resetPending bool
+	artifacts    []VerifiedArtifactAlias
 }
 
 func (p *activityTextPreview) append(content string, reset bool) {
@@ -25,13 +25,14 @@ func (p *activityTextPreview) append(content string, reset bool) {
 }
 
 func (p *activityTextPreview) project(id, label string, force bool) []Activity {
-	visible := RedactSensitiveText(p.current.String())
+	visible := RedactRuntimeText(p.current.String(), p.artifacts)
 	if !force {
 		runes := []rune(visible)
-		if len(runes) <= activityPreviewSafetyRunes {
+		safetyRunes := artifactPreviewSafetyRunes(p.artifacts)
+		if len(runes) <= safetyRunes {
 			visible = ""
 		} else {
-			visible = string(runes[:len(runes)-activityPreviewSafetyRunes])
+			visible = string(runes[:len(runes)-safetyRunes])
 		}
 	}
 	if visible == p.emitted || visible == "" {

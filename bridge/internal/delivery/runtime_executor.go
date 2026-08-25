@@ -19,11 +19,34 @@ type RuntimeExecutor struct {
 	Adapters           map[string]bridgeruntime.Adapter
 	Prepare            PrepareRunFunc
 	IsPrepareRetryable func(error) bool
+	ResolveArtifacts   func(contracts.RunRequestedPayload) ([]bridgeruntime.VerifiedArtifactAlias, error)
 	Now                func() time.Time
 	Observer           operations.Observer
 }
 
 func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender) error {
+	var artifacts []bridgeruntime.VerifiedArtifactAlias
+	var artifactErr error
+	if e.ResolveArtifacts != nil {
+		artifacts, artifactErr = e.ResolveArtifacts(record.Request)
+	} else if runHasPinnedArtifactContent(record.Request) {
+		artifactErr = fmt.Errorf("Runtime Artifact resolver is unavailable")
+	}
+	if artifactErr == nil {
+		artifacts, artifactErr = bridgeruntime.ValidateArtifactAliases(
+			record.Request,
+			artifacts,
+		)
+	}
+	if artifactErr != nil {
+		return e.failBeforeRuntime(
+			ctx,
+			record,
+			send,
+			"ARTIFACT_RUNTIME_ALIAS_INVALID",
+			"Verified Artifact aliases could not be admitted to the Runtime.",
+		)
+	}
 	startedAt := e.now()
 	e.Observer.Runtime(operations.RuntimeEvent{
 		At: startedAt, AgentID: record.Request.TargetAgentID, RunID: record.RunID,
@@ -45,7 +68,9 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 	}
 	sequence := record.LastSequence
 	currentState := record.State
-	err := adapter.Execute(ctx, bridgeruntime.Request{Run: record.Request}, func(eventContext context.Context, event bridgeruntime.Event) error {
+	err := adapter.Execute(ctx, bridgeruntime.Request{
+		Run: record.Request, Artifacts: artifacts,
+	}, func(eventContext context.Context, event bridgeruntime.Event) error {
 		sequence++
 		now := time.Now().UTC()
 		if e.Now != nil {
@@ -70,14 +95,16 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 				finished.State = operations.RuntimeError
 			}
 			currentState = stateForStatus(*event.Status)
+			clarification := redactRuntimeClarification(event.Clarification, artifacts)
+			runtimeBoundaryError := redactRuntimeError(event.Error, artifacts)
 			message := contracts.RunStatusMessage{
 				ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
 				Type: contracts.RunStatus,
 				Payload: contracts.RunStatusPayload{
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 					TraceID:  record.Request.TraceID,
-					Sequence: sequence, Status: *event.Status, Error: event.Error,
-					Session: event.Session, Clarification: event.Clarification,
+					Sequence: sequence, Status: *event.Status, Error: runtimeBoundaryError,
+					Session: event.Session, Clarification: clarification,
 				},
 			}
 			if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
@@ -95,14 +122,15 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		}
 		if event.Activity != nil {
 			activity := event.Activity
-			if activity.ID == "" || utf8.RuneCountInString(activity.ID) > 160 ||
+			activityID := bridgeruntime.RedactRuntimeText(activity.ID, artifacts)
+			if activityID == "" || utf8.RuneCountInString(activityID) > 160 ||
 				(activity.Kind != "reasoning" && activity.Kind != "tool") ||
 				(activity.Phase != "started" && activity.Phase != "updated" &&
 					activity.Phase != "completed" && activity.Phase != "failed") {
 				return fmt.Errorf("Runtime emitted an invalid activity event")
 			}
-			label := bridgeruntime.RedactSensitiveText(activity.Label)
-			content := bridgeruntime.RedactSensitiveText(activity.Content)
+			label := bridgeruntime.RedactRuntimeText(activity.Label, artifacts)
+			content := bridgeruntime.RedactRuntimeText(activity.Content, artifacts)
 			if utf8.RuneCountInString(label) > 120 ||
 				utf8.RuneCountInString(content) > 4_000 {
 				return fmt.Errorf("Runtime activity exceeded its safe limit")
@@ -126,7 +154,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 				Payload: contracts.RunActivityPayload{
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 					TraceID: record.Request.TraceID, Sequence: sequence,
-					ActivityID: activity.ID, Kind: activity.Kind,
+					ActivityID: activityID, Kind: activity.Kind,
 					Phase: activity.Phase, Label: labelValue,
 					Content: contentValue, Reset: reset,
 				},
@@ -140,7 +168,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 			if event.Output.Content == "" {
 				return fmt.Errorf("Runtime emitted an empty output delta")
 			}
-			content := bridgeruntime.RedactSensitiveText(event.Output.Content)
+			content := bridgeruntime.RedactRuntimeText(event.Output.Content, artifacts)
 			var reset *bool
 			if event.Output.Reset {
 				value := true
@@ -163,14 +191,15 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		if event.Reply == "" {
 			return fmt.Errorf("Runtime emitted an empty event")
 		}
-		content := bridgeruntime.RedactSensitiveText(event.Reply)
+		content := bridgeruntime.RedactRuntimeText(event.Reply, artifacts)
 		message := contracts.RunReplyMessage{
 			ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
 			Type: contracts.RunReply,
 			Payload: contracts.RunReplyPayload{
 				RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 				TraceID:  record.Request.TraceID,
-				Sequence: sequence, Content: content, Assessment: event.Assessment,
+				Sequence: sequence, Content: content,
+				Assessment: redactRuntimeAssessment(event.Assessment, artifacts),
 			},
 		}
 		if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {
@@ -235,6 +264,22 @@ func (e RuntimeExecutor) FailMaterialization(
 	send Sender,
 	_cause error,
 ) error {
+	return e.failBeforeRuntime(
+		ctx,
+		record,
+		send,
+		"ARTIFACT_MATERIALIZATION_FAILED",
+		"Pinned Artifact content could not be verified in isolated staging.",
+	)
+}
+
+func (e RuntimeExecutor) failBeforeRuntime(
+	ctx context.Context,
+	record Record,
+	send Sender,
+	code string,
+	messageText string,
+) error {
 	latest, err := e.Inbox.Get(record.RunID)
 	if err != nil {
 		return err
@@ -252,8 +297,8 @@ func (e RuntimeExecutor) FailMaterialization(
 			TraceID: latest.Request.TraceID, Sequence: sequence,
 			Status: contracts.Failed,
 			Error: &contracts.AgentRoomError{
-				Code:      "ARTIFACT_MATERIALIZATION_FAILED",
-				Message:   "Pinned Artifact content could not be verified in isolated staging.",
+				Code:      code,
+				Message:   messageText,
 				Retryable: false,
 			},
 		},
@@ -268,6 +313,133 @@ func (e RuntimeExecutor) FailMaterialization(
 		return err
 	}
 	return send(ctx, message)
+}
+
+func runHasPinnedArtifactContent(run contracts.RunRequestedPayload) bool {
+	if run.ContextPlan == nil || run.ContextPlan.ResultEvidence == nil {
+		return false
+	}
+	for _, reference := range run.ContextPlan.ResultEvidence.ArtifactRefs {
+		if reference.Content != nil {
+			return true
+		}
+	}
+	return false
+}
+
+func redactRuntimeClarification(
+	clarification *contracts.TaskClarificationRequest,
+	artifacts []bridgeruntime.VerifiedArtifactAlias,
+) *contracts.TaskClarificationRequest {
+	if clarification == nil {
+		return nil
+	}
+	redacted := *clarification
+	redacted.Question = bridgeruntime.RedactRuntimeText(redacted.Question, artifacts)
+	redacted.Choices = append([]string(nil), clarification.Choices...)
+	for index := range redacted.Choices {
+		redacted.Choices[index] = bridgeruntime.RedactRuntimeText(
+			redacted.Choices[index],
+			artifacts,
+		)
+	}
+	return &redacted
+}
+
+func redactRuntimeError(
+	runtimeBoundaryError *contracts.AgentRoomError,
+	artifacts []bridgeruntime.VerifiedArtifactAlias,
+) *contracts.AgentRoomError {
+	if runtimeBoundaryError == nil {
+		return nil
+	}
+	redacted := *runtimeBoundaryError
+	redacted.Message = bridgeruntime.RedactRuntimeText(redacted.Message, artifacts)
+	redacted.Details = redactRuntimeDetailMap(redacted.Details, artifacts)
+	return &redacted
+}
+
+func redactRuntimeDetailMap(
+	details map[string]interface{},
+	artifacts []bridgeruntime.VerifiedArtifactAlias,
+) map[string]interface{} {
+	if details == nil {
+		return nil
+	}
+	redacted := make(map[string]interface{}, len(details))
+	for key, value := range details {
+		redacted[bridgeruntime.RedactRuntimeText(key, artifacts)] =
+			redactRuntimeDetail(value, artifacts)
+	}
+	return redacted
+}
+
+func redactRuntimeDetail(
+	value interface{},
+	artifacts []bridgeruntime.VerifiedArtifactAlias,
+) interface{} {
+	switch typed := value.(type) {
+	case string:
+		return bridgeruntime.RedactRuntimeText(typed, artifacts)
+	case map[string]interface{}:
+		return redactRuntimeDetailMap(typed, artifacts)
+	case []interface{}:
+		redacted := make([]interface{}, len(typed))
+		for index := range typed {
+			redacted[index] = redactRuntimeDetail(typed[index], artifacts)
+		}
+		return redacted
+	case []string:
+		redacted := make([]string, len(typed))
+		for index := range typed {
+			redacted[index] = bridgeruntime.RedactRuntimeText(typed[index], artifacts)
+		}
+		return redacted
+	default:
+		return value
+	}
+}
+
+func redactRuntimeAssessment(
+	assessment *contracts.Assessment,
+	artifacts []bridgeruntime.VerifiedArtifactAlias,
+) *contracts.Assessment {
+	if assessment == nil {
+		return nil
+	}
+	redacted := *assessment
+	redacted.NewEvidenceRefs = append([]string(nil), assessment.NewEvidenceRefs...)
+	for index := range redacted.NewEvidenceRefs {
+		redacted.NewEvidenceRefs[index] = bridgeruntime.RedactRuntimeText(
+			redacted.NewEvidenceRefs[index],
+			artifacts,
+		)
+	}
+	redacted.OpenQuestions = append(
+		[]contracts.OpenQuestionElement(nil),
+		assessment.OpenQuestions...,
+	)
+	for index := range redacted.OpenQuestions {
+		redacted.OpenQuestions[index].ID = bridgeruntime.RedactRuntimeText(
+			redacted.OpenQuestions[index].ID,
+			artifacts,
+		)
+		redacted.OpenQuestions[index].Question = bridgeruntime.RedactRuntimeText(
+			redacted.OpenQuestions[index].Question,
+			artifacts,
+		)
+	}
+	redacted.ResolvedQuestionIDS = append(
+		[]string(nil),
+		assessment.ResolvedQuestionIDS...,
+	)
+	for index := range redacted.ResolvedQuestionIDS {
+		redacted.ResolvedQuestionIDS[index] = bridgeruntime.RedactRuntimeText(
+			redacted.ResolvedQuestionIDS[index],
+			artifacts,
+		)
+	}
+	return &redacted
 }
 
 func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Sender, code string) error {

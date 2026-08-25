@@ -151,6 +151,15 @@ func TestMaterializerStagesVerifiedReadOnlyContentAndReusesReceipt(t *testing.T)
 	if err != nil || len(entries) != 0 {
 		t.Fatalf("configured Workspace was mutated: entries=%v err=%v", entries, err)
 	}
+	aliases, err := manager.RuntimeArtifacts(download.request())
+	resolvedFinalPath, resolveErr := filepath.EvalSymlinks(finalPath)
+	if err != nil || len(aliases) != 1 || aliases[0].ArtifactID != download.artifactID ||
+		aliases[0].ContentID != download.contentID || aliases[0].LogicalAlias != download.alias ||
+		resolveErr != nil || aliases[0].LocalPath != resolvedFinalPath ||
+		aliases[0].SHA256 != download.sha256 ||
+		aliases[0].SizeBytes != int64(len(source)) || aliases[0].MediaType != contracts.TextXDiff {
+		t.Fatalf("Runtime aliases=%#v err=%v", aliases, err)
+	}
 	download.mu.Lock()
 	firstRequestCount := len(download.ranges)
 	download.mu.Unlock()
@@ -163,6 +172,33 @@ func TestMaterializerStagesVerifiedReadOnlyContentAndReusesReceipt(t *testing.T)
 	defer download.mu.Unlock()
 	if len(download.ranges) != firstRequestCount {
 		t.Fatalf("receipt reuse downloaded again: before=%d after=%d", firstRequestCount, len(download.ranges))
+	}
+}
+
+func TestRuntimeArtifactAdmissionRevalidatesStagedBytesAndPermissions(t *testing.T) {
+	download := newDownloadServer(t, []byte("verified Runtime input"))
+	dataDir := t.TempDir()
+	manager := download.manager(t, dataDir, t.TempDir())
+	request := download.request()
+	if _, err := manager.Materialize(context.Background(), request); err != nil {
+		t.Fatal(err)
+	}
+	finalPath := filepath.Join(
+		dataDir, "materializations", request.RunID, download.artifactID, "result.patch",
+	)
+	if err := os.Chmod(finalPath, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if aliases, err := manager.RuntimeArtifacts(request); err == nil || aliases != nil ||
+		!strings.Contains(err.Error(), "staged_content_permissions_changed") {
+		t.Fatalf("changed permissions aliases=%#v err=%v", aliases, err)
+	}
+	if err := os.WriteFile(finalPath, []byte("tampered Runtime input"), 0o400); err != nil {
+		t.Fatal(err)
+	}
+	if aliases, err := manager.RuntimeArtifacts(request); err == nil || aliases != nil ||
+		!strings.Contains(err.Error(), "staged_digest_mismatch") {
+		t.Fatalf("tampered bytes aliases=%#v err=%v", aliases, err)
 	}
 }
 
