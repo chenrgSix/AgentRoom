@@ -16,9 +16,12 @@ the timeline and Room settings, Agent owns roster and Device presentation,
 Bridge owns enrollment controls, Run owns activity and diagnostic presentation,
 Discussion owns Wave status and controls, and Task owns selection, creation, and
 clarification surfaces. Shared HTTP behavior lives in `api-client.ts`, while
-browser projection types live in `models.ts`. `App.tsx` remains the page-level
-coordinator for authoritative state reconciliation, cross-feature intent
-handlers, and shell composition; feature components do not fetch or derive
+browser projection types live in `models.ts`. The Room composer owns its draft,
+Mention selection, outbox retry, and multi-Agent submission state through
+`useRoomComposer`; Discussion selection, goal editing, and lifecycle commands
+are isolated in `useDiscussionController`. `App.tsx` remains the page-level
+coordinator for authoritative state reconciliation and shell composition;
+feature controllers send user intents but do not derive or override
 Server-owned state machines independently.
 
 Simplified Chinese is the default presentation language. English remains
@@ -264,6 +267,7 @@ browser acceptance covers message, Mention, reconnect, Run progress, reply, and
 cancellation. A public end-to-end two-Agent parallel Discussion persists its
 conclusion in `QA-010`. Existing UI work is tracked through `WEB-019`; Wave
 presentation and acceptance are completed by `WEB-020` and `QA-010`.
+Composer and Discussion controller extraction is tracked by `WEB-038`.
 
 `WEB-021` replaces first-page polling with a newest-100 snapshot, resumable
 cursor deltas, duplicate suppression, and a 500-message browser history bound.

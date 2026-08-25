@@ -1,7 +1,5 @@
 import {
-  type ChangeEvent,
   type FormEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -27,8 +25,10 @@ import {
   roleLabel
 } from "./features/agent/AgentWorkspace.js";
 import { DiscussionStatus } from "./features/discussion/DiscussionStatus.js";
+import { useDiscussionController } from "./features/discussion/useDiscussionController.js";
 import { RoomTimeline } from "./features/room/RoomTimeline.js";
 import { RoomSettingsDialog } from "./features/room/RoomSettingsDialog.js";
+import { useRoomComposer } from "./features/room/useRoomComposer.js";
 import { TeamMembersWorkspace } from "./features/team/TeamMembersWorkspace.js";
 import {
   ResourceLifecycleDialog,
@@ -50,7 +50,6 @@ import {
   type LocalSession,
   type Member,
   type MemberInvitation,
-  type MentionSearch,
   type Message,
   type Room,
   type RoomCollaborationPolicy,
@@ -80,17 +79,6 @@ import {
   loadRunDiagnostic,
   type RunDiagnostic
 } from "./run-diagnostics.js";
-import {
-  createClientMessageId,
-  type PendingRoomMessage,
-  queuePendingMessage,
-  updatePendingMessage
-} from "./message-outbox.js";
-import {
-  removeVisibleMentionToken,
-  resolveExactMentionCommands,
-  retainVisibleMentionIds
-} from "./structured-mentions.js";
 
 function collaborationPolicyFor(room: Room | null): RoomCollaborationPolicy {
   return room?.collaborationPolicy ?? defaultRoomCollaborationPolicy;
@@ -173,20 +161,11 @@ export function App() {
   const [memberInviteName, setMemberInviteName] = useState("");
   const [memberInvitation, setMemberInvitation] = useState<MemberInvitation | null>(null);
   const [invitationCopied, setInvitationCopied] = useState(false);
-  const [messageContent, setMessageContent] = useState("");
-  const [pendingMessages, setPendingMessages] = useState<PendingRoomMessage[]>([]);
-  const [discussionGoalEditId, setDiscussionGoalEditId] = useState<string | null>(null);
-  const [discussionGoalDraft, setDiscussionGoalDraft] = useState("");
-  const [expandedDiscussionId, setExpandedDiscussionId] = useState<string | null>(null);
-  const [mentionAgentIds, setMentionAgentIds] = useState<string[]>([]);
-  const [mentionSearch, setMentionSearch] = useState<MentionSearch | null>(null);
-  const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
   const [busy, setBusy] = useState(false);
   const [teamBusy, setTeamBusy] = useState(false);
   const [taskBusy, setTaskBusy] = useState(false);
   const [clarificationBusyId, setClarificationBusyId] = useState<string | null>(null);
   const [participantBusy, setParticipantBusy] = useState(false);
-  const [composerBusy, setComposerBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messageSyncRef = useRef<{
     roomId: string;
@@ -196,7 +175,6 @@ export function App() {
   const diagnosticRequestsRef = useRef(new Set<string>());
   const runOutputSyncRef = useRef(new Map<string, RunOutputProjection>());
   const runActivitySyncRef = useRef(new Map<string, RunActivityProjection>());
-  const selectedRoomIdRef = useRef<string | null>(selectedRoomId);
 
   const commitRunOutputEvents = (
     roomRuns: Run[],
@@ -272,62 +250,80 @@ export function App() {
     const visible = new Set(roomParticipants.agentIds);
     return agents.filter(({ agentId }) => visible.has(agentId));
   }, [agents, roomParticipants.agentIds]);
-  const mentionOptions = useMemo(() => {
-    if (!mentionSearch) return [];
-    const query = mentionSearch.query.toLocaleLowerCase(locale);
-    return roomAgents.filter((agent) =>
-      !mentionAgentIds.includes(agent.agentId) && (
-        agent.name.toLocaleLowerCase(locale).includes(query) ||
-        roleLabel(agent.role, locale).toLocaleLowerCase(locale).includes(query)
-      )
-    ).slice(0, 8);
-  }, [locale, mentionAgentIds, mentionSearch, roomAgents]);
-  const exactMentionCommands = useMemo(
-    () => resolveExactMentionCommands(messageContent, roomAgents, agents),
-    [agents, messageContent, roomAgents]
-  );
-  const selectedMentionAgents = mentionAgentIds.flatMap((agentId) => {
-    const agent = agentsById.get(agentId);
-    return agent ? [agent] : [];
-  });
-  const unresolvedExactAmbiguousNames = exactMentionCommands.ambiguousNames.filter(
-    (name) => !selectedMentionAgents.some((agent) => agent.name === name)
-  );
-  const directlyParsedAgents = exactMentionCommands.agentIds.flatMap((agentId) => {
-    if (mentionAgentIds.includes(agentId)) return [];
-    const agent = agentsById.get(agentId);
-    return agent ? [agent] : [];
-  });
   const readyAgents = agents.filter((agent) => agent.presence === "ready").length;
   const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
   const activeDevices = devices.filter((device) => device.status === "active").length;
   const currentMember = members.find((member) => member.userId === session?.userId) ?? null;
-  const pendingRoomMessages = pendingMessages.filter(({ roomId }) =>
-    roomId === selectedRoomId
-  );
   const lifecycleTeam = lifecycleTeams.find(({ teamId }) =>
     teamId === lifecycleTeamId
   ) ?? null;
   const t = (key: TranslationKey) => translate(locale, key);
-  const taskDiscussions = discussions.filter(({ discussion }) =>
-    discussion.taskId === selectedTaskId
-  );
-  const activeDiscussion = [...taskDiscussions].reverse().find(({ discussion }) =>
-    !["completed", "canceled", "terminated"].includes(discussion.state)
-  ) ?? null;
   const roomHasActiveRuns = runs.some(({ state }) => activeRunStates.has(state));
   const roomHasActiveDiscussion = discussions.some(({ discussion }) =>
     !["completed", "canceled", "terminated"].includes(discussion.state)
   );
   const roomHasActiveWork = roomHasActiveRuns || roomHasActiveDiscussion;
-  const visibleDiscussion = activeDiscussion ?? taskDiscussions.at(-1) ?? null;
-  const visibleDiscussionExpanded = visibleDiscussion?.discussion.discussionId === expandedDiscussionId;
-
-  useEffect(() => {
-    setExpandedDiscussionId((current) =>
-      current && current !== visibleDiscussion?.discussion.discussionId ? null : current
-    );
-  }, [visibleDiscussion?.discussion.discussionId]);
+  const {
+    activeDiscussion,
+    cancelGoalEdit: cancelDiscussionGoalEdit,
+    control: controlDiscussion,
+    editGoal: editDiscussionGoal,
+    expandedId: expandedDiscussionId,
+    goalDraft: discussionGoalDraft,
+    goalEditId: discussionGoalEditId,
+    saveGoal: saveDiscussionGoal,
+    setExpandedId: setExpandedDiscussionId,
+    setGoalDraft: setDiscussionGoalDraft,
+    visibleDiscussion,
+    visibleDiscussionExpanded
+  } = useDiscussionController({
+    discussions,
+    onBusy: setBusy,
+    onError: setError,
+    onRoomStateChanged: refreshRoomState,
+    selectedTaskId,
+    session
+  });
+  const {
+    busy: composerBusy,
+    deliver: deliverPendingMessage,
+    directlyParsedAgents,
+    exactMentionCommands,
+    handleChange: handleMessageChange,
+    handleKeyDown: handleMessageKeyDown,
+    mentionOptionIndex,
+    mentionOptions,
+    mentionSearch,
+    messageContent,
+    pendingMessages: pendingRoomMessages,
+    removeMention,
+    retainMentionAgentIds,
+    selectMention,
+    selectedMentionAgents,
+    submit: submitComposer,
+    unresolvedExactAmbiguousNames
+  } = useRoomComposer({
+    activeDiscussion,
+    agentRoleLabel: (agent) => roleLabel(agent.role, locale),
+    agents,
+    locale,
+    onDelivered: async (message, nextRuns) => {
+      setMessages((current) => mergeRoomMessages(current, [message]));
+      setRuns((current) => {
+        const byId = new Map(current.map((run) => [run.runId, run]));
+        for (const run of nextRuns) byId.set(run.runId, run);
+        return [...byId.values()];
+      });
+      await refreshRoomState();
+    },
+    onError: setError,
+    onRoomStateChanged: refreshRoomState,
+    roomAgents,
+    roomPolicy: selectedRoomPolicy,
+    selectedRoomId,
+    selectedTaskId,
+    session
+  });
 
   useEffect(() => {
     setRoomActionsOpen(false);
@@ -362,10 +358,6 @@ export function App() {
     document.documentElement.style.colorScheme = theme;
   }, [theme]);
 
-  useEffect(() => {
-    selectedRoomIdRef.current = selectedRoomId;
-  }, [selectedRoomId]);
-
   useLayoutEffect(() => {
     if (!pendingInvitationToken) return;
     window.history.replaceState(
@@ -374,15 +366,6 @@ export function App() {
       `${window.location.pathname}${window.location.search}`
     );
   }, []);
-
-  useEffect(() => {
-    setMentionAgentIds((current) => {
-      const retained = current.filter((agentId) =>
-        agents.some((agent) => agent.agentId === agentId)
-      );
-      return retained.length === current.length ? current : retained;
-    });
-  }, [agents]);
 
   async function loadTeams(activeSession: LocalSession) {
     const next = await jsonRequest<Team[]>("/api/teams", {}, activeSession.token);
@@ -523,7 +506,9 @@ export function App() {
         item.agentId === updated.agentId ? updated : item
       ));
       if (!enabled) {
-        setMentionAgentIds((current) => current.filter((id) => id !== agent.agentId));
+        retainMentionAgentIds(agents
+          .filter(({ agentId }) => agentId !== agent.agentId)
+          .map(({ agentId }) => agentId));
       }
     } catch (reason) {
       setError(String(reason));
@@ -691,9 +676,6 @@ export function App() {
       setAgents(nextAgents);
       setMembers(nextMembers);
       setDevices(nextDevices);
-      setMentionAgentIds((current) => current.filter((agentId) =>
-        nextAgents.some((agent) => agent.agentId === agentId)
-      ));
       setSelectedRoomId((current) =>
         nextRooms.some((room) => room.roomId === current)
           ? current
@@ -705,7 +687,6 @@ export function App() {
   useEffect(() => {
     if (!session || !selectedRoomId) {
       setMessages([]);
-      setPendingMessages([]);
       setRuns([]);
       setRunOutputs({});
       setRunActivities({});
@@ -794,9 +775,7 @@ export function App() {
       setRooms((current) => current.map((room) =>
         room.roomId === nextSettings.room.roomId ? nextSettings.room : room
       ));
-      setMentionAgentIds((current) => current.filter((agentId) =>
-        nextSettings.participants.agentIds.includes(agentId)
-      ));
+      retainMentionAgentIds(nextSettings.participants.agentIds);
     })
       .catch((reason: unknown) => {
         if (!stopped) setError(String(reason));
@@ -933,9 +912,7 @@ export function App() {
             setRooms((current) => current.map((room) =>
               room.roomId === nextSettings.room.roomId ? nextSettings.room : room
             ));
-            setMentionAgentIds((current) => current.filter((agentId) =>
-              nextSettings.participants.agentIds.includes(agentId)
-            ));
+            retainMentionAgentIds(nextSettings.participants.agentIds);
           }
         }
       } catch (reason) {
@@ -1158,9 +1135,7 @@ export function App() {
         room.roomId === updated.room.roomId ? updated.room : room
       ));
       setRoomSettingsDraftRevision(updated.room.settingsRevision);
-      setMentionAgentIds((current) => current.filter((agentId) =>
-        updated.participants.agentIds.includes(agentId)
-      ));
+      retainMentionAgentIds(updated.participants.agentIds);
       setParticipantDialogOpen(false);
     } catch (reason) {
       if (String(reason).includes("Room settings changed; reload and retry")) {
@@ -1457,287 +1432,6 @@ export function App() {
       setError(String(reason));
     } finally {
       setClarificationBusyId(null);
-    }
-  }
-
-  async function submitComposer(event: FormEvent) {
-    event.preventDefault();
-    if (
-      !session || !selectedRoomId || !selectedTaskId ||
-      !messageContent.trim()
-    ) return;
-    const exactCommands = resolveExactMentionCommands(
-      messageContent,
-      roomAgents,
-      agents
-    );
-    const selectedNames = new Set(selectedMentionAgents.map(({ name }) => name));
-    const unresolvedAmbiguousNames = exactCommands.ambiguousNames.filter(
-      (name) => !selectedNames.has(name)
-    );
-    if (unresolvedAmbiguousNames.length > 0) {
-      setError(locale === "zh-CN"
-        ? `精确指令 @${unresolvedAmbiguousNames.join("、@")} 匹配到多个同名智能体，请从候选列表选择具体身份。`
-        : `Exact command @${unresolvedAmbiguousNames.join(", @")} matches multiple same-name Agents. Select a specific identity from the suggestions.`);
-      return;
-    }
-    const resolvedMentionAgentIds = exactCommands.usesAll
-      ? exactCommands.agentIds
-      : [...new Set([...mentionAgentIds, ...exactCommands.agentIds])];
-    if (exactCommands.usesAll && !selectedRoomPolicy.allowAll) {
-      setError(locale === "zh-CN"
-        ? "当前房间设置不允许使用 @all。"
-        : "This Room does not allow the @all command.");
-      return;
-    }
-    if (exactCommands.usesAll && resolvedMentionAgentIds.length === 0) {
-      setError(locale === "zh-CN"
-        ? "当前房间没有可供 @all 路由的智能体。"
-        : "This Room has no Agents for @all to route to.");
-      return;
-    }
-    if (resolvedMentionAgentIds.length > 5) {
-      setError(locale === "zh-CN"
-        ? `精确指令匹配到 ${resolvedMentionAgentIds.length} 个智能体，超过一次协作最多 5 个的限制。`
-        : `The exact commands matched ${resolvedMentionAgentIds.length} Agents, exceeding the 5-Agent collaboration limit.`);
-      return;
-    }
-    if (
-      selectedRoomPolicy.allowDiscussion &&
-      resolvedMentionAgentIds.length >= 2 &&
-      activeDiscussion
-    ) {
-      setError(locale === "zh-CN"
-        ? "当前房间已有协作讨论，请先结束或停止后再发起新的协作。"
-        : "This Room already has an active Discussion. Finish or stop it before starting another.");
-      return;
-    }
-    setError(null);
-    if (
-      selectedRoomPolicy.allowDiscussion &&
-      resolvedMentionAgentIds.length >= 2
-    ) {
-      setComposerBusy(true);
-      try {
-        await jsonRequest<DiscussionView>(
-          `/api/rooms/${selectedRoomId}/discussions`,
-          {
-            method: "POST",
-            body: JSON.stringify({
-              taskId: selectedTaskId,
-              goal: messageContent,
-              participantAgentIds: resolvedMentionAgentIds,
-              mode: "round_robin",
-              outputMode: "final_answer"
-            })
-          },
-          session.token
-        );
-        setMessageContent("");
-        setMentionAgentIds([]);
-        setMentionSearch(null);
-        await refreshRoomState();
-      } catch (reason) {
-        setError(String(reason));
-      } finally {
-        setComposerBusy(false);
-      }
-      return;
-    }
-
-    const pending: PendingRoomMessage = {
-      clientMessageId: createClientMessageId(),
-      roomId: selectedRoomId,
-      taskId: selectedTaskId,
-      content: messageContent,
-      ...(resolvedMentionAgentIds.length > 0
-        ? { mentionAgentIds: resolvedMentionAgentIds }
-        : {}),
-      status: "pending"
-    };
-    setPendingMessages((current) => queuePendingMessage(current, pending));
-    setMessageContent("");
-    setMentionAgentIds([]);
-    setMentionSearch(null);
-    await deliverPendingMessage(pending);
-  }
-
-  async function deliverPendingMessage(pending: PendingRoomMessage) {
-    if (!session) return;
-    setComposerBusy(true);
-    setPendingMessages((current) =>
-      updatePendingMessage(current, pending.clientMessageId, "pending")
-    );
-    setError(null);
-    try {
-      const result = await jsonRequest<{ message: Message; runs: Run[] }>(
-        `/api/rooms/${pending.roomId}/messages`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            ...(pending.taskId ? { taskId: pending.taskId } : {}),
-            content: pending.content,
-            clientMessageId: pending.clientMessageId,
-            ...(pending.mentionAgentIds?.length === 1
-              ? { mentionAgentId: pending.mentionAgentIds[0] }
-              : pending.mentionAgentIds && pending.mentionAgentIds.length > 1
-                ? { mentionAgentIds: pending.mentionAgentIds }
-                : {})
-          })
-        },
-        session.token
-      );
-      setPendingMessages((current) => current.filter(({ clientMessageId }) =>
-        clientMessageId !== pending.clientMessageId
-      ));
-      if (selectedRoomIdRef.current === pending.roomId) {
-        setMessages((current) => mergeRoomMessages(current, [result.message]));
-        setRuns((current) => {
-          const byId = new Map(current.map((run) => [run.runId, run]));
-          for (const run of result.runs) byId.set(run.runId, run);
-          return [...byId.values()];
-        });
-        await refreshRoomState();
-      }
-    } catch (reason) {
-      setPendingMessages((current) =>
-        updatePendingMessage(current, pending.clientMessageId, "failed")
-      );
-      setError(String(reason));
-    } finally {
-      setComposerBusy(false);
-    }
-  }
-
-  async function controlDiscussion(
-    discussionId: string,
-    action: "finish" | "stop_after_turn" | "pause" | "cancel" | "continue"
-  ) {
-    if (!session) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await jsonRequest<DiscussionView>(
-        `/api/discussions/${discussionId}/actions`,
-        { method: "POST", body: JSON.stringify({ action }) },
-        session.token
-      );
-      await refreshRoomState();
-    } catch (reason) {
-      setError(String(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function editDiscussionGoal(view: DiscussionView) {
-    setDiscussionGoalEditId(view.discussion.discussionId);
-    setDiscussionGoalDraft(view.discussion.goal);
-  }
-
-  function cancelDiscussionGoalEdit() {
-    setDiscussionGoalEditId(null);
-    setDiscussionGoalDraft("");
-  }
-
-  async function saveDiscussionGoal() {
-    if (!session || !discussionGoalEditId || !discussionGoalDraft.trim()) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await jsonRequest<DiscussionView>(
-        `/api/discussions/${discussionGoalEditId}/actions`,
-        {
-          method: "POST",
-          body: JSON.stringify({ action: "adjust_goal", goal: discussionGoalDraft })
-        },
-        session.token
-      );
-      cancelDiscussionGoalEdit();
-      await refreshRoomState();
-    } catch (reason) {
-      setError(String(reason));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function handleMessageChange(event: ChangeEvent<HTMLTextAreaElement>) {
-    const nextContent = event.currentTarget.value;
-    const cursor = event.currentTarget.selectionStart ?? nextContent.length;
-    const beforeCursor = nextContent.slice(0, cursor);
-    const match = /(?:^|\s)@([^@\s]*)$/u.exec(beforeCursor);
-
-    setMessageContent(nextContent);
-    setError(null);
-    setMentionAgentIds((current) =>
-      retainVisibleMentionIds(nextContent, current, agentsById)
-    );
-    if (match) {
-      setMentionSearch({
-        end: cursor,
-        query: match[1] ?? "",
-        start: beforeCursor.lastIndexOf("@")
-      });
-      setMentionOptionIndex(0);
-    } else {
-      setMentionSearch(null);
-    }
-  }
-
-  function selectMention(agent: Agent) {
-    if (!mentionSearch) return;
-    if (mentionAgentIds.length >= 5) {
-      setError(locale === "zh-CN"
-        ? "一次协作最多可以提及 5 个智能体。"
-        : "A collaboration can mention at most 5 Agents.");
-      setMentionSearch(null);
-      return;
-    }
-    const nextContent = [
-      messageContent.slice(0, mentionSearch.start),
-      `@${agent.name} `,
-      messageContent.slice(mentionSearch.end)
-    ].join("");
-    setMessageContent(nextContent);
-    setMentionAgentIds((current) => current.includes(agent.agentId)
-      ? current
-      : [...current, agent.agentId]
-    );
-    setError(null);
-    setMentionSearch(null);
-    setMentionOptionIndex(0);
-  }
-
-  function removeMention(agent: Agent) {
-    setMessageContent((current) => removeVisibleMentionToken(
-      current,
-      agent.name,
-      roomAgents.map(({ name }) => name)
-    ));
-    setMentionAgentIds((current) => current.filter((agentId) => agentId !== agent.agentId));
-    setMentionSearch(null);
-  }
-
-  function handleMessageKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
-    if (!mentionSearch) return;
-    if (event.key === "Escape") {
-      event.preventDefault();
-      setMentionSearch(null);
-      return;
-    }
-    if (mentionOptions.length === 0) return;
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setMentionOptionIndex((current) => (current + 1) % mentionOptions.length);
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setMentionOptionIndex((current) =>
-        (current - 1 + mentionOptions.length) % mentionOptions.length
-      );
-    } else if (event.key === "Enter") {
-      event.preventDefault();
-      selectMention(mentionOptions[mentionOptionIndex] ?? mentionOptions[0]!);
     }
   }
 
