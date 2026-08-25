@@ -2,7 +2,7 @@
 
 - Prefix: `ART`
 - Implementation: `apps/server/src/artifact/`, `apps/server/src/http/artifact-routes.ts`,
-  `bridge/internal/artifact/`, and migration 0036
+  `bridge/internal/artifact/`, and migrations 0036-0037
 - Owns: Blob uploads, sealed content, content retention, authenticated transfer,
   and materialization receipts
 
@@ -31,7 +31,7 @@ decides whether those bytes become canonical Team evidence.
 | --- | --- |
 | Blob upload | upload/publication identity, Team and Device scope, idempotency key, declared size/digest/media type, received offset, state, expiry |
 | Artifact content | contentId, Team scope, SHA-256, size, storage key, sealed timestamp |
-| Materialization receipt | target Run/Device, Artifact/content IDs, logical alias, digest, state, timestamp |
+| Materialization receipt | target Run/Device delivery scope, Artifact/content IDs, logical alias, media type, size, digest, and verified/reused state; no local path |
 
 The first BlobStore is a bounded local-filesystem adapter. Temporary and sealed
 files share a filesystem so seal can fsync and atomically rename. SQLite stores
@@ -75,12 +75,16 @@ size, and digest. The authenticated target Device downloads only content named
 by its pending or accepted delivery. The implemented content endpoint resolves
 authorization from that frozen payload and verifies the immutable sealed Blob
 before returning bytes; a same-Team source or sibling Device is not sufficient.
-The next Bridge slice writes those bytes to a temporary file under a
-Bridge-owned Run directory, checks bounds and digest, fsyncs, atomically
-renames, removes executable bits, and exposes the pinned `artifact://` alias.
-No configured Workspace file is created or replaced.
+`BRG-029` writes those bytes in authenticated 256 KiB ranges to an owner-only
+temporary file under a Bridge-owned Run/Artifact directory, checks the pinned
+metadata, size, media type, and digest, fsyncs, atomically renames, and protects
+the final file as read-only and non-executable. A path-free local receipt makes
+rename-response loss and Bridge restart converge to `reused`. Existing
+symlinks, special files, traversal-shaped identifiers, permission drift, and a
+staging root inside the configured Workspace fail closed. No configured
+Workspace file is created or replaced.
 
-The Runtime receives a bounded alias manifest. It may read the staged files
+`ADP-014` will give the Runtime a bounded alias manifest. It may read the staged files
 under its existing local sandbox policy. Result-evidence consumption advances
 only at the existing durable Runtime acceptance point.
 
@@ -94,7 +98,7 @@ only at the existing durable Runtime acceptance point.
 | seal response lost | sealed content identity is queried | reuse the same content identity |
 | sealed before bind | publication is sealed and unbound | retry exact bind or expire by policy |
 | bind response lost | canonical Artifact ID is stored on publication | return the existing Artifact |
-| Server restart during download | Run delivery still pins content | target resumes or restarts staging |
+| Server or Bridge restart during download | Run delivery still pins content and `.part` retains its exact offset | target resumes authenticated ranges without accepting partial bytes |
 | target rename response lost | local receipt and digest agree | return the existing alias |
 | Runtime acceptance ambiguous | provider may have received prompt | do not advance result cursor or rerun blindly |
 
@@ -119,7 +123,7 @@ download. Read-only mode is not presented as an OS sandbox guarantee.
 `ART-001` owns durable upload and seal. `TASK-010` owns canonical bind,
 `CON-010` the additive wire contract, completed `BRG-028` source publication,
 completed `RUN-011`
-pinned delivery, `BRG-029` isolated materialization, `ADP-014` Runtime alias
+pinned delivery, completed `BRG-029` isolated materialization, `ADP-014` Runtime alias
 injection, `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
 two-Bridge recovery gate.
 

@@ -93,6 +93,13 @@ payload hash and access decision. A legacy Agent receives the ordinary
 reference-only projection and cannot use its Device credential to infer or
 download the content.
 
+`BRG-029` extends that endpoint with exact bounded byte ranges for restartable
+downloads. Delivery acceptance validates either the complete set of receipts
+against the frozen descriptors or the single closed non-retryable
+materialization error; partial, forged, duplicate, mixed success/error, and
+content-free failure acknowledgements are rejected. Only after that check does
+sequence 1 move the Run to `delivered`.
+
 The triggering Message creates the authoritative `traceId`. The Run, Delivery,
 Bridge request, Runtime events, projected Agent reply, and any child handoff
 Run inherit it. Bridge-supplied trace values cannot replace this authority.

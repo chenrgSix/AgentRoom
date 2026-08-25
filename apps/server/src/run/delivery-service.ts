@@ -189,7 +189,9 @@ export class DeliveryService {
     traceId: string,
     agentId: string,
     sequence: number,
-    now: string
+    now: string,
+    artifactMaterializations?: unknown,
+    artifactMaterializationError?: unknown
   ): RunRecord {
     if (sequence !== 1) {
       throw new Error("run.accepted must use sequence 1");
@@ -210,6 +212,11 @@ export class DeliveryService {
     ) {
       throw new Error("Run acceptance identity mismatch");
     }
+    this.validateArtifactMaterializations(
+      delivery,
+      artifactMaterializations,
+      artifactMaterializationError
+    );
     this.database.prepare(`
       UPDATE run_deliveries SET state = 'accepted', accepted_at = ?
       WHERE run_id = ? AND state = 'pending'
@@ -219,6 +226,66 @@ export class DeliveryService {
       sequence: 1,
       status: "delivered"
     }, now).run;
+  }
+
+  private validateArtifactMaterializations(
+    delivery: DeliveryRecord,
+    materializations: unknown,
+    materializationError: unknown
+  ): void {
+    const expected = delivery.payload.contextPlan.resultEvidence?.artifactRefs
+      .flatMap((reference) => reference.content
+        ? [{ artifactId: reference.artifactId, ...reference.content }]
+        : []) ?? [];
+    if (materializationError !== undefined) {
+      const failure = materializationError as Record<string, unknown>;
+      if (
+        expected.length === 0 || !failure || typeof failure !== "object" ||
+        Array.isArray(failure) ||
+        failure.code !== "ARTIFACT_MATERIALIZATION_FAILED" ||
+        failure.retryable !== false ||
+        failure.message !==
+          "Pinned Artifact content could not be verified in isolated staging." ||
+        (materializations !== undefined &&
+          (!Array.isArray(materializations) || materializations.length !== 0))
+      ) {
+        throw new Error("Artifact materialization failure does not match delivery");
+      }
+      return;
+    }
+    if (!Array.isArray(materializations)) {
+      if (expected.length === 0 && materializations === undefined) return;
+      throw new Error("Artifact materialization receipts do not match delivery");
+    }
+    if (materializations.length !== expected.length) {
+      throw new Error("Artifact materialization receipts do not match delivery");
+    }
+    const remaining = new Map(expected.map((receipt) => [receipt.artifactId, receipt]));
+    for (const candidate of materializations) {
+      if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+        throw new Error("Artifact materialization receipts do not match delivery");
+      }
+      const receipt = candidate as Record<string, unknown>;
+      const artifactId = typeof receipt.artifactId === "string"
+        ? receipt.artifactId
+        : "";
+      const pinned = remaining.get(artifactId);
+      if (
+        !pinned || receipt.contentId !== pinned.contentId ||
+        receipt.logicalAlias !== pinned.logicalAlias ||
+        receipt.mediaType !== pinned.mediaType ||
+        receipt.sha256 !== pinned.sha256 ||
+        receipt.sizeBytes !== pinned.sizeBytes ||
+        (receipt.materializationState !== "verified" &&
+          receipt.materializationState !== "reused")
+      ) {
+        throw new Error("Artifact materialization receipts do not match delivery");
+      }
+      remaining.delete(artifactId);
+    }
+    if (remaining.size !== 0) {
+      throw new Error("Artifact materialization receipts do not match delivery");
+    }
   }
 
   public getByRun(runId: string): DeliveryRecord | undefined {

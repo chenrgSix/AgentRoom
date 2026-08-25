@@ -95,6 +95,16 @@ state; Bridge inbox writes are fsynced before acceptance or event send.
 The local Bridge inbox is owned by the Bridge module, although its recovery
 contract is tested jointly with server delivery records.
 
+`BRG-029` adds a durable local `preparing` state before any content-bearing Run
+is acknowledged. Bounded range downloads fsync an owner-only partial file;
+verified bytes are protected and atomically renamed before a path-free receipt
+is installed. Restart leaves `preparing` unguessed so the pending Server
+delivery re-enters the materializer at the exact local offset. A final file and
+matching receipt are rehashed before returning `reused`; receipt, metadata,
+permission, or digest drift fails closed. Runtime recovery revalidates receipts
+before replaying sequence 1 and never advances result-evidence consumption at
+this staging boundary.
+
 ## Recovery Policy
 
 On startup, the server validates migrations and preserves queued deliveries and

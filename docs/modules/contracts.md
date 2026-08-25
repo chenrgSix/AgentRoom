@@ -145,7 +145,12 @@ capability; neither optional flag grants access by itself. After isolated bytes
 are verified, `run.accepted` may carry at most 20 closed materialization
 receipts. Each repeats the pinned Artifact/content IDs, size, digest, logical
 alias, and only the bounded `verified` or `reused` state; additional local or
-provider-native fields are contract-invalid.
+provider-native fields are contract-invalid. A pre-Runtime deterministic
+verification failure instead carries one closed, non-retryable
+`artifactMaterializationError` and no receipt. This negative acknowledgement is
+the sequence 1 delivery cut that permits the following sequence 2 `failed` or
+`canceled` event; retryable download failures send neither form and remain
+pending for exact redelivery.
 
 An optional `longTermMemory` plan carries independently revisioned Room and
 Task snapshots. Each scope contains at most 24 typed entries, an

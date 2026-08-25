@@ -18,6 +18,7 @@ import (
 type State string
 
 const (
+	StatePreparing      State = "preparing"
 	StateAccepted       State = "accepted"
 	StateWorking        State = "working"
 	StateInputRequired  State = "input_required"
@@ -236,6 +237,34 @@ func (i *Inbox) Update(runID string, state State, sequence int64, now time.Time)
 	}
 	record.State = state
 	record.LastSequence = sequence
+	record.UpdatedAt = now.UTC()
+	if err := replace(path, record); err != nil {
+		return Record{}, err
+	}
+	return record, nil
+}
+
+func (i *Inbox) TransitionLocalState(
+	runID string,
+	expected State,
+	next State,
+	now time.Time,
+) (Record, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	path := i.path(runID)
+	record, err := i.load(path)
+	if err != nil {
+		return Record{}, err
+	}
+	if record.State != expected {
+		return record, fmt.Errorf(
+			"Run local state changed: %s, expected %s",
+			record.State,
+			expected,
+		)
+	}
+	record.State = next
 	record.UpdatedAt = now.UTC()
 	if err := replace(path, record); err != nil {
 		return Record{}, err

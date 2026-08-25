@@ -120,6 +120,19 @@ digest drift fail locally. Output and server responses contain only opaque
 identities, basename, size, media type, and digest; configured paths, storage
 keys, credentials, and file contents are not logged.
 
+For `BRG-029`, a managed Runtime Agent also advertises isolated Artifact
+materialization. Before sending `run.accepted` or invoking a Runtime, the Bridge
+downloads every pinned content descriptor through the exact target Device/Run
+authorization, resumes an owner-only `.part` file by bounded byte ranges,
+verifies all response metadata plus final size and SHA-256, then fsyncs and
+atomically installs one read-only non-executable file under
+`dataDir/materializations/<run>/<artifact>/`. A closed local receipt contains
+only pinned identities and metadata; a configured Workspace is never a staging
+root and is never written. A retryable transport failure leaves the inbox in
+`preparing` without ACK so redelivery resumes it. A deterministic verification
+failure sends the bounded negative acknowledgement and sequence 2 `failed`
+without starting a Runtime.
+
 `GET /ws/bridge` authenticates the Device bearer credential before upgrade.
 Every connection must start with protocol `1.0` `bridge.hello`; a newer epoch
 closes the old socket, while stale epochs and identity-mismatched heartbeats are
@@ -135,9 +148,12 @@ than an unbounded WebSocket allocation.
 ## Durable Inbox and ACK
 
 The Bridge writes `deliveryAttemptId`, `idempotencyKey`, payload hash, and local
-status before ACK. A duplicate returns the existing acceptance and cannot start
-a second Runtime process. If recovery cannot determine whether a process
-finished, the Bridge reports `outcome_unknown` rather than guessing.
+status before ACK. Content-bearing Runs add the durable local `preparing` cut;
+recovery does not reinterpret it as Runtime acceptance and waits for the same
+Server delivery to resume materialization. A duplicate returns verified or
+reused receipts and cannot start a second Runtime process. If recovery cannot
+determine whether a process finished after acceptance, the Bridge reports
+`outcome_unknown` rather than guessing.
 
 The MVP inbox uses one owner-only, fsynced JSON record per Run under `dataDir`.
 Acceptance is serialized, verifies both idempotency key and payload hash, and

@@ -15,10 +15,12 @@ import (
 )
 
 type RuntimeExecutor struct {
-	Inbox    *Inbox
-	Adapters map[string]bridgeruntime.Adapter
-	Now      func() time.Time
-	Observer operations.Observer
+	Inbox              *Inbox
+	Adapters           map[string]bridgeruntime.Adapter
+	Prepare            PrepareRunFunc
+	IsPrepareRetryable func(error) bool
+	Now                func() time.Time
+	Observer           operations.Observer
 }
 
 func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender) error {
@@ -227,6 +229,47 @@ func (e RuntimeExecutor) CancelQueued(ctx context.Context, record Record, send S
 	return send(ctx, message)
 }
 
+func (e RuntimeExecutor) FailMaterialization(
+	ctx context.Context,
+	record Record,
+	send Sender,
+	_cause error,
+) error {
+	latest, err := e.Inbox.Get(record.RunID)
+	if err != nil {
+		return err
+	}
+	if isTerminalState(latest.State) {
+		return e.Replay(ctx, latest, send)
+	}
+	now := e.now()
+	sequence := latest.LastSequence + 1
+	message := contracts.RunStatusMessage{
+		ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: now,
+		Type: contracts.RunStatus,
+		Payload: contracts.RunStatusPayload{
+			RunID: latest.RunID, AgentID: latest.Request.TargetAgentID,
+			TraceID: latest.Request.TraceID, Sequence: sequence,
+			Status: contracts.Failed,
+			Error: &contracts.AgentRoomError{
+				Code:      "ARTIFACT_MATERIALIZATION_FAILED",
+				Message:   "Pinned Artifact content could not be verified in isolated staging.",
+				Retryable: false,
+			},
+		},
+	}
+	if _, err := e.Inbox.AppendEvent(
+		latest.RunID,
+		StateFailed,
+		sequence,
+		message,
+		now,
+	); err != nil {
+		return err
+	}
+	return send(ctx, message)
+}
+
 func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Sender, code string) error {
 	now := time.Now().UTC()
 	if e.Now != nil {
@@ -290,6 +333,18 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 		recoverable = append(recoverable, record)
 	}
 	for _, record := range recoverable {
+		if record.State == StatePreparing {
+			continue
+		}
+		var materializations []contracts.VerifiedArtifactMaterializationReceipt
+		var prepareErr error
+		if e.Prepare != nil {
+			materializations, prepareErr = e.Prepare(ctx, record.Request)
+			if prepareErr != nil && e.IsPrepareRetryable != nil &&
+				e.IsPrepareRetryable(prepareErr) {
+				return prepareErr
+			}
+		}
 		now := time.Now().UTC()
 		if e.Now != nil {
 			now = e.Now().UTC()
@@ -300,7 +355,12 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 			Payload: contracts.RunAcceptedPayload{
 				RunID: record.RunID, TraceID: record.Request.TraceID,
 				AgentID: record.Request.TargetAgentID, Sequence: 1,
+				ArtifactMaterializations: materializations,
 			},
+		}
+		if prepareErr != nil {
+			accepted.Payload.ArtifactMaterializationError =
+				materializationFailureAcknowledgement()
 		}
 		if err := send(ctx, accepted); err != nil {
 			return err

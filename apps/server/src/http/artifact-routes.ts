@@ -49,6 +49,24 @@ function exactBase64(value: string): Buffer {
   return decoded;
 }
 
+function requestedByteRange(
+  value: string | string[] | undefined,
+  size: number
+): { start: number; end: number } | null | undefined {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return null;
+  const match = /^bytes=(0|[1-9][0-9]*)-(0|[1-9][0-9]*)$/u.exec(value);
+  const start = Number(match?.[1]);
+  const end = Number(match?.[2]);
+  if (
+    !match || !Number.isSafeInteger(start) || !Number.isSafeInteger(end) ||
+    start < 0 || end < start || end >= size || end - start + 1 > (256 << 10)
+  ) {
+    return null;
+  }
+  return { start, end };
+}
+
 export function registerArtifactRoutes({
   app,
   artifactContentBinding,
@@ -222,11 +240,33 @@ export function registerArtifactRoutes({
         request.params.artifactId,
         request.params.contentId
       );
+      const range = requestedByteRange(
+        request.headers.range,
+        result.content.sizeBytes
+      );
       noStore(reply);
+      reply.header("accept-ranges", "bytes");
+      if (range === null) {
+        reply.header("content-range", `bytes */${result.content.sizeBytes}`);
+        return reply.status(416).send({
+          error: { code: "INVALID_RANGE", message: "Artifact byte range is invalid" }
+        });
+      }
       reply.header("x-agentroom-content-id", result.content.contentId);
       reply.header("x-agentroom-content-sha256", result.content.sha256);
       reply.header("x-agentroom-logical-alias", result.content.logicalAlias);
-      return reply.type(result.content.mediaType).send(result.bytes);
+      if (range !== undefined) {
+        reply.status(206);
+        reply.header(
+          "content-range",
+          `bytes ${range.start}-${range.end}/${result.content.sizeBytes}`
+        );
+      }
+      return reply.type(result.content.mediaType).send(
+        range === undefined
+          ? result.bytes
+          : result.bytes.subarray(range.start, range.end + 1)
+      );
     }
   );
 }

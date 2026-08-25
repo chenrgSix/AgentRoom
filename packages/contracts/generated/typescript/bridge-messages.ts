@@ -463,12 +463,27 @@ export interface RunAcceptedMessage {
 }
 
 export interface RunAcceptedPayload {
-  agentId:                   string;
-  runId:                     string;
-  sequence:                  number;
-  traceId:                   string;
-  artifactMaterializations?: VerifiedArtifactMaterializationReceipt[];
+  agentId:  string;
+  runId:    string;
+  sequence: number;
+  traceId:  string;
+  /**
+   * Non-retryable negative acknowledgement when pinned Artifact content cannot be verified
+   * before Runtime admission.
+   */
+  artifactMaterializationError?: ArtifactMaterializationError;
+  artifactMaterializations?:     VerifiedArtifactMaterializationReceipt[];
   [property: string]: unknown;
+}
+
+/**
+ * Non-retryable negative acknowledgement when pinned Artifact content cannot be verified
+ * before Runtime admission.
+ */
+export interface ArtifactMaterializationError {
+  code:      string;
+  message:   string;
+  retryable: boolean;
 }
 
 /**

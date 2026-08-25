@@ -260,6 +260,30 @@
     }
   ],
   "$defs": {
+    "artifactMaterializationError": {
+      "title": "Artifact Materialization Error",
+      "description": "Non-retryable negative acknowledgement when pinned Artifact content cannot be verified before Runtime admission.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "type": "string",
+          "pattern": "^ARTIFACT_MATERIALIZATION_FAILED$"
+        },
+        "message": {
+          "type": "string",
+          "pattern": "^Pinned Artifact content could not be verified in isolated staging\\.$"
+        },
+        "retryable": {
+          "const": false
+        }
+      }
+    },
     "runtimeScopeId": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
@@ -1593,7 +1617,36 @@
         },
         {
           "type": "object",
+          "oneOf": [
+            {
+              "not": {
+                "properties": {
+                  "artifactMaterializationError": {}
+                },
+                "required": [
+                  "artifactMaterializationError"
+                ]
+              }
+            },
+            {
+              "required": [
+                "artifactMaterializationError"
+              ],
+              "properties": {
+                "artifactMaterializationError": {
+                  "$ref": "#/$defs/artifactMaterializationError"
+                },
+                "artifactMaterializations": {
+                  "type": "array",
+                  "maxItems": 0
+                }
+              }
+            }
+          ],
           "properties": {
+            "artifactMaterializationError": {
+              "$ref": "#/$defs/artifactMaterializationError"
+            },
             "artifactMaterializations": {
               "type": "array",
               "maxItems": 20,

@@ -917,6 +917,71 @@
       "valid": true
     },
     {
+      "name": "valid Run acceptance with deterministic Artifact materialization failure",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5YX",
+        "timestamp": "2026-08-22T10:00:12Z",
+        "type": "run.accepted",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 1,
+          "artifactMaterializationError": {
+            "code": "ARTIFACT_MATERIALIZATION_FAILED",
+            "message": "Pinned Artifact content could not be verified in isolated staging.",
+            "retryable": false
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "Artifact materialization failure cannot request a blind retry",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactMaterializationError",
+      "instance": {
+        "code": "ARTIFACT_MATERIALIZATION_FAILED",
+        "message": "Pinned Artifact content could not be verified in isolated staging.",
+        "retryable": true
+      },
+      "valid": false
+    },
+    {
+      "name": "Artifact materialization failure cannot claim a verified receipt",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5YY",
+        "timestamp": "2026-08-22T10:00:12Z",
+        "type": "run.accepted",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 1,
+          "artifactMaterializationError": {
+            "code": "ARTIFACT_MATERIALIZATION_FAILED",
+            "message": "Pinned Artifact content could not be verified in isolated staging.",
+            "retryable": false
+          },
+          "artifactMaterializations": [
+            {
+              "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "sizeBytes": 1024,
+              "mediaType": "text/x-diff",
+              "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/change.patch",
+              "materializationState": "verified"
+            }
+          ]
+        }
+      },
+      "valid": false
+    },
+    {
       "name": "Artifact receipt rejects a local staging path",
       "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactMaterializationReceipt",
       "instance": {

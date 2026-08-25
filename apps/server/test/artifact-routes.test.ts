@@ -311,6 +311,7 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
     }
 
     const targetCredential = auth.issueDeviceCredential(targetDevice.deviceId, now);
+    const targetPrincipal = auth.authenticateDevice(targetCredential.secret, now);
     const targetHeaders = {
       authorization: `Bearer ${targetCredential.secret}`,
       "x-agentroom-server-token": serverToken
@@ -318,6 +319,69 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
     const downloadUrl =
       `/api/bridge/runs/${downstreamRun.runId}/artifacts/${artifactId}` +
       `/contents/${contentId}`;
+    const pendingRange = await app.inject({
+      method: "GET",
+      url: downloadUrl,
+      headers: { ...targetHeaders, range: "bytes=0-4" }
+    });
+    assert.equal(pendingRange.statusCode, 206);
+    assert.deepEqual(pendingRange.rawPayload, source.subarray(0, 5));
+    assert.throws(() => delivery.accept(
+      targetPrincipal,
+      downstreamRun.runId,
+      downstreamRun.traceId,
+      targetAgent.agentId,
+      1,
+      now
+    ), /materialization receipts/u);
+    assert.throws(() => delivery.accept(
+      targetPrincipal,
+      downstreamRun.runId,
+      downstreamRun.traceId,
+      targetAgent.agentId,
+      1,
+      now,
+      [{
+        artifactId,
+        contentId,
+        logicalAlias: `artifact://${artifactId}/change.patch`,
+        mediaType: "text/x-diff",
+        sha256: "f".repeat(64),
+        sizeBytes: source.length,
+        materializationState: "verified"
+      }]
+    ), /materialization receipts/u);
+    assert.throws(() => delivery.accept(
+      targetPrincipal,
+      downstreamRun.runId,
+      downstreamRun.traceId,
+      targetAgent.agentId,
+      1,
+      now,
+      undefined,
+      {
+        code: "ARTIFACT_MATERIALIZATION_FAILED",
+        message: "retry later",
+        retryable: true
+      }
+    ), /materialization failure/u);
+    assert.equal(delivery.accept(
+      targetPrincipal,
+      downstreamRun.runId,
+      downstreamRun.traceId,
+      targetAgent.agentId,
+      1,
+      now,
+      [{
+        artifactId,
+        contentId,
+        logicalAlias: `artifact://${artifactId}/change.patch`,
+        mediaType: "text/x-diff",
+        sha256,
+        sizeBytes: source.length,
+        materializationState: "verified"
+      }]
+    ).state, "delivered");
     const download = await app.inject({
       method: "GET",
       url: downloadUrl,
@@ -332,6 +396,56 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
       `artifact://${artifactId}/change.patch`
     );
     assert.equal(download.body.includes(blobRoot), false);
+    const rangedDownload = await app.inject({
+      method: "GET",
+      url: downloadUrl,
+      headers: { ...targetHeaders, range: "bytes=5-17" }
+    });
+    assert.equal(rangedDownload.statusCode, 206);
+    assert.equal(
+      rangedDownload.headers["content-range"],
+      `bytes 5-17/${source.length}`
+    );
+    assert.deepEqual(rangedDownload.rawPayload, source.subarray(5, 18));
+    const invalidRange = await app.inject({
+      method: "GET",
+      url: downloadUrl,
+      headers: { ...targetHeaders, range: `bytes=0-${source.length}` }
+    });
+    assert.equal(invalidRange.statusCode, 416);
+
+    const failureMessage = messages.createMemberMessage(member, {
+      roomId: room.roomId,
+      content: "Verify materialization failure handling.",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: targetAgent.agentId,
+        displayLabel: "Reviewer / Managed"
+      }],
+      now
+    });
+    const failureRun = runs.createRunsForMessage(
+      member,
+      failureMessage.messageId,
+      now
+    )[0];
+    assert.ok(failureRun);
+    assert.ok(delivery.dispatch(failureRun.runId)?.payload.contextPlan
+      .resultEvidence?.artifactRefs.some((reference) => reference.content));
+    assert.equal(delivery.accept(
+      targetPrincipal,
+      failureRun.runId,
+      failureRun.traceId,
+      targetAgent.agentId,
+      1,
+      now,
+      undefined,
+      {
+        code: "ARTIFACT_MATERIALIZATION_FAILED",
+        message: "Pinned Artifact content could not be verified in isolated staging.",
+        retryable: false
+      }
+    ).state, "delivered");
 
     const wrongDevice = await app.inject({
       method: "GET",

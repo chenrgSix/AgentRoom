@@ -265,7 +265,9 @@ export function registerBridgeSocketRoutes({
             message.payload.traceId,
             message.payload.agentId,
             1,
-            clock()
+            clock(),
+            message.payload.artifactMaterializations,
+            message.payload.artifactMaterializationError
           );
           app.log.info({
             event: "run.delivery.accepted",

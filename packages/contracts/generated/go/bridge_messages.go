@@ -350,11 +350,22 @@ type RunAcceptedMessage struct {
 }
 
 type RunAcceptedPayload struct {
-	AgentID                  string                                   `json:"agentId"`
-	RunID                    string                                   `json:"runId"`
-	Sequence                 int64                                    `json:"sequence"`
-	TraceID                  string                                   `json:"traceId"`
-	ArtifactMaterializations []VerifiedArtifactMaterializationReceipt `json:"artifactMaterializations,omitempty"`
+	AgentID  string `json:"agentId"`
+	RunID    string `json:"runId"`
+	Sequence int64  `json:"sequence"`
+	TraceID  string `json:"traceId"`
+	// Non-retryable negative acknowledgement when pinned Artifact content cannot be verified
+	// before Runtime admission.
+	ArtifactMaterializationError *ArtifactMaterializationError            `json:"artifactMaterializationError,omitempty"`
+	ArtifactMaterializations     []VerifiedArtifactMaterializationReceipt `json:"artifactMaterializations,omitempty"`
+}
+
+// Non-retryable negative acknowledgement when pinned Artifact content cannot be verified
+// before Runtime admission.
+type ArtifactMaterializationError struct {
+	Code      string `json:"code"`
+	Message   string `json:"message"`
+	Retryable bool   `json:"retryable"`
 }
 
 // Bridge-owned receipt for verified isolated staging; it never contains a local path.

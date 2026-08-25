@@ -65,10 +65,11 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 			DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
-		BridgeVersion:       "test",
-		HeartbeatInterval:   10 * time.Millisecond,
-		ResumeAgentNames:    map[string]bool{"Builder": true},
-		StreamingAgentNames: map[string]bool{"Builder": true},
+		BridgeVersion:                     "test",
+		HeartbeatInterval:                 10 * time.Millisecond,
+		ResumeAgentNames:                  map[string]bool{"Builder": true},
+		StreamingAgentNames:               map[string]bool{"Builder": true},
+		ArtifactMaterializationAgentNames: map[string]bool{"Builder": true},
 	}
 	done := make(chan error, 1)
 	go func() { done <- client.Run(ctx) }()
@@ -91,6 +92,9 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	}
 	if capabilities["supportsArtifactPublication"] != true {
 		t.Fatalf("Artifact publication capability was not published: %#v", publication)
+	}
+	if capabilities["supportsArtifactMaterialization"] != true {
+		t.Fatalf("Artifact materialization capability was not published: %#v", publication)
 	}
 	runtimeScopeID, ok := payload["runtimeScopeId"].(string)
 	if !ok || len(runtimeScopeID) != 64 {
