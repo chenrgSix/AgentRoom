@@ -18,6 +18,8 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 
 - Current baseline:
   [agent_room_network_design_v0.2.md](agent_room_network_design_v0.2.md)
+- Stable release:
+  [AgentRoom v0.2.0](https://github.com/chenrgSix/AgentRoom/releases/tag/v0.2.0)
 - Historical baseline:
   [agent_room_network_design_v0.1.md](agent_room_network_design_v0.1.md)
 - Contributor rules: [CONTRIBUTING.md](CONTRIBUTING.md)

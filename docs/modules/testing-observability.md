@@ -263,6 +263,16 @@ prerelease, and a fresh public download passed the committed verifier. The
 acceptance records the initial E2E timeout and retains the separate real-login
 and two-physical-machine gates.
 
+The stable `v0.2.0` release evidence is recorded in
+`docs/acceptance/qa-021-v0.2.0.md`. `QA-021` is complete because the exact final
+tag passed main CI, the empty-draft workflow built seven archives and verified
+all 11 assets before and after upload, the Release was published as the public
+Latest version, and a new public download passed the tag's committed verifier.
+The acceptance records both pre-publication defects and the approved zero-asset
+tag rebuild instead of treating either failed attempt as release evidence.
+`BRG-013` and `QA-002` remain visibly open post-release physical-environment
+acceptance.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through

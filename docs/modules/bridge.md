@@ -451,6 +451,16 @@ exact tag, and an independent public download passed the same 11-asset
 verifier. Full evidence is recorded in
 `docs/acceptance/qa-017-v0.2.0-rc.5.md`.
 
+Release `v0.2.0` is the stable trusted-small-Team baseline. It adds Task-scoped
+managed Runtime continuity, acknowledged rolling Room context, reviewed Memory,
+and verified cross-Bridge Artifact publication, isolated materialization,
+Runtime alias injection, lineage, and safe preview. GitHub Actions run
+`32880452367` built and verified all seven archives from exact tag commit
+`77c11bf617f43b63c47264afe0aac8032fb9ba65`; an independent public download
+passed the same 11-asset verifier. The packages remain unsigned and
+manual-update-only, while `BRG-013` stays active as post-release real-login
+evidence. Full evidence is recorded in `docs/acceptance/qa-021-v0.2.0.md`.
+
 ## Dependencies
 
 Contracts, Registry publication, Security pairing, and Runtime Adapters.
