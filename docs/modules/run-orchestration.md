@@ -144,6 +144,15 @@ repeated answer returns the existing Message and continuation; it cannot create
 a second Run. Discussion Runs retain the Wave behavior above and cannot open
 this ordinary-Run clarification flow.
 
+The question does not outlive its authority. Canceling an `input_required` Run
+is a direct central terminal transition; reaching the Run deadline expires it.
+Any terminal Run transition atomically changes a still-waiting clarification to
+`canceled` with `run_canceled`, `run_expired`, or `run_terminal`. Startup and
+read/answer reconciliation also detects a terminal Task, unavailable Agent,
+invalid Room assignment, or orphaned question scope, closes the Run safely,
+and records the exact reason. Only `waiting -> resumed` creates continuation
+work.
+
 Clarification answers are collaboration context only. They cannot approve a
 filesystem, shell, network, tool, sandbox, or Runtime request. Codex App Server
 interactive requests still receive a local protocol error, and all Runtime
@@ -207,12 +216,14 @@ resolves its own first-terminal race under the rules above.
 - Deadline tests distinguish queued `expired` from accepted
   `outcome_unknown`; `input_required` does not advance policy before the
   barrier.
-- Task clarification recovery replays one question, accepts one Room-authorized
-  answer, closes the original Run, and creates one same-Task continuation Run.
+- Task clarification recovery replays one valid question, accepts one
+  Room-authorized answer, closes the original Run, and creates one same-Task
+  continuation Run; cancellation, expiry, and invalid scope converge instead
+  to one reasoned terminal record with no continuation.
 
 ## Task Mapping
 
-`RUN-001` through `RUN-009`, plus the in-process harness `QA-001`, recovery
+`RUN-001` through `RUN-010`, plus the in-process harness `QA-001`, recovery
 tasks `DATA-003` and `QA-004`, and parallel Wave verification `QA-010`.
 
 ## Dependencies

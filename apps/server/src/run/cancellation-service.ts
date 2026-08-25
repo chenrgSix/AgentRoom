@@ -27,7 +27,7 @@ export class CancellationService {
       throw new AuthorizationError("FORBIDDEN", "Run cancellation denied");
     }
     if (terminalStates.has(run.state)) return run;
-    if (run.state === "queued") {
+    if (run.state === "queued" || run.state === "input_required") {
       return this.runs.applyEvent(run.runId, {
         type: "status", sequence: run.lastSequence + 1, status: "canceled"
       }, this.clock()).run;

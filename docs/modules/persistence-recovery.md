@@ -128,6 +128,12 @@ same-Task continuation, and links those identities before commit. Answer retry
 returns the existing continuation, while normal queued-delivery recovery sends
 it after Bridge reconnect.
 
+Migration 0031 adds durable clarification resolution reasons and a database
+trigger that closes every still-waiting clarification in the same transaction
+as its requesting Run's terminal transition. Startup reconciliation handles
+preexisting deadline, Agent-assignment, Task, and question-scope invalidation;
+it never revives or silently deletes the evidence record.
+
 Backups use the SQLite backup API, include schema metadata, refuse overwrite,
 and pass `quick_check`. Restore and forward-only migration rollback procedure is
 documented in `docs/backup-and-restore.md`. The Compose workflow installs host

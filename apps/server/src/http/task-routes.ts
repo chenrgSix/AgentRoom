@@ -148,7 +148,8 @@ export function registerTaskRoutes({
     "/api/tasks/:taskId/clarifications",
     async (request) => taskClarifications.list(
       principal(request),
-      request.params.taskId
+      request.params.taskId,
+      clock()
     )
   );
   app.post<{ Params: { clarificationId: string } }>(

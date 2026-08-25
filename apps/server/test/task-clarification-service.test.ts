@@ -12,6 +12,7 @@ import { migrateDatabase } from "../src/data/migration-runner.js";
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { BridgeRunEventService } from "../src/run/bridge-run-event-service.js";
+import { CancellationService } from "../src/run/cancellation-service.js";
 import { DeliveryService } from "../src/run/delivery-service.js";
 import { RunRepository } from "../src/run/run-repository.js";
 import { RunService } from "../src/run/run-service.js";
@@ -235,6 +236,104 @@ test("Task clarification resumes the same Task session in a new bounded Run", as
         choices: ["only-one"]
       }
     }, now), /Invalid Task clarification status/u);
+
+    const requestClarification = (content: string, at: string) => {
+      const message = messages.createMemberMessage(principal, {
+        roomId: room.roomId,
+        taskId: run.taskId,
+        content,
+        mentions: [{
+          targetType: "agent" as const,
+          targetAgentId: agent.agentId,
+          displayLabel: "Builder / Managed"
+        }],
+        now: at
+      });
+      const pending = runs.createRunsForMessage(principal, message.messageId, at)[0];
+      assert.ok(pending);
+      runRepository.applyEvent(pending.runId, {
+        type: "status", sequence: 1, status: "delivered"
+      }, at);
+      bridgeEvents.applyStatus(devicePrincipal, {
+        runId: pending.runId,
+        traceId: pending.traceId,
+        agentId: agent.agentId,
+        sequence: 2,
+        status: "working"
+      }, at);
+      bridgeEvents.applyStatus(devicePrincipal, {
+        runId: pending.runId,
+        traceId: pending.traceId,
+        agentId: agent.agentId,
+        sequence: 3,
+        status: "input_required",
+        clarification: { kind: "task", question: `Clarify ${content}?` }
+      }, at);
+      const latest = clarificationRepository.listForTask(run.taskId)[0];
+      assert.ok(latest);
+      return { run: pending, clarification: latest };
+    };
+
+    const cancelCase = requestClarification(
+      "cancel lifecycle",
+      "2026-08-25T10:03:00.000Z"
+    );
+    const canceled = new CancellationService(
+      core,
+      runRepository,
+      auth,
+      new BridgeConnectionRegistry(),
+      () => "2026-08-25T10:04:00.000Z"
+    ).cancel(principal, cancelCase.run.runId, "No longer needed");
+    assert.equal(canceled.state, "canceled");
+    assert.deepEqual(
+      clarificationRepository.get(cancelCase.clarification.clarificationId),
+      {
+        ...cancelCase.clarification,
+        state: "canceled",
+        resolutionReason: "run_canceled",
+        canceledAt: "2026-08-25T10:04:00.000Z"
+      }
+    );
+
+    const expireCase = requestClarification(
+      "expiry lifecycle",
+      "2026-08-25T10:05:00.000Z"
+    );
+    clarifications.list(
+      principal,
+      run.taskId,
+      "2026-08-25T10:25:01.000Z"
+    );
+    assert.equal(runRepository.getRun(expireCase.run.runId)?.state, "expired");
+    assert.equal(
+      clarificationRepository.get(expireCase.clarification.clarificationId)
+        ?.resolutionReason,
+      "run_expired"
+    );
+
+    const unavailableCase = requestClarification(
+      "unavailable Agent lifecycle",
+      "2026-08-25T10:26:00.000Z"
+    );
+    database.prepare(`
+      UPDATE agents SET enabled = 0, presence = 'offline', updated_at = ?
+      WHERE agent_id = ?
+    `).run("2026-08-25T10:27:00.000Z", agent.agentId);
+    const reconciled = clarifications.reconcile("2026-08-25T10:27:00.000Z");
+    assert.equal(reconciled.length, 1);
+    assert.equal(reconciled[0]?.clarificationId, unavailableCase.clarification.clarificationId);
+    assert.equal(reconciled[0]?.resolutionReason, "agent_unavailable");
+    assert.equal(
+      runRepository.getRun(unavailableCase.run.runId)?.state,
+      "outcome_unknown"
+    );
+    assert.throws(() => clarifications.answer(
+      principal,
+      unavailableCase.clarification.clarificationId,
+      "Too late",
+      "2026-08-25T10:28:00.000Z"
+    ), /clarification is canceled/u);
   } finally {
     database.close();
   }

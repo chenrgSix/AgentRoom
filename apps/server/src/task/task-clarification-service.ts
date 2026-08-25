@@ -30,12 +30,109 @@ export class TaskClarificationService {
 
   public list(
     principal: WebPrincipal,
-    taskId: string
+    taskId: string,
+    now?: string
   ): TaskClarificationRecord[] {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error(`Task not found: ${taskId}`);
     this.auth.requireRoomMember(principal, task.roomId);
+    if (now) this.reconcile(now, taskId);
     return this.clarifications.listForTask(taskId);
+  }
+
+  public reconcile(now: string, taskId?: string): TaskClarificationRecord[] {
+    return this.transactions.immediate(() => {
+      const reconciled: TaskClarificationRecord[] = [];
+      for (const clarification of this.clarifications.listWaiting(taskId)) {
+        const requestingRun = this.runs.getRun(clarification.requestingRunId);
+        if (!requestingRun) {
+          reconciled.push(this.clarifications.cancelWaiting({
+            clarificationId: clarification.clarificationId,
+            reason: "orphaned",
+            now
+          }));
+          continue;
+        }
+        if (requestingRun.state !== "input_required") {
+          const reason = requestingRun.state === "canceled"
+            ? "run_canceled"
+            : requestingRun.state === "expired"
+              ? "run_expired"
+              : "run_terminal";
+          reconciled.push(this.clarifications.cancelWaiting({
+            clarificationId: clarification.clarificationId,
+            reason,
+            now
+          }));
+          continue;
+        }
+        const task = this.tasks.get(clarification.taskId);
+        if (!task || task.state === "completed" || task.state === "canceled") {
+          reconciled.push(this.clarifications.cancelWaiting({
+            clarificationId: clarification.clarificationId,
+            reason: task ? "task_terminal" : "orphaned",
+            now
+          }));
+          this.closeOrphanedRun(
+            requestingRun,
+            "TASK_CLARIFICATION_TASK_CLOSED",
+            now
+          );
+          continue;
+        }
+        const agent = this.core.getAgent(clarification.targetAgentId);
+        if (
+          !agent || !agent.enabled ||
+          !this.core.isRoomAgent(clarification.roomId, clarification.targetAgentId)
+        ) {
+          reconciled.push(this.clarifications.cancelWaiting({
+            clarificationId: clarification.clarificationId,
+            reason: "agent_unavailable",
+            now
+          }));
+          this.closeOrphanedRun(
+            requestingRun,
+            "TASK_CLARIFICATION_AGENT_UNAVAILABLE",
+            now
+          );
+          continue;
+        }
+        const question = this.core.getMessage(clarification.questionMessageId);
+        if (
+          !question || question.roomId !== clarification.roomId ||
+          question.taskId !== clarification.taskId ||
+          question.senderType !== "agent" ||
+          question.senderId !== clarification.targetAgentId
+        ) {
+          reconciled.push(this.clarifications.cancelWaiting({
+            clarificationId: clarification.clarificationId,
+            reason: "orphaned",
+            now
+          }));
+          this.closeOrphanedRun(
+            requestingRun,
+            "TASK_CLARIFICATION_ORPHANED",
+            now
+          );
+          continue;
+        }
+        if (Date.parse(requestingRun.deadlineAt) <= Date.parse(now)) {
+          this.runs.applyEvent(requestingRun.runId, {
+            type: "status",
+            sequence: requestingRun.lastSequence + 1,
+            status: "expired",
+            error: {
+              code: "TASK_CLARIFICATION_EXPIRED",
+              message: "Task clarification expired before an answer was accepted.",
+              retryable: false
+            }
+          }, now);
+          const expired = this.clarifications.get(clarification.clarificationId);
+          if (expired) reconciled.push(expired);
+        }
+      }
+      return reconciled;
+    });
   }
 
   public answer(
@@ -53,6 +150,7 @@ export class TaskClarificationService {
       throw new Error(`Task clarification not found: ${clarificationId}`);
     }
     this.auth.requireRoomMember(principal, initial.roomId);
+    this.reconcile(now, initial.taskId);
 
     return this.transactions.immediate(() => {
       const clarification = this.clarifications.get(clarificationId);
@@ -98,16 +196,6 @@ export class TaskClarificationService {
         clientMessageId: `client_clarification_${clarification.clarificationId}`,
         now
       });
-      this.runs.applyEvent(requestingRun.runId, {
-        type: "status",
-        sequence: requestingRun.lastSequence + 1,
-        status: "outcome_unknown",
-        error: {
-          code: "TASK_CLARIFICATION_CONTINUED",
-          message: "Run suspended for Task clarification and continued in a new bounded Run.",
-          retryable: false
-        }
-      }, now);
       const continuation = this.runService.createRunsForMessage(
         principal,
         persisted.message.messageId,
@@ -123,8 +211,35 @@ export class TaskClarificationService {
         continuationRunId: continuation.runId,
         now
       });
+      this.runs.applyEvent(requestingRun.runId, {
+        type: "status",
+        sequence: requestingRun.lastSequence + 1,
+        status: "outcome_unknown",
+        error: {
+          code: "TASK_CLARIFICATION_CONTINUED",
+          message: "Run suspended for Task clarification and continued in a new bounded Run.",
+          retryable: false
+        }
+      }, now);
       this.core.updateAgentPresence(agent.agentId, "ready", now);
       return { clarification: resumed, message: persisted.message, run: continuation };
     });
+  }
+
+  private closeOrphanedRun(
+    run: RunRecord,
+    code: string,
+    now: string
+  ): void {
+    this.runs.applyEvent(run.runId, {
+      type: "status",
+      sequence: run.lastSequence + 1,
+      status: "outcome_unknown",
+      error: {
+        code,
+        message: "Task clarification can no longer be resumed safely.",
+        retryable: false
+      }
+    }, now);
   }
 }

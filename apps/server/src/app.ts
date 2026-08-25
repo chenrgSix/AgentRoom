@@ -549,6 +549,7 @@ export async function createServerApp(
 
   registerMcpRoutes(routeContext);
 
+  taskClarifications.reconcile(clock());
   await dispatchDiscussionRuns(discussions.recover());
   for (const runId of new Set(
     runRepository.listPendingReplyRoutingIntents().map(({ parentRunId }) =>

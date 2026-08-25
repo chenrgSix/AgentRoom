@@ -1,7 +1,7 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028/0029/0030, and the Web Room
+- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028/0029/0030/0031, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -21,7 +21,7 @@ and results belong to the same longer-lived goal.
 | Logical Task Session | taskId, agentId, Runtime scope ID derived from runtime kind/workspace/config fingerprints/schema version, consumed cursors |
 | Task memory projection | taskId, source Room cursor, summary revision, provenance |
 | ArtifactRef | artifactId, taskId, artifactRevision, type, workspaceRef, repository/path/commit/branch metadata, title, summary, creator, optional sourceRunId, timestamp |
-| TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, timestamps |
+| TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, terminal reason, timestamps |
 
 Task state is `open`, `working`, `blocked`, `review`, `completed`, or
 `canceled`. A Task state is explicit aggregate state; one successful Run does
@@ -116,6 +116,15 @@ clarification record links both Runs and both Messages, so retries and recovery
 retain evidence without pretending that one Run stayed alive across a human
 pause.
 
+A clarification remains `waiting` only while its requesting Run is
+`input_required`, before that Run's deadline, and while its Task, Agent, Room
+assignment, and question Message remain valid. Direct user cancellation closes
+the Run without sending a redundant Runtime interrupt. Migration 0031 closes a
+waiting record whenever its Run becomes terminal, and startup/list/answer
+reconciliation expires deadlines or converges unavailable/orphaned scope to a
+reasoned `canceled` record. A canceled question cannot create an answer Message
+or continuation Run.
+
 ## Migration and Compatibility
 
 Existing Runs and Discussions are assigned to one recoverable default Task per
@@ -150,14 +159,16 @@ cross-task context.
 - Summary and Artifact consumers can trace claims back to authoritative source
   events or external workspace evidence.
 - Clarification answer retries converge on one Message and continuation Run;
-  Bridge restart replays the question without re-executing the suspended Run.
+  cancellation, deadline expiry, unavailable Agents, and orphaned scope close
+  waiting records durably; Bridge restart replays only a still-valid question
+  without re-executing the suspended Run.
 - Permission-shaped fields are rejected by the wire contract, and interactive
   local Runtime requests never reach the clarification API.
 
 ## Task Mapping
 
 `TASK-001` through `TASK-005`, with wire and Runtime work in `CON-007` and
-`ADP-012`, clarification in `RUN-009`, and structural cleanup only after those
+`ADP-012`, clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those
 behavioral milestones.
 
 ## Dependencies

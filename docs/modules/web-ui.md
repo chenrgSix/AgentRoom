@@ -109,6 +109,9 @@ Room Message and same-Task continuation rather than a local permission grant.
 Submitting an answer is single-flight, replaces the waiting record with the
 Server result, and reconciles the Room so the new bounded Run and Messages are
 visible.
+The clarification read reconciles deadline and scope before rendering, so a
+canceled or expired record disappears from the answer surface and retains its
+durable resolution reason for history.
 
 Discussion views render the central ProgressSnapshot, Wave, member Turns, and
 OrchestrationDecision; they do not derive completion from Agent prose. The
