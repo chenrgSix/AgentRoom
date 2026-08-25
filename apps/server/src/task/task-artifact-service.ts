@@ -181,6 +181,7 @@ export class TaskArtifactService {
     const agentId = "agentId" in principal ? principal.agentId : null;
     const record: TaskArtifactRecord = {
       artifactId: createOpaqueId("artifact"),
+      artifactRevision: 0,
       taskId: task.taskId,
       roomId: task.roomId,
       type: input.type,

@@ -74,10 +74,20 @@ func projectedResultEvidence(evidence *contracts.TaskResultEvidence) string {
 	if evidence == nil || len(evidence.ArtifactRefs) == 0 {
 		return ""
 	}
-	lines := []string{fmt.Sprintf(
+	header := fmt.Sprintf(
 		"Structured Task result evidence (revision %d; references require local verification):",
 		evidence.Revision,
-	)}
+	)
+	if evidence.DeliveryKind != nil && evidence.FromRevision != nil &&
+		evidence.ThroughRevision != nil {
+		header = fmt.Sprintf(
+			"Structured Task result evidence (%s revisions %d-%d; references require local verification):",
+			*evidence.DeliveryKind,
+			*evidence.FromRevision+1,
+			*evidence.ThroughRevision,
+		)
+	}
+	lines := []string{header}
 	for _, artifact := range evidence.ArtifactRefs {
 		locators := make([]string, 0, 5)
 		if artifact.WorkspaceRef != nil {
@@ -99,9 +109,13 @@ func projectedResultEvidence(evidence *contracts.TaskResultEvidence) string {
 		if len(locators) > 0 {
 			locatorText = strings.Join(locators, "; ")
 		}
+		ordinal := ""
+		if artifact.ArtifactRevision != nil {
+			ordinal = fmt.Sprintf("revision %d; ", *artifact.ArtifactRevision)
+		}
 		lines = append(lines, fmt.Sprintf(
-			"- [%s; %s] %s | %s | %s",
-			artifact.ArtifactID, artifact.Type, cleanPromptName(artifact.Title),
+			"- [%s%s; %s] %s | %s | %s",
+			ordinal, artifact.ArtifactID, artifact.Type, cleanPromptName(artifact.Title),
 			locatorText, strings.TrimSpace(artifact.Summary),
 		))
 	}

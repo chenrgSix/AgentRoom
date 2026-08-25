@@ -21,8 +21,14 @@ import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 import { ContextPlanner } from "../src/task/context-planner.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
+import { ArtifactRepository } from "../src/task/artifact-repository.js";
+import { TaskArtifactService } from "../src/task/task-artifact-service.js";
+import {
+  ResultEvidenceConsumptionRepository
+} from "../src/task/result-evidence-consumption-repository.js";
 
 const now = "2026-08-22T10:00:00.000Z";
+const runtimeScopeId = "a".repeat(64);
 
 class CapturingSocket implements BridgeSocket {
   public readonly messages: string[] = [];
@@ -67,6 +73,7 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       name: "Builder",
       role: "Managed",
       integrationMode: "managed",
+      runtimeScopeId,
       capabilities: {
         supportsHandoff: false,
         supportsInterrupt: true,
@@ -91,6 +98,23 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       },
       now
     });
+    const task = taskRepository.getDefaultForRoom(room.roomId);
+    assert.ok(task);
+    const taskArtifacts = new TaskArtifactService(
+      new ArtifactRepository(database),
+      taskRepository,
+      runRepository,
+      core,
+      auth
+    );
+    for (let revision = 1; revision <= 25; revision += 1) {
+      taskArtifacts.create(principal, task.taskId, {
+        type: "test_result",
+        workspaceRef: "workspace_delivery",
+        title: `Delivery evidence ${revision}`,
+        summary: `Evidence revision ${revision}.`
+      }, now);
+    }
     const message = messages.createMemberMessage(principal, {
       roomId: room.roomId,
       content: "Implement delivery",
@@ -127,11 +151,19 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
           scope?: string;
           resumePolicy?: string;
           contextCursor?: number;
+          runtimeScopeId?: string;
         };
         targetAgentName?: string;
         contextPlan?: {
           roomMemory?: { revision?: number; sourceMessageIds?: string[] };
           taskMemory?: { revision?: number; summary?: string };
+          resultEvidence?: {
+            deliveryKind?: string;
+            fromRevision?: number;
+            throughRevision?: number;
+            hasMore?: boolean;
+            artifactRefs?: Array<{ artifactRevision?: number }>;
+          };
         };
         contextMessages?: Array<{ sequence?: number; senderName?: string }>;
         routingAgents?: Array<{ agentId: string; name: string }>;
@@ -141,7 +173,8 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
     assert.deepEqual(requested.payload?.session, {
       scope: "task",
       resumePolicy: "resume_or_start",
-      contextCursor: message.sequence
+      contextCursor: message.sequence,
+      runtimeScopeId
     });
     assert.equal(requested.payload?.targetAgentName, "Builder");
     assert.equal(requested.payload?.contextPlan?.roomMemory?.revision, 1);
@@ -159,9 +192,114 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       agentId: reviewer.agentId,
       name: "Reviewer"
     }]);
+    assert.deepEqual(requested.payload?.contextPlan?.resultEvidence, {
+      revision: 25,
+      deliveryKind: "bootstrap",
+      fromRevision: 5,
+      throughRevision: 25,
+      hasMore: false,
+      artifactRefs: requested.payload?.contextPlan?.resultEvidence?.artifactRefs
+    });
+    assert.deepEqual(
+      requested.payload?.contextPlan?.resultEvidence?.artifactRefs?.map(
+        ({ artifactRevision }) => artifactRevision
+      ),
+      Array.from({ length: 20 }, (_, index) => index + 6)
+    );
+    const consumption = new ResultEvidenceConsumptionRepository(database);
+    assert.throws(() => consumption.acknowledge({
+      runId: run.runId,
+      taskId: task.taskId,
+      agentId: agent.agentId,
+      runtimeScopeId,
+      throughRevision: 26,
+      now
+    }), /exceeds its delivered page/u);
+    consumption.acknowledge({
+      runId: run.runId,
+      taskId: task.taskId,
+      agentId: agent.agentId,
+      runtimeScopeId,
+      throughRevision: 25,
+      now
+    });
+    for (let revision = 26; revision <= 55; revision += 1) {
+      taskArtifacts.create(principal, task.taskId, {
+        type: "test_result",
+        workspaceRef: "workspace_delivery",
+        title: `Delivery evidence ${revision}`,
+        summary: `Evidence revision ${revision}.`
+      }, now);
+    }
+    const deltaMessage = messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "Continue delivery",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: agent.agentId,
+        displayLabel: "Builder / Managed"
+      }],
+      now
+    });
+    const deltaRun = runs.createRunsForMessage(
+      principal,
+      deltaMessage.messageId,
+      now
+    )[0];
+    assert.ok(deltaRun);
+    const firstDelta = delivery.dispatch(deltaRun.runId)?.payload.contextPlan.resultEvidence;
+    assert.deepEqual({
+      deliveryKind: firstDelta?.deliveryKind,
+      fromRevision: firstDelta?.fromRevision,
+      throughRevision: firstDelta?.throughRevision,
+      hasMore: firstDelta?.hasMore,
+      revisions: firstDelta?.artifactRefs.map(({ artifactRevision }) => artifactRevision)
+    }, {
+      deliveryKind: "delta",
+      fromRevision: 25,
+      throughRevision: 45,
+      hasMore: true,
+      revisions: Array.from({ length: 20 }, (_, index) => index + 26)
+    });
+    consumption.acknowledge({
+      runId: deltaRun.runId,
+      taskId: task.taskId,
+      agentId: agent.agentId,
+      runtimeScopeId,
+      throughRevision: 45,
+      now
+    });
+    const finalMessage = messages.createMemberMessage(principal, {
+      roomId: room.roomId,
+      content: "Finish delivery",
+      mentions: [{
+        targetType: "agent",
+        targetAgentId: agent.agentId,
+        displayLabel: "Builder / Managed"
+      }],
+      now
+    });
+    const finalRun = runs.createRunsForMessage(
+      principal,
+      finalMessage.messageId,
+      now
+    )[0];
+    assert.ok(finalRun);
+    const finalDelta = delivery.dispatch(finalRun.runId)?.payload.contextPlan.resultEvidence;
+    assert.deepEqual({
+      fromRevision: finalDelta?.fromRevision,
+      throughRevision: finalDelta?.throughRevision,
+      hasMore: finalDelta?.hasMore,
+      revisions: finalDelta?.artifactRefs.map(({ artifactRevision }) => artifactRevision)
+    }, {
+      fromRevision: 45,
+      throughRevision: 55,
+      hasMore: false,
+      revisions: Array.from({ length: 10 }, (_, index) => index + 46)
+    });
     const first = delivery.getByRun(run.runId);
     const repeated = delivery.dispatch(run.runId);
-    assert.equal(socket.messages.length, 2);
+    assert.equal(socket.messages.length, 4);
     assert.equal(first?.deliveryAttemptId, repeated?.deliveryAttemptId);
     assert.equal(first?.idempotencyKey, repeated?.idempotencyKey);
     assert.equal(repeated?.sendCount, 2);

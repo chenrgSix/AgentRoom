@@ -12,6 +12,9 @@ import type {
   RunRecord,
   RunRepository
 } from "./run-repository.js";
+import type {
+  ResultEvidenceConsumptionRepository
+} from "../task/result-evidence-consumption-repository.js";
 
 const bridgeStatuses = new Set<RuntimeStatus>([
   "working",
@@ -62,7 +65,8 @@ function safeRuntimeFailureDetails(value: unknown): Record<string, unknown> | nu
 export class BridgeRunEventService {
   public constructor(
     private readonly core: CoreRepository,
-    private readonly runs: RunRepository
+    private readonly runs: RunRepository,
+    private readonly evidenceConsumption?: ResultEvidenceConsumptionRepository
   ) {}
 
   public applyStatus(
@@ -82,6 +86,8 @@ export class BridgeRunEventService {
       session?: {
         disposition: "started" | "resumed" | "recreated";
         contextCursor: number;
+        runtimeScopeId?: string;
+        resultEvidenceRevision?: number;
       };
       clarification?: RuntimeTaskClarification;
     },
@@ -107,11 +113,22 @@ export class BridgeRunEventService {
     }
     if (input.session) {
       const trigger = this.core.getMessage(run.triggerMessageId);
+      const agent = this.core.getAgent(run.targetAgentId);
+      const hasEvidenceCursor =
+        input.session.runtimeScopeId !== undefined ||
+        input.session.resultEvidenceRevision !== undefined;
       if (
         !sessionDispositions.has(input.session.disposition) ||
         !Number.isSafeInteger(input.session.contextCursor) ||
         input.session.contextCursor < 0 ||
-        !trigger || input.session.contextCursor > trigger.sequence
+        !trigger || input.session.contextCursor > trigger.sequence ||
+        (hasEvidenceCursor && (
+          typeof input.session.runtimeScopeId !== "string" ||
+          !/^[0-9a-f]{64}$/u.test(input.session.runtimeScopeId) ||
+          !Number.isSafeInteger(input.session.resultEvidenceRevision) ||
+          (input.session.resultEvidenceRevision ?? -1) < 0 ||
+          !agent || agent.runtimeScopeId !== input.session.runtimeScopeId
+        ))
       ) {
         throw new Error("Invalid logical Runtime session status");
       }
@@ -141,6 +158,18 @@ export class BridgeRunEventService {
       }
     }
     const safeDetails = safeRuntimeFailureDetails(input.error?.details);
+    if (
+      input.session?.runtimeScopeId !== undefined &&
+      input.session.resultEvidenceRevision !== undefined
+    ) {
+      this.evidenceConsumption?.validateAcknowledgement({
+        runId: run.runId,
+        taskId: run.taskId,
+        agentId: run.targetAgentId,
+        runtimeScopeId: input.session.runtimeScopeId,
+        throughRevision: input.session.resultEvidenceRevision
+      });
+    }
     const applied = this.runs.applyEvent(run.runId, {
       type: "status",
       sequence: input.sequence,
@@ -180,6 +209,19 @@ export class BridgeRunEventService {
           : "busy",
         now
       );
+    }
+    if (
+      input.session?.runtimeScopeId !== undefined &&
+      input.session.resultEvidenceRevision !== undefined
+    ) {
+      this.evidenceConsumption?.acknowledge({
+        runId: run.runId,
+        taskId: run.taskId,
+        agentId: run.targetAgentId,
+        runtimeScopeId: input.session.runtimeScopeId,
+        throughRevision: input.session.resultEvidenceRevision,
+        now
+      });
     }
     return applied;
   }

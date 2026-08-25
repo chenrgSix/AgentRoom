@@ -123,19 +123,24 @@ authoritative source Room cursor and a unique list of source Message IDs, and
 contains no provider-native state. A full bootstrap carries both projections;
 a resumed Bridge may retain only the projection whose revision is newer. An
 empty plan is invalid, and omission remains compatible with older peers.
-The same plan may include a revisioned non-empty `resultEvidence` delta with at
-most 20 ArtifactRefs. References identify commit, branch, relative file/patch,
-test-result, or document evidence and retain creator plus optional source Run;
-they never embed file bytes, tool output, provider sessions, or permission
-grants.
+The same plan may include a revisioned non-empty `resultEvidence` page with at
+most 20 ArtifactRefs. Additive `deliveryKind`, `fromRevision`,
+`throughRevision`, and `hasMore` fields distinguish a newest-first bootstrap
+window from a strict ascending continuation page; every new reference also has
+a Task-local `artifactRevision`. References identify commit, branch, relative
+file/patch, test-result, or document evidence and retain creator plus optional
+source Run; they never embed file bytes, tool output, provider sessions, or
+permission grants.
 
-A Bridge may add a logical Session status to `run.status`: only
-`started`, `resumed`, or `recreated` plus the consumed context cursor may cross
-the boundary. Provider-native session IDs, local workspace paths, and local
-session-store keys are forbidden inside that closed object. All Task Session
-fields are additive during the rolling transition; their absence retains the
-legacy Room-scoped behavior without allowing a Task-scoped binding to reuse a
-legacy native session.
+A Bridge may add a logical Session status to `run.status`: only `started`,
+`resumed`, or `recreated`, the consumed context cursor, an opaque hashed Runtime
+scope ID, and its exact consumed result-evidence revision may cross the
+boundary. The same scope ID is optionally published with the managed Agent and
+included in the Run request. Provider-native session IDs, local workspace
+paths, and local session-store keys are forbidden inside these closed objects.
+All Task Session fields are additive during the rolling transition; their
+absence retains the legacy Room-scoped behavior without allowing a Task-scoped
+binding to reuse a legacy native session.
 
 An `input_required` status may add one closed `clarification` object containing
 only `kind: task`, a bounded question, and optional bounded answer choices. It

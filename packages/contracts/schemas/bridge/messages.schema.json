@@ -260,6 +260,10 @@
     }
   ],
   "$defs": {
+    "runtimeScopeId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "connectionEpoch": {
       "type": "integer",
       "minimum": 1
@@ -622,6 +626,9 @@
         },
         "capabilities": {
           "$ref": "#/$defs/runtimeCapabilities"
+        },
+        "runtimeScopeId": {
+          "$ref": "#/$defs/runtimeScopeId"
         }
       }
     },
@@ -710,6 +717,9 @@
         "contextCursor": {
           "type": "integer",
           "minimum": 0
+        },
+        "runtimeScopeId": {
+          "$ref": "#/$defs/runtimeScopeId"
         }
       }
     },
@@ -730,6 +740,13 @@
           ]
         },
         "contextCursor": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "runtimeScopeId": {
+          "$ref": "#/$defs/runtimeScopeId"
+        },
+        "resultEvidenceRevision": {
           "type": "integer",
           "minimum": 0
         }
@@ -804,6 +821,10 @@
         "artifactId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
         },
+        "artifactRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
         "type": {
           "enum": [
             "commit",
@@ -874,6 +895,23 @@
         "revision": {
           "type": "integer",
           "minimum": 1
+        },
+        "deliveryKind": {
+          "enum": [
+            "bootstrap",
+            "delta"
+          ]
+        },
+        "fromRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "throughRevision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "hasMore": {
+          "type": "boolean"
         },
         "artifactRefs": {
           "type": "array",

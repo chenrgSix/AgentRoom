@@ -112,6 +112,7 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	parser.bootstrapInstruction = runtimePrompt(request.Run)
 	parser.binding = sessionBinding
 	parser.contextCursor = plan.ContextCursor
+	parser.runtimeScopeID = plan.ScopeID
 	parser.roomMemoryRevision, parser.taskMemoryRevision,
 		parser.resultEvidenceRevision = contextRevisions(request.Run)
 	parser.runID = request.Run.RunID
@@ -266,6 +267,7 @@ type codexAppServerParser struct {
 	resultEvidenceRevision int64
 	runID                  string
 	logicalTaskSession     bool
+	runtimeScopeID         string
 	sessionDisposition     contracts.Disposition
 }
 
@@ -431,7 +433,12 @@ func (p *codexAppServerParser) logicalSessionStatus() *contracts.LogicalSessionS
 	if !p.logicalTaskSession {
 		return nil
 	}
-	return sessionStatus(p.sessionDisposition, p.binding.LastRoomSequence)
+	return sessionStatus(
+		p.sessionDisposition,
+		p.binding.LastRoomSequence,
+		p.runtimeScopeID,
+		p.binding.ResultEvidenceRevision,
+	)
 }
 
 func (p *codexAppServerParser) threadRequest() map[string]any {

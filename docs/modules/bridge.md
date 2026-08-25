@@ -258,6 +258,15 @@ Room key and can never alias a Task-scoped session. The Bridge reports only
 `started`, `resumed`, or `recreated` with the consumed cursor; native IDs and
 raw workspace paths never cross the connection.
 
+`TASK-005` derives and publishes one opaque Runtime scope hash from the same
+local Runtime kind, workspace/configuration fingerprints, and schema version.
+The Server uses that safe identifier only to isolate Task result-evidence
+consumption. A resumed binding retains an evidence page only when its
+`fromRevision` exactly equals the locally consumed revision; a gap is dropped
+without advancing the binding. Accepted status events report the scope and
+exact consumed `throughRevision`, which the Server fences against the durable
+Run Delivery before moving its cursor.
+
 `ADP-009` adds an optional `outputProtocol` field only for owner-authored
 Generic Runtime configurations. Omitting it preserves bounded, final-only
 stdout behavior. Selecting `agentroom-jsonl-v1` opts the Runtime into the

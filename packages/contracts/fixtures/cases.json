@@ -165,6 +165,7 @@
           "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "name": "Bob",
           "role": "Backend",
+          "runtimeScopeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "capabilities": {
             "invocationMode": "managed",
             "supportsStart": true,
@@ -210,7 +211,8 @@
           "session": {
             "scope": "task",
             "resumePolicy": "resume_or_start",
-            "contextCursor": 42
+            "contextCursor": 42,
+            "runtimeScopeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
           },
           "triggerMessageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WB",
           "requesterMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
@@ -237,9 +239,14 @@
             },
             "resultEvidence": {
               "revision": 1,
+              "deliveryKind": "delta",
+              "fromRevision": 0,
+              "throughRevision": 1,
+              "hasMore": false,
               "artifactRefs": [
                 {
                   "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+                  "artifactRevision": 1,
                   "type": "commit",
                   "workspaceRef": "workspace_oauth",
                   "repository": "agent-room/network",
@@ -343,11 +350,19 @@
           "status": "working",
           "session": {
             "disposition": "resumed",
-            "contextCursor": 42
+            "contextCursor": 42,
+            "runtimeScopeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "resultEvidenceRevision": 1
           }
         }
       },
       "valid": true
+    },
+    {
+      "name": "Runtime scope rejects a non-digest value",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/runtimeScopeId",
+      "instance": "scope-short",
+      "valid": false
     },
     {
       "name": "Run status rejects a native Runtime session identifier",

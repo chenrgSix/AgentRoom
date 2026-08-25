@@ -129,8 +129,20 @@ test("Context Planner builds stable provenance projections and bounded relevant 
     const resultEvidence = repeated.contextPlan.resultEvidence;
     assert.ok(resultEvidence);
     assert.equal(resultEvidence.revision, 1);
+    assert.deepEqual({
+      deliveryKind: resultEvidence.deliveryKind,
+      fromRevision: resultEvidence.fromRevision,
+      throughRevision: resultEvidence.throughRevision,
+      hasMore: resultEvidence.hasMore
+    }, {
+      deliveryKind: "bootstrap",
+      fromRevision: 0,
+      throughRevision: 1,
+      hasMore: false
+    });
     assert.deepEqual(resultEvidence.artifactRefs[0], {
       artifactId: resultEvidence.artifactRefs[0]?.artifactId,
+      artifactRevision: 1,
       type: "commit",
       workspaceRef: "workspace_oauth",
       repository: "agent-room/network",
@@ -144,6 +156,59 @@ test("Context Planner builds stable provenance projections and bounded relevant 
       UPDATE task_artifact_refs SET summary = 'rewritten'
       WHERE artifact_id = ?
     `).run(resultEvidence.artifactRefs[0]?.artifactId), /immutable/u);
+
+    for (let index = 2; index <= 31; index += 1) {
+      artifacts.create(principal, task.taskId, {
+        type: "test_result",
+        workspaceRef: "workspace_oauth",
+        title: `OAuth verification ${index}`,
+        summary: `Verification evidence ${index}.`
+      }, now);
+    }
+    const firstDelta = planner.plan({
+      roomId: room.roomId,
+      taskId: task.taskId,
+      throughSequence: trigger.sequence,
+      triggerMessageId: trigger.messageId,
+      resultEvidenceAfterRevision: 1
+    }, now).contextPlan.resultEvidence;
+    assert.ok(firstDelta);
+    assert.deepEqual({
+      deliveryKind: firstDelta.deliveryKind,
+      fromRevision: firstDelta.fromRevision,
+      throughRevision: firstDelta.throughRevision,
+      hasMore: firstDelta.hasMore,
+      revisions: firstDelta.artifactRefs.map(({ artifactRevision }) =>
+        artifactRevision
+      )
+    }, {
+      deliveryKind: "delta",
+      fromRevision: 1,
+      throughRevision: 21,
+      hasMore: true,
+      revisions: Array.from({ length: 20 }, (_, index) => index + 2)
+    });
+    const secondDelta = planner.plan({
+      roomId: room.roomId,
+      taskId: task.taskId,
+      throughSequence: trigger.sequence,
+      triggerMessageId: trigger.messageId,
+      resultEvidenceAfterRevision: 21
+    }, now).contextPlan.resultEvidence;
+    assert.ok(secondDelta);
+    assert.deepEqual({
+      fromRevision: secondDelta.fromRevision,
+      throughRevision: secondDelta.throughRevision,
+      hasMore: secondDelta.hasMore,
+      revisions: secondDelta.artifactRefs.map(({ artifactRevision }) =>
+        artifactRevision
+      )
+    }, {
+      fromRevision: 21,
+      throughRevision: 31,
+      hasMore: false,
+      revisions: Array.from({ length: 10 }, (_, index) => index + 22)
+    });
 
     const nextTrigger = messages.createMemberMessage(principal, {
       roomId: room.roomId,

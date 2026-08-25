@@ -18,6 +18,7 @@ export interface PublishAgentInput {
   role: string;
   integrationMode: "managed" | "manual" | "fake";
   capabilities: AgentCapabilities;
+  runtimeScopeId?: string | null;
   now: string;
 }
 
@@ -30,6 +31,12 @@ function normalizedLabel(value: string, label: string): string {
 }
 
 function validateCapabilities(input: PublishAgentInput): void {
+  if (
+    input.runtimeScopeId != null &&
+    !/^[0-9a-f]{64}$/u.test(input.runtimeScopeId)
+  ) {
+    throw new Error("Runtime scope ID is invalid");
+  }
   if (input.integrationMode === "managed" || input.integrationMode === "fake") {
     if (!input.deviceId || !input.capabilities.supportsStart) {
       throw new Error("Managed and Fake Agents require a Device and start capability");
@@ -80,6 +87,7 @@ export class AgentService {
       role: normalizedLabel(input.role, "Agent role"),
       integrationMode: input.integrationMode,
       capabilities: input.capabilities,
+      runtimeScopeId: input.runtimeScopeId ?? null,
       enabled: true,
       presence: input.integrationMode === "manual" ? "manual" : "offline",
       createdAt: input.now,
@@ -104,6 +112,7 @@ export class AgentService {
       name: string;
       role: string;
       capabilities: AgentCapabilities;
+      runtimeScopeId?: string;
       now: string;
     }
   ): AgentRecord {
@@ -112,6 +121,12 @@ export class AgentService {
     }
     if (!input.capabilities.supportsStart) {
       throw new Error("Managed Bridge Agent must support start");
+    }
+    if (
+      input.runtimeScopeId !== undefined &&
+      !/^[0-9a-f]{64}$/u.test(input.runtimeScopeId)
+    ) {
+      throw new Error("Bridge Runtime scope ID is invalid");
     }
     const existing = this.repository.getAgent(input.agentId);
     if (
@@ -134,6 +149,7 @@ export class AgentService {
       role: normalizedLabel(input.role, "Agent role"),
       integrationMode: "managed",
       capabilities: input.capabilities,
+      runtimeScopeId: input.runtimeScopeId ?? existing?.runtimeScopeId ?? null,
       enabled: existing?.enabled ?? true,
       presence: existing?.enabled === false ? "offline" : "ready",
       createdAt: existing?.createdAt ?? input.now,

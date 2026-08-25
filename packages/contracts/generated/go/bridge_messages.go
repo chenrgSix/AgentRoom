@@ -94,13 +94,14 @@ type AgentPublishMessage struct {
 }
 
 type AgentPublishPayload struct {
-	AgentID       string       `json:"agentId"`
-	Capabilities  Capabilities `json:"capabilities"`
-	DeviceID      string       `json:"deviceId"`
-	Name          string       `json:"name"`
-	OwnerMemberID string       `json:"ownerMemberId"`
-	Role          string       `json:"role"`
-	TeamID        string       `json:"teamId"`
+	AgentID        string       `json:"agentId"`
+	Capabilities   Capabilities `json:"capabilities"`
+	DeviceID       string       `json:"deviceId"`
+	Name           string       `json:"name"`
+	OwnerMemberID  string       `json:"ownerMemberId"`
+	Role           string       `json:"role"`
+	RuntimeScopeID *string      `json:"runtimeScopeId,omitempty"`
+	TeamID         string       `json:"teamId"`
 }
 
 type Capabilities struct {
@@ -179,14 +180,19 @@ type RuntimeContextPlan struct {
 }
 
 type TaskResultEvidence struct {
-	ArtifactRefs []ArtifactReference `json:"artifactRefs"`
-	Revision     int64               `json:"revision"`
+	ArtifactRefs    []ArtifactReference `json:"artifactRefs"`
+	DeliveryKind    *DeliveryKind       `json:"deliveryKind,omitempty"`
+	FromRevision    *int64              `json:"fromRevision,omitempty"`
+	HasMore         *bool               `json:"hasMore,omitempty"`
+	Revision        int64               `json:"revision"`
+	ThroughRevision *int64              `json:"throughRevision,omitempty"`
 }
 
 type ArtifactReference struct {
-	ArtifactID string  `json:"artifactId"`
-	Branch     *string `json:"branch,omitempty"`
-	CommitSHA  *string `json:"commitSha,omitempty"`
+	ArtifactID       string  `json:"artifactId"`
+	ArtifactRevision *int64  `json:"artifactRevision,omitempty"`
+	Branch           *string `json:"branch,omitempty"`
+	CommitSHA        *string `json:"commitSha,omitempty"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
 	CreatedAt         time.Time             `json:"createdAt"`
 	CreatedByAgentID  *string               `json:"createdByAgentId,omitempty"`
@@ -222,9 +228,10 @@ type RoutingAgent struct {
 }
 
 type LogicalSessionRequest struct {
-	ContextCursor int64        `json:"contextCursor"`
-	ResumePolicy  ResumePolicy `json:"resumePolicy"`
-	Scope         Scope        `json:"scope"`
+	ContextCursor  int64        `json:"contextCursor"`
+	ResumePolicy   ResumePolicy `json:"resumePolicy"`
+	RuntimeScopeID *string      `json:"runtimeScopeId,omitempty"`
+	Scope          Scope        `json:"scope"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -283,8 +290,10 @@ type AgentRoomError struct {
 }
 
 type LogicalSessionStatus struct {
-	ContextCursor int64       `json:"contextCursor"`
-	Disposition   Disposition `json:"disposition"`
+	ContextCursor          int64       `json:"contextCursor"`
+	Disposition            Disposition `json:"disposition"`
+	ResultEvidenceRevision *int64      `json:"resultEvidenceRevision,omitempty"`
+	RuntimeScopeID         *string     `json:"runtimeScopeId,omitempty"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -482,6 +491,13 @@ const (
 	File       ArtifactReferenceType = "file"
 	Patch      ArtifactReferenceType = "patch"
 	TestResult ArtifactReferenceType = "test_result"
+)
+
+type DeliveryKind string
+
+const (
+	Bootstrap DeliveryKind = "bootstrap"
+	Delta     DeliveryKind = "delta"
 )
 
 type ProjectionKind string

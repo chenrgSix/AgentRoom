@@ -1,7 +1,7 @@
 # Task Collaboration Module
 
 - Prefix: `TASK`
-- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028, and the Web Room
+- Implementation: `apps/server/src/task/`, migrations 0024/0026/0027/0028/0029/0030, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -18,9 +18,9 @@ and results belong to the same longer-lived goal.
 | Entity | Required State |
 | --- | --- |
 | AgentTask | taskId, roomId, parentTaskId, title, goal, state, primaryAgentId, workspaceRef, summary, memory/artifact revisions, lastRoomSequence, creator, timestamps |
-| Logical Task Session | taskId, agentId, runtime kind, workspace fingerprint, config fingerprint, schema version |
+| Logical Task Session | taskId, agentId, Runtime scope ID derived from runtime kind/workspace/config fingerprints/schema version, consumed cursors |
 | Task memory projection | taskId, source Room cursor, summary revision, provenance |
-| ArtifactRef | artifactId, taskId, type, workspaceRef, repository/path/commit/branch metadata, title, summary, creator, optional sourceRunId, timestamp |
+| ArtifactRef | artifactId, taskId, artifactRevision, type, workspaceRef, repository/path/commit/branch metadata, title, summary, creator, optional sourceRunId, timestamp |
 | TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, timestamps |
 
 Task state is `open`, `working`, `blocked`, `review`, `completed`, or
@@ -52,6 +52,9 @@ when their Task is already terminal.
   local schema version. Its owner-only binding advances the consumed Room
   cursor only after the native Runtime accepts the turn; a failed cut therefore
   repeats context rather than skipping unseen history.
+- The Bridge publishes only a deterministic hash of that Runtime scope. The
+  Server keys result-evidence consumption by Task, Agent, and scope hash; no
+  workspace path, native session ID, or local configuration crosses the wire.
 - Workspace and Artifact references are identifiers and verification metadata,
   not a central shared filesystem or permission grant.
 - Task clarification is missing domain context, not local authorization. Its
@@ -89,9 +92,14 @@ events, result evidence, and the current request. A resumed Session receives
 only Room events after its last consumed cursor, Task-memory/result revisions
 it has not consumed, and the current request. The Bridge prompt labels every
 projection and Message as quoted, untrusted collaboration context.
-The newest 20 ArtifactRefs form a separately revisioned result-evidence delta;
-their summaries are claims to verify against the named workspace evidence, not
-proof that a commit, test, or file exists.
+On a new Runtime scope, the newest 20 ArtifactRefs form a bounded bootstrap
+page in ascending artifact-revision order. After the Bridge confirms that page
+in a Run status, later deliveries start strictly after the durable consumed
+revision and carry at most 20 consecutive references plus `hasMore`. The Server
+accepts only the exact `throughRevision` found in that Run's durable Delivery;
+forged, skipped, stale-scope, and out-of-order acknowledgements cannot advance
+the cursor. Artifact summaries are claims to verify against the named
+workspace evidence, not proof that a commit, test, or file exists.
 
 ## Human Clarification
 
@@ -136,6 +144,9 @@ cross-task context.
   deleting or exposing the old provider session.
 - Cursor tests prove resumed prompts do not repeat already-consumed Room
   Messages and never skip a committed delta that is present in the delivery.
+- Result-evidence tests prove bootstrap ordering, multi-page continuation,
+  scope rollover, durable-delivery acknowledgement fencing, and Bridge-local
+  rejection of a discontinuous page.
 - Summary and Artifact consumers can trace claims back to authoritative source
   events or external workspace evidence.
 - Clarification answer retries converge on one Message and continuation Run;
@@ -145,7 +156,7 @@ cross-task context.
 
 ## Task Mapping
 
-`TASK-001` through `TASK-003`, with wire and Runtime work in `CON-007` and
+`TASK-001` through `TASK-005`, with wire and Runtime work in `CON-007` and
 `ADP-012`, clarification in `RUN-009`, and structural cleanup only after those
 behavioral milestones.
 

@@ -301,6 +301,8 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 			logicalStatus = sessionStatus(
 				sessionDisposition,
 				sessionBinding.LastRoomSequence,
+				plan.ScopeID,
+				sessionBinding.ResultEvidenceRevision,
 			)
 		}
 	}

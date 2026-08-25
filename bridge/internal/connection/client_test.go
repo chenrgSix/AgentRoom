@@ -86,6 +86,10 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	if !ok || capabilities["supportsStreaming"] != true || capabilities["supportsResume"] != true {
 		t.Fatalf("Runtime capabilities were not published: %#v", publication)
 	}
+	runtimeScopeID, ok := payload["runtimeScopeId"].(string)
+	if !ok || len(runtimeScopeID) != 64 {
+		t.Fatalf("Runtime scope was not published: %#v", publication)
+	}
 	cancel()
 	select {
 	case err := <-done:

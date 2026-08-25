@@ -32,6 +32,7 @@ export interface ContextMemoryProjection {
 
 export interface ContextArtifactRef {
   artifactId: string;
+  artifactRevision: number;
   type: ArtifactType;
   workspaceRef?: string;
   repository?: string;
@@ -52,6 +53,10 @@ export interface PlannedRuntimeContext {
     taskMemory: ContextMemoryProjection;
     resultEvidence?: {
       revision: number;
+      deliveryKind: "bootstrap" | "delta";
+      fromRevision: number;
+      throughRevision: number;
+      hasMore: boolean;
       artifactRefs: ContextArtifactRef[];
     };
   };
@@ -107,6 +112,7 @@ export class ContextPlanner {
       taskId: string;
       throughSequence: number;
       triggerMessageId: string;
+      resultEvidenceAfterRevision?: number;
     },
     now: string
   ): PlannedRuntimeContext {
@@ -139,7 +145,10 @@ export class ContextPlanner {
       input.throughSequence
     );
 
-    const artifactRefs = this.artifacts.listForTask(task.taskId, 20);
+    const resultEvidence = this.planResultEvidence(
+      task,
+      input.resultEvidenceAfterRevision
+    );
     return {
       contextPlan: {
         roomMemory: this.projectRoom(
@@ -149,16 +158,7 @@ export class ContextPlanner {
           now
         ),
         taskMemory: this.projectTask(task, taskSourceCursor, now),
-        ...(artifactRefs.length > 0
-          ? {
-              resultEvidence: {
-                revision: task.artifactRevision,
-                artifactRefs: artifactRefs.map((artifact) =>
-                  this.contextArtifact(artifact)
-                )
-              }
-            }
-          : {})
+        ...(resultEvidence ? { resultEvidence } : {})
       },
       contextMessages
     };
@@ -318,6 +318,7 @@ export class ContextPlanner {
   private contextArtifact(artifact: TaskArtifactRecord): ContextArtifactRef {
     return {
       artifactId: artifact.artifactId,
+      artifactRevision: artifact.artifactRevision,
       type: artifact.type,
       ...(artifact.workspaceRef ? { workspaceRef: artifact.workspaceRef } : {}),
       ...(artifact.repository ? { repository: artifact.repository } : {}),
@@ -334,6 +335,40 @@ export class ContextPlanner {
         ? { createdByAgentId: artifact.createdByAgentId }
         : {}),
       createdAt: artifact.createdAt
+    };
+  }
+
+  private planResultEvidence(
+    task: AgentTaskRecord,
+    afterRevision: number | undefined
+  ): PlannedRuntimeContext["contextPlan"]["resultEvidence"] | undefined {
+    if (task.artifactRevision === 0) return undefined;
+    if (
+      afterRevision !== undefined &&
+      afterRevision >= 0 &&
+      afterRevision <= task.artifactRevision
+    ) {
+      const artifacts = this.artifacts.listAfterRevision(task.taskId, afterRevision, 20);
+      if (artifacts.length === 0) return undefined;
+      const throughRevision = artifacts.at(-1)!.artifactRevision;
+      return {
+        revision: throughRevision,
+        deliveryKind: "delta",
+        fromRevision: afterRevision,
+        throughRevision,
+        hasMore: throughRevision < task.artifactRevision,
+        artifactRefs: artifacts.map((artifact) => this.contextArtifact(artifact))
+      };
+    }
+    const artifacts = this.artifacts.listForTask(task.taskId, 20).reverse();
+    if (artifacts.length === 0) return undefined;
+    return {
+      revision: task.artifactRevision,
+      deliveryKind: "bootstrap",
+      fromRevision: artifacts[0]!.artifactRevision - 1,
+      throughRevision: task.artifactRevision,
+      hasMore: false,
+      artifactRefs: artifacts.map((artifact) => this.contextArtifact(artifact))
     };
   }
 }

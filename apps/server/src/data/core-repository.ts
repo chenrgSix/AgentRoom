@@ -73,6 +73,7 @@ export interface AgentRecord {
   role: string;
   integrationMode: "managed" | "manual" | "fake";
   capabilities: AgentCapabilities;
+  runtimeScopeId?: string | null;
   enabled: boolean;
   presence: "ready" | "busy" | "degraded" | "manual" | "offline";
   createdAt: string;

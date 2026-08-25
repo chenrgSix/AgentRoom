@@ -172,6 +172,8 @@ function mapRunEvent(row: RunEventRow): RunEventRecord {
           ? { session: JSON.parse(row.session_json) as {
               disposition: "started" | "resumed" | "recreated";
               contextCursor: number;
+              runtimeScopeId?: string;
+              resultEvidenceRevision?: number;
             } }
           : {}),
         ...(row.clarification_json

@@ -11,6 +11,9 @@ import type {
   ContextMemoryProjection,
   ContextPlanner
 } from "../task/context-planner.js";
+import {
+  ResultEvidenceConsumptionRepository
+} from "../task/result-evidence-consumption-repository.js";
 import type { RunRecord, RunRepository } from "./run-repository.js";
 
 interface DeliveryPayload {
@@ -22,6 +25,7 @@ interface DeliveryPayload {
     scope: "task";
     resumePolicy: "resume_or_start";
     contextCursor: number;
+    runtimeScopeId?: string;
   };
   triggerMessageId: string;
   requesterMemberId: string;
@@ -36,6 +40,10 @@ interface DeliveryPayload {
     taskMemory: ContextMemoryProjection;
     resultEvidence?: {
       revision: number;
+      deliveryKind: "bootstrap" | "delta";
+      fromRevision: number;
+      throughRevision: number;
+      hasMore: boolean;
       artifactRefs: ContextArtifactRef[];
     };
   };
@@ -104,7 +112,8 @@ export class DeliveryService {
     private readonly runs: RunRepository,
     private readonly contextPlanner: ContextPlanner,
     private readonly connections: BridgeConnectionRegistry,
-    private readonly clock: () => string
+    private readonly clock: () => string,
+    private readonly evidenceConsumption = new ResultEvidenceConsumptionRepository(database)
   ) {}
 
   public dispatch(runId: string): DeliveryRecord | undefined {
@@ -214,11 +223,21 @@ export class DeliveryService {
     }
     const deliveryAttemptId = createOpaqueId("delivery");
     const idempotencyKey = createOpaqueId("idem");
+    const evidenceAfterRevision = agent.runtimeScopeId
+      ? this.evidenceConsumption.get(
+          run.taskId,
+          agent.agentId,
+          agent.runtimeScopeId
+        )
+      : undefined;
     const plannedContext = this.contextPlanner.plan({
       roomId: run.roomId,
       taskId: run.taskId,
       throughSequence: trigger.sequence,
-      triggerMessageId: trigger.messageId
+      triggerMessageId: trigger.messageId,
+      ...(evidenceAfterRevision !== undefined
+        ? { resultEvidenceAfterRevision: evidenceAfterRevision }
+        : {})
     }, this.clock());
     const payload: DeliveryPayload = {
       runId: run.runId,
@@ -228,7 +247,8 @@ export class DeliveryService {
       session: {
         scope: "task",
         resumePolicy: "resume_or_start",
-        contextCursor: trigger.sequence
+        contextCursor: trigger.sequence,
+        ...(agent.runtimeScopeId ? { runtimeScopeId: agent.runtimeScopeId } : {})
       },
       triggerMessageId: run.triggerMessageId,
       requesterMemberId: run.requesterMemberId,

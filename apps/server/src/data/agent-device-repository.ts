@@ -17,6 +17,7 @@ interface AgentRow {
   role: string;
   integration_mode: AgentRecord["integrationMode"];
   capabilities_json: string;
+  runtime_scope_id: string | null;
   enabled: number;
   presence: AgentRecord["presence"];
   created_at: string;
@@ -44,15 +45,16 @@ export class AgentDeviceRepository {
       this.database.prepare(`
         INSERT INTO agents (
           agent_id, team_id, owner_member_id, device_id, name, role,
-          integration_mode, capabilities_json, enabled, presence, created_at,
-          updated_at
+          integration_mode, capabilities_json, runtime_scope_id, enabled,
+          presence, created_at, updated_at
         ) VALUES (
           @agentId, @teamId, @ownerMemberId, @deviceId, @name, @role,
-          @integrationMode, @capabilitiesJson, @enabled, @presence, @createdAt,
-          @updatedAt
+          @integrationMode, @capabilitiesJson, @runtimeScopeId, @enabled,
+          @presence, @createdAt, @updatedAt
         )
       `).run({
         ...agent,
+        runtimeScopeId: agent.runtimeScopeId ?? null,
         capabilitiesJson: JSON.stringify(agent.capabilities),
         enabled: agent.enabled ? 1 : 0
       });
@@ -73,10 +75,12 @@ export class AgentDeviceRepository {
     this.database.prepare(`
       UPDATE agents
       SET name = @name, role = @role, capabilities_json = @capabilitiesJson,
-          enabled = @enabled, presence = @presence, updated_at = @updatedAt
+          runtime_scope_id = @runtimeScopeId, enabled = @enabled,
+          presence = @presence, updated_at = @updatedAt
       WHERE agent_id = @agentId
     `).run({
       ...agent,
+      runtimeScopeId: agent.runtimeScopeId ?? null,
       capabilitiesJson: JSON.stringify(agent.capabilities),
       enabled: agent.enabled ? 1 : 0
     });
@@ -263,6 +267,7 @@ export class AgentDeviceRepository {
       role: row.role,
       integrationMode: row.integration_mode,
       capabilities: JSON.parse(row.capabilities_json) as AgentCapabilities,
+      runtimeScopeId: row.runtime_scope_id,
       enabled: row.enabled === 1,
       presence: row.presence,
       createdAt: row.created_at,

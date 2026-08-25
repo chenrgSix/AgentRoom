@@ -83,6 +83,9 @@ func TestFileRuntimeSessionStorePersistsTaskScopedBinding(t *testing.T) {
 func TestTaskSessionContextKeepsOnlyUnconsumedMemoryRevisions(t *testing.T) {
 	sequence41 := int64(41)
 	sequence43 := int64(43)
+	deliveryKind := contracts.Delta
+	fromRevision := int64(1)
+	throughRevision := int64(2)
 	run := contracts.RunRequestedPayload{
 		ContextMessages: []contracts.ContextMessage{
 			{MessageID: "msg_old_12345678", Sequence: &sequence41, Content: "old"},
@@ -96,7 +99,8 @@ func TestTaskSessionContextKeepsOnlyUnconsumedMemoryRevisions(t *testing.T) {
 				Revision: 5, SourceCursor: 31, Summary: "Task revision five",
 			},
 			ResultEvidence: &contracts.TaskResultEvidence{
-				Revision: 2,
+				Revision: 2, DeliveryKind: &deliveryKind,
+				FromRevision: &fromRevision, ThroughRevision: &throughRevision,
 				ArtifactRefs: []contracts.ArtifactReference{{
 					ArtifactID: "artifact_delta_12345678", Type: contracts.Commit,
 					Title: "Delta", Summary: "Verify the commit",
@@ -118,6 +122,34 @@ func TestTaskSessionContextKeepsOnlyUnconsumedMemoryRevisions(t *testing.T) {
 		delta.ContextPlan.ResultEvidence == nil ||
 		delta.ContextPlan.ResultEvidence.Revision != 2 {
 		t.Fatalf("memory revision delta was not filtered: %#v", delta.ContextPlan)
+	}
+}
+
+func TestTaskSessionContextRejectsResultEvidenceCursorGap(t *testing.T) {
+	deliveryKind := contracts.Delta
+	fromRevision := int64(4)
+	throughRevision := int64(6)
+	run := contracts.RunRequestedPayload{
+		ContextPlan: &contracts.RuntimeContextPlan{
+			ResultEvidence: &contracts.TaskResultEvidence{
+				Revision: 6, DeliveryKind: &deliveryKind,
+				FromRevision: &fromRevision, ThroughRevision: &throughRevision,
+				ArtifactRefs: []contracts.ArtifactReference{{
+					ArtifactID: "artifact_gap_12345678", Type: contracts.Commit,
+					Title: "Gap", Summary: "Must not consume a discontinuous page",
+				}},
+			},
+		},
+	}
+	delta := contextDeltaForSession(run, RuntimeSessionBinding{
+		ResultEvidenceRevision: 3,
+	})
+	if delta.ContextPlan != nil {
+		t.Fatalf("discontinuous result evidence was accepted: %#v", delta.ContextPlan)
+	}
+	_, _, resultRevision := contextRevisions(delta)
+	if resultRevision != 0 {
+		t.Fatalf("discontinuous page advanced result evidence cursor: %d", resultRevision)
 	}
 }
 

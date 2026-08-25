@@ -20,6 +20,7 @@ import (
 	"agentroom.dev/bridge/internal/identity"
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
+	bridgeruntime "agentroom.dev/bridge/internal/runtime"
 	contracts "agentroom.dev/contracts/generated/go"
 	"github.com/coder/websocket"
 )
@@ -159,6 +160,10 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	}
 	for _, configured := range c.Config.Agents {
 		agentID := identities[configured.Name]
+		runtimeScopeID, err := bridgeruntime.AgentRuntimeScopeID(configured)
+		if err != nil {
+			return false, fmt.Errorf("resolve Agent Runtime scope: %w", err)
+		}
 		capabilities := contracts.Capabilities{
 			InvocationMode:    contracts.Managed,
 			SupportsHandoff:   false,
@@ -173,13 +178,14 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			Timestamp:       time.Now().UTC(),
 			Type:            contracts.AgentPublish,
 			Payload: contracts.AgentPublishPayload{
-				AgentID:       agentID,
-				Capabilities:  capabilities,
-				DeviceID:      c.Credential.DeviceID,
-				Name:          configured.Name,
-				OwnerMemberID: c.Credential.OwnerMemberID,
-				Role:          configured.Role,
-				TeamID:        c.Credential.TeamID,
+				AgentID:        agentID,
+				Capabilities:   capabilities,
+				DeviceID:       c.Credential.DeviceID,
+				Name:           configured.Name,
+				OwnerMemberID:  c.Credential.OwnerMemberID,
+				Role:           configured.Role,
+				RuntimeScopeID: &runtimeScopeID,
+				TeamID:         c.Credential.TeamID,
 			},
 		}
 		if err := writer.writeJSON(ctx, publication); err != nil {

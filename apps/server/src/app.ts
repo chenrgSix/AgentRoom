@@ -69,6 +69,9 @@ import { MessageService } from "./team-room/message-service.js";
 import { AgentTaskService } from "./task/agent-task-service.js";
 import { ArtifactRepository } from "./task/artifact-repository.js";
 import { ContextPlanner } from "./task/context-planner.js";
+import {
+  ResultEvidenceConsumptionRepository
+} from "./task/result-evidence-consumption-repository.js";
 import { ClarificationRepository } from "./task/clarification-repository.js";
 import { TaskArtifactService } from "./task/task-artifact-service.js";
 import { TaskClarificationService } from "./task/task-clarification-service.js";
@@ -134,6 +137,7 @@ export async function createServerApp(
     auth
   );
   const contextPlanner = new ContextPlanner(database, core, taskRepository);
+  const resultEvidenceConsumption = new ResultEvidenceConsumptionRepository(database);
   const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth, taskRepository);
   const clarificationRepository = new ClarificationRepository(database);
@@ -166,7 +170,11 @@ export async function createServerApp(
     bridgeConnections,
     clock
   );
-  const bridgeRunEvents = new BridgeRunEventService(core, runRepository);
+  const bridgeRunEvents = new BridgeRunEventService(
+    core,
+    runRepository,
+    resultEvidenceConsumption
+  );
   const handoffs = new HandoffService(core, runRepository);
   const cancellations = new CancellationService(
     core, runRepository, auth, bridgeConnections, clock

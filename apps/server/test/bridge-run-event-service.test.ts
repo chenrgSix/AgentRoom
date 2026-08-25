@@ -44,12 +44,13 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     const principal = auth.authenticateWebSession(session.secret, now);
     const room = teams.createRoom(principal, created.team.teamId, "general", now);
     const device = registry.registerOwnDevice(principal, created.team.teamId, "Mac", now);
+    const runtimeScopeId = "a".repeat(64);
     const agent = agents.publishAgent(principal, {
       teamId: created.team.teamId, deviceId: device.deviceId, name: "Builder", role: "Managed",
       integrationMode: "managed", capabilities: {
         supportsHandoff: false, supportsInterrupt: true, supportsResume: false,
         supportsStart: true, supportsStreaming: true
-      }, now
+      }, runtimeScopeId, now
     });
     const trigger = messages.createMemberMessage(principal, {
       roomId: room.roomId, content: "Implement events", mentions: [{
@@ -63,6 +64,16 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     const devicePrincipal = auth.authenticateDevice(credential.secret, now);
     const service = new BridgeRunEventService(core, runRepository);
 
+    assert.throws(() => service.applyStatus(devicePrincipal, {
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 7, status: "completed",
+      session: {
+        disposition: "resumed",
+        contextCursor: trigger.sequence,
+        runtimeScopeId: "b".repeat(64),
+        resultEvidenceRevision: 0
+      }
+    }, now), /logical Runtime session status/u);
     assert.equal(service.applyStatus(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
       agentId: agent.agentId, sequence: 2, status: "working"
@@ -115,13 +126,18 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       agentId: agent.agentId, sequence: 7, status: "completed",
       session: {
         disposition: "resumed",
-        contextCursor: trigger.sequence
+        contextCursor: trigger.sequence,
+        runtimeScopeId,
+        resultEvidenceRevision: 0
       }
     }, now).run.state, "completed");
     const terminalEvent = runRepository.listEvents(run.runId).at(-1)?.event;
     assert.deepEqual(
       terminalEvent?.type === "status" ? terminalEvent.session : null,
-      { disposition: "resumed", contextCursor: trigger.sequence }
+      {
+        disposition: "resumed", contextCursor: trigger.sequence,
+        runtimeScopeId, resultEvidenceRevision: 0
+      }
     );
     assert.equal(
       taskRepository.get(run.taskId)?.lastRoomSequence,

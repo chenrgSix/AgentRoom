@@ -17,6 +17,7 @@ const legacyRoomTaskScope = "legacy-room"
 
 type runtimeSessionPlan struct {
 	Key           RuntimeSessionKey
+	ScopeID       string
 	LogicalTask   bool
 	ContextCursor int64
 	ResumePolicy  contracts.ResumePolicy
@@ -51,6 +52,14 @@ func planRuntimeSession(
 	if err != nil {
 		return runtimeSessionPlan{}, false, err
 	}
+	scopeID, err := AgentRuntimeScopeID(configuration)
+	if err != nil {
+		return runtimeSessionPlan{}, false, err
+	}
+	if logicalTask && run.Session.RuntimeScopeID != nil &&
+		*run.Session.RuntimeScopeID != scopeID {
+		return runtimeSessionPlan{}, false, fmt.Errorf("logical Task Session scope does not match the published Runtime")
+	}
 	return runtimeSessionPlan{
 		Key: RuntimeSessionKey{
 			RuntimeKind:          runtimeKind,
@@ -61,10 +70,41 @@ func planRuntimeSession(
 			ConfigFingerprint:    configFingerprint,
 			SchemaVersion:        runtimeSessionSchemaVersion,
 		},
+		ScopeID:       scopeID,
 		LogicalTask:   logicalTask,
 		ContextCursor: contextCursor,
 		ResumePolicy:  resumePolicy,
 	}, true, nil
+}
+
+// AgentRuntimeScopeID is safe to publish centrally. It changes when the local
+// workspace or semantic Runtime configuration would create a different native
+// Task Session, but it does not expose either value.
+func AgentRuntimeScopeID(configuration config.AgentConfig) (string, error) {
+	workspaceFingerprint, err := fingerprintWorkspace(configuration.Workspace)
+	if err != nil {
+		return "", err
+	}
+	configFingerprint, err := fingerprintRuntimeConfig(configuration)
+	if err != nil {
+		return "", err
+	}
+	encoded, err := json.Marshal(struct {
+		RuntimeKind          string `json:"runtimeKind"`
+		WorkspaceFingerprint string `json:"workspaceFingerprint"`
+		ConfigFingerprint    string `json:"configFingerprint"`
+		SchemaVersion        int    `json:"schemaVersion"`
+	}{
+		RuntimeKind:          configuration.RuntimeKind,
+		WorkspaceFingerprint: workspaceFingerprint,
+		ConfigFingerprint:    configFingerprint,
+		SchemaVersion:        runtimeSessionSchemaVersion,
+	})
+	if err != nil {
+		return "", fmt.Errorf("encode Runtime scope: %w", err)
+	}
+	digest := sha256.Sum256(encoded)
+	return hex.EncodeToString(digest[:]), nil
 }
 
 func fingerprintWorkspace(workspace string) (string, error) {
@@ -145,9 +185,18 @@ func contextDeltaForSession(
 		plan.TaskMemory.Revision <= binding.TaskMemoryRevision {
 		plan.TaskMemory = nil
 	}
-	if plan.ResultEvidence != nil &&
-		plan.ResultEvidence.Revision <= binding.ResultEvidenceRevision {
-		plan.ResultEvidence = nil
+	if plan.ResultEvidence != nil {
+		evidence := plan.ResultEvidence
+		if evidence.DeliveryKind != nil && *evidence.DeliveryKind == contracts.Delta {
+			if evidence.FromRevision == nil || evidence.ThroughRevision == nil ||
+				*evidence.FromRevision != binding.ResultEvidenceRevision {
+				plan.ResultEvidence = nil
+			} else if *evidence.ThroughRevision <= binding.ResultEvidenceRevision {
+				plan.ResultEvidence = nil
+			}
+		} else if evidence.Revision <= binding.ResultEvidenceRevision {
+			plan.ResultEvidence = nil
+		}
 	}
 	if plan.RoomMemory == nil && plan.TaskMemory == nil &&
 		plan.ResultEvidence == nil {
@@ -176,7 +225,11 @@ func contextRevisions(
 	}
 	resultRevision := int64(0)
 	if run.ContextPlan.ResultEvidence != nil {
-		resultRevision = run.ContextPlan.ResultEvidence.Revision
+		if run.ContextPlan.ResultEvidence.ThroughRevision != nil {
+			resultRevision = *run.ContextPlan.ResultEvidence.ThroughRevision
+		} else {
+			resultRevision = run.ContextPlan.ResultEvidence.Revision
+		}
 	}
 	return roomRevision, taskRevision, resultRevision
 }
@@ -188,9 +241,13 @@ func isHistoricalProjection(kind *contracts.ProjectionKind) bool {
 func sessionStatus(
 	disposition contracts.Disposition,
 	contextCursor int64,
+	runtimeScopeID string,
+	resultEvidenceRevision int64,
 ) *contracts.LogicalSessionStatus {
 	return &contracts.LogicalSessionStatus{
-		Disposition:   disposition,
-		ContextCursor: contextCursor,
+		Disposition:            disposition,
+		ContextCursor:          contextCursor,
+		RuntimeScopeID:         &runtimeScopeID,
+		ResultEvidenceRevision: &resultEvidenceRevision,
 	}
 }

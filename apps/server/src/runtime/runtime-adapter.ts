@@ -19,6 +19,10 @@ export interface RuntimeRequest {
     taskMemory: RuntimeContextMemoryProjection;
     resultEvidence?: {
       revision: number;
+      deliveryKind?: "bootstrap" | "delta";
+      fromRevision?: number;
+      throughRevision?: number;
+      hasMore?: boolean;
       artifactRefs: RuntimeContextArtifactRef[];
     };
   };
@@ -39,6 +43,7 @@ export interface RuntimeContextMemoryProjection {
 
 export interface RuntimeContextArtifactRef {
   artifactId: string;
+  artifactRevision?: number;
   type: "commit" | "branch" | "file" | "patch" | "test_result" | "document";
   workspaceRef?: string;
   repository?: string;
@@ -73,6 +78,8 @@ export type RuntimeEvent =
       session?: {
         disposition: "started" | "resumed" | "recreated";
         contextCursor: number;
+        runtimeScopeId?: string;
+        resultEvidenceRevision?: number;
       };
       clarification?: RuntimeTaskClarification;
     }

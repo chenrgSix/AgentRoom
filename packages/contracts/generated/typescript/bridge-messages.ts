@@ -136,13 +136,14 @@ export interface AgentPublishMessage {
 }
 
 export interface AgentPublishPayload {
-  agentId:       string;
-  capabilities:  Capabilities;
-  deviceId:      string;
-  name:          string;
-  ownerMemberId: string;
-  role:          string;
-  teamId:        string;
+  agentId:         string;
+  capabilities:    Capabilities;
+  deviceId:        string;
+  name:            string;
+  ownerMemberId:   string;
+  role:            string;
+  runtimeScopeId?: string;
+  teamId:          string;
   [property: string]: unknown;
 }
 
@@ -252,14 +253,19 @@ export interface RuntimeContextPlan {
 }
 
 export interface TaskResultEvidence {
-  artifactRefs: [ArtifactReference, ...ArtifactReference[]];
-  revision:     number;
+  artifactRefs:     [ArtifactReference, ...ArtifactReference[]];
+  deliveryKind?:    DeliveryKind;
+  fromRevision?:    number;
+  hasMore?:         boolean;
+  revision:         number;
+  throughRevision?: number;
 }
 
 export interface ArtifactReference {
-  artifactId: string;
-  branch?:    string;
-  commitSha?: string;
+  artifactId:        string;
+  artifactRevision?: number;
+  branch?:           string;
+  commitSha?:        string;
   /**
    * RFC 3339 date-time normalized to the UTC Z suffix.
    */
@@ -276,6 +282,8 @@ export interface ArtifactReference {
 }
 
 export type ArtifactReferenceType = "commit" | "branch" | "file" | "patch" | "test_result" | "document";
+
+export type DeliveryKind = "bootstrap" | "delta";
 
 export interface RoomMemoryClass {
   projectionKind?:  ProjectionKind;
@@ -301,9 +309,10 @@ export interface RoutingAgent {
 }
 
 export interface LogicalSessionRequest {
-  contextCursor: number;
-  resumePolicy:  ResumePolicy;
-  scope:         Scope;
+  contextCursor:   number;
+  resumePolicy:    ResumePolicy;
+  runtimeScopeId?: string;
+  scope:           Scope;
 }
 
 export type ResumePolicy = "resume_or_start" | "start_new";
@@ -391,8 +400,10 @@ export interface AgentRoomError {
 }
 
 export interface LogicalSessionStatus {
-  contextCursor: number;
-  disposition:   Disposition;
+  contextCursor:           number;
+  disposition:             Disposition;
+  resultEvidenceRevision?: number;
+  runtimeScopeId?:         string;
 }
 
 export type Disposition = "started" | "resumed" | "recreated";

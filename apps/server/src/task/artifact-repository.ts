@@ -12,6 +12,7 @@ export type ArtifactType =
 
 export interface TaskArtifactRecord {
   artifactId: string;
+  artifactRevision: number;
   taskId: string;
   roomId: string;
   type: ArtifactType;
@@ -30,6 +31,7 @@ export interface TaskArtifactRecord {
 
 interface TaskArtifactRow {
   artifact_id: string;
+  artifact_revision: number;
   task_id: string;
   room_id: string;
   artifact_type: ArtifactType;
@@ -49,6 +51,7 @@ interface TaskArtifactRow {
 function mapArtifact(row: TaskArtifactRow): TaskArtifactRecord {
   return {
     artifactId: row.artifact_id,
+    artifactRevision: row.artifact_revision,
     taskId: row.task_id,
     roomId: row.room_id,
     type: row.artifact_type,
@@ -77,24 +80,26 @@ export class ArtifactRepository {
     revision: number;
   } {
     return this.transactions.immediate(() => {
+      const revisionRow = this.database.prepare(`
+        UPDATE agent_tasks
+        SET artifact_revision = artifact_revision + 1, updated_at = @createdAt
+        WHERE task_id = @taskId
+        RETURNING artifact_revision
+      `).get(record) as { artifact_revision: number } | undefined;
+      if (!revisionRow) throw new Error(`Task not found: ${record.taskId}`);
       this.database.prepare(`
         INSERT INTO task_artifact_refs (
-          artifact_id, task_id, room_id, artifact_type, workspace_ref,
+          artifact_id, artifact_revision, task_id, room_id, artifact_type, workspace_ref,
           repository_ref, path_ref, commit_sha, branch_ref, title, summary,
           source_run_id, created_by_member_id, created_by_agent_id, created_at
         ) VALUES (
-          @artifactId, @taskId, @roomId, @type, @workspaceRef,
+          @artifactId, @artifactRevision, @taskId, @roomId, @type, @workspaceRef,
           @repository, @path, @commitSha, @branch, @title, @summary,
           @sourceRunId, @createdByMemberId, @createdByAgentId, @createdAt
         )
-      `).run(record);
-      this.database.prepare(`
-        UPDATE agent_tasks
-        SET artifact_revision = artifact_revision + 1, updated_at = ?
-        WHERE task_id = ?
-      `).run(record.createdAt, record.taskId);
-      const revision = this.getRevision(record.taskId);
-      return { artifact: record, revision };
+      `).run({ ...record, artifactRevision: revisionRow.artifact_revision });
+      const artifact = { ...record, artifactRevision: revisionRow.artifact_revision };
+      return { artifact, revision: artifact.artifactRevision };
     });
   }
 
@@ -102,9 +107,22 @@ export class ArtifactRepository {
     return (this.database.prepare(`
       SELECT * FROM task_artifact_refs
       WHERE task_id = ?
-      ORDER BY created_at DESC, artifact_id DESC
+      ORDER BY artifact_revision DESC
       LIMIT ?
     `).all(taskId, limit) as TaskArtifactRow[]).map(mapArtifact);
+  }
+
+  public listAfterRevision(
+    taskId: string,
+    afterRevision: number,
+    limit: number
+  ): TaskArtifactRecord[] {
+    return (this.database.prepare(`
+      SELECT * FROM task_artifact_refs
+      WHERE task_id = ? AND artifact_revision > ?
+      ORDER BY artifact_revision
+      LIMIT ?
+    `).all(taskId, afterRevision, limit) as TaskArtifactRow[]).map(mapArtifact);
   }
 
   public getRevision(taskId: string): number {

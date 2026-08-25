@@ -216,6 +216,9 @@ export function registerBridgeSocketRoutes({
             agentId: message.payload.agentId,
             name: message.payload.name,
             role: message.payload.role,
+            ...(typeof message.payload.runtimeScopeId === "string"
+              ? { runtimeScopeId: message.payload.runtimeScopeId }
+              : {}),
             capabilities: {
               supportsHandoff: capabilities.supportsHandoff === true,
               supportsInterrupt: capabilities.supportsInterrupt === true,
@@ -332,7 +335,17 @@ export function registerBridgeSocketRoutes({
                   session: {
                     disposition: String(runtimeSession.disposition ?? "") as
                       "started" | "resumed" | "recreated",
-                    contextCursor: Number(runtimeSession.contextCursor)
+                    contextCursor: Number(runtimeSession.contextCursor),
+                    ...(typeof runtimeSession.runtimeScopeId === "string"
+                      ? { runtimeScopeId: runtimeSession.runtimeScopeId }
+                      : {}),
+                    ...(runtimeSession.resultEvidenceRevision === undefined
+                      ? {}
+                      : {
+                          resultEvidenceRevision: Number(
+                            runtimeSession.resultEvidenceRevision
+                          )
+                        })
                   }
                 }
               : {}),

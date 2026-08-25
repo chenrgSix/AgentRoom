@@ -142,6 +142,13 @@ structured result-evidence revisions; a new or recreated Codex Thread receives
 the complete bootstrap plan. Artifact summaries remain verification hints and
 never grant access to a referenced workspace path.
 
+Result evidence is cursor-driven rather than inferred from the Task's global
+revision. A new local Runtime scope receives the newest bounded bootstrap page;
+resumed sessions accept only a delta whose `fromRevision` matches their
+owner-only binding. Status reports return the opaque scope hash and exact
+`throughRevision` only after the native Runtime accepts the page, so a gap,
+failed cut, or replay cannot silently skip evidence.
+
 Codex and Generic CLI adapters also recognize an optional final
 `agentroom-assessment` XML-style envelope containing JSON. A valid envelope is
 removed from the visible reply and sent as structured evidence; malformed or
