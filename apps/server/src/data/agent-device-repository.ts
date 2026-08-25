@@ -192,6 +192,27 @@ export class AgentDeviceRepository {
     return row && this.mapAgent(row);
   }
 
+  public compareAndSetAgentWorkspaceGeneration(
+    agentId: string,
+    workspaceRef: string,
+    expectedGeneration: string,
+    nextGeneration: string,
+    now: string
+  ): AgentRecord | undefined {
+    const result = this.database.prepare(`
+      UPDATE agents
+      SET workspace_generation = ?, updated_at = ?
+      WHERE agent_id = ? AND workspace_ref = ? AND workspace_generation = ?
+    `).run(
+      nextGeneration,
+      now,
+      agentId,
+      workspaceRef,
+      expectedGeneration
+    );
+    return result.changes === 1 ? this.getAgent(agentId) : undefined;
+  }
+
   public listAgents(teamId: string): AgentRecord[] {
     const rows = this.database.prepare(`
       SELECT * FROM agents WHERE team_id = ? ORDER BY created_at, agent_id

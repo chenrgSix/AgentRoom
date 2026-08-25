@@ -241,12 +241,11 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-artifact-e2e-"));
   const workspaceA = path.join(directory, "workspace-a");
   const workspaceB = path.join(directory, "workspace-b");
-  const outputB = path.join(workspaceB, "output");
   const dataA = path.join(directory, "data-a");
   const dataB = path.join(directory, "data-b");
   await Promise.all([
     mkdir(workspaceA, { recursive: true }),
-    mkdir(outputB, { recursive: true })
+    mkdir(workspaceB, { recursive: true })
   ]);
   const bridgeServerToken = "artifact-e2e-central-token-12345678901234567890";
   const app = await createServerApp({
@@ -333,8 +332,8 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
     const sourceSha256 = createHash("sha256").update(sourceBytes).digest("hex");
     await writeFile(path.join(workspaceA, "source.patch"), sourceBytes);
 
-    const derivedPath = path.join(outputB, "derived.json");
-    const runtimeMarker = path.join(outputB, "runtime-consumed.json");
+    const derivedPath = path.join(workspaceB, "derived.json");
+    const runtimeMarker = path.join(workspaceB, "runtime-consumed.json");
     const consumerHelper = path.join(directory, "consume-artifact.mjs");
     await writeFile(consumerHelper, [
       "import { createHash } from 'node:crypto';",
@@ -631,7 +630,7 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
       "--agent", "Consumer Agent B",
       "--run-id", consumeRunId,
       "--type", "test_result",
-      "--file", "output/derived.json",
+      "--file", "derived.json",
       "--title", "Artifact B",
       "--summary", "Bridge B verified the exact staged bytes from Artifact A.",
       "--verifies", artifactAId

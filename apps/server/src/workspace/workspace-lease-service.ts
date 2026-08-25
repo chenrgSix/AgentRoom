@@ -25,6 +25,13 @@ export interface WorkspaceLeaseView extends Omit<WorkspaceLeaseRecord, "state"> 
   state: "active" | "released" | "expired";
 }
 
+export interface WorkspaceSourceSnapshotView {
+  agentId: string;
+  runId: string;
+  workspaceRef: string;
+  workspaceGeneration: string;
+}
+
 function effectiveLease(
   lease: WorkspaceLeaseRecord,
   now: string
@@ -55,6 +62,75 @@ export class WorkspaceLeaseService {
     private readonly tasks: AgentTaskRepository,
     private readonly core: CoreRepository
   ) {}
+
+  public getSourceSnapshot(
+    principal: DevicePrincipal,
+    runId: string,
+    agentId: string
+  ): WorkspaceSourceSnapshotView {
+    const scope = this.requireCurrentAssignment(principal, runId, agentId);
+    return {
+      agentId,
+      runId,
+      workspaceRef: scope.workspaceRef,
+      workspaceGeneration: scope.workspaceGeneration
+    };
+  }
+
+  public refreshSourceSnapshot(
+    principal: DevicePrincipal,
+    input: {
+      runId: string;
+      agentId: string;
+      workspaceRef: string;
+      expectedWorkspaceGeneration: string;
+      workspaceGeneration: string;
+    },
+    now: string
+  ): WorkspaceSourceSnapshotView {
+    if (
+      !workspaceRefPattern.test(input.workspaceRef) ||
+      !generationPattern.test(input.expectedWorkspaceGeneration) ||
+      !generationPattern.test(input.workspaceGeneration)
+    ) {
+      throw new Error("Workspace source snapshot refresh is invalid");
+    }
+    const scope = this.requireCurrentAssignment(
+      principal,
+      input.runId,
+      input.agentId
+    );
+    if (scope.workspaceRef !== input.workspaceRef) {
+      throw new Error("Workspace source snapshot identity changed");
+    }
+    if (scope.workspaceGeneration === input.workspaceGeneration) {
+      return {
+        agentId: input.agentId,
+        runId: input.runId,
+        workspaceRef: scope.workspaceRef,
+        workspaceGeneration: scope.workspaceGeneration
+      };
+    }
+    if (scope.workspaceGeneration !== input.expectedWorkspaceGeneration) {
+      throw new Error("Workspace source snapshot refresh conflicts");
+    }
+    const updated = this.core.compareAndSetAgentWorkspaceGeneration(
+      input.agentId,
+      input.workspaceRef,
+      input.expectedWorkspaceGeneration,
+      input.workspaceGeneration,
+      now
+    );
+    if (!updated || updated.workspaceGeneration !== input.workspaceGeneration) {
+      throw new Error("Workspace source snapshot refresh conflicts");
+    }
+    return {
+      agentId: input.agentId,
+      runId: input.runId,
+      workspaceRef: input.workspaceRef,
+      workspaceGeneration: input.workspaceGeneration
+    };
+  }
 
   public issueReadSource(
     principal: DevicePrincipal,
@@ -165,11 +241,35 @@ export class WorkspaceLeaseService {
     input: Pick<IssueWorkspaceLeaseInput, "runId" | "agentId" | "workspaceRef" |
       "workspaceGeneration">
   ): { roomId: string; taskId: string } {
-    const run = this.runs.getRun(input.runId);
+    const scope = this.requireCurrentAssignment(
+      principal,
+      input.runId,
+      input.agentId
+    );
+    if (
+      scope.workspaceRef !== input.workspaceRef ||
+      scope.workspaceGeneration !== input.workspaceGeneration
+    ) {
+      throw new Error("Workspace source lease snapshot is stale or unsupported");
+    }
+    return { roomId: scope.roomId, taskId: scope.taskId };
+  }
+
+  private requireCurrentAssignment(
+    principal: DevicePrincipal,
+    runId: string,
+    agentId: string
+  ): {
+      roomId: string;
+      taskId: string;
+      workspaceRef: string;
+      workspaceGeneration: string;
+    } {
+    const run = this.runs.getRun(runId);
     if (!run || !new Set(["delivered", "working"]).has(run.state)) {
       throw new Error("Workspace source lease requires an active assigned Run");
     }
-    if (run.targetAgentId !== input.agentId) {
+    if (run.targetAgentId !== agentId) {
       throw new Error("Workspace source lease Agent does not match its Run");
     }
     const task = this.tasks.get(run.taskId);
@@ -179,22 +279,22 @@ export class WorkspaceLeaseService {
     ) {
       throw new Error("Workspace source lease Task is unavailable");
     }
-    const agent = this.core.getAgent(input.agentId);
+    const agent = this.core.getAgent(agentId);
     if (
       !agent || !agent.enabled || agent.integrationMode !== "managed" ||
       agent.teamId !== principal.teamId ||
       agent.ownerMemberId !== principal.ownerMemberId ||
-      agent.deviceId !== principal.deviceId
+      agent.deviceId !== principal.deviceId ||
+      agent.capabilities.supportsWorkspaceLeases !== true ||
+      !agent.workspaceRef || !agent.workspaceGeneration
     ) {
       throw new Error("Workspace source lease Device assignment is invalid");
     }
-    if (
-      agent.capabilities.supportsWorkspaceLeases !== true ||
-      agent.workspaceRef !== input.workspaceRef ||
-      agent.workspaceGeneration !== input.workspaceGeneration
-    ) {
-      throw new Error("Workspace source lease snapshot is stale or unsupported");
-    }
-    return { roomId: run.roomId, taskId: run.taskId };
+    return {
+      roomId: run.roomId,
+      taskId: run.taskId,
+      workspaceRef: agent.workspaceRef,
+      workspaceGeneration: agent.workspaceGeneration
+    };
   }
 }

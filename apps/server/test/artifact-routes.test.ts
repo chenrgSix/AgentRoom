@@ -110,11 +110,48 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
       authorization: `Bearer ${credential.secret}`,
       "x-agentroom-server-token": serverToken
     };
+    const refreshedGeneration = "c".repeat(64);
+    const snapshotUrl =
+      `/api/bridge/workspace-source-snapshots/${run.runId}/${agent.agentId}`;
+    const snapshotResponse = await app.inject({
+      method: "GET",
+      url: snapshotUrl,
+      headers
+    });
+    assert.equal(snapshotResponse.statusCode, 200, snapshotResponse.body);
+    assert.equal(snapshotResponse.json().workspaceGeneration, workspaceGeneration);
+    const refreshResponse = await app.inject({
+      method: "POST",
+      url: snapshotUrl,
+      headers,
+      payload: {
+        workspaceRef,
+        expectedWorkspaceGeneration: workspaceGeneration,
+        workspaceGeneration: refreshedGeneration
+      }
+    });
+    assert.equal(refreshResponse.statusCode, 200, refreshResponse.body);
+    assert.equal(
+      refreshResponse.json().workspaceGeneration,
+      refreshedGeneration
+    );
+    const conflictingRefresh = await app.inject({
+      method: "POST",
+      url: snapshotUrl,
+      headers,
+      payload: {
+        workspaceRef,
+        expectedWorkspaceGeneration: workspaceGeneration,
+        workspaceGeneration: "d".repeat(64)
+      }
+    });
+    assert.equal(conflictingRefresh.statusCode, 400);
+
     const leasePayload = {
       runId: run.runId,
       agentId: agent.agentId,
       workspaceRef,
-      workspaceGeneration,
+      workspaceGeneration: refreshedGeneration,
       idempotencyKey: "idem_artifact_http_lease_123456"
     };
     const unauthorized = await app.inject({
@@ -146,7 +183,7 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
         runId: run.runId,
         agentId: agent.agentId,
         workspaceRef,
-        workspaceGeneration,
+        workspaceGeneration: refreshedGeneration,
         idempotencyKey: "idem_artifact_http_publish_1234",
         artifactType: "patch",
         fileName: "change.patch",

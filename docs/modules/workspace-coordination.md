@@ -35,10 +35,14 @@ lease. Only after the accepted lease does the Bridge open and double-read the
 file; Artifact Content Transport accepts only that lease and still verifies the
 final content digest.
 
-The implemented Device-authenticated lease endpoint accepts only the published
-opaque Workspace identity and generation. The Bridge keeps the configured root
-and source path local, rechecks the Workspace generation across a double-read
-capture, and sends only a basename plus immutable byte metadata downstream.
+The implemented Device-authenticated snapshot endpoints expose only the active
+Run's current opaque Agent generation. When local metadata has advanced, the
+Bridge revalidates its unopened source observation and compare-and-sets that
+generation without reconnecting. The Device-authenticated lease endpoint then
+accepts only the refreshed Workspace identity and generation. The Bridge keeps
+the configured root and source path local, rechecks the Workspace generation
+across a double-read capture, and sends only a basename plus immutable byte
+metadata downstream.
 
 For a future Workspace apply operation, `write_apply` uses compare-and-set
 against the current generation. `isolated_worktree` names a Bridge-created
@@ -54,8 +58,10 @@ Bridge-owned Artifact staging.
 - New Artifact observations and descriptions derive distinct lease attempt
   identities, so expiry of one operation cannot prevent later publication by
   the same active Run and Workspace generation.
-- Generation mismatch fails before a write operation starts; it never silently
-  refreshes the requested generation.
+- Source snapshot refresh is explicit, active-Run-scoped, and compare-and-set;
+  a conflict is read and rejected rather than overwritten.
+- Generation mismatch fails before a write operation starts; source-read
+  refresh does not weaken future write-mode compare-and-set rules.
 - The Server may reconstruct active coordination from durable rows after
   restart, while the Bridge revalidates every local precondition.
 

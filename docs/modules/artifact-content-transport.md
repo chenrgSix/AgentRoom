@@ -48,8 +48,10 @@ semantics.
 
 The first Bridge source client exposes an explicit `artifact publish` command.
 It plans one allowlisted typed file without reading its bytes, requests the
-assigned Run's lease over the Device-authenticated HTTP boundary, captures only
-after the lease is accepted, and drives prepare, ordered chunks, seal, and bind.
+active Run's current opaque snapshot, compare-and-sets a newer local generation
+when necessary, requests the assigned Run's lease over the Device-authenticated
+HTTP boundary, captures only after the lease is accepted, and drives prepare,
+ordered chunks, seal, and bind.
 Deterministic operation-scoped idempotency keys plus publication status lookup
 recover response loss without letting an expired operation block a later
 distinct Artifact or inventing another Blob or Artifact identity.

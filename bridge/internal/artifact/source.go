@@ -36,6 +36,7 @@ type SourcePlan struct {
 	cleanRelativePath   string
 	resolvedRoot        string
 	observed            os.FileInfo
+	openSource          func(string) (*os.File, error)
 }
 
 func PlanSource(root, relativePath, artifactType string) (SourcePlan, error) {
@@ -103,6 +104,7 @@ func PlanSource(root, relativePath, artifactType string) (SourcePlan, error) {
 		cleanRelativePath:   cleanRelative,
 		resolvedRoot:        resolvedRoot,
 		observed:            observed,
+		openSource:          os.Open,
 	}, nil
 }
 
@@ -111,30 +113,11 @@ func Capture(plan SourcePlan) (Source, error) {
 }
 
 func capture(plan SourcePlan, afterFirstRead func(string) error) (Source, error) {
-	if err := validateSourcePlan(plan, plan.artifactType); err != nil {
-		return Source{}, err
-	}
-	target := filepath.Join(plan.resolvedRoot, plan.cleanRelativePath)
-	canonicalTarget, err := filepath.EvalSymlinks(target)
-	if err != nil || canonicalTarget != target {
-		return Source{}, fmt.Errorf("Artifact source changed before capture")
-	}
-	beforeWorkspace, err := workspace.Inspect(plan.resolvedRoot)
+	target, beforeWorkspace, before, err := observeSourcePlan(plan)
 	if err != nil {
 		return Source{}, err
 	}
-	if beforeWorkspace.WorkspaceRef != plan.WorkspaceRef ||
-		beforeWorkspace.Generation != plan.WorkspaceGeneration {
-		return Source{}, fmt.Errorf("Workspace generation changed before Artifact capture")
-	}
-	before, err := os.Lstat(target)
-	if err != nil || !os.SameFile(plan.observed, before) ||
-		before.Size() != plan.observed.Size() ||
-		before.ModTime() != plan.observed.ModTime() ||
-		before.Mode() != plan.observed.Mode() {
-		return Source{}, fmt.Errorf("Artifact source changed before capture")
-	}
-	opened, err := os.Open(target)
+	opened, err := plan.openSource(target)
 	if err != nil {
 		return Source{}, fmt.Errorf("open Artifact file: %w", err)
 	}
@@ -199,7 +182,8 @@ func (plan SourcePlan) leaseIdentity() string {
 
 func validateSourcePlan(plan SourcePlan, artifactType string) error {
 	if plan.observed == nil || plan.resolvedRoot == "" ||
-		plan.cleanRelativePath == "" || plan.artifactType != artifactType ||
+		plan.openSource == nil || plan.cleanRelativePath == "" ||
+		plan.artifactType != artifactType ||
 		!strings.HasPrefix(plan.WorkspaceRef, "workspace_") ||
 		len(plan.WorkspaceRef) != len("workspace_")+64 ||
 		!validLowerHex(strings.TrimPrefix(plan.WorkspaceRef, "workspace_"), 64) ||
@@ -212,6 +196,38 @@ func validateSourcePlan(plan SourcePlan, artifactType string) error {
 		return fmt.Errorf("Artifact source plan type or media type is invalid")
 	}
 	return nil
+}
+
+func observeSourcePlan(
+	plan SourcePlan,
+) (string, workspace.Snapshot, os.FileInfo, error) {
+	if err := validateSourcePlan(plan, plan.artifactType); err != nil {
+		return "", workspace.Snapshot{}, nil, err
+	}
+	target := filepath.Join(plan.resolvedRoot, plan.cleanRelativePath)
+	canonicalTarget, err := filepath.EvalSymlinks(target)
+	if err != nil || canonicalTarget != target {
+		return "", workspace.Snapshot{}, nil,
+			fmt.Errorf("Artifact source changed before capture")
+	}
+	currentWorkspace, err := workspace.Inspect(plan.resolvedRoot)
+	if err != nil {
+		return "", workspace.Snapshot{}, nil, err
+	}
+	if currentWorkspace.WorkspaceRef != plan.WorkspaceRef ||
+		currentWorkspace.Generation != plan.WorkspaceGeneration {
+		return "", workspace.Snapshot{}, nil,
+			fmt.Errorf("Workspace generation changed before Artifact capture")
+	}
+	current, err := os.Lstat(target)
+	if err != nil || !os.SameFile(plan.observed, current) ||
+		current.Size() != plan.observed.Size() ||
+		current.ModTime() != plan.observed.ModTime() ||
+		current.Mode() != plan.observed.Mode() {
+		return "", workspace.Snapshot{}, nil,
+			fmt.Errorf("Artifact source changed before capture")
+	}
+	return target, currentWorkspace, current, nil
 }
 
 func safeFileName(fileName string) bool {

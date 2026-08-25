@@ -294,6 +294,22 @@ export class CoreRepository {
     return this.agentsAndDevices.getAgent(agentId);
   }
 
+  public compareAndSetAgentWorkspaceGeneration(
+    agentId: string,
+    workspaceRef: string,
+    expectedGeneration: string,
+    nextGeneration: string,
+    now: string
+  ): AgentRecord | undefined {
+    return this.agentsAndDevices.compareAndSetAgentWorkspaceGeneration(
+      agentId,
+      workspaceRef,
+      expectedGeneration,
+      nextGeneration,
+      now
+    );
+  }
+
   public listAgents(teamId: string): AgentRecord[] {
     return this.agentsAndDevices.listAgents(teamId);
   }

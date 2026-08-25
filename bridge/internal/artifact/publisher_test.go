@@ -73,6 +73,15 @@ func TestPublisherRecoversLostResponsesWithoutSendingLocalPaths(t *testing.T) {
 			requestBodies = append(requestBodies, string(encoded))
 		}
 		switch {
+		case strings.HasPrefix(
+			request.URL.Path,
+			"/api/bridge/workspace-source-snapshots/",
+		):
+			_ = json.NewEncoder(writer).Encode(map[string]string{
+				"agentId": "agent_12345678", "runId": "run_12345678",
+				"workspaceRef":        sourcePlan.WorkspaceRef,
+				"workspaceGeneration": sourcePlan.WorkspaceGeneration,
+			})
 		case request.URL.Path == "/api/bridge/workspace-leases/read-source":
 			leaseCalls++
 			if leaseCalls == 1 {
@@ -178,16 +187,32 @@ func TestPublisherDoesNotReadSourceBeforeLeaseAcceptance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.Remove(target); err != nil {
-		t.Fatal(err)
+	openCalls := 0
+	plan.openSource = func(path string) (*os.File, error) {
+		openCalls++
+		return os.Open(path)
 	}
 	leaseCalls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		leaseCalls++
-		writer.WriteHeader(http.StatusConflict)
-		_ = json.NewEncoder(writer).Encode(map[string]any{
-			"error": map[string]string{"message": "Workspace lease denied"},
-		})
+		switch {
+		case strings.HasPrefix(
+			request.URL.Path,
+			"/api/bridge/workspace-source-snapshots/",
+		):
+			_ = json.NewEncoder(writer).Encode(map[string]string{
+				"agentId": "agent_12345678", "runId": "run_12345678",
+				"workspaceRef":        plan.WorkspaceRef,
+				"workspaceGeneration": plan.WorkspaceGeneration,
+			})
+		case request.URL.Path == "/api/bridge/workspace-leases/read-source":
+			leaseCalls++
+			writer.WriteHeader(http.StatusConflict)
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"error": map[string]string{"message": "Workspace lease denied"},
+			})
+		default:
+			writer.WriteHeader(http.StatusNotFound)
+		}
 	}))
 	defer server.Close()
 
@@ -204,6 +229,61 @@ func TestPublisherDoesNotReadSourceBeforeLeaseAcceptance(t *testing.T) {
 	}
 	if leaseCalls != 1 {
 		t.Fatalf("lease calls = %d, want 1", leaseCalls)
+	}
+	if openCalls != 0 {
+		t.Fatalf("source opens = %d before denied lease, want 0", openCalls)
+	}
+}
+
+func TestPublisherRefreshesWorkspaceSnapshotWithCompareAndSet(t *testing.T) {
+	root := testWorkspace(t)
+	if err := os.WriteFile(
+		filepath.Join(root, "derived.json"),
+		[]byte(`{"verified":true}`),
+		0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	plan, err := PlanSource(root, "derived.json", "test_result")
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentGeneration := strings.Repeat("a", 64)
+	getCalls := 0
+	postCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		getCalls++
+		if request.Method == http.MethodPost {
+			getCalls--
+			postCalls++
+			var body map[string]string
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Error(err)
+			}
+			if body["expectedWorkspaceGeneration"] != currentGeneration ||
+				body["workspaceGeneration"] != plan.WorkspaceGeneration {
+				t.Errorf("unexpected Workspace snapshot CAS: %#v", body)
+			}
+			currentGeneration = plan.WorkspaceGeneration
+		}
+		_ = json.NewEncoder(writer).Encode(map[string]string{
+			"agentId": "agent_12345678", "runId": "run_12345678",
+			"workspaceRef":        plan.WorkspaceRef,
+			"workspaceGeneration": currentGeneration,
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient(config.Config{ServerURL: server.URL}, pairing.Credential{
+		Token: "device-secret-token",
+	})
+	if err := client.refreshSourceSnapshot(context.Background(), PublishInput{
+		RunID: "run_12345678", AgentID: "agent_12345678", Source: plan,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if getCalls != 1 || postCalls != 1 {
+		t.Fatalf("snapshot calls: get=%d post=%d", getCalls, postCalls)
 	}
 }
 

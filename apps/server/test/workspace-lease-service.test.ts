@@ -148,6 +148,48 @@ test("source-read leases bind exact Run, Agent, Device, and Workspace snapshot",
       ).state,
       "expired"
     );
+    assert.deepEqual(
+      service.getSourceSnapshot(principal, run.runId, agent.agentId),
+      {
+        agentId: agent.agentId,
+        runId: run.runId,
+        workspaceRef,
+        workspaceGeneration
+      }
+    );
+    const refreshedGeneration = "c".repeat(64);
+    assert.equal(
+      service.refreshSourceSnapshot(principal, {
+        runId: run.runId,
+        agentId: agent.agentId,
+        workspaceRef,
+        expectedWorkspaceGeneration: workspaceGeneration,
+        workspaceGeneration: refreshedGeneration
+      }, now).workspaceGeneration,
+      refreshedGeneration
+    );
+    assert.throws(
+      () => service.refreshSourceSnapshot(principal, {
+        runId: run.runId,
+        agentId: agent.agentId,
+        workspaceRef,
+        expectedWorkspaceGeneration: workspaceGeneration,
+        workspaceGeneration: "d".repeat(64)
+      }, now),
+      /refresh conflicts/u
+    );
+    assert.throws(
+      () => service.requireActiveReadSource(principal, issued.leaseId, request, now),
+      /stale or unsupported/u
+    );
+    assert.equal(
+      service.issueReadSource(principal, {
+        ...request,
+        workspaceGeneration: refreshedGeneration,
+        idempotencyKey: "idem_workspace_refreshed_12345678"
+      }, now).state,
+      "active"
+    );
     assert.equal(service.release(principal, issued.leaseId, now).state, "released");
   } finally {
     database.close();

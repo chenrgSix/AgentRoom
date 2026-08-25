@@ -60,6 +60,14 @@ accepts the lease, the Bridge revalidates that observation, opens the file under
 local owner policy, hashes the opened stream, and rejects a file whose identity,
 size, or Workspace generation changes during capture.
 
+If the metadata-only observation is newer than the Agent snapshot last
+published on its long-lived connection, the Device first reads that opaque
+snapshot and performs an active-Run-scoped compare-and-set refresh. The
+Workspace identity cannot change, a concurrent generation change conflicts,
+and response loss is resolved by reading the resulting opaque generation. This
+refresh grants no file access; the separate accepted lease remains mandatory
+before byte capture.
+
 Downloading a pinned Artifact into a Bridge-owned Run staging directory does
 not require a Workspace lease because it does not read or modify the configured
 Workspace. Copying, applying, merging, or checking out staged content into a

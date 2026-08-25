@@ -85,6 +85,44 @@ export function registerArtifactRoutes({
     return auth.authenticateDevice(bearerToken(request), clock());
   };
 
+  app.get<{ Params: { runId: string; agentId: string } }>(
+    "/api/bridge/workspace-source-snapshots/:runId/:agentId",
+    async (request, reply) => {
+      const principal = devicePrincipal(request);
+      noStore(reply);
+      return workspaceLeases.getSourceSnapshot(
+        principal,
+        request.params.runId,
+        request.params.agentId
+      );
+    }
+  );
+
+  app.post<{ Params: { runId: string; agentId: string } }>(
+    "/api/bridge/workspace-source-snapshots/:runId/:agentId",
+    async (request, reply) => {
+      const principal = devicePrincipal(request);
+      const body = bodyObject(request);
+      const refreshed = workspaceLeases.refreshSourceSnapshot(principal, {
+        runId: request.params.runId,
+        agentId: request.params.agentId,
+        workspaceRef: requiredString(body.workspaceRef, "workspaceRef", 100),
+        expectedWorkspaceGeneration: requiredString(
+          body.expectedWorkspaceGeneration,
+          "expectedWorkspaceGeneration",
+          64
+        ),
+        workspaceGeneration: requiredString(
+          body.workspaceGeneration,
+          "workspaceGeneration",
+          64
+        )
+      }, clock());
+      noStore(reply);
+      return refreshed;
+    }
+  );
+
   app.post("/api/bridge/workspace-leases/read-source", async (request, reply) => {
     const principal = devicePrincipal(request);
     const body = bodyObject(request);

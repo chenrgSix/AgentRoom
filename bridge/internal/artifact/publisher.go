@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"sort"
 	"strings"
 
@@ -61,6 +62,13 @@ type leaseView struct {
 	State   string `json:"state"`
 }
 
+type workspaceSourceSnapshotView struct {
+	AgentID             string `json:"agentId"`
+	RunID               string `json:"runId"`
+	WorkspaceRef        string `json:"workspaceRef"`
+	WorkspaceGeneration string `json:"workspaceGeneration"`
+}
+
 type sealView struct {
 	Publication publicationView `json:"publication"`
 	Content     struct {
@@ -103,6 +111,12 @@ func (c *Client) Publish(
 	}
 	relations, err := normalizedPublishRelations(input.Relations)
 	if err != nil {
+		return PublishResult{}, err
+	}
+	if _, _, _, err := observeSourcePlan(input.Source); err != nil {
+		return PublishResult{}, err
+	}
+	if err := c.refreshSourceSnapshot(ctx, input); err != nil {
 		return PublishResult{}, err
 	}
 	leaseKey := leaseIdempotencyKey(input, relations)
@@ -336,6 +350,59 @@ func leaseIdempotencyKey(
 		input.ArtifactType, input.Title, input.Summary,
 		publishRelationsIdentity(relations),
 	)
+}
+
+func (c *Client) refreshSourceSnapshot(
+	ctx context.Context,
+	input PublishInput,
+) error {
+	requestPath := "/api/bridge/workspace-source-snapshots/" +
+		url.PathEscape(input.RunID) + "/" + url.PathEscape(input.AgentID)
+	var current workspaceSourceSnapshotView
+	if err := c.retrySameRequest(
+		ctx, http.MethodGet, requestPath, nil, &current,
+	); err != nil {
+		return err
+	}
+	if current.WorkspaceRef != input.Source.WorkspaceRef {
+		return fmt.Errorf("Workspace source snapshot identity changed")
+	}
+	if current.WorkspaceGeneration == input.Source.WorkspaceGeneration {
+		return nil
+	}
+	refreshRequest := map[string]any{
+		"workspaceRef":                input.Source.WorkspaceRef,
+		"expectedWorkspaceGeneration": current.WorkspaceGeneration,
+		"workspaceGeneration":         input.Source.WorkspaceGeneration,
+	}
+	var refreshed workspaceSourceSnapshotView
+	err := c.request(
+		ctx, http.MethodPost, requestPath, refreshRequest, &refreshed,
+	)
+	if err != nil && isOutcomeUnknown(err) {
+		var observed workspaceSourceSnapshotView
+		if statusErr := c.request(
+			ctx, http.MethodGet, requestPath, nil, &observed,
+		); statusErr == nil {
+			if observed.WorkspaceRef == input.Source.WorkspaceRef &&
+				observed.WorkspaceGeneration == input.Source.WorkspaceGeneration {
+				return nil
+			}
+			if observed.WorkspaceGeneration == current.WorkspaceGeneration {
+				err = c.request(
+					ctx, http.MethodPost, requestPath, refreshRequest, &refreshed,
+				)
+			}
+		}
+	}
+	if err != nil {
+		return err
+	}
+	if refreshed.WorkspaceRef != input.Source.WorkspaceRef ||
+		refreshed.WorkspaceGeneration != input.Source.WorkspaceGeneration {
+		return fmt.Errorf("Workspace source snapshot refresh did not converge")
+	}
+	return nil
 }
 
 func (c *Client) retrySameRequest(
