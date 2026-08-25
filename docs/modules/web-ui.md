@@ -10,6 +10,17 @@ The browser client is the primary Team conversation surface. It renders
 authoritative server state and sends user intents; it does not contain routing,
 authorization, or Run state-machine logic.
 
+Presentation is split under `apps/web/src/features/` by product responsibility:
+Auth owns the access gate, Team owns member and lifecycle surfaces, Room owns
+the timeline and Room settings, Agent owns roster and Device presentation,
+Bridge owns enrollment controls, Run owns activity and diagnostic presentation,
+Discussion owns Wave status and controls, and Task owns selection, creation, and
+clarification surfaces. Shared HTTP behavior lives in `api-client.ts`, while
+browser projection types live in `models.ts`. `App.tsx` remains the page-level
+coordinator for authoritative state reconciliation, cross-feature intent
+handlers, and shell composition; feature components do not fetch or derive
+Server-owned state machines independently.
+
 Simplified Chinese is the default presentation language. English remains
 available through an in-product switch, and the selected locale is persisted
 only in browser-local preferences. Protocol identifiers, commands, user data,

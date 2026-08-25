@@ -1,0 +1,242 @@
+export interface Team {
+  teamId: string;
+  name: string;
+  createdAt: string;
+  archivedAt?: string | null;
+}
+
+export interface Member {
+  memberId: string;
+  teamId: string;
+  userId: string | null;
+  displayName: string;
+  role: "owner" | "member";
+  createdAt: string;
+}
+
+export interface RoomCollaborationPolicy {
+  allowDiscussion: boolean;
+  allowAll: boolean;
+  allowAgentMentions: boolean;
+  maxAgentMentionDepth: number;
+}
+
+export const defaultRoomCollaborationPolicy: RoomCollaborationPolicy = {
+  allowDiscussion: true,
+  allowAll: true,
+  allowAgentMentions: true,
+  maxAgentMentionDepth: 4
+};
+
+export interface Room {
+  roomId: string;
+  teamId: string;
+  name: string;
+  collaborationPolicy?: RoomCollaborationPolicy;
+  settingsRevision: number;
+  createdAt: string;
+  archivedAt?: string | null;
+}
+
+export interface Agent {
+  agentId: string;
+  enabled?: boolean;
+  name: string;
+  role: string;
+  integrationMode: "managed" | "manual" | "fake";
+  presence: string;
+}
+
+export interface Message {
+  messageId: string;
+  roomId: string;
+  taskId: string;
+  sequence: number;
+  senderType: "member" | "agent" | "system";
+  senderId: string;
+  content: string;
+  parentMessageId: string | null;
+  mentions: Array<{
+    targetType: "agent";
+    targetAgentId: string;
+    displayLabel: string;
+  }>;
+  createdAt: string;
+}
+
+export interface RoomMessagePage {
+  items: Message[];
+  nextCursor: string | null;
+  syncCursor?: string;
+}
+
+export interface RoomParticipants {
+  memberIds: string[];
+  agentIds: string[];
+}
+
+export interface RoomSettings {
+  room: Room;
+  participants: RoomParticipants;
+}
+
+export interface TeamChangeCursor {
+  changed: boolean;
+  cursor: number;
+  reset: boolean;
+  team?: boolean;
+  roomIds?: string[];
+  runRoomIds?: string[];
+}
+
+export interface Device {
+  deviceId: string;
+  name: string;
+  status: "active" | "revoked";
+}
+
+export interface Run {
+  runId: string;
+  taskId: string;
+  triggerMessageId: string;
+  targetAgentId: string;
+  state: "queued" | "delivered" | "working" | "input_required" | "completed" | "failed" | "canceled" | "expired" | "outcome_unknown";
+  updatedAt: string;
+}
+
+export type DiscussionState =
+  | "active"
+  | "stop_requested"
+  | "waiting_human"
+  | "awaiting_extension"
+  | "paused"
+  | "finalizing"
+  | "completed"
+  | "canceled"
+  | "terminated";
+
+export interface DiscussionView {
+  discussion: {
+    discussionId: string;
+    taskId: string;
+    goal: string;
+    state: DiscussionState;
+    stateReason: string | null;
+    currentTurn: number;
+    currentWave: number;
+    progress: {
+      confidence: number | null;
+      openQuestions: Array<{
+        id: string;
+        question: string;
+        importance: "low" | "medium" | "high";
+      }>;
+      plateauCount: number;
+    };
+    budget: {
+      turnsUsed: number;
+      durationSeconds: number;
+    };
+  };
+  participants: Array<{
+    agentId: string;
+    role: "participant" | "reviewer";
+  }>;
+  waves: Array<{
+    waveId: string;
+    ordinal: number;
+    phase: "contribution" | "review" | "finalization";
+    state: "open" | "completed" | "partial" | "failed" | "canceled";
+    expectedMembers: number;
+  }>;
+  turns: Array<{
+    turnId: string;
+    kind: "discussion" | "finalization";
+    speakerAgentId: string;
+    runId: string | null;
+    state: "planned" | "queued" | "working" | "completed" | "failed" | "canceled";
+    waveId: string | null;
+    waveMemberOrdinal: number | null;
+    terminalReason: string | null;
+  }>;
+}
+
+export type AgentTaskState =
+  | "open"
+  | "working"
+  | "blocked"
+  | "review"
+  | "completed"
+  | "canceled";
+
+export interface AgentTask {
+  taskId: string;
+  roomId: string;
+  parentTaskId: string | null;
+  title: string;
+  goal: string;
+  state: AgentTaskState;
+  primaryAgentId: string | null;
+  isDefault: boolean;
+  updatedAt: string;
+}
+
+export interface TaskClarification {
+  clarificationId: string;
+  taskId: string;
+  roomId: string;
+  requestingRunId: string;
+  targetAgentId: string;
+  question: string;
+  choices: string[];
+  state: "waiting" | "resumed" | "canceled";
+  questionMessageId: string;
+  answerMessageId: string | null;
+  continuationRunId: string | null;
+}
+
+export interface LocalSession {
+  userId: string;
+  displayName: string;
+  token?: string;
+}
+
+export type AuthMode = "local" | "trusted-team";
+export type AuthGateState =
+  | "loading"
+  | "local_bootstrap"
+  | "setup_required"
+  | "sign_in_required"
+  | "claim_required"
+  | "authenticated";
+
+export interface AuthenticatedUser {
+  userId: string;
+  displayName: string;
+  createdAt?: string;
+}
+
+export type AuthStatus = {
+  mode: AuthMode;
+  state: Exclude<AuthGateState, "loading" | "claim_required">;
+  user?: AuthenticatedUser;
+  session?: { expiresAt: string };
+};
+
+export interface MemberInvitation {
+  invitationId: string;
+  teamId: string;
+  displayName: string;
+  expiresAt: string;
+  claimUrl: string;
+}
+
+export interface MentionSearch {
+  end: number;
+  query: string;
+  start: number;
+}
+
+export type WorkspaceView = "room" | "agents" | "members";
+export type ConnectionMode = "managed" | "mcp" | "demo";
+export type Theme = "dark" | "light";
