@@ -84,6 +84,7 @@ interface RunEventRow {
   assessment_json: string | null;
   activity_json: string | null;
   error_json: string | null;
+  session_json: string | null;
   created_at: string;
 }
 
@@ -163,6 +164,12 @@ function mapRunEvent(row: RunEventRow): RunEventRecord {
               message: string;
               retryable: boolean;
               details?: Record<string, unknown>;
+            } }
+          : {}),
+        ...(row.session_json
+          ? { session: JSON.parse(row.session_json) as {
+              disposition: "started" | "resumed" | "recreated";
+              contextCursor: number;
             } }
           : {})
       };
@@ -290,8 +297,8 @@ export class RunRepository {
       this.database.prepare(`
         INSERT INTO run_events (
           run_id, trace_id, sequence, event_type, status, content, output_reset,
-          error_json, assessment_json, activity_json, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          error_json, assessment_json, activity_json, session_json, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
         runId,
         current.traceId,
@@ -316,8 +323,18 @@ export class RunRepository {
               ...(event.reset ? { reset: true } : {})
             })
           : null,
+        event.type === "status" && event.session
+          ? JSON.stringify(event.session)
+          : null,
         now
       );
+      if (event.type === "status" && event.session) {
+        this.database.prepare(`
+          UPDATE agent_tasks
+          SET last_room_sequence = max(last_room_sequence, ?), updated_at = ?
+          WHERE task_id = ?
+        `).run(event.session.contextCursor, now, current.taskId);
+      }
       if (event.type === "reply") {
         this.database.prepare(`
           INSERT INTO run_reply_routing_intents (

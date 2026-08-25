@@ -42,31 +42,44 @@ func TestCodexAdapterMapsAppServerEventsToRuntimeEvents(t *testing.T) {
 	}
 }
 
-func TestCodexAdapterResumesStoredRoomAgentThread(t *testing.T) {
+func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 	t.Setenv("AGENTROOM_CODEX_HELPER", "resume")
 	workspace := t.TempDir()
 	store := NewFileRuntimeSessionStore(t.TempDir())
-	key := RuntimeSessionKey{
-		RuntimeKind: "codex", RoomID: "room_alpha", AgentID: "agent_builder",
-		Workspace: workspace,
-	}
-	if err := store.Save(RuntimeSessionBinding{RuntimeSessionKey: key, SessionID: "019d-thread"}); err != nil {
-		t.Fatal(err)
-	}
-	adapter := CodexAdapter{Config: config.AgentConfig{
+	configuration := config.AgentConfig{
 		Command:   []string{os.Args[0], "-test.run=TestCodexHelperProcess", "--", "app-server", "--listen", "stdio://"},
 		Workspace: workspace, Sandbox: "workspace-write", EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER"},
-	}, Sessions: store}
+		RuntimeKind: "codex", Adapter: "codex",
+	}
+	key := testRuntimeSessionKey(t, configuration, "task_alpha")
+	if err := store.Save(RuntimeSessionBinding{
+		RuntimeSessionKey: key, SessionID: "019d-thread", LastRoomSequence: 41,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	adapter := CodexAdapter{Config: configuration, Sessions: store}
 	var terminal Event
+	taskID := "task_alpha"
+	consumedSequence := int64(41)
 	if err := adapter.Execute(context.Background(), Request{Run: contracts.RunRequestedPayload{
-		RoomID: "room_alpha", TargetAgentID: "agent_builder", Instruction: "implement it",
+		RoomID: "room_alpha", TargetAgentID: "agent_builder", TaskID: &taskID,
+		Instruction: "implement it", RunID: "run_next",
+		ContextMessages: []contracts.ContextMessage{{
+			MessageID: "msg_consumed", Content: "do not inject this twice",
+			Sequence: &consumedSequence,
+		}},
+		Session: &contracts.LogicalSessionRequest{
+			Scope: contracts.Task, ResumePolicy: contracts.ResumeOrStart, ContextCursor: 42,
+		},
 	}}, func(_ context.Context, event Event) error {
 		terminal = event
 		return nil
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if terminal.Status == nil || *terminal.Status != contracts.Completed {
+	if terminal.Status == nil || *terminal.Status != contracts.Completed ||
+		terminal.Session == nil || terminal.Session.Disposition != contracts.Resumed ||
+		terminal.Session.ContextCursor != 42 {
 		t.Fatalf("stored Codex thread did not resume: %#v", terminal)
 	}
 }
@@ -95,16 +108,27 @@ func TestCodexAppServerParserStreamsAndResetsAcrossAgentMessages(t *testing.T) {
 
 func TestCodexAppServerParserResumesAndReplacesMissingThread(t *testing.T) {
 	store := NewFileRuntimeSessionStore(t.TempDir())
-	key := RuntimeSessionKey{
-		RuntimeKind: "codex", RoomID: "room_alpha", AgentID: "agent_builder",
-		Workspace: t.TempDir(),
+	workspace := t.TempDir()
+	configuration := config.AgentConfig{
+		RuntimeKind: "codex", Adapter: "codex", Workspace: workspace,
+		Command: []string{"codex", "app-server"}, Sandbox: "workspace-write",
 	}
+	key := testRuntimeSessionKey(t, configuration, "task_alpha")
 	if err := store.Save(RuntimeSessionBinding{RuntimeSessionKey: key, SessionID: "thread-old"}); err != nil {
 		t.Fatal(err)
 	}
-	parser := newCodexAppServerSessionParser(config.AgentConfig{
-		Workspace: key.Workspace, Sandbox: "workspace-write",
-	}, "continue it", store, &key, "thread-old")
+	binding, found, err := store.Load(key)
+	if err != nil || !found {
+		t.Fatal("stored binding could not be loaded")
+	}
+	parser := newCodexAppServerSessionParser(
+		configuration, "continue it", store, &key, "thread-old",
+	)
+	parser.binding = binding
+	parser.logicalTaskSession = true
+	parser.sessionDisposition = contracts.Resumed
+	parser.contextCursor = 43
+	parser.runID = "run_recreated"
 	_, messages, err := parser.consume([]byte(`{"id":1,"result":{"userAgent":"fixture"}}`))
 	if err != nil || len(messages) != 2 || !strings.Contains(fmt.Sprint(messages[1]), "thread/resume") ||
 		!strings.Contains(fmt.Sprint(messages[1]), "thread-old") {
@@ -119,9 +143,14 @@ func TestCodexAppServerParserResumesAndReplacesMissingThread(t *testing.T) {
 		t.Fatalf("stale Codex binding remained: found=%t err=%v", found, err)
 	}
 	consumeCodexFixture(t, parser, `{"id":2,"result":{"thread":{"id":"thread-new","ephemeral":false}}}`)
-	binding, found, err := store.Load(key)
+	binding, found, err = store.Load(key)
 	if err != nil || !found || binding.SessionID != "thread-new" {
 		t.Fatalf("replacement Codex thread was not persisted: %#v found=%t err=%v", binding, found, err)
+	}
+	consumeCodexFixture(t, parser, `{"id":3,"result":{"turn":{"id":"turn-new"}}}`)
+	if status := parser.logicalSessionStatus(); status == nil ||
+		status.Disposition != contracts.Recreated || status.ContextCursor != 43 {
+		t.Fatalf("replacement Codex disposition was not reported: %#v", status)
 	}
 }
 

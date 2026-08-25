@@ -47,6 +47,10 @@ when their Task is already terminal.
 - Agent-native session IDs, provider history, hidden reasoning, tool records,
   and local paths remain on the Bridge. The central Server owns only the
   logical Task Session scope and safe disposition/cursor metadata.
+- The Bridge session key includes workspace/configuration fingerprints and a
+  local schema version. Its owner-only binding advances the consumed Room
+  cursor only after the native Runtime accepts the turn; a failed cut therefore
+  repeats context rather than skipping unseen history.
 - Workspace and Artifact references are identifiers and verification metadata,
   not a central shared filesystem or permission grant.
 

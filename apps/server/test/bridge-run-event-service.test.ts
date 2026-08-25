@@ -32,8 +32,9 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     const agents = new AgentService(core, auth);
     const messages = new MessageService(core, auth);
     const runRepository = new RunRepository(database);
+    const taskRepository = new AgentTaskRepository(database);
     const runs = new RunService(
-      core, runRepository, auth, new AgentTaskRepository(database)
+      core, runRepository, auth, taskRepository
     );
     const created = teams.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6", userDisplayName: "Alice",
@@ -111,8 +112,29 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
     }, now).applied, false);
     assert.equal(service.applyStatus(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
-      agentId: agent.agentId, sequence: 7, status: "completed"
+      agentId: agent.agentId, sequence: 7, status: "completed",
+      session: {
+        disposition: "resumed",
+        contextCursor: trigger.sequence
+      }
     }, now).run.state, "completed");
+    const terminalEvent = runRepository.listEvents(run.runId).at(-1)?.event;
+    assert.deepEqual(
+      terminalEvent?.type === "status" ? terminalEvent.session : null,
+      { disposition: "resumed", contextCursor: trigger.sequence }
+    );
+    assert.equal(
+      taskRepository.get(run.taskId)?.lastRoomSequence,
+      trigger.sequence
+    );
+    assert.throws(() => service.applyStatus(devicePrincipal, {
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 8, status: "completed",
+      session: {
+        disposition: "resumed",
+        contextCursor: trigger.sequence + 1
+      }
+    }, now), /logical Runtime session status/u);
     assert.equal(service.applyOutput(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
       agentId: agent.agentId, sequence: 8,

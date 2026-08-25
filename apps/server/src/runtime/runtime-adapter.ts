@@ -33,6 +33,10 @@ export type RuntimeEvent =
         retryable: boolean;
         details?: Record<string, unknown>;
       };
+      session?: {
+        disposition: "started" | "resumed" | "recreated";
+        contextCursor: number;
+      };
     }
   | {
       type: "activity";

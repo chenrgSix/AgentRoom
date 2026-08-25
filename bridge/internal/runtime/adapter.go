@@ -24,6 +24,7 @@ type Event struct {
 	Reply      string
 	Assessment *contracts.Assessment
 	Error      *contracts.AgentRoomError
+	Session    *contracts.LogicalSessionStatus
 }
 
 type Activity struct {

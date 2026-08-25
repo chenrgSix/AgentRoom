@@ -832,12 +832,14 @@ export async function createServerApp(
         }
         if (message.type === "run.status" && registeredEpoch !== undefined) {
           const error = message.payload.error;
+          const session = message.payload.session;
           if (
             typeof message.payload.runId !== "string" ||
             typeof message.payload.agentId !== "string" ||
             !Number.isSafeInteger(message.payload.sequence) ||
             typeof message.payload.status !== "string" ||
-            (error !== undefined && (typeof error !== "object" || error === null))
+            (error !== undefined && (typeof error !== "object" || error === null)) ||
+            (session !== undefined && (typeof session !== "object" || session === null))
           ) {
             rejectMessage("run_status_rejected");
             return;
@@ -847,6 +849,7 @@ export async function createServerApp(
             return;
           }
           const runtimeError = error as Record<string, unknown> | undefined;
+          const runtimeSession = session as Record<string, unknown> | undefined;
           const applied = bridgeRunEvents.applyStatus(devicePrincipal, {
             runId: message.payload.runId,
             traceId: message.payload.traceId,
@@ -864,6 +867,15 @@ export async function createServerApp(
                     ...(runtimeError.details === undefined
                       ? {}
                       : { details: runtimeError.details })
+                  }
+                }
+              : {}),
+            ...(runtimeSession
+              ? {
+                  session: {
+                    disposition: String(runtimeSession.disposition ?? "") as
+                      "started" | "resumed" | "recreated",
+                    contextCursor: Number(runtimeSession.contextCursor)
                   }
                 }
               : {})

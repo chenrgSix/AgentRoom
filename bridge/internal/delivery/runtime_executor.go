@@ -72,6 +72,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 					TraceID:  record.Request.TraceID,
 					Sequence: sequence, Status: *event.Status, Error: event.Error,
+					Session: event.Session,
 				},
 			}
 			if _, err := e.Inbox.AppendEvent(record.RunID, currentState, sequence, message, now); err != nil {

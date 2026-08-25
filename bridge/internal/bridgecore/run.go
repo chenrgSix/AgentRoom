@@ -53,7 +53,9 @@ func RunObserved(
 		agentID := identities[configured.Name]
 		agentNames[agentID] = configured.Name
 		if configured.RuntimeKind == "pi" {
-			adapters[agentID] = bridgeruntime.PiAdapter{Config: configured}
+			adapters[agentID] = bridgeruntime.PiAdapter{
+				Config: configured, Sessions: sessions,
+			}
 		} else {
 			switch configured.Adapter {
 			case "generic":

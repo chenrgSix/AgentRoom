@@ -40,6 +40,9 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	}
 	working := contracts.Working
 	completed := contracts.Completed
+	session := &contracts.LogicalSessionStatus{
+		Disposition: contracts.Resumed, ContextCursor: 42,
+	}
 	goalSatisfied := true
 	adapter := &bridgeruntime.FakeAdapter{}
 	if err := adapter.Enqueue(bridgeruntime.FakeScript{Events: []bridgeruntime.Event{
@@ -53,7 +56,7 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 		}, {
 			Reply:      "done token=very-sensitive-value",
 			Assessment: &contracts.Assessment{GoalSatisfied: &goalSatisfied},
-		}, {Status: &completed},
+		}, {Status: &completed, Session: session},
 	}}); err != nil {
 		t.Fatal(err)
 	}
@@ -94,6 +97,12 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 		reply.Payload.Assessment.GoalSatisfied == nil ||
 		!*reply.Payload.Assessment.GoalSatisfied {
 		t.Fatalf("assessment was not transported: %#v", sent[3])
+	}
+	terminal, ok := sent[4].(contracts.RunStatusMessage)
+	if !ok || terminal.Payload.Session == nil ||
+		terminal.Payload.Session.Disposition != contracts.Resumed ||
+		terminal.Payload.Session.ContextCursor != 42 {
+		t.Fatalf("logical Task Session status was not transported: %#v", sent[4])
 	}
 	latest, err := inbox.Get(request.RunID)
 	if err != nil {

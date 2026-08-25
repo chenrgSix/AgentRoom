@@ -9,18 +9,28 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
+const runtimeSessionSchemaVersion = 2
+
 type RuntimeSessionKey struct {
-	RuntimeKind string `json:"runtimeKind"`
-	RoomID      string `json:"roomId"`
-	AgentID     string `json:"agentId"`
-	Workspace   string `json:"workspace"`
+	RuntimeKind          string `json:"runtimeKind"`
+	RoomID               string `json:"roomId"`
+	TaskID               string `json:"taskId"`
+	AgentID              string `json:"agentId"`
+	WorkspaceFingerprint string `json:"workspaceFingerprint"`
+	ConfigFingerprint    string `json:"configFingerprint"`
+	SchemaVersion        int    `json:"schemaVersion"`
 }
 
 type RuntimeSessionBinding struct {
 	RuntimeSessionKey
-	SessionID string `json:"sessionId"`
+	SessionID        string    `json:"sessionId"`
+	LastRoomSequence int64     `json:"lastRoomSequence"`
+	LastRunID        string    `json:"lastRunId,omitempty"`
+	CreatedAt        time.Time `json:"createdAt"`
+	UpdatedAt        time.Time `json:"updatedAt"`
 }
 
 type RuntimeSessionStore interface {
@@ -66,7 +76,8 @@ func (s *FileRuntimeSessionStore) Load(key RuntimeSessionKey) (RuntimeSessionBin
 	if err := decoder.Decode(&trailing); err != io.EOF {
 		return RuntimeSessionBinding{}, false, fmt.Errorf("decode Runtime session binding: trailing data")
 	}
-	if binding.RuntimeSessionKey != key || strings.TrimSpace(binding.SessionID) == "" {
+	if binding.RuntimeSessionKey != key || strings.TrimSpace(binding.SessionID) == "" ||
+		binding.LastRoomSequence < 0 || binding.CreatedAt.IsZero() || binding.UpdatedAt.IsZero() {
 		return RuntimeSessionBinding{}, false, fmt.Errorf("Runtime session binding does not match its key")
 	}
 	return binding, true, nil
@@ -79,6 +90,16 @@ func (s *FileRuntimeSessionStore) Save(binding RuntimeSessionBinding) error {
 	}
 	if strings.TrimSpace(binding.SessionID) == "" {
 		return fmt.Errorf("Runtime session id is required")
+	}
+	if binding.LastRoomSequence < 0 {
+		return fmt.Errorf("Runtime session cursor cannot be negative")
+	}
+	now := time.Now().UTC()
+	if binding.CreatedAt.IsZero() {
+		binding.CreatedAt = now
+	}
+	if binding.UpdatedAt.IsZero() {
+		binding.UpdatedAt = now
 	}
 	if err := os.MkdirAll(s.root, 0o700); err != nil {
 		return fmt.Errorf("create Runtime session directory: %w", err)
@@ -133,7 +154,10 @@ func (s *FileRuntimeSessionStore) bindingPath(key RuntimeSessionKey) (string, er
 		return "", fmt.Errorf("Runtime session directory is required")
 	}
 	if strings.TrimSpace(key.RuntimeKind) == "" || strings.TrimSpace(key.RoomID) == "" ||
-		strings.TrimSpace(key.AgentID) == "" || strings.TrimSpace(key.Workspace) == "" {
+		strings.TrimSpace(key.TaskID) == "" || strings.TrimSpace(key.AgentID) == "" ||
+		strings.TrimSpace(key.WorkspaceFingerprint) == "" ||
+		strings.TrimSpace(key.ConfigFingerprint) == "" ||
+		key.SchemaVersion != runtimeSessionSchemaVersion {
 		return "", fmt.Errorf("Runtime session key is incomplete")
 	}
 	source, err := json.Marshal(key)

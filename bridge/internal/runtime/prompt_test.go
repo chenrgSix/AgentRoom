@@ -59,3 +59,20 @@ func TestRuntimePromptPreservesLegacyInstructionWithoutProjection(t *testing.T) 
 		t.Fatalf("unexpected legacy prompt: %q", prompt)
 	}
 }
+
+func TestTaskSessionContextKeepsOnlyUnconsumedRoomDeltas(t *testing.T) {
+	sequence41 := int64(41)
+	sequence42 := int64(42)
+	sequence43 := int64(43)
+	messages := []contracts.ContextMessage{
+		{MessageID: "msg_old_12345678", Sequence: &sequence41, Content: "already consumed"},
+		{MessageID: "msg_boundary_12345678", Sequence: &sequence42, Content: "at cursor"},
+		{MessageID: "msg_new_12345678", Sequence: &sequence43, Content: "new delta"},
+		{MessageID: "msg_legacy_12345678", Content: "legacy without sequence"},
+	}
+	filtered := contextAfterCursor(messages, 42)
+	if len(filtered) != 2 || filtered[0].MessageID != "msg_new_12345678" ||
+		filtered[1].MessageID != "msg_legacy_12345678" {
+		t.Fatalf("Task Session cursor repeated or skipped Room context: %#v", filtered)
+	}
+}

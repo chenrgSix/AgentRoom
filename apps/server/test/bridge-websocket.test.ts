@@ -408,7 +408,11 @@ test("Bridge applies accepted, output, activity, status, and reply messages with
       traceId: fixture.traceId,
       agentId,
       sequence: 6,
-      status: "completed"
+      status: "completed",
+      session: {
+        disposition: "resumed",
+        contextCursor: 1
+      }
     }));
     await waitFor(() => runState(fixture, "completed"));
     const timeline = await fixture.app.inject({
@@ -435,6 +439,10 @@ test("Bridge applies accepted, output, activity, status, and reply messages with
       phase: "updated",
       label: "Thinking",
       content: "Validated the strict trace."
+    });
+    assert.deepEqual(output.json().at(-1).event.session, {
+      disposition: "resumed",
+      contextCursor: 1
     });
   } finally {
     await closeFixture(fixture);

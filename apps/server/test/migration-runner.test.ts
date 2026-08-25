@@ -27,16 +27,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 24);
+  assert.equal(first.currentVersion, 25);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -57,7 +57,7 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       )
       .get() as { count: number };
 
-    assert.equal(migrationCount.count, 24);
+    assert.equal(migrationCount.count, 25);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
   } finally {
@@ -139,7 +139,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -295,7 +295,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [23, 24]);
+  assert.deepEqual(migrated.appliedVersions, [23, 24, 25]);
   const database = openDatabase(databasePath);
   try {
     const runs = new RunRepository(database);

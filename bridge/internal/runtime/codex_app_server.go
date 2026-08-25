@@ -9,6 +9,7 @@ import (
 	"io"
 	"os/exec"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	"agentroom.dev/bridge/internal/config"
@@ -19,30 +20,48 @@ const maxCodexProtocolOutput = 4 * 1024 * 1024
 const codexPreviewSafetyRunes = 64
 
 func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emit EmitFunc) error {
-	working := contracts.Working
-	if err := emit(ctx, Event{Status: &working}); err != nil {
-		return err
-	}
 	if err := validateCodexCommand(c.Config.Command); err != nil {
 		return emitCodexFailure(ctx, emit, "CODEX_COMMAND_INVALID", err.Error())
 	}
 	var sessionKey *RuntimeSessionKey
+	var sessionBinding RuntimeSessionBinding
+	logicalTaskSession := false
+	sessionDisposition := contracts.Started
 	resumeThreadID := ""
-	if c.Sessions != nil && request.Run.RoomID != "" && request.Run.TargetAgentID != "" {
-		key := RuntimeSessionKey{
-			RuntimeKind: "codex",
-			RoomID:      request.Run.RoomID,
-			AgentID:     request.Run.TargetAgentID,
-			Workspace:   c.Config.Workspace,
-		}
+	promptRun := request.Run
+	plan, sessionEligible, planErr := planRuntimeSession("codex", c.Config, request.Run)
+	if planErr != nil {
+		return emitCodexFailure(ctx, emit, "CODEX_SESSION_STATE_INVALID", "Codex session scope could not be resolved.")
+	}
+	if c.Sessions != nil && sessionEligible {
+		key := plan.Key
 		binding, found, err := c.Sessions.Load(key)
 		if err != nil {
 			return emitCodexFailure(ctx, emit, "CODEX_SESSION_STATE_INVALID", "Codex session state could not be loaded.")
 		}
+		if found && plan.ResumePolicy == contracts.StartNew {
+			if err := c.Sessions.Delete(key); err != nil {
+				return emitCodexFailure(ctx, emit, "CODEX_SESSION_STATE_INVALID", "Codex session state could not be reset.")
+			}
+			found = false
+		}
 		if found {
 			resumeThreadID = binding.SessionID
+			sessionBinding = binding
+			sessionDisposition = contracts.Resumed
+			if plan.LogicalTask {
+				promptRun.ContextMessages = contextAfterCursor(
+					request.Run.ContextMessages,
+					binding.LastRoomSequence,
+				)
+			}
 		}
+		logicalTaskSession = plan.LogicalTask
 		sessionKey = &key
+	}
+	working := contracts.Working
+	if err := emit(ctx, Event{Status: &working}); err != nil {
+		return err
 	}
 
 	runContext := ctx
@@ -91,8 +110,13 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	}
 
 	parser := newCodexAppServerSessionParser(
-		c.Config, runtimePrompt(request.Run), c.Sessions, sessionKey, resumeThreadID,
+		c.Config, runtimePrompt(promptRun), c.Sessions, sessionKey, resumeThreadID,
 	)
+	parser.binding = sessionBinding
+	parser.contextCursor = plan.ContextCursor
+	parser.runID = request.Run.RunID
+	parser.logicalTaskSession = logicalTaskSession
+	parser.sessionDisposition = sessionDisposition
 	scanner := bufio.NewScanner(stdout)
 	scanner.Buffer(make([]byte, 64*1024), maxCodexProtocolOutput)
 	total := 0
@@ -191,7 +215,10 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 		}
 	}
 	completed := contracts.Completed
-	return emit(ctx, Event{Status: &completed})
+	return emit(ctx, Event{
+		Status:  &completed,
+		Session: parser.logicalSessionStatus(),
+	})
 }
 
 type codexAppServerMessage struct {
@@ -206,23 +233,28 @@ type codexAppServerMessage struct {
 }
 
 type codexAppServerParser struct {
-	config       config.AgentConfig
-	instruction  string
-	sessions     RuntimeSessionStore
-	sessionKey   *RuntimeSessionKey
-	resumeID     string
-	resumeFailed bool
-	threadID     string
-	turnID       string
-	currentItem  string
-	currentText  strings.Builder
-	emittedText  string
-	reply        string
-	resetPending bool
-	complete     bool
-	failure      string
-	activities   []Activity
-	reasoning    map[string]*activityTextPreview
+	config             config.AgentConfig
+	instruction        string
+	sessions           RuntimeSessionStore
+	sessionKey         *RuntimeSessionKey
+	resumeID           string
+	resumeFailed       bool
+	threadID           string
+	turnID             string
+	currentItem        string
+	currentText        strings.Builder
+	emittedText        string
+	reply              string
+	resetPending       bool
+	complete           bool
+	failure            string
+	activities         []Activity
+	reasoning          map[string]*activityTextPreview
+	binding            RuntimeSessionBinding
+	contextCursor      int64
+	runID              string
+	logicalTaskSession bool
+	sessionDisposition contracts.Disposition
 }
 
 func (p *codexAppServerParser) drainActivities() []Activity {
@@ -290,6 +322,10 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 			}
 			p.resumeID = ""
 			p.resumeFailed = true
+			p.binding = RuntimeSessionBinding{}
+			if p.logicalTaskSession {
+				p.sessionDisposition = contracts.Recreated
+			}
 			return nil, []any{p.threadRequest()}, nil
 		}
 		return nil, nil, fmt.Errorf("Codex app-server request failed: %s", message.Error.Message)
@@ -314,10 +350,7 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 		}
 		p.threadID = result.Thread.ID
 		if p.sessions != nil && p.sessionKey != nil {
-			if err := p.sessions.Save(RuntimeSessionBinding{
-				RuntimeSessionKey: *p.sessionKey,
-				SessionID:         p.threadID,
-			}); err != nil {
+			if err := p.saveSessionBinding(false); err != nil {
 				return nil, nil, err
 			}
 		}
@@ -338,10 +371,44 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 			return nil, nil, fmt.Errorf("Codex turn/start response omitted turn id")
 		}
 		p.turnID = result.Turn.ID
+		if p.sessions != nil && p.sessionKey != nil {
+			if err := p.saveSessionBinding(true); err != nil {
+				return nil, nil, err
+			}
+		}
 		return nil, nil, nil
 	default:
 		return nil, nil, nil
 	}
+}
+
+func (p *codexAppServerParser) saveSessionBinding(consumed bool) error {
+	now := time.Now().UTC()
+	binding := p.binding
+	binding.RuntimeSessionKey = *p.sessionKey
+	binding.SessionID = p.threadID
+	if binding.CreatedAt.IsZero() {
+		binding.CreatedAt = now
+	}
+	if consumed {
+		if p.contextCursor > binding.LastRoomSequence {
+			binding.LastRoomSequence = p.contextCursor
+		}
+		binding.LastRunID = p.runID
+	}
+	binding.UpdatedAt = now
+	if err := p.sessions.Save(binding); err != nil {
+		return err
+	}
+	p.binding = binding
+	return nil
+}
+
+func (p *codexAppServerParser) logicalSessionStatus() *contracts.LogicalSessionStatus {
+	if !p.logicalTaskSession {
+		return nil
+	}
+	return sessionStatus(p.sessionDisposition, p.binding.LastRoomSequence)
 }
 
 func (p *codexAppServerParser) threadRequest() map[string]any {

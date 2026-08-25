@@ -26,6 +26,8 @@ const terminalStatuses = new Set<RuntimeStatus>([
   "outcome_unknown"
 ]);
 
+const sessionDispositions = new Set(["started", "resumed", "recreated"]);
+
 const runtimeFailureCategories = new Set([
   "start",
   "authentication",
@@ -74,6 +76,10 @@ export class BridgeRunEventService {
         retryable: boolean;
         details?: unknown;
       };
+      session?: {
+        disposition: "started" | "resumed" | "recreated";
+        contextCursor: number;
+      };
     },
     now: string
   ): AppliedRunEvent {
@@ -95,6 +101,17 @@ export class BridgeRunEventService {
         throw new Error("Invalid Runtime error");
       }
     }
+    if (input.session) {
+      const trigger = this.core.getMessage(run.triggerMessageId);
+      if (
+        !sessionDispositions.has(input.session.disposition) ||
+        !Number.isSafeInteger(input.session.contextCursor) ||
+        input.session.contextCursor < 0 ||
+        !trigger || input.session.contextCursor > trigger.sequence
+      ) {
+        throw new Error("Invalid logical Runtime session status");
+      }
+    }
     const safeDetails = safeRuntimeFailureDetails(input.error?.details);
     const applied = this.runs.applyEvent(run.runId, {
       type: "status",
@@ -109,7 +126,8 @@ export class BridgeRunEventService {
               ...(safeDetails ? { details: safeDetails } : {})
             }
           }
-        : {})
+        : {}),
+      ...(input.session ? { session: input.session } : {})
     }, now);
     if (applied.applied) {
       this.core.updateAgentPresence(

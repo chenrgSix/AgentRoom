@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"slices"
 	"strings"
@@ -97,23 +98,43 @@ func TestPiAdapterEmitsPreviewBeforeFinalReply(t *testing.T) {
 	}
 }
 
-func TestPiAdapterUsesStableRoomAgentSession(t *testing.T) {
+func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 	t.Setenv("AGENTROOM_PI_HELPER", "session")
 	workspace := t.TempDir()
 	t.Setenv("AGENTROOM_PI_WORKSPACE", workspace)
 	name := "我的 Pi"
-	adapter := PiAdapter{Config: config.AgentConfig{
+	configuration := config.AgentConfig{
 		Command:   []string{os.Args[0], "-test.run=TestPiHelperProcess"},
-		Workspace: workspace, EnvAllowlist: []string{"AGENTROOM_PI_HELPER", "AGENTROOM_PI_WORKSPACE"},
+		Workspace: workspace, EnvAllowlist: []string{
+			"AGENTROOM_PI_HELPER", "AGENTROOM_PI_WORKSPACE", "AGENTROOM_PI_EXPECTED_SESSION_ID",
+			"AGENTROOM_PI_REQUIRED_CONTEXT", "AGENTROOM_PI_FORBIDDEN_CONTEXT",
+		},
 		RuntimeKind: "pi", PresetVersion: config.CurrentPresetVersion,
-	}}
+	}
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	adapter := PiAdapter{Config: configuration, Sessions: store}
+	taskID := "task_alpha"
 	request := Request{Run: contracts.RunRequestedPayload{
-		RoomID: "room_alpha", TargetAgentID: "agent_pi", TargetAgentName: &name,
+		RunID: "run_first", RoomID: "room_alpha", TaskID: &taskID,
+		TargetAgentID: "agent_pi", TargetAgentName: &name,
+		Session: &contracts.LogicalSessionRequest{
+			Scope: contracts.Task, ResumePolicy: contracts.ResumeOrStart, ContextCursor: 7,
+		},
 	}}
+	plan, eligible, err := planRuntimeSession("pi", configuration, request.Run)
+	if err != nil || !eligible {
+		t.Fatalf("could not plan Pi Task Session: eligible=%t err=%v", eligible, err)
+	}
+	expectedSessionID := piSessionID(plan.Key, request.Run.RunID)
+	t.Setenv("AGENTROOM_PI_EXPECTED_SESSION_ID", expectedSessionID)
 	var reply string
+	var terminal Event
 	if err := adapter.Execute(context.Background(), request, func(_ context.Context, event Event) error {
 		if event.Reply != "" {
 			reply = event.Reply
+		}
+		if event.Status != nil {
+			terminal = event
 		}
 		return nil
 	}); err != nil {
@@ -122,12 +143,47 @@ func TestPiAdapterUsesStableRoomAgentSession(t *testing.T) {
 	if reply != "Session resumed." {
 		t.Fatalf("unexpected Pi session reply: %q", reply)
 	}
-	first := piSessionID("room_alpha", "agent_pi", workspace)
-	if first != piSessionID("room_alpha", "agent_pi", workspace) ||
-		first == piSessionID("room_beta", "agent_pi", workspace) ||
-		first == piSessionID("room_alpha", "agent_other", workspace) ||
-		first == piSessionID("room_alpha", "agent_pi", t.TempDir()) {
-		t.Fatalf("Pi session identity is not stable and scoped: %q", first)
+	if terminal.Session == nil || terminal.Session.Disposition != contracts.Started ||
+		terminal.Session.ContextCursor != 7 {
+		t.Fatalf("new Pi Task Session was not reported: %#v", terminal)
+	}
+	binding, found, err := store.Load(plan.Key)
+	if err != nil || !found || binding.SessionID != expectedSessionID ||
+		binding.LastRoomSequence != 7 || binding.LastRunID != request.Run.RunID {
+		t.Fatalf("Pi Task Session was not persisted: %#v found=%t err=%v", binding, found, err)
+	}
+	request.Run.RunID = "run_second"
+	request.Run.Session.ContextCursor = 9
+	consumedSequence := int64(7)
+	newSequence := int64(8)
+	request.Run.ContextMessages = []contracts.ContextMessage{{
+		MessageID: "msg_consumed", Content: "already-consumed-context",
+		Sequence: &consumedSequence,
+	}, {
+		MessageID: "msg_new", Content: "new-room-delta",
+		Sequence: &newSequence,
+	}}
+	t.Setenv("AGENTROOM_PI_REQUIRED_CONTEXT", "new-room-delta")
+	t.Setenv("AGENTROOM_PI_FORBIDDEN_CONTEXT", "already-consumed-context")
+	terminal = Event{}
+	if err := adapter.Execute(context.Background(), request, func(_ context.Context, event Event) error {
+		if event.Status != nil {
+			terminal = event
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Session == nil || terminal.Session.Disposition != contracts.Resumed ||
+		terminal.Session.ContextCursor != 9 {
+		t.Fatalf("existing Pi Task Session was not resumed: %#v", terminal)
+	}
+	otherTaskID := "task_beta"
+	request.Run.TaskID = &otherTaskID
+	otherPlan, eligible, err := planRuntimeSession("pi", configuration, request.Run)
+	if err != nil || !eligible || otherPlan.Key == plan.Key ||
+		piSessionID(otherPlan.Key, request.Run.RunID) == expectedSessionID {
+		t.Fatal("Pi native session identity crossed Task scope")
 	}
 }
 
@@ -144,12 +200,20 @@ func TestInsertPiSessionArgumentsPrecedesOptionTerminator(t *testing.T) {
 
 func TestPiHelperProcess(t *testing.T) {
 	if os.Getenv("AGENTROOM_PI_HELPER") == "session" {
-		expectedID := piSessionID("room_alpha", "agent_pi", os.Getenv("AGENTROOM_PI_WORKSPACE"))
+		expectedID := os.Getenv("AGENTROOM_PI_EXPECTED_SESSION_ID")
 		expectedName := piSessionName(contracts.RunRequestedPayload{
 			RoomID: "room_alpha", TargetAgentName: stringPointer("我的 Pi"),
 		})
 		if *piHelperSessionID != expectedID || *piHelperSessionName != expectedName {
 			os.Exit(3)
+		}
+		prompt, err := io.ReadAll(os.Stdin)
+		if err != nil ||
+			(os.Getenv("AGENTROOM_PI_REQUIRED_CONTEXT") != "" &&
+				!strings.Contains(string(prompt), os.Getenv("AGENTROOM_PI_REQUIRED_CONTEXT"))) ||
+			(os.Getenv("AGENTROOM_PI_FORBIDDEN_CONTEXT") != "" &&
+				strings.Contains(string(prompt), os.Getenv("AGENTROOM_PI_FORBIDDEN_CONTEXT"))) {
+			os.Exit(4)
 		}
 		fmt.Println(`{"type":"message_end","message":{"role":"assistant","content":[{"type":"text","text":"Session resumed."}],"stopReason":"stop"}}`)
 		os.Exit(0)

@@ -239,6 +239,16 @@ display name at execution. Runtime probes remain explicitly ephemeral. The
 Bridge publishes `supportsResume` only for these managed adapters, while the
 central service still cannot alter local tools, approval, or sandbox policy.
 
+`ADP-012` replaces Room-scoped continuation with a schema-versioned local
+binding keyed by Runtime kind, Room, Task, Agent, workspace fingerprint, and
+semantic configuration fingerprint. Codex and Pi persist the native session ID
+plus last consumed Room sequence under owner-only permissions; resumed Runs
+receive only newer Room deltas. Task, workspace, configuration, or explicit
+start-new changes cannot reuse another binding. Legacy requests use a separate
+Room key and can never alias a Task-scoped session. The Bridge reports only
+`started`, `resumed`, or `recreated` with the consumed cursor; native IDs and
+raw workspace paths never cross the connection.
+
 `ADP-009` adds an optional `outputProtocol` field only for owner-authored
 Generic Runtime configurations. Omitting it preserves bounded, final-only
 stdout behavior. Selecting `agentroom-jsonl-v1` opts the Runtime into the

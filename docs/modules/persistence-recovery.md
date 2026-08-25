@@ -43,6 +43,11 @@ identity to existing Messages, Runs, and Discussions. Triggers reject
 cross-Room references, and a partial unique index enforces one active
 Discussion per Task rather than per Room.
 
+Migration 0025 adds the closed logical Runtime Session status object to durable
+Run events. The Server validates disposition and bounds the reported cursor by
+the triggering Message sequence, advances the Task's monotonic Room cursor,
+and never stores a provider-native session ID.
+
 After an ordinary Wave settles, Discussion Orchestration appends an idempotent
 `wave_result` system Message with an ID derived from the Wave ID. This Message is
 the next Wave's stable input anchor. It is deliberately written before the

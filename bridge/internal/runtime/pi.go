@@ -29,7 +29,8 @@ var errPiOutputLimit = errors.New("Pi assistant output exceeded its safe limit")
 // and tool name/lifecycle cross as activity. Usage, tool arguments/results,
 // commands, paths, and provider-specific fragments remain local.
 type PiAdapter struct {
-	Config config.AgentConfig
+	Config   config.AgentConfig
+	Sessions RuntimeSessionStore
 }
 
 func (p PiAdapter) Name() string { return "pi" }
@@ -39,6 +40,50 @@ func (p PiAdapter) Capabilities() Capabilities {
 }
 
 func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) error {
+	promptRun := request.Run
+	var sessionKey *RuntimeSessionKey
+	var sessionBinding RuntimeSessionBinding
+	logicalTaskSession := false
+	sessionDisposition := contracts.Started
+	nativeSessionID := ""
+	plan, sessionEligible, planErr := planRuntimeSession("pi", p.Config, request.Run)
+	if planErr != nil {
+		return emitPiSessionFailure(ctx, emit)
+	}
+	if p.Config.RuntimeKind == "pi" &&
+		p.Config.PresetVersion >= config.CurrentPresetVersion && sessionEligible {
+		key := plan.Key
+		found := false
+		if p.Sessions != nil {
+			binding, bindingFound, err := p.Sessions.Load(key)
+			if err != nil {
+				return emitPiSessionFailure(ctx, emit)
+			}
+			found = bindingFound
+			sessionBinding = binding
+			if found && plan.ResumePolicy == contracts.StartNew {
+				if err := p.Sessions.Delete(key); err != nil {
+					return emitPiSessionFailure(ctx, emit)
+				}
+				found = false
+				sessionBinding = RuntimeSessionBinding{}
+			}
+		}
+		if found {
+			nativeSessionID = sessionBinding.SessionID
+			sessionDisposition = contracts.Resumed
+			if plan.LogicalTask {
+				promptRun.ContextMessages = contextAfterCursor(
+					request.Run.ContextMessages,
+					sessionBinding.LastRoomSequence,
+				)
+			}
+		} else {
+			nativeSessionID = piSessionID(key, request.Run.RunID)
+		}
+		logicalTaskSession = plan.LogicalTask
+		sessionKey = &key
+	}
 	working := contracts.Working
 	if err := emit(ctx, Event{Status: &working}); err != nil {
 		return err
@@ -52,11 +97,10 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 	processContext, cancelProcess := context.WithCancel(runContext)
 	defer cancelProcess()
 	commandArguments := append([]string(nil), p.Config.Command[1:]...)
-	if p.Config.RuntimeKind == "pi" && p.Config.PresetVersion >= config.CurrentPresetVersion &&
-		request.Run.RoomID != "" && request.Run.TargetAgentID != "" {
+	if nativeSessionID != "" {
 		commandArguments = insertPiSessionArguments(
 			commandArguments,
-			"--session-id", piSessionID(request.Run.RoomID, request.Run.TargetAgentID, p.Config.Workspace),
+			"--session-id", nativeSessionID,
 			"--name", piSessionName(request.Run),
 		)
 	}
@@ -64,7 +108,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 	configureRuntimeCommand(command)
 	command.Dir = p.Config.Workspace
 	command.Env = allowedEnvironment(p.Config.EnvAllowlist)
-	command.Stdin = strings.NewReader(runtimePrompt(request.Run))
+	command.Stdin = strings.NewReader(runtimePrompt(promptRun))
 	stdout, err := command.StdoutPipe()
 	if err != nil {
 		return emitPiStartFailure(ctx, emit)
@@ -228,11 +272,34 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 			"RUNTIME_OUTPUT_LIMIT", "Runtime reply exceeded its safe limit.",
 		)})
 	}
+	var logicalStatus *contracts.LogicalSessionStatus
+	if p.Sessions != nil && sessionKey != nil {
+		now := time.Now().UTC()
+		sessionBinding.RuntimeSessionKey = *sessionKey
+		sessionBinding.SessionID = nativeSessionID
+		if sessionBinding.CreatedAt.IsZero() {
+			sessionBinding.CreatedAt = now
+		}
+		if logicalTaskSession && plan.ContextCursor > sessionBinding.LastRoomSequence {
+			sessionBinding.LastRoomSequence = plan.ContextCursor
+		}
+		sessionBinding.LastRunID = request.Run.RunID
+		sessionBinding.UpdatedAt = now
+		if err := p.Sessions.Save(sessionBinding); err != nil {
+			return emitPiSessionFailure(ctx, emit)
+		}
+		if logicalTaskSession {
+			logicalStatus = sessionStatus(
+				sessionDisposition,
+				sessionBinding.LastRoomSequence,
+			)
+		}
+	}
 	if err := emit(ctx, Event{Reply: reply, Assessment: assessment}); err != nil {
 		return err
 	}
 	completed := contracts.Completed
-	return emit(ctx, Event{Status: &completed})
+	return emit(ctx, Event{Status: &completed, Session: logicalStatus})
 }
 
 func insertPiSessionArguments(arguments []string, sessionArguments ...string) []string {
@@ -247,16 +314,26 @@ func insertPiSessionArguments(arguments []string, sessionArguments ...string) []
 	return append(arguments, sessionArguments...)
 }
 
-func piSessionID(roomID, agentID, workspace string) string {
-	digest := sha256.Sum256([]byte(
-		"agentroom/pi/v1\x00" + roomID + "\x00" + agentID + "\x00" + workspace,
-	))
+func piSessionID(key RuntimeSessionKey, seed string) string {
+	encoded, _ := json.Marshal(struct {
+		Key  RuntimeSessionKey `json:"key"`
+		Seed string            `json:"seed"`
+	}{Key: key, Seed: seed})
+	digest := sha256.Sum256(append([]byte("agentroom/pi/v2\x00"), encoded...))
 	digest[6] = (digest[6] & 0x0f) | 0x50
 	digest[8] = (digest[8] & 0x3f) | 0x80
 	return fmt.Sprintf(
 		"%x-%x-%x-%x-%x",
 		digest[0:4], digest[4:6], digest[6:8], digest[8:10], digest[10:16],
 	)
+}
+
+func emitPiSessionFailure(ctx context.Context, emit EmitFunc) error {
+	failed := contracts.Failed
+	return emit(ctx, Event{Status: &failed, Error: runtimeError(
+		"RUNTIME_SESSION_STATE_INVALID",
+		"Runtime session state could not be resolved or persisted.",
+	)})
 }
 
 func piSessionName(run contracts.RunRequestedPayload) string {

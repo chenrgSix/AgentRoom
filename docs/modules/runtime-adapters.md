@@ -49,7 +49,7 @@ owner's local Pi configuration and explicit local arguments. Bridge migration
 removes the product-authored restrictions from preset version 2 while retaining
 other owner-authored arguments from older configurations, and removes conflicting
 owner session selectors before the Bridge adds a stable `--session-id` derived
-from the Room, Agent identity, and workspace. Pi assistant
+from the logical Task Session binding. Pi assistant
 `text_delta` events feed a bounded provisional preview. Explicit
 `thinking_delta`/`reasoning_delta` summary text and tool execution name/phase
 feed the separate activity stream; usage, structured command/tool records,
@@ -65,7 +65,10 @@ provider-specific raw tool-call markup fails the Run with
 `RUNTIME_PROTOCOL_INVALID`; none of that raw stdout is published to the Room.
 Normal managed Runs therefore append to one native Pi session per Task, Agent,
 Runtime semantic configuration, and workspace across Bridge restarts. The
-session receives a bounded local display name; Pi's
+Bridge binding stores the native ID, consumed Room cursor, last Run ID, and
+timestamps in its owner-only data directory. It stores workspace and semantic
+configuration fingerprints rather than a raw workspace path. The session
+receives a bounded local display name; Pi's
 own session directory and provider configuration remain owner-controlled. The
 explicit Runtime probe still adds `--no-session`, so diagnostics never pollute
 normal history. Unscoped Codex probes likewise use an ephemeral Thread. The
@@ -125,8 +128,9 @@ authorizes, depth-limits, and persists every resulting child Run.
 
 ## Events and Replies
 
-Adapter events carry `runId`, logical Task Session disposition, sequence,
-timestamp, and schema version. Native session references stay local. Text
+Adapter events carry `runId`, sequence, timestamp, and an optional logical Task
+Session disposition/cursor. Native session references and local binding keys
+stay local. Text
 replies and structured handoff requests are filtered
 for obvious credentials and sensitive local paths before leaving the machine.
 
@@ -141,7 +145,7 @@ Runtime, owns the resulting continue/finish decision.
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, native session resume, streaming, activity, named context, cancellation, crash, recovery,
 and local permission inheritance. Work is tracked by `ADP-001` through
-`ADP-011` and `BRG-023`/`BRG-027` in
+`ADP-012` and `BRG-023`/`BRG-027` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one
