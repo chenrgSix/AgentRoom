@@ -33,6 +33,8 @@ the bounded attempt, delivery, event sequence, and terminal result.
 - Bind an optional `orchestrationKey` to one Run for aggregate-owned recovery.
 - Preserve the authoritative `taskId` across Mention routing, Discussion Waves,
   handoff, retry, and recovery.
+- Pin content-bearing canonical Artifact metadata into the existing immutable
+  Delivery payload; never resolve live upload or Workspace state on retry.
 - Persist safe Task clarification requests and create one authorized
   continuation Run after a Room answer.
 
@@ -68,6 +70,18 @@ to terminal `expired` and is never delivered on a later reconnect.
 6. Stop retrying after acceptance, cancellation, expiry, or Agent revocation.
 
 Delivery is at least once; execution is idempotent through the Bridge inbox.
+
+When result evidence contains bound snapshot content, the Delivery payload also
+contains its canonical Artifact revision, content identity, size, media type,
+digest, and logical alias. The target Bridge may fetch only content named by its
+Run Delivery. It stages and verifies required bytes before Runtime invocation.
+Staging failure is a deterministic pre-invocation failure; it is not
+`outcome_unknown`. Applying staged content to a configured Workspace is outside
+Run delivery and requires a separate Workspace write lease.
+
+Result-evidence consumption still advances only after the Runtime accepts the
+turn under the existing Task Session contract. An ambiguous provider acceptance
+does not advance the cursor, even when staging completed locally.
 
 The triggering Message creates the authoritative `traceId`. The Run, Delivery,
 Bridge request, Runtime events, projected Agent reply, and any child handoff

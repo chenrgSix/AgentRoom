@@ -1,0 +1,112 @@
+# Artifact Content Transport Module
+
+- Prefix: `ART`
+- Planned implementation: `apps/server/src/artifact/` and
+  `bridge/internal/artifact/`
+- Owns: Blob uploads, sealed content, content retention, authenticated transfer,
+  and materialization receipts
+
+## Purpose
+
+Artifact Content Transport makes selected Task result evidence available across
+Devices without becoming a second Artifact authority or a central filesystem.
+It transports bytes identified by immutable size and digest; Task Collaboration
+decides whether those bytes become canonical Team evidence.
+
+## Ownership Boundaries
+
+- Task Collaboration owns canonical Artifact identity, Task revision, creator,
+  provenance, type, title, summary, and Artifact lineage.
+- Artifact Content Transport owns upload progress, sealed Blob metadata, storage
+  keys, retention, content download authorization, and materialization receipts.
+- Workspace Coordination owns source access and later Workspace-write leases.
+- Run Orchestration pins content-bearing Artifact metadata into one durable Run
+  delivery.
+- The Bridge owns source paths and Run-scoped staging paths. Neither crosses the
+  Server boundary.
+
+## State
+
+| Entity | Required State |
+| --- | --- |
+| Blob upload | upload/publication identity, Team and Device scope, idempotency key, declared size/digest/media type, received offset, state, expiry |
+| Artifact content | contentId, Team scope, SHA-256, size, media type, storage key, sealed timestamp, retention state |
+| Materialization receipt | target Run/Device, Artifact/content IDs, logical alias, digest, state, timestamp |
+
+The first BlobStore is a bounded local-filesystem adapter. Temporary and sealed
+files share a filesystem so seal can fsync and atomically rename. SQLite stores
+metadata only.
+
+## Publication and Bind
+
+```text
+prepare -> receive ordered bounded chunks -> seal bytes
+        -> Task-owned transactional bind -> canonical Artifact becomes visible
+```
+
+Chunk append requires the exact current offset, bounded size, and publication
+identity. Exact replay is idempotent; overlap, gap, conflicting digest, or quota
+excess fails closed. Seal verifies the complete stream and records a
+content-addressed identity. Bind inserts one immutable Task Artifact and advances
+its revision in the same SQLite transaction that closes the publication.
+
+Only bound canonical Artifacts enter Context Planner, Web preview, Memory
+provenance, or Run delivery. Sealed-but-unbound content is recoverable storage,
+not a result.
+
+## Delivery and Materialization
+
+A durable Run payload pins Artifact ID/revision plus content ID, media type,
+size, and digest. The authenticated target Device downloads only content named
+by its pending or accepted delivery. It writes a temporary file under a
+Bridge-owned Run directory, checks bounds and digest, fsyncs, atomically renames,
+removes executable bits, and exposes an `artifact://` alias. No configured
+Workspace file is created or replaced.
+
+The Runtime receives a bounded alias manifest. It may read the staged files
+under its existing local sandbox policy. Result-evidence consumption advances
+only at the existing durable Runtime acceptance point.
+
+## Recovery Matrix
+
+| Cut | Authoritative observation | Recovery |
+| --- | --- | --- |
+| before prepare commit | no publication | retry the same idempotency key |
+| prepare response lost | publication lookup succeeds | reuse publication and offset |
+| chunk response lost | durable offset is queried | resend only when offset did not advance |
+| seal response lost | sealed content identity is queried | reuse the same content identity |
+| sealed before bind | publication is sealed and unbound | retry exact bind or expire by policy |
+| bind response lost | canonical Artifact ID is stored on publication | return the existing Artifact |
+| Server restart during download | Run delivery still pins content | target resumes or restarts staging |
+| target rename response lost | local receipt and digest agree | return the existing alias |
+| Runtime acceptance ambiguous | provider may have received prompt | do not advance result cursor or rerun blindly |
+
+## Initial Bounds
+
+The first slice supports Patch, Markdown document, and JSON test result content
+up to 4 MiB. Chunks are ordered and bounded. Images, arbitrary files, archives,
+directories, repositories, executables, HTML execution, and Workspace apply are
+deferred.
+
+## Security and Verification
+
+All source reads require a current `read_source` lease and local path checks.
+Content access is Team- and delivery-scoped. Deduplication never exposes
+cross-Team content existence. Tests cover traversal, symlinks, special files,
+changing source files, MIME mismatch, size/digest mismatch, quota, expiry,
+duplicate and out-of-order chunks, response loss, restart, and unauthorized
+download. Read-only mode is not presented as an OS sandbox guarantee.
+
+## Task Mapping
+
+`ART-001` owns durable upload and seal. `TASK-010` owns canonical bind,
+`CON-010` the additive wire contract, `BRG-028` source publication, `RUN-011`
+pinned delivery, `BRG-029` isolated materialization, `ADP-014` Runtime alias
+injection, `TASK-011` lineage, `WEB-040` preview, and `QA-020` the deterministic
+two-Bridge recovery gate.
+
+## Dependencies
+
+Contracts, Workspace Coordination, Persistence, and Security. Task and Run
+modules consume sealed content through explicit ports without transferring
+canonical Artifact ownership.

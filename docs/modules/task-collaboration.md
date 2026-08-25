@@ -23,7 +23,8 @@ and results belong to the same longer-lived goal.
 | Rolling Room checkpoint | immutable parent, contiguous input interval, through sequence, summary, provenance/digest, prompt/model version, build kind |
 | Rolling Room state | mode, latest and desired through sequences, latest checkpoint, generation, lease, bounded failure projection |
 | Long-term MemoryEntry | memoryId, Room/Task scope, typed content, active/superseded/retracted state, scope revision, supersession link, Message/Artifact/Run/Discussion provenance, Member author, timestamps |
-| ArtifactRef | artifactId, taskId, artifactRevision, type, workspaceRef, repository/path/commit/branch metadata, title, summary, creator, optional sourceRunId, timestamp |
+| ArtifactRef | artifactId, taskId, artifactRevision, type, workspaceRef, repository/path/commit/branch metadata, content mode and optional sealed content identity, title, summary, creator, optional sourceRunId, timestamp |
+| ArtifactRelation | relationId, source Artifact, target Artifact, type, creator, timestamp |
 | TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, terminal reason, timestamps |
 
 Task state is `open`, `working`, `blocked`, `review`, `completed`, or
@@ -70,6 +71,20 @@ assigned to itself. File-like references must be workspace-relative, commit
 hashes and branches are syntactically bounded, and no Artifact operation reads
 or transfers the referenced content. Each successful append advances one Task
 artifact revision atomically.
+
+`ADR-0015` extends that same canonical record; it does not add another Artifact
+aggregate. Existing records have `contentMode=reference_only`. A new
+content-bearing record has `contentMode=snapshot_blob` plus immutable content
+ID, size, media type, and SHA-256 metadata at insertion time. A durable
+publication operation and sealed Blob remain invisible until one immediate
+transaction inserts the canonical Artifact, advances the existing Task artifact
+revision, and marks the publication bound. An existing Artifact is never
+mutated to attach later content.
+
+Artifact relations are immutable Task evidence. A newly produced Artifact may
+`derive_from`, `review`, or `verify` an older in-scope Artifact. The new Artifact
+still occupies the ordinary Task result-evidence cursor; a text reply does not
+substitute for the lineage record.
 
 ## Shared Memory
 
@@ -175,6 +190,14 @@ forged, skipped, stale-scope, and out-of-order acknowledgements cannot advance
 the cursor. Artifact summaries are claims to verify against the named
 workspace evidence, not proof that a commit, test, or file exists.
 
+For a content-bearing Artifact, Context Planner projects only the sealed content
+identity already bound to the canonical record. Run Orchestration freezes that
+identity, size, media type, and digest into the existing durable Delivery
+payload. Live publication state is never resolved during a retry. The Bridge
+must stage required content before invoking the Runtime, while the existing
+Runtime acceptance receipt remains the result-evidence cursor advancement
+point.
+
 ## Human Clarification
 
 A managed Runtime may end a bounded ordinary Run with one structured Task
@@ -247,11 +270,12 @@ cross-task context.
 
 ## Task Mapping
 
-`TASK-001` through `TASK-009`, with wire and Runtime work in `CON-007`,
+`TASK-001` through `TASK-011`, with wire and Runtime work in `CON-007`,
 `CON-009`, `ADP-012`, and `ADP-013`, clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those
 behavioral milestones.
 
 ## Dependencies
 
-Contracts, Team/Room, Registry, Persistence, and Security. Run and Discussion
+Contracts, Team/Room, Registry, Persistence, Security, Workspace Coordination,
+and Artifact Content Transport. Run and Discussion
 Orchestration consume Task identity but keep ownership of execution state.

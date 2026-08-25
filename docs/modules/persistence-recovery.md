@@ -154,6 +154,15 @@ LongTermMemory validation, formal Memory creation, and accepted-Memory linkage
 share one transaction; rejection and invalid candidate output cannot affect a
 valid checkpoint commit.
 
+`ADR-0015` reserves two separate future linearization points for content-bearing
+Task evidence. Blob seal fsyncs and atomically installs content before sealed
+metadata commits. Canonical bind then uses one immediate SQLite transaction to
+verify that sealed identity, append the immutable Task Artifact, advance its
+artifact revision, and close the publication operation. A response-loss retry
+queries the same publication identity; it never creates a replacement identity
+or guesses whether either cut committed. Sealed-but-unbound content remains
+recoverable until a bounded retention policy expires it.
+
 Backups use the SQLite backup API, include schema metadata, refuse overwrite,
 and pass `quick_check`. Restore and forward-only migration rollback procedure is
 documented in `docs/backup-and-restore.md`. The Compose workflow installs host

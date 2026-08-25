@@ -42,6 +42,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | P14 | Human clarification resumes work without remote permission approval | RUN-009 |
 | P15 | Large composition roots are split behind stable behavior | DISC-008, DISC-009, DATA-006, WEB-037, WEB-038, GOV-008 |
 | P16 | Long-lived Rooms deliver acknowledged rolling context without input gaps | TASK-008, ADP-013, QA-019 |
+| P17 | Agents exchange verified Artifact content across Bridges without implicit Workspace writes | QA-020 |
 
 ## Milestone G0: Governance and Architecture
 
@@ -54,6 +55,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | GOV-005 | DONE | Define adaptive Discussion orchestration baseline | GOV-004 | accepted ADR, module boundary, state machine, budget, and verification matrix agree |
 | GOV-006 | DONE | Adopt noncommercial source-available licensing | GOV-003 | standard license, Required Notice, commercial policy, contribution boundary, metadata, and release packaging agree |
 | GOV-007 | DONE | Publish installation and usage quick start | GOV-003, BRG-008, MCP-005 | README guides a clean clone through Team setup, Bridge and MCP enrollment, Agent invocation, Discussion controls, production deployment, and diagnostics |
+| GOV-009 | DONE | Define canonical cross-Bridge Artifact content ownership | GOV-008, TASK-005, QA-019 | accepted ADRs 0015/0016, Workspace and Artifact transport module boundaries, Task/Run/Persistence extensions, crash matrix, compatibility rules, P17 dependency graph, and deterministic-versus-physical acceptance boundary agree |
 
 ## Workstream F0: Contracts and Fake System
 
@@ -262,6 +264,22 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | WEB-037 | DONE | Split the Web shell by product feature | TASK-003, RUN-009 | Auth, Team, Room, Agent, Run, Discussion, Bridge, and Task presentation boundaries plus shared model/API modules reduce `App.tsx` from 4045 to 2413 lines while retaining page-level reconciliation and shell composition; 22 Web regressions, production build, and isolated real-browser acceptance preserve accessible dialogs/tabs/navigation with zero horizontal overflow at 1440 px, 720 px, and 390 px and no console warnings or errors |
 | WEB-038 | DONE | Extract Web Room composer and Discussion controllers | WEB-037, DISC-009 | `useRoomComposer` owns drafts, stable-ID Mentions, outbox retries, and single/multi-Agent submission while `useDiscussionController` owns Task-scoped selection, expansion, goal editing, and lifecycle intents; `App.tsx` falls from 2414 to 2108 lines, and 22 Web regressions plus TypeScript verification preserve onboarding, clarification, Mention, Discussion, retry, and responsive presentation behavior |
 | GOV-008 | DONE | Reduce the Server composition root to module registration | DISC-008, DATA-006 | ten explicit feature route registrars and shared stateless HTTP helpers reduce `app.ts` from 2145 to 569 lines while keeping dependency construction, hooks, recovery, timers, and static hosting in the composition root; an automated method/path inventory proves all 57 routes are registered exactly once, 114 Server regressions, the Server production build, and deterministic cross-process E2E (2 pass, 1 explicit live skip) preserve API, WebSocket, Bridge, MCP, recovery, and authorization behavior |
+
+## Workstream F8: Verified Artifact Content Handoff
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| WSP-001 | READY | Add opaque Workspace identity and source-read leases | GOV-009, BRG-004, TASK-001 | additive contract, migration, service, and Bridge tests prove a Run/Task/Agent/Device/generation-bound `read_source` lease authorizes only a locally validated source read; cross-scope, terminal, expired, and path-leaking cases fail |
+| ART-001 | PLANNED | Persist durable Blob upload and seal | WSP-001, DATA-006 | bounded local BlobStore and migration tests prove ordered idempotent chunks, fsync plus atomic content-addressed seal, exact status recovery, Team-scoped dedupe, quotas, expiry, and sealed-but-unbound restart recovery |
+| TASK-010 | PLANNED | Bind sealed content to canonical Task Artifacts | ART-001, TASK-003 | one immediate transaction inserts one immutable content-bearing `task_artifact_refs` row, advances one Task artifact revision, closes one publication, and rejects unsealed, conflicting, cross-Team, cross-Task, foreign-Run, and response-loss duplicates |
+| CON-010 | PLANNED | Define Artifact content delivery and materialization receipts | TASK-010, CON-009 | additive positive/negative fixtures plus deterministic TypeScript/Go generation carry content identity, size, media type, digest, logical alias, Bridge capabilities, and bounded receipt state without paths or provider-native data |
+| BRG-028 | PLANNED | Publish one locally authorized Artifact snapshot | WSP-001, ART-001, TASK-010, CON-010 | Bridge command and HTTP interoperability tests prove no-follow Workspace containment, stable file capture, resumable exact publication, safe response-loss lookup, and no absolute path or secret crosses the boundary |
+| RUN-011 | PLANNED | Pin Artifact content in durable Run delivery | TASK-010, CON-010, RUN-002 | delivery tests prove one payload freezes canonical Artifact revision and content metadata across retry/restart, authorizes only its target Device, and never resolves live publication state |
+| BRG-029 | PLANNED | Materialize delivered Artifacts in isolated Run staging | RUN-011, ART-001, CON-010, BRG-005 | Go recovery and security tests prove authenticated resumable download, size/digest verification, no-follow staging, atomic rename, non-executable logical aliases, restart recovery, and zero configured-Workspace writes |
+| ADP-014 | PLANNED | Inject verified Artifact aliases into managed Runtimes | BRG-029, ADP-013 | Codex, Pi, Generic, prompt, and Task Session tests prove only verified aliases enter bounded untrusted context and result-evidence consumption advances only at Runtime acceptance |
+| TASK-011 | PLANNED | Record immutable derived Artifact lineage | TASK-010, TASK-006 | service, migration, HTTP, MCP, and Context Planner tests prove in-scope `derives_from`/`reviews`/`verifies` relations cannot mutate or cross Task history and derived Artifact B remains ordinary revisioned evidence |
+| WEB-040 | PLANNED | Preview safe Artifact snapshot content | TASK-010, ART-001 | authorized browser tests render bounded Patch, Markdown text, and JSON test results without HTML execution, path disclosure, cross-Team access, or treating unverified content as trusted |
+| QA-020 | PLANNED | Verify Artifact-to-Artifact two-Bridge recovery | BRG-028, BRG-029, ADP-014, TASK-011, WEB-040, QA-004, QA-006 | deterministic real-Server/two-Bridge E2E proves A publishes Artifact A, B consumes identical staged bytes and publishes linked Artifact B across duplicate, response-loss, restart, digest-failure, and offline cuts; physical-machine proof remains a separate extension of QA-002 |
 
 ## Deferred Beyond MVP
 
