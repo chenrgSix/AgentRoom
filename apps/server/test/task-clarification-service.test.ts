@@ -6,6 +6,7 @@ import test from "node:test";
 
 import { BridgeConnectionRegistry } from "../src/bridge/bridge-connection-registry.js";
 import { CoreRepository } from "../src/data/core-repository.js";
+import { SqliteTransactionBoundary } from "../src/data/sqlite-transaction-boundary.js";
 import { openDatabase } from "../src/data/database.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
 import { AgentService } from "../src/registry/agent-service.js";
@@ -41,7 +42,7 @@ test("Task clarification resumes the same Task session in a new bounded Run", as
     const runs = new RunService(core, runRepository, auth, taskRepository);
     const clarificationRepository = new ClarificationRepository(database);
     const clarifications = new TaskClarificationService(
-      database,
+      new SqliteTransactionBoundary(database),
       clarificationRepository,
       taskRepository,
       core,

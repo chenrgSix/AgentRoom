@@ -10,6 +10,12 @@ This module is the central collaboration model and the only authority for Team
 and Room conversation history. Every human or Agent contribution becomes a
 persisted Message before routing or realtime broadcast.
 
+Persistence is split by aggregate: `team-room-repository.ts` owns Team, Member,
+Room, settings, and participants; `message-repository.ts` owns Message sequence,
+Task binding, Mention validation, and history queries. Existing services consume
+the stable `CoreRepository` facade, whose delegates share one explicit SQLite
+transaction boundary with Agent/Device persistence.
+
 ## Responsibilities
 
 - Create and read Teams and Rooms.

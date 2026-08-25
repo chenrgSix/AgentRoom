@@ -1,5 +1,7 @@
 import type Database from "better-sqlite3";
 
+import { SqliteTransactionBoundary } from "../data/sqlite-transaction-boundary.js";
+
 export type ArtifactType =
   | "commit"
   | "branch"
@@ -65,13 +67,16 @@ function mapArtifact(row: TaskArtifactRow): TaskArtifactRecord {
 }
 
 export class ArtifactRepository {
-  public constructor(private readonly database: Database.Database) {}
+  public constructor(
+    private readonly database: Database.Database,
+    private readonly transactions = new SqliteTransactionBoundary(database)
+  ) {}
 
   public create(record: TaskArtifactRecord): {
     artifact: TaskArtifactRecord;
     revision: number;
   } {
-    return this.database.transaction(() => {
+    return this.transactions.immediate(() => {
       this.database.prepare(`
         INSERT INTO task_artifact_refs (
           artifact_id, task_id, room_id, artifact_type, workspace_ref,
@@ -90,7 +95,7 @@ export class ArtifactRepository {
       `).run(record.createdAt, record.taskId);
       const revision = this.getRevision(record.taskId);
       return { artifact: record, revision };
-    }).immediate();
+    });
   }
 
   public listForTask(taskId: string, limit: number): TaskArtifactRecord[] {

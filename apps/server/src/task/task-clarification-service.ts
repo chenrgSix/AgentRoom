@@ -1,6 +1,5 @@
-import type Database from "better-sqlite3";
-
 import type { CoreRepository, MessageRecord } from "../data/core-repository.js";
+import { SqliteTransactionBoundary } from "../data/sqlite-transaction-boundary.js";
 import type { RunRecord, RunRepository } from "../run/run-repository.js";
 import type { RunService } from "../run/run-service.js";
 import type { AuthService, WebPrincipal } from "../security/auth-service.js";
@@ -19,7 +18,7 @@ export interface ResumedTaskClarification {
 
 export class TaskClarificationService {
   public constructor(
-    private readonly database: Database.Database,
+    private readonly transactions: SqliteTransactionBoundary,
     private readonly clarifications: ClarificationRepository,
     private readonly tasks: AgentTaskRepository,
     private readonly core: CoreRepository,
@@ -55,7 +54,7 @@ export class TaskClarificationService {
     }
     this.auth.requireRoomMember(principal, initial.roomId);
 
-    return this.database.transaction(() => {
+    return this.transactions.immediate(() => {
       const clarification = this.clarifications.get(clarificationId);
       if (!clarification) {
         throw new Error(`Task clarification not found: ${clarificationId}`);
@@ -126,6 +125,6 @@ export class TaskClarificationService {
       });
       this.core.updateAgentPresence(agent.agentId, "ready", now);
       return { clarification: resumed, message: persisted.message, run: continuation };
-    }).immediate();
+    });
   }
 }

@@ -69,6 +69,15 @@ second anchor.
 
 ## Transaction Boundaries
 
+The Server composition root creates one `SqliteTransactionBoundary` for the
+Team/Room, Message, Agent/Device, Artifact, and Task-clarification repositories.
+`CoreRepository` remains a compatibility facade for services, but it owns no
+aggregate SQL: `team-room-repository.ts`, `message-repository.ts`, and
+`agent-device-repository.ts` own those statements and receive the same boundary.
+`AgentTaskRepository` remains the Task aggregate owner. Nested repository calls
+therefore join the outer `better-sqlite3` transaction/savepoint rather than
+opening unrelated connections or inventing cross-database coordination.
+
 Message append, Run batch creation, Delivery creation, ACK, and each event
 application have explicit SQLite transactions. Opening a Discussion Wave writes
 the decision, Wave, and all planned member Turns atomically before member Runs
@@ -133,7 +142,7 @@ atomic planning and closure, callback duplication, ordinary reconciliation,
 delivery recovery, backup, restore, and corrupted input rejection. `QA-010`
 reopens SQLite at planned-member, partially settled barrier, and
 committed-next-Wave cut points, and verifies deterministic-anchor retry.
-Persistence work is tracked by `DATA-001` through `DATA-005`; parallel recovery
+Persistence work is tracked by `DATA-001` through `DATA-006`; parallel recovery
 is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
 
 ## Dependencies

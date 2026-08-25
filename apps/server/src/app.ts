@@ -20,6 +20,7 @@ import { BridgeConnectionRegistry } from "./bridge/bridge-connection-registry.js
 import { openDatabase } from "./data/database.js";
 import { prepareDatabaseDirectory } from "./data/database-location.js";
 import { migrateDatabase } from "./data/migration-runner.js";
+import { SqliteTransactionBoundary } from "./data/sqlite-transaction-boundary.js";
 import { createOpaqueId } from "./domain/identifiers.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
 import { DiscussionRepository } from "./discussion/discussion-repository.js";
@@ -248,7 +249,8 @@ export async function createServerApp(
   await prepareDatabaseDirectory(options.databasePath);
   await migrateDatabase(options.databasePath);
   const database = openDatabase(options.databasePath);
-  const core = new CoreRepository(database);
+  const transactions = new SqliteTransactionBoundary(database);
+  const core = new CoreRepository(database, transactions);
   const auth = new AuthService(database);
   const bridgeServerToken = normalizeBridgeServerToken(options.bridgeServerToken);
   const webAuth = options.webAuth ?? { mode: "local" as const };
@@ -277,7 +279,7 @@ export async function createServerApp(
   const runRepository = new RunRepository(database);
   const taskRepository = new AgentTaskRepository(database);
   const tasks = new AgentTaskService(taskRepository, core, auth);
-  const artifactRepository = new ArtifactRepository(database);
+  const artifactRepository = new ArtifactRepository(database, transactions);
   const taskArtifacts = new TaskArtifactService(
     artifactRepository,
     taskRepository,
@@ -290,7 +292,7 @@ export async function createServerApp(
   const runs = new RunService(core, runRepository, auth, taskRepository);
   const clarificationRepository = new ClarificationRepository(database);
   const taskClarifications = new TaskClarificationService(
-    database,
+    transactions,
     clarificationRepository,
     taskRepository,
     core,
