@@ -188,6 +188,12 @@
           "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "roomId": "room_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "session": {
+            "scope": "task",
+            "resumePolicy": "resume_or_start",
+            "contextCursor": 42
+          },
           "triggerMessageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WB",
           "requesterMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "targetAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
@@ -198,6 +204,7 @@
           "contextMessages": [
             {
               "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WB",
+              "sequence": 42,
               "senderId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
               "senderName": "Alice",
               "content": "Please review the API boundary."
@@ -244,10 +251,37 @@
           "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "sequence": 2,
-          "status": "working"
+          "status": "working",
+          "session": {
+            "disposition": "resumed",
+            "contextCursor": 42
+          }
         }
       },
       "valid": true
+    },
+    {
+      "name": "Run status rejects a native Runtime session identifier",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WX",
+        "timestamp": "2026-08-22T10:00:06Z",
+        "type": "run.status",
+        "payload": {
+          "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "traceId": "trace_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sequence": 2,
+          "status": "working",
+          "session": {
+            "disposition": "started",
+            "contextCursor": 42,
+            "nativeSessionId": "thread_private"
+          }
+        }
+      },
+      "valid": false
     },
     {
       "name": "Run status rejects a missing trace ID",

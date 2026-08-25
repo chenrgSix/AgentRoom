@@ -682,6 +682,56 @@
         "content": {
           "type": "string",
           "maxLength": 32768
+        },
+        "sequence": {
+          "$ref": "#/$defs/sequence"
+        }
+      }
+    },
+    "logicalSessionRequest": {
+      "title": "Logical Session Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope",
+        "resumePolicy",
+        "contextCursor"
+      ],
+      "properties": {
+        "scope": {
+          "const": "task"
+        },
+        "resumePolicy": {
+          "enum": [
+            "resume_or_start",
+            "start_new"
+          ]
+        },
+        "contextCursor": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "logicalSessionStatus": {
+      "title": "Logical Session Status",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "disposition",
+        "contextCursor"
+      ],
+      "properties": {
+        "disposition": {
+          "enum": [
+            "started",
+            "resumed",
+            "recreated"
+          ]
+        },
+        "contextCursor": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
@@ -710,6 +760,12 @@
         },
         "roomId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "taskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "session": {
+          "$ref": "#/$defs/logicalSessionRequest"
         },
         "triggerMessageId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
@@ -830,6 +886,9 @@
             },
             "error": {
               "$ref": "https://agentroom.dev/schemas/common/error.schema.json"
+            },
+            "session": {
+              "$ref": "#/$defs/logicalSessionStatus"
             }
           }
         }

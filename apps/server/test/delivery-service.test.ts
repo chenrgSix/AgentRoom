@@ -119,12 +119,25 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
     assert.equal(socket.messages.length, 1);
     const requested = JSON.parse(socket.messages[0] ?? "{}") as {
       payload?: {
+        taskId?: string;
+        session?: {
+          scope?: string;
+          resumePolicy?: string;
+          contextCursor?: number;
+        };
         targetAgentName?: string;
-        contextMessages?: Array<{ senderName?: string }>;
+        contextMessages?: Array<{ sequence?: number; senderName?: string }>;
         routingAgents?: Array<{ agentId: string; name: string }>;
       };
     };
+    assert.equal(requested.payload?.taskId, run.taskId);
+    assert.deepEqual(requested.payload?.session, {
+      scope: "task",
+      resumePolicy: "resume_or_start",
+      contextCursor: message.sequence
+    });
     assert.equal(requested.payload?.targetAgentName, "Builder");
+    assert.equal(requested.payload?.contextMessages?.at(-1)?.sequence, message.sequence);
     assert.equal(requested.payload?.contextMessages?.at(-1)?.senderName, "Alice");
     assert.deepEqual(requested.payload?.routingAgents, [{
       agentId: reviewer.agentId,

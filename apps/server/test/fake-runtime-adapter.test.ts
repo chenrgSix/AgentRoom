@@ -16,8 +16,10 @@ test("Fake Runtime deterministically streams a success script", async () => {
   });
   const request = {
     runId: "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+    taskId: "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
     agentId: "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
     instruction: "Review the API.",
+    contextCursor: 0,
     contextMessages: []
   };
   const events = [];
@@ -52,8 +54,10 @@ test("Fake Runtime rejects invalid scripts and exposes failure events", async ()
   const events = [];
   for await (const event of adapter.execute({
     runId: "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+    taskId: "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
     agentId: "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
     instruction: "Fail deterministically.",
+    contextCursor: 0,
     contextMessages: []
   })) {
     events.push(event);

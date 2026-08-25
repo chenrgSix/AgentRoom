@@ -104,13 +104,24 @@ disagreement, Reviewer approval, and a recommendation. Clients that omit the
 field remain fully compatible and are evaluated as reply-only participants.
 
 Every `run.requested` carries a stable `deliveryAttemptId` and
-`idempotencyKey`, plus the central `traceId`. Retries preserve these fields so
-the Bridge can compare the persisted payload hash and acknowledge without
-starting a second Runtime. Every Bridge-to-server Run event must echo the same
-non-empty `traceId`; the server rejects an absent, invalid, or mismatched value.
-Local inbox data written before trace propagation is not a recoverable protocol
-1.0 record and is handled by the Bridge's incompatible-record policy rather
-than inferred by the server.
+`idempotencyKey`, plus the central `traceId`. Task-capable requests add the
+authoritative `taskId`, a logical Session request with Task scope and resume
+policy, and an inclusive Room `contextCursor`; projected context Messages carry
+their Room sequence. Retries preserve these fields so the Bridge can compare
+the persisted payload hash and acknowledge without starting a second Runtime.
+Every Bridge-to-server Run event must echo the same non-empty `traceId`; the
+server rejects an absent, invalid, or mismatched value. Local inbox data written
+before trace propagation is not a recoverable protocol 1.0 record and is
+handled by the Bridge's incompatible-record policy rather than inferred by the
+server.
+
+A Bridge may add a logical Session status to `run.status`: only
+`started`, `resumed`, or `recreated` plus the consumed context cursor may cross
+the boundary. Provider-native session IDs, local workspace paths, and local
+session-store keys are forbidden inside that closed object. All Task Session
+fields are additive during the rolling transition; their absence retains the
+legacy Room-scoped behavior without allowing a Task-scoped binding to reuse a
+legacy native session.
 
 The request may also include the target Agent name, named context senders, and
 the exact enabled Room peers eligible for reply routing. These are display and

@@ -12,6 +12,12 @@ interface DeliveryPayload {
   runId: string;
   traceId: string;
   roomId: string;
+  taskId: string;
+  session: {
+    scope: "task";
+    resumePolicy: "resume_or_start";
+    contextCursor: number;
+  };
   triggerMessageId: string;
   requesterMemberId: string;
   targetAgentId: string;
@@ -22,6 +28,7 @@ interface DeliveryPayload {
   instruction: string;
   contextMessages: Array<{
     messageId: string;
+    sequence: number;
     senderId: string;
     senderName?: string;
     content: string;
@@ -197,6 +204,12 @@ export class DeliveryService {
       runId: run.runId,
       traceId: run.traceId,
       roomId: run.roomId,
+      taskId: run.taskId,
+      session: {
+        scope: "task",
+        resumePolicy: "resume_or_start",
+        contextCursor: trigger.sequence
+      },
       triggerMessageId: run.triggerMessageId,
       requesterMemberId: run.requesterMemberId,
       targetAgentId: run.targetAgentId,
@@ -209,6 +222,7 @@ export class DeliveryService {
         .listMessagesThrough(run.roomId, trigger.sequence, 50)
         .map((message) => ({
           messageId: message.messageId,
+          sequence: message.sequence,
           senderId: message.senderId,
           senderName: message.senderType === "member"
             ? this.core.getMember(message.senderId)?.displayName ?? "Member"

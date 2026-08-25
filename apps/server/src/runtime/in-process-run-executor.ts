@@ -49,12 +49,15 @@ export class InProcessRunExecutor {
     this.core.updateAgentPresence(agent.agentId, "busy", this.clock());
     const request: RuntimeRequest = {
       runId: initial.runId,
+      taskId: initial.taskId,
       agentId: agent.agentId,
       instruction: initial.instruction,
+      contextCursor: trigger.sequence,
       contextMessages: this.core
         .listMessagesThrough(initial.roomId, trigger.sequence, 50)
         .map((message) => ({
           messageId: message.messageId,
+          sequence: message.sequence,
           senderId: message.senderId,
           content: message.content
         }))

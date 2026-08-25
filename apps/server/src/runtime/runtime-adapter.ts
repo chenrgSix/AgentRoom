@@ -10,10 +10,13 @@ export type RuntimeStatus =
 
 export interface RuntimeRequest {
   runId: string;
+  taskId: string;
   agentId: string;
   instruction: string;
+  contextCursor: number;
   contextMessages: Array<{
     messageId: string;
+    sequence: number;
     senderId: string;
     content: string;
   }>;

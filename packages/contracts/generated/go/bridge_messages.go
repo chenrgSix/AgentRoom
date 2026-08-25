@@ -145,19 +145,21 @@ type RunRequestedMessage struct {
 type RunRequestedPayload struct {
 	ContextMessages []ContextMessage `json:"contextMessages"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
-	Deadline          time.Time      `json:"deadline"`
-	DeliveryAttemptID string         `json:"deliveryAttemptId"`
-	IdempotencyKey    string         `json:"idempotencyKey"`
-	Instruction       string         `json:"instruction"`
-	ParentRunID       *string        `json:"parentRunId,omitempty"`
-	RequesterMemberID string         `json:"requesterMemberId"`
-	RoomID            string         `json:"roomId"`
-	RoutingAgents     []RoutingAgent `json:"routingAgents,omitempty"`
-	RunID             string         `json:"runId"`
-	TargetAgentID     string         `json:"targetAgentId"`
-	TargetAgentName   *string        `json:"targetAgentName,omitempty"`
-	TraceID           string         `json:"traceId"`
-	TriggerMessageID  string         `json:"triggerMessageId"`
+	Deadline          time.Time              `json:"deadline"`
+	DeliveryAttemptID string                 `json:"deliveryAttemptId"`
+	IdempotencyKey    string                 `json:"idempotencyKey"`
+	Instruction       string                 `json:"instruction"`
+	ParentRunID       *string                `json:"parentRunId,omitempty"`
+	RequesterMemberID string                 `json:"requesterMemberId"`
+	RoomID            string                 `json:"roomId"`
+	RoutingAgents     []RoutingAgent         `json:"routingAgents,omitempty"`
+	RunID             string                 `json:"runId"`
+	Session           *LogicalSessionRequest `json:"session,omitempty"`
+	TargetAgentID     string                 `json:"targetAgentId"`
+	TargetAgentName   *string                `json:"targetAgentName,omitempty"`
+	TaskID            *string                `json:"taskId,omitempty"`
+	TraceID           string                 `json:"traceId"`
+	TriggerMessageID  string                 `json:"triggerMessageId"`
 }
 
 type ContextMessage struct {
@@ -166,11 +168,18 @@ type ContextMessage struct {
 	// Opaque identifier with a lowercase type prefix and non-semantic suffix.
 	SenderID   string  `json:"senderId"`
 	SenderName *string `json:"senderName,omitempty"`
+	Sequence   *int64  `json:"sequence,omitempty"`
 }
 
 type RoutingAgent struct {
 	AgentID string `json:"agentId"`
 	Name    string `json:"name"`
+}
+
+type LogicalSessionRequest struct {
+	ContextCursor int64        `json:"contextCursor"`
+	ResumePolicy  ResumePolicy `json:"resumePolicy"`
+	Scope         Scope        `json:"scope"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -208,8 +217,9 @@ type RunStatusPayload struct {
 	Sequence int64  `json:"sequence"`
 	TraceID  string `json:"traceId"`
 	// Stable, client-safe error returned at a protocol boundary.
-	Error  *AgentRoomError    `json:"error,omitempty"`
-	Status RunExecutionStatus `json:"status"`
+	Error   *AgentRoomError       `json:"error,omitempty"`
+	Session *LogicalSessionStatus `json:"session,omitempty"`
+	Status  RunExecutionStatus    `json:"status"`
 }
 
 // Stable, client-safe error returned at a protocol boundary.
@@ -218,6 +228,11 @@ type AgentRoomError struct {
 	Details   map[string]interface{} `json:"details,omitempty"`
 	Message   string                 `json:"message"`
 	Retryable bool                   `json:"retryable"`
+}
+
+type LogicalSessionStatus struct {
+	ContextCursor int64       `json:"contextCursor"`
+	Disposition   Disposition `json:"disposition"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -406,6 +421,19 @@ const (
 	AgentStatus AgentStatusMessageType = "agent.status"
 )
 
+type ResumePolicy string
+
+const (
+	ResumeOrStart ResumePolicy = "resume_or_start"
+	StartNew      ResumePolicy = "start_new"
+)
+
+type Scope string
+
+const (
+	Task Scope = "task"
+)
+
 type RunRequestedMessageType string
 
 const (
@@ -416,6 +444,14 @@ type RunAcceptedMessageType string
 
 const (
 	RunAccepted RunAcceptedMessageType = "run.accepted"
+)
+
+type Disposition string
+
+const (
+	Recreated Disposition = "recreated"
+	Resumed   Disposition = "resumed"
+	Started   Disposition = "started"
 )
 
 type RunExecutionStatus string

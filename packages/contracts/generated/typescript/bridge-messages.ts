@@ -223,8 +223,10 @@ export interface RunRequestedPayload {
   roomId:            string;
   routingAgents?:    RoutingAgent[];
   runId:             string;
+  session?:          LogicalSessionRequest;
   targetAgentId:     string;
   targetAgentName?:  string;
+  taskId?:           string;
   traceId:           string;
   triggerMessageId:  string;
   [property: string]: unknown;
@@ -238,6 +240,7 @@ export interface ContextMessage {
    */
   senderId:    string;
   senderName?: string;
+  sequence?:   number;
   [property: string]: unknown;
 }
 
@@ -245,6 +248,16 @@ export interface RoutingAgent {
   agentId: string;
   name:    string;
 }
+
+export interface LogicalSessionRequest {
+  contextCursor: number;
+  resumePolicy:  ResumePolicy;
+  scope:         Scope;
+}
+
+export type ResumePolicy = "resume_or_start" | "start_new";
+
+export type Scope = "task";
 
 export type RunRequestedMessageType = "run.requested";
 
@@ -302,8 +315,9 @@ export interface RunStatusPayload {
   /**
    * Stable, client-safe error returned at a protocol boundary.
    */
-  error?: AgentRoomError;
-  status: RunExecutionStatus;
+  error?:   AgentRoomError;
+  session?: LogicalSessionStatus;
+  status:   RunExecutionStatus;
   [property: string]: unknown;
 }
 
@@ -317,6 +331,13 @@ export interface AgentRoomError {
   retryable: boolean;
   [property: string]: unknown;
 }
+
+export interface LogicalSessionStatus {
+  contextCursor: number;
+  disposition:   Disposition;
+}
+
+export type Disposition = "started" | "resumed" | "recreated";
 
 export type RunExecutionStatus = "working" | "input_required" | "completed" | "failed" | "canceled" | "outcome_unknown";
 
