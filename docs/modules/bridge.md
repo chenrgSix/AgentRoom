@@ -474,6 +474,14 @@ update behavior. `BRG-036` changes embedded presentation assets and pure view
 models; it does not add a central wire field, automatic updater, shared Codex
 daemon, Room conversation surface, or new local permission.
 
+Local acceptance is recorded in
+`docs/acceptance/brg-036-productized-bridge-shell.md`. Isolated configured and
+first-run browser fixtures cover the native starting viewport and narrow
+layout, while a temporary packaged macOS app covers the real Wails WebView,
+local configuration projection, human-readable connection refusal, and Agent
+page navigation. This is implementation acceptance, not a new release or
+signed/notarized distribution claim.
+
 ## Distribution
 
 End users install a prebuilt Bridge and do not need Go or Node.js. Publishing a
