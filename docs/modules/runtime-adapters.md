@@ -79,7 +79,10 @@ Bridge creates one persisted Thread per Task and Agent in the fixed
 owner-selected workspace and Runtime semantic configuration, records only its
 opaque Thread id under the owner-only Bridge data
 directory, and calls `thread/resume` on later Runs. A missing or invalid stored
-Thread is discarded and replaced once with a fresh persisted Thread. The Bridge
+Thread is discarded and replaced once with a fresh persisted Thread. An
+`active writer` conflict from another local Codex client instead returns
+retryable `CODEX_SESSION_IN_USE`, preserves the stored binding, and never starts
+a replacement Thread. The Bridge
 passes the owner-selected `read-only` or `workspace-write` sandbox,
 and uses `approvalPolicy: never` so a remote Team message cannot escalate local
 permissions. It publishes `item/agentMessage/delta`, resets provisional

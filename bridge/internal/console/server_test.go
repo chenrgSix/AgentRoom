@@ -141,6 +141,7 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="codex-use-detected"`, `id="codex-preflight"`,
 		`id="agent-use-detected"`, `id="agent-preflight"`,
 		`id="pi-permission-policy"`, `id="agent-pi-permission-policy"`,
+		`id="codex-session-ownership-policy"`, `id="agent-codex-session-ownership-policy"`,
 		`id="edit-connection"`, `id="connection-modal-backdrop"`,
 		`id="connection-form"`, `id="connection-server-url"`,
 		`id="server-token"`, `id="current-server-token"`,
@@ -172,6 +173,13 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if !bytes.Contains(html, []byte("权限跟随本机 Pi")) ||
 		!bytes.Contains(javascript, []byte("权限：跟随本机 Pi")) {
 		t.Fatal("Console must disclose that managed Pi follows owner-controlled local permissions")
+	}
+	if bytes.Count(html, []byte("CODEX_SESSION_IN_USE")) != 2 ||
+		bytes.Count(html, []byte("不会自动新建替代会话")) != 2 ||
+		!bytes.Contains(html, []byte(`aria-describedby="codex-session-ownership-policy"`)) ||
+		!bytes.Contains(html, []byte(`aria-describedby="agent-codex-session-ownership-policy agent-pi-permission-policy"`)) ||
+		!bytes.Contains(javascript, []byte(`elements["agent-codex-session-ownership-policy"].classList.toggle("hidden", !codex)`)) {
+		t.Fatal("Codex enrollment and Agent settings must disclose multi-client session ownership limits")
 	}
 	if !bytes.Contains(javascript, []byte("request(agentId ? `/api/agents/")) ||
 		bytes.Contains(javascript, []byte(`request(editMode ? "/api/config"`)) {

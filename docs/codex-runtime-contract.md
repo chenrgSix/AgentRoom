@@ -21,8 +21,11 @@ additive contract:
    owner-selected sandbox with remote escalation disabled. The Bridge stores the
    opaque Thread id under its owner-only data directory.
 3. Later Runs for the same Room, Agent, and workspace call `thread/resume`. A
-   rejected stale binding is removed and retried once with `thread/start`.
-   An unscoped Bridge Runtime probe instead starts an ephemeral Thread.
+   missing or invalid stale binding is removed and retried once with
+   `thread/start`. A multi-client `active writer` conflict instead preserves
+   the binding, returns retryable `CODEX_SESSION_IN_USE`, and never starts a
+   replacement Thread. An unscoped Bridge Runtime probe starts an ephemeral
+   Thread.
 4. `turn/start` submits the bounded Run instruction.
 5. `item/agentMessage/delta` supplies safe provisional assistant text.
 6. `item/reasoning/summaryTextDelta` supplies an official public reasoning
@@ -55,6 +58,12 @@ supported in this baseline. App Server requests that require local user input
 receive a protocol error and are never approved remotely. If this contract
 fails against a later Codex version, the Run fails closed while the generated
 schema and pinned parser fixtures are updated.
+
+Codex Desktop/CLI and Bridge currently start separate local App Server
+processes rather than sharing a long-running daemon. Opening the same persisted
+Thread in another client can therefore hold its single writer. The owner must
+release that client and retry; Bridge does not silently fork, replace, or
+discard the occupied binding.
 
 Example Bridge Agent configuration:
 

@@ -25,7 +25,7 @@ const elements = Object.fromEntries([
   "agent-modal-error",
   "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace",
   "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env",
-  "agent-pi-permission-policy", "save-agent",
+  "agent-codex-session-ownership-policy", "agent-pi-permission-policy", "save-agent",
   "agent-use-detected", "agent-preflight", "agent-preflight-result",
   "codex-discovery-status", "codex-discovery-help", "codex-install-link",
   "pi-discovery-status", "pi-discovery-help", "pi-install-link",
@@ -260,6 +260,7 @@ function syncAgentKindFields() {
   const codex = elements["agent-kind"].value === "codex";
   elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
   elements["agent-credential-field"].classList.toggle("hidden", codex);
+  elements["agent-codex-session-ownership-policy"].classList.toggle("hidden", !codex);
   elements["agent-pi-permission-policy"].classList.toggle("hidden", codex);
   renderDiscovery("agent", codex ? "codex" : "pi");
 }

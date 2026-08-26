@@ -116,7 +116,7 @@
           <p>命令由 Bridge 生成固定参数，不接受服务器传入 shell 字符串。</p>
         </div>
         <div class="runtime-card">
-          <label class="runtime-toggle"><input id="codex-enabled" type="checkbox" checked><span>Codex</span><small>原生 JSONL · 支持中断</small></label>
+          <label class="runtime-toggle"><input id="codex-enabled" type="checkbox" checked aria-describedby="codex-session-ownership-policy"><span>Codex</span><small>原生 JSONL · 支持中断</small></label>
           <div class="runtime-fields" id="codex-fields">
             <div class="fields two">
               <label>显示名称<input id="codex-name" maxlength="80" value="Local Codex" required></label>
@@ -133,6 +133,7 @@
             </div>
             <label>工作区<input class="workspace" id="codex-workspace" required></label>
             <label>文件沙箱<select id="codex-sandbox"><option value="workspace-write">允许修改工作区</option><option value="read-only">只读</option></select></label>
+            <p class="runtime-policy runtime-policy-warning" id="codex-session-ownership-policy">多客户端会话限制：Bridge 与 Codex Desktop/CLI 目前各自运行本地 App Server。若另一客户端正在占用同一 Codex 会话，本次任务会返回可重试的 <code>CODEX_SESSION_IN_USE</code>，保留原会话且不会自动新建替代会话。请先在另一客户端结束占用（必要时完全退出 Desktop），再重试。</p>
           </div>
         </div>
         <div class="runtime-card">
@@ -232,7 +233,7 @@
         <form id="agent-form">
           <p class="inline-error hidden" id="agent-modal-error" role="alert"></p>
           <label>运行时
-            <select id="agent-kind">
+            <select id="agent-kind" aria-describedby="agent-codex-session-ownership-policy agent-pi-permission-policy">
               <option value="codex">Codex</option>
               <option value="pi">Pi</option>
             </select>
@@ -260,6 +261,7 @@
           <label class="hidden" id="agent-credential-field">凭据环境变量名称（可选）
             <input id="agent-credential-env" placeholder="例如 ANTHROPIC_API_KEY">
           </label>
+          <p class="runtime-policy runtime-policy-warning" id="agent-codex-session-ownership-policy">多客户端会话限制：Bridge 与 Codex Desktop/CLI 目前各自运行本地 App Server。若另一客户端正在占用同一 Codex 会话，本次任务会返回可重试的 <code>CODEX_SESSION_IN_USE</code>，保留原会话且不会自动新建替代会话。请先在另一客户端结束占用（必要时完全退出 Desktop），再重试。</p>
           <p class="runtime-policy hidden" id="agent-pi-permission-policy">权限跟随本机 Pi；Bridge 仅固定 JSON 输出与无会话运行方式。</p>
           <p class="modal-help">保存只会更新这个智能体；若 Bridge 正在运行，将安全重启连接。任务或自检执行期间禁止修改。</p>
           <div class="actions modal-actions">

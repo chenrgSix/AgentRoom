@@ -93,6 +93,14 @@ before save. Preflight is explicit, token-authenticated, does not persist or
 restart the Bridge, and is fenced against every active Team Run or concurrent
 Runtime probe.
 
+Both first-enrollment and per-Agent Codex configuration disclose the local
+multi-client ownership boundary. Codex Desktop/CLI and Bridge currently run
+separate App Server processes. If another local client owns the same Thread,
+Bridge preserves the Task Session binding, returns retryable
+`CODEX_SESSION_IN_USE`, and does not create a replacement Thread. The Console
+instructs the owner to release that client, including fully exiting Desktop
+when necessary, before retrying. This Codex-specific warning is hidden for Pi.
+
 Runtime path discovery follows
 [ADR-0019](../adr/0019-bounded-local-runtime-discovery.md): PATH first, then
 known app bundles and common installation locations, with no shell startup,
