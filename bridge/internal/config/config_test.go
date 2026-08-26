@@ -39,6 +39,19 @@ func TestLoadValidConfig(t *testing.T) {
 	if loaded.DataDir != filepath.Join(directory, "data") {
 		t.Fatalf("unexpected data directory: %s", loaded.DataDir)
 	}
+	if loaded.ShareReasoningSummaries {
+		t.Fatal("missing local consent must default to false")
+	}
+	for _, consent := range []bool{true, false} {
+		loaded.ShareReasoningSummaries = consent
+		if err := Replace(path, loaded); err != nil {
+			t.Fatal(err)
+		}
+		reloaded, err := Load(path)
+		if err != nil || reloaded.ShareReasoningSummaries != consent {
+			t.Fatalf("consent round trip failed: %v", err)
+		}
+	}
 }
 
 func TestRejectsUnsafeOrAmbiguousConfig(t *testing.T) {

@@ -15,13 +15,14 @@ import (
 )
 
 type RuntimeExecutor struct {
-	Inbox              *Inbox
-	Adapters           map[string]bridgeruntime.Adapter
-	Prepare            PrepareRunFunc
-	IsPrepareRetryable func(error) bool
-	ResolveArtifacts   func(contracts.RunRequestedPayload) ([]bridgeruntime.VerifiedArtifactAlias, error)
-	Now                func() time.Time
-	Observer           operations.Observer
+	Inbox                   *Inbox
+	Adapters                map[string]bridgeruntime.Adapter
+	Prepare                 PrepareRunFunc
+	IsPrepareRetryable      func(error) bool
+	ResolveArtifacts        func(contracts.RunRequestedPayload) ([]bridgeruntime.VerifiedArtifactAlias, error)
+	Now                     func() time.Time
+	Observer                operations.Observer
+	ShareReasoningSummaries bool
 }
 
 func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender) error {
@@ -71,6 +72,10 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 	err := adapter.Execute(ctx, bridgeruntime.Request{
 		Run: record.Request, Artifacts: artifacts,
 	}, func(eventContext context.Context, event bridgeruntime.Event) error {
+		if event.Status == nil && event.Activity != nil &&
+			event.Activity.Kind == "reasoning" && !e.ShareReasoningSummaries {
+			return nil // No persisted content and no sequence gap for withheld summaries.
+		}
 		sequence++
 		now := time.Now().UTC()
 		if e.Now != nil {
@@ -475,11 +480,44 @@ func (e RuntimeExecutor) Replay(ctx context.Context, record Record, send Sender)
 		return err
 	}
 	for _, event := range latest.Events {
+		if !e.ShareReasoningSummaries {
+			event, err = privateReasoningReplay(event)
+			if err != nil {
+				return err
+			}
+		}
 		if err := send(ctx, event); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// Old outbox entries must still occupy their original sequence on recovery.
+// Consent controls every replay; local history is retained, not rewritten.
+func privateReasoningReplay(source json.RawMessage) (json.RawMessage, error) {
+	var envelope struct {
+		Type    string `json:"type"`
+		Payload struct {
+			Kind string `json:"kind"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(source, &envelope); err != nil {
+		return nil, fmt.Errorf("decode replay privacy envelope: %w", err)
+	}
+	if envelope.Type != string(contracts.RunActivity) || envelope.Payload.Kind != "reasoning" {
+		return source, nil
+	}
+	var message contracts.RunActivityMessage
+	if err := json.Unmarshal(source, &message); err != nil {
+		return nil, fmt.Errorf("decode reasoning replay: %w", err)
+	}
+	label := "Summary sharing disabled"
+	message.Payload.ActivityID = fmt.Sprintf("private-activity-%d", message.Payload.Sequence)
+	message.Payload.Label = &label
+	message.Payload.Content = nil
+	message.Payload.Reset = nil
+	return json.Marshal(message)
 }
 
 func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {

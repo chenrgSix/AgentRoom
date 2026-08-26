@@ -70,6 +70,7 @@
       <dl class="details">
         <div><dt>中央服务</dt><dd id="current-server">—</dd></div>
         <div><dt>中央 Token</dt><dd id="current-server-token">未配置</dd></div>
+        <div><dt>思考摘要共享</dt><dd id="current-reasoning-sharing">未授权（不共享摘要）</dd></div>
         <div><dt>Team</dt><dd id="current-team">—</dd></div>
         <div><dt>Device</dt><dd id="current-device">—</dd></div>
         <div><dt>配置文件</dt><dd id="config-path">—</dd></div>
@@ -102,6 +103,11 @@
         <label id="fingerprint-field" class="hidden">HTTPS 证书 SHA-256 指纹
           <input id="fingerprint" autocomplete="off" placeholder="64 位十六进制指纹">
         </label>
+        <label class="runtime-toggle">
+          <input id="share-reasoning-summaries" type="checkbox" aria-describedby="reasoning-sharing-help">
+          <span>信任此中央服务，允许共享思考摘要</span>
+        </label>
+        <p id="reasoning-sharing-help" class="runtime-policy">默认关闭。开启后，Runtime 公开的思考摘要会发往当前中央服务并可被有权限的成员查看；关闭不影响回复、状态和工具名称。不会开放原始私密推理、命令参数、工具输出、密钥或文件权限。</p>
       </section>
 
       <section class="panel">
@@ -197,7 +203,12 @@
           <label id="connection-fingerprint-field" class="hidden">HTTPS 证书 SHA-256 指纹
             <input id="connection-fingerprint" autocomplete="off" placeholder="64 位十六进制指纹">
           </label>
-          <p class="modal-help">只更新本机 Bridge 的出站地址、中央 Token 和 HTTPS 信任配置，不会重建智能体或修改 Device 凭据。Token 留空时保留原值；若 Bridge 正在运行，保存后会安全重连。</p>
+          <label class="runtime-toggle">
+            <input id="connection-share-reasoning-summaries" type="checkbox" aria-describedby="connection-reasoning-sharing-help">
+            <span>信任此中央服务，允许共享思考摘要</span>
+          </label>
+          <p id="connection-reasoning-sharing-help" class="modal-help">只共享 Runtime 公开且经脱敏的思考摘要，不开放原始私密推理、命令参数、工具输出、密钥或文件权限。此授权独立于 HTTPS 信任；请先停止 Bridge 并等待任务退出后再更改。修改服务地址会清除此勾选，需要重新授权。关闭后，旧缓存重放也隐藏摘要，但已上传内容不能撤回。</p>
+          <p class="modal-help">只更新本机 Bridge 的出站连接与摘要共享授权，不会重建智能体或修改 Device 凭据。Token 留空时保留原值；普通连接配置保存后会安全重连。</p>
           <div class="actions modal-actions">
             <button class="secondary" id="cancel-connection-modal" type="button">取消</button>
             <button class="primary" id="save-connection" type="submit">保存并应用</button>

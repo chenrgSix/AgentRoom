@@ -85,9 +85,10 @@ func RunObserved(
 	}
 	executor := delivery.RuntimeExecutor{
 		Inbox: inbox, Adapters: adapters, Observer: runtimeObserver,
-		Prepare:            materializer.Materialize,
-		ResolveArtifacts:   materializer.RuntimeArtifacts,
-		IsPrepareRetryable: bridgeartifact.IsRetryableMaterialization,
+		ShareReasoningSummaries: loaded.ShareReasoningSummaries,
+		Prepare:                 materializer.Materialize,
+		ResolveArtifacts:        materializer.RuntimeArtifacts,
+		IsPrepareRetryable:      bridgeartifact.IsRetryableMaterialization,
 	}
 	runHandler := delivery.Handler{
 		Inbox: inbox, Gate: delivery.NewAgentExecutionGate(),

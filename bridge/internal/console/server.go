@@ -58,6 +58,7 @@ type RuntimeInput struct {
 }
 
 type EnrollmentInput struct {
+	ShareReasoningSummaries *bool            `json:"shareReasoningSummaries,omitempty"`
 	ServerURL               string           `json:"serverUrl"`
 	ServerToken             string           `json:"serverToken,omitempty"`
 	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
@@ -67,6 +68,7 @@ type EnrollmentInput struct {
 }
 
 type ConnectionSettingsInput struct {
+	ShareReasoningSummaries *bool            `json:"shareReasoningSummaries,omitempty"`
 	ServerURL               string           `json:"serverUrl"`
 	ServerToken             string           `json:"serverToken,omitempty"`
 	ClearServerToken        bool             `json:"clearServerToken,omitempty"`
@@ -101,6 +103,7 @@ type ConnectionView struct {
 }
 
 type State struct {
+	ShareReasoningSummaries bool             `json:"shareReasoningSummaries"`
 	Phase                   Phase            `json:"phase"`
 	Configured              bool             `json:"configured"`
 	Paired                  bool             `json:"paired"`
@@ -897,6 +900,9 @@ func (s *Service) requireConfigurationMutationLocked() error {
 }
 
 func (s *Service) replaceConfigurationLocked(configuration config.Config) error {
+	if err := s.requireReasoningConsentChangeLocked(configuration); err != nil {
+		return err
+	}
 	if err := s.dependencies.ReplaceConfig(s.options.ConfigPath, configuration); err != nil {
 		return err
 	}
@@ -955,6 +961,13 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 	}
 	candidate := cloneConfiguration(*s.configuration)
 	candidate.ServerURL = strings.TrimSpace(input.ServerURL)
+	candidate.ShareReasoningSummaries = reasoningConsentForUpdate(
+		*s.configuration, candidate.ServerURL, input.ShareReasoningSummaries,
+	)
+	if err := s.requireReasoningConsentChangeLocked(candidate); err != nil {
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
 	replacementToken := strings.TrimSpace(input.ServerToken)
 	if input.ClearServerToken && replacementToken != "" {
 		writeError(response, http.StatusBadRequest, "serverToken cannot be replaced and cleared together")
@@ -974,7 +987,8 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 	if candidate.ServerURL == s.configuration.ServerURL &&
 		candidate.ServerToken == s.configuration.ServerToken &&
 		candidate.ServerTrustMode == s.configuration.ServerTrustMode &&
-		candidate.ServerCertificateSHA256 == s.configuration.ServerCertificateSHA256 {
+		candidate.ServerCertificateSHA256 == s.configuration.ServerCertificateSHA256 &&
+		candidate.ShareReasoningSummaries == s.configuration.ShareReasoningSummaries {
 		writeJSON(response, http.StatusOK, s.state)
 		return
 	}
@@ -1005,6 +1019,13 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 	if configuration.ServerToken == "" {
 		configuration.ServerToken = s.configuration.ServerToken
 	}
+	configuration.ShareReasoningSummaries = reasoningConsentForUpdate(
+		*s.configuration, configuration.ServerURL, input.ShareReasoningSummaries,
+	)
+	if err := s.requireReasoningConsentChangeLocked(configuration); err != nil {
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
 	if err := s.replaceConfigurationLocked(configuration); err != nil {
 		writeError(response, http.StatusInternalServerError, publicError(err))
 		return
@@ -1019,6 +1040,7 @@ func buildConfig(input EnrollmentInput, dataDir string) (config.Config, error) {
 		ServerToken:             strings.TrimSpace(input.ServerToken),
 		ServerTrustMode:         input.ServerTrustMode,
 		ServerCertificateSHA256: strings.TrimSpace(input.ServerCertificateSHA256),
+		ShareReasoningSummaries: input.ShareReasoningSummaries != nil && *input.ShareReasoningSummaries,
 		DeviceName:              strings.TrimSpace(input.DeviceName),
 		DataDir:                 dataDir,
 		Agents:                  []config.AgentConfig{},
@@ -1093,6 +1115,7 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 	}
 	s.state.ServerURL = configuration.ServerURL
 	s.state.ServerTokenConfigured = configuration.ServerToken != ""
+	s.state.ShareReasoningSummaries = configuration.ShareReasoningSummaries
 	s.state.ServerTrustMode = configuration.ResolvedTrustMode()
 	s.state.ServerCertificateSHA256 = configuration.ServerCertificateSHA256
 	s.state.DeviceName = configuration.DeviceName

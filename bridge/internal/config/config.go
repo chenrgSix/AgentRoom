@@ -15,6 +15,7 @@ type Config struct {
 	ServerToken             string        `json:"serverToken,omitempty"`
 	ServerTrustMode         TrustMode     `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string        `json:"serverCertificateSha256,omitempty"`
+	ShareReasoningSummaries bool          `json:"shareReasoningSummaries,omitempty"`
 	DeviceName              string        `json:"deviceName"`
 	DataDir                 string        `json:"dataDir"`
 	Agents                  []AgentConfig `json:"agents"`

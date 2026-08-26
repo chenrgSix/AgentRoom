@@ -242,7 +242,8 @@ func TestRuntimeExecutorPersistsAndSequencesEvents(t *testing.T) {
 	var runtimeEvents []operations.RuntimeEvent
 	executor := RuntimeExecutor{
 		Inbox: inbox, Now: func() time.Time { return now },
-		Adapters: map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+		Adapters:                map[string]bridgeruntime.Adapter{request.TargetAgentID: adapter},
+		ShareReasoningSummaries: true,
 		Observer: operations.Observer{OnRuntime: func(event operations.RuntimeEvent) {
 			runtimeEvents = append(runtimeEvents, event)
 		}},

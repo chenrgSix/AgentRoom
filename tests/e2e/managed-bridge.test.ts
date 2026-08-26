@@ -33,9 +33,7 @@ async function stopProcess(process: ChildProcess): Promise<void> {
   ]);
 }
 
-test("Web Mention streams Pi output and completes through a paired Go Bridge", {
-  timeout: 60_000
-}, async () => {
+async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<void> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-e2e-"));
   const bridgeServerToken = "managed-e2e-central-token-12345678901234567890";
   const app = await createServerApp({
@@ -109,6 +107,7 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     await writeFile(configPath, JSON.stringify({
       serverUrl,
       serverToken: bridgeServerToken,
+      ...(shareReasoningSummaries ? { shareReasoningSummaries: true } : {}),
       deviceName: "Bob Bridge",
       dataDir: path.join(directory, "bridge-data"),
       agents: [{
@@ -251,7 +250,7 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     assert.ok(preview.event.content);
     assert.ok(piReply.startsWith(preview.event.content));
     const liveActivities = previewEvents.filter(({ event }) => event.type === "activity");
-    assert.ok(liveActivities.some(({ event }) => event.kind === "reasoning"));
+    assert.equal(liveActivities.some(({ event }) => event.kind === "reasoning"), shareReasoningSummaries);
     assert.ok(liveActivities.some(({ event }) => event.kind === "tool"));
     assert.equal(
       liveActivities.some(({ event }) => event.content?.includes("split-secret-value")),
@@ -288,9 +287,13 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     assert.ok(replyEvent);
     assert.ok(outputEvent.sequence < replyEvent.sequence);
     assert.equal(replyEvent.event.content, piReply);
-    assert.ok(completedEvents.some(({ event }) =>
+    assert.equal(completedEvents.some(({ event }) =>
       event.type === "activity" && event.kind === "reasoning" && event.phase === "completed"
-    ));
+    ), shareReasoningSummaries);
+    if (!shareReasoningSummaries) {
+      assert.equal(JSON.stringify(completedEvents).includes(piReasoning), false);
+      assert.equal(completedEvents.some(({ event }) => event.kind === "reasoning"), false);
+    }
     const resumedEvents = await app.inject({
       method: "GET",
       url: `/api/runs/${piRunId}/events?after=${outputEvent.sequence}`,
@@ -392,4 +395,10 @@ test("Web Mention streams Pi output and completes through a paired Go Bridge", {
     if (bridgeProcess) await stopProcess(bridgeProcess);
     await app.close();
   }
-});
+}
+
+for (const shareReasoningSummaries of [false, true]) {
+  test(`Web Mention completes through a paired Go Bridge with reasoning sharing ${shareReasoningSummaries ? "enabled" : "disabled by default"}`, {
+    timeout: 60_000
+  }, () => verifyManagedBridge(shareReasoningSummaries));
+}

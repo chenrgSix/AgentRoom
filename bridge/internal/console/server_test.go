@@ -146,6 +146,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="server-token"`, `id="current-server-token"`,
 		`id="connection-server-token"`, `id="clear-server-token"`,
 		`id="connection-trust-mode"`, `id="connection-fingerprint"`,
+		`id="share-reasoning-summaries"`, `id="connection-share-reasoning-summaries"`,
+		`id="current-reasoning-sharing"`,
 	} {
 		if !bytes.Contains(html, []byte(id)) {
 			t.Fatalf("embedded UI omitted %s", id)

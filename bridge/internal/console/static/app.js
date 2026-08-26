@@ -8,6 +8,7 @@ const elements = Object.fromEntries([
   "request-enrollment", "start-existing-pairing", "join-copy-result",
   "pairing-modal-backdrop", "close-pairing-modal", "cancel-pairing-modal", "confirm-reenrollment", "pairing-modal-error",
   "current-server-token",
+  "current-reasoning-sharing", "share-reasoning-summaries", "connection-share-reasoning-summaries",
   "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
   "enrollment-form", "server-url", "server-token", "device-name", "trust-mode", "fingerprint-field",
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
@@ -292,6 +293,7 @@ function openConnectionModal() {
   elements["clear-server-token"].checked = false;
   elements["connection-trust-mode"].value = currentState.serverTrustMode || "system_ca";
   elements["connection-fingerprint"].value = currentState.serverCertificateSha256 || "";
+  elements["connection-share-reasoning-summaries"].checked = Boolean(currentState.shareReasoningSummaries);
   syncConnectionTrustFields();
   syncConnectionTokenFields();
   elements["connection-modal-backdrop"].classList.remove("hidden");
@@ -345,6 +347,7 @@ function render(state) {
     elements["device-title"].textContent = state.deviceName;
     elements["current-server"].textContent = state.serverUrl;
     elements["current-server-token"].textContent = state.serverTokenConfigured ? "已配置" : "未配置";
+    elements["current-reasoning-sharing"].textContent = state.shareReasoningSummaries ? "已授权（仅公开摘要）" : "未授权（不共享摘要）";
     elements["current-team"].textContent = state.teamId || "等待配对";
     elements["current-device"].textContent = state.deviceId || "等待配对";
     elements["config-path"].textContent = state.configPath;
@@ -403,6 +406,8 @@ elements["clear-server-token"].addEventListener("change", () => {
   syncConnectionTokenFields();
 });
 elements["codex-enabled"].addEventListener("change", () => setRuntime("codex", elements["codex-enabled"].checked));
+elements["server-url"].addEventListener("input", () => { elements["share-reasoning-summaries"].checked = false; });
+elements["connection-server-url"].addEventListener("input", () => { elements["connection-share-reasoning-summaries"].checked = false; });
 elements["pi-enabled"].addEventListener("change", () => setRuntime("pi", elements["pi-enabled"].checked));
 elements["join-code"].addEventListener("click", async () => {
   if (!currentState || !pairingView(currentState).canCopy) return;
@@ -533,6 +538,7 @@ elements["connection-form"].addEventListener("submit", async (event) => {
         serverUrl,
         serverToken: elements["connection-server-token"].value.trim(),
         clearServerToken: elements["clear-server-token"].checked,
+        shareReasoningSummaries: elements["connection-share-reasoning-summaries"].checked,
         serverTrustMode: trustMode,
         serverCertificateSha256: https && trustMode === "pinned_sha256"
           ? elements["connection-fingerprint"].value
@@ -596,6 +602,7 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
       body: JSON.stringify({
         serverUrl: elements["server-url"].value,
         serverToken: elements["server-token"].value.trim(),
+        shareReasoningSummaries: elements["share-reasoning-summaries"].checked,
         serverTrustMode: usesHTTPS(elements["server-url"].value)
           ? elements["trust-mode"].value
           : "system_ca",

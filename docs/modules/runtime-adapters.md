@@ -140,6 +140,12 @@ authorizes, depth-limits, and persists every resulting child Run.
 
 ## Events and Replies
 
+The shared Bridge executor applies the local `shareReasoningSummaries` consent
+after Adapter projection. Missing/false consent withholds reasoning activity
+before outbound persistence; enabling it never expands the Adapter's existing
+public-summary and redaction boundary. See
+[ADR-0018](../adr/0018-local-reasoning-summary-consent.md).
+
 Adapter events carry `runId`, sequence, timestamp, and an optional logical Task
 Session disposition/cursor. Native session references and local binding keys
 stay local. Text

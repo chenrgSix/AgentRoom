@@ -195,6 +195,25 @@ mismatched values are rejected rather than inferred or migrated.
 
 ## Local Safety
 
+### Reasoning-summary consent
+
+Following [ADR-0018](../adr/0018-local-reasoning-summary-consent.md), the local
+`shareReasoningSummaries` setting defaults to false, including for existing
+configurations. It grants only sharing of Runtime-provided public summaries
+with the configured central service; it is not TLS trust or permission to
+access commands, files, raw hidden reasoning, or tool inputs/outputs. Replies,
+status, and allowlisted tool-name lifecycle continue to work when disabled.
+
+New unconsented reasoning events are discarded before sequence allocation and
+outbox persistence. Recovery masks old reasoning content with privacy-only
+placeholders while retaining contiguous sequences. Local records are retained;
+already uploaded content cannot be recalled. Changing this permission requires
+the Bridge and all workers to be stopped, with probes and work idle. Changing
+the server URL clears consent unless the local owner explicitly grants it
+again; unrelated config edits preserve it.
+
+### Existing safety boundaries
+
 Device credentials use OS-protected storage when available. The Bridge starts
 only Runtime configurations explicitly published by the owner and never
 bypasses the Runtime's command, file, network, or approval policy. Logs exclude
