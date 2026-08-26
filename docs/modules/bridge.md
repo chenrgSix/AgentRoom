@@ -440,6 +440,40 @@ CGO-free CLI tests and builds do not compile the desktop package. Desktop tests
 compile the native shell explicitly, while visual acceptance verifies the
 native WebView, close-to-tray behavior, and second-instance window restore.
 
+### Productized desktop information architecture
+
+`BRG-036` replaces the configured Console's engineering-dashboard layout with
+an Agent-first desktop shell. The paired application has three destinations:
+Overview for the current connection and next action, Agents for local Runtime
+availability and policy, and Settings for connection, privacy, startup,
+updates, diagnostics, identity detail, and re-enrollment. First configuration
+and pending Owner approval remain focused step flows outside that navigation.
+
+The default paired view answers whether the Bridge is connected, which local
+Agents can work, and what the owner should do next. Raw Team and Device IDs,
+configuration paths, retry counters, and transport errors remain locally
+available under explicit technical detail or settings disclosure; they do not
+compete with the ordinary status summary. A stable presentation mapper turns
+known connection failures into owner guidance while retaining the unmodified
+local error only inside the collapsed detail. This presentation layer cannot
+rewrite lifecycle state, suppress an unknown failure, or treat reconnecting as
+online.
+
+Agent cards show only owner-safe local facts already available to the Console:
+name, role, Runtime kind, availability, active-work state, Workspace basename,
+and read-only, Workspace-write, or local-policy filesystem authority. Full
+paths and commands stay in the authenticated edit flow. Test, edit, start,
+stop, pairing, privacy-consent, and recovery mutations retain their existing
+active-work fences and authenticated API handlers.
+
+The shell follows system color preference, uses one restrained accent, keeps
+the connection summary and configured Agent list visible in the native 980 by
+780 initial viewport, and preserves keyboard navigation, modal focus return,
+responsive layout, loopback authentication, secret omission, and manual-only
+update behavior. `BRG-036` changes embedded presentation assets and pure view
+models; it does not add a central wire field, automatic updater, shared Codex
+daemon, Room conversation surface, or new local permission.
+
 ## Distribution
 
 End users install a prebuilt Bridge and do not need Go or Node.js. Publishing a
