@@ -230,6 +230,14 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	}
 	active := make(map[string]activeRun)
 	var activeMu sync.Mutex
+	var runWorkers sync.WaitGroup
+	readerDone := make(chan struct{})
+	defer func() {
+		cancelConnection()
+		_ = socket.CloseNow()
+		<-readerDone // No more workers may be added once the reader has exited.
+		runWorkers.Wait()
+	}()
 	reportReadError := func(err error) {
 		select {
 		case readError <- err:
@@ -237,6 +245,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		}
 	}
 	go func() {
+		defer close(readerDone)
 		for {
 			_, source, err := socket.Read(ctx)
 			if err != nil {
@@ -270,7 +279,9 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 					cancel(nil)
 					continue
 				}
+				runWorkers.Add(1)
 				go func() {
+					defer runWorkers.Done()
 					defer cancel(nil)
 					err := c.HandleRun(runContext, requested, func(sendContext context.Context, value any) error {
 						return writer.writeJSON(sendContext, value)

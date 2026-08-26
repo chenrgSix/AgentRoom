@@ -30,6 +30,7 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run validate` — validate all registered JSON Schemas.
 - `npm run build` — build every implemented workspace.
 - `npm test` — run implemented workspace tests.
+- `npm run test:bridge-ui` — test the embedded Bridge GUI's pairing state projection.
 - `npm run test:e2e` — run deterministic cross-process acceptance tests.
 - `npm run test:e2e:live` — explicitly invoke local Codex and Pi against an isolated temporary Team.
 - `npm run db:migrate` — migrate the configured central SQLite database.

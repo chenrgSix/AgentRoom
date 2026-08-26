@@ -1,7 +1,12 @@
+import { pairingView } from "./pairing-view.mjs";
+
 const elements = Object.fromEntries([
   "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view",
-  "device-title", "start-bridge", "stop-bridge", "resume-enrollment", "edit-connection", "add-agent", "current-server",
+  "device-title", "start-bridge", "stop-bridge", "edit-connection", "add-agent", "current-server",
+  "pairing-status", "pairing-binding", "pairing-guidance", "pairing-blocked", "pairing-backup",
+  "request-enrollment", "start-existing-pairing", "join-copy-result",
+  "pairing-modal-backdrop", "close-pairing-modal", "cancel-pairing-modal", "confirm-reenrollment", "pairing-modal-error",
   "current-server-token",
   "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
   "enrollment-form", "server-url", "server-token", "device-name", "trust-mode", "fingerprint-field",
@@ -37,6 +42,8 @@ if (!token) elements["auth-warning"].classList.remove("hidden");
 let currentState = null;
 let editingAgentId = null;
 let draftPreflightRunning = false;
+let enrollmentActionRunning = false;
+let expectedPairingDeviceId = null;
 const runtimeTestResults = new Map();
 
 const labels = {
@@ -80,6 +87,8 @@ function showError(error) {
   elements["agent-modal-error"].classList.toggle("hidden", !message);
   elements["connection-modal-error"].textContent = message;
   elements["connection-modal-error"].classList.toggle("hidden", !message);
+  elements["pairing-modal-error"].textContent = message;
+  elements["pairing-modal-error"].classList.toggle("hidden", !message);
 }
 
 function setRuntime(kind, enabled) {
@@ -166,7 +175,7 @@ function renderAgent(agent) {
   probeButton.type = "button";
   probeButton.textContent = "测试运行";
   const probeSupported = agent.kind === "codex" || agent.kind === "pi";
-  probeButton.disabled = !probeSupported || !agent.executableReady || agent.activeRuns > 0;
+  probeButton.disabled = currentState.enrollment?.active || !probeSupported || !agent.executableReady || agent.activeRuns > 0;
   const probeResult = document.createElement("span");
   const latestProbe = runtimeTestResults.get(agent.agentId);
   if (latestProbe === "running") {
@@ -205,7 +214,7 @@ function renderAgent(agent) {
   editButton.className = "secondary agent-edit";
   editButton.type = "button";
   editButton.textContent = "编辑";
-  editButton.disabled = currentState.agents.some((candidate) => candidate.activeRuns > 0) ||
+  editButton.disabled = currentState.enrollment?.active || currentState.agents.some((candidate) => candidate.activeRuns > 0) ||
     [...runtimeTestResults.values()].includes("running");
   editButton.addEventListener("click", () => openAgentModal(agent));
   row.append(title, role, status, readiness, permission, workspace, probe, editButton);
@@ -298,7 +307,7 @@ function render(state) {
   elements.phase.textContent = labels[state.phase] || state.phase;
   elements.phase.classList.toggle("running", state.bridgeRunning);
   elements.configured.textContent = state.configured ? "已创建" : "未创建";
-  elements.paired.textContent = state.paired ? "已配对" : "未配对";
+  elements.paired.textContent = state.paired ? "已保存配对" : "未配对";
   elements.running.textContent = state.bridgeRunning ? "运行中" : "已停止";
   const connection = state.connection || {state: state.bridgeRunning ? "connecting" : "stopped"};
   elements["connection-state"].textContent = connectionLabels[connection.state] || connection.state;
@@ -307,12 +316,28 @@ function render(state) {
   elements.error.textContent = state.lastError || "";
   elements.error.classList.toggle("hidden", !state.lastError);
 
-  const waiting = state.phase === "waiting_approval";
-  elements.approval.classList.toggle("hidden", !waiting);
-  if (waiting) {
-    elements["join-code"].textContent = state.joinCode;
-    elements["join-expiry"].textContent = `有效期至 ${new Date(state.joinExpiresAt).toLocaleTimeString()}`;
+  const pairing = pairingView(state);
+  elements["pairing-status"].textContent = pairing.status;
+  elements["pairing-binding"].textContent = pairing.binding;
+  elements["pairing-guidance"].textContent = pairing.guidance;
+  elements["pairing-blocked"].textContent = pairing.blockedReason;
+  elements["request-enrollment"].classList.toggle("hidden", !pairing.showRequest);
+  elements["request-enrollment"].textContent = pairing.requestLabel;
+  elements["request-enrollment"].disabled = enrollmentActionRunning || !pairing.canRequest;
+  elements["start-existing-pairing"].classList.toggle("hidden", !state.paired);
+  elements["start-existing-pairing"].disabled = !pairing.canStartExisting;
+  const backup = state.enrollment?.backupConfigPath;
+  elements["pairing-backup"].classList.toggle("hidden", !backup);
+  elements["pairing-backup"].textContent = backup ? `旧配置备份：${backup}（旧数据目录保持原样）` : "";
+  elements.approval.classList.toggle("hidden", !pairing.showApproval);
+  if (elements["join-code"].textContent !== pairing.codeText) {
+    elements["join-copy-result"].textContent = pairing.canCopy ? "点击代码复制；也可手动选择代码。" : "";
   }
+  elements["join-code"].textContent = pairing.codeText;
+  elements["join-code"].disabled = !pairing.canCopy;
+  elements["join-expiry"].textContent = pairing.expiry;
+  elements["cancel-enrollment"].disabled = !pairing.canCancel || enrollmentActionRunning;
+  const waiting = Boolean(state.enrollment?.active);
 
   elements["configured-view"].classList.toggle("hidden", !state.configured);
   elements["enrollment-form"].classList.toggle("hidden", state.configured || waiting);
@@ -331,10 +356,9 @@ function render(state) {
       : "尚未连接";
     elements["connection-error"].textContent = connection.lastError || "";
     elements["connection-error"].classList.toggle("hidden", !connection.lastError);
-    elements["start-bridge"].disabled = state.bridgeRunning || !state.paired;
+    elements["start-bridge"].disabled = !pairing.canStartExisting;
     elements["stop-bridge"].disabled = !state.bridgeRunning;
-    elements["resume-enrollment"].classList.toggle("hidden", state.paired);
-    const mutationBlocked = state.agents.some((agent) => agent.activeRuns > 0) ||
+    const mutationBlocked = waiting || state.agents.some((agent) => agent.activeRuns > 0) ||
       [...runtimeTestResults.values()].includes("running") || draftPreflightRunning;
     elements["add-agent"].classList.toggle("hidden", !state.paired);
     elements["add-agent"].disabled = mutationBlocked;
@@ -356,6 +380,7 @@ function render(state) {
   elements["login-startup-warning"].textContent = startupWarning;
   elements["login-startup-warning"].classList.toggle("hidden", !startupWarning);
   elements["submit-enrollment"].textContent = "生成加入码";
+  elements["submit-enrollment"].disabled = waiting || enrollmentActionRunning || draftPreflightRunning;
 }
 
 async function refresh() {
@@ -379,7 +404,59 @@ elements["clear-server-token"].addEventListener("change", () => {
 });
 elements["codex-enabled"].addEventListener("change", () => setRuntime("codex", elements["codex-enabled"].checked));
 elements["pi-enabled"].addEventListener("change", () => setRuntime("pi", elements["pi-enabled"].checked));
-elements["join-code"].addEventListener("click", async () => navigator.clipboard.writeText(elements["join-code"].textContent));
+elements["join-code"].addEventListener("click", async () => {
+  if (!currentState || !pairingView(currentState).canCopy) return;
+  try {
+    await navigator.clipboard.writeText(currentState.joinCode);
+    elements["join-copy-result"].textContent = "审批码已复制。请交给目标 Team 的 Owner 审批。";
+  } catch {
+    elements["join-copy-result"].textContent = "无法自动复制，请手动选择并复制上方审批码。";
+  }
+});
+function closePairingModal() {
+  if (enrollmentActionRunning) return;
+  elements["pairing-modal-backdrop"].classList.add("hidden");
+  expectedPairingDeviceId = null;
+}
+async function requestEnrollment(expectedDeviceId = null) {
+  if (enrollmentActionRunning) return;
+  enrollmentActionRunning = true;
+  elements["confirm-reenrollment"].disabled = true;
+  showError(null);
+  try {
+    if (currentState.enrollment?.active && pairingView(currentState).canRequest) {
+      await request("/api/enrollment/cancel", {method: "POST"});
+    }
+    await request(expectedDeviceId ? "/api/enrollment/restart" : "/api/enrollment/start", {
+      method: "POST",
+      ...(expectedDeviceId ? {body: JSON.stringify({confirmNewDevice: true, expectedDeviceId})} : {})
+    });
+    elements["pairing-modal-backdrop"].classList.add("hidden");
+    expectedPairingDeviceId = null;
+    await refresh();
+  } catch (error) {
+    showError(error);
+  } finally {
+    enrollmentActionRunning = false;
+    elements["confirm-reenrollment"].disabled = false;
+  }
+}
+elements["request-enrollment"].addEventListener("click", () => {
+  if (currentState.paired) {
+    expectedPairingDeviceId = currentState.deviceId;
+    showError(null);
+    elements["pairing-modal-backdrop"].classList.remove("hidden");
+    elements["cancel-pairing-modal"].focus();
+  } else {
+    void requestEnrollment();
+  }
+});
+elements["confirm-reenrollment"].addEventListener("click", () => {
+  if (expectedPairingDeviceId) void requestEnrollment(expectedPairingDeviceId);
+});
+for (const id of ["close-pairing-modal", "cancel-pairing-modal"]) {
+  elements[id].addEventListener("click", closePairingModal);
+}
 elements["add-agent"].addEventListener("click", () => openAgentModal());
 elements["edit-connection"].addEventListener("click", openConnectionModal);
 elements["agent-kind"].addEventListener("change", () => {
@@ -433,6 +510,7 @@ elements["connection-modal-backdrop"].addEventListener("click", (event) => {
   if (event.target === elements["connection-modal-backdrop"]) closeConnectionModal();
 });
 document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") closePairingModal();
   if (event.key === "Escape" && !elements["agent-modal-backdrop"].classList.contains("hidden")) {
     closeAgentModal();
   }
@@ -539,7 +617,7 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
 
 for (const [id, path] of [
   ["cancel-enrollment", "/api/enrollment/cancel"],
-  ["resume-enrollment", "/api/enrollment/start"],
+  ["start-existing-pairing", "/api/bridge/start"],
   ["start-bridge", "/api/bridge/start"],
   ["stop-bridge", "/api/bridge/stop"]
 ]) {

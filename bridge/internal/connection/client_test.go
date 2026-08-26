@@ -118,6 +118,76 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	}
 }
 
+func TestClientStopWaitsForCanceledRunWorkers(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		socket, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			return
+		}
+		defer socket.CloseNow()
+		for index := 0; index < 2; index++ {
+			if _, _, err := socket.Read(request.Context()); err != nil {
+				return
+			}
+		}
+		message, _ := json.Marshal(contracts.RunRequestedMessage{
+			Type: contracts.RunRequested, Payload: contracts.RunRequestedPayload{
+				RunID: "run_draining", TargetAgentID: "agent_draining",
+			},
+		})
+		if err := socket.Write(request.Context(), websocket.MessageText, message); err != nil {
+			return
+		}
+		_, _, _ = socket.Read(request.Context())
+	}))
+	defer server.Close()
+	started, canceled, release := make(chan struct{}), make(chan struct{}), make(chan struct{})
+	directory := t.TempDir()
+	client := Client{
+		Config: config.Config{ServerURL: server.URL, DataDir: directory, Agents: []config.AgentConfig{{
+			Name: "Builder", Role: "Implementation", Adapter: "generic", Command: []string{"agent"}, Workspace: directory,
+		}}},
+		Credential: pairing.Credential{DeviceID: "device_draining", TeamID: "team_draining", OwnerMemberID: "member_draining", Token: "fake-secret"},
+		HandleRun: func(ctx context.Context, _ contracts.RunRequestedMessage, _ func(context.Context, any) error) error {
+			close(started)
+			<-ctx.Done()
+			close(canceled)
+			<-release
+			return nil
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+	select {
+	case <-started:
+	case <-time.After(time.Second):
+		t.Fatal("Run worker did not start")
+	}
+	cancel()
+	select {
+	case <-canceled:
+	case <-time.After(time.Second):
+		t.Fatal("Run worker did not receive cancellation")
+	}
+	select {
+	case <-done:
+		close(release)
+		t.Fatal("Bridge stopped before its Runtime worker drained")
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(release)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Bridge did not stop after its Runtime worker exited")
+	}
+}
+
 func TestClientAcceptsContractValidRunAboveWebSocketLibraryDefault(t *testing.T) {
 	accepted := make(chan contracts.RunAcceptedMessage, 1)
 	var connections atomic.Int32

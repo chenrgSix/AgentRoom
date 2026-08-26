@@ -95,6 +95,26 @@ Runtime probe.
 
 ## Connection Lifecycle
 
+### Explicit GUI pairing recovery
+
+`BRG-030` follows [ADR-0017](../adr/0017-isolate-explicit-bridge-reenrollment.md).
+The local GUI keeps Team binding and recovery guidance visible after pairing.
+An approval code is a short-lived request, not a reusable Device credential.
+An online Bridge whose Agents are missing in Web requires checking the Web
+user and Team first; re-enrollment does not restore access to old Team history.
+
+`POST /api/enrollment/restart` requires the local bearer token, explicit
+`confirmNewDevice: true`, and the displayed `expectedDeviceId`. It only runs
+after the Bridge and its workers stop, with no Runtime probe or active work.
+Cancellation fences late results. On approval a fresh owner-only sibling data
+directory contains new credentials and Agent identities plus
+`previous-bridge.json`; the active config atomically switches to that directory.
+Runtime settings and all previous data remain intact. Old central Devices and
+Agents are not migrated or revoked, and old inbox/session state is not replayed
+under the new identity. Staging failures leave the old binding usable.
+
+### Transport
+
 The initial transport is `/ws/bridge`. After TLS connection, the Bridge sends a
 versioned hello containing its device identity, connection epoch, Agents, and
 capabilities. The server either accepts the session or returns a structured

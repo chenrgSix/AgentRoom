@@ -31,13 +31,29 @@
       <article><span>本地智能体</span><strong id="agent-count">0 个</strong></article>
     </section>
 
-    <section class="approval hidden" id="approval">
+    <section class="panel pairing-panel" aria-label="配对与恢复">
+      <div class="section-heading">
+        <div><p class="eyebrow">TEAM PAIRING</p><h2>配对与恢复</h2></div>
+        <strong id="pairing-status">正在读取</strong>
+      </div>
+      <p id="pairing-binding" class="pairing-binding"></p>
+      <p id="pairing-guidance" class="pairing-guidance"></p>
+      <div class="actions">
+        <button class="secondary hidden" id="request-enrollment" type="button">申请审批码</button>
+        <button class="secondary hidden" id="start-existing-pairing" type="button">启动现有配对</button>
+      </div>
+      <p id="pairing-blocked" class="tool-result"></p>
+      <p id="pairing-backup" class="tool-result hidden"></p>
+    </section>
+
+    <section class="approval hidden" id="approval" aria-label="当前审批码">
       <div>
         <p class="eyebrow">等待 TEAM OWNER 审批</p>
         <h2>在中央 Web 管理界面输入此代码</h2>
       </div>
-      <button class="join-code" id="join-code" type="button" title="复制加入码"></button>
+      <button class="join-code" id="join-code" type="button" title="复制审批码" aria-label="复制审批码"></button>
       <p id="join-expiry"></p>
+      <p id="join-copy-result" role="status">点击代码复制；也可手动选择代码。</p>
       <button class="secondary" id="cancel-enrollment" type="button">取消加入</button>
     </section>
 
@@ -45,7 +61,6 @@
       <div class="section-heading">
         <div><p class="eyebrow">CURRENT DEVICE</p><h2 id="device-title">本机 Bridge</h2></div>
         <div class="actions">
-          <button class="secondary hidden" id="resume-enrollment" type="button">请求加入 Team</button>
           <button class="secondary" id="edit-connection" type="button">连接设置</button>
           <button class="primary" id="add-agent" type="button">添加智能体</button>
           <button class="primary" id="start-bridge" type="button">启动 Bridge</button>
@@ -138,6 +153,22 @@
         </div>
       </section>
     </form>
+
+    <div class="modal-backdrop hidden" id="pairing-modal-backdrop">
+      <section class="agent-modal" role="dialog" aria-modal="true" aria-labelledby="pairing-modal-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">NEW DEVICE IDENTITY</p><h2 id="pairing-modal-title">申请新审批码</h2></div>
+          <button class="icon-button" id="close-pairing-modal" type="button" aria-label="关闭">×</button>
+        </div>
+        <p class="pairing-guidance">这不是普通重连。审批成功后，将在审批所选 Team 中创建新的 Device 和 Agent 身份；旧 Agent 不会自动迁移或撤销，也不会恢复旧 Team 的访问权限。</p>
+        <p class="pairing-guidance">保留所有本机智能体配置。新凭据保存成功前不替换旧配对；成功后旧数据仍保留，并生成 previous-bridge.json 备份。</p>
+        <p class="inline-error hidden" id="pairing-modal-error" role="alert"></p>
+        <div class="actions modal-actions">
+          <button class="secondary" id="cancel-pairing-modal" type="button">保留现有配对</button>
+          <button class="primary" id="confirm-reenrollment" type="button">确认申请新身份</button>
+        </div>
+      </section>
+    </div>
 
     <div class="modal-backdrop hidden" id="connection-modal-backdrop">
       <section class="agent-modal connection-modal" role="dialog" aria-modal="true" aria-labelledby="connection-modal-title">
@@ -246,6 +277,6 @@
       </div>
     </section>
   </main>
-  <script src="/app.js" defer></script>
+  <script src="/app.js" type="module"></script>
 </body>
 </html>

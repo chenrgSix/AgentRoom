@@ -123,6 +123,7 @@ type State struct {
 	DetectedPi              string           `json:"detectedPi,omitempty"`
 	Connection              ConnectionView   `json:"connection"`
 	LoginStartup            autostart.State  `json:"loginStartup"`
+	Enrollment              EnrollmentView   `json:"enrollment"`
 }
 
 type Dependencies struct {
@@ -155,8 +156,10 @@ type Service struct {
 	configuration    *config.Config
 	credential       *pairing.Credential
 	joinCancel       context.CancelFunc
+	joinEpoch        uint64
 	bridgeCancel     context.CancelFunc
 	bridgeEpoch      uint64
+	bridgeWorkers    int
 	events           []diagnostics.Event
 	runtimeTests     map[string]struct{}
 	runtimePreflight bool
@@ -237,6 +240,10 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 			service.state.Paired = true
 			service.state.TeamID = credential.TeamID
 			service.state.DeviceID = credential.DeviceID
+			backupPath := filepath.Join(loaded.DataDir, "previous-bridge.json")
+			if info, err := os.Lstat(backupPath); err == nil && info.Mode().IsRegular() {
+				service.state.Enrollment.BackupConfigPath = backupPath
+			}
 		}
 	} else if !errors.Is(rootError(loadErr), os.ErrNotExist) {
 		return nil, loadErr
@@ -258,6 +265,13 @@ func (s *Service) State() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snapshot := cloneState(s.state)
+	snapshot.Enrollment.Active = s.joinCancel != nil
+	snapshot.Enrollment.BlockedReason = s.enrollmentBlockedReasonLocked()
+	snapshot.Enrollment.CanRequest = snapshot.Enrollment.BlockedReason == ""
+	if deadline, err := time.Parse(time.RFC3339Nano, snapshot.JoinExpiresAt); snapshot.Enrollment.Active && err == nil && !time.Now().Before(deadline) {
+		snapshot.JoinCode = ""
+		snapshot.Enrollment.CodeExpired = true
+	}
 	for index := range snapshot.Agents {
 		agent := &snapshot.Agents[index]
 		agent.ExecutableReady = executableAvailable(agent.ExecutablePath)
@@ -280,6 +294,7 @@ func (s *Service) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/state", s.authorize(s.getState))
 	mux.HandleFunc("POST /api/enrollment/start", s.authorize(s.startEnrollment))
+	mux.HandleFunc("POST /api/enrollment/restart", s.authorize(s.restartEnrollment))
 	mux.HandleFunc("POST /api/enrollment/cancel", s.authorize(s.cancelEnrollment))
 	mux.HandleFunc("PUT /api/config", s.authorize(s.updateConfig))
 	mux.HandleFunc("PUT /api/connection-settings", s.authorize(s.updateConnectionSettings))
@@ -316,6 +331,11 @@ func (s *Service) testRuntime(response http.ResponseWriter, request *http.Reques
 		return
 	}
 	s.mu.Lock()
+	if s.joinCancel != nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, "Wait for Team enrollment to finish before testing a Runtime")
+		return
+	}
 	if s.runtimePreflight {
 		s.mu.Unlock()
 		writeError(response, http.StatusConflict, "Wait for the Runtime preflight to finish")
@@ -503,6 +523,9 @@ func (s *Service) StartBridge() (State, error) {
 func (s *Service) StopBridge() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.joinCancel != nil {
+		return cloneState(s.state)
+	}
 	if s.bridgeCancel != nil {
 		s.bridgeCancel()
 	}
@@ -522,6 +545,7 @@ func (s *Service) Close() {
 		s.joinCancel()
 		s.joinCancel = nil
 	}
+	s.joinEpoch++
 	if s.bridgeCancel != nil {
 		s.bridgeCancel()
 		s.bridgeCancel = nil
@@ -568,14 +592,14 @@ func (s *Service) startEnrollment(response http.ResponseWriter, request *http.Re
 		}
 	}
 	s.mu.Lock()
-	if s.runtimePreflight || len(s.runtimeTests) > 0 {
+	if reason := s.enrollmentBlockedReasonLocked(); reason != "" {
 		s.mu.Unlock()
-		writeError(response, http.StatusConflict, "Wait for the Runtime test to finish before enrollment")
+		writeError(response, http.StatusConflict, reason)
 		return
 	}
-	if s.joinCancel != nil || s.bridgeCancel != nil {
+	if s.credential != nil {
 		s.mu.Unlock()
-		writeError(response, http.StatusConflict, "Stop the active Bridge or enrollment first")
+		writeError(response, http.StatusConflict, "Use explicit re-enrollment to request a new Device identity")
 		return
 	}
 	configuredBefore := s.configuration != nil
@@ -599,51 +623,62 @@ func (s *Service) startEnrollment(response http.ResponseWriter, request *http.Re
 		}
 		configuration = &built
 	}
-	ctx, cancel := context.WithCancel(context.Background())
-	s.joinCancel = cancel
-	s.state.Phase = PhaseJoining
-	s.state.LastError = ""
-	s.state.JoinCode = ""
-	s.state.JoinExpiresAt = ""
 	if err := s.applyConfigView(*configuration); err != nil {
-		s.joinCancel = nil
 		s.mu.Unlock()
-		cancel()
 		writeError(response, http.StatusInternalServerError, publicError(err))
 		return
 	}
+	ctx, epoch := s.beginEnrollmentLocked(false)
 	s.mu.Unlock()
 
-	go s.enroll(ctx, *configuration, configuredBefore)
+	go s.enroll(ctx, *configuration, configuredBefore, false, epoch)
 	writeJSON(response, http.StatusAccepted, map[string]string{"status": "joining"})
 }
 
-func (s *Service) enroll(ctx context.Context, configuration config.Config, configuredBefore bool) {
+func (s *Service) enroll(ctx context.Context, configuration config.Config, configuredBefore, recovery bool, epoch uint64) {
 	credential, err := s.dependencies.Enroll(ctx, configuration, func(challenge enrollment.Challenge) {
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		if s.joinEpoch != epoch || ctx.Err() != nil || s.joinCancel == nil {
+			return
+		}
 		s.state.Phase = PhaseApproval
 		s.state.JoinCode = challenge.UserCode
 		s.state.JoinExpiresAt = challenge.ExpiresAt.Format(time.RFC3339Nano)
 	})
-	if err == nil && !configuredBefore {
-		err = s.dependencies.SaveConfig(s.options.ConfigPath, configuration)
-	}
-	if err == nil {
-		err = s.dependencies.SaveCredential(configuration.DataDir, credential)
-	}
 	s.mu.Lock()
-	s.joinCancel = nil
+	defer s.mu.Unlock()
+	if s.joinEpoch != epoch || ctx.Err() != nil {
+		return
+	}
+	if err == nil && recovery {
+		configuration, err = s.installReEnrollmentLocked(configuration, credential)
+	} else if err == nil {
+		if !configuredBefore {
+			err = s.dependencies.SaveConfig(s.options.ConfigPath, configuration)
+			if err == nil {
+				s.configuration = &configuration
+				s.state.Configured = true
+			}
+		}
+		if err == nil {
+			err = s.dependencies.SaveCredential(configuration.DataDir, credential)
+		}
+	}
+	if s.joinCancel != nil {
+		s.joinCancel()
+		s.joinCancel = nil
+	}
+	s.state.JoinCode = ""
+	s.state.JoinExpiresAt = ""
 	if errors.Is(err, context.Canceled) {
 		s.state.Phase = phaseFor(s.state.Configured, s.state.BridgeRunning)
 		s.state.LastError = ""
-		s.mu.Unlock()
 		return
 	}
 	if err != nil {
 		s.state.Phase = PhaseError
-		s.state.LastError = publicError(err)
-		s.mu.Unlock()
+		s.state.LastError = diagnostics.Sanitize(publicError(err))
 		return
 	}
 	s.configuration = &configuration
@@ -660,7 +695,6 @@ func (s *Service) enroll(ctx context.Context, configuration config.Config, confi
 		s.state.Phase = PhaseError
 		s.state.LastError = publicError(err)
 	}
-	s.mu.Unlock()
 }
 
 func (s *Service) cancelEnrollment(response http.ResponseWriter, _ *http.Request) {
@@ -670,8 +704,11 @@ func (s *Service) cancelEnrollment(response http.ResponseWriter, _ *http.Request
 		s.joinCancel()
 		s.joinCancel = nil
 	}
+	s.joinEpoch++
 	s.state.JoinCode = ""
 	s.state.JoinExpiresAt = ""
+	s.state.LastError = ""
+	s.state.Enrollment.Recovery = false
 	s.state.Phase = phaseFor(s.state.Configured, s.state.BridgeRunning)
 	writeJSON(response, http.StatusOK, s.state)
 }
@@ -686,6 +723,9 @@ func (s *Service) startBridge(response http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Service) startBridgeLocked() error {
+	if s.joinCancel != nil {
+		return fmt.Errorf("Finish or cancel Team enrollment before starting the Bridge")
+	}
 	if s.bridgeCancel != nil {
 		return nil
 	}
@@ -696,6 +736,7 @@ func (s *Service) startBridgeLocked() error {
 	s.bridgeEpoch++
 	epoch := s.bridgeEpoch
 	s.bridgeCancel = cancel
+	s.bridgeWorkers++
 	s.state.BridgeRunning = true
 	s.state.Phase = PhaseRunning
 	s.state.LastError = ""
@@ -707,6 +748,15 @@ func (s *Service) startBridgeLocked() error {
 		err := s.dependencies.RunBridge(ctx, configuration, credential, s.operationalObserver(epoch))
 		s.mu.Lock()
 		defer s.mu.Unlock()
+		s.bridgeWorkers--
+		if s.bridgeWorkers == 0 {
+			for index := range s.state.Agents {
+				s.state.Agents[index].ActiveRuns = 0
+				if s.state.Agents[index].RuntimeState == string(operations.RuntimeWorking) {
+					s.state.Agents[index].RuntimeState = string(operations.RuntimeIdle)
+				}
+			}
+		}
 		if s.bridgeEpoch != epoch {
 			return
 		}
@@ -941,15 +991,15 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
-	configuration, err := buildConfig(input, s.options.DataDir)
-	if err != nil {
-		writeError(response, http.StatusBadRequest, err.Error())
-		return
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.requireConfigurationMutationLocked(); err != nil {
 		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
+	configuration, err := buildConfig(input, s.configuration.DataDir)
+	if err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
 	if configuration.ServerToken == "" {
