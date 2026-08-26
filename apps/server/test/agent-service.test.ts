@@ -101,6 +101,7 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
         supportsStart: true,
         supportsStreaming: true
       },
+      runtimePolicy: { filesystemAccess: "workspace-write" },
       now
     });
     const republished = agents.publishDeviceAgent(devicePrincipal, {
@@ -108,6 +109,7 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
       name: "Remote Builder Updated",
       role: "Managed",
       capabilities: remote.capabilities,
+      runtimePolicy: { filesystemAccess: "read-only" },
       now
     });
 
@@ -125,9 +127,13 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
     assert.equal(manual.presence, "manual");
     assert.equal(fake.integrationMode, "fake");
     assert.equal(republished.name, "Remote Builder Updated");
+    assert.deepEqual(republished.runtimePolicy, {
+      filesystemAccess: "read-only"
+    });
     assert.equal(disabled.enabled, false);
     assert.equal(republishedDisabled.enabled, false);
     assert.equal(republishedDisabled.presence, "offline");
+    assert.equal(republishedDisabled.runtimePolicy, null);
     assert.equal(enabled.enabled, true);
     assert.deepEqual(
       agents.listAgents(principal, created.team.teamId)
@@ -180,6 +186,22 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
       },
       now
     }), /Manual Agents cannot advertise/u);
+    assert.throws(() => agents.publishAgent(principal, {
+      teamId: created.team.teamId,
+      deviceId: null,
+      name: "Unsafe Manual Policy",
+      role: "Manual",
+      integrationMode: "manual",
+      capabilities: {
+        supportsHandoff: false,
+        supportsInterrupt: false,
+        supportsResume: false,
+        supportsStart: false,
+        supportsStreaming: false
+      },
+      runtimePolicy: { filesystemAccess: "local-policy" },
+      now
+    }), /Runtime policy summary is invalid/u);
   } finally {
     database.close();
   }

@@ -50,6 +50,17 @@ type Client struct {
 	ArtifactMaterializationAgentNames map[string]bool
 }
 
+func publishedRuntimePolicy(agent config.AgentConfig) contracts.RuntimePolicy {
+	filesystemAccess := contracts.LocalPolicy
+	if agent.RuntimeKind == "codex" || agent.Adapter == "codex" {
+		filesystemAccess = contracts.WorkspaceWrite
+		if agent.Sandbox == "read-only" {
+			filesystemAccess = contracts.ReadOnly
+		}
+	}
+	return contracts.RuntimePolicy{FilesystemAccess: filesystemAccess}
+}
+
 func (c Client) Run(ctx context.Context) error {
 	initial, maximum := c.retryBounds()
 	backoff := initial
@@ -189,6 +200,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		supportsArtifactMaterialization :=
 			c.ArtifactMaterializationAgentNames[configured.Name]
 		capabilities.SupportsArtifactMaterialization = &supportsArtifactMaterialization
+		runtimePolicy := publishedRuntimePolicy(configured)
 		publication := contracts.AgentPublishMessage{
 			ProtocolVersion: "1.0",
 			MessageID:       newID("msg"),
@@ -201,6 +213,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 				Name:                configured.Name,
 				OwnerMemberID:       c.Credential.OwnerMemberID,
 				Role:                configured.Role,
+				RuntimePolicy:       &runtimePolicy,
 				RuntimeScopeID:      &runtimeScopeID,
 				WorkspaceRef:        &workspaceSnapshot.WorkspaceRef,
 				WorkspaceGeneration: &workspaceSnapshot.Generation,

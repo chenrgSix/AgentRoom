@@ -1,6 +1,7 @@
 import type {
   AgentCapabilities,
   AgentRecord,
+  AgentRuntimePolicy,
   CoreRepository
 } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
@@ -18,6 +19,7 @@ export interface PublishAgentInput {
   role: string;
   integrationMode: "managed" | "manual" | "fake";
   capabilities: AgentCapabilities;
+  runtimePolicy?: AgentRuntimePolicy | null;
   runtimeScopeId?: string | null;
   workspaceRef?: string | null;
   workspaceGeneration?: string | null;
@@ -33,6 +35,17 @@ function normalizedLabel(value: string, label: string): string {
 }
 
 function validateCapabilities(input: PublishAgentInput): void {
+  if (
+    input.runtimePolicy != null &&
+    (
+      input.integrationMode !== "managed" ||
+      !["read-only", "workspace-write", "local-policy"].includes(
+        input.runtimePolicy.filesystemAccess
+      )
+    )
+  ) {
+    throw new Error("Runtime policy summary is invalid");
+  }
   if (
     input.runtimeScopeId != null &&
     !/^[0-9a-f]{64}$/u.test(input.runtimeScopeId)
@@ -112,6 +125,7 @@ export class AgentService {
       role: normalizedLabel(input.role, "Agent role"),
       integrationMode: input.integrationMode,
       capabilities: input.capabilities,
+      runtimePolicy: input.runtimePolicy ?? null,
       runtimeScopeId: input.runtimeScopeId ?? null,
       workspaceRef: input.workspaceRef ?? null,
       workspaceGeneration: input.workspaceGeneration ?? null,
@@ -139,6 +153,7 @@ export class AgentService {
       name: string;
       role: string;
       capabilities: AgentCapabilities;
+      runtimePolicy?: AgentRuntimePolicy;
       runtimeScopeId?: string;
       workspaceRef?: string;
       workspaceGeneration?: string;
@@ -150,6 +165,14 @@ export class AgentService {
     }
     if (!input.capabilities.supportsStart) {
       throw new Error("Managed Bridge Agent must support start");
+    }
+    if (
+      input.runtimePolicy !== undefined &&
+      !["read-only", "workspace-write", "local-policy"].includes(
+        input.runtimePolicy.filesystemAccess
+      )
+    ) {
+      throw new Error("Bridge Runtime policy summary is invalid");
     }
     if (
       input.runtimeScopeId !== undefined &&
@@ -202,6 +225,7 @@ export class AgentService {
       role: normalizedLabel(input.role, "Agent role"),
       integrationMode: "managed",
       capabilities: input.capabilities,
+      runtimePolicy: input.runtimePolicy ?? null,
       runtimeScopeId: input.runtimeScopeId ?? existing?.runtimeScopeId ?? null,
       workspaceRef: input.workspaceRef ?? existing?.workspaceRef ?? null,
       workspaceGeneration: input.workspaceGeneration ??

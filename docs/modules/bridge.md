@@ -150,6 +150,14 @@ versioned hello containing its device identity, connection epoch, Agents, and
 capabilities. The server either accepts the session or returns a structured
 incompatibility or revocation error.
 
+`REG-005` adds an optional safe `runtimePolicy` projection to managed Agent
+publication. Its only field is `filesystemAccess`: Codex reports `read-only`
+or `workspace-write`, while Pi and Generic report `local-policy` because their
+actual tool and permission decisions remain local. The projection never
+contains a Workspace path, command, argument, environment variable, tool,
+Provider, account, or credential. Older Bridges omit it and the Server clears
+the displayed value to unreported rather than retaining a stale policy.
+
 Only the newest authenticated epoch may deliver work. Reconnect uses capped
 exponential backoff with jitter, republishes capabilities, and resumes from the
 last acknowledged server cursor.

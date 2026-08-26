@@ -133,7 +133,10 @@ overwritten.
 
 Managed Codex preset version 5 starts the customer's local
 `codex app-server --listen stdio://` with the configured workspace and
-`read-only` or `workspace-write` sandbox. The Bridge publishes bounded
+`read-only` or `workspace-write` sandbox. Agent publication exposes only the
+corresponding `filesystemAccess` enum; Pi and Generic publish `local-policy`.
+It never publishes the Workspace path, command, environment variables, tools,
+Provider, account, or credential as Runtime policy. The Bridge publishes bounded
 `item/agentMessage/delta` previews and keeps the completed Agent message as the
 authoritative Room reply. It never adds approval bypass flags. Official
 reasoning-summary activity and allowlisted tool name/lifecycle may cross, while raw hidden

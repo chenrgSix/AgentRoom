@@ -68,6 +68,10 @@ export interface AgentCapabilities {
   supportsArtifactMaterialization?: boolean;
 }
 
+export interface AgentRuntimePolicy {
+  filesystemAccess: "read-only" | "workspace-write" | "local-policy";
+}
+
 export interface AgentRecord {
   agentId: string;
   teamId: string;
@@ -77,6 +81,7 @@ export interface AgentRecord {
   role: string;
   integrationMode: "managed" | "manual" | "fake";
   capabilities: AgentCapabilities;
+  runtimePolicy: AgentRuntimePolicy | null;
   runtimeScopeId?: string | null;
   workspaceRef?: string | null;
   workspaceGeneration?: string | null;

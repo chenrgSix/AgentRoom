@@ -513,6 +513,22 @@
         }
       }
     },
+    "runtimePolicySummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filesystemAccess"
+      ],
+      "properties": {
+        "filesystemAccess": {
+          "enum": [
+            "read-only",
+            "workspace-write",
+            "local-policy"
+          ]
+        }
+      }
+    },
     "runtimeCapabilities": {
       "type": "object",
       "additionalProperties": true,
@@ -670,6 +686,9 @@
         },
         "capabilities": {
           "$ref": "#/$defs/runtimeCapabilities"
+        },
+        "runtimePolicy": {
+          "$ref": "#/$defs/runtimePolicySummary"
         },
         "runtimeScopeId": {
           "$ref": "#/$defs/runtimeScopeId"

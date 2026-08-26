@@ -76,6 +76,14 @@ Managed Bridge publications carry a locally persisted stable Agent ID. The
 server permits create or update only when Device, Owner, and Team match the
 authenticated Device credential; reconnect publication is idempotent.
 
+Managed publication may include the safe Runtime policy summary defined by
+`REG-005`. The Registry persists only its closed `filesystemAccess` enum and
+returns it to authenticated Team members. Omission means unreported and clears
+an older value on republication, preventing a downgraded or older Bridge from
+leaving a stale policy label. Unknown policy fields and values are rejected;
+local paths, commands, environment variables, tools, Provider data, accounts,
+and credentials never enter this projection.
+
 An Owner may disable or re-enable an Agent through
 `PATCH /api/agents/:agentId`. Disablement is fenced while that Agent has active
 Run or Discussion work, preserves Room assignment and history, and remains

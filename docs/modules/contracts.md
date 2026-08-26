@@ -86,6 +86,12 @@ to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free
 comparison identities, not Runtime scope IDs or permission grants. Older
 Bridges omit them and remain limited to reference-only Artifact evidence.
 
+`REG-005` adds optional `runtimePolicy` to managed Agent publication. The
+closed summary contains exactly one `filesystemAccess` enum with
+`read-only`, `workspace-write`, or `local-policy`; local paths, commands,
+environment variables, Provider data, credentials, and arbitrary extension
+fields are invalid. Older Bridges may omit the field and remain compatible.
+
 `run.output_delta` is a Bridge-to-server preview event. It carries one bounded
 text addition and an optional `reset` flag within the same strict Run event
 sequence used by status and reply events. A reset replaces the provisional

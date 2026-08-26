@@ -23,6 +23,9 @@ interface BridgeFixture {
   app: Awaited<ReturnType<typeof createServerApp>>;
   socket: BridgeSocket;
   authorization: { authorization: string };
+  deviceId: string;
+  ownerMemberId: string;
+  teamId: string;
   roomId: string;
   runId: string;
   traceId: string;
@@ -193,6 +196,7 @@ async function createFixture(
     name: "Protocol Agent",
     ownerMemberId: paired.device.ownerMemberId,
     role: "Protocol Test",
+    runtimePolicy: { filesystemAccess: "read-only" },
     teamId: paired.device.teamId
   }));
   await waitFor(async () => {
@@ -201,8 +205,14 @@ async function createFixture(
       url: `/api/teams/${teamId}/agents`,
       headers: authorization
     });
-    return response.json().some((agent: { agentId: string; presence: string }) =>
-      agent.agentId === agentId && agent.presence === "ready"
+    return response.json().some((agent: {
+      agentId: string;
+      presence: string;
+      runtimePolicy?: { filesystemAccess?: string };
+    }) =>
+      agent.agentId === agentId &&
+      agent.presence === "ready" &&
+      agent.runtimePolicy?.filesystemAccess === "read-only"
     );
   });
   const requestedMessage = nextMessage(socket);
@@ -219,6 +229,9 @@ async function createFixture(
     app,
     socket,
     authorization,
+    deviceId: paired.device.deviceId,
+    ownerMemberId: paired.device.ownerMemberId,
+    teamId: paired.device.teamId,
     roomId,
     runId: requested.payload.runId as string,
     traceId: requested.payload.traceId as string
@@ -662,6 +675,39 @@ test("Bridge rejects permission-shaped Task clarification fields", async () => {
     assert.deepEqual(await closed, {
       code: 4_008,
       reason: "Bridge message rejected: run_status_rejected"
+    });
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("Bridge rejects local details inside a Runtime policy summary", async () => {
+  const fixture = await createFixture();
+  try {
+    const closed = nextClose(fixture.socket);
+    send(fixture.socket, envelope("agent.publish", {
+      agentId,
+      capabilities: {
+        invocationMode: "managed",
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: false
+      },
+      deviceId: fixture.deviceId,
+      name: "Unsafe Agent",
+      ownerMemberId: fixture.ownerMemberId,
+      role: "Unsafe",
+      runtimePolicy: {
+        filesystemAccess: "read-only",
+        workspacePath: "/Users/alice/private"
+      },
+      teamId: fixture.teamId
+    }));
+    assert.deepEqual(await closed, {
+      code: 4_008,
+      reason: "Bridge message rejected: agent_publication_rejected"
     });
   } finally {
     await closeFixture(fixture);

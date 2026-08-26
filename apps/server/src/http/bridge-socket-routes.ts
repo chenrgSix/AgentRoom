@@ -1,4 +1,5 @@
 import type { BridgeRunEventService } from "../run/bridge-run-event-service.js";
+import type { AgentRuntimePolicy } from "../data/core-repository.js";
 import { bearerToken } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
@@ -34,6 +35,18 @@ const bridgeLogMessageTypes = new Set([
   "run.output_delta",
   "run.reply"
 ]);
+const filesystemAccessPolicies = new Set<AgentRuntimePolicy["filesystemAccess"]>([
+  "read-only",
+  "workspace-write",
+  "local-policy"
+]);
+
+function isFilesystemAccessPolicy(
+  value: unknown
+): value is AgentRuntimePolicy["filesystemAccess"] {
+  return typeof value === "string" && filesystemAccessPolicies.has(value as
+    AgentRuntimePolicy["filesystemAccess"]);
+}
 
 export function isBridgeTraceId(value: unknown): value is string {
   return typeof value === "string" && bridgeTraceIdPattern.test(value);
@@ -200,6 +213,17 @@ export function registerBridgeSocketRoutes({
           const capabilities = message.payload.capabilities as
             | Record<string, unknown>
             | undefined;
+          const runtimePolicy = message.payload.runtimePolicy;
+          const runtimePolicyObject = runtimePolicy &&
+            typeof runtimePolicy === "object" &&
+            !Array.isArray(runtimePolicy)
+            ? runtimePolicy as Record<string, unknown>
+            : undefined;
+          const validRuntimePolicy = runtimePolicy === undefined || (
+            runtimePolicyObject !== undefined &&
+            Object.keys(runtimePolicyObject).length === 1 &&
+            isFilesystemAccessPolicy(runtimePolicyObject.filesystemAccess)
+          );
           if (
             message.payload.deviceId !== devicePrincipal.deviceId ||
             message.payload.teamId !== devicePrincipal.teamId ||
@@ -207,7 +231,8 @@ export function registerBridgeSocketRoutes({
             typeof message.payload.agentId !== "string" ||
             typeof message.payload.name !== "string" ||
             typeof message.payload.role !== "string" ||
-            capabilities?.invocationMode !== "managed"
+            capabilities?.invocationMode !== "managed" ||
+            !validRuntimePolicy
           ) {
             rejectMessage("agent_publication_rejected");
             return;
@@ -216,6 +241,14 @@ export function registerBridgeSocketRoutes({
             agentId: message.payload.agentId,
             name: message.payload.name,
             role: message.payload.role,
+            ...(runtimePolicyObject &&
+              isFilesystemAccessPolicy(runtimePolicyObject.filesystemAccess)
+              ? {
+                  runtimePolicy: {
+                    filesystemAccess: runtimePolicyObject.filesystemAccess
+                  }
+                }
+              : {}),
             ...(typeof message.payload.runtimeScopeId === "string"
               ? { runtimeScopeId: message.payload.runtimeScopeId }
               : {}),

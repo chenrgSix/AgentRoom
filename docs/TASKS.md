@@ -89,6 +89,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | REG-002 | DONE | Implement Agent publication and capability validation | REG-001, CON-003 | managed/manual agents publish correctly |
 | REG-003 | DONE | Implement Presence TTL and derived status | REG-002 | ready, busy, degraded, manual, offline verified |
 | REG-004 | DONE | Add recoverable Agent enablement controls | REG-003, ROOM-004, RUN-003 | `agent-service.test.ts` and `team-room-service.test.ts` prove Owner-only disable/enable preserves stable identity and Room assignment, rejects active work, and cannot be undone by managed Bridge republication |
+| REG-005 | DONE | Project safe managed Agent Runtime policies centrally | REG-002, BRG-004, CON-003 | closed `runtimePolicy.filesystemAccess` contract validation across 57 fixtures, generated TypeScript and Go checks, Bridge publication plus full/race/vet tests, migration 0039, 129 Server tests and build, security rejection of local configuration detail, compatibility clearing for legacy omission, and docs lint prove only the bounded read/write/local-policy summary crosses the Device boundary |
 | WEB-001 | DONE | Scaffold Web shell and basic Team management | ROOM-001, REG-001 | user creates Team, Room, Member, and fake Agent |
 
 ## Workstream F2: Bridge and Managed Runtime

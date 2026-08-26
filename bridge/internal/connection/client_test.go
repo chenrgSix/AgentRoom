@@ -96,6 +96,10 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	if capabilities["supportsArtifactMaterialization"] != true {
 		t.Fatalf("Artifact materialization capability was not published: %#v", publication)
 	}
+	runtimePolicy, ok := payload["runtimePolicy"].(map[string]any)
+	if !ok || len(runtimePolicy) != 1 || runtimePolicy["filesystemAccess"] != "local-policy" {
+		t.Fatalf("safe Runtime policy summary was not published: %#v", publication)
+	}
 	runtimeScopeID, ok := payload["runtimeScopeId"].(string)
 	if !ok || len(runtimeScopeID) != 64 {
 		t.Fatalf("Runtime scope was not published: %#v", publication)
@@ -115,6 +119,28 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Bridge client did not stop")
+	}
+}
+
+func TestPublishedRuntimePolicyContainsOnlyFilesystemAccess(t *testing.T) {
+	tests := []struct {
+		name     string
+		agent    config.AgentConfig
+		expected contracts.FilesystemAccess
+	}{
+		{name: "Codex read only", agent: config.AgentConfig{RuntimeKind: "codex", Sandbox: "read-only"}, expected: contracts.ReadOnly},
+		{name: "Codex Workspace write", agent: config.AgentConfig{RuntimeKind: "codex", Sandbox: "workspace-write"}, expected: contracts.WorkspaceWrite},
+		{name: "legacy Codex", agent: config.AgentConfig{Adapter: "codex"}, expected: contracts.WorkspaceWrite},
+		{name: "Pi local policy", agent: config.AgentConfig{RuntimeKind: "pi"}, expected: contracts.LocalPolicy},
+		{name: "Generic local policy", agent: config.AgentConfig{RuntimeKind: "generic"}, expected: contracts.LocalPolicy},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			policy := publishedRuntimePolicy(test.agent)
+			if policy.FilesystemAccess != test.expected {
+				t.Fatalf("expected %q, got %q", test.expected, policy.FilesystemAccess)
+			}
+		})
 	}
 }
 

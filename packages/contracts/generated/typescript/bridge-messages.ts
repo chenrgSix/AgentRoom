@@ -142,6 +142,7 @@ export interface AgentPublishPayload {
   name:                 string;
   ownerMemberId:        string;
   role:                 string;
+  runtimePolicy?:       RuntimePolicy;
   runtimeScopeId?:      string;
   teamId:               string;
   workspaceGeneration?: string;
@@ -164,6 +165,12 @@ export interface Capabilities {
 }
 
 export type InvocationMode = "managed" | "manual";
+
+export interface RuntimePolicy {
+  filesystemAccess: FilesystemAccess;
+}
+
+export type FilesystemAccess = "read-only" | "workspace-write" | "local-policy";
 
 export type AgentPublishMessageType = "agent.publish";
 

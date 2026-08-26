@@ -94,16 +94,17 @@ type AgentPublishMessage struct {
 }
 
 type AgentPublishPayload struct {
-	AgentID             string       `json:"agentId"`
-	Capabilities        Capabilities `json:"capabilities"`
-	DeviceID            string       `json:"deviceId"`
-	Name                string       `json:"name"`
-	OwnerMemberID       string       `json:"ownerMemberId"`
-	Role                string       `json:"role"`
-	RuntimeScopeID      *string      `json:"runtimeScopeId,omitempty"`
-	TeamID              string       `json:"teamId"`
-	WorkspaceGeneration *string      `json:"workspaceGeneration,omitempty"`
-	WorkspaceRef        *string      `json:"workspaceRef,omitempty"`
+	AgentID             string         `json:"agentId"`
+	Capabilities        Capabilities   `json:"capabilities"`
+	DeviceID            string         `json:"deviceId"`
+	Name                string         `json:"name"`
+	OwnerMemberID       string         `json:"ownerMemberId"`
+	Role                string         `json:"role"`
+	RuntimePolicy       *RuntimePolicy `json:"runtimePolicy,omitempty"`
+	RuntimeScopeID      *string        `json:"runtimeScopeId,omitempty"`
+	TeamID              string         `json:"teamId"`
+	WorkspaceGeneration *string        `json:"workspaceGeneration,omitempty"`
+	WorkspaceRef        *string        `json:"workspaceRef,omitempty"`
 }
 
 type Capabilities struct {
@@ -117,6 +118,10 @@ type Capabilities struct {
 	SupportsStart                   bool           `json:"supportsStart"`
 	SupportsStreaming               bool           `json:"supportsStreaming"`
 	SupportsWorkspaceLeases         *bool          `json:"supportsWorkspaceLeases,omitempty"`
+}
+
+type RuntimePolicy struct {
+	FilesystemAccess FilesystemAccess `json:"filesystemAccess"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -609,6 +614,14 @@ type InvocationMode string
 const (
 	Managed InvocationMode = "managed"
 	Manual  InvocationMode = "manual"
+)
+
+type FilesystemAccess string
+
+const (
+	LocalPolicy    FilesystemAccess = "local-policy"
+	ReadOnly       FilesystemAccess = "read-only"
+	WorkspaceWrite FilesystemAccess = "workspace-write"
 )
 
 type AgentPublishMessageType string

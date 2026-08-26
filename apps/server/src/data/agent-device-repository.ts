@@ -3,6 +3,7 @@ import type Database from "better-sqlite3";
 import type {
   AgentCapabilities,
   AgentRecord,
+  AgentRuntimePolicy,
   DevicePresenceRecord,
   DeviceRecord
 } from "./core-repository.js";
@@ -17,6 +18,7 @@ interface AgentRow {
   role: string;
   integration_mode: AgentRecord["integrationMode"];
   capabilities_json: string;
+  runtime_policy_json: string | null;
   runtime_scope_id: string | null;
   workspace_ref: string | null;
   workspace_generation: string | null;
@@ -47,13 +49,13 @@ export class AgentDeviceRepository {
       this.database.prepare(`
         INSERT INTO agents (
           agent_id, team_id, owner_member_id, device_id, name, role,
-          integration_mode, capabilities_json, runtime_scope_id, workspace_ref,
-          workspace_generation, enabled,
+          integration_mode, capabilities_json, runtime_policy_json,
+          runtime_scope_id, workspace_ref, workspace_generation, enabled,
           presence, created_at, updated_at
         ) VALUES (
           @agentId, @teamId, @ownerMemberId, @deviceId, @name, @role,
-          @integrationMode, @capabilitiesJson, @runtimeScopeId, @workspaceRef,
-          @workspaceGeneration, @enabled,
+          @integrationMode, @capabilitiesJson, @runtimePolicyJson,
+          @runtimeScopeId, @workspaceRef, @workspaceGeneration, @enabled,
           @presence, @createdAt, @updatedAt
         )
       `).run({
@@ -62,6 +64,9 @@ export class AgentDeviceRepository {
         workspaceRef: agent.workspaceRef ?? null,
         workspaceGeneration: agent.workspaceGeneration ?? null,
         capabilitiesJson: JSON.stringify(agent.capabilities),
+        runtimePolicyJson: agent.runtimePolicy
+          ? JSON.stringify(agent.runtimePolicy)
+          : null,
         enabled: agent.enabled ? 1 : 0
       });
       if (agent.enabled) {
@@ -81,6 +86,7 @@ export class AgentDeviceRepository {
     this.database.prepare(`
       UPDATE agents
       SET name = @name, role = @role, capabilities_json = @capabilitiesJson,
+          runtime_policy_json = @runtimePolicyJson,
           runtime_scope_id = @runtimeScopeId, workspace_ref = @workspaceRef,
           workspace_generation = @workspaceGeneration, enabled = @enabled,
           presence = @presence, updated_at = @updatedAt
@@ -91,6 +97,9 @@ export class AgentDeviceRepository {
       workspaceRef: agent.workspaceRef ?? null,
       workspaceGeneration: agent.workspaceGeneration ?? null,
       capabilitiesJson: JSON.stringify(agent.capabilities),
+      runtimePolicyJson: agent.runtimePolicy
+        ? JSON.stringify(agent.runtimePolicy)
+        : null,
       enabled: agent.enabled ? 1 : 0
     });
   }
@@ -297,6 +306,9 @@ export class AgentDeviceRepository {
       role: row.role,
       integrationMode: row.integration_mode,
       capabilities: JSON.parse(row.capabilities_json) as AgentCapabilities,
+      runtimePolicy: row.runtime_policy_json
+        ? JSON.parse(row.runtime_policy_json) as AgentRuntimePolicy
+        : null,
       runtimeScopeId: row.runtime_scope_id,
       workspaceRef: row.workspace_ref,
       workspaceGeneration: row.workspace_generation,

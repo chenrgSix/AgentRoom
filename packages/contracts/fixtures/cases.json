@@ -168,6 +168,9 @@
           "runtimeScopeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
           "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "workspaceGeneration": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+          "runtimePolicy": {
+            "filesystemAccess": "workspace-write"
+          },
           "capabilities": {
             "invocationMode": "managed",
             "supportsStart": true,
@@ -182,6 +185,37 @@
         }
       },
       "valid": true
+    },
+    {
+      "name": "Agent Runtime policy rejects local configuration detail",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_agent_policy_reject_12345678",
+        "timestamp": "2026-08-22T10:00:10Z",
+        "type": "agent.publish",
+        "payload": {
+          "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "name": "Unsafe Builder",
+          "role": "Backend",
+          "runtimePolicy": {
+            "filesystemAccess": "read-only",
+            "workspacePath": "/Users/alice/private"
+          },
+          "capabilities": {
+            "invocationMode": "managed",
+            "supportsStart": true,
+            "supportsResume": true,
+            "supportsStreaming": true,
+            "supportsInterrupt": true,
+            "supportsHandoff": false
+          }
+        }
+      },
+      "valid": false
     },
     {
       "name": "valid Agent status",
