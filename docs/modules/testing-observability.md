@@ -273,6 +273,15 @@ tag rebuild instead of treating either failed attempt as release evidence.
 `BRG-013` and `QA-002` remain visibly open post-release physical-environment
 acceptance.
 
+The `v0.3.0-rc.1` candidate admits the additive Bridge recovery, local consent,
+Runtime discovery, Codex session guidance, browser Mention retention, and safe
+Agent Runtime policy projection delivered after `v0.2.0`. Admission requires
+the exact tagged source to pass main CI, the empty-draft workflow to verify all
+11 assets before and after upload, public prerelease publication, and a fresh
+public download verified with the tag's committed script. Migration 0039 and
+the optional `runtimePolicy.filesystemAccess` projection are included in the
+version-aligned Server, Web, contracts, and Bridge candidate.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
