@@ -282,6 +282,13 @@ public download verified with the tag's committed script. Migration 0039 and
 the optional `runtimePolicy.filesystemAccess` projection are included in the
 version-aligned Server, Web, contracts, and Bridge candidate.
 
+The `v0.3.0-rc.1` evidence is recorded in
+`docs/acceptance/qa-022-v0.3.0-rc.1.md`. `QA-022` is complete because the exact
+tagged source passed main CI, the empty-draft workflow built seven archives and
+verified all 11 assets before and after upload, the candidate was published as
+a prerelease, and a fresh public download passed the tag's committed verifier.
+The acceptance retains the separate real-login and two-physical-machine gates.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
