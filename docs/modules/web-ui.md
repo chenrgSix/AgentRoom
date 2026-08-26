@@ -169,6 +169,26 @@ The composer previews exact matches before submission. Browser acceptance types
 an exact full name, a non-matching prefix, and `@all` without sending a Message;
 component coverage verifies the resulting single-Run and Discussion payloads.
 
+The composer offers a default-off **Keep last @ mentions** switch. Only its
+boolean preference is persisted in browser-local storage; Agent identities and
+message drafts are not. When enabled, an ordinary submission pre-fills the next
+draft with the resolved Agent names and stable-ID chips. Successful Discussion
+creation does the same, but a late response cannot overwrite a newer draft or
+another Room/Task. The retained tokens remain visible, editable, and removable;
+turning the switch off removes automatically retained tokens without deleting
+the user's new message text. A draft containing only retained tokens cannot
+accidentally submit another Run. An exact `@all` retains its concrete recipients,
+not a dynamic expansion to future roster members. Existing multi-Agent policy,
+five-Agent limits, and active-Discussion guards still apply.
+
+Changing Room, Task, or signed-in identity clears the composer draft and its
+targets. Removed, disabled, or renamed retained Agents lose their old tokens
+rather than resolving them to a different identity. Presence alone does not
+clear a target: offline delivery keeps the existing queue semantics. Failed
+ordinary messages retain the original outbox payload and client Message ID;
+retry never reads or overwrites the current draft's recipients. These are Web
+presentation preferences only, not a Server routing fallback or session policy.
+
 Timeline messages resolve their visible author from the stable `senderId` and
 the current Team roster. Registered Agent and member names are shown directly;
 the generic localized Agent label is reserved for missing historical identities.
@@ -283,6 +303,12 @@ cancellation. A public end-to-end two-Agent parallel Discussion persists its
 conclusion in `QA-010`. Existing UI work is tracked through `WEB-019`; Wave
 presentation and acceptance are completed by `WEB-020` and `QA-010`.
 Composer and Discussion controller extraction is tracked by `WEB-038`.
+
+`WEB-041` adds the browser-local Mention retention preference. Focused hook
+regressions and the full-App integration cover continuation, stable identity,
+scope/roster changes, outbox retry, and stale completions; isolated production
+browser screenshots and limits are recorded in
+[the local acceptance](../acceptance/web-041-mention-retention.md).
 
 `WEB-021` replaces first-page polling with a newest-100 snapshot, resumable
 cursor deltas, duplicate suppression, and a 500-message browser history bound.

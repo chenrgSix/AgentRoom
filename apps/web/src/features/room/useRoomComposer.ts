@@ -30,6 +30,11 @@ import {
   resolveExactMentionCommands,
   retainVisibleMentionIds
 } from "../../structured-mentions.js";
+import {
+  readKeepMentionsPreference,
+  removeRetainedMentionTokens,
+  writeKeepMentionsPreference
+} from "./mention-retention.js";
 
 interface RoomComposerInput {
   activeDiscussion: DiscussionView | null;
@@ -67,7 +72,19 @@ export function useRoomComposer(input: RoomComposerInput) {
   const [mentionSearch, setMentionSearch] = useState<MentionSearch | null>(null);
   const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
   const [busy, setBusy] = useState(false);
+  const [keepMentions, setKeepMentions] = useState(readKeepMentionsPreference);
+  const keepMentionsRef = useRef(keepMentions);
+  const retainedAgentsRef = useRef<Agent[]>([]);
+  const draftRevisionRef = useRef(0);
+  const scopeKey = JSON.stringify([session?.userId, selectedRoomId, selectedTaskId]);
+  const scopeRef = useRef({ key: scopeKey, revision: 0 });
+  if (scopeRef.current.key !== scopeKey) {
+    scopeRef.current = { key: scopeKey, revision: scopeRef.current.revision + 1 };
+  }
+  const roomAgentsRef = useRef(roomAgents);
+  roomAgentsRef.current = roomAgents;
   const selectedRoomIdRef = useRef<string | null>(selectedRoomId);
+  selectedRoomIdRef.current = selectedRoomId;
 
   const agentsById = useMemo(
     () => new Map(agents.map((agent) => [agent.agentId, agent])),
@@ -99,24 +116,38 @@ export function useRoomComposer(input: RoomComposerInput) {
     const agent = agentsById.get(agentId);
     return agent ? [agent] : [];
   });
+  const hasMessageText = removeRetainedMentionTokens(
+    messageContent, retainedAgentsRef.current, agents
+  ).trim().length > 0;
 
   useEffect(() => {
-    selectedRoomIdRef.current = selectedRoomId;
     setPendingMessages([]);
-  }, [selectedRoomId]);
+  }, [selectedRoomId, session?.userId]);
 
   useEffect(() => {
+    resetDraft();
+  }, [scopeKey]);
+
+  useEffect(() => {
+    const eligible = new Map(roomAgents
+      .filter((agent) => agent.enabled !== false)
+      .map((agent) => [agent.agentId, agent]));
+    discardRetainedMentions(retainedAgentsRef.current.filter((agent) =>
+      eligible.get(agent.agentId)?.name !== agent.name
+    ));
     setMentionAgentIds((current) => {
-      const retained = current.filter((agentId) => agentsById.has(agentId));
+      const retained = current.filter((agentId) => eligible.has(agentId));
       return retained.length === current.length ? current : retained;
     });
-  }, [agentsById]);
+  }, [roomAgents]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!session || !selectedRoomId || !selectedTaskId || !messageContent.trim()) {
+    if (busy || !session || !selectedRoomId || !selectedTaskId || !hasMessageText) {
       return;
     }
+    const submittedScopeRevision = scopeRef.current.revision;
+    const submittedDraftRevision = draftRevisionRef.current;
     const exactCommands = resolveExactMentionCommands(
       messageContent,
       roomAgents,
@@ -181,7 +212,10 @@ export function useRoomComposer(input: RoomComposerInput) {
           },
           session.token
         );
-        resetDraft();
+        if (scopeRef.current.revision === submittedScopeRevision &&
+          draftRevisionRef.current === submittedDraftRevision) {
+          resetDraft(resolvedMentionAgentIds);
+        }
         await onRoomStateChanged();
       } catch (reason) {
         onError(String(reason));
@@ -202,7 +236,7 @@ export function useRoomComposer(input: RoomComposerInput) {
       status: "pending"
     };
     setPendingMessages((current) => queuePendingMessage(current, pending));
-    resetDraft();
+    resetDraft(resolvedMentionAgentIds);
     await deliver(pending);
   }
 
@@ -253,6 +287,15 @@ export function useRoomComposer(input: RoomComposerInput) {
     const beforeCursor = nextContent.slice(0, cursor);
     const match = /(?:^|\s)@([^@\s]*)$/u.exec(beforeCursor);
 
+    draftRevisionRef.current += 1;
+    const retainedIds = new Set(retainVisibleMentionIds(
+      nextContent,
+      retainedAgentsRef.current.map(({ agentId }) => agentId),
+      new Map(retainedAgentsRef.current.map((agent) => [agent.agentId, agent]))
+    ));
+    retainedAgentsRef.current = retainedAgentsRef.current.filter(({ agentId }) =>
+      retainedIds.has(agentId)
+    );
     setMessageContent(nextContent);
     onError(null);
     setMentionAgentIds((current) =>
@@ -284,6 +327,7 @@ export function useRoomComposer(input: RoomComposerInput) {
       `@${agent.name} `,
       messageContent.slice(mentionSearch.end)
     ].join("");
+    draftRevisionRef.current += 1;
     setMessageContent(nextContent);
     setMentionAgentIds((current) => current.includes(agent.agentId)
       ? current
@@ -295,6 +339,10 @@ export function useRoomComposer(input: RoomComposerInput) {
   }
 
   function removeMention(agent: Agent) {
+    draftRevisionRef.current += 1;
+    retainedAgentsRef.current = retainedAgentsRef.current.filter(({ agentId }) =>
+      agentId !== agent.agentId
+    );
     setMessageContent((current) => removeVisibleMentionToken(
       current,
       agent.name,
@@ -308,9 +356,36 @@ export function useRoomComposer(input: RoomComposerInput) {
 
   function retainMentionAgentIds(agentIds: string[]) {
     const retainedIds = new Set(agentIds);
+    discardRetainedMentions(retainedAgentsRef.current.filter(({ agentId }) =>
+      !retainedIds.has(agentId)
+    ));
     setMentionAgentIds((current) => current.filter((agentId) =>
       retainedIds.has(agentId)
     ));
+  }
+
+  function discardRetainedMentions(removed: Agent[]) {
+    if (removed.length === 0) return;
+    draftRevisionRef.current += 1;
+    const removedIds = new Set(removed.map(({ agentId }) => agentId));
+    const knownAgents = [...agents, ...retainedAgentsRef.current];
+    retainedAgentsRef.current = retainedAgentsRef.current.filter(({ agentId }) =>
+      !removedIds.has(agentId)
+    );
+    setMessageContent((current) => removeRetainedMentionTokens(
+      current, removed, knownAgents
+    ));
+    setMentionAgentIds((current) => current.filter((agentId) =>
+      !removedIds.has(agentId)
+    ));
+    setMentionSearch(null);
+  }
+
+  function changeKeepMentions(enabled: boolean) {
+    keepMentionsRef.current = enabled;
+    setKeepMentions(enabled);
+    writeKeepMentionsPreference(enabled);
+    if (!enabled) discardRetainedMentions(retainedAgentsRef.current);
   }
 
   function handleKeyDown(event: ReactKeyboardEvent<HTMLTextAreaElement>) {
@@ -335,20 +410,40 @@ export function useRoomComposer(input: RoomComposerInput) {
     }
   }
 
-  function resetDraft() {
-    setMessageContent("");
-    setMentionAgentIds([]);
+  function resetDraft(agentIds: string[] = []) {
+    const eligible = new Map(roomAgentsRef.current
+      .filter((agent) => agent.enabled !== false)
+      .map((agent) => [agent.agentId, agent]));
+    let retained = keepMentionsRef.current
+      ? agentIds.flatMap((agentId) => {
+          const agent = eligible.get(agentId);
+          return agent ? [agent] : [];
+        })
+      : [];
+    const content = retained.map(({ name }) => `@${name} `).join("");
+    const parsed = resolveExactMentionCommands(content, roomAgentsRef.current);
+    if (parsed.usesAll || parsed.agentIds.some((id) => !agentIds.includes(id))) {
+      // Reserved or embedded command syntax in a name must not widen a preset.
+      retained = [];
+    }
+    draftRevisionRef.current += 1;
+    retainedAgentsRef.current = retained;
+    setMessageContent(retained.map(({ name }) => `@${name} `).join(""));
+    setMentionAgentIds(retained.map(({ agentId }) => agentId));
     setMentionSearch(null);
     setMentionOptionIndex(0);
   }
 
   return {
     busy,
+    changeKeepMentions,
     deliver,
     directlyParsedAgents,
     exactMentionCommands,
     handleChange,
     handleKeyDown,
+    hasMessageText,
+    keepMentions,
     mentionOptionIndex,
     mentionOptions,
     mentionSearch,

@@ -758,6 +758,27 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       assert.equal(body.mentionAgentId, secondAgent.agentId);
     });
 
+    const keepMentionsSwitch = screen.getByRole("switch", { name: "保留上次 @" }) as HTMLInputElement;
+    assert.equal(keepMentionsSwitch.checked, false);
+    fireEvent.click(keepMentionsSwitch);
+    fireEvent.change(roomMessageInput, { target: { value: "@Local Codex 连续对话第一条" } });
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => assert.equal((roomMessageInput as HTMLTextAreaElement).value, "@Local Codex "));
+    screen.getByRole("button", { name: "移除提及 Local Codex（Codex 执行者）" });
+    assert.equal((screen.getByRole("button", { name: "发送" }) as HTMLButtonElement).disabled, true);
+    fireEvent.change(roomMessageInput, { target: { value: "@Local Codex 接着解释" } });
+    await waitFor(() => assert.equal((screen.getByRole("button", { name: "发送" }) as HTMLButtonElement).disabled, false));
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    await waitFor(() => {
+      const lastMessage = requests.findLast((candidate) => candidate.method === "POST" && candidate.path.endsWith("/messages"));
+      assert.equal(JSON.parse(lastMessage?.body ?? "{}").content, "@Local Codex 接着解释");
+      assert.equal(JSON.parse(lastMessage?.body ?? "{}").mentionAgentId, secondAgent.agentId);
+    });
+    fireEvent.change(roomMessageInput, { target: { value: "@Local Codex 保留这段新正文" } });
+    fireEvent.click(keepMentionsSwitch);
+    assert.equal((roomMessageInput as HTMLTextAreaElement).value, "保留这段新正文");
+    assert.equal(screen.queryByRole("button", { name: "移除提及 Local Codex（Codex 执行者）" }), null);
+
     fireEvent.change(roomMessageInput, { target: { value: "确定交付恢复规则 @all" } });
     screen.getByText("精确指令 @all · 将路由当前房间 2 个智能体");
     fireEvent.click(screen.getByRole("button", { name: "发送" }));

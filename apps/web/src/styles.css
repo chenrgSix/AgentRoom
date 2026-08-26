@@ -544,6 +544,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .room-policy-summary .policy-mode.single { border-color: #4a5144; color: #aeb6a7; }
 .room-policy-summary > button { margin-left: auto; padding: 2px 3px; border: 0; background: transparent; color: #9dbb62; font-size: 8px; font-weight: 800; cursor: pointer; }
 .composer textarea { width: 100%; min-height: 46px; resize: none; padding: 10px 4px 6px; border: 0; outline: none; background: transparent; color: #edf0e4; font-size: 14px; line-height: 1.5; }
+.composer-preferences { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 10px; min-width: 0; padding: 2px 4px; }
+.composer-retain-mentions { display: inline-flex; align-items: center; gap: 6px; color: #b8c6a9; font-size: 11px; cursor: pointer; }
+.composer-retain-mentions input { width: 14px; height: 14px; margin: 0; accent-color: #b4d878; cursor: pointer; }
+.composer-retain-mentions input:focus-visible { outline: 2px solid #b4d878; outline-offset: 3px; }
+.composer-preference-hint { color: #85937a; font-size: 10px; overflow-wrap: anywhere; }
 .discussion-goal-editor { width: 100%; min-width: min(520px, 58vw); padding: 7px 8px; border: 1px solid #4b583c; border-radius: 8px; background: #171b14; color: #edf0e4; }
 .composer-send { min-width: 70px; min-height: 44px; padding: 10px 17px; border: 1px solid #78964a; border-radius: 13px; background: linear-gradient(145deg, #c7e978, #acd75f); color: #17200f; font-size: 12px; font-weight: 850; cursor: pointer; box-shadow: 0 8px 22px rgb(156 202 80 / 16%); }
 
@@ -734,6 +739,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .task-clarification-choices button[aria-pressed="true"] { border-color: #a78e3e; background: #efe2ae; color: #4e3e0c; }
 :root[data-theme="light"] .task-clarification-answer textarea { border-color: #d6caa2; background: #fffdf7; color: #40391f; }
 :root[data-theme="light"] .composer textarea { color: #263021; }
+:root[data-theme="light"] .composer-retain-mentions { color: #405b2e; }
+:root[data-theme="light"] .composer-preference-hint { color: #627257; }
 :root[data-theme="light"] .task-context label { color: #63705e; }
 :root[data-theme="light"] .task-context select { border-color: #c8d1c1; background: #f7f9f4; color: #33402d; }
 :root[data-theme="light"] .task-context > button { border-color: #a8ba86; background: #edf3e5; color: #526b2b; }

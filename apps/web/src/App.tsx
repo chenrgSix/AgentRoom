@@ -314,11 +314,14 @@ export function App() {
   });
   const {
     busy: composerBusy,
+    changeKeepMentions,
     deliver: deliverPendingMessage,
     directlyParsedAgents,
     exactMentionCommands,
     handleChange: handleMessageChange,
     handleKeyDown: handleMessageKeyDown,
+    hasMessageText,
+    keepMentions,
     mentionOptionIndex,
     mentionOptions,
     mentionSearch,
@@ -2145,10 +2148,26 @@ export function App() {
                   rows={2}
                   value={messageContent}
                 />
+                <div className="composer-preferences">
+                  <label className="composer-retain-mentions">
+                    <input
+                      checked={keepMentions}
+                      onChange={(event) => changeKeepMentions(event.target.checked)}
+                      role="switch"
+                      type="checkbox"
+                    />
+                    <span>{locale === "zh-CN" ? "保留上次 @" : "Keep last @ mentions"}</span>
+                  </label>
+                  <span className="composer-preference-hint">
+                    {locale === "zh-CN"
+                      ? "仅本浏览器 · 切换房间或任务时清空"
+                      : "This browser only · cleared on Room or Task change"}
+                  </span>
+                </div>
               </div>
               <button
                 className="composer-send"
-                disabled={composerBusy || !selectedTask ||
+                disabled={composerBusy || !hasMessageText || !selectedTask ||
                   selectedTask.state === "completed" ||
                   selectedTask.state === "canceled"}
               >
