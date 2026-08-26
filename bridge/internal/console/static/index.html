@@ -15,7 +15,10 @@
         <h1>连接本机智能体</h1>
         <p class="lede">配置 Codex 或 Pi，通过出站连接安全加入中央 Team。</p>
       </div>
-      <div class="phase" id="phase">正在读取状态</div>
+      <div class="hero-actions">
+        <button class="secondary guide-entry" type="button" data-open-codex-session-guide>Codex 会话说明</button>
+        <div class="phase" id="phase">正在读取状态</div>
+      </div>
     </header>
 
     <div class="auth-warning hidden" id="auth-warning">
@@ -133,7 +136,7 @@
             </div>
             <label>工作区<input class="workspace" id="codex-workspace" required></label>
             <label>文件沙箱<select id="codex-sandbox"><option value="workspace-write">允许修改工作区</option><option value="read-only">只读</option></select></label>
-            <p class="runtime-policy runtime-policy-warning" id="codex-session-ownership-policy">多客户端会话限制：Bridge 与 Codex Desktop/CLI 目前各自运行本地 App Server。若另一客户端正在占用同一 Codex 会话，本次任务会返回可重试的 <code>CODEX_SESSION_IN_USE</code>，保留原会话且不会自动新建替代会话。请先在另一客户端结束占用（必要时完全退出 Desktop），再重试。</p>
+            <p class="runtime-policy runtime-policy-warning" id="codex-session-ownership-policy">当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server。若会话正被其他客户端使用，Bridge 会保留原会话并提示稍后重试，不会另建会话。<button class="inline-guide-link" type="button" data-open-codex-session-guide>查看完整说明</button></p>
           </div>
         </div>
         <div class="runtime-card">
@@ -261,7 +264,7 @@
           <label class="hidden" id="agent-credential-field">凭据环境变量名称（可选）
             <input id="agent-credential-env" placeholder="例如 ANTHROPIC_API_KEY">
           </label>
-          <p class="runtime-policy runtime-policy-warning" id="agent-codex-session-ownership-policy">多客户端会话限制：Bridge 与 Codex Desktop/CLI 目前各自运行本地 App Server。若另一客户端正在占用同一 Codex 会话，本次任务会返回可重试的 <code>CODEX_SESSION_IN_USE</code>，保留原会话且不会自动新建替代会话。请先在另一客户端结束占用（必要时完全退出 Desktop），再重试。</p>
+          <p class="runtime-policy runtime-policy-warning" id="agent-codex-session-ownership-policy">当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server。若会话正被其他客户端使用，Bridge 会保留原会话并提示稍后重试，不会另建会话。<button class="inline-guide-link" type="button" data-open-codex-session-guide>查看完整说明</button></p>
           <p class="runtime-policy hidden" id="agent-pi-permission-policy">权限跟随本机 Pi；Bridge 仅固定 JSON 输出与无会话运行方式。</p>
           <p class="modal-help">保存只会更新这个智能体；若 Bridge 正在运行，将安全重启连接。任务或自检执行期间禁止修改。</p>
           <div class="actions modal-actions">
@@ -271,6 +274,49 @@
         </form>
       </section>
     </div>
+
+    <dialog class="agent-modal session-guide-dialog" id="codex-session-guide" aria-labelledby="codex-session-guide-title" aria-describedby="codex-session-guide-summary">
+      <div class="section-heading">
+        <div><p class="eyebrow">CODEX TASK SESSION GUIDE</p><h2 id="codex-session-guide-title">Codex 会话复用与占用处理</h2></div>
+        <button class="icon-button" id="close-codex-session-guide" type="button" aria-label="关闭会话说明">×</button>
+      </div>
+      <div class="guide-callout" id="codex-session-guide-summary">
+        <strong>当前状态</strong>
+        <p>AgentRoom Bridge 与 Codex Desktop/CLI 各自运行本地 App Server；当前 AgentRoom 版本没有启用共享 daemon。App Server 能接受多个连接，不代表 Desktop 已配置为连接 Bridge 的进程。</p>
+      </div>
+      <section class="guide-section" aria-labelledby="codex-session-terms-title">
+        <h3 id="codex-session-terms-title">先分清三个概念</h3>
+        <dl class="guide-terms">
+          <div><dt>Task</dt><dd>AgentRoom 中持续协作的上下文。切换 Task 会隔离会话。</dd></div>
+          <div><dt>Run</dt><dd>每次提及智能体触发的一次执行。同一 Task 可以有多个 Run。</dd></div>
+          <div><dt>Codex 会话</dt><dd>Bridge 在本机保存并尝试恢复的底层执行上下文；一条消息不等于一个新会话。</dd></div>
+        </dl>
+      </section>
+      <section class="guide-section" aria-labelledby="codex-session-reuse-title">
+        <h3 id="codex-session-reuse-title">什么时候会复用</h3>
+        <p>继续使用同一 Task、同一智能体，并保持 Runtime、工作区和沙箱等关键配置不变时，Bridge 会尝试恢复原 Codex 会话。第一次执行、新 Task、切换智能体、关键配置变化，或原会话被明确判定为缺失或无效时，会使用隔离的新会话。</p>
+      </section>
+      <section class="guide-section" aria-labelledby="codex-session-errors-title">
+        <h3 id="codex-session-errors-title">遇到会话错误怎么办</h3>
+        <div class="guide-code-list">
+          <p><code>CODEX_SESSION_IN_USE</code><span>另一个本机客户端正在持有该会话。可以重试；Bridge 已保留原绑定。</span></p>
+          <p><code>CODEX_SESSION_RESUME_FAILED</code><span>恢复被拒绝，但 Bridge 无法安全判断为会话缺失。可以重试；Bridge 不会创建替代会话。</span></p>
+        </div>
+        <ol class="guide-steps">
+          <li>先等待 Codex Desktop 或 CLI 中相关操作结束。</li>
+          <li>仍提示占用时，完全退出持有该会话的 Desktop 或 CLI 进程。</li>
+          <li>回到原 AgentRoom Task 重试，不要为了绕过错误新建 Task 或修改工作区、沙箱。</li>
+          <li>恢复失败持续出现时，在“客户端维护”中导出脱敏诊断包再排查；不要手动删除本机会话。</li>
+        </ol>
+      </section>
+      <section class="guide-section" aria-labelledby="codex-session-daemon-title">
+        <h3 id="codex-session-daemon-title">关于共享 daemon</h3>
+        <p>共享 App Server 是后续可评估的架构方向，不是当前 Bridge 功能。只有 Desktop 能明确连接同一个外部 daemon，并补齐生命周期、取消、审批、工作区和权限隔离后，才适合启用。</p>
+      </section>
+      <div class="actions modal-actions">
+        <button class="primary" id="acknowledge-codex-session-guide" type="button">知道了</button>
+      </div>
+    </dialog>
 
     <section class="panel client-tools">
       <div class="section-heading">

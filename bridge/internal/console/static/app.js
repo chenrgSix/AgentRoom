@@ -1,6 +1,7 @@
 import { pairingView } from "./pairing-view.mjs";
 import { detectedPathForDraft, runtimeDiscoveryView } from "./runtime-discovery.mjs";
 import { applyAgentRuntimePolicy, applyEnrollmentCodexPolicy } from "./runtime-policy.mjs";
+import { createSessionGuideController } from "./session-guide.mjs";
 
 const elements = Object.fromEntries([
   "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
@@ -35,8 +36,14 @@ const elements = Object.fromEntries([
   "cancel-connection-modal", "connection-modal-error", "connection-form",
   "connection-server-url", "connection-server-token", "clear-server-token-field", "clear-server-token",
   "connection-trust-mode", "connection-fingerprint-field",
-  "connection-fingerprint", "save-connection"
+  "connection-fingerprint", "save-connection",
+  "codex-session-guide", "close-codex-session-guide", "acknowledge-codex-session-guide"
 ].map((id) => [id, document.getElementById(id)]));
+
+const sessionGuide = createSessionGuideController(
+  elements["codex-session-guide"],
+  elements["close-codex-session-guide"]
+);
 
 const query = new URLSearchParams(window.location.search);
 if (query.get("token")) {
@@ -556,6 +563,12 @@ for (const id of ["close-agent-modal", "cancel-agent-modal"]) {
 }
 for (const id of ["close-connection-modal", "cancel-connection-modal"]) {
   elements[id].addEventListener("click", closeConnectionModal);
+}
+for (const trigger of document.querySelectorAll("[data-open-codex-session-guide]")) {
+  trigger.addEventListener("click", (event) => sessionGuide.open(event.currentTarget));
+}
+for (const id of ["close-codex-session-guide", "acknowledge-codex-session-guide"]) {
+  elements[id].addEventListener("click", () => sessionGuide.close());
 }
 elements["agent-modal-backdrop"].addEventListener("click", (event) => {
   if (event.target === elements["agent-modal-backdrop"]) closeAgentModal();

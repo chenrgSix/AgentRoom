@@ -150,6 +150,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="share-reasoning-summaries"`, `id="connection-share-reasoning-summaries"`,
 		`id="current-reasoning-sharing"`,
 		`id="agent-discovery-status"`, `id="agent-discovery-help"`, `id="agent-install-link"`,
+		`id="codex-session-guide"`, `id="codex-session-guide-title"`,
+		`id="close-codex-session-guide"`, `id="acknowledge-codex-session-guide"`,
 	} {
 		if !bytes.Contains(html, []byte(id)) {
 			t.Fatalf("embedded UI omitted %s", id)
@@ -174,14 +176,20 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		!bytes.Contains(javascript, []byte("权限：跟随本机 Pi")) {
 		t.Fatal("Console must disclose that managed Pi follows owner-controlled local permissions")
 	}
-	if bytes.Count(html, []byte("CODEX_SESSION_IN_USE")) != 2 ||
-		bytes.Count(html, []byte("不会自动新建替代会话")) != 2 ||
+	if bytes.Count(html, []byte(`data-open-codex-session-guide`)) != 3 ||
+		bytes.Count(html, []byte("当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server")) != 2 ||
+		!bytes.Contains(html, []byte("CODEX_SESSION_IN_USE")) ||
+		!bytes.Contains(html, []byte("CODEX_SESSION_RESUME_FAILED")) ||
+		!bytes.Contains(html, []byte("当前 AgentRoom 版本没有启用共享 daemon")) ||
+		!bytes.Contains(html, []byte("一条消息不等于一个新会话")) ||
 		!bytes.Contains(html, []byte(`aria-describedby="codex-session-ownership-policy"`)) ||
 		!bytes.Contains(html, []byte(`aria-describedby="agent-codex-session-ownership-policy"`)) ||
 		bytes.Contains(html, []byte(`aria-describedby="agent-codex-session-ownership-policy agent-pi-permission-policy"`)) ||
 		!bytes.Contains(javascript, []byte(`applyAgentRuntimePolicy(`)) ||
-		!bytes.Contains(javascript, []byte(`applyEnrollmentCodexPolicy(enabled, elements["codex-enabled"])`)) {
-		t.Fatal("Codex enrollment and Agent settings must disclose multi-client session ownership limits")
+		!bytes.Contains(javascript, []byte(`applyEnrollmentCodexPolicy(enabled, elements["codex-enabled"])`)) ||
+		!bytes.Contains(javascript, []byte(`createSessionGuideController(`)) ||
+		!bytes.Contains(javascript, []byte(`document.querySelectorAll("[data-open-codex-session-guide]")`)) {
+		t.Fatal("Codex settings must expose the selection-scoped warning and embedded Task Session guide")
 	}
 	if !bytes.Contains(javascript, []byte("request(agentId ? `/api/agents/")) ||
 		bytes.Contains(javascript, []byte(`request(editMode ? "/api/config"`)) {

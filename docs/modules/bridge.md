@@ -104,6 +104,17 @@ programmatically removed from the active description when Codex is disabled or
 the per-Agent Runtime is Pi; the Pi permission policy becomes the only
 description associated with that selector.
 
+`BRG-035` keeps the configuration warning concise and adds an embedded,
+always-available Codex Task Session guide to the Console. The guide separates
+AgentRoom Task, Run, and native Codex session semantics; explains the exact
+reuse and recreation boundaries; provides recovery steps for retryable
+`CODEX_SESSION_IN_USE` and `CODEX_SESSION_RESUME_FAILED`; and explicitly states
+that shared App Server daemon operation is not enabled by the current Bridge.
+The same modal is reachable from the Console header and both Codex
+configuration warnings without discarding an in-progress Agent form. Opening
+the guide moves focus to its close control, native modal semantics keep the
+background inert, and closing it restores focus to the exact entry point.
+
 Runtime path discovery follows
 [ADR-0019](../adr/0019-bounded-local-runtime-discovery.md): PATH first, then
 known app bundles and common installation locations, with no shell startup,

@@ -18,6 +18,8 @@ button, input, select { outline: none; }
 button:focus-visible, input:focus-visible, select:focus-visible { box-shadow: 0 0 0 3px rgb(200 237 98 / 25%); border-color: var(--lime); }
 .shell { width: min(1120px, calc(100% - 40px)); margin: 0 auto; padding: 46px 0 80px; }
 .hero { display: grid; grid-template-columns: 62px 1fr auto; align-items: center; gap: 20px; margin-bottom: 38px; }
+.hero-actions { display: grid; justify-items: end; gap: 9px; }
+.guide-entry { padding: 8px 12px; color: var(--lime); }
 .brand { width: 58px; height: 58px; border: 1px solid #52612f; border-radius: 18px; display: grid; place-items: center; color: var(--lime); font-weight: 800; letter-spacing: .12em; }
 .eyebrow, .step { margin: 0 0 8px; color: #9dab75; font-size: 11px; font-weight: 750; letter-spacing: .18em; }
 h1, h2, p { margin-top: 0; }
@@ -91,6 +93,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .runtime-policy { margin: 0; color: #b8c7a8; font-size: 11px; line-height: 1.5; }
 .runtime-policy-warning { padding: 11px 12px; border: 1px solid #645728; border-radius: 11px; background: #211d10; color: #e6d394; }
 .runtime-policy-warning code { color: #f2dfa0; }
+.inline-guide-link { display: inline; margin-left: 5px; border: 0; padding: 0; background: transparent; color: var(--lime); font-size: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .agent-edit { width: 100%; margin-top: 12px; padding: 8px 10px; font-size: 12px; }
 .modal-backdrop { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; overflow-y: auto; padding: 24px; background: rgb(4 7 4 / 76%); backdrop-filter: blur(8px); }
 .agent-modal { width: min(620px, 100%); max-height: calc(100vh - 48px); overflow-y: auto; border: 1px solid #52612f; border-radius: 20px; padding: 25px; background: #131813; box-shadow: 0 24px 80px rgb(0 0 0 / 55%); }
@@ -99,6 +102,25 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .icon-button { width: 38px; height: 38px; padding: 0; border-color: var(--line); background: #1b211a; color: #dce4d3; font-size: 22px; }
 .modal-help { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
 .modal-actions { justify-content: flex-end; margin-top: 4px; }
+.session-guide-dialog { width: min(760px, calc(100% - 32px)); color: #edf2e3; }
+.session-guide-dialog::backdrop { background: rgb(4 7 4 / 76%); backdrop-filter: blur(8px); }
+.session-guide-dialog .section-heading { position: sticky; top: -25px; z-index: 1; margin: -25px -25px 18px; padding: 25px 25px 14px; border-bottom: 1px solid var(--line); background: #131813; }
+.guide-callout { padding: 15px 16px; border: 1px solid #647934; border-radius: 13px; background: #182014; }
+.guide-callout strong { color: var(--lime); }
+.guide-callout p, .guide-section p { margin: 6px 0 0; color: #c5cdbd; font-size: 13px; line-height: 1.7; }
+.guide-section { margin-top: 22px; }
+.guide-section h3 { margin: 0 0 10px; color: #eef3e7; font-size: 15px; }
+.guide-terms { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin: 0; }
+.guide-terms div { padding: 13px; border: 1px solid var(--line); border-radius: 11px; background: #0f130f; }
+.guide-terms dt { margin-bottom: 6px; color: var(--lime); font-size: 12px; font-weight: 750; }
+.guide-terms dd { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.55; }
+.guide-code-list { display: grid; gap: 8px; }
+.guide-code-list p { display: grid; grid-template-columns: max-content 1fr; gap: 12px; align-items: start; margin: 0; padding: 11px 12px; border: 1px solid var(--line); border-radius: 11px; background: #0f130f; }
+.guide-code-list code { color: #f2dfa0; overflow-wrap: anywhere; }
+.guide-code-list span { color: #c5cdbd; }
+.guide-steps { margin: 13px 0 0; padding-left: 22px; color: #c5cdbd; font-size: 13px; line-height: 1.7; }
+.guide-steps li + li { margin-top: 5px; }
+.session-guide-dialog > .modal-actions { position: sticky; bottom: -25px; margin: 22px -25px -25px; padding: 14px 25px 25px; border-top: 1px solid var(--line); background: #131813; }
 .inline-error { color: var(--danger); font-size: 12px; margin: 12px 0 0; overflow-wrap: anywhere; }
 .details.compact { margin-bottom: 16px; }
 .setting-toggle { grid-template-columns: 22px 1fr; align-items: start; gap: 12px; padding: 17px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
@@ -113,8 +135,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 @media (max-width: 760px) {
   .shell { width: min(100% - 24px, 620px); padding-top: 24px; }
   .hero { grid-template-columns: 50px 1fr; }
+  .hero-actions { grid-column: 1 / -1; grid-template-columns: auto 1fr; align-items: center; justify-items: start; }
   .brand { width: 48px; height: 48px; border-radius: 14px; }
-  .phase { grid-column: 1 / -1; justify-self: start; }
   .status-grid { grid-template-columns: 1fr 1fr; }
   .fields.two, .details, .agent-list, .maintenance-actions { grid-template-columns: 1fr; }
   .section-heading, .submit-panel { display: grid; }
@@ -125,4 +147,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .runtime-fields { margin-left: 8px; }
   .modal-backdrop { padding: 12px; }
   .agent-modal { max-height: calc(100vh - 24px); padding: 19px; }
+  .session-guide-dialog { width: calc(100% - 24px); max-height: calc(100vh - 24px); }
+  .session-guide-dialog .section-heading { display: flex; top: -19px; margin: -19px -19px 18px; padding: 19px 19px 13px; }
+  .session-guide-dialog .section-heading > div { min-width: 0; }
+  .session-guide-dialog .icon-button { flex: 0 0 auto; }
+  .guide-terms { grid-template-columns: 1fr; }
+  .guide-code-list p { grid-template-columns: 1fr; gap: 5px; }
+  .session-guide-dialog > .modal-actions { bottom: -19px; margin: 22px -19px -19px; padding: 13px 19px 19px; }
 }
