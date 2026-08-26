@@ -2,9 +2,11 @@ import { pairingView } from "./pairing-view.mjs";
 import { detectedPathForDraft, runtimeDiscoveryView } from "./runtime-discovery.mjs";
 import { applyAgentRuntimePolicy, applyEnrollmentCodexPolicy } from "./runtime-policy.mjs";
 import { createSessionGuideController } from "./session-guide.mjs";
+import { agentPresentation, connectionPresentation } from "./bridge-presentation.mjs";
 
 const elements = Object.fromEntries([
-  "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
+  "app-sidebar", "setup-intro", "page-context", "page-title", "phase", "phase-label",
+  "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view",
   "device-title", "start-bridge", "stop-bridge", "edit-connection", "add-agent", "current-server",
   "pairing-status", "pairing-binding", "pairing-guidance", "pairing-blocked", "pairing-backup",
@@ -13,6 +15,9 @@ const elements = Object.fromEntries([
   "current-server-token",
   "current-reasoning-sharing", "share-reasoning-summaries", "connection-share-reasoning-summaries",
   "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
+  "overview-agent-list", "overview-agent-count", "connection-summary", "connection-summary-label",
+  "connection-server-label", "connection-summary-title", "connection-summary-copy",
+  "connection-technical", "connection-technical-message", "connection-fix",
   "enrollment-form", "server-url", "server-token", "device-name", "trust-mode", "fingerprint-field",
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
   "codex-path", "codex-workspace", "codex-sandbox", "pi-enabled", "pi-fields",
@@ -58,7 +63,31 @@ let draftPreflightRunning = false;
 let enrollmentActionRunning = false;
 let expectedPairingDeviceId = null;
 let discoveryRunning = false;
+let activePage = "overview";
 const runtimeTestResults = new Map();
+
+const pageCopy = {
+  overview: {context: "本机执行环境", title: "概览"},
+  agents: {context: "Runtime 与权限", title: "本机 Agent"},
+  settings: {context: "只保存在这台设备", title: "设置"}
+};
+
+function setPage(page, focus = false) {
+  if (!pageCopy[page]) return;
+  activePage = page;
+  for (const panel of document.querySelectorAll("[data-page-panel]")) {
+    panel.classList.toggle("hidden", panel.dataset.pagePanel !== page);
+  }
+  for (const item of document.querySelectorAll(".nav-item[data-page-target]")) {
+    const selected = item.dataset.pageTarget === page;
+    item.classList.toggle("active", selected);
+    if (selected) item.setAttribute("aria-current", "page");
+    else item.removeAttribute("aria-current");
+  }
+  elements["page-context"].textContent = pageCopy[page].context;
+  elements["page-title"].textContent = pageCopy[page].title;
+  if (focus) document.querySelector(`[data-page-panel="${page}"] h2`)?.focus?.();
+}
 
 const labels = {
   unconfigured: "等待配置",
@@ -74,13 +103,6 @@ const connectionLabels = {
   connecting: "连接中",
   online: "在线",
   retrying: "重连中"
-};
-
-const runtimeLabels = {
-  unavailable: "不可用",
-  idle: "空闲",
-  working: "执行中",
-  error: "最近执行异常"
 };
 
 async function request(path, options = {}) {
@@ -165,35 +187,56 @@ async function preflightDraft(kind, source, button, resultElement) {
   }
 }
 
-function renderAgent(agent) {
+function renderAgent(agent, {compact = false} = {}) {
+  const view = agentPresentation(agent, {bridgeRunning: currentState.bridgeRunning});
   const row = document.createElement("article");
   row.className = "agent-row";
+  row.classList.toggle("compact-agent", compact);
+
+  const header = document.createElement("div");
+  header.className = "agent-card-header";
+  const avatar = document.createElement("span");
+  avatar.className = "agent-avatar";
+  avatar.textContent = view.initials;
+  const identity = document.createElement("div");
+  identity.className = "agent-identity";
   const title = document.createElement("strong");
-  const kindLabel = agent.kind === "codex" ? "Codex" : agent.kind === "pi" ? "Pi" : "Generic CLI";
-  title.textContent = `${agent.name} · ${kindLabel}`;
+  title.textContent = agent.name;
   const role = document.createElement("span");
-  role.textContent = agent.role;
-  const workspace = document.createElement("span");
-  workspace.textContent = agent.workspace;
+  role.textContent = `${view.role} · ${view.kindLabel}`;
+  identity.append(title, role);
   const status = document.createElement("span");
-  status.className = `runtime-status ${agent.runtimeState || "unavailable"}`;
-  const active = agent.activeRuns ? ` · ${agent.activeRuns} 个运行中` : "";
-  status.textContent = `${runtimeLabels[agent.runtimeState] || agent.runtimeState}${active}`;
-  const readiness = document.createElement("span");
-  readiness.textContent = agent.executableReady ? "可执行文件可用" : "可执行文件不存在或不可执行";
-  const permission = document.createElement("span");
-  permission.textContent = agent.kind === "pi"
-    ? "权限：跟随本机 Pi"
-    : `沙箱：${agent.sandbox || "workspace-write"}`;
-  const probe = document.createElement("div");
-  probe.className = "runtime-test";
+  status.className = `runtime-status ${view.tone}`;
+  status.textContent = view.status;
+  header.append(avatar, identity, status);
+
+  const facts = document.createElement("div");
+  facts.className = "agent-facts";
+  for (const [label, value, className = ""] of [
+    ["文件策略", view.filesystemPolicy],
+    ["工作区", view.workspaceName],
+    ["Runtime", view.executableSummary, "runtime-fact"]
+  ]) {
+    const fact = document.createElement("div");
+    fact.className = `agent-fact ${className}`.trim();
+    const factLabel = document.createElement("span");
+    factLabel.textContent = label;
+    const factValue = document.createElement("strong");
+    factValue.textContent = value;
+    fact.append(factLabel, factValue);
+    facts.append(fact);
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "agent-actions";
   const probeButton = document.createElement("button");
   probeButton.className = "secondary";
   probeButton.type = "button";
-  probeButton.textContent = "测试运行";
+  probeButton.textContent = compact ? "测试" : "测试运行";
   const probeSupported = agent.kind === "codex" || agent.kind === "pi";
   probeButton.disabled = currentState.enrollment?.active || !probeSupported || !agent.executableReady || agent.activeRuns > 0;
   const probeResult = document.createElement("span");
+  probeResult.className = "agent-probe-result";
   const latestProbe = runtimeTestResults.get(agent.agentId);
   if (latestProbe === "running") {
     probeButton.disabled = true;
@@ -209,7 +252,7 @@ function renderAgent(agent) {
       ? "Generic CLI 不支持自动自检"
       : agent.activeRuns > 0
       ? "任务执行期间不可自检"
-      : "按需启动一次受限本地调用，不会自动执行";
+      : "尚未测试";
   }
   probeButton.addEventListener("click", async () => {
     runtimeTestResults.set(agent.agentId, "running");
@@ -226,7 +269,6 @@ function renderAgent(agent) {
     }
     if (currentState) render(currentState);
   });
-  probe.append(probeButton, probeResult);
   const editButton = document.createElement("button");
   editButton.className = "secondary agent-edit";
   editButton.type = "button";
@@ -234,7 +276,8 @@ function renderAgent(agent) {
   editButton.disabled = currentState.enrollment?.active || currentState.agents.some((candidate) => candidate.activeRuns > 0) ||
     [...runtimeTestResults.values()].includes("running");
   editButton.addEventListener("click", () => openAgentModal(agent));
-  row.append(title, role, status, readiness, permission, workspace, probe, editButton);
+  actions.append(probeButton, probeResult, editButton);
+  row.append(header, facts, actions);
   return row;
 }
 
@@ -363,20 +406,42 @@ function closeConnectionModal() {
 
 function render(state) {
   currentState = state;
+  const waiting = Boolean(state.enrollment?.active);
   renderDiscovery("codex", "codex");
   renderDiscovery("pi", "pi");
   renderDiscovery("agent", elements["agent-kind"].value);
-  elements.phase.textContent = labels[state.phase] || state.phase;
+  document.body.classList.toggle("configured-mode", state.configured);
+  elements["app-sidebar"].classList.toggle("hidden", !state.configured);
+  elements["setup-intro"].classList.toggle("hidden", state.configured || waiting);
+  if (state.configured) {
+    setPage(activePage);
+  } else {
+    elements["page-context"].textContent = waiting ? "Team 审批" : "首次设置";
+    elements["page-title"].textContent = waiting ? "等待 Owner 批准" : "开始使用 Bridge";
+  }
+  elements["phase-label"].textContent = state.configured && !state.bridgeRunning
+    ? "Bridge 已停止"
+    : (labels[state.phase] || state.phase);
   elements.phase.classList.toggle("running", state.bridgeRunning);
   elements.configured.textContent = state.configured ? "已创建" : "未创建";
   elements.paired.textContent = state.paired ? "已保存配对" : "未配对";
   elements.running.textContent = state.bridgeRunning ? "运行中" : "已停止";
   const connection = state.connection || {state: state.bridgeRunning ? "connecting" : "stopped"};
+  const connectionView = connectionPresentation(state);
   elements["connection-state"].textContent = connectionLabels[connection.state] || connection.state;
   elements["agent-count"].textContent = `${state.agents.length} 个`;
+  elements["overview-agent-count"].textContent = `${state.agents.length} 个 Agent`;
   elements["bridge-version"].textContent = state.version || "dev";
-  elements.error.textContent = state.lastError || "";
-  elements.error.classList.toggle("hidden", !state.lastError);
+  elements["connection-summary"].className = `connection-card ${connectionView.tone}`;
+  elements["connection-summary-label"].textContent = connectionView.label;
+  elements["connection-server-label"].textContent = connectionView.server;
+  elements["connection-summary-title"].textContent = connectionView.title;
+  elements["connection-summary-copy"].textContent = connectionView.summary;
+  elements["connection-technical"].classList.toggle("hidden", !connectionView.technicalDetail);
+  elements["connection-technical-message"].textContent = connectionView.technicalDetail;
+  elements["connection-fix"].classList.toggle("hidden", connectionView.action !== "settings");
+  elements["start-bridge"].classList.toggle("hidden", connectionView.action !== "start");
+  elements["stop-bridge"].classList.toggle("hidden", !state.bridgeRunning);
 
   const pairing = pairingView(state);
   elements["pairing-status"].textContent = pairing.status;
@@ -399,7 +464,6 @@ function render(state) {
   elements["join-code"].disabled = !pairing.canCopy;
   elements["join-expiry"].textContent = pairing.expiry;
   elements["cancel-enrollment"].disabled = !pairing.canCancel || enrollmentActionRunning;
-  const waiting = Boolean(state.enrollment?.active);
 
   elements["configured-view"].classList.toggle("hidden", !state.configured);
   elements["enrollment-form"].classList.toggle("hidden", state.configured || waiting);
@@ -427,7 +491,11 @@ function render(state) {
     elements["add-agent"].disabled = mutationBlocked;
     elements["edit-connection"].classList.toggle("hidden", !state.paired);
     elements["edit-connection"].disabled = mutationBlocked;
+    elements["connection-fix"].disabled = mutationBlocked;
     elements["agent-list"].replaceChildren(...state.agents.map(renderAgent));
+    elements["overview-agent-list"].replaceChildren(
+      ...state.agents.map((agent) => renderAgent(agent, {compact: true}))
+    );
   } else {
     if (!elements["device-name"].value) elements["device-name"].value = "Local Bridge";
     if (!elements["codex-path"].value) elements["codex-path"].value = state.detectedCodex || "";
@@ -454,6 +522,15 @@ async function refresh() {
     showError(error);
   }
 }
+
+for (const target of document.querySelectorAll("[data-page-target]")) {
+  target.addEventListener("click", () => setPage(target.dataset.pageTarget, true));
+}
+
+elements["connection-fix"].addEventListener("click", () => {
+  setPage("settings");
+  openConnectionModal();
+});
 
 elements["server-url"].addEventListener("input", () => {
   syncTrustFields();

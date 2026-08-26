@@ -94,7 +94,9 @@ func TestConsoleServesEmbeddedUIAndRequiresBearerTokenForAPI(t *testing.T) {
 	}
 	source, _ := io.ReadAll(response.Body)
 	response.Body.Close()
-	if response.StatusCode != http.StatusOK || !bytes.Contains(source, []byte("连接本机智能体")) {
+	if response.StatusCode != http.StatusOK ||
+		!bytes.Contains(source, []byte(`id="setup-intro"`)) ||
+		!bytes.Contains(source, []byte(`id="configured-view"`)) {
 		t.Fatalf("unexpected Console page: %d %s", response.StatusCode, source)
 	}
 	if response.Header.Get("content-security-policy") == "" {
@@ -135,6 +137,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, id := range []string{
+		`id="app-sidebar"`, `id="overview-page"`, `id="agents-page"`,
+		`id="settings-page"`, `id="connection-summary"`, `id="overview-agent-list"`,
 		`id="connection-state"`, `id="trust-mode"`, `id="login-startup"`,
 		`id="export-diagnostics"`, `id="check-update"`, `id="bridge-version"`,
 		`id="add-agent"`, `id="agent-modal-backdrop"`, `id="agent-form"`,
@@ -172,8 +176,12 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		!bytes.Contains(javascript, []byte(`elements["agent-use-detected"]`)) {
 		t.Fatal("draft Runtime preflight and detected-value action must remain explicit")
 	}
+	presentation, err := staticFiles.ReadFile("static/bridge-presentation.mjs")
+	if err != nil {
+		t.Fatal(err)
+	}
 	if !bytes.Contains(html, []byte("权限跟随本机 Pi")) ||
-		!bytes.Contains(javascript, []byte("权限：跟随本机 Pi")) {
+		!bytes.Contains(presentation, []byte("跟随本机策略")) {
 		t.Fatal("Console must disclose that managed Pi follows owner-controlled local permissions")
 	}
 	if bytes.Count(html, []byte(`data-open-codex-session-guide`)) != 3 ||

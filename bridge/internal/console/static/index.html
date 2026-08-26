@@ -7,84 +7,177 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <main class="shell">
-    <header class="hero">
-      <div class="brand"><span>AR</span></div>
-      <div>
-        <p class="eyebrow">LOCAL BRIDGE CONSOLE</p>
-        <h1>连接本机智能体</h1>
-        <p class="lede">配置 Codex 或 Pi，通过出站连接安全加入中央 Team。</p>
+  <main class="app-shell">
+    <aside class="sidebar hidden" id="app-sidebar">
+      <div class="sidebar-brand">
+        <span class="brand-mark" aria-hidden="true">AR</span>
+        <div><strong>AgentRoom</strong><small>Bridge</small></div>
       </div>
-      <div class="hero-actions">
-        <button class="secondary guide-entry" type="button" data-open-codex-session-guide>Codex 会话说明</button>
-        <div class="phase" id="phase">正在读取状态</div>
+      <nav class="sidebar-nav" aria-label="Bridge 页面">
+        <button class="nav-item active" type="button" data-page-target="overview" aria-current="page">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M3.5 9.2 10 3.8l6.5 5.4v6.5a1 1 0 0 1-1 1h-11a1 1 0 0 1-1-1Z"/><path d="M8 16.7v-5h4v5"/></svg></span><span>概览</span>
+        </button>
+        <button class="nav-item" type="button" data-page-target="agents">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="7" r="3"/><path d="M4.5 16.2c.7-2.8 2.5-4.2 5.5-4.2s4.8 1.4 5.5 4.2"/></svg></span><span>本机 Agent</span>
+        </button>
+        <button class="nav-item" type="button" data-page-target="settings">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 5h12M4 10h12M4 15h12"/><circle cx="8" cy="5" r="1.6"/><circle cx="13" cy="10" r="1.6"/><circle cx="7" cy="15" r="1.6"/></svg></span><span>设置</span>
+        </button>
+      </nav>
+      <div class="sidebar-footer">
+        <button class="sidebar-help" type="button" data-open-codex-session-guide>Codex 会话说明</button>
+        <div class="sidebar-device"><span id="device-title">本机 Bridge</span><small id="bridge-version">dev</small></div>
       </div>
-    </header>
+    </aside>
 
-    <div class="auth-warning hidden" id="auth-warning">
-      当前页面缺少本地控制令牌。请使用 Bridge 启动时输出的完整 Console 地址重新打开。
-    </div>
-    <div class="error hidden" id="error" role="alert"></div>
-
-    <section class="status-grid" aria-label="Bridge 状态">
-      <article><span>本地配置</span><strong id="configured">未创建</strong></article>
-      <article><span>Team 配对</span><strong id="paired">未配对</strong></article>
-      <article><span>Bridge 进程</span><strong id="running">未运行</strong></article>
-      <article><span>中央连接</span><strong id="connection-state">已停止</strong></article>
-      <article><span>本地智能体</span><strong id="agent-count">0 个</strong></article>
-    </section>
-
-    <section class="panel pairing-panel" aria-label="配对与恢复">
-      <div class="section-heading">
-        <div><p class="eyebrow">TEAM PAIRING</p><h2>配对与恢复</h2></div>
-        <strong id="pairing-status">正在读取</strong>
-      </div>
-      <p id="pairing-binding" class="pairing-binding"></p>
-      <p id="pairing-guidance" class="pairing-guidance"></p>
-      <div class="actions">
-        <button class="secondary hidden" id="request-enrollment" type="button">申请审批码</button>
-        <button class="secondary hidden" id="start-existing-pairing" type="button">启动现有配对</button>
-      </div>
-      <p id="pairing-blocked" class="tool-result"></p>
-      <p id="pairing-backup" class="tool-result hidden"></p>
-    </section>
-
-    <section class="approval hidden" id="approval" aria-label="当前审批码">
-      <div>
-        <p class="eyebrow">等待 TEAM OWNER 审批</p>
-        <h2>在中央 Web 管理界面输入此代码</h2>
-      </div>
-      <button class="join-code" id="join-code" type="button" title="复制审批码" aria-label="复制审批码"></button>
-      <p id="join-expiry"></p>
-      <p id="join-copy-result" role="status">点击代码复制；也可手动选择代码。</p>
-      <button class="secondary" id="cancel-enrollment" type="button">取消加入</button>
-    </section>
-
-    <section class="configured-view hidden" id="configured-view">
-      <div class="section-heading">
-        <div><p class="eyebrow">CURRENT DEVICE</p><h2 id="device-title">本机 Bridge</h2></div>
-        <div class="actions">
-          <button class="secondary" id="edit-connection" type="button">连接设置</button>
-          <button class="primary" id="add-agent" type="button">添加智能体</button>
-          <button class="primary" id="start-bridge" type="button">启动 Bridge</button>
-          <button class="secondary" id="stop-bridge" type="button">停止 Bridge</button>
+    <section class="app-main">
+      <header class="topbar">
+        <div>
+          <p class="topbar-context" id="page-context">本机执行环境</p>
+          <h1 id="page-title">开始使用 Bridge</h1>
         </div>
-      </div>
-      <dl class="details">
-        <div><dt>中央服务</dt><dd id="current-server">—</dd></div>
-        <div><dt>中央 Token</dt><dd id="current-server-token">未配置</dd></div>
-        <div><dt>思考摘要共享</dt><dd id="current-reasoning-sharing">未授权（不共享摘要）</dd></div>
-        <div><dt>Team</dt><dd id="current-team">—</dd></div>
-        <div><dt>Device</dt><dd id="current-device">—</dd></div>
-        <div><dt>配置文件</dt><dd id="config-path">—</dd></div>
-        <div><dt>连接详情</dt><dd id="connection-detail">—</dd></div>
-        <div><dt>最后连接</dt><dd id="last-connected">—</dd></div>
-      </dl>
-      <p class="inline-error hidden" id="connection-error"></p>
-      <div class="agent-list" id="agent-list"></div>
-    </section>
+        <div class="phase" id="phase"><span class="status-dot"></span><span id="phase-label">正在读取状态</span></div>
+      </header>
 
-    <form id="enrollment-form">
+      <div class="content-scroll">
+        <div class="auth-warning hidden" id="auth-warning">
+          当前页面缺少本地控制令牌。请从 Bridge 菜单重新打开本机窗口。
+        </div>
+        <div class="error hidden" id="error" role="alert"></div>
+        <div class="state-cache hidden" aria-hidden="true">
+          <span id="configured">未创建</span><span id="paired">未配对</span>
+          <span id="running">未运行</span><span id="connection-state">已停止</span>
+          <span id="agent-count">0 个</span>
+        </div>
+
+        <section class="setup-intro" id="setup-intro">
+          <span class="setup-mark">AR</span>
+          <p class="eyebrow">本机 Agent 连接器</p>
+          <h2>把 Codex 和 Pi 安全连接到你的 Team</h2>
+          <p>Bridge 只建立出站连接，Runtime、工作区和文件权限继续由这台设备控制。</p>
+          <ol class="setup-steps" aria-label="设置步骤">
+            <li><span>1</span>连接中央服务</li>
+            <li><span>2</span>选择本机 Agent</li>
+            <li><span>3</span>由 Owner 批准</li>
+          </ol>
+        </section>
+
+        <section class="approval hidden" id="approval" aria-label="当前审批码">
+          <div>
+            <p class="eyebrow">等待 Owner 批准</p>
+            <h2>在中央 Web 管理界面输入此代码</h2>
+          </div>
+          <button class="join-code" id="join-code" type="button" title="复制审批码" aria-label="复制审批码"></button>
+          <p id="join-expiry"></p>
+          <p id="join-copy-result" role="status">点击代码复制；也可手动选择代码。</p>
+          <button class="secondary" id="cancel-enrollment" type="button">取消加入</button>
+        </section>
+
+        <section class="configured-view hidden" id="configured-view">
+          <section class="app-page" data-page-panel="overview" id="overview-page">
+            <div class="page-heading">
+              <div><p class="eyebrow">今天的状态</p><h2>本机 Agent 一览</h2></div>
+              <button class="text-button" type="button" data-page-target="agents">管理全部 Agent →</button>
+            </div>
+            <article class="connection-card" id="connection-summary">
+              <div class="connection-icon" aria-hidden="true"><span></span></div>
+              <div class="connection-copy">
+                <div class="connection-meta"><span id="connection-summary-label">正在连接</span><span id="connection-server-label">中央服务</span></div>
+                <h3 id="connection-summary-title">正在读取连接状态</h3>
+                <p id="connection-summary-copy">请稍候。</p>
+                <details class="technical-detail hidden" id="connection-technical">
+                  <summary>查看技术详情</summary>
+                  <code id="connection-technical-message"></code>
+                </details>
+              </div>
+              <div class="connection-actions">
+                <button class="primary hidden" id="start-bridge" type="button">启动 Bridge</button>
+                <button class="secondary" id="stop-bridge" type="button">停止</button>
+                <button class="secondary hidden" id="connection-fix" type="button">检查连接</button>
+              </div>
+            </article>
+            <div class="overview-statline">
+              <strong id="overview-agent-count">0 个 Agent</strong>
+              <span>Runtime 与权限均由本机控制</span>
+            </div>
+            <div class="agent-list overview-agents" id="overview-agent-list"></div>
+          </section>
+
+          <section class="app-page hidden" data-page-panel="agents" id="agents-page">
+            <div class="page-heading">
+              <div><p class="eyebrow">本机执行环境</p><h2>已配置的 Agent</h2><p>测试、编辑 Runtime 和查看本机文件策略。</p></div>
+              <button class="primary" id="add-agent" type="button">添加 Agent</button>
+            </div>
+            <div class="agent-list detailed-agents" id="agent-list"></div>
+          </section>
+
+          <section class="app-page hidden" data-page-panel="settings" id="settings-page">
+            <div class="page-heading">
+              <div><p class="eyebrow">仅保存在这台设备</p><h2>Bridge 设置</h2></div>
+            </div>
+
+            <section class="settings-card">
+              <div class="setting-heading"><div><h3>中央连接</h3><p>服务地址、HTTPS 信任与中央 Token。</p></div><button class="secondary" id="edit-connection" type="button">编辑</button></div>
+              <dl class="setting-summary">
+                <div><dt>中央服务</dt><dd id="current-server">—</dd></div>
+                <div><dt>连接状态</dt><dd id="connection-detail">—</dd></div>
+                <div><dt>最后连接</dt><dd id="last-connected">—</dd></div>
+              </dl>
+            </section>
+
+            <section class="settings-card">
+              <div class="setting-heading"><div><h3>隐私</h3><p>中央策略不能扩大本机 Runtime 权限。</p></div></div>
+              <dl class="setting-summary single">
+                <div><dt>思考摘要共享</dt><dd id="current-reasoning-sharing">未授权（不共享摘要）</dd></div>
+              </dl>
+            </section>
+
+            <details class="settings-card disclosure-card">
+              <summary><span><strong>设备与技术详情</strong><small>查看本机路径、原始身份和连接错误</small></span><span aria-hidden="true">⌄</span></summary>
+              <dl class="details technical-grid">
+                <div><dt>中央 Token</dt><dd id="current-server-token">未配置</dd></div>
+                <div><dt>Team ID</dt><dd id="current-team">—</dd></div>
+                <div><dt>Device ID</dt><dd id="current-device">—</dd></div>
+                <div><dt>配置文件</dt><dd id="config-path">—</dd></div>
+              </dl>
+              <p class="technical-error hidden" id="connection-error"></p>
+            </details>
+
+            <details class="settings-card disclosure-card pairing-panel">
+              <summary><span><strong>配对与恢复</strong><small id="pairing-status">正在读取</small></span><span aria-hidden="true">⌄</span></summary>
+              <p id="pairing-binding" class="pairing-binding"></p>
+              <p id="pairing-guidance" class="pairing-guidance"></p>
+              <div class="actions">
+                <button class="secondary hidden" id="request-enrollment" type="button">申请审批码</button>
+                <button class="secondary hidden" id="start-existing-pairing" type="button">启动现有配对</button>
+              </div>
+              <p id="pairing-blocked" class="tool-result"></p>
+              <p id="pairing-backup" class="tool-result hidden"></p>
+            </details>
+
+            <section class="settings-card client-tools">
+              <div class="setting-heading"><div><h3>应用与维护</h3><p>启动、更新和脱敏诊断。</p></div></div>
+              <label class="setting-toggle hidden" id="login-startup-row">
+                <input id="login-startup" type="checkbox">
+                <span><strong>登录后自动启动</strong><small>只启动托盘和已配对 Bridge，不保存凭据。</small></span>
+              </label>
+              <p class="inline-error hidden" id="login-startup-warning"></p>
+              <div class="maintenance-actions">
+                <div>
+                  <button class="secondary" id="export-diagnostics" type="button">导出脱敏诊断包</button>
+                  <p class="tool-result" id="diagnostics-result">不包含凭据、消息、原始 ID 或本机路径。</p>
+                </div>
+                <div>
+                  <button class="secondary" id="check-update" type="button">检查更新</button>
+                  <p class="tool-result" id="update-result">仅在点击时访问 GitHub，不会自动安装。</p>
+                  <a class="release-link hidden" id="release-link" target="_blank" rel="noopener noreferrer">打开 GitHub Release 页面</a>
+                </div>
+              </div>
+            </section>
+          </section>
+        </section>
+
+        <form id="enrollment-form">
       <section class="panel">
         <div class="section-heading">
           <div><p class="step">01</p><h2>中央服务</h2></div>
@@ -318,30 +411,6 @@
       </div>
     </dialog>
 
-    <section class="panel client-tools">
-      <div class="section-heading">
-        <div><p class="eyebrow">CLIENT SETTINGS</p><h2>客户端维护</h2></div>
-        <p>更新检查仅在你点击时访问 GitHub，不会下载、替换或自动安装。</p>
-      </div>
-      <dl class="details compact">
-        <div><dt>Bridge 版本</dt><dd id="bridge-version">dev</dd></div>
-        <div><dt>更新策略</dt><dd>仅手动检查</dd></div>
-      </dl>
-      <label class="setting-toggle hidden" id="login-startup-row">
-        <input id="login-startup" type="checkbox">
-        <span><strong>登录后自动启动</strong><small>macOS 用户级 LaunchAgent，只启动托盘和已配对 Bridge。</small></span>
-      </label>
-      <p class="inline-error hidden" id="login-startup-warning"></p>
-      <div class="maintenance-actions">
-        <div>
-          <button class="secondary" id="export-diagnostics" type="button">导出脱敏诊断包</button>
-          <p class="tool-result" id="diagnostics-result">不包含凭据、消息、原始 ID 或本机路径。</p>
-        </div>
-        <div>
-          <button class="secondary" id="check-update" type="button">检查更新</button>
-          <p class="tool-result" id="update-result">尚未检查</p>
-          <a class="release-link hidden" id="release-link" target="_blank" rel="noopener noreferrer">打开 GitHub Release 页面</a>
-        </div>
       </div>
     </section>
   </main>

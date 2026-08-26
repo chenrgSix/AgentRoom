@@ -17,6 +17,31 @@ import (
 	"agentroom.dev/bridge/internal/pairing"
 )
 
+// Opt-in first-run fixture: an empty temporary configuration and no central or
+// Runtime calls. It keeps visual acceptance independent from a real Device.
+func TestSetupBrowserFixture(t *testing.T) {
+	if os.Getenv("AGENTROOM_SETUP_UI_FIXTURE") != "1" {
+		t.Skip("opt-in isolated setup browser fixture")
+	}
+	service, _, _ := newTestService(t, inertDependencies())
+	finished := make(chan struct{})
+	var stop sync.Once
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /fixture/stop", func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+		stop.Do(func() { close(finished) })
+	})
+	mux.Handle("/", service.Handler())
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	fmt.Printf("SETUP_FIXTURE_URL=%s/?token=%s\n", server.URL, service.Token())
+	select {
+	case <-finished:
+	case <-time.After(20 * time.Minute):
+		t.Fatal("browser fixture timed out")
+	}
+}
+
 // Opt-in browser fixture: temporary config, fake credentials, and no central
 // network calls. Control routes exist only in this test, never in the binary.
 func TestPairingBrowserFixture(t *testing.T) {
