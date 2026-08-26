@@ -185,6 +185,12 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		t.Fatal("Console must disclose that managed Pi follows owner-controlled local permissions")
 	}
 	if bytes.Count(html, []byte(`data-open-codex-session-guide`)) != 3 ||
+		!bytes.Contains(html, []byte(`>使用说明</button>`)) ||
+		!bytes.Contains(html, []byte("AgentRoom Bridge 使用说明")) ||
+		!bytes.Contains(html, []byte("Bridge 是做什么的")) ||
+		!bytes.Contains(html, []byte("日常怎么用")) ||
+		!bytes.Contains(html, []byte("Codex 会话说明")) ||
+		!bytes.Contains(html, []byte(`aria-label="关闭使用说明"`)) ||
 		bytes.Count(html, []byte("当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server")) != 2 ||
 		!bytes.Contains(html, []byte("CODEX_SESSION_IN_USE")) ||
 		!bytes.Contains(html, []byte("CODEX_SESSION_RESUME_FAILED")) ||

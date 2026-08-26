@@ -25,7 +25,7 @@
         </button>
       </nav>
       <div class="sidebar-footer">
-        <button class="sidebar-help" type="button" data-open-codex-session-guide>Codex 会话说明</button>
+        <button class="sidebar-help" type="button" data-open-codex-session-guide>使用说明</button>
         <div class="sidebar-device"><span id="device-title">本机 Bridge</span><small id="bridge-version">dev</small></div>
       </div>
     </aside>
@@ -370,13 +370,26 @@
 
     <dialog class="agent-modal session-guide-dialog" id="codex-session-guide" aria-labelledby="codex-session-guide-title" aria-describedby="codex-session-guide-summary">
       <div class="section-heading">
-        <div><p class="eyebrow">CODEX TASK SESSION GUIDE</p><h2 id="codex-session-guide-title">Codex 会话复用与占用处理</h2></div>
-        <button class="icon-button" id="close-codex-session-guide" type="button" aria-label="关闭会话说明">×</button>
+        <div><p class="eyebrow">AGENTROOM BRIDGE GUIDE</p><h2 id="codex-session-guide-title">AgentRoom Bridge 使用说明</h2></div>
+        <button class="icon-button" id="close-codex-session-guide" type="button" aria-label="关闭使用说明">×</button>
       </div>
       <div class="guide-callout" id="codex-session-guide-summary">
-        <strong>当前状态</strong>
-        <p>AgentRoom Bridge 与 Codex Desktop/CLI 各自运行本地 App Server；当前 AgentRoom 版本没有启用共享 daemon。App Server 能接受多个连接，不代表 Desktop 已配置为连接 Bridge 的进程。</p>
+        <strong>Bridge 是做什么的</strong>
+        <p>Bridge 把这台设备上的 Codex 和 Pi 安全连接到中央 Team。中央服务负责分配任务，本机继续掌握 Runtime、工作区、文件权限和执行审批。</p>
       </div>
+      <section class="guide-section" aria-labelledby="bridge-usage-start-title">
+        <h3 id="bridge-usage-start-title">日常怎么用</h3>
+        <ol class="guide-steps">
+          <li>在“概览”确认 Bridge 正在运行，并查看中央服务是否已连接。</li>
+          <li>在“本机 Agent”检查 Runtime、工作区和文件策略；测试或修改配置需要在本机明确操作。</li>
+          <li>在中央 AgentRoom 中提及对应 Agent 即可分配任务；Bridge 会在本机执行并返回结果。</li>
+          <li>连接、隐私、配对恢复、更新和诊断入口都集中在“设置”。</li>
+        </ol>
+      </section>
+      <section class="guide-section" aria-labelledby="codex-session-overview-title">
+        <h3 id="codex-session-overview-title">Codex 会话说明</h3>
+        <p>AgentRoom Bridge 与 Codex Desktop/CLI 各自运行本地 App Server；当前 AgentRoom 版本没有启用共享 daemon。App Server 能接受多个连接，不代表 Desktop 已配置为连接 Bridge 的进程。</p>
+      </section>
       <section class="guide-section" aria-labelledby="codex-session-terms-title">
         <h3 id="codex-session-terms-title">先分清三个概念</h3>
         <dl class="guide-terms">

@@ -115,6 +115,14 @@ configuration warnings without discarding an in-progress Agent form. Opening
 the guide moves focus to its close control, native modal semantics keep the
 background inert, and closing it restores focus to the exact entry point.
 
+`BRG-037` presents that material through the broader **使用说明** entry. The
+dialog first explains what Bridge controls and where owners find Overview,
+Agents, and Settings, then retains the Codex Task, Run, native session, recovery,
+and separate-App-Server guidance as an explicit **Codex 会话说明** section.
+Codex-specific inline warnings still open the same dialog without changing the
+current Agent draft, selection-scoped accessibility description, or focus
+restoration behavior.
+
 Runtime path discovery follows
 [ADR-0019](../adr/0019-bounded-local-runtime-discovery.md): PATH first, then
 known app bundles and common installation locations, with no shell startup,
