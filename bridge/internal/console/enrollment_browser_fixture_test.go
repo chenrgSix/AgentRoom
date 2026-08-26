@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"runtime"
 	"sync"
 	"testing"
 	"time"
@@ -25,6 +26,15 @@ func TestPairingBrowserFixture(t *testing.T) {
 	var mu sync.Mutex
 	var decision chan bool
 	dependencies := inertDependencies()
+	switch os.Getenv("AGENTROOM_DISCOVERY_FIXTURE") {
+	case "missing":
+		dependencies.DiscoverRuntime = func(string) RuntimeDiscovery { return RuntimeDiscovery{} }
+	case "fallback":
+		dependencies.DiscoverRuntime = func(kind string) RuntimeDiscovery {
+			homeDirectory, _ := os.UserHomeDir()
+			return discoverRuntimeFrom(kind, runtimeCandidates(kind, runtime.GOOS, homeDirectory, os.Getenv), missingRuntime)
+		}
+	}
 	dependencies.Enroll = func(ctx context.Context, cfg config.Config, show func(enrollment.Challenge)) (pairing.Credential, error) {
 		result := make(chan bool, 1)
 		mu.Lock()

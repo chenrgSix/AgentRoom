@@ -122,9 +122,12 @@
               <label>显示名称<input id="codex-name" maxlength="80" value="Local Codex" required></label>
               <label>角色<input id="codex-role" maxlength="80" value="Implementation" required></label>
             </div>
-            <label>Codex 可执行文件<input id="codex-path" required></label>
+            <label>Codex 可执行文件（完整文件路径）<input id="codex-path" required aria-describedby="codex-discovery-help"></label>
+            <p id="codex-discovery-status" class="runtime-discovery-status" role="status"></p>
+            <p id="codex-discovery-help" class="runtime-policy"></p>
+            <a id="codex-install-link" class="runtime-install-link hidden" href="https://learn.chatgpt.com/docs/codex/cli" target="_blank" rel="noopener noreferrer">Codex CLI 官方安装说明</a>
             <div class="runtime-draft-actions">
-              <button class="secondary" id="codex-use-detected" type="button">使用检测到的 Codex</button>
+              <button class="secondary" id="codex-use-detected" type="button">重新检测并填入 Codex</button>
               <button class="secondary" id="codex-preflight" type="button">保存前预检</button>
               <span id="codex-preflight-result">预检不会保存配置或重启 Bridge。</span>
             </div>
@@ -139,9 +142,12 @@
               <label>显示名称<input id="pi-name" maxlength="80" value="Local Pi"></label>
               <label>角色<input id="pi-role" maxlength="80" value="Reviewer"></label>
             </div>
-            <label>Pi 可执行文件<input id="pi-path"></label>
+            <label>Pi 可执行文件（完整文件路径）<input id="pi-path" aria-describedby="pi-discovery-help"></label>
+            <p id="pi-discovery-status" class="runtime-discovery-status" role="status"></p>
+            <p id="pi-discovery-help" class="runtime-policy"></p>
+            <span id="pi-install-link" class="hidden"></span>
             <div class="runtime-draft-actions">
-              <button class="secondary" id="pi-use-detected" type="button">使用检测到的 Pi</button>
+              <button class="secondary" id="pi-use-detected" type="button">重新检测并填入 Pi</button>
               <button class="secondary" id="pi-preflight" type="button">保存前预检</button>
               <span id="pi-preflight-result">预检不会保存配置或重启 Bridge。</span>
             </div>
@@ -235,9 +241,12 @@
             <label>显示名称<input id="agent-name" maxlength="80" required></label>
             <label>角色<input id="agent-role" maxlength="80" required></label>
           </div>
-          <label>可执行文件<input id="agent-path" required></label>
+          <label>可执行文件（完整文件路径）<input id="agent-path" required aria-describedby="agent-discovery-help"></label>
+          <p id="agent-discovery-status" class="runtime-discovery-status" role="status"></p>
+          <p id="agent-discovery-help" class="runtime-policy"></p>
+          <a id="agent-install-link" class="runtime-install-link hidden" href="https://learn.chatgpt.com/docs/codex/cli" target="_blank" rel="noopener noreferrer">Codex CLI 官方安装说明</a>
           <div class="runtime-draft-actions">
-            <button class="secondary" id="agent-use-detected" type="button">使用检测值</button>
+            <button class="secondary" id="agent-use-detected" type="button">重新检测并填入</button>
             <button class="secondary" id="agent-preflight" type="button">保存前预检</button>
             <span id="agent-preflight-result">先验证当前表单；不会写入文件或重启 Bridge。</span>
           </div>

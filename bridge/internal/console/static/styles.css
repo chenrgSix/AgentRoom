@@ -59,6 +59,9 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .approval .secondary { grid-column: 2; grid-row: 2; }
 .pairing-panel .section-heading { margin-bottom: 12px; }
 .pairing-binding { font-size: 12px; overflow-wrap: anywhere; color: #b8c7a8; }
+.runtime-discovery-status { font-size: 12px; color: #b8c7a8; overflow-wrap: anywhere; }
+.runtime-policy { overflow-wrap: anywhere; }
+.runtime-install-link { display: inline-block; color: var(--lime); font-size: 12px; margin-bottom: 12px; }
 .pairing-guidance { color: var(--muted); font-size: 13px; line-height: 1.7; }
 #pairing-status { color: var(--lime); white-space: nowrap; }
 #pairing-backup { overflow-wrap: anywhere; }

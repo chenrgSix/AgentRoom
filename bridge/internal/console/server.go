@@ -15,7 +15,6 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -103,41 +102,43 @@ type ConnectionView struct {
 }
 
 type State struct {
-	ShareReasoningSummaries bool             `json:"shareReasoningSummaries"`
-	Phase                   Phase            `json:"phase"`
-	Configured              bool             `json:"configured"`
-	Paired                  bool             `json:"paired"`
-	BridgeRunning           bool             `json:"bridgeRunning"`
-	Version                 string           `json:"version"`
-	ConfigPath              string           `json:"configPath"`
-	Workspace               string           `json:"workspace"`
-	ServerURL               string           `json:"serverUrl,omitempty"`
-	ServerTokenConfigured   bool             `json:"serverTokenConfigured"`
-	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
-	ServerCertificateSHA256 string           `json:"serverCertificateSha256,omitempty"`
-	DeviceName              string           `json:"deviceName,omitempty"`
-	TeamID                  string           `json:"teamId,omitempty"`
-	DeviceID                string           `json:"deviceId,omitempty"`
-	JoinCode                string           `json:"joinCode,omitempty"`
-	JoinExpiresAt           string           `json:"joinExpiresAt,omitempty"`
-	LastError               string           `json:"lastError,omitempty"`
-	Agents                  []AgentView      `json:"agents"`
-	DetectedCodex           string           `json:"detectedCodex,omitempty"`
-	DetectedPi              string           `json:"detectedPi,omitempty"`
-	Connection              ConnectionView   `json:"connection"`
-	LoginStartup            autostart.State  `json:"loginStartup"`
-	Enrollment              EnrollmentView   `json:"enrollment"`
+	ShareReasoningSummaries bool                        `json:"shareReasoningSummaries"`
+	Phase                   Phase                       `json:"phase"`
+	Configured              bool                        `json:"configured"`
+	Paired                  bool                        `json:"paired"`
+	BridgeRunning           bool                        `json:"bridgeRunning"`
+	Version                 string                      `json:"version"`
+	ConfigPath              string                      `json:"configPath"`
+	Workspace               string                      `json:"workspace"`
+	ServerURL               string                      `json:"serverUrl,omitempty"`
+	ServerTokenConfigured   bool                        `json:"serverTokenConfigured"`
+	ServerTrustMode         config.TrustMode            `json:"serverTrustMode,omitempty"`
+	ServerCertificateSHA256 string                      `json:"serverCertificateSha256,omitempty"`
+	DeviceName              string                      `json:"deviceName,omitempty"`
+	TeamID                  string                      `json:"teamId,omitempty"`
+	DeviceID                string                      `json:"deviceId,omitempty"`
+	JoinCode                string                      `json:"joinCode,omitempty"`
+	JoinExpiresAt           string                      `json:"joinExpiresAt,omitempty"`
+	LastError               string                      `json:"lastError,omitempty"`
+	Agents                  []AgentView                 `json:"agents"`
+	DetectedCodex           string                      `json:"detectedCodex,omitempty"`
+	DetectedPi              string                      `json:"detectedPi,omitempty"`
+	RuntimeDiscovery        map[string]RuntimeDiscovery `json:"runtimeDiscovery"`
+	Connection              ConnectionView              `json:"connection"`
+	LoginStartup            autostart.State             `json:"loginStartup"`
+	Enrollment              EnrollmentView              `json:"enrollment"`
 }
 
 type Dependencies struct {
-	Enroll         func(context.Context, config.Config, func(enrollment.Challenge)) (pairing.Credential, error)
-	SaveConfig     func(string, config.Config) error
-	ReplaceConfig  func(string, config.Config) error
-	SaveCredential func(string, pairing.Credential) error
-	RunBridge      func(context.Context, config.Config, pairing.Credential, operations.Observer) error
-	LoginStartup   autostart.Controller
-	UpdateChecker  updatecheck.Service
-	ProbeRuntime   func(context.Context, config.AgentConfig) RuntimeProbeResult
+	DiscoverRuntime func(string) RuntimeDiscovery
+	Enroll          func(context.Context, config.Config, func(enrollment.Challenge)) (pairing.Credential, error)
+	SaveConfig      func(string, config.Config) error
+	ReplaceConfig   func(string, config.Config) error
+	SaveCredential  func(string, pairing.Credential) error
+	RunBridge       func(context.Context, config.Config, pairing.Credential, operations.Observer) error
+	LoginStartup    autostart.Controller
+	UpdateChecker   updatecheck.Service
+	ProbeRuntime    func(context.Context, config.AgentConfig) RuntimeProbeResult
 }
 
 type Options struct {
@@ -171,6 +172,9 @@ type Service struct {
 var environmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,79}$`)
 
 func New(options Options, dependencies Dependencies) (*Service, error) {
+	if dependencies.DiscoverRuntime == nil {
+		dependencies.DiscoverRuntime = discoverRuntime
+	}
 	if dependencies.Enroll == nil || dependencies.SaveConfig == nil || dependencies.ReplaceConfig == nil ||
 		dependencies.SaveCredential == nil || dependencies.RunBridge == nil {
 		return nil, fmt.Errorf("Console dependencies are incomplete")
@@ -220,17 +224,16 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 		token:        token,
 		tokenHash:    sha256.Sum256([]byte(token)),
 		state: State{
-			Phase:         PhaseUnconfigured,
-			ConfigPath:    resolvedConfig,
-			Workspace:     workspace,
-			Version:       bridgeVersion,
-			Agents:        []AgentView{},
-			DetectedCodex: discover("codex"),
-			DetectedPi:    discover("pi"),
-			Connection:    ConnectionView{State: operations.ConnectionStopped},
+			Phase:      PhaseUnconfigured,
+			ConfigPath: resolvedConfig,
+			Workspace:  workspace,
+			Version:    bridgeVersion,
+			Agents:     []AgentView{},
+			Connection: ConnectionView{State: operations.ConnectionStopped},
 		},
 		runtimeTests: make(map[string]struct{}),
 	}
+	service.applyDiscoveryLocked(service.discoverRuntimes())
 	if loaded, loadErr := config.Load(resolvedConfig); loadErr == nil {
 		service.configuration = &loaded
 		service.state.Configured = true
@@ -296,6 +299,7 @@ func (s *Service) Handler() http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/state", s.authorize(s.getState))
+	mux.HandleFunc("GET /api/runtime-discovery", s.authorize(s.refreshRuntimeDiscovery))
 	mux.HandleFunc("POST /api/enrollment/start", s.authorize(s.startEnrollment))
 	mux.HandleFunc("POST /api/enrollment/restart", s.authorize(s.restartEnrollment))
 	mux.HandleFunc("POST /api/enrollment/cancel", s.authorize(s.cancelEnrollment))
@@ -1217,7 +1221,7 @@ func formatTime(value *time.Time) string {
 
 func executableAvailable(path string) bool {
 	info, err := os.Stat(path)
-	return err == nil && !info.IsDir() && info.Mode().Perm()&0o111 != 0
+	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
 }
 
 func redactOperationalText(value string) string {
@@ -1269,6 +1273,11 @@ func (s *Service) diagnosticInputLocked() diagnostics.Input {
 
 func cloneState(state State) State {
 	state.Agents = append([]AgentView{}, state.Agents...)
+	discovered := make(map[string]RuntimeDiscovery, len(state.RuntimeDiscovery))
+	for kind, value := range state.RuntimeDiscovery {
+		discovered[kind] = value
+	}
+	state.RuntimeDiscovery = discovered
 	return state
 }
 
@@ -1290,18 +1299,6 @@ func randomToken() (string, error) {
 	return base64.RawURLEncoding.EncodeToString(source), nil
 }
 
-func discover(name string) string {
-	value, err := exec.LookPath(name)
-	if err != nil {
-		return ""
-	}
-	resolved, err := filepath.Abs(value)
-	if err != nil {
-		return value
-	}
-	return resolved
-}
-
 func executableFile(value string) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -1312,7 +1309,7 @@ func executableFile(value string) (string, error) {
 		return "", err
 	}
 	info, err := os.Stat(resolved)
-	if err != nil || info.IsDir() || info.Mode().Perm()&0o111 == 0 {
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
 		return "", fmt.Errorf("path must identify an executable file")
 	}
 	return resolved, nil

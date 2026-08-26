@@ -93,6 +93,14 @@ before save. Preflight is explicit, token-authenticated, does not persist or
 restart the Bridge, and is fenced against every active Team Run or concurrent
 Runtime probe.
 
+Runtime path discovery follows
+[ADR-0019](../adr/0019-bounded-local-runtime-discovery.md): PATH first, then
+known app bundles and common installation locations, with no shell startup,
+recursive scan, install, or automatic probe. Authenticated explicit
+`GET /api/runtime-discovery` refreshes path/source results; ordinary state
+polling does not repeat discovery. Missing-result guidance explains terminal
+lookup and full executable paths, and never clears an existing form draft.
+
 ## Connection Lifecycle
 
 ### Explicit GUI pairing recovery

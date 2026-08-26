@@ -1,4 +1,5 @@
 import { pairingView } from "./pairing-view.mjs";
+import { detectedPathForDraft, runtimeDiscoveryView } from "./runtime-discovery.mjs";
 
 const elements = Object.fromEntries([
   "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
@@ -26,6 +27,9 @@ const elements = Object.fromEntries([
   "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env",
   "agent-pi-permission-policy", "save-agent",
   "agent-use-detected", "agent-preflight", "agent-preflight-result",
+  "codex-discovery-status", "codex-discovery-help", "codex-install-link",
+  "pi-discovery-status", "pi-discovery-help", "pi-install-link",
+  "agent-discovery-status", "agent-discovery-help", "agent-install-link",
   "connection-modal-backdrop", "connection-modal-title", "close-connection-modal",
   "cancel-connection-modal", "connection-modal-error", "connection-form",
   "connection-server-url", "connection-server-token", "clear-server-token-field", "clear-server-token",
@@ -45,6 +49,7 @@ let editingAgentId = null;
 let draftPreflightRunning = false;
 let enrollmentActionRunning = false;
 let expectedPairingDeviceId = null;
+let discoveryRunning = false;
 const runtimeTestResults = new Map();
 
 const labels = {
@@ -256,6 +261,42 @@ function syncAgentKindFields() {
   elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
   elements["agent-credential-field"].classList.toggle("hidden", codex);
   elements["agent-pi-permission-policy"].classList.toggle("hidden", codex);
+  renderDiscovery("agent", codex ? "codex" : "pi");
+}
+
+function renderDiscovery(prefix, kind) {
+  if (!currentState) return;
+  const view = runtimeDiscoveryView(kind, currentState);
+  elements[`${prefix}-discovery-status`].textContent = view.status;
+  elements[`${prefix}-discovery-help`].textContent = view.help;
+  elements[`${prefix}-install-link`].classList.toggle("hidden", !view.showCodexInstall);
+  elements[`${prefix}-use-detected`].disabled = discoveryRunning;
+}
+
+async function useDetectedRuntime(prefix, kind) {
+  if (discoveryRunning) return;
+  const input = elements[`${prefix}-path`];
+  const draftPath = input.value;
+  const draftAgent = editingAgentId;
+  discoveryRunning = true;
+  showError(null);
+  try {
+    const discovered = await request("/api/runtime-discovery");
+    currentState.runtimeDiscovery = discovered;
+    currentState.detectedCodex = discovered.codex?.path || "";
+    currentState.detectedPi = discovered.pi?.path || "";
+    if (input.value === draftPath && (prefix !== "agent" ||
+      (elements["agent-kind"].value === kind && editingAgentId === draftAgent))) {
+      input.value = detectedPathForDraft(draftPath, discovered[kind]?.path);
+    }
+  } catch (error) {
+    showError(error);
+  } finally {
+    discoveryRunning = false;
+    renderDiscovery("codex", "codex");
+    renderDiscovery("pi", "pi");
+    renderDiscovery("agent", elements["agent-kind"].value);
+  }
 }
 
 function openAgentModal(agent = null) {
@@ -306,6 +347,9 @@ function closeConnectionModal() {
 
 function render(state) {
   currentState = state;
+  renderDiscovery("codex", "codex");
+  renderDiscovery("pi", "pi");
+  renderDiscovery("agent", elements["agent-kind"].value);
   elements.phase.textContent = labels[state.phase] || state.phase;
   elements.phase.classList.toggle("running", state.bridgeRunning);
   elements.configured.textContent = state.configured ? "已创建" : "未创建";
@@ -475,9 +519,7 @@ elements["agent-kind"].addEventListener("change", () => {
 });
 elements["agent-use-detected"].addEventListener("click", () => {
   const kind = elements["agent-kind"].value;
-  elements["agent-path"].value = kind === "pi"
-    ? currentState.detectedPi || ""
-    : currentState.detectedCodex || "";
+  void useDetectedRuntime("agent", kind);
 });
 elements["agent-preflight"].addEventListener("click", () => {
   void preflightDraft(
@@ -489,9 +531,7 @@ elements["agent-preflight"].addEventListener("click", () => {
 });
 for (const kind of ["codex", "pi"]) {
   elements[`${kind}-use-detected`].addEventListener("click", () => {
-    elements[`${kind}-path`].value = kind === "pi"
-      ? currentState.detectedPi || ""
-      : currentState.detectedCodex || "";
+    void useDetectedRuntime(kind, kind);
   });
   elements[`${kind}-preflight`].addEventListener("click", () => {
     void preflightDraft(
