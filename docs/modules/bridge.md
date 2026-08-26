@@ -99,7 +99,10 @@ separate App Server processes. If another local client owns the same Thread,
 Bridge preserves the Task Session binding, returns retryable
 `CODEX_SESSION_IN_USE`, and does not create a replacement Thread. The Console
 instructs the owner to release that client, including fully exiting Desktop
-when necessary, before retrying. This Codex-specific warning is hidden for Pi.
+when necessary, before retrying. This Codex-specific warning is visually and
+programmatically removed from the active description when Codex is disabled or
+the per-Agent Runtime is Pi; the Pi permission policy becomes the only
+description associated with that selector.
 
 Runtime path discovery follows
 [ADR-0019](../adr/0019-bounded-local-runtime-discovery.md): PATH first, then

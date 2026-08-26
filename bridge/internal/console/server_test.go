@@ -177,8 +177,10 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if bytes.Count(html, []byte("CODEX_SESSION_IN_USE")) != 2 ||
 		bytes.Count(html, []byte("不会自动新建替代会话")) != 2 ||
 		!bytes.Contains(html, []byte(`aria-describedby="codex-session-ownership-policy"`)) ||
-		!bytes.Contains(html, []byte(`aria-describedby="agent-codex-session-ownership-policy agent-pi-permission-policy"`)) ||
-		!bytes.Contains(javascript, []byte(`elements["agent-codex-session-ownership-policy"].classList.toggle("hidden", !codex)`)) {
+		!bytes.Contains(html, []byte(`aria-describedby="agent-codex-session-ownership-policy"`)) ||
+		bytes.Contains(html, []byte(`aria-describedby="agent-codex-session-ownership-policy agent-pi-permission-policy"`)) ||
+		!bytes.Contains(javascript, []byte(`applyAgentRuntimePolicy(`)) ||
+		!bytes.Contains(javascript, []byte(`applyEnrollmentCodexPolicy(enabled, elements["codex-enabled"])`)) {
 		t.Fatal("Codex enrollment and Agent settings must disclose multi-client session ownership limits")
 	}
 	if !bytes.Contains(javascript, []byte("request(agentId ? `/api/agents/")) ||

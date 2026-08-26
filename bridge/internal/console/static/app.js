@@ -1,5 +1,6 @@
 import { pairingView } from "./pairing-view.mjs";
 import { detectedPathForDraft, runtimeDiscoveryView } from "./runtime-discovery.mjs";
+import { applyAgentRuntimePolicy, applyEnrollmentCodexPolicy } from "./runtime-policy.mjs";
 
 const elements = Object.fromEntries([
   "phase", "configured", "paired", "running", "connection-state", "agent-count", "approval",
@@ -101,6 +102,9 @@ function setRuntime(kind, enabled) {
   elements[`${kind}-fields`].classList.toggle("hidden", !enabled);
   for (const input of elements[`${kind}-fields`].querySelectorAll("input, select, button")) {
     input.disabled = !enabled;
+  }
+  if (kind === "codex") {
+    applyEnrollmentCodexPolicy(enabled, elements["codex-enabled"]);
   }
 }
 
@@ -260,8 +264,12 @@ function syncAgentKindFields() {
   const codex = elements["agent-kind"].value === "codex";
   elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
   elements["agent-credential-field"].classList.toggle("hidden", codex);
-  elements["agent-codex-session-ownership-policy"].classList.toggle("hidden", !codex);
-  elements["agent-pi-permission-policy"].classList.toggle("hidden", codex);
+  applyAgentRuntimePolicy(
+    elements["agent-kind"].value,
+    elements["agent-kind"],
+    elements["agent-codex-session-ownership-policy"],
+    elements["agent-pi-permission-policy"]
+  );
   renderDiscovery("agent", codex ? "codex" : "pi");
 }
 
