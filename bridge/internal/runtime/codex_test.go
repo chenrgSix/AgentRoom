@@ -175,6 +175,62 @@ func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 	}
 }
 
+func TestCodexAdapterPreservesSessionHeldByAnotherLocalClient(t *testing.T) {
+	t.Setenv("AGENTROOM_CODEX_HELPER", "session-in-use")
+	workspace := t.TempDir()
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	configuration := config.AgentConfig{
+		Command: []string{
+			os.Args[0], "-test.run=TestCodexHelperProcess", "--", "app-server", "--listen", "stdio://",
+		},
+		Workspace: workspace, Sandbox: "workspace-write",
+		EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER"},
+		RuntimeKind:  "codex", Adapter: "codex",
+	}
+	taskID := "task_session_in_use"
+	key := testRuntimeSessionKey(t, configuration, taskID)
+	original := RuntimeSessionBinding{
+		RuntimeSessionKey: key, SessionID: "019d-thread",
+		LastRoomSequence: 41, LastRunID: "run_previous",
+	}
+	if err := store.Save(original); err != nil {
+		t.Fatal(err)
+	}
+	run := contracts.RunRequestedPayload{
+		RunID: "run_session_in_use", RoomID: "room_alpha",
+		TaskID: &taskID, TargetAgentID: "agent_builder",
+		Instruction: "continue it",
+		Session: &contracts.LogicalSessionRequest{
+			Scope: contracts.Task, ResumePolicy: contracts.ResumeOrStart,
+			ContextCursor: 42,
+		},
+	}
+	adapter := CodexAdapter{Config: configuration, Sessions: store}
+	var terminal Event
+	if err := adapter.Execute(context.Background(), Request{Run: run}, func(_ context.Context, event Event) error {
+		terminal = event
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Status == nil || *terminal.Status != contracts.Failed || terminal.Error == nil ||
+		terminal.Error.Code != "CODEX_SESSION_IN_USE" || !terminal.Error.Retryable || terminal.Session != nil {
+		t.Fatalf("unexpected occupied-session result: %#v", terminal)
+	}
+	encoded, err := json.Marshal(terminal.Error)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(encoded), "019d-thread") || strings.Contains(string(encoded), "active writer") {
+		t.Fatalf("occupied-session diagnostic leaked the provider error: %s", encoded)
+	}
+	binding, found, err := store.Load(key)
+	if err != nil || !found || binding.SessionID != original.SessionID ||
+		binding.LastRoomSequence != original.LastRoomSequence || binding.LastRunID != original.LastRunID {
+		t.Fatalf("occupied Codex binding changed: %#v found=%t err=%v", binding, found, err)
+	}
+}
+
 func TestCodexAppServerParserStreamsAndResetsAcrossAgentMessages(t *testing.T) {
 	parser := newCodexAppServerParser(config.AgentConfig{
 		Workspace: t.TempDir(), Sandbox: "workspace-write",
@@ -387,6 +443,9 @@ func TestCodexHelperProcess(t *testing.T) {
 	case "resume":
 		runCodexAppServerFixture(t, true, "thread/resume", false)
 		return
+	case "session-in-use":
+		runCodexAppServerSessionInUseFixture(t)
+		return
 	case "hang":
 		runCodexAppServerFixture(
 			t,
@@ -402,6 +461,35 @@ func TestCodexHelperProcess(t *testing.T) {
 		if strings.HasPrefix(os.Getenv("AGENTROOM_CODEX_HELPER"), "failure:") {
 			fmt.Fprintln(os.Stderr, "EPERM operation not permitted: "+os.Getenv("AGENTROOM_CODEX_HELPER"))
 			os.Exit(23)
+		}
+	}
+}
+
+func runCodexAppServerSessionInUseFixture(t *testing.T) {
+	scanner := bufio.NewScanner(os.Stdin)
+	encoder := json.NewEncoder(os.Stdout)
+	for scanner.Scan() {
+		var request struct {
+			ID     int    `json:"id"`
+			Method string `json:"method"`
+		}
+		if err := json.Unmarshal(scanner.Bytes(), &request); err != nil {
+			os.Exit(2)
+		}
+		switch request.ID {
+		case 1:
+			_ = encoder.Encode(map[string]any{"id": 1, "result": map[string]any{"userAgent": "fixture"}})
+		case 2:
+			if request.Method != "thread/resume" {
+				os.Exit(3)
+			}
+			_ = encoder.Encode(map[string]any{
+				"id": 2,
+				"error": map[string]any{
+					"code":    -32001,
+					"message": "failed to initialize thread persistence: thread-store conflict: thread 019d-thread already has an active writer",
+				},
+			})
 		}
 	}
 }

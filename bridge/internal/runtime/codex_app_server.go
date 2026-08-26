@@ -18,6 +18,8 @@ import (
 
 const maxCodexProtocolOutput = 4 * 1024 * 1024
 
+var errCodexSessionInUse = errors.New("Codex session is active in another local client")
+
 func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emit EmitFunc) error {
 	if err := validateCodexCommand(c.Config.Command); err != nil {
 		return emitCodexFailure(ctx, emit, "CODEX_COMMAND_INVALID", err.Error())
@@ -220,6 +222,14 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 		})
 	}
 	if protocolError != nil {
+		if errors.Is(protocolError, errCodexSessionInUse) {
+			return emitCodexRetryableFailure(
+				ctx,
+				emit,
+				"CODEX_SESSION_IN_USE",
+				"Codex session is active in another local client. Close it there and retry.",
+			)
+		}
 		return emitCodexFailureAfterAcceptance(
 			ctx, emit, parser, "CODEX_PROTOCOL_INVALID",
 			"Codex emitted an incompatible app-server event stream.", nil,
@@ -381,6 +391,9 @@ func (p *codexAppServerParser) consume(source []byte) (*OutputDelta, []any, erro
 func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*OutputDelta, []any, error) {
 	if message.Error != nil {
 		if string(message.ID) == "2" && p.resumeID != "" && !p.resumeFailed {
+			if isCodexSessionInUse(message.Error.Message) {
+				return nil, nil, errCodexSessionInUse
+			}
 			if p.sessions != nil && p.sessionKey != nil {
 				if err := p.sessions.Delete(*p.sessionKey); err != nil {
 					return nil, nil, err
@@ -458,6 +471,12 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 	}
 }
 
+func isCodexSessionInUse(message string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	return strings.Contains(normalized, "thread-store conflict") &&
+		strings.Contains(normalized, "already has an active writer")
+}
+
 func (p *codexAppServerParser) saveSessionBinding(consumed bool) error {
 	now := time.Now().UTC()
 	binding := p.binding
@@ -532,6 +551,18 @@ func emitCodexFailureAfterAcceptance(
 		Status: &failed, Error: errorValue,
 		Session: parser.acceptedLogicalSessionStatus(),
 	})
+}
+
+func emitCodexRetryableFailure(
+	ctx context.Context,
+	emit EmitFunc,
+	code string,
+	message string,
+) error {
+	failed := contracts.Failed
+	errorValue := runtimeError(code, message)
+	errorValue.Retryable = true
+	return emit(ctx, Event{Status: &failed, Error: errorValue})
 }
 
 func (p *codexAppServerParser) threadRequest() map[string]any {
