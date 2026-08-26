@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import React, { type FormEvent } from "react";
 
 import { BridgeConnectionPanel } from "../bridge/BridgeConnectionPanel.js";
 import { type Locale, type TranslationKey, translate } from "../../i18n.js";
@@ -49,6 +49,74 @@ export function roleLabel(role: string, locale: Locale): string {
     Teammate: "Team 成员"
   };
   return labels[role] ?? role;
+}
+
+export function filesystemAccessLabel(
+  policy: Agent["runtimePolicy"],
+  locale: Locale
+): string {
+  if (locale === "en") {
+    if (policy?.filesystemAccess === "read-only") return "Read only";
+    if (policy?.filesystemAccess === "workspace-write") return "Workspace write";
+    if (policy?.filesystemAccess === "local-policy") return "Local policy";
+    return "Not reported";
+  }
+  if (policy?.filesystemAccess === "read-only") return "只读";
+  if (policy?.filesystemAccess === "workspace-write") return "工作区可写";
+  if (policy?.filesystemAccess === "local-policy") return "遵循本机策略";
+  return "未上报";
+}
+
+function filesystemAccessHelp(
+  policy: Agent["runtimePolicy"],
+  locale: Locale
+): string {
+  if (locale === "en") {
+    if (policy?.filesystemAccess === "read-only") {
+      return "This managed Runtime cannot write to its Workspace.";
+    }
+    if (policy?.filesystemAccess === "workspace-write") {
+      return "This managed Runtime can write within its local Workspace limits.";
+    }
+    if (policy?.filesystemAccess === "local-policy") {
+      return "File access follows local Runtime policy; its details stay on the Device.";
+    }
+    return "This Agent has not published a file-access summary.";
+  }
+  if (policy?.filesystemAccess === "read-only") {
+    return "该托管 Runtime 不能写入其工作区。";
+  }
+  if (policy?.filesystemAccess === "workspace-write") {
+    return "该托管 Runtime 可在本机工作区限制内写入。";
+  }
+  if (policy?.filesystemAccess === "local-policy") {
+    return "文件访问遵循本机 Runtime 策略，具体配置不会上传。";
+  }
+  return "该 Agent 尚未上报文件访问摘要。";
+}
+
+export function AgentPolicySummary({
+  locale,
+  policy
+}: {
+  locale: Locale;
+  policy: Agent["runtimePolicy"];
+}) {
+  return (
+    <dl className="agent-policy-summary">
+      <div>
+        <dt>{locale === "zh-CN" ? "文件访问" : "File access"}</dt>
+        <dd>
+          <span
+            className={`policy-badge ${policy?.filesystemAccess ?? "unreported"}`}
+            title={filesystemAccessHelp(policy, locale)}
+          >
+            {filesystemAccessLabel(policy, locale)}
+          </span>
+        </dd>
+      </div>
+    </dl>
+  );
 }
 
 interface AgentWorkspaceProps {
@@ -162,6 +230,7 @@ export function AgentWorkspace({
                   <span className={`integration-badge ${agent.integrationMode}`}>
                     {integrationLabel(agent.integrationMode, locale)}
                   </span>
+                  <AgentPolicySummary locale={locale} policy={agent.runtimePolicy} />
                   <small>{presenceHelp(agent, locale)}</small>
                   {currentMemberIsOwner && (
                     <button

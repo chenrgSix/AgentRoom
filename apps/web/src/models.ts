@@ -45,6 +45,9 @@ export interface Agent {
   role: string;
   integrationMode: "managed" | "manual" | "fake";
   presence: string;
+  runtimePolicy?: {
+    filesystemAccess: "read-only" | "workspace-write" | "local-policy";
+  } | null;
 }
 
 export interface Message {

@@ -197,6 +197,16 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .integration-badge { width: fit-content; padding: 4px 7px; border-radius: 6px; background: #27301f; color: #bcd47c; font-size: 9px; font-weight: 750; }
 .integration-badge.manual { background: #1e2c36; color: #91bddf; }
 .integration-badge.fake { background: #332d1e; color: #d9bd76; }
+.agent-policy-summary { margin: 0; padding: 8px 9px; border: 1px solid #30372c; border-radius: 9px; background: #11140f; }
+.agent-policy-summary > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
+.agent-policy-summary dt { color: #747d6c; font-size: 9px; font-weight: 700; letter-spacing: .03em; }
+.agent-policy-summary dd { min-width: 0; margin: 0; }
+.policy-badge { display: inline-flex; align-items: center; max-width: 100%; padding: 4px 7px; border: 1px solid #49533f; border-radius: 999px; color: #b3beaa; font-size: 9px; font-weight: 800; line-height: 1; white-space: nowrap; }
+.policy-badge::before { width: 5px; height: 5px; flex: 0 0 auto; border-radius: 50%; background: currentColor; content: ""; }
+.policy-badge.read-only { border-color: #56624a; color: #c0cbb6; }
+.policy-badge.workspace-write { border-color: #697942; background: #202719; color: #cbe37c; }
+.policy-badge.local-policy { border-color: #455b69; background: #172129; color: #9bc9e4; }
+.policy-badge.unreported { border-style: dashed; color: #798173; }
 
 .connection-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding: 4px; border: 1px solid #30372c; border-radius: 10px; background: #10120f; }
 .connection-tabs button { min-width: 0; padding: 8px 7px; border: 0; border-radius: 7px; background: transparent; color: #798170; font-size: 9px; font-weight: 750; cursor: pointer; }
@@ -671,6 +681,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .device-card small { color: #697364; }
 :root[data-theme="light"] .panel-header > span,
 :root[data-theme="light"] .status-badge { border-color: #c9d2c0; background: #eef2e9; color: #5f6959; }
+:root[data-theme="light"] .agent-policy-summary { border-color: #d5dccd; background: #f2f5ee; }
+:root[data-theme="light"] .agent-policy-summary dt { color: #697364; }
+:root[data-theme="light"] .policy-badge { background: #fff; }
+:root[data-theme="light"] .policy-badge.read-only { border-color: #b9c3b2; color: #576154; }
+:root[data-theme="light"] .policy-badge.workspace-write { border-color: #9aad72; background: #edf4df; color: #587125; }
+:root[data-theme="light"] .policy-badge.local-policy { border-color: #a4bdca; background: #edf5f8; color: #47728a; }
 :root[data-theme="light"] .panel-empty,
 :root[data-theme="light"] .device-empty { border-color: #cbd4c1; color: #64705c; }
 :root[data-theme="light"] .connection-tabs { border-color: #d0d8c8; background: #edf1e8; }

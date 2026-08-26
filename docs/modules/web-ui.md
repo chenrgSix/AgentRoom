@@ -53,6 +53,10 @@ without changing server-owned state.
   untrusted evidence.
 - Inline `@` suggestions that resolve typed display names to stable Agent IDs.
 - Agent roster with presence and capability summaries.
+- Agent cards show the authenticated managed Runtime's bounded file-access
+  summary as read-only, Workspace write, local policy, or not reported. This
+  surface never receives or renders Workspace paths, commands, tools,
+  environment variables, Provider details, accounts, or credentials.
 - Run cards with live status, replies, cancellation, and failure details.
 - Discussion Wave progress, member Run outcomes, goal adjustment,
   finalization, extension, pause, and stop controls without presenting a soft
@@ -207,6 +211,15 @@ roster, status, managed enrollment approval, MCP credentials, demo runtimes,
 and trusted Devices. Fake Agents are explicitly labeled as simulations and are
 not presented as production connections. Secrets are shown only in the
 immediate setup result and are never returned by list APIs.
+
+Each Agent card presents the Server-owned `runtimePolicy.filesystemAccess`
+projection without interpreting missing data. `read-only` means the managed
+Runtime cannot write to its Workspace; `workspace-write` means it can write
+within local Workspace limits; `local-policy` means the concrete rule remains
+on the Device. A missing projection is labeled **not reported**, rather than
+being guessed from presence, role, Runtime name, or integration mode. The badge
+title explains these semantics in the selected locale while keeping local
+configuration out of the browser payload and DOM.
 
 The Room timeline is the only vertically scrolling conversation surface. Its
 Discussion status and composer are docked after the timeline in normal layout
