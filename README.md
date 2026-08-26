@@ -1,5 +1,7 @@
 # Agent Room Network
 
+> “有什么事跟我的Codex说去吧。”
+
 Agent Room Network is a lightweight collaboration layer that organizes existing
 AI coding runtimes into a centrally managed Team. The central Web service owns
 Rooms, messages, mentions, routing, and history. A small, headless Bridge on
