@@ -289,6 +289,16 @@ verified all 11 assets before and after upload, the candidate was published as
 a prerelease, and a fresh public download passed the tag's committed verifier.
 The acceptance retains the separate real-login and two-physical-machine gates.
 
+The `v0.3.0-rc.2` candidate admits the productized native Bridge navigation,
+general embedded usage guidance, and explicit `preserve_and_retry` or
+`start_new` Codex active-writer conflict policy. The release evidence is
+recorded in `docs/acceptance/qa-023-v0.3.0-rc.2.md`. `QA-023` is complete
+because the exact tagged source passed main CI, the empty-draft workflow built
+seven archives and verified all 11 assets before and after upload, the
+candidate was published as a prerelease, and a fresh public download passed
+the tag's committed verifier. The stable Latest release remains `v0.2.0`, and
+the separate real-login and two-physical-machine gates remain open.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
