@@ -315,8 +315,12 @@ cursor deltas, duplicate suppression, and a 500-message browser history bound.
 Refresh is single-flight and only merges messages, so a slow response cannot
 overwrite a newer Room projection. `WEB-022` reads the existing authorized
 Run-event API once for each terminal failure and renders only the error code,
-allowlisted category, exit code, and localized recovery guidance. Raw Runtime
-stderr, paths, messages, and unknown detail keys never enter the view model.
+retryable flag, allowlisted category, exit code, and localized recovery
+guidance. `WEB-042` adds code-owned guidance for `CODEX_SESSION_IN_USE` and
+`CODEX_SESSION_RESUME_FAILED`: it tells the owner to release other local Codex
+clients and retry while confirming that the original binding was preserved and
+no replacement Thread was created. Raw Runtime stderr, paths, messages, and
+unknown detail keys never enter the view model.
 
 `WEB-027` clears an ordinary zero/one-Mention draft into a visible optimistic
 row with one client Message ID. A failed row remains in the Room with an

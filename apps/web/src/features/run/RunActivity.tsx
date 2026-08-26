@@ -99,8 +99,19 @@ export function diagnosticCategoryLabel(
 
 export function diagnosticGuidance(
   category: RuntimeFailureCategory | null,
-  locale: Locale
+  locale: Locale,
+  code?: string
 ): string {
+  if (code === "CODEX_SESSION_IN_USE") {
+    return locale === "zh-CN"
+      ? "请先在其他 Codex Desktop/CLI 中结束该会话的占用，必要时完全退出 Desktop，然后重试任务。原会话已保留。"
+      : "Release this session in the other Codex Desktop/CLI client, fully quit Desktop if needed, then retry. The original session was preserved.";
+  }
+  if (code === "CODEX_SESSION_RESUME_FAILED") {
+    return locale === "zh-CN"
+      ? "Bridge 已保留原会话且未新建替代会话。请检查其他本机 Codex 客户端后重试；若仍失败，再导出 Bridge 诊断。"
+      : "Bridge preserved the original session and did not create a replacement. Check other local Codex clients and retry; export Bridge diagnostics if it still fails.";
+  }
   if (locale === "en") {
     const guidance: Record<RuntimeFailureCategory, string> = {
       start: "Open Bridge and verify the Runtime executable.",

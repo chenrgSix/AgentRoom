@@ -124,11 +124,14 @@ export function RoomTimeline({
                             {` · ${runDiagnostics[run.runId]?.code}`}
                             {runDiagnostics[run.runId]?.exitCode !== null &&
                               ` · ${locale === "zh-CN" ? "退出码" : "exit"} ${runDiagnostics[run.runId]?.exitCode}`}
+                            {runDiagnostics[run.runId]?.retryable &&
+                              ` · ${locale === "zh-CN" ? "可重试" : "retryable"}`}
                           </strong>
                           <small>
                             {diagnosticGuidance(
                               runDiagnostics[run.runId]?.category ?? null,
-                              locale
+                              locale,
+                              runDiagnostics[run.runId]?.code
                             )}
                           </small>
                         </span>

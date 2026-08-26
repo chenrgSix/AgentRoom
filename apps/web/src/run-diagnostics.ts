@@ -11,6 +11,7 @@ export interface RunDiagnostic {
   code: string;
   category: RuntimeFailureCategory | null;
   exitCode: number | null;
+  retryable: boolean;
   stderrCaptured: boolean;
 }
 
@@ -53,6 +54,7 @@ export function projectRunDiagnostic(events: RunEventView[]): RunDiagnostic | nu
         Number.isSafeInteger(details.exitCode)
         ? details.exitCode
         : null,
+      retryable: source.retryable === true,
       stderrCaptured: details.stderrCaptured === true
     };
   }
