@@ -140,6 +140,7 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="app-sidebar"`, `id="overview-page"`, `id="agents-page"`,
 		`id="settings-page"`, `id="connection-summary"`, `id="overview-agent-list"`,
 		`id="connection-state"`, `id="trust-mode"`, `id="login-startup"`,
+		`id="login-startup-unsupported"`,
 		`id="export-diagnostics"`, `id="check-update"`, `id="bridge-version"`,
 		`id="add-agent"`, `id="agent-modal-backdrop"`, `id="agent-form"`,
 		`id="codex-use-detected"`, `id="codex-preflight"`,
@@ -167,6 +168,10 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	}
 	if bytes.Count(javascript, []byte(`request("/api/update/check"`)) != 1 {
 		t.Fatal("update check must exist only in the explicit click handler")
+	}
+	if !bytes.Contains(html, []byte("当前系统暂不支持登录后自动启动")) ||
+		!bytes.Contains(javascript, []byte(`elements["login-startup-unsupported"].classList.toggle("hidden", startup.supported)`)) {
+		t.Fatal("unsupported desktop platforms must disclose manual startup instead of hiding the boundary")
 	}
 	if bytes.Count(javascript, []byte(`request("/api/runtime-tests"`)) != 1 ||
 		!bytes.Contains(javascript, []byte("测试运行")) {

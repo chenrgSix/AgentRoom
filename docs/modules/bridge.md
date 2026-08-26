@@ -453,10 +453,19 @@ trust the app on first launch. Apple Developer ID signing and notarization are
 outside the accepted distribution boundary; the GUI must not claim that Apple
 verified the package or recommend disabling Gatekeeper globally.
 
+The Windows amd64 desktop preview is an unsigned portable ZIP built on a native
+Windows runner. It uses the installed Microsoft Edge WebView2 Runtime and may
+trigger an unknown-publisher SmartScreen warning. Documentation requires
+checksum verification and must not recommend disabling SmartScreen or Defender.
+The preview has no installer, code-signing claim, automatic updater, or Windows
+login-startup integration; unsupported login startup remains visible in local
+Settings instead of appearing as a working toggle.
+
 Wails is pinned to `v3.0.0-beta.12` behind the `desktop` Go build tag. Ordinary
 CGO-free CLI tests and builds do not compile the desktop package. Desktop tests
-compile the native shell explicitly, while visual acceptance verifies the
-native WebView, close-to-tray behavior, and second-instance window restore.
+compile the native shell explicitly on macOS and Windows, while platform
+acceptance verifies the native WebView, close-to-tray behavior, and
+second-instance window restore.
 
 ### Productized desktop information architecture
 
@@ -506,8 +515,9 @@ End users install a prebuilt Bridge and do not need Go or Node.js. Publishing a
 GitHub Release triggers `.github/workflows/release-bridge.yml`, which tests and
 cross-compiles CGO-free CLI archives for macOS amd64/arm64, Windows amd64, and
 Linux amd64/arm64. Native macOS runners additionally build unsigned Wails GUI
-ZIPs for Apple Silicon and Intel. The Release tag is injected into each binary;
-all archives and one `SHA256SUMS` file are attached to the Release.
+ZIPs for Apple Silicon and Intel, and a native Windows runner builds the
+unsigned Windows amd64 GUI preview. The Release tag is injected into each
+binary; all archives and one `SHA256SUMS` file are attached to the Release.
 
 Each archive contains the binary, client README, and an OS-specific launcher.
 The macOS `.command` and Windows `.cmd` launchers are directly clickable; Linux
@@ -518,8 +528,9 @@ does not contain or require an Apple signature or notarization ticket.
 
 The first release artifacts are unsigned portable binaries. Desktop packages
 remain unsigned by product decision and rely on checksum verification plus
-explicit user trust. Login startup remains opt-in, and update checks remain
-manual-only; neither capability installs or executes downloaded code.
+explicit user trust. Login startup remains opt-in on macOS and unsupported on
+Windows; update checks remain manual-only. Neither capability installs or
+executes downloaded code.
 
 `v0.2.0-rc.1` predates `BRG-016` and cannot repair an incompatible inbox by
 itself. For a strict central-service deployment, replace the Bridge first and

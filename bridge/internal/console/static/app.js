@@ -31,7 +31,7 @@ const elements = Object.fromEntries([
   "codex-use-detected", "codex-preflight", "codex-preflight-result",
   "pi-use-detected", "pi-preflight", "pi-preflight-result",
   "submit-enrollment", "auth-warning", "error", "bridge-version",
-  "login-startup-row", "login-startup", "login-startup-warning", "export-diagnostics",
+  "login-startup-row", "login-startup", "login-startup-unsupported", "login-startup-warning", "export-diagnostics",
   "diagnostics-result", "check-update", "update-result", "release-link",
   "agent-modal-backdrop", "agent-modal-title", "close-agent-modal", "cancel-agent-modal",
   "agent-modal-error",
@@ -527,6 +527,7 @@ function render(state) {
   }
   const startup = state.loginStartup || {supported: false, enabled: false};
   elements["login-startup-row"].classList.toggle("hidden", !startup.supported);
+  elements["login-startup-unsupported"].classList.toggle("hidden", startup.supported);
   elements["login-startup"].checked = Boolean(startup.enabled);
   const startupWarning = startup.pathMismatch ? "应用位置已变化，请关闭后重新开启此选项以修复。" : "";
   elements["login-startup-warning"].textContent = startupWarning;

@@ -31,6 +31,7 @@ cli_archives=(
 desktop_archives=(
   "agentroom-bridge-desktop_${version}_darwin_amd64.zip"
   "agentroom-bridge-desktop_${version}_darwin_arm64.zip"
+  "agentroom-bridge-desktop_${version}_windows_amd64.zip"
 )
 license_assets=(LICENSE NOTICE COMMERCIAL-LICENSE.md)
 expected_count=$((${#cli_archives[@]} + ${#desktop_archives[@]} + ${#license_assets[@]} + 1))
@@ -219,7 +220,7 @@ verify_cli_archive() {
   assert_licenses "${root}"
 }
 
-verify_desktop_archive() {
+verify_macos_desktop_archive() {
   local archive=$1
   local architecture=$2
   local package=${archive%.zip}
@@ -254,12 +255,38 @@ verify_desktop_archive() {
   assert_licenses "${resources}"
 }
 
+verify_windows_desktop_archive() {
+  local archive=$1
+  local architecture=$2
+  local package=${archive%.zip}
+  local extraction="${temporary_root}/${package}"
+  local members="${temporary_root}/${package}.members"
+  local root
+  local binary
+
+  mkdir -p "${extraction}"
+  unzip -Z1 "${asset_dir}/${archive}" > "${members}"
+  assert_safe_members "${archive}" "${members}"
+  unzip -q "${asset_dir}/${archive}" -d "${extraction}"
+
+  root="${extraction}/${package}"
+  binary="${root}/AgentRoom Bridge.exe"
+  if [[ ! -s "${binary}" || ! -s "${root}/README.md" ]]; then
+    echo "Windows Desktop archive is missing its executable or README: ${archive}" >&2
+    exit 1
+  fi
+  assert_binary_version "${binary}"
+  assert_binary_architecture "${binary}" "windows/${architecture}"
+  assert_licenses "${root}"
+}
+
 verify_cli_archive "${cli_archives[0]}" darwin amd64
 verify_cli_archive "${cli_archives[1]}" darwin arm64
 verify_cli_archive "${cli_archives[2]}" linux amd64
 verify_cli_archive "${cli_archives[3]}" linux arm64
 verify_cli_archive "${cli_archives[4]}" windows amd64
-verify_desktop_archive "${desktop_archives[0]}" amd64
-verify_desktop_archive "${desktop_archives[1]}" arm64
+verify_macos_desktop_archive "${desktop_archives[0]}" amd64
+verify_macos_desktop_archive "${desktop_archives[1]}" arm64
+verify_windows_desktop_archive "${desktop_archives[2]}" amd64
 
 printf 'Verified %s release assets for %s\n' "${expected_count}" "${release_tag}"

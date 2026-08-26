@@ -123,3 +123,30 @@ jobs:
           go test -tags desktop ./cmd/agentroom-bridge-desktop
           go vet -tags desktop ./cmd/agentroom-bridge-desktop
           go build -tags desktop ./cmd/agentroom-bridge-desktop
+
+  desktop-windows:
+    name: Desktop Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: |
+            bridge/go.sum
+            packages/contracts/go.sum
+
+      - name: Test, vet, and package desktop shell
+        working-directory: bridge
+        shell: pwsh
+        run: |
+          go test -tags desktop ./cmd/agentroom-bridge-desktop
+          go vet -tags desktop ./cmd/agentroom-bridge-desktop
+          ./scripts/package-desktop-windows.ps1 `
+            -ReleaseTag v0.0.0-ci `
+            -GoArch amd64 `
+            -OutputDir (Join-Path $env:RUNNER_TEMP "agentroom-desktop-windows")

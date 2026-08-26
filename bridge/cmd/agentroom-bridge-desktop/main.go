@@ -122,6 +122,9 @@ func run() error {
 		Mac: application.MacOptions{
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
+		Windows: application.WindowsOptions{
+			DisableQuitOnLastWindowClosed: true,
+		},
 		OnShutdown: func() {
 			close(stopStatus)
 			service.Close()
@@ -146,11 +149,13 @@ func run() error {
 		window.Hide()
 		event.Cancel()
 	})
-	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
-		window.Show()
-		window.Restore()
-		window.Focus()
-	})
+	if runtime.GOOS == "darwin" {
+		app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
+			window.Show()
+			window.Restore()
+			window.Focus()
+		})
+	}
 
 	tray := app.SystemTray.New()
 	if runtime.GOOS == "darwin" {
