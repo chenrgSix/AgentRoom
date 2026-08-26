@@ -18,7 +18,10 @@ import (
 
 const maxCodexProtocolOutput = 4 * 1024 * 1024
 
-var errCodexSessionInUse = errors.New("Codex session is active in another local client")
+var (
+	errCodexSessionInUse        = errors.New("Codex session is active in another local client")
+	errCodexSessionResumeFailed = errors.New("Codex session resume failed without a safe recreation signal")
+)
 
 func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emit EmitFunc) error {
 	if err := validateCodexCommand(c.Config.Command); err != nil {
@@ -230,6 +233,14 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 				"Codex session is active in another local client. Close it there and retry.",
 			)
 		}
+		if errors.Is(protocolError, errCodexSessionResumeFailed) {
+			return emitCodexRetryableFailure(
+				ctx,
+				emit,
+				"CODEX_SESSION_RESUME_FAILED",
+				"Codex session could not be resumed safely. Retry after checking local Codex clients.",
+			)
+		}
 		return emitCodexFailureAfterAcceptance(
 			ctx, emit, parser, "CODEX_PROTOCOL_INVALID",
 			"Codex emitted an incompatible app-server event stream.", nil,
@@ -394,6 +405,9 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 			if isCodexSessionInUse(message.Error.Message) {
 				return nil, nil, errCodexSessionInUse
 			}
+			if !isCodexSessionMissingOrInvalid(message.Error.Message) {
+				return nil, nil, errCodexSessionResumeFailed
+			}
 			if p.sessions != nil && p.sessionKey != nil {
 				if err := p.sessions.Delete(*p.sessionKey); err != nil {
 					return nil, nil, err
@@ -475,6 +489,19 @@ func isCodexSessionInUse(message string) bool {
 	normalized := strings.ToLower(strings.TrimSpace(message))
 	return strings.Contains(normalized, "thread-store conflict") &&
 		strings.Contains(normalized, "already has an active writer")
+}
+
+func isCodexSessionMissingOrInvalid(message string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(message))
+	if normalized == "not found" {
+		return true
+	}
+	return (strings.Contains(normalized, "thread") &&
+		(strings.Contains(normalized, "not found") ||
+			strings.Contains(normalized, "does not exist") ||
+			strings.Contains(normalized, "unknown thread"))) ||
+		strings.Contains(normalized, "invalid thread id") ||
+		strings.Contains(normalized, "thread id is invalid")
 }
 
 func (p *codexAppServerParser) saveSessionBinding(consumed bool) error {

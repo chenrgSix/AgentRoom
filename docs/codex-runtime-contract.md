@@ -24,8 +24,10 @@ additive contract:
    missing or invalid stale binding is removed and retried once with
    `thread/start`. A multi-client `active writer` conflict instead preserves
    the binding, returns retryable `CODEX_SESSION_IN_USE`, and never starts a
-   replacement Thread. An unscoped Bridge Runtime probe starts an ephemeral
-   Thread.
+   replacement Thread. Any other resume rejection also preserves the binding,
+   fails closed with retryable `CODEX_SESSION_RESUME_FAILED`, and never guesses
+   that the stored Thread is stale. An unscoped Bridge Runtime probe starts an
+   ephemeral Thread.
 4. `turn/start` submits the bounded Run instruction.
 5. `item/agentMessage/delta` supplies safe provisional assistant text.
 6. `item/reasoning/summaryTextDelta` supplies an official public reasoning
