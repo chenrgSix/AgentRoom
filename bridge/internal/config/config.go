@@ -41,24 +41,37 @@ func (c Config) ResolvedTrustMode() TrustMode {
 }
 
 type AgentConfig struct {
-	Name           string   `json:"name"`
-	Role           string   `json:"role"`
-	Adapter        string   `json:"adapter"`
-	RuntimeKind    string   `json:"runtimeKind"`
-	PresetVersion  int      `json:"presetVersion"`
-	Command        []string `json:"command"`
-	Workspace      string   `json:"workspace"`
-	Sandbox        string   `json:"sandbox,omitempty"`
-	OutputProtocol string   `json:"outputProtocol,omitempty"`
-	EnvAllowlist   []string `json:"envAllowlist,omitempty"`
+	Name                       string                     `json:"name"`
+	Role                       string                     `json:"role"`
+	Adapter                    string                     `json:"adapter"`
+	RuntimeKind                string                     `json:"runtimeKind"`
+	PresetVersion              int                        `json:"presetVersion"`
+	Command                    []string                   `json:"command"`
+	Workspace                  string                     `json:"workspace"`
+	Sandbox                    string                     `json:"sandbox,omitempty"`
+	CodexSessionConflictPolicy CodexSessionConflictPolicy `json:"codexSessionConflictPolicy,omitempty"`
+	OutputProtocol             string                     `json:"outputProtocol,omitempty"`
+	EnvAllowlist               []string                   `json:"envAllowlist,omitempty"`
 }
 
+type CodexSessionConflictPolicy string
+
 const (
-	CurrentSchemaVersion           = 2
+	CodexSessionConflictPreserveAndRetry CodexSessionConflictPolicy = "preserve_and_retry"
+	CodexSessionConflictStartNew         CodexSessionConflictPolicy = "start_new"
+
+	CurrentSchemaVersion           = 3
 	CurrentPresetVersion           = 5
 	OutputProtocolAgentRoomJSONLV1 = "agentroom-jsonl-v1"
 	ServerTokenHeader              = "X-AgentRoom-Server-Token"
 )
+
+func (a AgentConfig) ResolvedCodexSessionConflictPolicy() CodexSessionConflictPolicy {
+	if a.CodexSessionConflictPolicy == "" {
+		return CodexSessionConflictPreserveAndRetry
+	}
+	return a.CodexSessionConflictPolicy
+}
 
 func CodexPresetCommand(executable string) []string {
 	return []string{executable, "app-server", "--listen", "stdio://"}
@@ -170,6 +183,9 @@ func Migrate(value Config) (Config, error) {
 			default:
 				agent.RuntimeKind = "generic"
 			}
+		}
+		if agent.RuntimeKind == "codex" && agent.CodexSessionConflictPolicy == "" {
+			agent.CodexSessionConflictPolicy = CodexSessionConflictPreserveAndRetry
 		}
 		if agent.PresetVersion == CurrentPresetVersion || agent.RuntimeKind == "generic" {
 			continue
@@ -430,6 +446,14 @@ func (a AgentConfig) validate() error {
 	}
 	if a.RuntimeKind == "codex" && a.Sandbox != "read-only" && a.Sandbox != "workspace-write" {
 		return fmt.Errorf("codex sandbox must be read-only or workspace-write")
+	}
+	if a.RuntimeKind == "codex" &&
+		a.ResolvedCodexSessionConflictPolicy() != CodexSessionConflictPreserveAndRetry &&
+		a.ResolvedCodexSessionConflictPolicy() != CodexSessionConflictStartNew {
+		return fmt.Errorf("codexSessionConflictPolicy must be preserve_and_retry or start_new")
+	}
+	if a.RuntimeKind != "codex" && a.CodexSessionConflictPolicy != "" {
+		return fmt.Errorf("codexSessionConflictPolicy is supported only for codex runtimeKind")
 	}
 	if (a.RuntimeKind == "pi" || a.RuntimeKind == "generic") && a.Adapter != "generic" {
 		return fmt.Errorf("pi and generic runtimeKind require the generic adapter")

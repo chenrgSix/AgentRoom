@@ -1,6 +1,10 @@
 import { pairingView } from "./pairing-view.mjs";
 import { detectedPathForDraft, runtimeDiscoveryView } from "./runtime-discovery.mjs";
-import { applyAgentRuntimePolicy, applyEnrollmentCodexPolicy } from "./runtime-policy.mjs";
+import {
+  applyAgentRuntimePolicy,
+  applyCodexSessionConflictPolicy,
+  applyEnrollmentCodexPolicy
+} from "./runtime-policy.mjs";
 import { createSessionGuideController } from "./session-guide.mjs";
 import { agentPresentation, connectionPresentation } from "./bridge-presentation.mjs";
 
@@ -20,7 +24,8 @@ const elements = Object.fromEntries([
   "connection-technical", "connection-technical-message", "connection-fix",
   "enrollment-form", "server-url", "server-token", "device-name", "trust-mode", "fingerprint-field",
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
-  "codex-path", "codex-workspace", "codex-sandbox", "pi-enabled", "pi-fields",
+  "codex-path", "codex-workspace", "codex-sandbox", "codex-session-conflict-policy",
+  "codex-session-ownership-policy-copy", "pi-enabled", "pi-fields",
   "pi-name", "pi-role", "pi-path", "pi-workspace", "pi-credential-env",
   "pi-permission-policy",
   "codex-use-detected", "codex-preflight", "codex-preflight-result",
@@ -31,8 +36,10 @@ const elements = Object.fromEntries([
   "agent-modal-backdrop", "agent-modal-title", "close-agent-modal", "cancel-agent-modal",
   "agent-modal-error",
   "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace",
-  "agent-sandbox-field", "agent-sandbox", "agent-credential-field", "agent-credential-env",
-  "agent-codex-session-ownership-policy", "agent-pi-permission-policy", "save-agent",
+  "agent-sandbox-field", "agent-sandbox", "agent-session-conflict-policy-field",
+  "agent-session-conflict-policy", "agent-credential-field", "agent-credential-env",
+  "agent-codex-session-ownership-policy", "agent-codex-session-ownership-policy-copy",
+  "agent-pi-permission-policy", "save-agent",
   "agent-use-detected", "agent-preflight", "agent-preflight-result",
   "codex-discovery-status", "codex-discovery-help", "codex-install-link",
   "pi-discovery-status", "pi-discovery-help", "pi-install-link",
@@ -147,6 +154,9 @@ function runtimeDraft(kind, source) {
     executablePath: elements[`${prefix}-path`].value,
     workspace: elements[`${prefix}-workspace`].value,
     sandbox: kind === "codex" ? elements[`${prefix}-sandbox`].value : "",
+    codexSessionConflictPolicy: kind === "codex"
+      ? elements[`${prefix}-session-conflict-policy`].value
+      : "",
     credentialEnvironmentVariable: kind === "pi"
       ? elements[`${prefix}-credential-env`].value
       : ""
@@ -212,11 +222,15 @@ function renderAgent(agent, {compact = false} = {}) {
 
   const facts = document.createElement("div");
   facts.className = "agent-facts";
-  for (const [label, value, className = ""] of [
+  const factRows = [
     ["文件策略", view.filesystemPolicy],
     ["工作区", view.workspaceName],
     ["Runtime", view.executableSummary, "runtime-fact"]
-  ]) {
+  ];
+  if (view.sessionConflictPolicy) {
+    factRows.splice(1, 0, ["会话占用", view.sessionConflictPolicy]);
+  }
+  for (const [label, value, className = ""] of factRows) {
     const fact = document.createElement("div");
     fact.className = `agent-fact ${className}`.trim();
     const factLabel = document.createElement("span");
@@ -313,12 +327,17 @@ function syncConnectionTokenFields() {
 function syncAgentKindFields() {
   const codex = elements["agent-kind"].value === "codex";
   elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
+  elements["agent-session-conflict-policy-field"].classList.toggle("hidden", !codex);
   elements["agent-credential-field"].classList.toggle("hidden", codex);
   applyAgentRuntimePolicy(
     elements["agent-kind"].value,
     elements["agent-kind"],
     elements["agent-codex-session-ownership-policy"],
     elements["agent-pi-permission-policy"]
+  );
+  applyCodexSessionConflictPolicy(
+    elements["agent-session-conflict-policy"].value,
+    elements["agent-codex-session-ownership-policy-copy"]
   );
   renderDiscovery("agent", codex ? "codex" : "pi");
 }
@@ -370,6 +389,8 @@ function openAgentModal(agent = null) {
     (kind === "pi" ? currentState.detectedPi : currentState.detectedCodex) || "";
   elements["agent-workspace"].value = agent?.workspace || currentState.agents[0]?.workspace || currentState.workspace || "";
   elements["agent-sandbox"].value = agent?.sandbox || "workspace-write";
+  elements["agent-session-conflict-policy"].value =
+    agent?.codexSessionConflictPolicy || "preserve_and_retry";
   elements["agent-credential-env"].value = agent?.credentialEnvironmentVariable || "";
   elements["agent-preflight-result"].className = "";
   elements["agent-preflight-result"].textContent = "先验证当前表单；不会写入文件或重启 Bridge。";
@@ -610,6 +631,13 @@ elements["agent-kind"].addEventListener("change", () => {
   }
   syncAgentKindFields();
 });
+elements["agent-session-conflict-policy"].addEventListener("change", syncAgentKindFields);
+elements["codex-session-conflict-policy"].addEventListener("change", () => {
+  applyCodexSessionConflictPolicy(
+    elements["codex-session-conflict-policy"].value,
+    elements["codex-session-ownership-policy-copy"]
+  );
+});
 elements["agent-use-detected"].addEventListener("click", () => {
   const kind = elements["agent-kind"].value;
   void useDetectedRuntime("agent", kind);
@@ -725,7 +753,8 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
     role: elements["codex-role"].value,
     executablePath: elements["codex-path"].value,
     workspace: elements["codex-workspace"].value || workspaceFallback,
-    sandbox: elements["codex-sandbox"].value
+    sandbox: elements["codex-sandbox"].value,
+    codexSessionConflictPolicy: elements["codex-session-conflict-policy"].value
   }, {
     kind: "pi",
     enabled: elements["pi-enabled"].checked,
@@ -832,6 +861,10 @@ elements["check-update"].addEventListener("click", async () => {
 
 setRuntime("codex", true);
 setRuntime("pi", false);
+applyCodexSessionConflictPolicy(
+  elements["codex-session-conflict-policy"].value,
+  elements["codex-session-ownership-policy-copy"]
+);
 syncTrustFields();
 void refresh();
 setInterval(refresh, 1000);

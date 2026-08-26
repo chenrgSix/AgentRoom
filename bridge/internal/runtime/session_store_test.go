@@ -246,6 +246,11 @@ func TestRuntimeSessionKeyRollsOnWorkspaceAndSemanticConfig(t *testing.T) {
 	if candidate := testRuntimeSessionKey(t, changedConfig, "task_alpha"); candidate == baseline {
 		t.Fatal("semantic Runtime configuration change reused the session key")
 	}
+	changedConflictPolicy := configuration
+	changedConflictPolicy.CodexSessionConflictPolicy = config.CodexSessionConflictStartNew
+	if candidate := testRuntimeSessionKey(t, changedConflictPolicy, "task_alpha"); candidate != baseline {
+		t.Fatal("conflict handling policy bypassed the existing session instead of governing its resume")
+	}
 	changedWorkspace := configuration
 	changedWorkspace.Workspace = t.TempDir()
 	if candidate := testRuntimeSessionKey(t, changedWorkspace, "task_alpha"); candidate == baseline {

@@ -80,11 +80,19 @@ owner-selected workspace and Runtime semantic configuration, records only its
 opaque Thread id under the owner-only Bridge data
 directory, and calls `thread/resume` on later Runs. A missing or invalid stored
 Thread is discarded and replaced once with a fresh persisted Thread. An
-`active writer` conflict from another local Codex client instead returns
-retryable `CODEX_SESSION_IN_USE`, preserves the stored binding, and never starts
-a replacement Thread. Any other resume rejection fails closed as retryable
+recognized `active writer` conflict from another local Codex client follows the
+owner-selected `codexSessionConflictPolicy`. The default `preserve_and_retry`
+returns retryable `CODEX_SESSION_IN_USE`, preserves the stored binding, and
+never starts a replacement Thread. The explicit `start_new` policy keeps the
+provider-owned old Thread intact, starts one fresh persisted Thread, replaces
+the Bridge binding only after the new Thread is accepted, replays the full Task
+bootstrap, and reports `recreated`; this trades native conversation continuity
+for immediate progress. Any other resume rejection fails closed as retryable
 `CODEX_SESSION_RESUME_FAILED` while preserving the binding; only an explicitly
-recognized missing or invalid Thread can be recreated. The Bridge
+recognized missing or invalid Thread or the configured active-writer policy can
+trigger recreation. The conflict policy is local Agent configuration, is not
+controlled by the central service, and does not broaden filesystem, tool,
+network, or approval permissions. The Bridge
 passes the owner-selected `read-only` or `workspace-write` sandbox,
 and uses `approvalPolicy: never` so a remote Team message cannot escalate local
 permissions. It publishes `item/agentMessage/delta`, resets provisional

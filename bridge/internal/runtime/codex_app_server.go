@@ -403,33 +403,15 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 	if message.Error != nil {
 		if string(message.ID) == "2" && p.resumeID != "" && !p.resumeFailed {
 			if isCodexSessionInUse(message.Error.Message) {
-				return nil, nil, errCodexSessionInUse
+				if p.config.ResolvedCodexSessionConflictPolicy() != config.CodexSessionConflictStartNew {
+					return nil, nil, errCodexSessionInUse
+				}
+				return p.prepareReplacementThread(false)
 			}
 			if !isCodexSessionMissingOrInvalid(message.Error.Message) {
 				return nil, nil, errCodexSessionResumeFailed
 			}
-			if p.sessions != nil && p.sessionKey != nil {
-				if err := p.sessions.Delete(*p.sessionKey); err != nil {
-					return nil, nil, err
-				}
-			}
-			p.resumeID = ""
-			p.resumeFailed = true
-			p.instruction = p.bootstrapInstruction
-			p.binding = RuntimeSessionBinding{}
-			p.roomMemoryRevision = p.bootstrapRoomMemoryRevision
-			p.taskMemoryRevision = p.bootstrapTaskMemoryRevision
-			p.resultEvidenceRevision = p.bootstrapResultEvidenceRevision
-			p.roomLongTermMemoryRevision = p.bootstrapRoomLongTermMemoryRevision
-			p.taskLongTermMemoryRevision = p.bootstrapTaskLongTermMemoryRevision
-			if p.logicalTaskSession {
-				p.sessionDisposition = contracts.Recreated
-			}
-			if p.bootstrapRoomContextConsumption != nil {
-				p.contextCursor = p.bootstrapContextCursor
-				p.roomContextConsumption = p.bootstrapRoomContextConsumption
-			}
-			return nil, []any{p.threadRequest()}, nil
+			return p.prepareReplacementThread(true)
 		}
 		return nil, nil, fmt.Errorf("Codex app-server request failed: %s", message.Error.Message)
 	}
@@ -483,6 +465,33 @@ func (p *codexAppServerParser) consumeResponse(message codexAppServerMessage) (*
 	default:
 		return nil, nil, nil
 	}
+}
+
+func (p *codexAppServerParser) prepareReplacementThread(
+	deleteStoredBinding bool,
+) (*OutputDelta, []any, error) {
+	if deleteStoredBinding && p.sessions != nil && p.sessionKey != nil {
+		if err := p.sessions.Delete(*p.sessionKey); err != nil {
+			return nil, nil, err
+		}
+	}
+	p.resumeID = ""
+	p.resumeFailed = true
+	p.instruction = p.bootstrapInstruction
+	p.binding = RuntimeSessionBinding{}
+	p.roomMemoryRevision = p.bootstrapRoomMemoryRevision
+	p.taskMemoryRevision = p.bootstrapTaskMemoryRevision
+	p.resultEvidenceRevision = p.bootstrapResultEvidenceRevision
+	p.roomLongTermMemoryRevision = p.bootstrapRoomLongTermMemoryRevision
+	p.taskLongTermMemoryRevision = p.bootstrapTaskLongTermMemoryRevision
+	if p.logicalTaskSession {
+		p.sessionDisposition = contracts.Recreated
+	}
+	if p.bootstrapRoomContextConsumption != nil {
+		p.contextCursor = p.bootstrapContextCursor
+		p.roomContextConsumption = p.bootstrapRoomContextConsumption
+	}
+	return nil, []any{p.threadRequest()}, nil
 }
 
 func isCodexSessionInUse(message string) bool {

@@ -171,6 +171,16 @@ invitations.
 Stable Agent IDs are generated once into `agent-identities.json` and reused on
 every reconnect; keep Agent configuration names stable when preserving identity.
 
+Each managed Codex Agent also stores a local `codexSessionConflictPolicy`.
+`preserve_and_retry` is the safe default: a recognized active-writer conflict
+keeps the current Task Session binding and returns a retryable error. The
+explicit `start_new` option preserves the old provider Thread itself but starts
+and binds a new Thread after the conflict, replays the current Task bootstrap,
+and trades native conversation continuity for immediate progress. Unknown
+resume rejection never follows this option and still fails closed. The Bridge
+Console exposes this choice beside the Codex sandbox and summarizes it on the
+Agent card; the central service cannot change it.
+
 Pi joins through the Generic CLI adapter in the same Bridge configuration. Use
 the absolute path returned by `command -v pi`; the minimal managed command is:
 
@@ -192,8 +202,9 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
 }
 ```
 
-The top-level configuration uses `"schemaVersion": 2`; version 1 files load
-without a central Token and migrate in memory. Pi tools, extensions,
+The top-level configuration uses `"schemaVersion": 3`; older files load with
+`preserve_and_retry` for each Codex Agent and migrate in memory. Version 1 files
+remain compatible without a central Token. Pi tools, extensions,
 Skills, project context, approval, and provider settings follow the owner's
 local Pi configuration. Owner-authored command arguments such as `--approve`,
 `--tools`, or extension flags remain local and survive Agent edits. The central

@@ -382,6 +382,16 @@ Room key and can never alias a Task-scoped session. The Bridge reports only
 `started`, `resumed`, or `recreated` with the consumed cursor; native IDs and
 raw workspace paths never cross the connection.
 
+`ADP-017` adds an owner-selected Codex active-writer conflict policy per local
+Agent. `preserve_and_retry` remains the migrated and new-Agent default and keeps
+the existing binding for later retry. `start_new` applies only to a recognized
+active-writer conflict: Bridge requests a fresh persisted Thread with the full
+Task bootstrap and replaces its local binding only after Codex accepts the new
+Thread. It does not delete the old provider Thread. Unclassified resume errors
+still preserve the binding and fail closed. The Console shows the policy beside
+the sandbox and in the Agent summary; no central command can change it or use it
+to widen filesystem, tool, network, or approval authority.
+
 `TASK-005` derives and publishes one opaque Runtime scope hash from the same
 local Runtime kind, workspace/configuration fingerprints, and schema version.
 The Server uses that safe identifier only to isolate Task result-evidence

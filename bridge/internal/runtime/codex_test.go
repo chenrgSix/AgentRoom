@@ -231,6 +231,62 @@ func TestCodexAdapterPreservesSessionHeldByAnotherLocalClient(t *testing.T) {
 	}
 }
 
+func TestCodexAdapterStartsNewSessionOnActiveWriterWhenConfigured(t *testing.T) {
+	t.Setenv("AGENTROOM_CODEX_HELPER", "session-in-use-start-new")
+	workspace := t.TempDir()
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	configuration := config.AgentConfig{
+		Command: []string{
+			os.Args[0], "-test.run=TestCodexHelperProcess", "--", "app-server", "--listen", "stdio://",
+		},
+		Workspace: workspace, Sandbox: "workspace-write",
+		CodexSessionConflictPolicy: config.CodexSessionConflictStartNew,
+		EnvAllowlist:               []string{"AGENTROOM_CODEX_HELPER"},
+		RuntimeKind:                "codex", Adapter: "codex",
+	}
+	taskID := "task_session_start_new"
+	key := testRuntimeSessionKey(t, configuration, taskID)
+	if err := store.Save(RuntimeSessionBinding{
+		RuntimeSessionKey: key, SessionID: "019d-thread",
+		LastRoomSequence: 41, LastRunID: "run_previous",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	run := contracts.RunRequestedPayload{
+		RunID: "run_session_start_new", RoomID: "room_alpha",
+		TaskID: &taskID, TargetAgentID: "agent_builder",
+		Instruction: "continue it",
+		Session: &contracts.LogicalSessionRequest{
+			Scope: contracts.Task, ResumePolicy: contracts.ResumeOrStart,
+			ContextCursor: 42,
+		},
+	}
+	adapter := CodexAdapter{Config: configuration, Sessions: store}
+	var reply string
+	var terminal Event
+	if err := adapter.Execute(context.Background(), Request{Run: run}, func(_ context.Context, event Event) error {
+		if event.Reply != "" {
+			reply = event.Reply
+		}
+		if event.Status != nil {
+			terminal = event
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if terminal.Status == nil || *terminal.Status != contracts.Completed || terminal.Session == nil ||
+		terminal.Session.Disposition != contracts.Recreated || terminal.Session.ContextCursor != 42 ||
+		reply != "Continued in replacement." {
+		t.Fatalf("unexpected replacement-session result: reply=%q terminal=%#v", reply, terminal)
+	}
+	binding, found, err := store.Load(key)
+	if err != nil || !found || binding.SessionID != "019d-replacement" ||
+		binding.LastRoomSequence != 42 || binding.LastRunID != run.RunID {
+		t.Fatalf("replacement Codex binding was not committed: %#v found=%t err=%v", binding, found, err)
+	}
+}
+
 func TestCodexAdapterPreservesSessionOnUnknownResumeFailure(t *testing.T) {
 	t.Setenv("AGENTROOM_CODEX_HELPER", "session-resume-failed")
 	workspace := t.TempDir()
@@ -240,8 +296,9 @@ func TestCodexAdapterPreservesSessionOnUnknownResumeFailure(t *testing.T) {
 			os.Args[0], "-test.run=TestCodexHelperProcess", "--", "app-server", "--listen", "stdio://",
 		},
 		Workspace: workspace, Sandbox: "workspace-write",
-		EnvAllowlist: []string{"AGENTROOM_CODEX_HELPER"},
-		RuntimeKind:  "codex", Adapter: "codex",
+		CodexSessionConflictPolicy: config.CodexSessionConflictStartNew,
+		EnvAllowlist:               []string{"AGENTROOM_CODEX_HELPER"},
+		RuntimeKind:                "codex", Adapter: "codex",
 	}
 	taskID := "task_resume_failed"
 	key := testRuntimeSessionKey(t, configuration, taskID)
@@ -368,6 +425,61 @@ func TestCodexAppServerParserResumesAndReplacesMissingThread(t *testing.T) {
 	if status := parser.logicalSessionStatus(); status == nil ||
 		status.Disposition != contracts.Recreated || status.ContextCursor != 43 {
 		t.Fatalf("replacement Codex disposition was not reported: %#v", status)
+	}
+}
+
+func TestCodexAppServerParserKeepsOccupiedBindingUntilReplacementIsAccepted(t *testing.T) {
+	workspace := t.TempDir()
+	configuration := config.AgentConfig{
+		Command: []string{"codex", "app-server"}, Workspace: workspace,
+		Sandbox: "workspace-write", RuntimeKind: "codex", Adapter: "codex",
+		CodexSessionConflictPolicy: config.CodexSessionConflictStartNew,
+	}
+	store := NewFileRuntimeSessionStore(t.TempDir())
+	taskID := "task_active_writer_replacement"
+	key := testRuntimeSessionKey(t, configuration, taskID)
+	original := RuntimeSessionBinding{
+		RuntimeSessionKey: key, SessionID: "thread-occupied",
+		LastRoomSequence: 17, LastRunID: "run_previous",
+	}
+	if err := store.Save(original); err != nil {
+		t.Fatal(err)
+	}
+	parser := newCodexAppServerSessionParser(
+		configuration, "delta prompt", store, &key, original.SessionID,
+	)
+	parser.binding = original
+	parser.logicalTaskSession = true
+	parser.sessionDisposition = contracts.Resumed
+	parser.bootstrapInstruction = "full Task bootstrap"
+	parser.bootstrapContextCursor = 18
+	parser.contextCursor = 18
+	parser.runID = "run_replacement"
+
+	_, messages, err := parser.consume([]byte(`{"id":1,"result":{"userAgent":"fixture"}}`))
+	if err != nil || len(messages) != 2 || !strings.Contains(fmt.Sprint(messages[1]), "thread/resume") {
+		t.Fatalf("Codex did not first resume the occupied Thread: %#v, %v", messages, err)
+	}
+	_, messages, err = parser.consume([]byte(`{"id":2,"error":{"code":-32001,"message":"thread-store conflict: thread thread-occupied already has an active writer"}}`))
+	if err != nil || len(messages) != 1 || !strings.Contains(fmt.Sprint(messages[0]), "thread/start") ||
+		strings.Contains(fmt.Sprint(messages[0]), "ephemeral") {
+		t.Fatalf("configured conflict policy did not request a persisted replacement: %#v, %v", messages, err)
+	}
+	binding, found, err := store.Load(key)
+	if err != nil || !found || binding.SessionID != original.SessionID ||
+		binding.LastRoomSequence != original.LastRoomSequence || binding.LastRunID != original.LastRunID {
+		t.Fatalf("occupied binding changed before replacement acceptance: %#v found=%t err=%v", binding, found, err)
+	}
+	_, messages, err = parser.consume([]byte(`{"id":2,"result":{"thread":{"id":"thread-replacement"}}}`))
+	if err != nil || len(messages) != 1 || !strings.Contains(fmt.Sprint(messages[0]), "turn/start") {
+		t.Fatalf("accepted replacement did not start its turn: %#v, %v", messages, err)
+	}
+	binding, found, err = store.Load(key)
+	if err != nil || !found || binding.SessionID != "thread-replacement" || binding.LastRunID != "" {
+		t.Fatalf("accepted replacement did not atomically replace the binding: %#v found=%t err=%v", binding, found, err)
+	}
+	if parser.instruction != "full Task bootstrap" || parser.sessionDisposition != contracts.Recreated {
+		t.Fatalf("replacement did not restore full Task context: instruction=%q disposition=%s", parser.instruction, parser.sessionDisposition)
 	}
 }
 
@@ -510,7 +622,10 @@ func TestCodexHelperProcess(t *testing.T) {
 		runCodexAppServerFixture(t, true, "thread/resume", false)
 		return
 	case "session-in-use":
-		runCodexAppServerSessionInUseFixture(t)
+		runCodexAppServerSessionInUseFixture(t, false)
+		return
+	case "session-in-use-start-new":
+		runCodexAppServerSessionInUseFixture(t, true)
 		return
 	case "session-resume-failed":
 		runCodexAppServerResumeFailureFixture(t)
@@ -534,13 +649,14 @@ func TestCodexHelperProcess(t *testing.T) {
 	}
 }
 
-func runCodexAppServerSessionInUseFixture(t *testing.T) {
+func runCodexAppServerSessionInUseFixture(t *testing.T, allowReplacement bool) {
 	scanner := bufio.NewScanner(os.Stdin)
 	encoder := json.NewEncoder(os.Stdout)
 	for scanner.Scan() {
 		var request struct {
-			ID     int    `json:"id"`
-			Method string `json:"method"`
+			ID     int             `json:"id"`
+			Method string          `json:"method"`
+			Params json.RawMessage `json:"params"`
 		}
 		if err := json.Unmarshal(scanner.Bytes(), &request); err != nil {
 			os.Exit(2)
@@ -549,6 +665,12 @@ func runCodexAppServerSessionInUseFixture(t *testing.T) {
 		case 1:
 			_ = encoder.Encode(map[string]any{"id": 1, "result": map[string]any{"userAgent": "fixture"}})
 		case 2:
+			if request.Method == "thread/start" && allowReplacement {
+				_ = encoder.Encode(map[string]any{"id": 2, "result": map[string]any{
+					"thread": map[string]any{"id": "019d-replacement"},
+				}})
+				continue
+			}
 			if request.Method != "thread/resume" {
 				os.Exit(3)
 			}
@@ -559,6 +681,27 @@ func runCodexAppServerSessionInUseFixture(t *testing.T) {
 					"message": "failed to initialize thread persistence: thread-store conflict: thread 019d-thread already has an active writer",
 				},
 			})
+		case 3:
+			if !allowReplacement {
+				os.Exit(4)
+			}
+			var params struct {
+				ThreadID string `json:"threadId"`
+			}
+			if json.Unmarshal(request.Params, &params) != nil || params.ThreadID != "019d-replacement" {
+				os.Exit(4)
+			}
+			_ = encoder.Encode(map[string]any{"id": 3, "result": map[string]any{
+				"turn": map[string]any{"id": "turn-replacement", "status": "inProgress"},
+			}})
+			_ = encoder.Encode(map[string]any{"method": "item/completed", "params": map[string]any{
+				"threadId": "019d-replacement", "turnId": "turn-replacement",
+				"item": map[string]any{"id": "item-replacement", "type": "agentMessage", "text": "Continued in replacement."},
+			}})
+			_ = encoder.Encode(map[string]any{"method": "turn/completed", "params": map[string]any{
+				"threadId": "019d-replacement",
+				"turn":     map[string]any{"id": "turn-replacement", "status": "completed", "items": []any{}},
+			}})
 		}
 	}
 }

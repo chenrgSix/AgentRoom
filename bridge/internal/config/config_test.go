@@ -201,6 +201,7 @@ func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) 
 	if loaded.Agents[0].RuntimeKind != "codex" ||
 		strings.Join(loaded.Agents[0].Command[1:], " ") != "app-server --listen stdio://" ||
 		loaded.Agents[0].Sandbox != "read-only" ||
+		loaded.Agents[0].CodexSessionConflictPolicy != CodexSessionConflictPreserveAndRetry ||
 		loaded.Agents[0].PresetVersion != CurrentPresetVersion {
 		t.Fatalf("unexpected Codex migration: %#v", loaded.Agents[0])
 	}
@@ -249,8 +250,38 @@ func TestMigrateVersionThreeCodexPresetKeepsOwnerSandbox(t *testing.T) {
 	}
 	codex := configuration.Agents[0]
 	if codex.PresetVersion != CurrentPresetVersion || codex.Sandbox != "read-only" ||
+		codex.CodexSessionConflictPolicy != CodexSessionConflictPreserveAndRetry ||
 		strings.Join(codex.Command[1:], " ") != "app-server --listen stdio://" {
 		t.Fatalf("version three Codex preset was not upgraded safely: %#v", codex)
+	}
+}
+
+func TestCodexSessionConflictPolicyValidation(t *testing.T) {
+	base := AgentConfig{
+		Name: "Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex",
+		PresetVersion: CurrentPresetVersion, Command: CodexPresetCommand("/usr/local/bin/codex"),
+		Workspace: t.TempDir(), Sandbox: "workspace-write",
+	}
+	if err := base.validate(); err != nil ||
+		base.ResolvedCodexSessionConflictPolicy() != CodexSessionConflictPreserveAndRetry {
+		t.Fatalf("default Codex conflict policy was rejected: policy=%q err=%v", base.ResolvedCodexSessionConflictPolicy(), err)
+	}
+	startNew := base
+	startNew.CodexSessionConflictPolicy = CodexSessionConflictStartNew
+	if err := startNew.validate(); err != nil {
+		t.Fatalf("start-new Codex conflict policy was rejected: %v", err)
+	}
+	unknown := base
+	unknown.CodexSessionConflictPolicy = "replace_everything"
+	if err := unknown.validate(); err == nil {
+		t.Fatal("unknown Codex conflict policy was accepted")
+	}
+	pi := base
+	pi.Adapter = "generic"
+	pi.RuntimeKind = "pi"
+	pi.CodexSessionConflictPolicy = CodexSessionConflictStartNew
+	if err := pi.validate(); err == nil {
+		t.Fatal("Pi was allowed to claim a Codex conflict policy")
 	}
 }
 

@@ -196,6 +196,11 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		!bytes.Contains(html, []byte("CODEX_SESSION_RESUME_FAILED")) ||
 		!bytes.Contains(html, []byte("当前 AgentRoom 版本没有启用共享 daemon")) ||
 		!bytes.Contains(html, []byte("一条消息不等于一个新会话")) ||
+		bytes.Count(html, []byte(`value="preserve_and_retry"`)) != 2 ||
+		bytes.Count(html, []byte(`value="start_new"`)) != 2 ||
+		!bytes.Contains(html, []byte("旧 Codex 会话不会被删除")) ||
+		!bytes.Contains(javascript, []byte("codexSessionConflictPolicy")) ||
+		!bytes.Contains(javascript, []byte("applyCodexSessionConflictPolicy")) ||
 		!bytes.Contains(html, []byte(`aria-describedby="codex-session-ownership-policy"`)) ||
 		!bytes.Contains(html, []byte(`aria-describedby="agent-codex-session-ownership-policy"`)) ||
 		bytes.Contains(html, []byte(`aria-describedby="agent-codex-session-ownership-policy agent-pi-permission-policy"`)) ||
@@ -264,6 +269,7 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		Runtimes: []RuntimeInput{{
 			Kind: "codex", Enabled: true, Name: "Local Codex", Role: "Builder",
 			ExecutablePath: executablePath, Workspace: directory, Sandbox: "read-only",
+			CodexSessionConflictPolicy: config.CodexSessionConflictStartNew,
 		}, {
 			Kind: "pi", Enabled: true, Name: "Local Pi", Role: "Reviewer",
 			ExecutablePath: executablePath, Workspace: directory,
@@ -304,7 +310,8 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 		t.Fatalf("Runtime preset versions were not persisted: %#v", loaded)
 	}
 	if strings.Join(loaded.Agents[0].Command[1:], " ") != "app-server --listen stdio://" ||
-		loaded.Agents[0].Sandbox != "read-only" {
+		loaded.Agents[0].Sandbox != "read-only" ||
+		loaded.Agents[0].CodexSessionConflictPolicy != config.CodexSessionConflictStartNew {
 		t.Fatalf("unexpected Codex command: %#v", loaded.Agents[0].Command)
 	}
 	if strings.Join(loaded.Agents[1].Command[1:], " ") != "--mode json --print" {
@@ -813,13 +820,15 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	added := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/agents", RuntimeInput{
 		Kind: "codex", Name: "Second Codex", Role: "Reviewer",
 		ExecutablePath: executablePath, Workspace: directory, Sandbox: "read-only",
+		CodexSessionConflictPolicy: config.CodexSessionConflictStartNew,
 	})
 	var addedView AgentView
 	if err := json.NewDecoder(added.Body).Decode(&addedView); err != nil {
 		t.Fatal(err)
 	}
 	added.Body.Close()
-	if added.StatusCode != http.StatusCreated || addedView.AgentID == "" || addedView.AgentID == firstID {
+	if added.StatusCode != http.StatusCreated || addedView.AgentID == "" || addedView.AgentID == firstID ||
+		addedView.CodexSessionConflictPolicy != config.CodexSessionConflictStartNew {
 		t.Fatalf("unexpected added Agent: %d %#v", added.StatusCode, addedView)
 	}
 	waitSignal(t, stopped, "old Bridge stop after Agent addition")
@@ -845,7 +854,8 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 		t.Fatal("editing a stopped Bridge unexpectedly started it")
 	}
 	persisted, err := config.Load(configPath)
-	if err != nil || len(persisted.Agents) != 2 || persisted.Agents[1].Name != "Second Codex" {
+	if err != nil || len(persisted.Agents) != 2 || persisted.Agents[1].Name != "Second Codex" ||
+		persisted.Agents[1].CodexSessionConflictPolicy != config.CodexSessionConflictStartNew {
 		t.Fatalf("unexpected persisted Agents: %#v, %v", persisted.Agents, err)
 	}
 	reloaded, err := New(Options{

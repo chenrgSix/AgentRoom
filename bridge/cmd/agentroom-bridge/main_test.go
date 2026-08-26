@@ -30,3 +30,13 @@ func TestConfiguredAgentIsExplicitWhenAmbiguous(t *testing.T) {
 		t.Fatalf("selected=%#v err=%v", selected, err)
 	}
 }
+
+func TestJoinRejectsUnknownCodexSessionConflictPolicyBeforeEnrollment(t *testing.T) {
+	err := join([]string{
+		"--server", "http://127.0.0.1:3000",
+		"--codex-session-conflict-policy", "replace_everything",
+	})
+	if err == nil || !strings.Contains(err.Error(), "preserve_and_retry or start_new") {
+		t.Fatalf("unexpected conflict-policy validation error: %v", err)
+	}
+}

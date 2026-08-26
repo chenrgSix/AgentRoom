@@ -339,6 +339,11 @@ func join(args []string) error {
 	role := command.String("role", "Codex implementer", "Agent role shown in Agent Room")
 	codex := command.String("codex", "", "path to the Codex executable")
 	sandbox := command.String("sandbox", "workspace-write", "Codex sandbox: read-only or workspace-write")
+	sessionConflictPolicy := command.String(
+		"codex-session-conflict-policy",
+		string(config.CodexSessionConflictPreserveAndRetry),
+		"Codex active-writer policy: preserve_and_retry or start_new",
+	)
 	fingerprint := command.String("server-certificate-sha256", "", "HTTPS server certificate SHA-256 fingerprint")
 	trustMode := command.String("server-trust-mode", "", "HTTPS trust: system_ca or pinned_sha256")
 	if err := command.Parse(args); err != nil {
@@ -349,6 +354,11 @@ func join(args []string) error {
 	}
 	if *sandbox != "read-only" && *sandbox != "workspace-write" {
 		return fmt.Errorf("join --sandbox must be read-only or workspace-write")
+	}
+	resolvedSessionConflictPolicy := config.CodexSessionConflictPolicy(*sessionConflictPolicy)
+	if resolvedSessionConflictPolicy != config.CodexSessionConflictPreserveAndRetry &&
+		resolvedSessionConflictPolicy != config.CodexSessionConflictStartNew {
+		return fmt.Errorf("join --codex-session-conflict-policy must be preserve_and_retry or start_new")
 	}
 	resolvedPath := *path
 	if resolvedPath == "" {
@@ -420,7 +430,9 @@ func join(args []string) error {
 			Name: *agent, Role: *role, Adapter: "codex", RuntimeKind: "codex",
 			PresetVersion: config.CurrentPresetVersion,
 			Command:       config.CodexPresetCommand(resolvedCodex), Sandbox: *sandbox,
-			Workspace: resolvedWorkspace, EnvAllowlist: []string{"HOME", "PATH", "CODEX_HOME"},
+			CodexSessionConflictPolicy: resolvedSessionConflictPolicy,
+			Workspace:                  resolvedWorkspace,
+			EnvAllowlist:               []string{"HOME", "PATH", "CODEX_HOME"},
 		}},
 	}
 	if err := loaded.Validate(); err != nil {

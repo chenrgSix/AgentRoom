@@ -229,7 +229,13 @@
             </div>
             <label>工作区<input class="workspace" id="codex-workspace" required></label>
             <label>文件沙箱<select id="codex-sandbox"><option value="workspace-write">允许修改工作区</option><option value="read-only">只读</option></select></label>
-            <p class="runtime-policy runtime-policy-warning" id="codex-session-ownership-policy">当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server。若会话正被其他客户端使用，Bridge 会保留原会话并提示稍后重试，不会另建会话。<button class="inline-guide-link" type="button" data-open-codex-session-guide>查看完整说明</button></p>
+            <label>会话占用策略
+              <select id="codex-session-conflict-policy" aria-describedby="codex-session-ownership-policy">
+                <option value="preserve_and_retry">保留原会话，稍后重试（推荐）</option>
+                <option value="start_new">新建会话，继续执行</option>
+              </select>
+            </label>
+            <p class="runtime-policy runtime-policy-warning" id="codex-session-ownership-policy">当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server。<span id="codex-session-ownership-policy-copy">若会话正被其他客户端使用，Bridge 会保留原绑定并提示稍后重试，不会另建会话。</span><button class="inline-guide-link" type="button" data-open-codex-session-guide>查看完整说明</button></p>
           </div>
         </div>
         <div class="runtime-card">
@@ -354,10 +360,16 @@
               <option value="read-only">只读</option>
             </select>
           </label>
+          <label id="agent-session-conflict-policy-field">会话占用策略
+            <select id="agent-session-conflict-policy" aria-describedby="agent-codex-session-ownership-policy">
+              <option value="preserve_and_retry">保留原会话，稍后重试（推荐）</option>
+              <option value="start_new">新建会话，继续执行</option>
+            </select>
+          </label>
           <label class="hidden" id="agent-credential-field">凭据环境变量名称（可选）
             <input id="agent-credential-env" placeholder="例如 ANTHROPIC_API_KEY">
           </label>
-          <p class="runtime-policy runtime-policy-warning" id="agent-codex-session-ownership-policy">当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server。若会话正被其他客户端使用，Bridge 会保留原会话并提示稍后重试，不会另建会话。<button class="inline-guide-link" type="button" data-open-codex-session-guide>查看完整说明</button></p>
+          <p class="runtime-policy runtime-policy-warning" id="agent-codex-session-ownership-policy">当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server。<span id="agent-codex-session-ownership-policy-copy">若会话正被其他客户端使用，Bridge 会保留原绑定并提示稍后重试，不会另建会话。</span><button class="inline-guide-link" type="button" data-open-codex-session-guide>查看完整说明</button></p>
           <p class="runtime-policy hidden" id="agent-pi-permission-policy">权限跟随本机 Pi；Bridge 仅固定 JSON 输出与无会话运行方式。</p>
           <p class="modal-help">保存只会更新这个智能体；若 Bridge 正在运行，将安全重启连接。任务或自检执行期间禁止修改。</p>
           <div class="actions modal-actions">
@@ -404,8 +416,9 @@
       </section>
       <section class="guide-section" aria-labelledby="codex-session-errors-title">
         <h3 id="codex-session-errors-title">遇到会话错误怎么办</h3>
+        <p>每个本机 Codex Agent 都可以选择会话占用策略。“保留原会话”维持底层上下文并等待重试；“新建会话”只在 Bridge 明确识别到另一个客户端持有会话时生效。旧 Codex 会话不会被删除，但 AgentRoom 后续执行会切换到新的会话并重新注入当前 Task 上下文。</p>
         <div class="guide-code-list">
-          <p><code>CODEX_SESSION_IN_USE</code><span>另一个本机客户端正在持有该会话。可以重试；Bridge 已保留原绑定。</span></p>
+          <p><code>CODEX_SESSION_IN_USE</code><span>另一个本机客户端正在持有该会话，且当前策略选择保留原绑定。可以等待后重试。</span></p>
           <p><code>CODEX_SESSION_RESUME_FAILED</code><span>恢复被拒绝，但 Bridge 无法安全判断为会话缺失。可以重试；Bridge 不会创建替代会话。</span></p>
         </div>
         <ol class="guide-steps">

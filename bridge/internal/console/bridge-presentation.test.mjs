@@ -67,6 +67,7 @@ test("Agent presentation prioritizes availability, local authority, and Workspac
     status: "可用",
     tone: "success",
     filesystemPolicy: "只读",
+    sessionConflictPolicy: "占用时保留并重试",
     workspaceName: "AgentRoom",
     executableSummary: "Runtime 已找到"
   });
@@ -81,6 +82,7 @@ test("Agent presentation prioritizes availability, local authority, and Workspac
   });
   assert.equal(pi.status, "执行中 · 2");
   assert.equal(pi.filesystemPolicy, "跟随本机策略");
+  assert.equal(pi.sessionConflictPolicy, "");
   assert.equal(pi.workspaceName, "room");
 
   const stopped = agentPresentation({
@@ -91,4 +93,13 @@ test("Agent presentation prioritizes availability, local authority, and Workspac
   }, {bridgeRunning: false});
   assert.equal(stopped.status, "已配置");
   assert.equal(stopped.tone, "neutral");
+});
+
+test("Agent presentation exposes the configured Codex conflict strategy", () => {
+  const view = agentPresentation({
+    name: "Codex",
+    kind: "codex",
+    codexSessionConflictPolicy: "start_new"
+  });
+  assert.equal(view.sessionConflictPolicy, "占用时新建会话");
 });

@@ -46,14 +46,15 @@ const (
 )
 
 type RuntimeInput struct {
-	Kind                     string `json:"kind"`
-	Enabled                  bool   `json:"enabled"`
-	Name                     string `json:"name"`
-	Role                     string `json:"role"`
-	ExecutablePath           string `json:"executablePath"`
-	Workspace                string `json:"workspace"`
-	Sandbox                  string `json:"sandbox,omitempty"`
-	CredentialEnvironmentVar string `json:"credentialEnvironmentVariable,omitempty"`
+	Kind                       string                            `json:"kind"`
+	Enabled                    bool                              `json:"enabled"`
+	Name                       string                            `json:"name"`
+	Role                       string                            `json:"role"`
+	ExecutablePath             string                            `json:"executablePath"`
+	Workspace                  string                            `json:"workspace"`
+	Sandbox                    string                            `json:"sandbox,omitempty"`
+	CodexSessionConflictPolicy config.CodexSessionConflictPolicy `json:"codexSessionConflictPolicy,omitempty"`
+	CredentialEnvironmentVar   string                            `json:"credentialEnvironmentVariable,omitempty"`
 }
 
 type EnrollmentInput struct {
@@ -76,20 +77,21 @@ type ConnectionSettingsInput struct {
 }
 
 type AgentView struct {
-	AgentID                  string `json:"agentId"`
-	Kind                     string `json:"kind"`
-	Name                     string `json:"name"`
-	Role                     string `json:"role"`
-	ExecutablePath           string `json:"executablePath"`
-	Workspace                string `json:"workspace"`
-	Sandbox                  string `json:"sandbox,omitempty"`
-	CredentialEnvironmentVar string `json:"credentialEnvironmentVariable,omitempty"`
-	ExecutableReady          bool   `json:"executableReady"`
-	RuntimeState             string `json:"runtimeState"`
-	ActiveRuns               int    `json:"activeRuns"`
-	LastRunStatus            string `json:"lastRunStatus,omitempty"`
-	LastRuntimeError         string `json:"lastRuntimeError,omitempty"`
-	LastRunAt                string `json:"lastRunAt,omitempty"`
+	AgentID                    string                            `json:"agentId"`
+	Kind                       string                            `json:"kind"`
+	Name                       string                            `json:"name"`
+	Role                       string                            `json:"role"`
+	ExecutablePath             string                            `json:"executablePath"`
+	Workspace                  string                            `json:"workspace"`
+	Sandbox                    string                            `json:"sandbox,omitempty"`
+	CodexSessionConflictPolicy config.CodexSessionConflictPolicy `json:"codexSessionConflictPolicy,omitempty"`
+	CredentialEnvironmentVar   string                            `json:"credentialEnvironmentVariable,omitempty"`
+	ExecutableReady            bool                              `json:"executableReady"`
+	RuntimeState               string                            `json:"runtimeState"`
+	ActiveRuns                 int                               `json:"activeRuns"`
+	LastRunStatus              string                            `json:"lastRunStatus,omitempty"`
+	LastRuntimeError           string                            `json:"lastRuntimeError,omitempty"`
+	LastRunAt                  string                            `json:"lastRunAt,omitempty"`
 }
 
 type ConnectionView struct {
@@ -859,6 +861,10 @@ func (s *Service) updateAgent(response http.ResponseWriter, request *http.Reques
 		return
 	}
 	previous := candidate.Agents[selected]
+	if agent.RuntimeKind == "codex" && previous.RuntimeKind == "codex" &&
+		input.CodexSessionConflictPolicy == "" {
+		agent.CodexSessionConflictPolicy = previous.ResolvedCodexSessionConflictPolicy()
+	}
 	if agent.RuntimeKind == "pi" && previous.RuntimeKind == "pi" &&
 		len(agent.Command) > 0 {
 		agent.Command = config.PiPresetCommand(
@@ -1094,6 +1100,10 @@ func buildRuntime(runtime RuntimeInput) (config.AgentConfig, error) {
 		agent.Adapter = "codex"
 		agent.Command = config.CodexPresetCommand(executablePath)
 		agent.Sandbox = sandbox
+		agent.CodexSessionConflictPolicy = runtime.CodexSessionConflictPolicy
+		if agent.CodexSessionConflictPolicy == "" {
+			agent.CodexSessionConflictPolicy = config.CodexSessionConflictPreserveAndRetry
+		}
 		agent.EnvAllowlist = []string{"HOME", "PATH", "CODEX_HOME"}
 	case "pi":
 		agent.Adapter = "generic"
@@ -1154,8 +1164,9 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 		s.state.Agents = append(s.state.Agents, AgentView{
 			AgentID: identities[agent.Name], Kind: kind, Name: agent.Name, Role: agent.Role,
 			ExecutablePath: executablePath, Workspace: agent.Workspace,
-			Sandbox: sandbox, CredentialEnvironmentVar: credentialEnvironmentVar,
-			ExecutableReady: executableReady, RuntimeState: runtimeState,
+			Sandbox: sandbox, CodexSessionConflictPolicy: agent.CodexSessionConflictPolicy,
+			CredentialEnvironmentVar: credentialEnvironmentVar,
+			ExecutableReady:          executableReady, RuntimeState: runtimeState,
 		})
 	}
 	return nil

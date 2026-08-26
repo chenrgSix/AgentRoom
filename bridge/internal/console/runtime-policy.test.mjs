@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyAgentRuntimePolicy,
+  applyCodexSessionConflictPolicy,
   applyEnrollmentCodexPolicy
 } from "./static/runtime-policy.mjs";
 
@@ -56,4 +57,17 @@ test("disabled enrollment Codex removes its hidden policy description", () => {
 
   applyEnrollmentCodexPolicy(false, control);
   assert.equal(control.attributes.has("aria-describedby"), false);
+});
+
+test("Codex session conflict policy explains continuity before saving", () => {
+  const copy = {textContent: ""};
+
+  applyCodexSessionConflictPolicy("preserve_and_retry", copy);
+  assert.match(copy.textContent, /保留原绑定/);
+  assert.match(copy.textContent, /不会另建会话/);
+
+  applyCodexSessionConflictPolicy("start_new", copy);
+  assert.match(copy.textContent, /新建会话/);
+  assert.match(copy.textContent, /旧 Codex 会话不会被删除/);
+  assert.match(copy.textContent, /其他恢复错误仍会安全停止/);
 });
