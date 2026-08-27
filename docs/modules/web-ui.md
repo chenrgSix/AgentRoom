@@ -63,6 +63,9 @@ without changing server-owned state.
   budget as a completion target.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
+- Owner-only Device pairing with a browser-local one-time claim proof, locally
+  encoded QR, manual short code, exact verification phrase, explicit
+  approve/reject/cancel controls, and recoverable terminal-state projection.
 - Same-owner central Agent creation from an online Bridge template, with a
   transient management-code input and durable pending, rejected, or ready
   status but no local Runtime configuration or saved-code projection.
@@ -181,6 +184,28 @@ contains no Workspace path, Blob storage key, or source filename. The browser
 renders Patch, Markdown, and JSON bodies inside one escaped `<pre>` boundary;
 it never parses HTML or uses the normal Markdown renderer. The visible label
 keeps byte integrity distinct from trust in the Agent-authored meaning.
+
+Device pairing is a separate Owner-only presentation controller. It generates
+`claimSecret` and create/decision operation identities in the browser, stores
+the in-progress proof only in Team-and-Member-scoped `sessionStorage`, and sends the exact
+contract body to the Server. A lost create response is retried with the same
+`claimSecret` and operation ID, including after a component remount. A lost
+decision response is reconciled through the authenticated Owner projection;
+the same decision operation ID is retried only while the authoritative state
+still permits it. Active sessions poll at a bounded interval and also expose a
+manual refresh. Terminal state removes the secret from storage and React
+state before offering another pairing.
+
+The pairing link uses the registered `agentroom://pair-device` scheme with
+Server origin, session identity and expiry in its query and `claimSecret` in
+the URI fragment. QR encoding runs locally in a lazy browser chunk; no link or
+proof is sent to a third-party QR service. Once a Device claims the session,
+the Web hides the link and renders only the closed safe Device summary,
+verification phrase and Owner decisions. It never receives or renders a
+Server Token, Device credential, poll secret, Runtime configuration, command,
+environment value, tool setting, permission detail or Workspace path. Server
+authorization and pairing transitions remain authoritative; hiding the panel
+from non-Owners is presentation, not the security boundary.
 
 Discussion views render the central ProgressSnapshot, Wave, member Turns, and
 OrchestrationDecision; they do not derive completion from Agent prose. The
@@ -389,6 +414,14 @@ states, every closed rejection reason, retry identity, and code clearing. The
 full-App browser-DOM flow proves the same behavior through the production page
 coordinator. Exact evidence and the live-browser limitation are recorded in
 [the local acceptance](../acceptance/web-044-agent-provisioning.md).
+
+`WEB-045` adds the Owner-guided Device pairing panel. Focused component
+coverage proves locally encoded QR/link and manual short-code presentation,
+closed safe Device projection, explicit phrase confirmation, every Owner
+decision, same-proof create recovery across remount, same-operation decision
+recovery, terminal proof clearing, and non-Owner absence. Exact evidence and
+the boundary to installer and physical-host acceptance are recorded in
+[the local acceptance](../acceptance/web-045-device-pairing.md).
 
 `WEB-021` replaces first-page polling with a newest-100 snapshot, resumable
 cursor deltas, duplicate suppression, and a 500-message browser history bound.

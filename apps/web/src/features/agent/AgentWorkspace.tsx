@@ -1,6 +1,7 @@
 import React, { type FormEvent } from "react";
 
 import { BridgeConnectionPanel } from "../bridge/BridgeConnectionPanel.js";
+import { DevicePairingPanel } from "../device/DevicePairingPanel.js";
 import { AgentProvisioningPanel } from "./AgentProvisioningPanel.js";
 import { type Locale, type TranslationKey, translate } from "../../i18n.js";
 import type { Agent, ConnectionMode, Device } from "../../models.js";
@@ -277,6 +278,14 @@ export function AgentWorkspace({
           setupOutput={setupOutput}
         />
       </div>
+
+      <DevicePairingPanel
+        currentMemberIsOwner={currentMemberIsOwner}
+        currentMemberId={currentMemberId}
+        locale={locale}
+        sessionToken={sessionToken}
+        teamId={teamId}
+      />
 
       <AgentProvisioningPanel
         agents={agents}
