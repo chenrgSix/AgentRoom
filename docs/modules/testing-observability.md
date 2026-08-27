@@ -150,6 +150,15 @@ default Task routing, legacy completed Tasks without synthetic Results, and one
 physical managed Runtime whose accepted Result links to verified Artifact
 evidence.
 
+`QA-029` realizes that gate as a committed matrix rather than one broad happy
+path. Focused migration, reopen, CAS and authorization regressions own the
+individual cuts. Deterministic MCP E2E explicitly proposes a manual-Agent
+Result, while paired-Go-Bridge E2E runs an actual local managed process,
+publishes a verified Artifact and managed Result through their CLIs, ends the
+active Run, then proves exact accept-and-complete replay. The physical case is
+one isolated local host and does not imply the separate two-machine or
+credentialed-provider gates.
+
 ## Observability Contract
 
 One `traceId` follows Message, Run, delivery, Bridge, and Runtime events.

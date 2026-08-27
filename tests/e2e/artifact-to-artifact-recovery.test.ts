@@ -424,6 +424,39 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
       );
       return source && consumer ? { source, consumer } : undefined;
     });
+    const assignedTask = await app.inject({
+      method: "PUT",
+      url: `/api/tasks/${taskId}/definition`,
+      headers: authorization,
+      payload: {
+        operationId: "op_artifact_handoff_assign_0001",
+        expectedTaskRevision: 1,
+        title: taskResponse.json().title,
+        goal: taskResponse.json().goal,
+        ownerMemberId: taskResponse.json().ownerMemberId,
+        completionPolicy: taskResponse.json().completionPolicy,
+        priority: taskResponse.json().priority,
+        dueAt: taskResponse.json().dueAt,
+        criteria: [],
+        assignments: [
+          { agentId: agents.source.agentId, role: "primary" },
+          { agentId: agents.consumer.agentId, role: "contributor" }
+        ],
+        budgetPolicy: taskResponse.json().budgetPolicy
+      }
+    });
+    assert.equal(assignedTask.statusCode, 200, assignedTask.body);
+    const activatedTask = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${taskId}/control`,
+      headers: authorization,
+      payload: {
+        operationId: "op_artifact_handoff_activate_0001",
+        expectedTaskRevision: 2,
+        lifecycleState: "active"
+      }
+    });
+    assert.equal(activatedTask.statusCode, 200, activatedTask.body);
 
     stage = "take Bridge B offline";
     await stopBridge(bridgeB);

@@ -375,6 +375,135 @@ test("Result acceptance atomically completes its Task and survives response loss
   }
 });
 
+test("concurrent Result review and Task definition edit keep one revision-consistent winner", async () => {
+  const context = await setup();
+  let app = context.app;
+  try {
+    const task = await createActiveTask(context);
+    const run = await createCompletedRun(context, task.taskId as string);
+    const artifactId = await createArtifact(context, task.taskId as string);
+    const proposed = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${task.taskId as string}/results`,
+      headers: { authorization: context.authorization },
+      payload: proposal({
+        operationId: "op_race_result_proposal_0001",
+        taskId: task.taskId,
+        taskRevision: 2,
+        definitionRevision: 1,
+        criteriaRevision: 1,
+        artifactId,
+        runId: run.runId
+      })
+    });
+    assert.equal(proposed.statusCode, 200, proposed.body);
+    const currentResponse = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${task.taskId as string}`,
+      headers: { authorization: context.authorization }
+    });
+    assert.equal(currentResponse.statusCode, 200);
+    const current = currentResponse.json();
+    assert.equal(current.taskRevision, 3);
+
+    const reviewCommand = {
+      operationId: "op_race_review_accept_0001",
+      decision: "accepted",
+      expectedTaskRevision: 3,
+      expectedReviewRevision: 0,
+      reason: "Accept only if the reviewed definition remains current.",
+      completeTask: true
+    };
+    const definitionCommand = {
+      operationId: "op_race_definition_edit_0001",
+      expectedTaskRevision: 3,
+      title: current.title,
+      goal: "Require a newly revised definition before completion.",
+      ownerMemberId: current.ownerMemberId,
+      completionPolicy: current.completionPolicy,
+      priority: current.priority,
+      dueAt: current.dueAt,
+      criteria: current.criteria.map((criterion: {
+        criterionKey: string;
+        required: boolean;
+        ordinal: number;
+      }) => ({
+        criterionKey: criterion.criterionKey,
+        description: "The revised definition requires fresh durable evidence.",
+        required: criterion.required,
+        ordinal: criterion.ordinal
+      })),
+      assignments: current.assignments.map((assignment: {
+        agentId: string;
+        role: string;
+      }) => ({ agentId: assignment.agentId, role: assignment.role })),
+      budgetPolicy: current.budgetPolicy
+    };
+    const [reviewed, edited] = await Promise.all([
+      app.inject({
+        method: "POST",
+        url: `/api/results/${proposed.json().resultId as string}/review-decisions`,
+        headers: { authorization: context.authorization },
+        payload: reviewCommand
+      }),
+      app.inject({
+        method: "PUT",
+        url: `/api/tasks/${task.taskId as string}/definition`,
+        headers: { authorization: context.authorization },
+        payload: definitionCommand
+      })
+    ]);
+    assert.deepEqual(
+      [reviewed.statusCode, edited.statusCode].sort((left, right) => left - right),
+      [200, 400]
+    );
+
+    const expectedWinner = reviewed.statusCode === 200 ? "review" : "definition";
+    const beforeRestartTask = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${task.taskId as string}`,
+      headers: { authorization: context.authorization }
+    });
+    const beforeRestartResult = await app.inject({
+      method: "GET",
+      url: `/api/results/${proposed.json().resultId as string}`,
+      headers: { authorization: context.authorization }
+    });
+    assert.equal(beforeRestartTask.statusCode, 200);
+    assert.equal(beforeRestartResult.statusCode, 200);
+    if (expectedWinner === "review") {
+      assert.equal(beforeRestartTask.json().lifecycleState, "completed");
+      assert.equal(beforeRestartTask.json().definitionRevision, 1);
+      assert.equal(beforeRestartResult.json().state, "accepted");
+    } else {
+      assert.equal(beforeRestartTask.json().lifecycleState, "active");
+      assert.equal(beforeRestartTask.json().definitionRevision, 2);
+      assert.equal(beforeRestartResult.json().state, "proposed");
+    }
+
+    await app.close();
+    app = await createServerApp({
+      databasePath: context.databasePath,
+      clock: () => now,
+      logger: false
+    });
+    const reopenedTask = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${task.taskId as string}`,
+      headers: { authorization: context.authorization }
+    });
+    const reopenedResult = await app.inject({
+      method: "GET",
+      url: `/api/results/${proposed.json().resultId as string}`,
+      headers: { authorization: context.authorization }
+    });
+    assert.deepEqual(reopenedTask.json(), beforeRestartTask.json());
+    assert.deepEqual(reopenedResult.json(), beforeRestartResult.json());
+  } finally {
+    await app.close();
+  }
+});
+
 test("Result corrections preserve typed sources, actor limits, and child provenance", async () => {
   const context = await setup();
   try {

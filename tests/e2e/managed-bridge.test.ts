@@ -65,6 +65,16 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
       payload: { name: "general" }
     });
     const roomId = roomResponse.json().roomId as string;
+    const defaultTasksResponse = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${roomId}/tasks`,
+      headers: authorization
+    });
+    assert.equal(defaultTasksResponse.statusCode, 200);
+    const defaultTask = defaultTasksResponse.json().find(
+      (task: { isDefault: boolean }) => task.isDefault
+    );
+    assert.ok(defaultTask);
     const inviteResponse = await app.inject({
       method: "POST", url: `/api/teams/${teamId}/bridge-invites`, headers: authorization,
       payload: { deviceName: "Bob Bridge" }
@@ -167,6 +177,7 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
     assert.equal(sent.statusCode, 200);
     const runId = sent.json().runs[0].runId as string;
     const traceId = sent.json().message.traceId as string;
+    assert.equal(sent.json().runs[0].taskId, defaultTask.taskId);
     assert.equal(sent.json().runs[0].traceId, traceId);
 
     stage = "wait for Echo Builder completion";
@@ -323,10 +334,58 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
         candidate.name === "Slow Builder" && candidate.presence === "ready"
       );
     });
+    const formalTaskResponse = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${roomId}/tasks`,
+      headers: authorization,
+      payload: {
+        title: "Accept managed Runtime evidence",
+        goal: "Complete only after a managed Result cites the verified Artifact.",
+        lifecycleState: "ready",
+        completionPolicy: "accepted_result_required",
+        criteria: [{
+          criterionKey: "criterion_managed_e2e_0001",
+          description: "The managed Runtime publishes durable Artifact evidence.",
+          required: true,
+          ordinal: 1
+        }],
+        assignments: [{ agentId: slowAgent.agentId, role: "primary" }]
+      }
+    });
+    assert.equal(formalTaskResponse.statusCode, 200, formalTaskResponse.body);
+    const formalTaskId = formalTaskResponse.json().taskId as string;
+    const activatedTaskResponse = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${formalTaskId}/control`,
+      headers: authorization,
+      payload: {
+        operationId: "op_managed_e2e_activate_0001",
+        expectedTaskRevision: 1,
+        lifecycleState: "active"
+      }
+    });
+    assert.equal(activatedTaskResponse.statusCode, 200, activatedTaskResponse.body);
+    const unassignedRoute = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${roomId}/messages`,
+      headers: authorization,
+      payload: {
+        taskId: formalTaskId,
+        content: "An unassigned Agent must not receive this Task.",
+        mentionAgentId: agent.agentId
+      }
+    });
+    assert.equal(unassignedRoute.statusCode, 400);
+    assert.match(unassignedRoute.json().error.message, /not assigned/u);
     const slowSent = await app.inject({
       method: "POST", url: `/api/rooms/${roomId}/messages`, headers: authorization,
-      payload: { content: "Wait until canceled", mentionAgentId: slowAgent.agentId }
+      payload: {
+        taskId: formalTaskId,
+        content: "Publish verified evidence and propose the bounded Result.",
+        mentionAgentId: slowAgent.agentId
+      }
     });
+    assert.equal(slowSent.statusCode, 200, slowSent.body);
     const slowRunId = slowSent.json().runs[0].runId as string;
     stage = "wait for Slow Builder working state";
     await waitFor(async () => {
@@ -352,6 +411,7 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
     assert.match(published.stdout, /published Artifact artifact_/u);
     assert.equal(published.stdout.includes(directory), false);
     const slowTaskId = slowSent.json().runs[0].taskId as string;
+    assert.equal(slowTaskId, formalTaskId);
     const artifactResponse = await app.inject({
       method: "GET",
       url: `/api/tasks/${slowTaskId}/artifacts`,
@@ -368,6 +428,88 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
       contentArtifact.contentSha256,
       createHash("sha256").update(artifactBytes).digest("hex")
     );
+    const taskBeforeProposalResponse = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${formalTaskId}`,
+      headers: authorization
+    });
+    assert.equal(taskBeforeProposalResponse.statusCode, 200);
+    const taskBeforeProposal = taskBeforeProposalResponse.json();
+    const runEventsResponse = await app.inject({
+      method: "GET",
+      url: `/api/runs/${slowRunId}/events?after=0`,
+      headers: authorization
+    });
+    assert.equal(runEventsResponse.statusCode, 200);
+    const sourceEvent = (runEventsResponse.json() as Array<{
+      sequence: number;
+      event: { type: string };
+    }>).find(({ event }) => event.type === "status");
+    assert.ok(sourceEvent, "managed Run omitted its persisted status evidence");
+    const managedProposal = {
+      operationId: "op_managed_e2e_result_0001",
+      taskId: formalTaskId,
+      definitionRevision: taskBeforeProposal.definitionRevision,
+      criteriaRevision: taskBeforeProposal.criteriaRevision,
+      proposedAtTaskRevision: taskBeforeProposal.taskRevision,
+      supersedesResultId: null,
+      outcome: "satisfied",
+      summary: "The managed Runtime published the verified patch.",
+      risks: [],
+      openQuestions: [],
+      nextActions: [],
+      sources: [{
+        evidenceRefId: "evidence_managed_e2e_artifact_0001",
+        kind: "artifact",
+        artifactId: contentArtifact.artifactId
+      }, {
+        evidenceRefId: "evidence_managed_e2e_event_0001",
+        kind: "run_event",
+        runId: slowRunId,
+        sequence: sourceEvent.sequence
+      }],
+      criterionClaims: [{
+        criterionKey: "criterion_managed_e2e_0001",
+        coverage: "satisfied",
+        explanation: "The immutable patch Artifact is the required evidence.",
+        evidenceRefIds: ["evidence_managed_e2e_artifact_0001"]
+      }]
+    };
+    stage = "propose managed Result through the paired Bridge credential";
+    const proposedResult = await execFileAsync(bridgeBinary, [
+      "result", "propose",
+      "--config", configPath,
+      "--agent", "Slow Builder",
+      "--run-id", slowRunId,
+      "--proposal-json", JSON.stringify(managedProposal)
+    ]);
+    const resultMatch = /proposed Result (result_[A-Za-z0-9_-]+) version 1/u.exec(
+      proposedResult.stdout
+    );
+    assert.ok(resultMatch, proposedResult.stdout);
+    const resultId = resultMatch[1];
+    const proposedReplay = await execFileAsync(bridgeBinary, [
+      "result", "propose",
+      "--config", configPath,
+      "--agent", "Slow Builder",
+      "--run-id", slowRunId,
+      "--proposal-json", JSON.stringify(managedProposal)
+    ]);
+    assert.equal(proposedReplay.stdout, proposedResult.stdout);
+    const taskResultsResponse = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${formalTaskId}/results`,
+      headers: authorization
+    });
+    assert.equal(taskResultsResponse.statusCode, 200);
+    assert.equal(taskResultsResponse.json().length, 1);
+    assert.deepEqual(taskResultsResponse.json()[0].proposedBy, {
+      kind: "managed_agent",
+      agentId: slowAgent.agentId,
+      runId: slowRunId
+    });
+    assert.equal(taskResultsResponse.json()[0].proposal.sources[0].artifactId,
+      contentArtifact.artifactId);
     const canceled = await app.inject({
       method: "POST", url: `/api/runs/${slowRunId}/cancel`, headers: authorization,
       payload: { reason: "E2E cancellation" }
@@ -383,6 +525,44 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
       );
       return run?.state === "canceled" ? run : undefined;
     });
+    const taskBeforeReviewResponse = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${formalTaskId}`,
+      headers: authorization
+    });
+    assert.equal(taskBeforeReviewResponse.statusCode, 200);
+    const reviewCommand = {
+      operationId: "op_managed_e2e_review_0001",
+      decision: "accepted",
+      expectedTaskRevision: taskBeforeReviewResponse.json().taskRevision,
+      expectedReviewRevision: 0,
+      reason: "The physical managed Runtime supplied the required evidence.",
+      completeTask: true
+    };
+    stage = "accept and complete after simulated response loss";
+    const accepted = await app.inject({
+      method: "POST",
+      url: `/api/results/${resultId}/review-decisions`,
+      headers: authorization,
+      payload: reviewCommand
+    });
+    assert.equal(accepted.statusCode, 200, accepted.body);
+    assert.equal(accepted.json().completedTask, true);
+    const acceptedReplay = await app.inject({
+      method: "POST",
+      url: `/api/results/${resultId}/review-decisions`,
+      headers: authorization,
+      payload: reviewCommand
+    });
+    assert.deepEqual(acceptedReplay.json(), accepted.json());
+    const completedTaskResponse = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${formalTaskId}`,
+      headers: authorization
+    });
+    assert.equal(completedTaskResponse.statusCode, 200);
+    assert.equal(completedTaskResponse.json().lifecycleState, "completed");
+    assert.equal(completedTaskResponse.json().completionResultId, resultId);
     assert.equal(bridgeStdout.includes(bridgeServerToken), false);
     assert.equal(bridgeStderr.includes(bridgeServerToken), false);
   } catch (error) {
@@ -398,7 +578,7 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
 }
 
 for (const shareReasoningSummaries of [false, true]) {
-  test(`Web Mention completes through a paired Go Bridge with reasoning sharing ${shareReasoningSummaries ? "enabled" : "disabled by default"}`, {
+  test(`Web Mention and managed Result complete through a paired Go Bridge with reasoning sharing ${shareReasoningSummaries ? "enabled" : "disabled by default"}`, {
     timeout: 60_000
   }, () => verifyManagedBridge(shareReasoningSummaries));
 }

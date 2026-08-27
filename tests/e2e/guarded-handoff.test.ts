@@ -141,6 +141,62 @@ test("three Remote MCP Agents complete one guarded handoff chain", async () => {
     });
     assert.equal(aliceComplete.json().result.structuredContent.run.state, "completed");
 
+    const rootTaskResponse = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${rootResponse.json().runs[0].taskId as string}`,
+      headers: webHeaders
+    });
+    assert.equal(rootTaskResponse.statusCode, 200);
+    assert.equal(rootTaskResponse.json().isDefault, true);
+    const rootEventsResponse = await app.inject({
+      method: "GET",
+      url: `/api/runs/${rootRun.runId}/events?after=0`,
+      headers: webHeaders
+    });
+    assert.equal(rootEventsResponse.statusCode, 200);
+    const rootReplyEvent = (rootEventsResponse.json() as Array<{
+      sequence: number;
+      event: { type: string };
+    }>).find(({ event }) => event.type === "reply");
+    assert.ok(rootReplyEvent);
+    const manualProposal = {
+      operationId: "op_handoff_manual_result_0001",
+      taskId: rootTaskResponse.json().taskId,
+      definitionRevision: rootTaskResponse.json().definitionRevision,
+      criteriaRevision: rootTaskResponse.json().criteriaRevision,
+      proposedAtTaskRevision: rootTaskResponse.json().taskRevision,
+      supersedesResultId: null,
+      outcome: "informational",
+      summary: "Alice explicitly records the completed guarded handoff.",
+      risks: [],
+      openQuestions: [],
+      nextActions: [],
+      sources: [{
+        evidenceRefId: "evidence_handoff_reply_0001",
+        kind: "run_event",
+        runId: rootRun.runId,
+        sequence: rootReplyEvent.sequence
+      }],
+      criterionClaims: []
+    };
+    const manualResult = await call(alice.token, "team.propose_result", {
+      runId: rootRun.runId,
+      proposal: manualProposal
+    });
+    assert.equal(manualResult.json().result.isError, undefined);
+    assert.deepEqual(
+      manualResult.json().result.structuredContent.result.proposedBy,
+      { kind: "manual_agent", agentId: alice.agentId, runId: rootRun.runId }
+    );
+    const manualResultReplay = await call(alice.token, "team.propose_result", {
+      runId: rootRun.runId,
+      proposal: manualProposal
+    });
+    assert.deepEqual(
+      manualResultReplay.json().result.structuredContent.result,
+      manualResult.json().result.structuredContent.result
+    );
+
     const runs = await app.inject({
       method: "GET", url: `/api/rooms/${roomId}/runs`, headers: webHeaders
     });

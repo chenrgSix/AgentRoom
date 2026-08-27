@@ -8,9 +8,10 @@ import { createServerApp } from "../src/app.js";
 
 test("Team Workbench pages one authorized projection with stable filters", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-workbench-"));
+  const databasePath = path.join(directory, "server.sqlite");
   let now = "2026-08-28T10:00:00.000Z";
-  const app = await createServerApp({
-    databasePath: path.join(directory, "server.sqlite"),
+  let app = await createServerApp({
+    databasePath,
     clock: () => now,
     logger: false
   });
@@ -326,6 +327,28 @@ test("Team Workbench pages one authorized projection with stable filters", async
       headers: { authorization: memberAuthorization }
     });
     assert.equal(unauthorized.statusCode, 403);
+
+    const beforeRestart = await app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/work-items?scope=team&roomId=${firstRoomId}`,
+      headers: { authorization: ownerAuthorization }
+    });
+    assert.equal(beforeRestart.statusCode, 200);
+    assert.deepEqual(
+      beforeRestart.json().items[0].attentionReasons.map(
+        ({ reason }: { reason: string }) => reason
+      ),
+      ["blocked", "paused"]
+    );
+    await app.close();
+    app = await createServerApp({ databasePath, clock: () => now, logger: false });
+    const afterRestart = await app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/work-items?scope=team&roomId=${firstRoomId}`,
+      headers: { authorization: ownerAuthorization }
+    });
+    assert.equal(afterRestart.statusCode, 200);
+    assert.deepEqual(afterRestart.json(), beforeRestart.json());
   } finally {
     await app.close();
   }
