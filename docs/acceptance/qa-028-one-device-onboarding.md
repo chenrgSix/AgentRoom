@@ -65,25 +65,48 @@ The real Device-onboarding E2E is deterministic and same-host. The managed Pi
 protocol is exercised by a bounded test Runtime, not a credentialed provider.
 It therefore does not satisfy the physical Codex gate.
 
-## Physical evidence already available
+## Current-commit physical Central evidence
 
-`OPS-008` records successful local and direct-HTTPS installation on this
-physical macOS host at commit `991f508`, including exact install reentry,
-doctor, WebSocket authentication boundary, backup, staged restore and
-non-purging uninstall. The direct installation bound a non-loopback LAN
-address and used the installation-local TLS authority.
+The machine-A Central lifecycle was refreshed on this physical macOS host at
+exact commit `3497882dbb0bf60ac9e78f58e9dd17ad26d11a46`. The bounded local
+release label was `v0.4.0-qa028.1`; it is evidence input, not a published
+Release or compatibility promise.
 
-That evidence proves the Central host lifecycle only. It did not pair or run a
-Bridge from a second physical client, and it predates the current onboarding
-commits. Combining that record with same-host E2E would overstate the product
-gate.
+- `package-central-release.sh` produced Darwin amd64/arm64 and Linux
+  amd64/arm64 archives from that commit. `verify-central-release.sh` accepted
+  all four checksum-pinned archives against the exact release label and source
+  ref.
+- The Darwin arm64 archive was extracted into an isolated acceptance area and
+  its embedded SHA-256 checksum was verified before execution.
+- `agentroomctl install` completed in `direct_https` mode on a non-loopback LAN
+  origin with isolated ports. Exact install reentry converged without creating
+  a second installation or changing the selected origin.
+- `agentroomctl status` reported the expected release, origin, ready step,
+  healthy Server and externally bound HTTP/HTTPS listeners.
+- `agentroomctl doctor` accepted release checksums, private-file permissions,
+  the Compose model, HTTPS readiness and WebSocket ingress. The operator did
+  not manually create `.env`, issue certificates with OpenSSL, or supply a
+  legacy Server Token.
+- Ordinary `agentroomctl uninstall` removed the acceptance containers and
+  listeners without purging owner state. The SQLite file retained its inode,
+  size and mode; the owner recovery credential retained its inode, size and
+  mode `0600`; and the mode-`0600` installation manifest advanced to the
+  `uninstalled` step.
+
+This closes the stale machine-A lifecycle concern for the current onboarding
+commit. It still does not prove a second physical client, installed deep-link
+handling, a credentialed Codex provider, or either cross-host Run. The retained
+machine-A state can be brought back by exact reentry when machine B is
+available; combining this lifecycle evidence with same-host E2E would still
+overstate the product gate.
 
 ## Blocking physical gate
 
 `QA-002` remains `READY`, so the dependency of `QA-028` is unsatisfied. A
 reviewed `PASS` still requires:
 
-1. machine A running the current committed Server/Web build behind HTTPS;
+1. machine A reentering the now-verified current committed Central build behind
+   HTTPS;
 2. a different physical machine B running the matching packaged Bridge with a
    working local Codex login;
 3. the canonical deep link reaching the installed desktop/Console flow;
