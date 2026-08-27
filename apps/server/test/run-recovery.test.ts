@@ -136,7 +136,11 @@ test("server restart completes a partially routed Agent reply exactly once", asy
   const runs = new RunService(
     core, runRepository, auth, new AgentTaskRepository(database)
   );
-  const handoffs = new HandoffService(core, runRepository);
+  const handoffs = new HandoffService(
+    core,
+    runRepository,
+    new AgentTaskRepository(database)
+  );
   const created = teams.createTeamForUser({
     userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4R0UT",
     userDisplayName: "Alice",

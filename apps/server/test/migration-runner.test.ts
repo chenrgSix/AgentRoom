@@ -7,6 +7,7 @@ import test from "node:test";
 import Database from "better-sqlite3";
 
 import { openDatabase } from "../src/data/database.js";
+import { CoreRepository } from "../src/data/core-repository.js";
 import { prepareDatabaseDirectory } from "../src/data/database-location.js";
 import {
   defaultMigrationsDirectory,
@@ -14,6 +15,8 @@ import {
 } from "../src/data/migration-runner.js";
 import { DiscussionRepository } from "../src/discussion/discussion-repository.js";
 import { RunRepository } from "../src/run/run-repository.js";
+import { AuthService } from "../src/security/auth-service.js";
+import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
 async function temporaryDirectory(name: string): Promise<string> {
   return mkdtemp(path.join(os.tmpdir(), `agent-room-${name}-`));
@@ -27,16 +30,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 42);
+  assert.equal(first.currentVersion, 43);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -87,11 +90,23 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
         "WHERE type = 'table' AND name = 'device_pairing_sessions'"
       )
       .get() as { count: number };
+    const taskCriteriaTable = database
+      .prepare(
+        "SELECT count(*) AS count FROM sqlite_master " +
+        "WHERE type = 'table' AND name = 'task_criteria_entries'"
+      )
+      .get() as { count: number };
+    const taskAssignmentTable = database
+      .prepare(
+        "SELECT count(*) AS count FROM sqlite_master " +
+        "WHERE type = 'table' AND name = 'task_agent_assignments'"
+      )
+      .get() as { count: number };
     const agentColumns = database
       .prepare("PRAGMA table_info(agents)")
       .all() as Array<{ name: string }>;
 
-    assert.equal(migrationCount.count, 42);
+    assert.equal(migrationCount.count, 43);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
     assert.equal(clarificationTable.count, 1);
@@ -99,6 +114,8 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
     assert.equal(artifactPublicationTable.count, 1);
     assert.equal(artifactRelationTable.count, 1);
     assert.equal(devicePairingSessionTable.count, 1);
+    assert.equal(taskCriteriaTable.count, 1);
+    assert.equal(taskAssignmentTable.count, 1);
     assert.equal(agentColumns.some((column) =>
       column.name === "runtime_policy_json"
     ), true);
@@ -184,7 +201,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -342,7 +359,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
+    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
   );
   const database = openDatabase(databasePath);
   try {
@@ -371,6 +388,146 @@ test("Runtime activity migration preserves pending reply routing intents", async
       kind: "reasoning",
       phase: "completed"
     }, now).applied, true);
+  } finally {
+    database.close();
+  }
+});
+
+test("Task work migration maps legacy state and replaces a terminal default", async () => {
+  const directory = await temporaryDirectory("task-work-migration");
+  const databasePath = path.join(directory, "server.sqlite");
+  const legacyMigrations = path.join(directory, "legacy-migrations");
+  await mkdir(legacyMigrations, { recursive: true });
+  const entries = (await readdir(defaultMigrationsDirectory))
+    .filter((name) => /^[0-9]{4}_.+\.sql$/u.test(name) && name < "0043_")
+    .sort();
+  for (const entry of entries) {
+    await writeFile(
+      path.join(legacyMigrations, entry),
+      await readFile(path.join(defaultMigrationsDirectory, entry), "utf8"),
+      "utf8"
+    );
+  }
+  await migrateDatabase(databasePath, legacyMigrations);
+
+  const legacy = openDatabase(databasePath);
+  let roomId = "";
+  let oldDefaultTaskId = "";
+  try {
+    const core = new CoreRepository(legacy);
+    const auth = new AuthService(legacy);
+    const teams = new TeamRoomService(core, auth);
+    const created = teams.createTeamForUser({
+      userId: "user_task_migration_0001",
+      userDisplayName: "Migration Owner",
+      teamName: "Migration Team",
+      now: "2026-08-27T10:00:00.000Z"
+    });
+    const session = auth.issueWebSession(
+      created.owner.userId!,
+      "2026-08-27T10:00:00.000Z",
+      "2026-08-27T11:00:00.000Z"
+    );
+    const principal = auth.authenticateWebSession(
+      session.secret,
+      "2026-08-27T10:00:00.000Z"
+    );
+    const room = teams.createRoom(
+      principal,
+      created.team.teamId,
+      "migration",
+      "2026-08-27T10:00:00.000Z"
+    );
+    roomId = room.roomId;
+    oldDefaultTaskId = (legacy.prepare(`
+      SELECT task_id FROM agent_tasks WHERE room_id = ? AND is_default = 1
+    `).get(roomId) as { task_id: string }).task_id;
+    legacy.prepare(`
+      UPDATE agent_tasks SET state = 'completed' WHERE task_id = ?
+    `).run(oldDefaultTaskId);
+    const insert = legacy.prepare(`
+      INSERT INTO agent_tasks (
+        task_id, room_id, title, goal, state, created_by_member_id,
+        is_default, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
+    `);
+    for (const [suffix, state] of [
+      ["ready", "open"],
+      ["active", "working"],
+      ["blocked", "blocked"]
+    ] as const) {
+      insert.run(
+        `task_legacy_${suffix}_0001`,
+        roomId,
+        `Legacy ${suffix}`,
+        `Map legacy ${state}.`,
+        state,
+        created.owner.memberId,
+        "2026-08-27T10:01:00.000Z",
+        "2026-08-27T10:01:00.000Z"
+      );
+    }
+  } finally {
+    legacy.close();
+  }
+
+  const migrated = await migrateDatabase(databasePath);
+  assert.deepEqual(migrated.appliedVersions, [43]);
+  const database = openDatabase(databasePath);
+  try {
+    const rows = database.prepare(`
+      SELECT task_id, lifecycle_state, is_default, task_display_number
+      FROM agent_tasks WHERE room_id = ? ORDER BY task_id
+    `).all(roomId) as Array<{
+      task_id: string;
+      lifecycle_state: string;
+      is_default: number;
+      task_display_number: number;
+    }>;
+    assert.equal(
+      rows.find(({ task_id }) => task_id === oldDefaultTaskId)?.lifecycle_state,
+      "completed"
+    );
+    assert.equal(
+      rows.find(({ task_id }) => task_id === oldDefaultTaskId)?.is_default,
+      0
+    );
+    assert.equal(
+      rows.find(({ task_id }) => task_id === "task_legacy_ready_0001")
+        ?.lifecycle_state,
+      "ready"
+    );
+    assert.equal(
+      rows.find(({ task_id }) => task_id === "task_legacy_active_0001")
+        ?.lifecycle_state,
+      "active"
+    );
+    assert.equal(
+      rows.find(({ task_id }) => task_id === "task_legacy_blocked_0001")
+        ?.lifecycle_state,
+      "active"
+    );
+    assert.equal(new Set(rows.map(({ task_display_number }) =>
+      task_display_number)).size, rows.length);
+    const replacement = rows.find(({ is_default }) => is_default === 1);
+    assert.equal(replacement?.lifecycle_state, "active");
+    assert.match(replacement?.task_id ?? "", /^task_default_active_/u);
+    const block = database.prepare(`
+      SELECT state FROM task_blocks WHERE task_id = 'task_legacy_blocked_0001'
+    `).get() as { state: string };
+    assert.equal(block.state, "open");
+    assert.throws(() => database.prepare(`
+      UPDATE agent_tasks SET lifecycle_state = 'canceled'
+      WHERE task_id = ?
+    `).run(replacement!.task_id), /permanently active/u);
+    const taskCount = (database.prepare(`
+      SELECT count(*) AS count FROM agent_tasks WHERE room_id = ?
+    `).get(roomId) as { count: number }).count;
+    const definitionCount = (database.prepare(`
+      SELECT count(*) AS count FROM task_definition_revisions
+      WHERE task_id IN (SELECT task_id FROM agent_tasks WHERE room_id = ?)
+    `).get(roomId) as { count: number }).count;
+    assert.equal(definitionCount, taskCount);
   } finally {
     database.close();
   }

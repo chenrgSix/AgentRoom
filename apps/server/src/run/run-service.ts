@@ -34,7 +34,11 @@ export class RunService {
     const task = this.tasks.get(message.taskId);
     if (
       !task || task.roomId !== message.roomId ||
-      task.state === "completed" || task.state === "canceled"
+      !["ready", "active", "review"].includes(task.lifecycleState) ||
+      task.schedulingState !== "enabled" ||
+      task.budgetUsage.runAttempts >= task.budgetPolicy.maxRunAttempts ||
+      task.budgetUsage.executionDurationSeconds >=
+        task.budgetPolicy.maxExecutionDurationSeconds
     ) {
       throw new Error("Run Task must be runnable in the Message Room");
     }

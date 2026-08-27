@@ -170,6 +170,37 @@ test("Agent Tasks scope Runs and allow independent Room Discussions", async () =
       agentIds.push(agent.json().agent.agentId as string);
     }
 
+    for (const [index, taskId] of [oauthTaskId, ciTaskId].entries()) {
+      const taskResponse = await app.inject({
+        method: "GET",
+        url: `/api/tasks/${taskId}`,
+        headers: { authorization }
+      });
+      const task = taskResponse.json();
+      const assigned = await app.inject({
+        method: "PUT",
+        url: `/api/tasks/${taskId}/definition`,
+        headers: { authorization },
+        payload: {
+          operationId: `op_assign_legacy_task_000${index + 1}`,
+          expectedTaskRevision: task.taskRevision,
+          title: task.title,
+          goal: task.goal,
+          ownerMemberId: task.ownerMemberId,
+          completionPolicy: task.completionPolicy,
+          priority: task.priority,
+          dueAt: task.dueAt,
+          criteria: task.criteria,
+          assignments: agentIds.map((agentId, agentIndex) => ({
+            agentId,
+            role: agentIndex === 0 ? "primary" : "contributor"
+          })),
+          budgetPolicy: task.budgetPolicy
+        }
+      });
+      assert.equal(assigned.statusCode, 200);
+    }
+
     const changesBeforeTaskUpdate = await app.inject({
       method: "GET",
       url: `/api/teams/${teamId}/changes?after=0`,

@@ -67,7 +67,10 @@ export class MessageRepository {
         throw new Error("Reply Message must use its parent Task");
       }
       const resolvedTask = this.database.prepare(`
-        SELECT task_id, state FROM agent_tasks
+        SELECT task_id, state, lifecycle_state, scheduling_state, is_default,
+          max_run_attempts, max_execution_duration_seconds,
+          budget_run_attempts, budget_execution_duration_seconds
+        FROM agent_tasks
         WHERE task_id = coalesce(?, task_id) AND room_id = ?
           AND (? IS NOT NULL OR is_default = 1)
         ORDER BY is_default DESC
@@ -76,7 +79,17 @@ export class MessageRepository {
         persistedMessage.taskId ?? parentTask?.task_id ?? null,
         persistedMessage.roomId,
         persistedMessage.taskId ?? parentTask?.task_id ?? null
-      ) as { task_id: string; state: string } | undefined;
+      ) as {
+        task_id: string;
+        state: string;
+        lifecycle_state: string;
+        scheduling_state: string;
+        is_default: number;
+        max_run_attempts: number;
+        max_execution_duration_seconds: number;
+        budget_run_attempts: number;
+        budget_execution_duration_seconds: number;
+      } | undefined;
       if (!resolvedTask) {
         throw new Error("Message Task must belong to its Room");
       }
@@ -101,11 +114,16 @@ export class MessageRepository {
         }
       }
 
-      if (
-        taskMessage.mentions.length > 0 &&
-        (resolvedTask.state === "completed" || resolvedTask.state === "canceled")
-      ) {
-        throw new Error(`Task is not runnable in state ${resolvedTask.state}`);
+      if (taskMessage.mentions.length > 0 && (
+        !["ready", "active", "review"].includes(resolvedTask.lifecycle_state) ||
+        resolvedTask.scheduling_state !== "enabled" ||
+        resolvedTask.budget_run_attempts >= resolvedTask.max_run_attempts ||
+        resolvedTask.budget_execution_duration_seconds >=
+          resolvedTask.max_execution_duration_seconds
+      )) {
+        throw new Error(
+          `Task is not runnable in state ${resolvedTask.lifecycle_state}`
+        );
       }
 
       const findAgent = this.database.prepare(`
@@ -117,6 +135,14 @@ export class MessageRepository {
           | undefined;
         if (!agent || agent.team_id !== room.team_id || agent.enabled !== 1) {
           throw new Error(`Mention target is unavailable: ${mention.targetAgentId}`);
+        }
+        if (resolvedTask.is_default !== 1 && !this.database.prepare(`
+          SELECT 1 FROM task_agent_assignments
+          WHERE task_id = ? AND agent_id = ?
+        `).get(resolvedTask.task_id, mention.targetAgentId)) {
+          throw new Error(
+            `Mention target is not assigned to Task: ${mention.targetAgentId}`
+          );
         }
       }
 

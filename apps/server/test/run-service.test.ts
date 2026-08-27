@@ -103,7 +103,7 @@ test("one idempotent queued Run is created per structured Agent Mention", async 
       taskLongTermMemoryRevision: 0,
       taskArtifactRevision: 0,
       taskSummaryRevision: 0,
-      taskState: "open",
+      taskState: "working",
       taskTitle: "Room work",
       taskGoal: "Continue work in this Room.",
       fenceKind: "captured",

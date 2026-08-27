@@ -306,7 +306,7 @@ export async function createServerApp(
     resultEvidenceConsumption,
     delivery
   );
-  const handoffs = new HandoffService(core, runRepository);
+  const handoffs = new HandoffService(core, runRepository, taskRepository);
   const cancellations = new CancellationService(
     core, runRepository, auth, bridgeConnections, clock
   );

@@ -33,7 +33,11 @@ test("MCP Agent handoff creates a bounded child and rejects lineage loops", asyn
     const runs = new RunService(
       core, runRepository, auth, new AgentTaskRepository(database)
     );
-    const handoffs = new HandoffService(core, runRepository);
+    const handoffs = new HandoffService(
+      core,
+      runRepository,
+      new AgentTaskRepository(database)
+    );
     const created = teams.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6", userDisplayName: "Alice",
       teamName: "Core Team", now

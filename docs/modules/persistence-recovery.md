@@ -12,6 +12,12 @@ Agent Task, and audit records. SQLite is the MVP database for a single central
 server instance.
 
 Migration 0042 adds the nullable, bounded `workspace_alias` Agent projection.
+Migration 0043 adds the versioned Task work aggregate, immutable definition and
+criteria histories, current explicit assignments, blocks, comparable budget
+ledger, mutation idempotency records, deterministic legacy mapping, and a
+replacement rule for terminal historical default Tasks. Run insert/terminal
+triggers account attempt and duration usage atomically with Run persistence;
+they do not invent provider token or cost values.
 It deliberately adds no Workspace root, command, environment, filesystem
 policy, or network policy column; those remain Bridge-owned configuration.
 

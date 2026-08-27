@@ -1,10 +1,20 @@
 import type { ArtifactType } from "../task/artifact-repository.js";
 import type { MemoryEntryType } from "../task/memory-entry-repository.js";
-import type { AgentTaskState } from "../task/task-repository.js";
+import type {
+  AgentTaskState,
+  TaskAssignmentRole,
+  TaskCompletionPolicy,
+  TaskCriterion,
+  TaskLifecycleState,
+  TaskPriority,
+  TaskSchedulingState
+} from "../task/task-repository.js";
 import { artifactRelationInput } from "./artifact-relation-input.js";
 import {
   bodyObject,
   noStore,
+  requiredBoolean,
+  requiredPositiveInteger,
   requiredStringArray,
   requiredString
 } from "./http-helpers.js";
@@ -23,6 +33,61 @@ export function registerTaskRoutes({
   tasks,
   teamChanges
 }: ServerRouteContext): void {
+  const objectInput = (value: unknown, label: string): Record<string, unknown> => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+      throw new Error(`${label} must be an object`);
+    }
+    return value as Record<string, unknown>;
+  };
+  const criteriaInput = (value: unknown): TaskCriterion[] => {
+    if (!Array.isArray(value)) throw new Error("criteria must be an array");
+    return value.map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new Error(`criteria[${index}] must be an object`);
+      }
+      const criterion = entry as Record<string, unknown>;
+      return {
+        criterionKey: requiredString(
+          criterion.criterionKey,
+          `criteria[${index}].criterionKey`,
+          80
+        ),
+        description: requiredString(
+          criterion.description,
+          `criteria[${index}].description`,
+          2_000
+        ),
+        required: requiredBoolean(
+          criterion.required,
+          `criteria[${index}].required`
+        ),
+        ordinal: requiredPositiveInteger(
+          criterion.ordinal,
+          `criteria[${index}].ordinal`
+        )
+      };
+    });
+  };
+  const assignmentsInput = (value: unknown) => {
+    if (!Array.isArray(value)) throw new Error("assignments must be an array");
+    return value.map((entry, index) => {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+        throw new Error(`assignments[${index}] must be an object`);
+      }
+      const assignment = entry as Record<string, unknown>;
+      return {
+        agentId: requiredString(
+          assignment.agentId,
+          `assignments[${index}].agentId`,
+          140
+        ),
+        role: requiredString(
+          assignment.role,
+          `assignments[${index}].role`
+        ) as TaskAssignmentRole
+      };
+    });
+  };
   const memoryInput = (body: Record<string, unknown>) => ({
     type: requiredString(body.type, "type") as MemoryEntryType,
     content: requiredString(body.content, "content", 2_000),
@@ -82,10 +147,17 @@ export function registerTaskRoutes({
     "/api/rooms/:roomId/tasks",
     async (request) => tasks.list(principal(request), request.params.roomId)
   );
+  app.get<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId",
+    async (request) => tasks.get(principal(request), request.params.taskId)
+  );
   app.post<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/tasks",
     async (request) => {
       const body = bodyObject(request);
+      const budget = body.budgetPolicy === undefined
+        ? undefined
+        : objectInput(body.budgetPolicy, "budgetPolicy");
       return tasks.create(principal(request), {
         roomId: request.params.roomId,
         title: requiredString(body.title, "title", 160),
@@ -110,6 +182,61 @@ export function registerTaskRoutes({
               workspaceRef: body.workspaceRef === null
                 ? null
                 : requiredString(body.workspaceRef, "workspaceRef", 512)
+            }),
+        ...(body.ownerMemberId === undefined
+          ? {}
+          : {
+              ownerMemberId: requiredString(
+                body.ownerMemberId,
+                "ownerMemberId",
+                140
+              )
+            }),
+        ...(body.completionPolicy === undefined
+          ? {}
+          : {
+              completionPolicy: requiredString(
+                body.completionPolicy,
+                "completionPolicy"
+              ) as TaskCompletionPolicy
+            }),
+        ...(body.priority === undefined
+          ? {}
+          : { priority: requiredString(body.priority, "priority") as TaskPriority }),
+        ...(body.dueAt === undefined
+          ? {}
+          : {
+              dueAt: body.dueAt === null
+                ? null
+                : requiredString(body.dueAt, "dueAt", 80)
+            }),
+        ...(body.lifecycleState === undefined
+          ? {}
+          : {
+              lifecycleState: requiredString(
+                body.lifecycleState,
+                "lifecycleState"
+              ) as "draft" | "ready"
+            }),
+        ...(body.criteria === undefined
+          ? {}
+          : { criteria: criteriaInput(body.criteria) }),
+        ...(body.assignments === undefined
+          ? {}
+          : { assignments: assignmentsInput(body.assignments) }),
+        ...(budget === undefined
+          ? {}
+          : {
+              budgetPolicy: {
+                maxRunAttempts: requiredPositiveInteger(
+                  budget.maxRunAttempts,
+                  "budgetPolicy.maxRunAttempts"
+                ),
+                maxExecutionDurationSeconds: requiredPositiveInteger(
+                  budget.maxExecutionDurationSeconds,
+                  "budgetPolicy.maxExecutionDurationSeconds"
+                )
+              }
             })
       }, clock());
     }
@@ -143,6 +270,105 @@ export function registerTaskRoutes({
                 : requiredString(body.workspaceRef, "workspaceRef", 512)
             })
       }, clock());
+    }
+  );
+  app.put<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId/definition",
+    async (request) => {
+      const body = bodyObject(request);
+      const budget = objectInput(body.budgetPolicy, "budgetPolicy");
+      return tasks.updateDefinition(principal(request), request.params.taskId, {
+        operationId: requiredString(body.operationId, "operationId", 140),
+        expectedTaskRevision: requiredPositiveInteger(
+          body.expectedTaskRevision,
+          "expectedTaskRevision"
+        ),
+        title: requiredString(body.title, "title", 160),
+        goal: requiredString(body.goal, "goal", 20_000),
+        ownerMemberId: requiredString(body.ownerMemberId, "ownerMemberId", 140),
+        completionPolicy: requiredString(
+          body.completionPolicy,
+          "completionPolicy"
+        ) as TaskCompletionPolicy,
+        priority: requiredString(body.priority, "priority") as TaskPriority,
+        dueAt: body.dueAt === null
+          ? null
+          : requiredString(body.dueAt, "dueAt", 80),
+        criteria: criteriaInput(body.criteria),
+        assignments: assignmentsInput(body.assignments),
+        budgetPolicy: {
+          maxRunAttempts: requiredPositiveInteger(
+            budget.maxRunAttempts,
+            "budgetPolicy.maxRunAttempts"
+          ),
+          maxExecutionDurationSeconds: requiredPositiveInteger(
+            budget.maxExecutionDurationSeconds,
+            "budgetPolicy.maxExecutionDurationSeconds"
+          )
+        }
+      }, clock());
+    }
+  );
+  app.post<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId/control",
+    async (request) => {
+      const body = bodyObject(request);
+      return tasks.updateControl(principal(request), request.params.taskId, {
+        operationId: requiredString(body.operationId, "operationId", 140),
+        expectedTaskRevision: requiredPositiveInteger(
+          body.expectedTaskRevision,
+          "expectedTaskRevision"
+        ),
+        ...(body.lifecycleState === undefined
+          ? {}
+          : {
+              lifecycleState: requiredString(
+                body.lifecycleState,
+                "lifecycleState"
+              ) as TaskLifecycleState
+            }),
+        ...(body.schedulingState === undefined
+          ? {}
+          : {
+              schedulingState: requiredString(
+                body.schedulingState,
+                "schedulingState"
+              ) as TaskSchedulingState
+            })
+      }, clock());
+    }
+  );
+  app.post<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId/blocks",
+    async (request) => {
+      const body = bodyObject(request);
+      return tasks.addBlock(principal(request), request.params.taskId, {
+        operationId: requiredString(body.operationId, "operationId", 140),
+        expectedTaskRevision: requiredPositiveInteger(
+          body.expectedTaskRevision,
+          "expectedTaskRevision"
+        ),
+        reason: requiredString(body.reason, "reason", 2_000)
+      }, clock());
+    }
+  );
+  app.post<{ Params: { taskId: string; blockId: string } }>(
+    "/api/tasks/:taskId/blocks/:blockId/resolve",
+    async (request) => {
+      const body = bodyObject(request);
+      return tasks.resolveBlock(
+        principal(request),
+        request.params.taskId,
+        request.params.blockId,
+        {
+          operationId: requiredString(body.operationId, "operationId", 140),
+          expectedTaskRevision: requiredPositiveInteger(
+            body.expectedTaskRevision,
+            "expectedTaskRevision"
+          )
+        },
+        clock()
+      );
     }
   );
   app.get<{ Params: { taskId: string } }>(

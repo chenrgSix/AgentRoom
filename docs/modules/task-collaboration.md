@@ -2,7 +2,7 @@
 
 - Prefix: `TASK`
 - Implementation: `apps/server/src/task/`, migrations
-  0024/0026/0027/0028/0029/0030/0031/0032/0033/0034/0037/0038, and the Web Room
+  0024/0026/0027/0028/0029/0030/0031/0032/0033/0034/0037/0038/0043, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -18,7 +18,7 @@ and results belong to the same longer-lived goal.
 
 | Entity | Required State |
 | --- | --- |
-| AgentTask | taskId, roomId, parentTaskId, title, goal, state, primaryAgentId, workspaceRef, summary, memory/artifact revisions, lastRoomSequence, creator, timestamps |
+| AgentTask | taskId, Team display number, roomId, parentTaskId, title, goal, human Owner, lifecycle/scheduling/completion policy, Task/definition/criteria revisions, assignments, budget, completion Result, summary, memory/artifact revisions, lastRoomSequence, creator, timestamps |
 | Logical Task Session | taskId, agentId, Runtime scope ID derived from runtime kind/workspace/config fingerprints/schema version, acknowledged consumed cursors |
 | Task memory projection | taskId, source Room cursor, summary revision, provenance |
 | Rolling Room checkpoint | immutable parent, contiguous input interval, through sequence, summary, provenance/digest, prompt/model version, build kind |
@@ -28,10 +28,12 @@ and results belong to the same longer-lived goal.
 | ArtifactRelation | relationId, source Artifact, target Artifact, type, creator, timestamp |
 | TaskClarification | clarificationId, taskId, requestingRunId, targetAgentId, question/choices, question and answer Message IDs, continuationRunId, state, terminal reason, timestamps |
 
-Task state is `open`, `working`, `blocked`, `review`, `completed`, or
-`canceled`. A Task state is explicit aggregate state; one successful Run does
-not automatically complete a Task. Parent Tasks provide hierarchy without
-changing Run or delivery semantics.
+The authoritative lifecycle is `draft`, `ready`, `active`, `review`,
+`completed`, or `canceled`; scheduling is independently `enabled` or `paused`.
+The former `open`/`working`/`blocked`/`review`/`completed`/`canceled` field is a
+rolling-compatibility projection only. A Task state is explicit aggregate
+state; one successful Run does not automatically complete a Task. Parent Tasks
+provide hierarchy without changing Run or delivery semantics.
 
 The Server exposes membership-authorized Room Task list/create operations and
 an update operation by Task ID. Every Room has one non-removable default Task
@@ -39,10 +41,11 @@ for backward compatibility. A Task cannot enter a terminal state while it has
 an active Run or Discussion, and new routed Messages are rejected atomically
 when their Task is already terminal.
 
-## Target Work Aggregate
+## Versioned Work Aggregate
 
 [ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
-extends the existing Task without weakening its current Run binding, Artifact,
+is implemented by migration 0043 and the Task repository/service without
+weakening the existing Run binding, Artifact,
 Memory, context, or recovery contracts. The target adds a human Owner, monotonic
 Task revision, presentation-only Team display number, `draft`/`ready`/`active`/
 `review`/`completed`/`canceled` lifecycle, independent enabled/paused scheduling,
@@ -52,7 +55,7 @@ attention/next-action projection. Goal and criteria form a separately versioned
 Task definition so unrelated ownership, scheduling, budget, review, or display
 changes do not invalidate current execution evidence.
 
-Current and target state must remain distinguishable during migration. Existing
+Migration history and target state remain distinguishable. Existing
 nonterminal default Tasks become permanently active `owner_confirmed`
 compatibility aggregates and cannot complete or cancel. A terminal historical
 default remains terminal ordinary history while migration creates a new active
@@ -360,6 +363,24 @@ Room. New Rooms receive the same default so older clients may continue sending
 messages before they expose Task selection. Current clients send an explicit
 Task for new work and allow users to create or select another Task.
 
+Migration 0043 deterministically maps old lifecycle values, gives every Task a
+Team-local presentation number and human Owner, creates initial immutable
+definition/criteria revisions, migrates non-default primary Agents to explicit
+assignments, turns old `blocked` into an active Task plus an open block record,
+and backfills comparable Run-attempt/duration budget usage. A terminal
+historical default is demoted without moving any Message, Run, Discussion, or
+evidence; a new permanent active default is created for the Room. Database
+triggers protect that default, validate Task Team/Room/Owner identity, and
+account new Run attempts and terminal duration in the same Run transaction.
+
+The old PATCH endpoint remains a bounded compatibility adapter over the same
+repository transition and active-work fences. New definition, control, block,
+and block-resolution endpoints require an explicit operation ID and expected
+Task revision. Immediate response-loss retries converge without a second
+mutation; a different stale operation conflicts. Non-default execution,
+Discussion and handoff targets must be explicitly assigned, while the default
+Task deliberately derives eligible Agents from the current Room roster.
+
 Bridge Task Session fields roll out additively. During the transition, a new
 Bridge accepts a legacy Room-scoped request and a new Server tolerates a Bridge
 that does not report session disposition. A Task-scoped binding never falls
@@ -368,8 +389,9 @@ cross-task context.
 
 ## Security and Verification
 
-- Task reads and writes require Room membership; Task creation records the
-  authenticated Member and validates primary Agent membership.
+- Task reads require Room membership. Definition, lifecycle, scheduling and
+  block mutations require the Task Owner or Team Owner, use revision CAS, and
+  validate the human Owner and every assigned Agent against the current Room.
 - Cross-Room parent Tasks, Agents, Runs, Discussions, and ArtifactRefs are
   rejected.
 - Absolute host paths, parent traversal, credential-bearing repository URLs,
@@ -401,9 +423,10 @@ cross-task context.
 
 ## Task Mapping
 
-`TASK-001` through `TASK-011` implement the current Task continuity, Memory and
-Artifact evidence baseline. `TASK-012` and `TASK-013`, with `CON-013`, implement
-the ADR-0022 target ownership, criteria, completion and Result review contract;
+`TASK-001` through `TASK-012` implement Task continuity, Memory/Artifact
+evidence, versioned ownership, criteria, completion policy, scheduling,
+assignment, budget and attention. `TASK-013`, with `CON-013`, implements
+immutable Result submission and review;
 `BRG-044` and `MCP-006` add the managed and manual Agent proposal transports.
 Wire and Runtime work remains in `CON-007`, `CON-009`, `ADP-012`, and `ADP-013`,
 clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those

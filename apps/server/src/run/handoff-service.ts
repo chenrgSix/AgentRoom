@@ -1,6 +1,7 @@
 import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { McpPrincipal } from "../security/auth-service.js";
+import type { AgentTaskRepository } from "../task/task-repository.js";
 import { resolveExactAgentMentions } from "../team-room/exact-agent-mentions.js";
 import type { RunRecord, RunRepository } from "./run-repository.js";
 
@@ -9,7 +10,8 @@ const maximumUniqueAgents = 5;
 export class HandoffService {
   public constructor(
     private readonly core: CoreRepository,
-    private readonly runs: RunRepository
+    private readonly runs: RunRepository,
+    private readonly tasks: AgentTaskRepository
   ) {}
 
   public create(
@@ -96,12 +98,17 @@ export class HandoffService {
   ): RunRecord {
     const room = this.core.getRoom(parent.roomId);
     const target = this.core.getAgent(targetAgentId);
+    const task = this.tasks.get(parent.taskId);
     if (
       !room ||
       !target ||
+      !task ||
       !target.enabled ||
       target.teamId !== room.teamId ||
-      !this.core.isRoomAgent(parent.roomId, target.agentId)
+      !this.core.isRoomAgent(parent.roomId, target.agentId) ||
+      (!task.isDefault && !task.assignments.some((assignment) =>
+        assignment.agentId === target.agentId
+      ))
     ) {
       throw new Error("Handoff identity or target mismatch");
     }

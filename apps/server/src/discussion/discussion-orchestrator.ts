@@ -190,6 +190,11 @@ export class DiscussionOrchestrator {
       ) {
         throw new Error(`Discussion participant is unavailable: ${agentId}`);
       }
+      if (!task.isDefault && !task.assignments.some((assignment) =>
+        assignment.agentId === agentId
+      )) {
+        throw new Error(`Discussion participant is not assigned: ${agentId}`);
+      }
       return agent;
     });
     const policy = resolvePolicy(input.policy);
