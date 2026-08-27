@@ -11,10 +11,12 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"agentroom.dev/bridge/internal/config"
 	"agentroom.dev/bridge/internal/identity"
@@ -26,7 +28,15 @@ import (
 	"github.com/coder/websocket"
 )
 
-var ErrRunCancelRequested = errors.New("Run cancellation requested")
+var (
+	ErrRunCancelRequested   = errors.New("Run cancellation requested")
+	ErrConfigurationChanged = errors.New("Bridge configuration changed")
+)
+
+type ProvisionHandler func(
+	context.Context,
+	contracts.AgentProvisionRequestedMessage,
+) contracts.AgentProvisionResultMessage
 
 // The Bridge protocol permits a Run request with one 32,768-character
 // instruction and up to fifty 32,768-character context messages. Sixteen MiB
@@ -34,12 +44,18 @@ var ErrRunCancelRequested = errors.New("Run cancellation requested")
 // retaining a finite trust-boundary limit for central-server input.
 const maxBridgeIncomingMessageBytes int64 = 16 << 20
 
+var (
+	provisionIDPattern = regexp.MustCompile(`^agentprov_[A-Za-z0-9_-]{8,128}$`)
+	agentIDPattern     = regexp.MustCompile(`^agent_[A-Za-z0-9_-]{8,128}$`)
+)
+
 type Client struct {
 	Config                            config.Config
 	Credential                        pairing.Credential
 	BridgeVersion                     string
 	HeartbeatInterval                 time.Duration
 	HandleRun                         func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
+	HandleProvision                   ProvisionHandler
 	RecoverRuns                       func(context.Context, func(context.Context, any) error) error
 	Observer                          operations.Observer
 	RetryInitial                      time.Duration
@@ -76,6 +92,9 @@ func (c Client) Run(ctx context.Context) error {
 				At: time.Now().UTC(), State: operations.ConnectionStopped,
 			})
 			return nil
+		}
+		if errors.Is(err, ErrConfigurationChanged) {
+			return err
 		}
 		if connected {
 			backoff = initial
@@ -310,6 +329,40 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 				}()
 				continue
 			}
+			if envelope.Type == "agent.provision.requested" && c.HandleProvision != nil {
+				var requested contracts.AgentProvisionRequestedMessage
+				if err := json.Unmarshal(source, &requested); err != nil {
+					reportReadError(err)
+					return
+				}
+				if err := validateProvisionRequest(c.Credential.DeviceID, requested); err != nil {
+					reportReadError(err)
+					return
+				}
+				activeMu.Lock()
+				busy := len(active) > 0
+				activeMu.Unlock()
+				result := contracts.AgentProvisionResultMessage{}
+				if busy {
+					result = ProvisionResult(requested, contracts.Rejected, contracts.ReasonBusy)
+				} else {
+					result = c.HandleProvision(connectionContext, requested)
+				}
+				writeErr := writer.writeJSON(connectionContext, result)
+				if result.Payload.Status == contracts.Accepted {
+					if writeErr != nil {
+						reportReadError(fmt.Errorf("%w: send result: %v", ErrConfigurationChanged, writeErr))
+					} else {
+						reportReadError(ErrConfigurationChanged)
+					}
+					return
+				}
+				if writeErr != nil {
+					reportReadError(writeErr)
+					return
+				}
+				continue
+			}
 			if envelope.Type == "run.cancel_requested" {
 				var canceled contracts.RunCancelRequestedMessage
 				if err := json.Unmarshal(source, &canceled); err != nil {
@@ -353,6 +406,66 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			}
 		}
 	}
+}
+
+func validateProvisionRequest(
+	deviceID string,
+	requested contracts.AgentProvisionRequestedMessage,
+) error {
+	payload := requested.Payload
+	if requested.ProtocolVersion != "1.0" ||
+		requested.Type != contracts.AgentProvisionRequested ||
+		payload.DeviceID != deviceID ||
+		!provisionIDPattern.MatchString(payload.RequestID) ||
+		!agentIDPattern.MatchString(payload.TemplateAgentID) ||
+		!agentIDPattern.MatchString(payload.AgentID) ||
+		!boundedProvisionLabel(payload.Name) ||
+		!boundedProvisionLabel(payload.Role) ||
+		!validManagementCode(payload.ManagementCode) {
+		return fmt.Errorf("invalid Agent provisioning request")
+	}
+	return nil
+}
+
+func ProvisionResult(
+	requested contracts.AgentProvisionRequestedMessage,
+	status contracts.PayloadStatus,
+	reason contracts.Reason,
+) contracts.AgentProvisionResultMessage {
+	result := contracts.AgentProvisionResultMessage{
+		ProtocolVersion: "1.0",
+		MessageID:       newID("msg"),
+		Timestamp:       time.Now().UTC(),
+		Type:            contracts.AgentProvisionResult,
+		Payload: contracts.AgentProvisionResultPayload{
+			RequestID:       requested.Payload.RequestID,
+			DeviceID:        requested.Payload.DeviceID,
+			TemplateAgentID: requested.Payload.TemplateAgentID,
+			AgentID:         requested.Payload.AgentID,
+			Status:          status,
+		},
+	}
+	if status == contracts.Rejected {
+		result.Payload.Reason = &reason
+	}
+	return result
+}
+
+func boundedProvisionLabel(value string) bool {
+	length := utf8.RuneCountInString(value)
+	return strings.TrimSpace(value) == value && length >= 1 && length <= 80
+}
+
+func validManagementCode(value string) bool {
+	if len(value) != 6 && len(value) != 8 {
+		return false
+	}
+	for _, character := range value {
+		if character < '0' || character > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 func websocketURL(serverURL string) (string, error) {

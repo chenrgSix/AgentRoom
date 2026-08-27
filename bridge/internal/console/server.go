@@ -24,6 +24,7 @@ import (
 
 	"agentroom.dev/bridge/internal/autostart"
 	"agentroom.dev/bridge/internal/config"
+	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/diagnostics"
 	"agentroom.dev/bridge/internal/enrollment"
 	"agentroom.dev/bridge/internal/identity"
@@ -32,6 +33,7 @@ import (
 	"agentroom.dev/bridge/internal/pairing"
 	"agentroom.dev/bridge/internal/provisioning"
 	"agentroom.dev/bridge/internal/updatecheck"
+	contracts "agentroom.dev/contracts/generated/go"
 )
 
 //go:embed static/*
@@ -148,15 +150,22 @@ type State struct {
 }
 
 type Dependencies struct {
-	DiscoverRuntime func(string) RuntimeDiscovery
-	Enroll          func(context.Context, config.Config, func(enrollment.Challenge)) (pairing.Credential, error)
-	SaveConfig      func(string, config.Config) error
-	ReplaceConfig   func(string, config.Config) error
-	SaveCredential  func(string, pairing.Credential) error
-	RunBridge       func(context.Context, config.Config, pairing.Credential, operations.Observer) error
-	LoginStartup    autostart.Controller
-	UpdateChecker   updatecheck.Service
-	ProbeRuntime    func(context.Context, config.AgentConfig) RuntimeProbeResult
+	DiscoverRuntime           func(string) RuntimeDiscovery
+	Enroll                    func(context.Context, config.Config, func(enrollment.Challenge)) (pairing.Credential, error)
+	SaveConfig                func(string, config.Config) error
+	ReplaceConfig             func(string, config.Config) error
+	SaveCredential            func(string, pairing.Credential) error
+	RunBridge                 func(context.Context, config.Config, pairing.Credential, operations.Observer) error
+	RunBridgeWithProvisioning func(
+		context.Context,
+		config.Config,
+		pairing.Credential,
+		operations.Observer,
+		connection.ProvisionHandler,
+	) error
+	LoginStartup  autostart.Controller
+	UpdateChecker updatecheck.Service
+	ProbeRuntime  func(context.Context, config.AgentConfig) RuntimeProbeResult
 }
 
 type Options struct {
@@ -776,8 +785,25 @@ func (s *Service) startBridgeLocked() error {
 	s.recordEventLocked("bridge.started", "", string(operations.ConnectionConnecting))
 	configuration := *s.configuration
 	credential := *s.credential
+	provisionHandler := connection.ProvisionHandler(func(
+		handlerContext context.Context,
+		requested contracts.AgentProvisionRequestedMessage,
+	) contracts.AgentProvisionResultMessage {
+		return s.handleAgentProvision(handlerContext, epoch, requested)
+	})
 	go func() {
-		err := s.dependencies.RunBridge(ctx, configuration, credential, s.operationalObserver(epoch))
+		var err error
+		if s.dependencies.RunBridgeWithProvisioning != nil {
+			err = s.dependencies.RunBridgeWithProvisioning(
+				ctx,
+				configuration,
+				credential,
+				s.operationalObserver(epoch),
+				provisionHandler,
+			)
+		} else {
+			err = s.dependencies.RunBridge(ctx, configuration, credential, s.operationalObserver(epoch))
+		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.bridgeWorkers--
@@ -795,6 +821,14 @@ func (s *Service) startBridgeLocked() error {
 		s.bridgeCancel = nil
 		s.state.BridgeRunning = false
 		s.state.Connection.State = operations.ConnectionStopped
+		if errors.Is(err, connection.ErrConfigurationChanged) && ctx.Err() == nil {
+			s.state.Phase = PhaseReady
+			if restartErr := s.startBridgeLocked(); restartErr != nil {
+				s.state.Phase = PhaseError
+				s.state.LastError = publicError(restartErr)
+			}
+			return
+		}
 		if err != nil && !errors.Is(err, context.Canceled) && ctx.Err() == nil {
 			s.state.Phase = PhaseError
 			s.state.LastError = publicError(err)
@@ -803,6 +837,47 @@ func (s *Service) startBridgeLocked() error {
 		s.state.Phase = PhaseReady
 	}()
 	return nil
+}
+
+func (s *Service) handleAgentProvision(
+	_ context.Context,
+	epoch uint64,
+	requested contracts.AgentProvisionRequestedMessage,
+) contracts.AgentProvisionResultMessage {
+	reject := func(reason contracts.Reason) contracts.AgentProvisionResultMessage {
+		return connection.ProvisionResult(requested, contracts.Rejected, reason)
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.bridgeEpoch != epoch || s.configuration == nil || s.credential == nil {
+		return reject(contracts.ReasonBusy)
+	}
+	if valid, reason := s.provisioningAuthorizer.Verify(
+		s.configuration.AgentProvisioning,
+		requested.Payload.ManagementCode,
+		time.Now(),
+	); !valid {
+		return reject(reason)
+	}
+	if err := s.requireConfigurationMutationLocked(); err != nil {
+		return reject(contracts.ReasonBusy)
+	}
+	decision := provisioning.ApplyAuthorized(
+		*s.configuration,
+		s.options.ConfigPath,
+		s.dependencies.ReplaceConfig,
+		requested.Payload,
+	)
+	if !decision.Accepted {
+		return reject(decision.Reason)
+	}
+	s.configuration = &decision.Configuration
+	if err := s.applyConfigView(decision.Configuration); err != nil {
+		s.state.Phase = PhaseError
+		s.state.LastError = publicError(err)
+	}
+	s.recordEventLocked("agent_provisioning.accepted", "", "accepted")
+	return connection.ProvisionResult(requested, contracts.Accepted, "")
 }
 
 func (s *Service) stopBridge(response http.ResponseWriter, _ *http.Request) {

@@ -114,6 +114,14 @@ agentroom-bridge console \
 An existing paired configuration starts automatically. Editing Agent presets
 atomically updates the configuration and restarts the managed connection. The
 Console never returns Device credentials or environment values to the browser.
+The Settings page can also keep central Agent creation disabled, store a
+reusable eight-digit fixed management code as a salted local hash, or display a
+six-digit local code that rotates every five minutes. Fixed codes remain valid
+for multiple creations until the local owner replaces or disables them; dynamic
+codes are recommended when the Bridge is reachable through a public service.
+The central service receives a code only in the individual provisioning
+request and never receives the saved hash, rotating secret, Runtime command,
+Workspace, environment, credential, tool, or permission configuration.
 The configured-device view also exposes **连接设置** for changing the central
 service URL, port, and HTTPS trust mode without rebuilding the Agent roster or
 rewriting the Device credential. A running Bridge reconnects after save; a
@@ -222,7 +230,11 @@ the absolute path returned by `command -v pi`; the minimal managed command is:
 }
 ```
 
-The top-level configuration uses `"schemaVersion": 3`; older files load with
+The top-level configuration uses `"schemaVersion": 4`; older files load with
+central Agent provisioning disabled and retain their existing Runtime and
+identity behavior. The local Console persists management-code material under
+`agentProvisioning`; owner-only file permissions and the token-authenticated
+Console remain the authority boundary. Version 3 and older files load with
 `preserve_and_retry` for each Codex Agent and migrate in memory. Version 1 files
 remain compatible without a central Token. Pi tools, extensions,
 Skills, project context, approval, and provider settings follow the owner's

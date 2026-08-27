@@ -86,9 +86,11 @@ authenticated connection fails visibly without silently enrolling elsewhere.
 [ADR-0020](../adr/0020-authorize-central-agent-provisioning-locally.md). The
 paired Console Settings surface lets the local owner disable provisioning,
 save a reusable eight-digit fixed code, or display a locally generated
-six-digit code that rotates every five minutes. Code configuration is local,
-token-authenticated, omitted from public state and diagnostics, and fenced
-while enrollment, probes, or Team work is active.
+six-digit code that rotates every five minutes. Code configuration is local and
+token-authenticated; only the current rotating code is projected to that local
+Console. Saved hash/secret material is omitted from Console state and
+diagnostics, and changes are fenced while enrollment, probes, or Team work is
+active.
 
 An authenticated central request names an existing Agent on the same Device as
 its template. The Bridge resolves that stable identity, validates the local

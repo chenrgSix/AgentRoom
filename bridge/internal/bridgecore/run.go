@@ -37,6 +37,22 @@ func RunObserved(
 	bridgeVersion string,
 	observer operations.Observer,
 ) error {
+	return RunObservedWithProvisioning(
+		ctx, loaded, credential, bridgeVersion, observer, nil,
+	)
+}
+
+// RunObservedWithProvisioning keeps central requests behind a handler owned by
+// the local Console. The connection layer can transport a request but cannot
+// mutate Runtime configuration by itself.
+func RunObservedWithProvisioning(
+	ctx context.Context,
+	loaded config.Config,
+	credential pairing.Credential,
+	bridgeVersion string,
+	observer operations.Observer,
+	handleProvision connection.ProvisionHandler,
+) error {
 	inbox, err := delivery.Open(filepath.Join(loaded.DataDir, "inbox"))
 	if err != nil {
 		return err
@@ -103,6 +119,7 @@ func RunObserved(
 	}
 	return (connection.Client{
 		Config: loaded, Credential: credential, BridgeVersion: bridgeVersion, Observer: observer,
+		HandleProvision:  handleProvision,
 		ResumeAgentNames: resumeAgentNames, StreamingAgentNames: streamingAgentNames,
 		RoomContextCoverageAgentNames:     roomContextCoverageAgentNames,
 		ArtifactMaterializationAgentNames: artifactMaterializationAgentNames,

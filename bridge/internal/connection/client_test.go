@@ -144,6 +144,177 @@ func TestPublishedRuntimePolicyContainsOnlyFilesystemAccess(t *testing.T) {
 	}
 }
 
+func TestAcceptedProvisioningResultStopsOldConfigurationForReload(t *testing.T) {
+	result := make(chan contracts.AgentProvisionResultMessage, 1)
+	var connections atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		connections.Add(1)
+		socket, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			return
+		}
+		defer socket.CloseNow()
+		for index := 0; index < 2; index++ {
+			if _, _, err := socket.Read(request.Context()); err != nil {
+				return
+			}
+		}
+		requested := contracts.AgentProvisionRequestedMessage{
+			ProtocolVersion: "1.0", MessageID: "msg_provision_request_12345678",
+			Timestamp: time.Now().UTC(), Type: contracts.AgentProvisionRequested,
+			Payload: contracts.AgentProvisionRequestedPayload{
+				RequestID: "agentprov_request_12345678", DeviceID: "device_test",
+				TemplateAgentID: "agent_template_12345678", AgentID: "agent_created_12345678",
+				Name: "Reviewer", Role: "Review", ManagementCode: "12345678",
+			},
+		}
+		source, _ := json.Marshal(requested)
+		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
+			return
+		}
+		_, source, err = socket.Read(request.Context())
+		if err != nil {
+			return
+		}
+		var received contracts.AgentProvisionResultMessage
+		if err := json.Unmarshal(source, &received); err != nil {
+			t.Error(err)
+			return
+		}
+		result <- received
+	}))
+	defer server.Close()
+	directory := t.TempDir()
+	client := Client{
+		Config: config.Config{ServerURL: server.URL, DataDir: directory, Agents: []config.AgentConfig{{
+			Name: "Builder", Role: "Implementation", Adapter: "generic",
+			Command: []string{"agent"}, Workspace: directory,
+		}}},
+		Credential: pairing.Credential{
+			DeviceID: "device_test", TeamID: "team_test",
+			OwnerMemberID: "member_test", Token: "device-secret",
+		},
+		HandleProvision: func(_ context.Context, requested contracts.AgentProvisionRequestedMessage) contracts.AgentProvisionResultMessage {
+			return ProvisionResult(requested, contracts.Accepted, "")
+		},
+	}
+	done := make(chan error, 1)
+	go func() { done <- client.Run(context.Background()) }()
+	select {
+	case received := <-result:
+		if received.Payload.Status != contracts.Accepted || received.Payload.Reason != nil {
+			t.Fatalf("unexpected accepted result: %#v", received)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Bridge did not return an Agent provisioning result")
+	}
+	select {
+	case err := <-done:
+		if !errors.Is(err, ErrConfigurationChanged) {
+			t.Fatalf("Bridge did not stop for configuration reload: %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Bridge retained the stale configuration after acceptance")
+	}
+	if connections.Load() != 1 {
+		t.Fatalf("stale Client reconnected %d times", connections.Load())
+	}
+}
+
+func TestProvisioningIsRejectedAsBusyWhileARunIsActive(t *testing.T) {
+	result := make(chan contracts.AgentProvisionResultMessage, 1)
+	runStarted := make(chan struct{})
+	releaseRun := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		socket, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			return
+		}
+		defer socket.CloseNow()
+		for index := 0; index < 2; index++ {
+			if _, _, err := socket.Read(request.Context()); err != nil {
+				return
+			}
+		}
+		run := contracts.RunRequestedMessage{
+			Type: contracts.RunRequested,
+			Payload: contracts.RunRequestedPayload{
+				RunID: "run_active_12345678", TargetAgentID: "agent_template_12345678",
+			},
+		}
+		source, _ := json.Marshal(run)
+		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
+			return
+		}
+		select {
+		case <-runStarted:
+		case <-request.Context().Done():
+			return
+		}
+		requested := contracts.AgentProvisionRequestedMessage{
+			ProtocolVersion: "1.0", Type: contracts.AgentProvisionRequested,
+			Payload: contracts.AgentProvisionRequestedPayload{
+				RequestID: "agentprov_busy_12345678", DeviceID: "device_test",
+				TemplateAgentID: "agent_template_12345678", AgentID: "agent_created_12345678",
+				Name: "Reviewer", Role: "Review", ManagementCode: "12345678",
+			},
+		}
+		source, _ = json.Marshal(requested)
+		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
+			return
+		}
+		_, source, err = socket.Read(request.Context())
+		if err != nil {
+			return
+		}
+		var received contracts.AgentProvisionResultMessage
+		if err := json.Unmarshal(source, &received); err != nil {
+			t.Error(err)
+			return
+		}
+		result <- received
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+	directory := t.TempDir()
+	var provisionCalls atomic.Int32
+	client := Client{
+		Config: config.Config{ServerURL: server.URL, DataDir: directory, Agents: []config.AgentConfig{{
+			Name: "Builder", Role: "Implementation", Adapter: "generic",
+			Command: []string{"agent"}, Workspace: directory,
+		}}},
+		Credential: pairing.Credential{DeviceID: "device_test", Token: "device-secret"},
+		HandleRun: func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error {
+			close(runStarted)
+			<-releaseRun
+			return nil
+		},
+		HandleProvision: func(_ context.Context, requested contracts.AgentProvisionRequestedMessage) contracts.AgentProvisionResultMessage {
+			provisionCalls.Add(1)
+			return ProvisionResult(requested, contracts.Accepted, "")
+		},
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+	select {
+	case received := <-result:
+		if received.Payload.Status != contracts.Rejected || received.Payload.Reason == nil || *received.Payload.Reason != contracts.ReasonBusy {
+			t.Fatalf("active Run did not reject provisioning as busy: %#v", received)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Bridge did not reject provisioning during an active Run")
+	}
+	if provisionCalls.Load() != 0 {
+		t.Fatal("busy provisioning reached the local mutation handler")
+	}
+	close(releaseRun)
+	cancel()
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestClientStopWaitsForCanceledRunWorkers(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		socket, err := websocket.Accept(response, request, nil)

@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,16 +13,21 @@ import (
 	"path/filepath"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"agentroom.dev/bridge/internal/autostart"
 	"agentroom.dev/bridge/internal/config"
+	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/diagnostics"
 	"agentroom.dev/bridge/internal/enrollment"
+	"agentroom.dev/bridge/internal/identity"
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
+	"agentroom.dev/bridge/internal/provisioning"
 	"agentroom.dev/bridge/internal/updatecheck"
+	contracts "agentroom.dev/contracts/generated/go"
 )
 
 type fakeLoginStartup struct {
@@ -214,6 +220,220 @@ func TestConsolePersistsManagementCodeMaterialWithoutExposingIt(t *testing.T) {
 	}
 	if bytes.Contains(stateBody, []byte(loaded.AgentProvisioning.RotatingSecret)) {
 		t.Fatal("Console state exposed the rotating secret")
+	}
+}
+
+func TestCentralProvisioningClonesOnlyLocalTemplateAndBindsReservedIdentity(t *testing.T) {
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	workspace := filepath.Join(directory, "workspace")
+	if err := os.Mkdir(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	settings, err := provisioning.NewSettings(config.AgentProvisioningFixed, "87654321")
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := config.AgentConfig{
+		Name: "Builder", Role: "Implementation", Adapter: "codex",
+		RuntimeKind: "codex", PresetVersion: config.CurrentPresetVersion,
+		Command:   []string{"codex", "app-server", "--listen", "stdio://"},
+		Workspace: workspace, Sandbox: "workspace-write",
+		CodexSessionConflictPolicy: config.CodexSessionConflictStartNew,
+		EnvAllowlist:               []string{"HOME", "PATH", "CODEX_HOME", "LOCAL_SECRET_NAME"},
+	}
+	configuration := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "http://127.0.0.1:3000", DeviceName: "Local Bridge",
+		DataDir: dataDir, AgentProvisioning: settings,
+		Agents: []config.AgentConfig{template},
+	}
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	credential := pairing.Credential{
+		Token: "device-secret", DeviceID: "device_local_12345678",
+		TeamID: "team_local_12345678", OwnerMemberID: "member_local_12345678",
+	}
+	if err := pairing.Save(dataDir, credential); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := identity.LoadOrCreate(dataDir, configuration.Agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: workspace,
+		Token: "test-console-token",
+	}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	requested := contracts.AgentProvisionRequestedMessage{
+		ProtocolVersion: "1.0", Type: contracts.AgentProvisionRequested,
+		Payload: contracts.AgentProvisionRequestedPayload{
+			RequestID: "agentprov_clone_12345678", DeviceID: credential.DeviceID,
+			TemplateAgentID: identities[template.Name], AgentID: "agent_reserved_12345678",
+			Name: "Reviewer", Role: "Review", ManagementCode: "87654321",
+		},
+	}
+	accepted := service.handleAgentProvision(context.Background(), 0, requested)
+	if accepted.Payload.Status != contracts.Accepted || accepted.Payload.Reason != nil {
+		t.Fatalf("valid local provisioning was rejected: %#v", accepted)
+	}
+	loaded, err := config.Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	expectedClone := loaded.Agents[0]
+	expectedClone.Name = "Reviewer"
+	expectedClone.Role = "Review"
+	if len(loaded.Agents) != 2 || !reflect.DeepEqual(loaded.Agents[1], expectedClone) {
+		t.Fatalf("provisioned Agent did not clone the local Runtime: %#v", loaded.Agents)
+	}
+	bound, err := identity.LoadOrCreate(dataDir, loaded.Agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bound["Reviewer"] != requested.Payload.AgentID {
+		t.Fatalf("reserved Agent identity was not bound: %#v", bound)
+	}
+	responseBody, _ := json.Marshal(accepted)
+	for _, localValue := range []string{workspace, "codex", "LOCAL_SECRET_NAME", requested.Payload.ManagementCode} {
+		if bytes.Contains(responseBody, []byte(localValue)) {
+			t.Fatalf("provisioning result exposed local value %q: %s", localValue, responseBody)
+		}
+	}
+
+	retried := service.handleAgentProvision(context.Background(), 0, requested)
+	if retried.Payload.Status != contracts.Accepted || len(service.configuration.Agents) != 2 {
+		t.Fatalf("exact retry was not idempotent: %#v", retried)
+	}
+	invalid := requested
+	invalid.Payload.RequestID = "agentprov_invalid_12345678"
+	invalid.Payload.AgentID = "agent_invalid_12345678"
+	invalid.Payload.Name = "Invalid"
+	invalid.Payload.ManagementCode = "00000000"
+	rejected := service.handleAgentProvision(context.Background(), 0, invalid)
+	if rejected.Payload.Status != contracts.Rejected || rejected.Payload.Reason == nil ||
+		*rejected.Payload.Reason != contracts.InvalidCode || len(service.configuration.Agents) != 2 {
+		t.Fatalf("invalid code changed local configuration: %#v", rejected)
+	}
+	service.state.Agents[0].ActiveRuns = 1
+	busy := invalid
+	busy.Payload.ManagementCode = "87654321"
+	busyResult := service.handleAgentProvision(context.Background(), 0, busy)
+	if busyResult.Payload.Reason == nil || *busyResult.Payload.Reason != contracts.ReasonBusy {
+		t.Fatalf("active local Run did not fence configuration: %#v", busyResult)
+	}
+	service.state.Agents[0].ActiveRuns = 0
+	failing := requested
+	failing.Payload.RequestID = "agentprov_recover_12345678"
+	failing.Payload.AgentID = "agent_recover_12345678"
+	failing.Payload.Name = "Recovered Agent"
+	service.dependencies.ReplaceConfig = func(string, config.Config) error {
+		return errors.New("local disk unavailable")
+	}
+	failed := service.handleAgentProvision(context.Background(), 0, failing)
+	if failed.Payload.Reason == nil || *failed.Payload.Reason != contracts.ConfigurationFailed ||
+		len(service.configuration.Agents) != 2 {
+		t.Fatalf("failed atomic replacement changed live configuration: %#v", failed)
+	}
+	onDisk, err := config.Load(configPath)
+	if err != nil || len(onDisk.Agents) != 2 {
+		t.Fatalf("failed atomic replacement changed disk configuration: %#v %v", onDisk.Agents, err)
+	}
+	service.dependencies.ReplaceConfig = config.Replace
+	recovered := service.handleAgentProvision(context.Background(), 0, failing)
+	if recovered.Payload.Status != contracts.Accepted || len(service.configuration.Agents) != 3 {
+		t.Fatalf("same request did not recover after save failure: %#v", recovered)
+	}
+}
+
+func TestAcceptedCentralProvisioningRestartsBridgeWithNewConfiguration(t *testing.T) {
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	settings, err := provisioning.NewSettings(config.AgentProvisioningFixed, "87654321")
+	if err != nil {
+		t.Fatal(err)
+	}
+	configuration := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "http://127.0.0.1:3000", DeviceName: "Local Bridge",
+		DataDir: dataDir, AgentProvisioning: settings,
+		Agents: []config.AgentConfig{{
+			Name: "Builder", Role: "Implementation", Adapter: "generic",
+			RuntimeKind: "generic", Command: []string{"runtime"}, Workspace: directory,
+		}},
+	}
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	credential := pairing.Credential{
+		Token: "device-secret", DeviceID: "device_reload_12345678",
+		TeamID: "team_reload_12345678", OwnerMemberID: "member_reload_12345678",
+	}
+	if err := pairing.Save(dataDir, credential); err != nil {
+		t.Fatal(err)
+	}
+	identities, err := identity.LoadOrCreate(dataDir, configuration.Agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requested := contracts.AgentProvisionRequestedMessage{
+		ProtocolVersion: "1.0", Type: contracts.AgentProvisionRequested,
+		Payload: contracts.AgentProvisionRequestedPayload{
+			RequestID: "agentprov_reload_12345678", DeviceID: credential.DeviceID,
+			TemplateAgentID: identities["Builder"], AgentID: "agent_reload_12345678",
+			Name: "Reviewer", Role: "Review", ManagementCode: "87654321",
+		},
+	}
+	secondStart := make(chan config.Config, 1)
+	var starts atomic.Int32
+	dependencies := inertDependencies()
+	dependencies.RunBridgeWithProvisioning = func(
+		ctx context.Context,
+		loaded config.Config,
+		_ pairing.Credential,
+		_ operations.Observer,
+		handler connection.ProvisionHandler,
+	) error {
+		if starts.Add(1) == 1 {
+			result := handler(ctx, requested)
+			if result.Payload.Status != contracts.Accepted {
+				return errors.New("provisioning was not accepted")
+			}
+			return connection.ErrConfigurationChanged
+		}
+		secondStart <- loaded
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory,
+		Token: "test-console-token",
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if err := service.StartConfiguredBridge(); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case reloaded := <-secondStart:
+		if len(reloaded.Agents) != 2 || reloaded.Agents[1].Name != "Reviewer" {
+			t.Fatalf("Bridge restarted with stale configuration: %#v", reloaded.Agents)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("Bridge did not restart after accepted provisioning")
+	}
+	state := service.State()
+	if !state.BridgeRunning || len(state.Agents) != 2 {
+		t.Fatalf("restarted Bridge state did not converge: %#v", state)
 	}
 }
 

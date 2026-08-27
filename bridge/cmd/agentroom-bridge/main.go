@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -19,13 +20,16 @@ import (
 	"agentroom.dev/bridge/internal/bridgecore"
 	"agentroom.dev/bridge/internal/browserlaunch"
 	"agentroom.dev/bridge/internal/config"
+	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/console"
 	"agentroom.dev/bridge/internal/enrollment"
 	"agentroom.dev/bridge/internal/identity"
 	"agentroom.dev/bridge/internal/launchable"
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
+	"agentroom.dev/bridge/internal/provisioning"
 	"agentroom.dev/bridge/internal/updatecheck"
+	contracts "agentroom.dev/contracts/generated/go"
 )
 
 var version = "dev"
@@ -124,7 +128,7 @@ func run(args []string) error {
 		if err != nil {
 			return err
 		}
-		return runUntilSignal(loaded, credential)
+		return runUntilSignal(resolved, loaded, credential)
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
@@ -282,6 +286,9 @@ func runConsole(args []string) error {
 		ProbeRuntime:   console.ProbeRuntime,
 		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential, observer operations.Observer) error {
 			return bridgecore.RunObserved(ctx, loaded, credential, version, observer)
+		},
+		RunBridgeWithProvisioning: func(ctx context.Context, loaded config.Config, credential pairing.Credential, observer operations.Observer, handler connection.ProvisionHandler) error {
+			return bridgecore.RunObservedWithProvisioning(ctx, loaded, credential, version, observer, handler)
 		},
 	})
 	if err != nil {
@@ -455,11 +462,55 @@ func join(args []string) error {
 		return err
 	}
 	fmt.Printf("joined Team %s as device %s; config saved to %s\n", credential.TeamID, credential.DeviceID, resolvedPath)
-	return bridgecore.Run(ctx, loaded, credential, version)
+	return runManaged(ctx, resolvedPath, loaded, credential)
 }
 
-func runUntilSignal(loaded config.Config, credential pairing.Credential) error {
+func runUntilSignal(configPath string, loaded config.Config, credential pairing.Credential) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
-	return bridgecore.Run(ctx, loaded, credential, version)
+	return runManaged(ctx, configPath, loaded, credential)
+}
+
+func runManaged(
+	ctx context.Context,
+	configPath string,
+	loaded config.Config,
+	credential pairing.Credential,
+) error {
+	authorizer := &provisioning.Authorizer{}
+	for {
+		handler := connection.ProvisionHandler(func(
+			_ context.Context,
+			requested contracts.AgentProvisionRequestedMessage,
+		) contracts.AgentProvisionResultMessage {
+			decision := provisioning.Apply(
+				loaded,
+				configPath,
+				config.Replace,
+				authorizer,
+				requested.Payload,
+				time.Now(),
+			)
+			if !decision.Accepted {
+				return connection.ProvisionResult(requested, contracts.Rejected, decision.Reason)
+			}
+			return connection.ProvisionResult(requested, contracts.Accepted, "")
+		})
+		err := bridgecore.RunObservedWithProvisioning(
+			ctx,
+			loaded,
+			credential,
+			version,
+			operations.Observer{},
+			handler,
+		)
+		if !errors.Is(err, connection.ErrConfigurationChanged) || ctx.Err() != nil {
+			return err
+		}
+		reloaded, loadErr := config.Load(configPath)
+		if loadErr != nil {
+			return loadErr
+		}
+		loaded = reloaded
+	}
 }

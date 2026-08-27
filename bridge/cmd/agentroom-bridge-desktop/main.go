@@ -17,6 +17,7 @@ import (
 	"agentroom.dev/bridge/internal/autostart"
 	"agentroom.dev/bridge/internal/bridgecore"
 	"agentroom.dev/bridge/internal/config"
+	"agentroom.dev/bridge/internal/connection"
 	"agentroom.dev/bridge/internal/console"
 	"agentroom.dev/bridge/internal/enrollment"
 	"agentroom.dev/bridge/internal/operations"
@@ -87,6 +88,9 @@ func run() error {
 		ProbeRuntime:   console.ProbeRuntime,
 		RunBridge: func(ctx context.Context, loaded config.Config, credential pairing.Credential, observer operations.Observer) error {
 			return bridgecore.RunObserved(ctx, loaded, credential, version, observer)
+		},
+		RunBridgeWithProvisioning: func(ctx context.Context, loaded config.Config, credential pairing.Credential, observer operations.Observer, handler connection.ProvisionHandler) error {
+			return bridgecore.RunObservedWithProvisioning(ctx, loaded, credential, version, observer, handler)
 		},
 	})
 	if err != nil {
