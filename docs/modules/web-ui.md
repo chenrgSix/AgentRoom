@@ -303,9 +303,10 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 - Render Artifact snapshot previews only as escaped plain text; a verified
   digest does not make the content trusted or executable.
 - Never expose device secrets or raw Runtime environment values.
-- Agent provisioning selectors show only active Devices and online managed
-  templates owned by the current Member. This is presentation filtering, not
-  authority: the Server and Bridge independently revalidate every identity.
+- Agent provisioning selectors show only active Devices whose current Bridge
+  connection advertises provisioning support and online managed templates owned
+  by the current Member. This is presentation filtering, not authority: the
+  Server and Bridge independently revalidate every identity and capability.
 - Keep a management code only in the controlled input until one submission
   settles. Clear it after success, rejection, or transport failure; never put
   it in request history, browser storage, URLs, logs, or status projection.
@@ -334,8 +335,9 @@ browser screenshots and limits are recorded in
 
 `WEB-044` adds same-owner creation from an online managed Agent template. The
 form sends only request, Device, template, new-Agent name/role, and transient
-management-code fields. A pending offline request is reselected with the same
-request ID, while rejected requests receive a new identity. Focused component
+management-code fields. Pending, ambiguously delivered, and
+`configuration_failed` requests are reselected with the same request ID after a
+new code is entered; other rejected requests receive a new identity. Focused component
 coverage exercises both 6- and 8-digit inputs, ownership filtering, all request
 states, every closed rejection reason, retry identity, and code clearing. The
 full-App browser-DOM flow proves the same behavior through the production page

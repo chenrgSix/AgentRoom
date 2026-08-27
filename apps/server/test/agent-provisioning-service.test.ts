@@ -105,22 +105,96 @@ test("Agent provisioning is owner-scoped, idempotent, and converges on publicati
     }, now);
     assert.equal(accepted.status, "accepted");
 
-    const published = agents.publishDeviceAgent(bridge, {
-      agentId: request.agentId,
-      name: request.name,
-      role: request.role,
-      capabilities: template.capabilities,
-      now
-    });
-    const ready = provisioning.markReadyForPublishedAgent(
+    const published = provisioning.convergePublishedAgent(
       bridge,
-      published.agentId,
-      now
+      request.agentId,
+      now,
+      () => agents.publishDeviceAgent(bridge, {
+        agentId: request.agentId,
+        name: request.name,
+        role: request.role,
+        capabilities: template.capabilities,
+        now
+      })
     );
-    assert.equal(ready?.status, "ready");
+    assert.equal(published.agentId, request.agentId);
+    assert.equal(
+      provisioning.listOwnRequests(owner, created.team.teamId)[0]?.status,
+      "ready"
+    );
     assert.equal(
       provisioning.listOwnRequests(owner, created.team.teamId)[0]?.agentId,
       request.agentId
+    );
+
+    const recoveredFailure = provisioning.createRequest(owner, {
+      requestId: "agentprov_failed_publish_12345678",
+      teamId: created.team.teamId,
+      deviceId: device.deviceId,
+      templateAgentId: template.agentId,
+      name: "Recovered Failure",
+      role: "Recovery",
+      now
+    });
+    provisioning.markDelivered(recoveredFailure.requestId, now);
+    provisioning.applyResult(bridge, {
+      requestId: recoveredFailure.requestId,
+      deviceId: device.deviceId,
+      templateAgentId: template.agentId,
+      agentId: recoveredFailure.agentId,
+      status: "rejected",
+      reason: "configuration_failed"
+    }, now);
+    provisioning.convergePublishedAgent(
+      bridge,
+      recoveredFailure.agentId,
+      now,
+      () => agents.publishDeviceAgent(bridge, {
+        agentId: recoveredFailure.agentId,
+        name: recoveredFailure.name,
+        role: recoveredFailure.role,
+        capabilities: template.capabilities,
+        now
+      })
+    );
+    assert.equal(
+      provisioning.listOwnRequests(owner, created.team.teamId).find(
+        ({ requestId }) => requestId === recoveredFailure.requestId
+      )?.status,
+      "ready"
+    );
+
+    const rollbackRequest = provisioning.createRequest(owner, {
+      requestId: "agentprov_atomic_rollback_12345678",
+      teamId: created.team.teamId,
+      deviceId: device.deviceId,
+      templateAgentId: template.agentId,
+      name: "Atomic Rollback",
+      role: "Recovery",
+      now
+    });
+    provisioning.markDelivered(rollbackRequest.requestId, now);
+    assert.throws(() => provisioning.convergePublishedAgent(
+      bridge,
+      rollbackRequest.agentId,
+      now,
+      () => {
+        agents.publishDeviceAgent(bridge, {
+          agentId: rollbackRequest.agentId,
+          name: rollbackRequest.name,
+          role: rollbackRequest.role,
+          capabilities: template.capabilities,
+          now
+        });
+        throw new Error("simulated request status write failure");
+      }
+    ), /simulated request status write failure/u);
+    assert.equal(core.getAgent(rollbackRequest.agentId), undefined);
+    assert.equal(
+      provisioning.listOwnRequests(owner, created.team.teamId).find(
+        ({ requestId }) => requestId === rollbackRequest.requestId
+      )?.status,
+      "delivered"
     );
 
     core.ensureUser({

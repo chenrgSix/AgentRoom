@@ -86,6 +86,11 @@ export interface BridgeHelloPayload {
   connectionEpoch:           number;
   deviceId:                  string;
   supportedProtocolVersions: [string, ...string[]];
+  /**
+   * Whether this connection can authorize and apply central Agent provisioning requests.
+   * Omission means unsupported.
+   */
+  supportsAgentProvisioning?: boolean;
   [property: string]: unknown;
 }
 

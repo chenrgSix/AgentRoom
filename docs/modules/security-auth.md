@@ -100,6 +100,13 @@ still required before the Agent becomes ready. Management codes do not grant
 Room access, Run authority, filesystem access, Runtime permission, or account
 recovery.
 
+Capability negotiation is fail-closed for an active connection: an online
+Bridge must advertise central provisioning support before the Server persists
+or sends a request. An exact reserved-Agent publication from the exact Device
+may recover a lost acceptance result because possession of that Device
+credential already authorizes managed Agent publication; a Web session alone
+cannot produce that proof.
+
 ## Data Protection
 
 Room context, replies, handoff summaries, and logs may leave the owner machine
@@ -112,7 +119,7 @@ credentials or full sensitive payloads.
 Negative tests cover replay, forged poll tokens, non-owner approval, cross-Team access, expired code,
 recovery-secret failure, invitation replay/expiry, cross-origin Cookie writes,
 revocation, unpublished Runtime launch, credential leakage, and attempts to
-bypass local policy. Work is tracked by `SEC-001` through `SEC-005`, with pairing
+bypass local policy. Work is tracked by `SEC-001` through `SEC-007`, with pairing
 transport under `BRG-002` and central Token transport under `BRG-025`, in
 `docs/TASKS.md`.
 

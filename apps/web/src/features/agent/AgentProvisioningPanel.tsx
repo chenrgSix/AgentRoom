@@ -100,6 +100,13 @@ function mergeRequest(
   ];
 }
 
+function retriesSameRequest(request: AgentProvisionRequest): boolean {
+  return request.status === "pending" ||
+    request.status === "delivered" ||
+    (request.status === "rejected" &&
+      request.rejectionReason === "configuration_failed");
+}
+
 interface AgentProvisioningPanelProps {
   agents: Agent[];
   currentMemberId: string | null;
@@ -141,6 +148,7 @@ export function AgentProvisioningPanel({
     currentMemberId !== null &&
     device.ownerMemberId === currentMemberId &&
     device.status === "active" &&
+    device.supportsAgentProvisioning === true &&
     ownedTemplates.some((agent) => agent.deviceId === device.deviceId)
   ), [currentMemberId, devices, ownedTemplates]);
   const deviceTemplates = useMemo(() => ownedTemplates.filter((agent) =>
@@ -219,7 +227,7 @@ export function AgentProvisioningPanel({
       return;
     }
     const retry = requests.find((request) =>
-      request.status === "pending" &&
+      retriesSameRequest(request) &&
       request.deviceId === deviceId &&
       request.templateAgentId === templateAgentId &&
       request.name === normalizedName &&
@@ -418,9 +426,10 @@ export function AgentProvisioningPanel({
                   </div>
                   <small>{request.role}</small>
                   <p>{requestHelp(request, locale)}</p>
-                  {(request.status === "pending" || request.status === "rejected") && canPopulate && (
+                  {(["pending", "delivered", "rejected"].includes(request.status)) &&
+                    canPopulate && (
                     <button onClick={() => populateRequest(request)} type="button">
-                      {request.status === "pending"
+                      {retriesSameRequest(request)
                         ? (locale === "zh-CN" ? "使用同一请求重试" : "Retry the same request")
                         : (locale === "zh-CN" ? "重新填写" : "Fill again")}
                     </button>

@@ -87,7 +87,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     deviceId: "device_test",
     ownerMemberId: member.memberId,
     name: "Alice Mac",
-    status: "active" as const
+    status: "active" as const,
+    supportsAgentProvisioning: true
   };
   const agent = {
     agentId: "agent_review",

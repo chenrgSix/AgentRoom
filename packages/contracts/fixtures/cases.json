@@ -128,12 +128,33 @@
           "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "connectionEpoch": 1,
           "bridgeVersion": "0.1.0",
+          "supportsAgentProvisioning": true,
           "supportedProtocolVersions": [
             "1.0"
           ]
         }
       },
       "valid": true
+    },
+    {
+      "name": "Bridge hello rejects a non-boolean Agent provisioning capability",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "timestamp": "2026-08-22T10:00:00Z",
+        "type": "bridge.hello",
+        "payload": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "connectionEpoch": 1,
+          "bridgeVersion": "0.1.0",
+          "supportsAgentProvisioning": "yes",
+          "supportedProtocolVersions": [
+            "1.0"
+          ]
+        }
+      },
+      "valid": false
     },
     {
       "name": "valid Bridge heartbeat",

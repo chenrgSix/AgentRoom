@@ -27,9 +27,11 @@ The POST body contains exactly:
 The list response and rendered history contain no management code, command,
 Workspace path, environment value, credential, Provider detail, tool setting,
 or permission configuration. The controlled code input is cleared after every
-submission outcome. A failed offline delivery is recovered with the same
-request ID and a newly entered code; a rejected terminal request starts a new
-identity.
+submission outcome. A failed offline delivery, ambiguous delivered request, or
+`configuration_failed` result is recovered with the same request and Agent ID
+after a newly entered code; every other rejected terminal request starts a new
+identity. Devices whose active Bridge connection omits provisioning support are
+not selectable.
 
 All eight closed Bridge rejection reasons have localized code-owned messages.
 An unknown value receives a generic rejection message rather than being
@@ -58,11 +60,11 @@ retain the code.
 
 The final verification set on 2026-08-27 was:
 
-- `npm test`: 131 Server, 45 Web, 4 Contracts, and 23 embedded Bridge UI tests
-  passed, for 203 JavaScript/TypeScript tests plus the generated Go contract
+- `npm test`: 135 Server, 45 Web, 4 Contracts, and 23 embedded Bridge UI tests
+  passed, for 207 JavaScript/TypeScript tests plus the generated Go contract
   checks;
 - `npm run build`: Server, Web production bundle, and Contracts build passed;
-- `npm run validate`: 7 schemas and 63 positive/negative fixtures passed;
+- `npm run validate`: 7 schemas and 64 positive/negative fixtures passed;
 - `npm run test:e2e`: 4 deterministic cross-process scenarios passed; the
   explicitly opt-in live Codex/Pi scenario remained skipped;
 - `go test -race ./...` and `go vet ./...` from `bridge/` passed;

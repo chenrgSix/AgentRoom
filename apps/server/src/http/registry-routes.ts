@@ -30,7 +30,14 @@ export function registerRegistryRoutes({
 }: ServerRouteContext): void {
   app.get<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/devices",
-    async (request) => registry.listDevices(principal(request), request.params.teamId)
+    async (request) => registry.listDevices(
+      principal(request),
+      request.params.teamId
+    ).map((device) => ({
+      ...device,
+      supportsAgentProvisioning:
+        bridgeConnections.supportsAgentProvisioning(device.deviceId)
+    }))
   );
   app.patch<{ Params: { agentId: string } }>(
     "/api/agents/:agentId",
@@ -113,21 +120,40 @@ export function registerRegistryRoutes({
       if (!/^(?:[0-9]{6}|[0-9]{8})$/u.test(managementCode)) {
         throw new Error("Management code must contain exactly 6 or 8 digits");
       }
+      const deviceId = requiredString(body.deviceId, "deviceId", 140);
+      const templateAgentId = requiredString(
+        body.templateAgentId,
+        "templateAgentId",
+        140
+      );
+      agentProvisioning.requireEligibleTarget(principal(request), {
+        teamId: request.params.teamId,
+        deviceId,
+        templateAgentId
+      });
+      if (
+        bridgeConnections.activeEpoch(deviceId) !== undefined &&
+        !bridgeConnections.supportsAgentProvisioning(deviceId)
+      ) {
+        throw new Error(
+          "Agent provisioning conflict: Bridge upgrade required"
+        );
+      }
       const now = clock();
       const provision = agentProvisioning.createRequest(principal(request), {
         requestId: requiredString(body.requestId, "requestId", 140),
         teamId: request.params.teamId,
-        deviceId: requiredString(body.deviceId, "deviceId", 140),
-        templateAgentId: requiredString(
-          body.templateAgentId,
-          "templateAgentId",
-          140
-        ),
+        deviceId,
+        templateAgentId,
         name: requiredString(body.name, "name"),
         role: requiredString(body.role, "role"),
         now
       });
-      if (["accepted", "ready", "rejected"].includes(provision.status)) {
+      if (
+        ["accepted", "ready"].includes(provision.status) ||
+        (provision.status === "rejected" &&
+          provision.rejectionReason !== "configuration_failed")
+      ) {
         return provision;
       }
       const message: AgentProvisionRequestedMessage = {

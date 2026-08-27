@@ -89,7 +89,9 @@ command, path, environment, Provider field, credential, tool, or permission
 configuration. The Bridge result repeats the exact request, Device, template,
 and proposed Agent identities and returns only `accepted` or `rejected` plus a
 closed safe reason. A following authenticated `agent.publish`, not the result
-alone, establishes the managed Agent as ready.
+alone, establishes the managed Agent as ready. `bridge.hello` optionally
+advertises `supportsAgentProvisioning`; omission means unsupported so a rolling
+upgrade never sends the new request to an older Bridge.
 
 `WSP-001` adds optional opaque `workspaceRef` and `workspaceGeneration` fields
 to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free

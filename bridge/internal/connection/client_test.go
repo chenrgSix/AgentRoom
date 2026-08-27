@@ -65,8 +65,11 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 			DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
-		BridgeVersion:                     "test",
-		HeartbeatInterval:                 10 * time.Millisecond,
+		BridgeVersion:     "test",
+		HeartbeatInterval: 10 * time.Millisecond,
+		HandleProvision: func(_ context.Context, requested contracts.AgentProvisionRequestedMessage) contracts.AgentProvisionResultMessage {
+			return ProvisionResult(requested, contracts.Rejected, contracts.ProvisioningDisabled)
+		},
 		ResumeAgentNames:                  map[string]bool{"Builder": true},
 		StreamingAgentNames:               map[string]bool{"Builder": true},
 		ArtifactMaterializationAgentNames: map[string]bool{"Builder": true},
@@ -78,6 +81,10 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	heartbeat := <-messages
 	if hello["type"] != "bridge.hello" || publication["type"] != "agent.publish" || heartbeat["type"] != "bridge.heartbeat" {
 		t.Fatalf("unexpected messages: %#v %#v %#v", hello, publication, heartbeat)
+	}
+	helloPayload, ok := hello["payload"].(map[string]any)
+	if !ok || helloPayload["supportsAgentProvisioning"] != true {
+		t.Fatalf("Agent provisioning support was not advertised: %#v", hello)
 	}
 	payload, ok := publication["payload"].(map[string]any)
 	if !ok {

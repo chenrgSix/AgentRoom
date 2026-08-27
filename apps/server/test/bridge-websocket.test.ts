@@ -121,7 +121,8 @@ async function waitFor(
 }
 
 async function createFixture(
-  loggerInstance?: FastifyBaseLogger
+  loggerInstance?: FastifyBaseLogger,
+  supportsAgentProvisioning = true
 ): Promise<BridgeFixture> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-bridge-ws-"));
   const app = await createServerApp({
@@ -180,6 +181,7 @@ async function createFixture(
     bridgeVersion: "test",
     connectionEpoch: 1,
     deviceId: paired.device.deviceId,
+    supportsAgentProvisioning,
     supportedProtocolVersions: ["1.0"]
   }));
   send(socket, envelope("agent.publish", {
@@ -433,6 +435,164 @@ test("central provisioning keeps the code transient and converges after Bridge p
     assert.equal(pending.json().find((request: { requestId: string }) =>
       request.requestId === "agentprov_offline_12345678"
     )?.status, "pending");
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("reserved Agent publication recovers a lost acceptance result atomically", async () => {
+  const fixture = await createFixture();
+  try {
+    const requestId = "agentprov_lost_result_12345678";
+    const deliveredMessage = nextMessage(fixture.socket);
+    const submitted = await fixture.app.inject({
+      method: "POST",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization,
+      payload: {
+        requestId,
+        deviceId: fixture.deviceId,
+        templateAgentId: agentId,
+        name: "Recovered Publisher",
+        role: "Recovery",
+        managementCode: "87654321"
+      }
+    });
+    assert.equal(submitted.statusCode, 200);
+    const provisionedAgentId = submitted.json().agentId as string;
+    await deliveredMessage;
+
+    await sendAndFlush(fixture.socket, envelope("agent.publish", {
+      agentId: provisionedAgentId,
+      capabilities: {
+        invocationMode: "managed",
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: false
+      },
+      deviceId: fixture.deviceId,
+      name: "Recovered Publisher",
+      ownerMemberId: fixture.ownerMemberId,
+      role: "Recovery",
+      teamId: fixture.teamId
+    }));
+    await waitFor(async () => {
+      const response = await fixture.app.inject({
+        method: "GET",
+        url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+        headers: fixture.authorization
+      });
+      return response.json().find((request: { requestId: string }) =>
+        request.requestId === requestId
+      )?.status === "ready";
+    });
+
+    await sendAndFlush(fixture.socket, envelope("agent.provision.result", {
+      requestId,
+      deviceId: fixture.deviceId,
+      templateAgentId: agentId,
+      agentId: provisionedAgentId,
+      status: "accepted"
+    }));
+    const devices = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/devices`,
+      headers: fixture.authorization
+    });
+    assert.equal(devices.json()[0]?.supportsAgentProvisioning, true);
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("configuration save failure retries the same reserved Agent identity", async () => {
+  const fixture = await createFixture();
+  try {
+    const payload = {
+      requestId: "agentprov_config_retry_12345678",
+      deviceId: fixture.deviceId,
+      templateAgentId: agentId,
+      name: "Retryable Configuration",
+      role: "Recovery",
+      managementCode: "87654321"
+    };
+    const firstDelivery = nextMessage(fixture.socket);
+    const submitted = await fixture.app.inject({
+      method: "POST",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization,
+      payload
+    });
+    const provisionedAgentId = submitted.json().agentId as string;
+    await firstDelivery;
+    await sendAndFlush(fixture.socket, envelope("agent.provision.result", {
+      requestId: payload.requestId,
+      deviceId: fixture.deviceId,
+      templateAgentId: agentId,
+      agentId: provisionedAgentId,
+      status: "rejected",
+      reason: "configuration_failed"
+    }));
+    await waitFor(async () => {
+      const response = await fixture.app.inject({
+        method: "GET",
+        url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+        headers: fixture.authorization
+      });
+      return response.json().find((request: { requestId: string }) =>
+        request.requestId === payload.requestId
+      )?.rejectionReason === "configuration_failed";
+    });
+
+    const retriedDelivery = nextMessage(fixture.socket);
+    const retried = await fixture.app.inject({
+      method: "POST",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization,
+      payload: { ...payload, managementCode: "12345678" }
+    });
+    assert.equal(retried.statusCode, 200);
+    assert.equal(retried.json().agentId, provisionedAgentId);
+    assert.equal(retried.json().status, "delivered");
+    assert.equal(retried.json().rejectionReason, null);
+    assert.equal((await retriedDelivery).payload.agentId, provisionedAgentId);
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("an older Bridge cannot receive central Agent provisioning", async () => {
+  const fixture = await createFixture(undefined, false);
+  try {
+    const submitted = await fixture.app.inject({
+      method: "POST",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization,
+      payload: {
+        requestId: "agentprov_upgrade_required_12345678",
+        deviceId: fixture.deviceId,
+        templateAgentId: agentId,
+        name: "Unsupported Agent",
+        role: "Upgrade",
+        managementCode: "87654321"
+      }
+    });
+    assert.equal(submitted.statusCode, 409);
+    assert.match(submitted.body, /Bridge upgrade required/u);
+    const listed = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization
+    });
+    assert.deepEqual(listed.json(), []);
+    const devices = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/devices`,
+      headers: fixture.authorization
+    });
+    assert.equal(devices.json()[0]?.supportsAgentProvisioning, false);
   } finally {
     await closeFixture(fixture);
   }

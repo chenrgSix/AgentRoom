@@ -64,6 +64,9 @@ type BridgeHelloPayload struct {
 	ConnectionEpoch           int64    `json:"connectionEpoch"`
 	DeviceID                  string   `json:"deviceId"`
 	SupportedProtocolVersions []string `json:"supportedProtocolVersions"`
+	// Whether this connection can authorize and apply central Agent provisioning requests.
+	// Omission means unsupported.
+	SupportsAgentProvisioning *bool `json:"supportsAgentProvisioning,omitempty"`
 }
 
 // Fields shared by versioned cross-process messages.

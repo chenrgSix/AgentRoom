@@ -46,19 +46,29 @@ const ownDevice: Device = {
   deviceId: "device_alice",
   ownerMemberId: memberId,
   name: "Alice Mac",
-  status: "active"
+  status: "active",
+  supportsAgentProvisioning: true
 };
 const foreignDevice: Device = {
   deviceId: "device_bob",
   ownerMemberId: "member_bob",
   name: "Bob PC",
-  status: "active"
+  status: "active",
+  supportsAgentProvisioning: true
 };
 const offlineDevice: Device = {
   deviceId: "device_offline",
   ownerMemberId: memberId,
   name: "Offline Mac",
-  status: "active"
+  status: "active",
+  supportsAgentProvisioning: true
+};
+const legacyDevice: Device = {
+  deviceId: "device_legacy",
+  ownerMemberId: memberId,
+  name: "Old Bridge",
+  status: "active",
+  supportsAgentProvisioning: false
 };
 const ownTemplate: Agent = {
   agentId: "agent_alice_builder",
@@ -83,6 +93,12 @@ const offlineTemplate: Agent = {
   deviceId: offlineDevice.deviceId,
   name: "Offline Builder",
   presence: "offline"
+};
+const legacyTemplate: Agent = {
+  ...ownTemplate,
+  agentId: "agent_alice_legacy",
+  deviceId: legacyDevice.deviceId,
+  name: "Legacy Builder"
 };
 
 function requestRecord(
@@ -156,9 +172,9 @@ test("owning Member submits a code and follows delivered, accepted, and ready st
   try {
     render(
       <AgentProvisioningPanel
-        agents={[ownTemplate, foreignTemplate, offlineTemplate]}
+        agents={[ownTemplate, foreignTemplate, offlineTemplate, legacyTemplate]}
         currentMemberId={memberId}
-        devices={[ownDevice, foreignDevice, offlineDevice]}
+        devices={[ownDevice, foreignDevice, offlineDevice, legacyDevice]}
         locale="zh-CN"
         sessionToken="session_alice"
         teamId={teamId}
@@ -170,6 +186,7 @@ test("owning Member submits a code and follows delivered, accepted, and ready st
     assert.equal(device.value, ownDevice.deviceId);
     assert.equal(page.queryByText(foreignDevice.name), null);
     assert.equal(page.queryByText(offlineDevice.name), null);
+    assert.equal(page.queryByText(legacyDevice.name), null);
 
     const template = page.getByLabelText("本地模板 Agent") as HTMLSelectElement;
     assert.equal(template.options.length, 1);
@@ -217,7 +234,7 @@ test("owning Member submits a code and follows delivered, accepted, and ready st
   }
 });
 
-test("offline retry reuses the request ID, clears each code, and renders safe rejection", async () => {
+test("ambiguous delivery and save failure reuse one request ID", async () => {
   const dom = installDom();
   let history: AgentProvisionRequest[] = [];
   let postCount = 0;
@@ -278,10 +295,30 @@ test("offline retry reuses the request ID, clears each code, and renders safe re
     assert.equal(submissions[1]?.managementCode, "87654321");
     assert.doesNotMatch(dom.window.document.body.textContent ?? "", /654321|87654321/u);
 
+    fireEvent.click(page.getByRole("button", { name: "使用同一请求重试" }));
+    fireEvent.change(code, { target: { value: "112233" } });
+    fireEvent.submit(page.getByRole("button", { name: "创建 Agent" }).closest("form")!);
+    await waitFor(() => assert.equal(submissions.length, 3));
+    assert.equal(submissions[1]?.requestId, submissions[2]?.requestId);
+
+    history = [{
+      ...history[0]!,
+      status: "rejected",
+      rejectionReason: "configuration_failed"
+    }];
+    fireEvent.click(page.getByRole("button", { name: "刷新状态" }));
+    await page.findByText("Bridge 保存本地配置失败");
+    fireEvent.click(page.getByRole("button", { name: "使用同一请求重试" }));
+    fireEvent.change(code, { target: { value: "445566" } });
+    fireEvent.submit(page.getByRole("button", { name: "创建 Agent" }).closest("form")!);
+    await waitFor(() => assert.equal(submissions.length, 4));
+    assert.equal(submissions[2]?.requestId, submissions[3]?.requestId);
+
     history = [{ ...history[0]!, status: "rejected", rejectionReason: "invalid_code" }];
     fireEvent.click(page.getByRole("button", { name: "刷新状态" }));
     await page.findByText("已拒绝", { selector: ".status-badge" });
     page.getByText("管理码不正确或已过期");
+    page.getByRole("button", { name: "重新填写" });
   } finally {
     cleanup();
     dom.window.close();

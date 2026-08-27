@@ -99,6 +99,7 @@ export interface Device {
   ownerMemberId?: string;
   name: string;
   status: "active" | "revoked";
+  supportsAgentProvisioning?: boolean;
 }
 
 export type AgentProvisionRequestStatus =

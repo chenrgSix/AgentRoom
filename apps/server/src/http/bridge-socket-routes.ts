@@ -174,7 +174,15 @@ export function registerBridgeSocketRoutes({
             rejectMessage("invalid_hello");
             return;
           }
-          if (!bridgeConnections.register(devicePrincipal.deviceId, epoch as number, socket)) {
+          if (!bridgeConnections.register(
+            devicePrincipal.deviceId,
+            epoch as number,
+            socket,
+            {
+              supportsAgentProvisioning:
+                message.payload.supportsAgentProvisioning === true
+            }
+          )) {
             socket.close(4_009, "Stale Bridge connection epoch");
             return;
           }
@@ -213,10 +221,11 @@ export function registerBridgeSocketRoutes({
           return;
         }
         if (message.type === "agent.publish" && registeredEpoch !== undefined) {
-          const capabilities = message.payload.capabilities as
+          const publicationPayload = message.payload;
+          const capabilities = publicationPayload.capabilities as
             | Record<string, unknown>
             | undefined;
-          const runtimePolicy = message.payload.runtimePolicy;
+          const runtimePolicy = publicationPayload.runtimePolicy;
           const runtimePolicyObject = runtimePolicy &&
             typeof runtimePolicy === "object" &&
             !Array.isArray(runtimePolicy)
@@ -228,60 +237,60 @@ export function registerBridgeSocketRoutes({
             isFilesystemAccessPolicy(runtimePolicyObject.filesystemAccess)
           );
           if (
-            message.payload.deviceId !== devicePrincipal.deviceId ||
-            message.payload.teamId !== devicePrincipal.teamId ||
-            message.payload.ownerMemberId !== devicePrincipal.ownerMemberId ||
-            typeof message.payload.agentId !== "string" ||
-            typeof message.payload.name !== "string" ||
-            typeof message.payload.role !== "string" ||
+            publicationPayload.deviceId !== devicePrincipal.deviceId ||
+            publicationPayload.teamId !== devicePrincipal.teamId ||
+            publicationPayload.ownerMemberId !== devicePrincipal.ownerMemberId ||
+            typeof publicationPayload.agentId !== "string" ||
+            typeof publicationPayload.name !== "string" ||
+            typeof publicationPayload.role !== "string" ||
             capabilities?.invocationMode !== "managed" ||
             !validRuntimePolicy
           ) {
             rejectMessage("agent_publication_rejected");
             return;
           }
-          const publishedAgent = agents.publishDeviceAgent(devicePrincipal, {
-            agentId: message.payload.agentId,
-            name: message.payload.name,
-            role: message.payload.role,
-            ...(runtimePolicyObject &&
-              isFilesystemAccessPolicy(runtimePolicyObject.filesystemAccess)
-              ? {
-                  runtimePolicy: {
-                    filesystemAccess: runtimePolicyObject.filesystemAccess
-                  }
-                }
-              : {}),
-            ...(typeof message.payload.runtimeScopeId === "string"
-              ? { runtimeScopeId: message.payload.runtimeScopeId }
-              : {}),
-            capabilities: {
-              supportsHandoff: capabilities.supportsHandoff === true,
-              supportsInterrupt: capabilities.supportsInterrupt === true,
-              supportsResume: capabilities.supportsResume === true,
-              supportsStart: capabilities.supportsStart === true,
-              supportsStreaming: capabilities.supportsStreaming === true,
-              supportsRoomContextCoverage:
-                capabilities.supportsRoomContextCoverage === true,
-              supportsWorkspaceLeases:
-                capabilities.supportsWorkspaceLeases === true,
-              supportsArtifactPublication:
-                capabilities.supportsArtifactPublication === true,
-              supportsArtifactMaterialization:
-                capabilities.supportsArtifactMaterialization === true
-            },
-            ...(typeof message.payload.workspaceRef === "string"
-              ? { workspaceRef: message.payload.workspaceRef }
-              : {}),
-            ...(typeof message.payload.workspaceGeneration === "string"
-              ? { workspaceGeneration: message.payload.workspaceGeneration }
-              : {}),
-            now: clock()
-          });
-          agentProvisioning.markReadyForPublishedAgent(
+          agentProvisioning.convergePublishedAgent(
             devicePrincipal,
-            publishedAgent.agentId,
-            clock()
+            publicationPayload.agentId as string,
+            clock(),
+            () => agents.publishDeviceAgent(devicePrincipal, {
+              agentId: publicationPayload.agentId as string,
+              name: publicationPayload.name as string,
+              role: publicationPayload.role as string,
+              ...(runtimePolicyObject &&
+                isFilesystemAccessPolicy(runtimePolicyObject.filesystemAccess)
+                ? {
+                    runtimePolicy: {
+                      filesystemAccess: runtimePolicyObject.filesystemAccess
+                    }
+                  }
+                : {}),
+              ...(typeof publicationPayload.runtimeScopeId === "string"
+                ? { runtimeScopeId: publicationPayload.runtimeScopeId }
+                : {}),
+              capabilities: {
+                supportsHandoff: capabilities.supportsHandoff === true,
+                supportsInterrupt: capabilities.supportsInterrupt === true,
+                supportsResume: capabilities.supportsResume === true,
+                supportsStart: capabilities.supportsStart === true,
+                supportsStreaming: capabilities.supportsStreaming === true,
+                supportsRoomContextCoverage:
+                  capabilities.supportsRoomContextCoverage === true,
+                supportsWorkspaceLeases:
+                  capabilities.supportsWorkspaceLeases === true,
+                supportsArtifactPublication:
+                  capabilities.supportsArtifactPublication === true,
+                supportsArtifactMaterialization:
+                  capabilities.supportsArtifactMaterialization === true
+              },
+              ...(typeof publicationPayload.workspaceRef === "string"
+                ? { workspaceRef: publicationPayload.workspaceRef }
+                : {}),
+              ...(typeof publicationPayload.workspaceGeneration === "string"
+                ? { workspaceGeneration: publicationPayload.workspaceGeneration }
+                : {}),
+              now: clock()
+            })
           );
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
           teamChanges.notify(devicePrincipal.teamId);

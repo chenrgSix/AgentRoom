@@ -3,6 +3,8 @@ import type { AgentProvisionResultPayload } from
 import type Database from "better-sqlite3";
 
 import type { CoreRepository } from "../data/core-repository.js";
+import { SqliteTransactionBoundary } from
+  "../data/sqlite-transaction-boundary.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import {
   AuthorizationError,
@@ -90,27 +92,19 @@ export class AgentProvisioningService {
   public constructor(
     private readonly database: Database.Database,
     private readonly core: CoreRepository,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly transactions = new SqliteTransactionBoundary(database)
   ) {}
 
-  public createRequest(
+  public requireEligibleTarget(
     principal: WebPrincipal,
     input: {
-      requestId: string;
       teamId: string;
       deviceId: string;
       templateAgentId: string;
-      name: string;
-      role: string;
-      now: string;
     }
-  ): AgentProvisionRequestRecord {
-    if (!/^agentprov_[A-Za-z0-9_-]{8,128}$/u.test(input.requestId)) {
-      throw new Error("Agent provisioning request ID is invalid");
-    }
+  ): string {
     const actor = this.auth.requireTeamMember(principal, input.teamId);
-    const name = normalizedLabel(input.name, "Agent name");
-    const role = normalizedLabel(input.role, "Agent role");
     const device = this.core.getDevice(input.deviceId);
     const template = this.core.getAgent(input.templateAgentId);
     if (
@@ -137,12 +131,33 @@ export class AgentProvisioningService {
         "Agent provisioning template ownership denied"
       );
     }
+    return actor.memberId;
+  }
+
+  public createRequest(
+    principal: WebPrincipal,
+    input: {
+      requestId: string;
+      teamId: string;
+      deviceId: string;
+      templateAgentId: string;
+      name: string;
+      role: string;
+      now: string;
+    }
+  ): AgentProvisionRequestRecord {
+    if (!/^agentprov_[A-Za-z0-9_-]{8,128}$/u.test(input.requestId)) {
+      throw new Error("Agent provisioning request ID is invalid");
+    }
+    const actorMemberId = this.requireEligibleTarget(principal, input);
+    const name = normalizedLabel(input.name, "Agent name");
+    const role = normalizedLabel(input.role, "Agent role");
 
     const existing = this.get(input.requestId);
     if (existing) {
       if (
         existing.teamId !== input.teamId ||
-        existing.requestedByMemberId !== actor.memberId ||
+        existing.requestedByMemberId !== actorMemberId ||
         existing.deviceId !== input.deviceId ||
         existing.templateAgentId !== input.templateAgentId ||
         existing.name !== name ||
@@ -166,7 +181,7 @@ export class AgentProvisioningService {
       input.deviceId,
       input.templateAgentId,
       agentId,
-      actor.memberId,
+      actorMemberId,
       name,
       role,
       input.now,
@@ -179,10 +194,48 @@ export class AgentProvisioningService {
     this.database.prepare(`
       UPDATE agent_provision_requests
       SET status = 'delivered', delivered_at = COALESCE(delivered_at, ?),
-          updated_at = ?
-      WHERE request_id = ? AND status = 'pending'
+          rejection_reason = NULL, responded_at = NULL, updated_at = ?
+      WHERE request_id = ? AND (
+        status = 'pending' OR
+        (status = 'rejected' AND rejection_reason = 'configuration_failed')
+      )
     `).run(now, now, requestId);
     return this.require(requestId);
+  }
+
+  public convergePublishedAgent<T>(
+    principal: DevicePrincipal,
+    agentId: string,
+    now: string,
+    publish: () => T
+  ): T {
+    return this.transactions.immediate(() => {
+      const request = this.requestForPublishedAgent(principal, agentId);
+      const retryableConfigurationFailure = request?.status === "rejected" &&
+        request.rejectionReason === "configuration_failed";
+      if (
+        request &&
+        !["pending", "delivered", "accepted", "ready"].includes(request.status) &&
+        !retryableConfigurationFailure
+      ) {
+        throw new Error(
+          "Provisioned Agent publication conflicts with rejected request"
+        );
+      }
+      const published = publish();
+      if (request && request.status !== "ready") {
+        this.database.prepare(`
+          UPDATE agent_provision_requests
+          SET status = 'ready', rejection_reason = NULL,
+              responded_at = COALESCE(responded_at, ?), ready_at = ?, updated_at = ?
+          WHERE request_id = ? AND (
+            status IN ('pending', 'delivered', 'accepted') OR
+            (status = 'rejected' AND rejection_reason = 'configuration_failed')
+          )
+        `).run(now, now, now, request.requestId);
+      }
+      return published;
+    });
   }
 
   public applyResult(
@@ -237,35 +290,25 @@ export class AgentProvisioningService {
     return this.require(request.requestId);
   }
 
-  public markReadyForPublishedAgent(
+  private requestForPublishedAgent(
     principal: DevicePrincipal,
-    agentId: string,
-    now: string
+    agentId: string
   ): AgentProvisionRequestRecord | undefined {
-    const request = this.database.prepare(`
+    const row = this.database.prepare(`
       SELECT * FROM agent_provision_requests WHERE agent_id = ?
     `).get(agentId) as AgentProvisionRequestRow | undefined;
-    if (!request) return undefined;
+    if (!row) return undefined;
     if (
-      request.team_id !== principal.teamId ||
-      request.device_id !== principal.deviceId ||
-      request.requested_by_member_id !== principal.ownerMemberId
+      row.team_id !== principal.teamId ||
+      row.device_id !== principal.deviceId ||
+      row.requested_by_member_id !== principal.ownerMemberId
     ) {
       throw new AuthorizationError(
         "FORBIDDEN",
         "Published Agent provisioning identity denied"
       );
     }
-    if (request.status === "ready") return mapRow(request);
-    if (request.status !== "accepted") {
-      throw new Error("Provisioned Agent published before local acceptance");
-    }
-    this.database.prepare(`
-      UPDATE agent_provision_requests
-      SET status = 'ready', ready_at = ?, updated_at = ?
-      WHERE request_id = ? AND status = 'accepted'
-    `).run(now, now, request.request_id);
-    return this.require(request.request_id);
+    return mapRow(row);
   }
 
   public listOwnRequests(

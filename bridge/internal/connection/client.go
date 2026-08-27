@@ -172,6 +172,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	connectionContext, cancelConnection := context.WithCancel(ctx)
 	defer cancelConnection()
 	writer := socketWriter{socket: socket}
+	supportsAgentProvisioning := c.HandleProvision != nil
 	hello := contracts.BridgeHelloMessage{
 		ProtocolVersion: "1.0",
 		MessageID:       newID("msg"),
@@ -181,6 +182,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			BridgeVersion:             c.BridgeVersion,
 			ConnectionEpoch:           epoch,
 			DeviceID:                  c.Credential.DeviceID,
+			SupportsAgentProvisioning: &supportsAgentProvisioning,
 			SupportedProtocolVersions: []string{"1.0"},
 		},
 	}

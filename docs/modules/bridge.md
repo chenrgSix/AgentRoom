@@ -101,6 +101,13 @@ override a command, Workspace, environment, Runtime credential, Provider,
 sandbox, tool, or permission field. Rejection returns only a closed reason and
 never the code or local mismatch detail.
 
+The managed connection advertises central-provisioning support explicitly.
+After a failed config replacement, `configuration_failed` preserves the local
+reserved identity so the exact request can be retried; a new Agent ID must not
+claim that name. After a successful replacement, the Bridge reconnects and
+publishes the configured Agent even if its acceptance result was lost. The
+Server treats that exact authenticated publication as recovery evidence.
+
 The HTTP listener rejects non-loopback addresses. Every API call requires a
 32-byte random Bearer token that is removed from browser history and kept only
 in tab session storage. Public state omits Console tokens, Device credentials,

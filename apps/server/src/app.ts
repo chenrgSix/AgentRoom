@@ -167,7 +167,12 @@ export async function createServerApp(
   const teamChanges = new TeamChangeService();
   const registry = new MemberDeviceService(core, auth);
   const agents = new AgentService(core, auth);
-  const agentProvisioning = new AgentProvisioningService(database, core, auth);
+  const agentProvisioning = new AgentProvisioningService(
+    database,
+    core,
+    auth,
+    transactions
+  );
   const presence = new PresenceService(core, auth);
   const messages = new MessageService(core, auth);
   const teamWait = new TeamWaitService(core, auth);

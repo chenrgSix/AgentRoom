@@ -64,11 +64,27 @@ pending -> delivered -> accepted -> ready
 ```
 
 The Bridge rejects configuration mutation while enrollment, Runtime probes, or
-Team work is active. On acceptance it atomically binds the Server-selected Agent
-ID, replaces the local configuration, acknowledges acceptance, and rebuilds its
-managed connection. The following authenticated `agent.publish` makes the
-request `ready`. Exact request retries converge on the same request and Agent;
-conflicting reuse is rejected.
+Team work is active. On acceptance it binds the Server-selected Agent ID,
+atomically replaces the local configuration, acknowledges acceptance, and
+rebuilds its managed connection. The following authenticated `agent.publish`
+makes the request `ready`. If the acceptance result is lost, publication of the
+exact reserved Agent ID by the exact Device is stronger recovery evidence and
+atomically converges `pending`, `delivered`, or `accepted` to `ready` with the
+Agent Registry write. Exact request retries converge on the same request and
+Agent; conflicting reuse is rejected.
+
+`configuration_failed` is the one retryable Bridge rejection. The local identity
+binding deliberately preserves the reserved Agent ID across a failed config
+replacement, so the Web must resend the same request and Agent identity after a
+new code is entered. `pending` and ambiguously `delivered` requests follow the
+same same-ID retry rule. Every other rejection remains terminal and a changed
+request requires a new request ID.
+
+New Bridges advertise `supportsAgentProvisioning` in `bridge.hello`. Omission is
+treated as unsupported. The Server refuses a new request on an online connection
+that does not advertise support, and the Web excludes that Device from the
+selector. Capability state belongs to the active authenticated connection rather
+than persisted Device authority.
 
 Failed code attempts are counted locally per connection. Five consecutive
 failures impose an increasing bounded delay; a successful verification or local
@@ -98,9 +114,10 @@ Bridge editing. The Web can show request status but cannot reveal or recover a
 management code. An offline Device cannot accept a new request.
 
 The new protocol is additive. Older Servers never send provisioning messages;
-older Bridges reject or ignore no existing message. Existing Devices and Agent
-IDs are unchanged. Disabling remote provisioning does not disable or delete
-Agents that were already created.
+new Servers treat an older Bridge that omits the capability as unsupported and
+do not send it a provisioning request. Existing Devices and Agent IDs are
+unchanged. Disabling remote provisioning does not disable or delete Agents that
+were already created.
 
 ## Compatibility and Security
 
@@ -121,6 +138,12 @@ sandboxing, tool policy, and local approval remain independent defenses.
 - Fixed codes authorize multiple distinct requests until locally replaced.
 - One rotating code authorizes requests only inside its displayed interval.
 - Accepted retries preserve one Agent ID and one local Agent configuration.
+- Lost request delivery and `configuration_failed` retry with the same request
+  and Agent ID after the user enters a new code.
+- Lost acceptance results converge when the exact Device publishes the reserved
+  Agent, without leaving a partial Registry write or closing the connection.
+- Older online Bridges are rejected before request persistence and are absent
+  from the eligible Web selector.
 - Active work and Runtime probes fence provisioning without partial writes.
 - Server persistence, responses, logs, diagnostics, and Team messages contain no
   management code or local Runtime configuration.

@@ -24,13 +24,28 @@ test("only the newest authenticated Bridge epoch remains active", () => {
   const first = new FakeSocket();
   const stale = new FakeSocket();
   const newest = new FakeSocket();
-  assert.equal(registry.register("device_one", 2, first), true);
+  assert.equal(registry.register("device_one", 2, first, {
+    supportsAgentProvisioning: true
+  }), true);
   assert.equal(registry.register("device_one", 1, stale), false);
   assert.equal(registry.register("device_one", 3, newest), true);
   assert.equal(first.closes[0]?.code, 4_001);
   assert.equal(registry.activeEpoch("device_one"), 3);
+  assert.equal(registry.supportsAgentProvisioning("device_one"), false);
   registry.remove("device_one", first);
   assert.equal(registry.activeEpoch("device_one"), 3);
   assert.equal(registry.send("device_one", { type: "test" }), true);
   assert.deepEqual(JSON.parse(newest.sent[0] ?? ""), { type: "test" });
+});
+
+test("Bridge capabilities belong to the active connection epoch", () => {
+  const registry = new BridgeConnectionRegistry();
+  const capable = new FakeSocket();
+  const replacement = new FakeSocket();
+  assert.equal(registry.register("device_capable", 1, capable, {
+    supportsAgentProvisioning: true
+  }), true);
+  assert.equal(registry.supportsAgentProvisioning("device_capable"), true);
+  assert.equal(registry.register("device_capable", 2, replacement), true);
+  assert.equal(registry.supportsAgentProvisioning("device_capable"), false);
 });

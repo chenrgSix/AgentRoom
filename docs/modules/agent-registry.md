@@ -100,7 +100,10 @@ managed template Agent on the same active Device. It is not an Agent, cannot be
 mentioned or receive work, and contains no local Runtime configuration. Only
 the exact Device may accept or reject it. Acceptance remains pending until that
 Device publishes the reserved Agent ID; publication atomically converges the
-request to `ready`, while exact retries preserve the same request and identity.
+request to `ready`, including when an acceptance result was lost, while exact
+retries preserve the same request and identity. The Agent upsert and request
+transition share one immediate transaction. `configuration_failed` may be
+redelivered with the same identity; other rejections remain terminal.
 
 ## Verification
 

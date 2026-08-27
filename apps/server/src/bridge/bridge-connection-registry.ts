@@ -6,13 +6,19 @@ export interface BridgeSocket {
 interface Connection {
   deviceId: string;
   epoch: number;
+  supportsAgentProvisioning: boolean;
   socket: BridgeSocket;
 }
 
 export class BridgeConnectionRegistry {
   private readonly connections = new Map<string, Connection>();
 
-  public register(deviceId: string, epoch: number, socket: BridgeSocket): boolean {
+  public register(
+    deviceId: string,
+    epoch: number,
+    socket: BridgeSocket,
+    capabilities: { supportsAgentProvisioning?: boolean } = {}
+  ): boolean {
     const existing = this.connections.get(deviceId);
     if (existing && existing.epoch >= epoch) {
       return false;
@@ -20,7 +26,12 @@ export class BridgeConnectionRegistry {
     if (existing) {
       existing.socket.close(4_001, "Superseded by a newer connection epoch");
     }
-    this.connections.set(deviceId, { deviceId, epoch, socket });
+    this.connections.set(deviceId, {
+      deviceId,
+      epoch,
+      supportsAgentProvisioning: capabilities.supportsAgentProvisioning === true,
+      socket
+    });
     return true;
   }
 
@@ -41,6 +52,10 @@ export class BridgeConnectionRegistry {
 
   public activeEpoch(deviceId: string): number | undefined {
     return this.connections.get(deviceId)?.epoch;
+  }
+
+  public supportsAgentProvisioning(deviceId: string): boolean {
+    return this.connections.get(deviceId)?.supportsAgentProvisioning === true;
   }
 
   public activeCount(): number {
