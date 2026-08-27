@@ -144,13 +144,13 @@ func TestPublishedRuntimePolicyContainsOnlyFilesystemAccess(t *testing.T) {
 	tests := []struct {
 		name     string
 		agent    config.AgentConfig
-		expected contracts.FilesystemAccess
+		expected contracts.RuntimePolicyFilesystemAccess
 	}{
-		{name: "Codex read only", agent: config.AgentConfig{RuntimeKind: "codex", Sandbox: "read-only"}, expected: contracts.ReadOnly},
-		{name: "Codex Workspace write", agent: config.AgentConfig{RuntimeKind: "codex", Sandbox: "workspace-write"}, expected: contracts.WorkspaceWrite},
-		{name: "legacy Codex", agent: config.AgentConfig{Adapter: "codex"}, expected: contracts.WorkspaceWrite},
-		{name: "Pi local policy", agent: config.AgentConfig{RuntimeKind: "pi"}, expected: contracts.LocalPolicy},
-		{name: "Generic local policy", agent: config.AgentConfig{RuntimeKind: "generic"}, expected: contracts.LocalPolicy},
+		{name: "Codex read only", agent: config.AgentConfig{RuntimeKind: "codex", Sandbox: "read-only"}, expected: contracts.RuntimePolicyFilesystemAccess("read-only")},
+		{name: "Codex Workspace write", agent: config.AgentConfig{RuntimeKind: "codex", Sandbox: "workspace-write"}, expected: contracts.RuntimePolicyFilesystemAccess("workspace-write")},
+		{name: "legacy Codex", agent: config.AgentConfig{Adapter: "codex"}, expected: contracts.RuntimePolicyFilesystemAccess("workspace-write")},
+		{name: "Pi local policy", agent: config.AgentConfig{RuntimeKind: "pi"}, expected: contracts.RuntimePolicyFilesystemAccess("local-policy")},
+		{name: "Generic local policy", agent: config.AgentConfig{RuntimeKind: "generic"}, expected: contracts.RuntimePolicyFilesystemAccess("local-policy")},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

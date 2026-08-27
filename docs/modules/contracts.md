@@ -126,6 +126,13 @@ unbounded Workbench pages, and review or completion authority in Result review
 input. Cross-record actor/Run/source membership remains an owning-service
 authorization check because JSON Schema cannot query central persistence.
 
+`run.requested` optionally carries the same `contextManifest` definition so an
+older Bridge may ignore the additive field during rolling compatibility. Every
+new managed Delivery produced by the current Server includes it. Generated Go
+and TypeScript types expose the closed manifest shape, and the Bridge projects
+its frozen goal, criteria, permission summary and omission list without gaining
+Server authority over local Runtime policy.
+
 `WSP-001` adds optional opaque `workspaceRef` and `workspaceGeneration` fields
 to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free
 comparison identities, not Runtime scope IDs or permission grants. Older

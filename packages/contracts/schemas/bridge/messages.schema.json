@@ -1790,6 +1790,9 @@
         "contextPlan": {
           "$ref": "#/$defs/runtimeContextPlan"
         },
+        "contextManifest": {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/contextManifest"
+        },
         "routingAgents": {
           "type": "array",
           "maxItems": 20,

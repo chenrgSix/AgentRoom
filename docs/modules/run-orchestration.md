@@ -56,7 +56,7 @@ queued
 not transition. A Runtime that may have executed but lacks a trustworthy
 outcome becomes `outcome_unknown` and is never automatically rerun.
 
-### Task/Run/Result work-model target
+### Task/Run/Result attempt contract
 
 [ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
 keeps this state machine authoritative. `connection_lost`, Delivery progress,
@@ -72,20 +72,22 @@ in an audited request before another Run may start or the Task may become
 terminal. The acknowledgement preserves `outcome_unknown` and never asserts
 whether an external side effect occurred.
 
-Run creation under the target contract atomically validates Task lifecycle,
+Run creation atomically validates Task lifecycle,
 scheduling state, budget, Agent assignment, and expected Task revision; records
 the budget admission and Task/definition/criteria/context fences; and persists
 Run plus Delivery. Generic Run pause is unsupported. Pausing a Task prevents new
 scheduling and does not claim to suspend an already accepted provider process.
 
-Each Run exposes a redacted Context Manifest derived from its frozen durable
-Delivery rather than current live state. It names included Task definition,
-criteria, Room, Memory, Message and Artifact revisions and IDs; safe execution
-identity, Workspace alias and closed permission summaries; and categories
-intentionally not sent. It excludes credentials, paths, commands,
-environments, provider sessions, hidden reasoning, tool payloads, and unrelated
-context. Missing legacy fields render as `not_recorded`; the Web does not guess
-them.
+Migration 0044 gives every new Run a frozen redacted Context Manifest captured
+from its Task/definition/criteria/context fences and admission-time target
+policy rather than current live state. The exact stored object is carried by
+managed `run.requested` Delivery and projected by the Bridge as the frozen
+goal, criteria, permission summary and intentionally omitted categories. It
+names the bounded source identities and revisions used for admission, plus the
+safe Agent, Device and Workspace alias projection. It excludes credentials,
+paths, commands, environments, provider sessions, hidden reasoning, tool
+payloads, and unrelated context. Missing legacy fields render as
+`not_recorded`; the Web does not guess them.
 
 Offline managed Runs remain `queued` and are delivered when the target Device
 publishes or heartbeats. A queued Run that reaches its persisted deadline moves
@@ -95,7 +97,8 @@ to terminal `expired` and is never delivered on a later reconnect.
 
 1. Persist Run and delivery record.
 2. Select the currently active target Bridge connection.
-3. Send `run.requested` with Run ID and delivery attempt ID.
+3. Send `run.requested` with Run ID, delivery attempt ID, and the exact stored
+   Context Manifest when present.
 4. Bridge durably records Run ID before returning `run.accepted`.
 5. Retry on missing ACK without changing Run ID.
 6. Stop retrying after acceptance, cancellation, expiry, or Agent revocation.
@@ -285,9 +288,10 @@ resolves its own first-terminal race under the rules above.
 
 ## Task Mapping
 
-`RUN-001` through `RUN-010` implement current delivery, recovery, handoff and
-clarification behavior. `RUN-012` adds the ADR-0022 attempt-lineage and frozen
-Context Manifest target. The in-process harness is `QA-001`, recovery tasks are
+`RUN-001` through `RUN-010` implement delivery, recovery, handoff and
+clarification behavior. `RUN-012` implements ADR-0022 attempt lineage, audited
+ambiguous-outcome acknowledgement, semantic retry, and frozen Context
+Manifests. The in-process harness is `QA-001`, recovery tasks are
 `DATA-003` and `QA-004`, and parallel Wave verification is `QA-010`.
 
 ## Dependencies

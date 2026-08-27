@@ -21,6 +21,14 @@ they do not invent provider token or cost values.
 It deliberately adds no Workspace root, command, environment, filesystem
 policy, or network policy column; those remain Bridge-owned configuration.
 
+Migration 0044 adds a unique monotonic Task-local attempt number, optional
+same-Task retry lineage, immutable redacted Context Manifest, idempotent retry
+operation record, and append-only ambiguous-outcome acknowledgement. Existing
+Runs receive deterministic attempt numbers and retain a missing manifest as a
+legacy `not_recorded` condition; no historical execution context is invented.
+New Runs capture their manifest after the existing context-fence trigger and
+before any managed Delivery can be emitted.
+
 ## Storage Model
 
 Repositories expose domain operations rather than raw SQL to other modules.
@@ -86,8 +94,9 @@ Task revisions. A criteria edit also appends one complete immutable set and
 advances the criteria revision in the same transaction. Run creation validates
 expected Task revision, lifecycle, scheduling, budget and assignment; appends
 budget admission and any required ambiguity acknowledgement; captures
-Task/definition/criteria/context fences; and persists Run plus Delivery in one
-transaction.
+Task/definition/criteria/context fences; and persists the Run attempt plus its
+budget admission atomically. Managed Delivery is persisted separately before
+network send, carrying the exact already-frozen Context Manifest.
 
 Result proposal inserts content, Task-local version, sources, criterion claims,
 evidence references, and attention wakeup together under one operation identity.

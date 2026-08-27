@@ -30,16 +30,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 43);
+  assert.equal(first.currentVersion, 44);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -102,11 +102,20 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
         "WHERE type = 'table' AND name = 'task_agent_assignments'"
       )
       .get() as { count: number };
+    const ambiguityAcknowledgementTable = database
+      .prepare(
+        "SELECT count(*) AS count FROM sqlite_master " +
+        "WHERE type = 'table' AND name = 'run_ambiguity_acknowledgements'"
+      )
+      .get() as { count: number };
+    const runColumns = database
+      .prepare("PRAGMA table_info(runs)")
+      .all() as Array<{ name: string }>;
     const agentColumns = database
       .prepare("PRAGMA table_info(agents)")
       .all() as Array<{ name: string }>;
 
-    assert.equal(migrationCount.count, 43);
+    assert.equal(migrationCount.count, 44);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
     assert.equal(clarificationTable.count, 1);
@@ -116,6 +125,11 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
     assert.equal(devicePairingSessionTable.count, 1);
     assert.equal(taskCriteriaTable.count, 1);
     assert.equal(taskAssignmentTable.count, 1);
+    assert.equal(ambiguityAcknowledgementTable.count, 1);
+    assert.equal(runColumns.some(({ name }) => name === "attempt_number"), true);
+    assert.equal(runColumns.some(({ name }) =>
+      name === "context_manifest_json"
+    ), true);
     assert.equal(agentColumns.some((column) =>
       column.name === "runtime_policy_json"
     ), true);
@@ -201,7 +215,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -359,7 +373,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43]
+    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44]
   );
   const database = openDatabase(databasePath);
   try {
@@ -367,6 +381,8 @@ test("Runtime activity migration preserves pending reply routing intents", async
     assert.equal(runs.listPendingReplyRoutingIntents(runId).length, 1);
     assert.equal(runs.listEvents(runId).at(-1)?.event.type, "reply");
     assert.equal(runs.getContextFence(runId)?.fenceKind, "legacy");
+    assert.equal(runs.getRun(runId)?.attemptNumber, 1);
+    assert.equal(runs.getContextManifest(runId), undefined);
     assert.deepEqual(database.prepare(`
       SELECT mode, latest_through_sequence, desired_through_sequence
       FROM rolling_room_state
@@ -472,7 +488,7 @@ test("Task work migration maps legacy state and replaces a terminal default", as
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [43]);
+  assert.deepEqual(migrated.appliedVersions, [43, 44]);
   const database = openDatabase(databasePath);
   try {
     const rows = database.prepare(`

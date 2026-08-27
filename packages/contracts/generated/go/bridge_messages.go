@@ -127,7 +127,7 @@ type Capabilities struct {
 }
 
 type RuntimePolicy struct {
-	FilesystemAccess FilesystemAccess `json:"filesystemAccess"`
+	FilesystemAccess RuntimePolicyFilesystemAccess `json:"filesystemAccess"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -202,6 +202,7 @@ type RunRequestedMessage struct {
 }
 
 type RunRequestedPayload struct {
+	ContextManifest *ContextManifest    `json:"contextManifest,omitempty"`
 	ContextMessages []ContextMessage    `json:"contextMessages"`
 	ContextPlan     *RuntimeContextPlan `json:"contextPlan,omitempty"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
@@ -223,6 +224,55 @@ type RunRequestedPayload struct {
 	TaskID            *string                  `json:"taskId,omitempty"`
 	TraceID           string                   `json:"traceId"`
 	TriggerMessageID  string                   `json:"triggerMessageId"`
+}
+
+type ContextManifest struct {
+	Criteria           []Criterion       `json:"criteria"`
+	CriteriaRevision   int64             `json:"criteriaRevision"`
+	DefinitionRevision int64             `json:"definitionRevision"`
+	Goal               string            `json:"goal"`
+	Included           Included          `json:"included"`
+	ManifestVersion    ManifestVersion   `json:"manifestVersion"`
+	OmittedCategories  []OmittedCategory `json:"omittedCategories"`
+	Permissions        Permissions       `json:"permissions"`
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	RecordedAt   time.Time `json:"recordedAt"`
+	RunID        string    `json:"runId"`
+	Target       Target    `json:"target"`
+	TaskID       string    `json:"taskId"`
+	TaskRevision int64     `json:"taskRevision"`
+}
+
+type Criterion struct {
+	CriterionKey string `json:"criterionKey"`
+	Description  string `json:"description"`
+	Ordinal      int64  `json:"ordinal"`
+	Required     bool   `json:"required"`
+}
+
+type Included struct {
+	ArtifactIDS         []string `json:"artifactIds"`
+	ArtifactRevision    int64    `json:"artifactRevision"`
+	MemoryIDS           []string `json:"memoryIds"`
+	MessageIDS          []string `json:"messageIds"`
+	ParentRunIDS        []string `json:"parentRunIds"`
+	RoomContextRevision int64    `json:"roomContextRevision"`
+	TaskMemoryRevision  int64    `json:"taskMemoryRevision"`
+}
+
+type Permissions struct {
+	FilesystemAccess   PermissionsFilesystemAccess `json:"filesystemAccess"`
+	Handoff            Handoff                     `json:"handoff"`
+	Interrupt          Handoff                     `json:"interrupt"`
+	MaxDurationSeconds *int64                      `json:"maxDurationSeconds"`
+	NetworkAccess      NetworkAccess               `json:"networkAccess"`
+}
+
+type Target struct {
+	AgentID        string      `json:"agentId"`
+	DeviceID       *string     `json:"deviceId"`
+	RuntimeKind    RuntimeKind `json:"runtimeKind"`
+	WorkspaceAlias *string     `json:"workspaceAlias"`
 }
 
 type ContextMessage struct {
@@ -659,16 +709,16 @@ const (
 type InvocationMode string
 
 const (
-	Managed InvocationMode = "managed"
-	Manual  InvocationMode = "manual"
+	InvocationModeManual InvocationMode = "manual"
+	Managed              InvocationMode = "managed"
 )
 
-type FilesystemAccess string
+type RuntimePolicyFilesystemAccess string
 
 const (
-	LocalPolicy    FilesystemAccess = "local-policy"
-	ReadOnly       FilesystemAccess = "read-only"
-	WorkspaceWrite FilesystemAccess = "workspace-write"
+	PurpleLocalPolicy    RuntimePolicyFilesystemAccess = "local-policy"
+	PurpleReadOnly       RuntimePolicyFilesystemAccess = "read-only"
+	PurpleWorkspaceWrite RuntimePolicyFilesystemAccess = "workspace-write"
 )
 
 type AgentPublishMessageType string
@@ -721,6 +771,61 @@ type AgentProvisionResultMessageType string
 
 const (
 	AgentProvisionResult AgentProvisionResultMessageType = "agent.provision.result"
+)
+
+type ManifestVersion string
+
+const (
+	The10 ManifestVersion = "1.0"
+)
+
+type OmittedCategory string
+
+const (
+	EnvironmentValues    OmittedCategory = "environment_values"
+	HiddenReasoning      OmittedCategory = "hidden_reasoning"
+	LocalPaths           OmittedCategory = "local_paths"
+	OtherWorkspaces      OmittedCategory = "other_workspaces"
+	ProviderCredentials  OmittedCategory = "provider_credentials"
+	ProviderSessionIDS   OmittedCategory = "provider_session_ids"
+	ToolPayloads         OmittedCategory = "tool_payloads"
+	UnrelatedRoomHistory OmittedCategory = "unrelated_room_history"
+)
+
+type PermissionsFilesystemAccess string
+
+const (
+	FilesystemAccessNotRecorded PermissionsFilesystemAccess = "not_recorded"
+	FluffyLocalPolicy           PermissionsFilesystemAccess = "local-policy"
+	FluffyReadOnly              PermissionsFilesystemAccess = "read-only"
+	FluffyWorkspaceWrite        PermissionsFilesystemAccess = "workspace-write"
+)
+
+type Handoff string
+
+const (
+	HandoffNotRecorded Handoff = "not_recorded"
+	Supported          Handoff = "supported"
+	Unsupported        Handoff = "unsupported"
+)
+
+type NetworkAccess string
+
+const (
+	Disabled                 NetworkAccess = "disabled"
+	NetworkAccessLocalPolicy NetworkAccess = "local-policy"
+	NetworkAccessNotRecorded NetworkAccess = "not_recorded"
+)
+
+type RuntimeKind string
+
+const (
+	Codex                  RuntimeKind = "codex"
+	Fake                   RuntimeKind = "fake"
+	Generic                RuntimeKind = "generic"
+	Pi                     RuntimeKind = "pi"
+	RuntimeKindManual      RuntimeKind = "manual"
+	RuntimeKindNotRecorded RuntimeKind = "not_recorded"
 )
 
 type State string

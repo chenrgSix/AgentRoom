@@ -1,4 +1,8 @@
-import { bodyObject } from "./http-helpers.js";
+import {
+  bodyObject,
+  requiredPositiveInteger,
+  requiredString
+} from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerRunRoutes({
@@ -36,6 +40,50 @@ export function registerRunRoutes({
         throw new Error("Run event cursor must be a non-negative integer");
       }
       return runRepository.listEvents(run.runId, after);
+    }
+  );
+  app.get<{ Params: { runId: string } }>(
+    "/api/runs/:runId/context-manifest",
+    async (request) => runs.getContextManifest(
+      principal(request),
+      request.params.runId
+    )
+  );
+  app.post<{ Params: { runId: string } }>(
+    "/api/runs/:runId/ambiguity-acknowledgement",
+    async (request) => {
+      const body = bodyObject(request);
+      return runs.acknowledgeAmbiguity(
+        principal(request),
+        request.params.runId,
+        {
+          operationId: requiredString(body.operationId, "operationId", 140),
+          expectedTaskRevision: requiredPositiveInteger(
+            body.expectedTaskRevision,
+            "expectedTaskRevision"
+          ),
+          reason: requiredString(body.reason, "reason", 1000)
+        },
+        clock()
+      );
+    }
+  );
+  app.post<{ Params: { runId: string } }>(
+    "/api/runs/:runId/retry",
+    async (request) => {
+      const body = bodyObject(request);
+      return runs.retry(
+        principal(request),
+        request.params.runId,
+        {
+          operationId: requiredString(body.operationId, "operationId", 140),
+          expectedTaskRevision: requiredPositiveInteger(
+            body.expectedTaskRevision,
+            "expectedTaskRevision"
+          )
+        },
+        clock()
+      );
     }
   );
   app.get<{ Params: { traceId: string } }>(

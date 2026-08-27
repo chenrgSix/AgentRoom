@@ -2,7 +2,12 @@ import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { AuthService, WebPrincipal } from "../security/auth-service.js";
 import type { AgentTaskRepository } from "../task/task-repository.js";
-import type { RunRecord, RunRepository } from "./run-repository.js";
+import type {
+  RunAmbiguityAcknowledgement,
+  RunContextManifest,
+  RunRecord,
+  RunRepository
+} from "./run-repository.js";
 
 const defaultRunDurationMilliseconds = 20 * 60 * 1000;
 
@@ -74,5 +79,91 @@ export class RunService {
       this.runs.expireQueued(roomId, now);
     }
     return this.runs.listRoomRuns(roomId);
+  }
+
+  public getContextManifest(
+    principal: WebPrincipal,
+    runId: string
+  ): RunContextManifest {
+    const run = this.runs.getRun(runId);
+    if (!run) throw new Error(`Run not found: ${runId}`);
+    this.auth.requireRoomMember(principal, run.roomId);
+    const manifest = this.runs.getContextManifest(runId);
+    if (!manifest) throw new Error("Run Context Manifest was not recorded");
+    return manifest;
+  }
+
+  public acknowledgeAmbiguity(
+    principal: WebPrincipal,
+    runId: string,
+    input: {
+      operationId: string;
+      expectedTaskRevision: number;
+      reason: string;
+    },
+    now: string
+  ): RunAmbiguityAcknowledgement {
+    const run = this.runs.getRun(runId);
+    if (!run) throw new Error(`Run not found: ${runId}`);
+    const task = this.tasks.get(run.taskId);
+    if (!task) throw new Error(`Task not found: ${run.taskId}`);
+    const member = this.auth.requireRoomMember(principal, run.roomId);
+    if (member.role !== "owner" && member.memberId !== task.ownerMemberId) {
+      throw new Error("Only the Task Owner or Team Owner may acknowledge ambiguity");
+    }
+    const operationId = input.operationId.trim();
+    const reason = input.reason.trim();
+    if (!/^op_[A-Za-z0-9_-]{8,128}$/u.test(operationId)) {
+      throw new Error("Ambiguity acknowledgement operation ID is invalid");
+    }
+    if (!Number.isSafeInteger(input.expectedTaskRevision) ||
+      input.expectedTaskRevision < 1) {
+      throw new Error("Expected Task revision must be positive");
+    }
+    if (reason.length < 1 || input.reason.length > 1000) {
+      throw new Error("Ambiguity acknowledgement reason is invalid");
+    }
+    return this.runs.acknowledgeAmbiguity({
+      runId,
+      operationId,
+      expectedTaskRevision: input.expectedTaskRevision,
+      memberId: member.memberId,
+      reason,
+      now
+    });
+  }
+
+  public retry(
+    principal: WebPrincipal,
+    runId: string,
+    input: { operationId: string; expectedTaskRevision: number },
+    now: string
+  ): RunRecord {
+    const run = this.runs.getRun(runId);
+    if (!run) throw new Error(`Run not found: ${runId}`);
+    const task = this.tasks.get(run.taskId);
+    if (!task) throw new Error(`Task not found: ${run.taskId}`);
+    const member = this.auth.requireRoomMember(principal, run.roomId);
+    if (member.role !== "owner" && member.memberId !== task.ownerMemberId) {
+      throw new Error("Only the Task Owner or Team Owner may retry a Run");
+    }
+    const operationId = input.operationId.trim();
+    if (!/^op_[A-Za-z0-9_-]{8,128}$/u.test(operationId)) {
+      throw new Error("Run retry operation ID is invalid");
+    }
+    if (!Number.isSafeInteger(input.expectedTaskRevision) ||
+      input.expectedTaskRevision < 1) {
+      throw new Error("Expected Task revision must be positive");
+    }
+    return this.runs.createRetry({
+      parentRunId: runId,
+      operationId,
+      expectedTaskRevision: input.expectedTaskRevision,
+      memberId: member.memberId,
+      now,
+      deadlineAt: new Date(
+        Date.parse(now) + defaultRunDurationMilliseconds
+      ).toISOString()
+    });
   }
 }

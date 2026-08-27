@@ -16,7 +16,11 @@ import type {
 import {
   ResultEvidenceConsumptionRepository
 } from "../task/result-evidence-consumption-repository.js";
-import type { RunRecord, RunRepository } from "./run-repository.js";
+import type {
+  RunContextManifest,
+  RunRecord,
+  RunRepository
+} from "./run-repository.js";
 
 interface DeliveryPayload {
   runId: string;
@@ -53,6 +57,7 @@ interface DeliveryPayload {
       task?: ContextLongTermMemoryScope;
     };
   };
+  contextManifest: RunContextManifest;
   contextMessages: Array<{
     messageId: string;
     sequence: number;
@@ -393,6 +398,10 @@ export class DeliveryService {
       )
       : undefined;
     const contextFence = this.runs.getContextFence(run.runId);
+    const contextManifest = this.runs.getContextManifest(run.runId);
+    if (!contextManifest) {
+      throw new Error("Run delivery requires a frozen Context Manifest");
+    }
     const plannedContext = this.contextPlanner.plan({
       roomId: run.roomId,
       taskId: run.taskId,
@@ -441,6 +450,7 @@ export class DeliveryService {
       ...(run.parentRunId ? { parentRunId: run.parentRunId } : {}),
       instruction: run.instruction,
       contextPlan,
+      contextManifest,
       contextMessages: roomContextBundle
         ? []
         : plannedContext.contextMessages.map((message) =>

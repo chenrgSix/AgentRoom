@@ -67,11 +67,11 @@ type Client struct {
 }
 
 func publishedRuntimePolicy(agent config.AgentConfig) contracts.RuntimePolicy {
-	filesystemAccess := contracts.LocalPolicy
+	filesystemAccess := contracts.RuntimePolicyFilesystemAccess("local-policy")
 	if agent.RuntimeKind == "codex" || agent.Adapter == "codex" {
-		filesystemAccess = contracts.WorkspaceWrite
+		filesystemAccess = contracts.RuntimePolicyFilesystemAccess("workspace-write")
 		if agent.Sandbox == "read-only" {
-			filesystemAccess = contracts.ReadOnly
+			filesystemAccess = contracts.RuntimePolicyFilesystemAccess("read-only")
 		}
 	}
 	return contracts.RuntimePolicy{FilesystemAccess: filesystemAccess}

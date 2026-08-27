@@ -60,6 +60,43 @@ func TestRuntimePromptPreservesLegacyInstructionWithoutProjection(t *testing.T) 
 	}
 }
 
+func TestRuntimePromptProjectsFrozenContextManifest(t *testing.T) {
+	maxDuration := int64(1200)
+	prompt := runtimePrompt(contracts.RunRequestedPayload{
+		Instruction: "Review the implementation.",
+		ContextManifest: &contracts.ContextManifest{
+			TaskRevision: 4, DefinitionRevision: 2, CriteriaRevision: 3,
+			Goal: "Ship a bounded review.",
+			Criteria: []contracts.Criterion{{
+				CriterionKey: "criterion_review0001",
+				Description:  "Focused tests pass.", Required: true, Ordinal: 1,
+			}},
+			Permissions: contracts.Permissions{
+				FilesystemAccess:   contracts.PermissionsFilesystemAccess("workspace-write"),
+				NetworkAccess:      contracts.NetworkAccess("not_recorded"),
+				Interrupt:          contracts.Handoff("supported"),
+				Handoff:            contracts.Handoff("unsupported"),
+				MaxDurationSeconds: &maxDuration,
+			},
+			OmittedCategories: []contracts.OmittedCategory{
+				contracts.ProviderCredentials,
+				contracts.HiddenReasoning,
+			},
+		},
+	})
+	for _, expected := range []string{
+		"Frozen Run contract (Task revision 4; definition revision 2; criteria revision 3)",
+		"Task goal: Ship a bounded review.",
+		"[required] criterion_review0001: Focused tests pass.",
+		"filesystem=workspace-write; network=not_recorded; interrupt=supported; handoff=unsupported; max duration=1200 seconds",
+		"provider_credentials, hidden_reasoning",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("Context Manifest prompt omitted %q:\n%s", expected, prompt)
+		}
+	}
+}
+
 func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
 	commitSHA := "21f9e8c"
 	deliveryKind := contracts.Delta

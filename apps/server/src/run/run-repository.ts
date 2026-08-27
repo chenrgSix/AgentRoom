@@ -23,6 +23,8 @@ export interface RunRecord {
   requesterMemberId: string;
   targetAgentId: string;
   parentRunId: string | null;
+  attemptNumber?: number;
+  retryOfRunId?: string | null;
   instruction: string;
   state: RunState;
   lastSequence: number;
@@ -31,6 +33,67 @@ export interface RunRecord {
   updatedAt: string;
   terminalAt: string | null;
   orchestrationKey?: string;
+}
+
+export interface RunContextManifest {
+  manifestVersion: "1.0";
+  runId: string;
+  taskId: string;
+  taskRevision: number;
+  definitionRevision: number;
+  criteriaRevision: number;
+  goal: string;
+  criteria: Array<{
+    criterionKey: string;
+    description: string;
+    required: boolean;
+    ordinal: number;
+  }>;
+  target: {
+    agentId: string;
+    deviceId: string | null;
+    runtimeKind: "generic" | "manual" | "fake";
+    workspaceAlias: string | null;
+  };
+  included: {
+    messageIds: string[];
+    artifactIds: string[];
+    memoryIds: string[];
+    parentRunIds: string[];
+    roomContextRevision: number;
+    taskMemoryRevision: number;
+    artifactRevision: number;
+  };
+  permissions: {
+    filesystemAccess: "read-only" | "workspace-write" | "local-policy" |
+      "not_recorded";
+    networkAccess: "not_recorded";
+    interrupt: "supported" | "unsupported" | "not_recorded";
+    handoff: "supported" | "unsupported" | "not_recorded";
+    maxDurationSeconds: number;
+  };
+  omittedCategories: Array<
+    | "unrelated_room_history"
+    | "local_paths"
+    | "environment_values"
+    | "provider_credentials"
+    | "provider_session_ids"
+    | "hidden_reasoning"
+    | "tool_payloads"
+    | "other_workspaces"
+  >;
+  recordedAt: string;
+}
+
+export interface RunAmbiguityAcknowledgement {
+  runId: string;
+  operationId: string;
+  taskId: string;
+  acknowledgedByMemberId: string;
+  reason: string;
+  taskRevisionBefore: number;
+  taskRevisionAfter: number;
+  acknowledgedAt: string;
 }
 
 export interface RunContextFence {
@@ -80,6 +143,9 @@ interface RunRow {
   requester_member_id: string;
   target_agent_id: string;
   parent_run_id: string | null;
+  attempt_number: number;
+  retry_of_run_id: string | null;
+  context_manifest_json: string | null;
   instruction: string;
   state: RunState;
   last_sequence: number;
@@ -149,6 +215,8 @@ function mapRun(row: RunRow): RunRecord {
     requesterMemberId: row.requester_member_id,
     targetAgentId: row.target_agent_id,
     parentRunId: row.parent_run_id,
+    attemptNumber: row.attempt_number,
+    retryOfRunId: row.retry_of_run_id,
     instruction: row.instruction,
     state: row.state,
     lastSequence: row.last_sequence,
@@ -273,20 +341,237 @@ export class RunRepository {
         run_id, trace_id, room_id, task_id, trigger_message_id,
         requester_member_id, target_agent_id, parent_run_id, instruction,
         state, last_sequence, deadline_at, created_at, updated_at, terminal_at,
-        orchestration_key
+        orchestration_key, attempt_number, retry_of_run_id, context_manifest_json
       ) VALUES (
         @runId, @traceId, @roomId, @taskId, @triggerMessageId,
         @requesterMemberId, @targetAgentId, @parentRunId, @instruction,
         @state, @lastSequence, @deadlineAt, @createdAt, @updatedAt,
-        @terminalAt, @orchestrationKey
+        @terminalAt, @orchestrationKey, @attemptNumber, @retryOfRunId, NULL
       )
     `);
     this.database.transaction(() => {
       for (const run of runs) {
-        insert.run({ ...run, orchestrationKey: run.orchestrationKey ?? null });
+        const attemptNumber = run.attemptNumber ?? this.nextAttemptNumber(run.taskId);
+        insert.run({
+          ...run,
+          attemptNumber,
+          retryOfRunId: run.retryOfRunId ?? null,
+          orchestrationKey: run.orchestrationKey ?? null
+        });
+        const manifest = this.buildContextManifest(run.runId);
+        this.database.prepare(`
+          UPDATE runs SET context_manifest_json = ? WHERE run_id = ?
+        `).run(JSON.stringify(manifest), run.runId);
       }
     }).immediate();
-    return runs;
+    return runs.map(({ runId }) => this.getRun(runId)!);
+  }
+
+  public getContextManifest(runId: string): RunContextManifest | undefined {
+    const row = this.database.prepare(`
+      SELECT context_manifest_json FROM runs WHERE run_id = ?
+    `).get(runId) as { context_manifest_json: string | null } | undefined;
+    return row?.context_manifest_json
+      ? JSON.parse(row.context_manifest_json) as RunContextManifest
+      : undefined;
+  }
+
+  public getAmbiguityAcknowledgement(
+    runId: string
+  ): RunAmbiguityAcknowledgement | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM run_ambiguity_acknowledgements WHERE run_id = ?
+    `).get(runId) as {
+      run_id: string;
+      operation_id: string;
+      task_id: string;
+      acknowledged_by_member_id: string;
+      reason: string;
+      task_revision_before: number;
+      task_revision_after: number;
+      acknowledged_at: string;
+    } | undefined;
+    return row && {
+      runId: row.run_id,
+      operationId: row.operation_id,
+      taskId: row.task_id,
+      acknowledgedByMemberId: row.acknowledged_by_member_id,
+      reason: row.reason,
+      taskRevisionBefore: row.task_revision_before,
+      taskRevisionAfter: row.task_revision_after,
+      acknowledgedAt: row.acknowledged_at
+    };
+  }
+
+  public acknowledgeAmbiguity(input: {
+    runId: string;
+    operationId: string;
+    expectedTaskRevision: number;
+    memberId: string;
+    reason: string;
+    now: string;
+  }): RunAmbiguityAcknowledgement {
+    this.database.transaction(() => {
+      const operation = this.database.prepare(`
+        SELECT run_id FROM run_ambiguity_acknowledgements
+        WHERE operation_id = ?
+      `).get(input.operationId) as { run_id: string } | undefined;
+      if (operation) {
+        if (operation.run_id !== input.runId) {
+          throw new Error("Ambiguity operation is bound to another Run");
+        }
+        return;
+      }
+      const run = this.getRun(input.runId);
+      if (!run || run.state !== "outcome_unknown") {
+        throw new Error("Only an outcome_unknown Run may be acknowledged");
+      }
+      if (this.getAmbiguityAcknowledgement(input.runId)) {
+        throw new Error("Run ambiguity is already acknowledged");
+      }
+      const updated = this.database.prepare(`
+        UPDATE agent_tasks
+        SET task_revision = task_revision + 1, updated_at = ?
+        WHERE task_id = ? AND task_revision = ?
+      `).run(input.now, run.taskId, input.expectedTaskRevision);
+      if (updated.changes !== 1) throw new Error("Task revision conflict");
+      this.database.prepare(`
+        INSERT INTO run_ambiguity_acknowledgements (
+          run_id, operation_id, task_id, acknowledged_by_member_id, reason,
+          task_revision_before, task_revision_after, acknowledged_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        input.runId,
+        input.operationId,
+        run.taskId,
+        input.memberId,
+        input.reason,
+        input.expectedTaskRevision,
+        input.expectedTaskRevision + 1,
+        input.now
+      );
+    }).immediate();
+    return this.getAmbiguityAcknowledgement(input.runId)!;
+  }
+
+  public createRetry(input: {
+    parentRunId: string;
+    operationId: string;
+    expectedTaskRevision: number;
+    memberId: string;
+    now: string;
+    deadlineAt: string;
+  }): RunRecord {
+    let retryRunId: string | undefined;
+    this.database.transaction(() => {
+      const replay = this.database.prepare(`
+        SELECT parent_run_id, retry_run_id FROM run_retry_operations
+        WHERE operation_id = ?
+      `).get(input.operationId) as
+        | { parent_run_id: string; retry_run_id: string }
+        | undefined;
+      if (replay) {
+        if (replay.parent_run_id !== input.parentRunId) {
+          throw new Error("Retry operation is bound to another Run");
+        }
+        retryRunId = replay.retry_run_id;
+        return;
+      }
+      const parent = this.getRun(input.parentRunId);
+      if (!parent || !terminalStates.has(parent.state) || parent.state === "completed") {
+        throw new Error("Only an unsuccessful terminal Run may be retried");
+      }
+      if (parent.state === "outcome_unknown" &&
+        !this.getAmbiguityAcknowledgement(parent.runId)) {
+        throw new Error("Ambiguous Run outcome requires acknowledgement before retry");
+      }
+      const task = this.database.prepare(`
+        SELECT task_revision, lifecycle_state, scheduling_state,
+          max_run_attempts, budget_run_attempts,
+          max_execution_duration_seconds, budget_execution_duration_seconds,
+          is_default
+        FROM agent_tasks WHERE task_id = ?
+      `).get(parent.taskId) as {
+        task_revision: number;
+        lifecycle_state: string;
+        scheduling_state: string;
+        max_run_attempts: number;
+        budget_run_attempts: number;
+        max_execution_duration_seconds: number;
+        budget_execution_duration_seconds: number;
+        is_default: number;
+      } | undefined;
+      if (!task || task.task_revision !== input.expectedTaskRevision) {
+        throw new Error("Task revision conflict");
+      }
+      if (!["ready", "active", "review"].includes(task.lifecycle_state) ||
+        task.scheduling_state !== "enabled") {
+        throw new Error("Run Task is not schedulable");
+      }
+      if (task.budget_run_attempts >= task.max_run_attempts ||
+        task.budget_execution_duration_seconds >=
+          task.max_execution_duration_seconds) {
+        throw new Error("Task budget is exhausted");
+      }
+      if (task.is_default !== 1 && !this.database.prepare(`
+        SELECT 1 FROM task_agent_assignments WHERE task_id = ? AND agent_id = ?
+      `).get(parent.taskId, parent.targetAgentId)) {
+        throw new Error("Retry target is no longer assigned to the Task");
+      }
+      retryRunId = createOpaqueId("run");
+      const retryTriggerMessageId = createOpaqueId("msg");
+      const sequence = this.database.prepare(`
+        UPDATE rooms SET next_message_sequence = next_message_sequence + 1
+        WHERE room_id = ? RETURNING next_message_sequence AS sequence
+      `).get(parent.roomId) as { sequence: number };
+      this.database.prepare(`
+        INSERT INTO messages (
+          message_id, trace_id, room_id, task_id, sequence, sender_type,
+          sender_id, content, parent_message_id, client_message_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, 'member', ?, ?, ?, NULL, ?)
+      `).run(
+        retryTriggerMessageId,
+        parent.traceId,
+        parent.roomId,
+        parent.taskId,
+        sequence.sequence,
+        input.memberId,
+        parent.instruction,
+        parent.triggerMessageId,
+        input.now
+      );
+      this.createRuns([{
+        runId: retryRunId,
+        traceId: parent.traceId,
+        roomId: parent.roomId,
+        taskId: parent.taskId,
+        triggerMessageId: retryTriggerMessageId,
+        requesterMemberId: input.memberId,
+        targetAgentId: parent.targetAgentId,
+        parentRunId: null,
+        retryOfRunId: parent.runId,
+        instruction: parent.instruction,
+        state: "queued",
+        lastSequence: 0,
+        deadlineAt: input.deadlineAt,
+        createdAt: input.now,
+        updatedAt: input.now,
+        terminalAt: null
+      }]);
+      this.database.prepare(`
+        INSERT INTO run_retry_operations (
+          operation_id, parent_run_id, retry_run_id, created_by_member_id,
+          created_at
+        ) VALUES (?, ?, ?, ?, ?)
+      `).run(
+        input.operationId,
+        input.parentRunId,
+        retryRunId,
+        input.memberId,
+        input.now
+      );
+    }).immediate();
+    return this.getRun(retryRunId!)!;
   }
 
   public getRun(runId: string): RunRecord | undefined {
@@ -526,5 +811,129 @@ export class RunRepository {
       SET state = 'completed', completed_at = ?
       WHERE parent_run_id = ? AND reply_sequence = ? AND state = 'pending'
     `).run(now, parentRunId, replySequence);
+  }
+
+  private nextAttemptNumber(taskId: string): number {
+    return (this.database.prepare(`
+      SELECT COALESCE(MAX(attempt_number), 0) + 1 AS next
+      FROM runs WHERE task_id = ?
+    `).get(taskId) as { next: number }).next;
+  }
+
+  private buildContextManifest(runId: string): RunContextManifest {
+    const run = this.getRun(runId);
+    const fence = this.getContextFence(runId);
+    if (!run || !fence) {
+      throw new Error("Run Context Manifest requires a captured context fence");
+    }
+    const task = this.database.prepare(`
+      SELECT task_revision, definition_revision, criteria_revision, goal
+      FROM agent_tasks WHERE task_id = ?
+    `).get(run.taskId) as {
+      task_revision: number;
+      definition_revision: number;
+      criteria_revision: number;
+      goal: string;
+    } | undefined;
+    const agent = this.database.prepare(`
+      SELECT device_id, integration_mode, capabilities_json,
+        runtime_policy_json, workspace_alias
+      FROM agents WHERE agent_id = ?
+    `).get(run.targetAgentId) as {
+      device_id: string | null;
+      integration_mode: "managed" | "manual" | "fake";
+      capabilities_json: string;
+      runtime_policy_json: string | null;
+      workspace_alias: string | null;
+    } | undefined;
+    if (!task || !agent) {
+      throw new Error("Run Context Manifest identity is unavailable");
+    }
+    const criteria = (this.database.prepare(`
+      SELECT criterion_key, description, required, ordinal
+      FROM task_criteria_entries
+      WHERE task_id = ? AND criteria_revision = ?
+      ORDER BY ordinal, criterion_key
+    `).all(run.taskId, task.criteria_revision) as Array<{
+      criterion_key: string;
+      description: string;
+      required: number;
+      ordinal: number;
+    }>).map((criterion) => ({
+      criterionKey: criterion.criterion_key,
+      description: criterion.description,
+      required: criterion.required === 1,
+      ordinal: criterion.ordinal
+    }));
+    const capabilities = JSON.parse(agent.capabilities_json) as {
+      supportsInterrupt?: boolean;
+      supportsHandoff?: boolean;
+    };
+    const runtimePolicy = agent.runtime_policy_json
+      ? JSON.parse(agent.runtime_policy_json) as {
+          filesystemAccess?: "read-only" | "workspace-write" | "local-policy";
+        }
+      : undefined;
+    const parentRunIds = [...new Set([
+      run.parentRunId,
+      run.retryOfRunId ?? null
+    ].filter((value): value is string => value !== null))];
+    return {
+      manifestVersion: "1.0",
+      runId: run.runId,
+      taskId: run.taskId,
+      taskRevision: task.task_revision,
+      definitionRevision: task.definition_revision,
+      criteriaRevision: task.criteria_revision,
+      goal: fence.taskGoal,
+      criteria,
+      target: {
+        agentId: run.targetAgentId,
+        deviceId: agent.device_id,
+        runtimeKind: agent.integration_mode === "managed"
+          ? "generic"
+          : agent.integration_mode,
+        workspaceAlias: agent.workspace_alias
+      },
+      included: {
+        messageIds: [run.triggerMessageId],
+        artifactIds: [],
+        memoryIds: [],
+        parentRunIds,
+        roomContextRevision: fence.roomLongTermMemoryRevision,
+        taskMemoryRevision: fence.taskLongTermMemoryRevision,
+        artifactRevision: fence.taskArtifactRevision
+      },
+      permissions: {
+        filesystemAccess: runtimePolicy?.filesystemAccess ?? "not_recorded",
+        networkAccess: "not_recorded",
+        interrupt: typeof capabilities.supportsInterrupt === "boolean"
+          ? capabilities.supportsInterrupt ? "supported" : "unsupported"
+          : "not_recorded",
+        handoff: typeof capabilities.supportsHandoff === "boolean"
+          ? capabilities.supportsHandoff ? "supported" : "unsupported"
+          : "not_recorded",
+        maxDurationSeconds: Math.min(
+          86_400,
+          Math.max(
+            1,
+            Math.floor(
+              (Date.parse(run.deadlineAt) - Date.parse(run.createdAt)) / 1000
+            )
+          )
+        )
+      },
+      omittedCategories: [
+        "unrelated_room_history",
+        "local_paths",
+        "environment_values",
+        "provider_credentials",
+        "provider_session_ids",
+        "hidden_reasoning",
+        "tool_payloads",
+        "other_workspaces"
+      ],
+      recordedAt: run.createdAt
+    };
   }
 }

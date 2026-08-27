@@ -410,6 +410,61 @@
               }
             }
           },
+          "contextManifest": {
+            "manifestVersion": "1.0",
+            "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "taskRevision": 4,
+            "definitionRevision": 2,
+            "criteriaRevision": 2,
+            "goal": "Preserve compatibility while reviewing the API boundary.",
+            "criteria": [
+              {
+                "criterionKey": "criterion_compat0001",
+                "description": "The wire contract remains backward compatible.",
+                "required": true,
+                "ordinal": 1
+              }
+            ],
+            "target": {
+              "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+              "runtimeKind": "generic",
+              "workspaceAlias": "agentroom-main"
+            },
+            "included": {
+              "messageIds": [
+                "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5WB"
+              ],
+              "artifactIds": [
+                "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+              ],
+              "memoryIds": [
+                "memory_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+              ],
+              "parentRunIds": [],
+              "roomContextRevision": 3,
+              "taskMemoryRevision": 2,
+              "artifactRevision": 1
+            },
+            "permissions": {
+              "filesystemAccess": "workspace-write",
+              "networkAccess": "not_recorded",
+              "interrupt": "supported",
+              "handoff": "supported",
+              "maxDurationSeconds": 1200
+            },
+            "omittedCategories": [
+              "local_paths",
+              "environment_values",
+              "provider_credentials",
+              "provider_session_ids",
+              "hidden_reasoning",
+              "tool_payloads",
+              "other_workspaces"
+            ],
+            "recordedAt": "2026-08-22T10:00:04Z"
+          },
           "contextMessages": [],
           "routingAgents": [
             {

@@ -177,10 +177,10 @@ export interface Capabilities {
 export type InvocationMode = "managed" | "manual";
 
 export interface RuntimePolicy {
-  filesystemAccess: FilesystemAccess;
+  filesystemAccess: RuntimePolicyFilesystemAccess;
 }
 
-export type FilesystemAccess = "read-only" | "workspace-write" | "local-policy";
+export type RuntimePolicyFilesystemAccess = "read-only" | "workspace-write" | "local-policy";
 
 export type AgentPublishMessageType = "agent.publish";
 
@@ -297,8 +297,9 @@ export interface RunRequestedMessage {
 }
 
 export interface RunRequestedPayload {
-  contextMessages: ContextMessage[];
-  contextPlan?:    RuntimeContextPlan;
+  contextManifest?: ContextManifest;
+  contextMessages:  ContextMessage[];
+  contextPlan?:     RuntimeContextPlan;
   /**
    * RFC 3339 date-time normalized to the UTC Z suffix.
    */
@@ -324,6 +325,69 @@ export interface RunRequestedPayload {
   triggerMessageId:   string;
   [property: string]: unknown;
 }
+
+export interface ContextManifest {
+  criteria:           Criterion[];
+  criteriaRevision:   number;
+  definitionRevision: number;
+  goal:               string;
+  included:           Included;
+  manifestVersion:    ManifestVersion;
+  omittedCategories:  [OmittedCategory, ...OmittedCategory[]];
+  permissions:        Permissions;
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  recordedAt:   string;
+  runId:        string;
+  target:       Target;
+  taskId:       string;
+  taskRevision: number;
+}
+
+export interface Criterion {
+  criterionKey: string;
+  description:  string;
+  ordinal:      number;
+  required:     boolean;
+}
+
+export interface Included {
+  artifactIds:         string[];
+  artifactRevision:    number;
+  memoryIds:           string[];
+  messageIds:          string[];
+  parentRunIds:        string[];
+  roomContextRevision: number;
+  taskMemoryRevision:  number;
+}
+
+export type ManifestVersion = "1.0";
+
+export type OmittedCategory = "unrelated_room_history" | "local_paths" | "environment_values" | "provider_credentials" | "provider_session_ids" | "hidden_reasoning" | "tool_payloads" | "other_workspaces";
+
+export interface Permissions {
+  filesystemAccess:   PermissionsFilesystemAccess;
+  handoff:            Handoff;
+  interrupt:          Handoff;
+  maxDurationSeconds: number | null;
+  networkAccess:      NetworkAccess;
+}
+
+export type PermissionsFilesystemAccess = "read-only" | "workspace-write" | "local-policy" | "not_recorded";
+
+export type Handoff = "supported" | "unsupported" | "not_recorded";
+
+export type NetworkAccess = "disabled" | "local-policy" | "not_recorded";
+
+export interface Target {
+  agentId:        string;
+  deviceId:       null | string;
+  runtimeKind:    RuntimeKind;
+  workspaceAlias: null | string;
+}
+
+export type RuntimeKind = "codex" | "pi" | "generic" | "fake" | "manual" | "not_recorded";
 
 export interface ContextMessage {
   content:   string;

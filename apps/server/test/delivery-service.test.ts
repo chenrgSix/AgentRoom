@@ -169,6 +169,12 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
             artifactRefs?: Array<{ artifactRevision?: number }>;
           };
         };
+        contextManifest?: {
+          runId?: string;
+          taskId?: string;
+          goal?: string;
+          included?: { messageIds?: string[] };
+        };
         contextMessages?: Array<{ sequence?: number; senderName?: string }>;
         routingAgents?: Array<{ agentId: string; name: string }>;
       };
@@ -181,6 +187,15 @@ test("ACK loss resends one durable Delivery identity and converges once", async 
       runtimeScopeId
     });
     assert.equal(requested.payload?.targetAgentName, "Builder");
+    assert.deepEqual(
+      requested.payload?.contextManifest,
+      runRepository.getContextManifest(run.runId)
+    );
+    assert.equal(requested.payload?.contextManifest?.runId, run.runId);
+    assert.equal(requested.payload?.contextManifest?.taskId, run.taskId);
+    assert.deepEqual(requested.payload?.contextManifest?.included?.messageIds, [
+      message.messageId
+    ]);
     assert.equal(requested.payload?.contextPlan?.roomMemory?.revision, 1);
     assert.deepEqual(
       requested.payload?.contextPlan?.roomMemory?.sourceMessageIds,

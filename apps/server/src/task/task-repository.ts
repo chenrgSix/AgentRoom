@@ -314,7 +314,11 @@ export class AgentTaskRepository {
 
   public hasUnacknowledgedAmbiguity(taskId: string): boolean {
     return Boolean(this.database.prepare(`
-      SELECT 1 FROM runs WHERE task_id = ? AND state = 'outcome_unknown'
+      SELECT 1 FROM runs run
+      LEFT JOIN run_ambiguity_acknowledgements acknowledgement
+        ON acknowledgement.run_id = run.run_id
+      WHERE run.task_id = ? AND run.state = 'outcome_unknown'
+        AND acknowledgement.run_id IS NULL
       LIMIT 1
     `).get(taskId));
   }
@@ -691,8 +695,12 @@ export class AgentTaskRepository {
       );
     }
     const ambiguous = this.database.prepare(`
-      SELECT run_id, updated_at FROM runs WHERE task_id = ?
-        AND state = 'outcome_unknown' ORDER BY updated_at, run_id LIMIT 1
+      SELECT run.run_id, run.updated_at FROM runs run
+      LEFT JOIN run_ambiguity_acknowledgements acknowledgement
+        ON acknowledgement.run_id = run.run_id
+      WHERE run.task_id = ? AND run.state = 'outcome_unknown'
+        AND acknowledgement.run_id IS NULL
+      ORDER BY run.updated_at, run.run_id LIMIT 1
     `).get(row.task_id) as { run_id: string; updated_at: string } | undefined;
     if (ambiguous) {
       push(
