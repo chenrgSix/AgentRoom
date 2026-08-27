@@ -686,6 +686,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .onboarding-form input,
 :root[data-theme="light"] .action-card input,
 :root[data-theme="light"] .invitation-link input,
+:root[data-theme="light"] .provisioning-form input,
+:root[data-theme="light"] .provisioning-form select,
 :root[data-theme="light"] .access-form input { border-color: #c9d1c1; background: #fff; color: #263021; }
 :root[data-theme="light"] .management-intro > div > p:last-child,
 :root[data-theme="light"] .empty-stage > p,
@@ -718,6 +720,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .policy-badge.local-policy { border-color: #a4bdca; background: #edf5f8; color: #47728a; }
 :root[data-theme="light"] .panel-empty,
 :root[data-theme="light"] .device-empty { border-color: #cbd4c1; color: #64705c; }
+:root[data-theme="light"] .provisioning-form,
+:root[data-theme="light"] .provisioning-request-list li { border-color: #d5dccd; background: #f5f8f1; }
+:root[data-theme="light"] .provisioning-intro,
+:root[data-theme="light"] .provisioning-request-list p,
+:root[data-theme="light"] .provisioning-history-empty { color: #65705f; }
+:root[data-theme="light"] .provisioning-request-list strong,
+:root[data-theme="light"] .provisioning-history-heading strong { color: #303b2a; }
+:root[data-theme="light"] .provisioning-history { border-color: #d5dccd; }
+:root[data-theme="light"] .provisioning-error { border-color: #d9aaa3; background: #fff0ed; color: #8a3d35; }
 :root[data-theme="light"] .connection-tabs { border-color: #d0d8c8; background: #edf1e8; }
 :root[data-theme="light"] .connection-tabs button { color: #687360; }
 :root[data-theme="light"] .connection-tabs button[aria-selected="true"] { background: #dfe9cf; color: #435820; box-shadow: inset 0 0 0 1px #99aa75; }

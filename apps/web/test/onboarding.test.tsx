@@ -85,6 +85,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   };
   const device = {
     deviceId: "device_test",
+    ownerMemberId: member.memberId,
     name: "Alice Mac",
     status: "active" as const
   };
@@ -97,6 +98,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   };
   const secondAgent = {
     agentId: "agent_builder",
+    ownerMemberId: member.memberId,
+    deviceId: device.deviceId,
     integrationMode: "managed" as const,
     name: "Local Codex",
     presence: "ready",
@@ -147,6 +150,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   let discussionChangeDelivered = false;
   let streamFinal = false;
   let streamChangeDelivered = false;
+  let provisionRequest: Record<string, unknown> | null = null;
+  let provisionReady = false;
   const discussionRuns = [{
     runId: "run_review",
     taskId: roomTask.taskId,
@@ -454,6 +459,40 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/teams/${secondTeam.teamId}/devices`) {
       return jsonResponse([]);
     }
+    if (path === `/api/teams/${team.teamId}/agent-provision-requests` && method === "POST") {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      provisionRequest = {
+        requestId: body.requestId,
+        teamId: team.teamId,
+        deviceId: body.deviceId,
+        templateAgentId: body.templateAgentId,
+        agentId: "agent_release_reviewer",
+        requestedByMemberId: member.memberId,
+        name: body.name,
+        role: body.role,
+        status: "delivered",
+        rejectionReason: null,
+        createdAt: "2026-08-23T00:20:00.000Z",
+        deliveredAt: "2026-08-23T00:20:01.000Z",
+        respondedAt: null,
+        readyAt: null,
+        updatedAt: "2026-08-23T00:20:01.000Z"
+      };
+      return jsonResponse(provisionRequest);
+    }
+    if (path === `/api/teams/${team.teamId}/agent-provision-requests`) {
+      return jsonResponse(provisionRequest
+        ? [{
+            ...provisionRequest,
+            status: provisionReady ? "ready" : "delivered",
+            respondedAt: provisionReady ? "2026-08-23T00:20:02.000Z" : null,
+            readyAt: provisionReady ? "2026-08-23T00:20:03.000Z" : null,
+            updatedAt: provisionReady
+              ? "2026-08-23T00:20:03.000Z"
+              : "2026-08-23T00:20:01.000Z"
+          }]
+        : []);
+    }
     if (path === `/api/teams/${team.teamId}/members`) {
       return jsonResponse([member]);
     }
@@ -647,6 +686,46 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     screen.getByRole("heading", { name: "Team 智能体" });
     screen.getByText("托管本地 Codex");
     screen.getByText(/这不是智能体名称/u);
+    await screen.findByRole("heading", { name: "从我的 Bridge 创建 Agent" });
+    assert.equal(
+      (screen.getByLabelText("我的在线 Bridge") as HTMLSelectElement).value,
+      device.deviceId
+    );
+    assert.equal(
+      (screen.getByLabelText("本地模板 Agent") as HTMLSelectElement).value,
+      secondAgent.agentId
+    );
+    fireEvent.change(screen.getByLabelText("新 Agent 名称"), {
+      target: { value: "Release Reviewer" }
+    });
+    fireEvent.change(screen.getByLabelText("角色"), {
+      target: { value: "Release reviewer" }
+    });
+    const managementCode = screen.getByLabelText("Bridge 管理码") as HTMLInputElement;
+    fireEvent.change(managementCode, { target: { value: "246810" } });
+    fireEvent.submit(screen.getByRole("button", { name: "创建 Agent" }).closest("form")!);
+    await screen.findByText("Bridge 已收到", { selector: ".status-badge" });
+    assert.equal(managementCode.value, "");
+    const provisionPost = requests.find((candidate) =>
+      candidate.path === `/api/teams/${team.teamId}/agent-provision-requests` &&
+      candidate.method === "POST"
+    );
+    const provisionBody = JSON.parse(provisionPost?.body ?? "{}") as Record<string, unknown>;
+    assert.deepEqual(provisionBody, {
+      requestId: provisionBody.requestId,
+      deviceId: device.deviceId,
+      templateAgentId: secondAgent.agentId,
+      name: "Release Reviewer",
+      role: "Release reviewer",
+      managementCode: "246810"
+    });
+    assert.doesNotMatch(
+      JSON.stringify(provisionRequest),
+      /246810|managementCode|workspace|command|credential|tool/u
+    );
+    provisionReady = true;
+    fireEvent.click(screen.getByRole("button", { name: "刷新状态" }));
+    await screen.findByText("已就绪", { selector: ".status-badge" });
     const reviewCard = screen.getByRole("heading", { name: "Review Bot" }).closest("article");
     assert.ok(reviewCard);
     fireEvent.click(within(reviewCard).getByRole("button", { name: "停用" }));

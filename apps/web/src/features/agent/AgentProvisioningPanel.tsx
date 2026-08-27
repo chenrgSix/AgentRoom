@@ -1,4 +1,4 @@
-import {
+import React, {
   type FormEvent,
   useCallback,
   useEffect,
@@ -24,10 +24,12 @@ const onlinePresences = new Set(["ready", "busy", "degraded"]);
 
 const rejectionLabels: Record<string, { "zh-CN": string; en: string }> = {
   busy: { "zh-CN": "Bridge 正在执行任务", en: "The Bridge is running active work" },
-  disabled: { "zh-CN": "Bridge 已关闭中央创建", en: "Central creation is disabled on the Bridge" },
+  configuration_failed: { "zh-CN": "Bridge 保存本地配置失败", en: "The Bridge could not save its local configuration" },
+  identity_conflict: { "zh-CN": "本地 Agent 身份发生冲突", en: "The local Agent identity conflicts with existing configuration" },
   invalid_code: { "zh-CN": "管理码不正确或已过期", en: "The management code is invalid or expired" },
   invalid_request: { "zh-CN": "请求内容无效", en: "The request is invalid" },
-  save_failed: { "zh-CN": "Bridge 保存本地配置失败", en: "The Bridge could not save its local configuration" },
+  provisioning_disabled: { "zh-CN": "Bridge 已关闭中央创建", en: "Central creation is disabled on the Bridge" },
+  rate_limited: { "zh-CN": "管理码尝试过多，请稍后再试", en: "Too many code attempts; try again later" },
   template_not_found: { "zh-CN": "本地模板 Agent 已不存在", en: "The local template Agent no longer exists" }
 };
 
@@ -54,6 +56,16 @@ export function provisioningStatusLabel(
   return labels[status][locale];
 }
 
+export function provisioningRejectionLabel(
+  reason: string | null,
+  locale: Locale
+): string {
+  if (reason && rejectionLabels[reason]) return rejectionLabels[reason][locale];
+  return locale === "zh-CN"
+    ? "Bridge 拒绝了本次请求。"
+    : "The Bridge rejected this request.";
+}
+
 function requestHelp(request: AgentProvisionRequest, locale: Locale): string {
   if (request.status === "pending") {
     return locale === "zh-CN"
@@ -75,10 +87,7 @@ function requestHelp(request: AgentProvisionRequest, locale: Locale): string {
       ? "新 Agent 已由 Bridge 发布，可以加入房间。"
       : "The new Agent was published by the Bridge and can now join Rooms.";
   }
-  const reason = request.rejectionReason
-    ? rejectionLabels[request.rejectionReason]?.[locale] ?? null
-    : null;
-  return reason ?? (locale === "zh-CN" ? "Bridge 拒绝了本次请求。" : "The Bridge rejected this request.");
+  return provisioningRejectionLabel(request.rejectionReason, locale);
 }
 
 function mergeRequest(
