@@ -73,7 +73,8 @@ function Assert-InstalledPayload {
   }
   $registration = Get-ItemProperty -LiteralPath $uninstallKey
   if ($registration.DisplayName -ne "AgentRoom Bridge" -or $registration.DisplayVersion -ne $version) {
-    throw "Installed application registration has unexpected name or version"
+    throw ("Installed application registration has unexpected name or version: " +
+      "DisplayName='$($registration.DisplayName)', DisplayVersion='$($registration.DisplayVersion)'")
   }
 }
 

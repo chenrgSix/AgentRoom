@@ -37,6 +37,7 @@ CloseApplications=yes
 CloseApplicationsFilter=AgentRoom Bridge.exe
 RestartApplications=no
 Uninstallable=yes
+UninstallDisplayName=AgentRoom Bridge
 UninstallDisplayIcon={app}\AgentRoom Bridge.exe
 UsePreviousAppDir=yes
 OutputDir={#OutputDir}
