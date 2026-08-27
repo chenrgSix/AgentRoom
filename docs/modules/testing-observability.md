@@ -326,6 +326,16 @@ after upload, the candidate was published as a prerelease, and a fresh public
 download passed the tagged verifier on macOS. Physical Windows enrollment,
 real macOS login restart, and two-machine gates remain separate.
 
+The `v0.3.0-rc.6` candidate packages owner-scoped central Agent provisioning,
+Bridge-local fixed and rotating management codes, mixed-version capability
+gating, and same-request recovery. The release evidence is recorded in
+`docs/acceptance/qa-027-v0.3.0-rc.6.md`. `QA-027` is complete because the exact
+tagged source passed main CI, the empty-draft workflow built nine binary
+artifacts and verified all 14 assets before and after upload, the candidate was
+published as a prerelease, and a fresh anonymous direct download passed the
+tagged verifier on macOS. Physical Windows provisioning, real macOS login
+restart, and two-machine gates remain separate.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
