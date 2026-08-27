@@ -45,10 +45,16 @@ a separate release check.
 
 The physical `QA-002` procedure is maintained in
 `docs/acceptance/qa-002-two-machine-managed-agent.md`. It requires two real
-machines, HTTPS and fingerprint verification, a released Bridge archive, local
-Codex, online execution, offline queue/reconnect, one trace reconstruction, and
-a sanitized committed PASS record. Local processes and containers cannot close
-this task.
+machines, one verified Central/Bridge source, direct HTTPS, an installed desktop
+deep link, explicit local Codex self-test, online execution, offline
+queue/reconnect, exact trace reconstruction, and a sanitized committed PASS
+record. The repository evidence tool reads the Server database only through a
+read-only connection, accepts metrics captured inside the trusted host boundary,
+cross-checks public identities and persisted sequences, requires explicit
+physical attestations, rejects common credential/path/private-address shapes,
+and creates rather than overwrites the Markdown record. It cannot prove that
+two descriptions are physical machines, so human review remains mandatory.
+Local processes and containers cannot close this task.
 
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to

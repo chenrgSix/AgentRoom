@@ -31,6 +31,8 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run build` — build every implemented workspace.
 - `npm test` — run implemented workspace tests.
 - `npm run test:bridge-ui` — test the embedded Bridge GUI's pairing state projection.
+- `npm run test:qa-evidence` — test the sanitized two-machine acceptance evidence verifier.
+- `npm run capture:qa-002 -- --input /path/input.json --database /path/agent-room.sqlite --metrics /path/metrics.txt --output /path/evidence.md` — cross-check and render a reviewed two-machine acceptance record without copying secrets or local paths.
 - `npm run test:compose` — verify the default/custom central HTTPS ports and validate the Caddy configuration.
 - `npm run test:e2e` — run deterministic cross-process acceptance tests.
 - `npm run test:e2e:live` — explicitly invoke local Codex and Pi against an isolated temporary Team.

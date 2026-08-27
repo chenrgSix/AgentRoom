@@ -36,7 +36,7 @@ document and the task list in the same commit.
 | DATA | [Persistence and Recovery](persistence-recovery.md) | Database and projection durability | `apps/server/` | CON |
 | SEC | [Security and Authentication](security-auth.md) | Identity, credentials, authorization | server and Bridge | CON |
 | OPS | [Operations and Deployment](operations-deployment.md) | Central install manifest and lifecycle orchestration | `ops/agentroomctl/`, Compose, deployment scripts | DATA, SEC |
-| QA | [Testing and Observability](testing-observability.md) | Evidence, telemetry, release gates | `tests/` and all modules | all |
+| QA | [Testing and Observability](testing-observability.md) | Evidence, telemetry, release gates | `tests/`, `scripts/qa/`, and all modules | all |
 
 ## Dependency Flow
 

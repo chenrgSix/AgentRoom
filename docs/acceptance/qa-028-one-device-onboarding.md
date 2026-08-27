@@ -96,6 +96,11 @@ reviewed `PASS` still requires:
    with no private address, token, path, prompt, certificate key, or provider
    credential.
 
-The executable procedure and evidence template remain in
-`qa-002-two-machine-managed-agent.md`. No code change or local simulation can
-produce this missing physical fact.
+The executable procedure and closed evidence input are maintained in
+`qa-002-two-machine-managed-agent.md`. The repository verifier cross-checks the
+live read-only Server database, internally captured metrics, exact trace chains,
+single replies, Device/Agent ownership and path-free Workspace projection; it
+also rejects common credential, home-path and private-address shapes before
+creating a mode-`0600` Markdown record. Human review must still confirm that the
+two sanitized host descriptions identify different physical machines. No code
+change or local simulation can produce that missing physical fact.
