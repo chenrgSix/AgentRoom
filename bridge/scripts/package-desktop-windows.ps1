@@ -175,8 +175,9 @@ if (-not (Test-Path -LiteralPath $installer) -or (Get-Item -LiteralPath $install
   throw "Windows Desktop installer was not created"
 }
 $installerInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($installer)
+$installerFileVersion = [Version]$installerInfo.FileVersion
 if ($installerInfo.ProductName -ne "AgentRoom Bridge" -or
-    $installerInfo.ProductVersion -ne $version) {
+    $installerFileVersion.ToString(3) -ne $bundleVersion) {
   throw "Windows Desktop installer has unexpected product metadata"
 }
 
