@@ -28,6 +28,7 @@ import (
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
 	"agentroom.dev/bridge/internal/provisioning"
+	bridgeresult "agentroom.dev/bridge/internal/result"
 	"agentroom.dev/bridge/internal/updatecheck"
 	contracts "agentroom.dev/contracts/generated/go"
 )
@@ -58,7 +59,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("expected one of: version, console, validate-config, join, pair-device, pair, artifact, run")
+		return fmt.Errorf("expected one of: version, console, validate-config, join, pair-device, pair, artifact, result, run")
 	}
 	switch args[0] {
 	case "version":
@@ -112,6 +113,8 @@ func run(args []string) error {
 		return nil
 	case "artifact":
 		return runArtifact(args[1:])
+	case "result":
+		return runResult(args[1:])
 	case "run":
 		command := flag.NewFlagSet("run", flag.ContinueOnError)
 		path := command.String("config", "", "path to bridge JSON configuration")
@@ -134,6 +137,75 @@ func run(args []string) error {
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func runResult(args []string) error {
+	if len(args) == 0 || args[0] != "propose" {
+		return fmt.Errorf("result requires the propose subcommand")
+	}
+	command := flag.NewFlagSet("result propose", flag.ContinueOnError)
+	configPath := command.String("config", "", "path to bridge JSON configuration")
+	agentName := command.String("agent", "", "configured Agent name")
+	runID := command.String("run-id", "", "assigned Run identity")
+	proposalJSON := command.String(
+		"proposal-json",
+		"",
+		"contract-valid Result proposal JSON (never a file path)",
+	)
+	if err := command.Parse(args[1:]); err != nil {
+		return err
+	}
+	if strings.TrimSpace(*runID) == "" || strings.TrimSpace(*proposalJSON) == "" {
+		return fmt.Errorf("result propose requires --run-id and --proposal-json")
+	}
+	resolvedConfig := *configPath
+	if resolvedConfig == "" {
+		resolvedConfig = config.DefaultPath()
+	}
+	loaded, err := config.Load(resolvedConfig)
+	if err != nil {
+		return err
+	}
+	selected, err := configuredAgent(loaded.Agents, strings.TrimSpace(*agentName))
+	if err != nil {
+		return err
+	}
+	identities, err := identity.LoadOrCreate(loaded.DataDir, loaded.Agents)
+	if err != nil {
+		return err
+	}
+	agentID := identities[selected.Name]
+	if agentID == "" {
+		return fmt.Errorf("configured Agent has no stable identity")
+	}
+	credential, err := pairing.Load(loaded.DataDir)
+	if err != nil {
+		return err
+	}
+	proposal, err := bridgeresult.ParseProposal(*proposalJSON)
+	if err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	result, err := bridgeresult.NewClient(loaded, credential).Propose(
+		ctx,
+		bridgeresult.ProposeInput{
+			AgentID:  agentID,
+			RunID:    strings.TrimSpace(*runID),
+			Proposal: proposal,
+		},
+	)
+	if err != nil {
+		return err
+	}
+	fmt.Printf(
+		"proposed Result %s version %d for Task %s\n",
+		result.ResultID,
+		result.ResultVersion,
+		result.TaskID,
+	)
+	return nil
 }
 
 func pairDevice(args []string) error {
@@ -287,7 +359,7 @@ func configuredAgent(
 	if requestedName == "" {
 		if len(agents) != 1 {
 			return config.AgentConfig{}, fmt.Errorf(
-				"artifact publish requires --agent when multiple Agents are configured",
+				"configured Agent selection requires --agent when multiple Agents are configured",
 			)
 		}
 		return agents[0], nil

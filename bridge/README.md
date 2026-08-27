@@ -71,12 +71,23 @@ go run ./cmd/agentroom-bridge validate-config --config ./bridge.json
 go run ./cmd/agentroom-bridge pair-device --config ./bridge.json --link 'agentroom://pair-device?...#claimSecret=...'
 go run ./cmd/agentroom-bridge pair-device --config ./bridge.json --code BCDF-GHJK-MN
 go run ./cmd/agentroom-bridge pair --config ./bridge.json --code ONE_TIME_CODE
+go run ./cmd/agentroom-bridge result propose --help
 go run ./cmd/agentroom-bridge run --config ./bridge.json
 go test ./...
 go build ./cmd/agentroom-bridge
 go test -tags desktop ./cmd/agentroom-bridge-desktop
 go build -tags desktop ./cmd/agentroom-bridge-desktop
 ```
+
+`result propose` submits one explicit managed-Agent Result through the paired
+Device credential. Select a configured Agent with `--agent`, its exact assigned
+Run with `--run-id`, and pass the contract object directly with
+`--proposal-json`. The JSON must pin Task, definition, criteria and Task
+revisions and cite at least one persisted event from that Run. It may contain
+only opaque Artifact, Run-event, Message, Memory or Discussion references; the
+command deliberately has no proposal-file, Workspace-path, review or Task
+completion option. A response-loss retry sends the same operation identity and
+returns the existing immutable Result.
 
 ## Desktop GUI
 

@@ -10,6 +10,8 @@ import type { CoreRepository } from "../data/core-repository.js";
 import type { RunRepository } from "../run/run-repository.js";
 import type {
   AuthService,
+  DevicePrincipal,
+  McpPrincipal,
   WebPrincipal
 } from "../security/auth-service.js";
 import type { AgentTaskService } from "./agent-task-service.js";
@@ -120,7 +122,49 @@ export class ResultService {
     }, now);
   }
 
-  public proposeAgent(
+  public proposeManagedAgent(
+    principal: DevicePrincipal,
+    input: {
+      agentId: string;
+      runId: string;
+      proposal: ResultProposal;
+    },
+    now: string
+  ): ResultProjection {
+    const agent = this.core.getAgent(input.agentId);
+    if (!agent || agent.deviceId !== principal.deviceId) {
+      throw new Error("Managed Result Agent is outside the authenticated Device");
+    }
+    return this.proposeAgent({
+      teamId: principal.teamId,
+      agentId: input.agentId,
+      runId: input.runId,
+      actorKind: "managed_agent",
+      proposal: input.proposal
+    }, now);
+  }
+
+  public proposeManualAgent(
+    principal: McpPrincipal,
+    input: { runId: string; proposal: ResultProposal },
+    now: string
+  ): ResultProjection {
+    const task = this.requireTask(input.proposal.taskId);
+    this.auth.requireRoomMember(principal, task.roomId);
+    const agent = this.core.getAgent(principal.agentId);
+    if (!agent || agent.ownerMemberId !== principal.memberId) {
+      throw new Error("Manual Result Agent is outside the authenticated MCP identity");
+    }
+    return this.proposeAgent({
+      teamId: principal.teamId,
+      agentId: principal.agentId,
+      runId: input.runId,
+      actorKind: "manual_agent",
+      proposal: input.proposal
+    }, now);
+  }
+
+  private proposeAgent(
     input: {
       teamId: string;
       agentId: string;

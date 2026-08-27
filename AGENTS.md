@@ -39,6 +39,7 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run dev:web` — run the Vite browser UI with an API proxy.
 - `go run ./cmd/agentroom-bridge console` from `bridge/` — run the token-authenticated local client setup UI.
 - `go run ./cmd/agentroom-bridge artifact publish --config /path/bridge.json --agent Builder --run-id run_... --type patch --file change.patch --title "Verified patch" --summary "What changed"` from `bridge/` — publish one bounded Workspace-relative snapshot for an active assigned Run.
+- `go run ./cmd/agentroom-bridge result propose --help` from `bridge/` — submit one inline, contract-valid immutable Result for a configured Agent and exact assigned Run; the command never accepts a proposal file or review/completion action.
 - `go build -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — build the native Wails Bridge GUI for the current platform.
 - `go test -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — verify desktop-only state mapping and compile its native shell.
 - `go test ./... && go vet ./... && go build ./cmd/agentroomctl` from `ops/agentroomctl/` — verify and build the central lifecycle controller.

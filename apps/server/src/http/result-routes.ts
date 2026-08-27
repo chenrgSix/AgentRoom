@@ -5,6 +5,8 @@ import type {
 
 import {
   bodyObject,
+  bearerToken,
+  noStore,
   requiredBoolean,
   requiredPositiveInteger,
   requiredString,
@@ -198,10 +200,27 @@ function reviewInput(body: Record<string, unknown>): ResultReviewCommand {
 
 export function registerResultRoutes({
   app,
+  auth,
   clock,
   principal,
   results
 }: ServerRouteContext): void {
+  app.post("/api/bridge/results", async (request, reply) => {
+    const device = auth.authenticateDevice(bearerToken(request), clock());
+    const body = bodyObject(request);
+    assertKeys(body, ["actorKind", "agentId", "runId", "proposal"],
+      "Managed Result proposal");
+    if (body.actorKind !== "managed_agent") {
+      throw new Error("Managed Result actor kind is invalid");
+    }
+    const result = results.proposeManagedAgent(device, {
+      agentId: requiredString(body.agentId, "agentId", 140),
+      runId: requiredString(body.runId, "runId", 140),
+      proposal: proposalInput(objectInput(body.proposal, "proposal"))
+    }, clock());
+    noStore(reply);
+    return result;
+  });
   app.get<{ Params: { taskId: string } }>(
     "/api/tasks/:taskId/results",
     async (request) => results.list(principal(request), request.params.taskId)

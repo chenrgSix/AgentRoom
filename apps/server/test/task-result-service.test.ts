@@ -558,11 +558,15 @@ test("Result corrections preserve typed sources, actor limits, and child provena
         artifactId,
         runId: run.runId
       });
-      const agentResult = resultService.proposeAgent({
+      const agentResult = resultService.proposeManualAgent({
+        credentialId: "credential_manual_result_0001",
+        userId: "user_result_owner_0001",
+        sessionId: "session_manual_result_0001",
+        memberId: context.ownerMemberId,
         teamId: context.teamId,
-        agentId: context.agentId,
+        agentId: context.agentId
+      }, {
         runId: run.runId,
-        actorKind: "manual_agent",
         proposal: agentProposal
       }, now);
       assert.deepEqual(agentResult.proposedBy, {
@@ -570,17 +574,20 @@ test("Result corrections preserve typed sources, actor limits, and child provena
         agentId: context.agentId,
         runId: run.runId
       });
-      assert.throws(() => resultService.proposeAgent({
-        teamId: context.teamId,
+      assert.throws(() => resultService.proposeManagedAgent({
+        credentialId: "credential_spoof_result_0001",
+        deviceId: "device_spoof_result_0001",
+        ownerMemberId: context.ownerMemberId,
+        teamId: context.teamId
+      }, {
         agentId: context.agentId,
         runId: run.runId,
-        actorKind: "managed_agent",
         proposal: {
           ...agentProposal,
           operationId: "op_spoof_agent_result_0001",
           proposedAtTaskRevision: current.taskRevision + 1
         }
-      }, now), /identity is unavailable/u);
+      }, now), /authenticated Device/u);
       assert.deepEqual(database.prepare(`
         SELECT source_result_id, next_action_key FROM task_result_sources
         WHERE child_task_id = ?

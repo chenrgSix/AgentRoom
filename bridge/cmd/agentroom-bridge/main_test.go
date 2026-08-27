@@ -19,6 +19,18 @@ func TestArtifactCommandRequiresBoundedPublishInputs(t *testing.T) {
 	}
 }
 
+func TestResultCommandRequiresInlineStructuredProposal(t *testing.T) {
+	for _, args := range [][]string{
+		{"result"},
+		{"result", "unknown"},
+		{"result", "propose", "--run-id", "run_result_cli_0001"},
+	} {
+		if err := run(args); err == nil {
+			t.Fatalf("run(%q) unexpectedly succeeded", args)
+		}
+	}
+}
+
 func TestConfiguredAgentIsExplicitWhenAmbiguous(t *testing.T) {
 	agents := []config.AgentConfig{{Name: "Builder"}, {Name: "Reviewer"}}
 	if _, err := configuredAgent(agents, ""); err == nil ||
