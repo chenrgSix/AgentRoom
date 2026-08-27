@@ -142,6 +142,15 @@ disclosure, several Agent profiles under one Device, path-free Workspace
 projection, revocation before and after Bridge acceptance, and a physical-host
 TLS/deep-link check. A local Compose run does not prove the physical-host gate.
 
+The committed `device-onboarding.test.ts` cross-process scenario builds and
+starts the real Go Bridge CLI and Console against a real TCP Server. It consumes
+the canonical fragment-bearing deep link, compares the Owner and Bridge phrase,
+persists one mode-`0600` Device credential without a Server Token, publishes two
+path-free Agent projections, explicitly runs a managed Pi self-test, queues work
+while offline, reconnects to one reply, and then verifies distinct accepted and
+unaccepted revocation outcomes. This deterministic same-host evidence does not
+replace the physical two-machine TLS gate.
+
 The Result-gated completion release gate additionally covers current versus
 stale definitions and criteria, Agent assignment changes, all required criterion
 outcomes, missing/foreign evidence, concurrent accept/reject and definition-edit
