@@ -149,6 +149,11 @@ three-field allowlist reaches Run-event persistence.
 Health endpoints distinguish process liveness, dependency readiness, and
 degraded optional capabilities. Audit records are durable and access-controlled.
 
+The supported central Compose entrypoint keeps Server port 3000 private and
+publishes HTTPS through Caddy on configurable external port 9443 by default.
+Port 80 remains an ACME and redirect-only listener; redirects use the exact
+configured public origin so a non-default HTTPS port is never discarded.
+
 `OPS-001` is verified by contract fixtures, migration tests, forged-trace
 negative tests, restart persistence tests, and the real Server-to-Go-Bridge
 Generic Runtime E2E.

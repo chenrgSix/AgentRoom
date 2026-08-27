@@ -1,4 +1,12 @@
-{$AGENT_ROOM_DOMAIN} {
+{
+	auto_https disable_redirects
+}
+
+http://{$AGENT_ROOM_DOMAIN} {
+	redir {$AGENT_ROOM_PUBLIC_ORIGIN}{uri} permanent
+}
+
+https://{$AGENT_ROOM_DOMAIN} {
 	encode zstd gzip
 
 	@metrics path /api/metrics

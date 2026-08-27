@@ -198,7 +198,7 @@ intentionally hides `/api/metrics` from the public network.
 For a trusted small Team, use the included non-root Server and Caddy Compose
 profile. The host needs Git, Docker Engine or Docker Desktop with Compose v2,
 OpenSSL, and curl; it does not need Node.js or Go. Point a public DNS A/AAAA
-record at the host, allow inbound TCP 80/443 and outbound ACME traffic, and
+record at the host, allow inbound TCP 80/9443 and outbound ACME traffic, and
 ensure no other process owns those ports.
 
 Use a dedicated, clean checkout and record the exact source revision. Prefer a
@@ -219,12 +219,13 @@ docker compose config --quiet
 docker compose build --pull agentroom
 docker compose up -d
 docker compose ps --all
-curl --fail https://team.example.com/api/health/ready
+curl --fail https://team.example.com:9443/api/health/ready
 ```
 
-The application is served only over HTTPS; port 80 exists solely for certificate
-issuance and redirect. `secret-init` should show `Exited (0)`, while `agentroom`
-and `caddy` should be running. Open the configured HTTPS origin, enter an Owner
+The application is served only over HTTPS and defaults to external port 9443;
+port 80 exists solely for certificate issuance and an exact-origin redirect.
+`secret-init` should show `Exited (0)`, while `agentroom` and `caddy` should be
+running. Open the configured HTTPS origin, enter an Owner
 display name, and paste the recovery **file contents**, not its path. Keep that
 file offline-capable for later Owner recovery; members join through short-lived,
 one-time invitation links.

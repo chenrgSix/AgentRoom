@@ -5,8 +5,9 @@
 The supported Compose profile runs one AgentRoom Server and Web UI behind
 Caddy on a single trusted-team host. SQLite, the prepared Owner recovery
 secret, backups, and Caddy state use private named volumes. Only Caddy publishes
-ports: 443 serves the application, while 80 is limited to ACME and HTTPS
-redirects. Server port 3000 and `/api/metrics` are not public.
+ports: 9443 serves the application by default, while 80 is limited to ACME and
+an exact-origin HTTPS redirect. Server port 3000 and `/api/metrics` are not
+public.
 
 This is a small-team, single-instance deployment. It is not a high-availability
 or internet-scale identity service. Member offboarding and immediate Web
@@ -22,10 +23,10 @@ The host needs:
 - OpenSSL to generate the Owner recovery secret;
 - curl for health verification;
 - a public DNS A/AAAA record pointing to the host;
-- inbound TCP 80/443 and outbound access required for ACME.
+- inbound TCP 80/9443 and outbound access required for ACME.
 
 Node.js and Go are not required on a Compose host. Ensure no other service owns
-ports 80 or 443. Put another reverse proxy in front only after reproducing the
+ports 80 or 9443. Put another reverse proxy in front only after reproducing the
 same HTTPS, WebSocket, MCP body, and Authorization-header behavior.
 
 ## Prepare the Release
@@ -49,9 +50,9 @@ Edit `.env` before starting:
 | Variable | Required value |
 | --- | --- |
 | `AGENT_ROOM_DOMAIN` | Host name only, such as `team.example.com` |
-| `AGENT_ROOM_PUBLIC_ORIGIN` | Exact HTTPS origin, such as `https://team.example.com` |
+| `AGENT_ROOM_PUBLIC_ORIGIN` | Exact HTTPS origin, including a non-default port, such as `https://team.example.com:9443` |
 | `AGENT_ROOM_HTTP_PORT` | `80` for public certificate issuance and redirect |
-| `AGENT_ROOM_HTTPS_PORT` | `443` for the application |
+| `AGENT_ROOM_HTTPS_PORT` | External application port, default `9443`; it must match `AGENT_ROOM_PUBLIC_ORIGIN` |
 | `AGENT_ROOM_IMAGE_TAG` | Local image label aligned with the checked-out release |
 | `AGENT_ROOM_DATABASE_PATH` | Container path under `/data`, normally `/data/agent-room.sqlite` |
 | `AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE` | Host path to the generated secret file |
@@ -86,7 +87,7 @@ Check logs and the public readiness endpoint:
 ```bash
 docker compose logs --tail=100 secret-init agentroom caddy
 docker compose logs -f agentroom caddy
-curl --fail https://team.example.com/api/health/ready
+curl --fail https://team.example.com:9443/api/health/ready
 ```
 
 The initializer is network-disabled and short-lived. Server and Caddy use
@@ -121,7 +122,7 @@ redirects, while direct plain HTTP application access remains loopback-only.
 | --- | --- | --- |
 | `secret-init` is not `Exited (0)` | `docker compose logs secret-init` | missing, unreadable, or invalid-length recovery file |
 | `agentroom` is unhealthy | `docker compose logs agentroom` | database path, migration, secret, or public-origin validation |
-| Caddy cannot obtain a certificate | `docker compose logs caddy` | DNS, ports 80/443, firewall, or ACME egress |
+| Caddy cannot obtain a certificate | `docker compose logs caddy` | DNS, ports 80/9443, firewall, or ACME egress |
 | Browser works but Bridge does not connect | Caddy and AgentRoom logs | public URL, system trust, WebSocket, or Device credential |
 | `/api/metrics` returns `404` publicly | expected | metrics are intentionally hidden by Caddy |
 
