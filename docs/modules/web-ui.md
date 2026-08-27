@@ -36,6 +36,9 @@ without changing server-owned state.
 ## Primary Surfaces
 
 - Authenticated Team and Room shell.
+- Default Team Workbench with Mine/Team scope, authorized Task grouping, every
+  attention reason, criteria coverage, budget/telemetry, latest Run/Result, and
+  exact next-action projection.
 - Trusted-team Owner setup/recovery, member invitation claim, session restore,
   logout, and Owner invitation controls without exposing session credentials to
   JavaScript.
@@ -86,9 +89,9 @@ optional headless Bridge, keeping existing agent clients unchanged.
 [ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
 changes the default authenticated destination to **Work** while retaining Chat,
 Agents, and Devices as first-class destinations. This is a target extension;
-the current released shell remains Room-first until `WEB-046` and `WEB-047`
-meet their acceptance evidence. Within Work, Task, Run, and Result lists and
-details are first-class routes rather than chat disclosures.
+`WEB-046` now provides the default Team Workbench while `WEB-047` owns the
+remaining Task, Run, and Result detail routes. Within Work, those details remain
+first-class surfaces rather than chat disclosures.
 
 Work consumes a Team-scoped, Room-authorized read model and groups Tasks that
 need human action, are executing, await review, are blocked, or recently
@@ -97,6 +100,13 @@ dashboard counters, invents a percentage, treats unknown telemetry as zero, or
 uses a display number as an API identity. Cursor, filters, all attention reasons,
 primary badge, latest Run/Result, criteria coverage, budget usage, and next
 action come from the Server projection.
+
+The browser performs one `/api/teams/:teamId/work-items` read for the selected
+scope and refreshes it from the authenticated Team change cursor. It never
+enumerates Room Task endpoints to assemble Work. Card labels use `TASK-n` only
+for presentation; opening a card carries the opaque Task and Room identities.
+The Mine scope includes Tasks owned by the Member plus Tasks assigned to an
+Agent owned by that Member, still bounded to Rooms the Member can access.
 
 Task detail opens Overview with goal, canonical criteria, human Owner, explicit
 Agent assignments, lifecycle/scheduling state, attention, current execution,

@@ -1889,6 +1889,12 @@
         "scope": "mine",
         "attention": ["needs_approval", "outcome_unknown"],
         "lifecycleState": ["active", "review"],
+        "priority": ["high", "urgent"],
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "roomId": "room_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "updatedAfter": "2026-08-28T10:00:00.000Z",
+        "updatedBefore": "2026-08-28T11:00:00.000Z",
         "limit": 50,
         "cursor": null
       },

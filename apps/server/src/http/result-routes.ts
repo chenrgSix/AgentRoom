@@ -202,8 +202,10 @@ export function registerResultRoutes({
   app,
   auth,
   clock,
+  core,
   principal,
-  results
+  results,
+  teamChanges
 }: ServerRouteContext): void {
   app.post("/api/bridge/results", async (request, reply) => {
     const device = auth.authenticateDevice(bearerToken(request), clock());
@@ -218,6 +220,7 @@ export function registerResultRoutes({
       runId: requiredString(body.runId, "runId", 140),
       proposal: proposalInput(objectInput(body.proposal, "proposal"))
     }, clock());
+    teamChanges.notify(device.teamId, { kind: "room", roomId: result.roomId });
     noStore(reply);
     return result;
   });
@@ -236,17 +239,31 @@ export function registerResultRoutes({
       if (proposal.taskId !== request.params.taskId) {
         throw new Error("Result Task does not match the route");
       }
-      return results.proposeMember(principal(request), proposal, clock());
+      const result = results.proposeMember(principal(request), proposal, clock());
+      const room = core.getRoom(result.roomId);
+      if (room) teamChanges.notify(room.teamId, {
+        kind: "room",
+        roomId: result.roomId
+      });
+      return result;
     }
   );
   app.post<{ Params: { resultId: string } }>(
     "/api/results/:resultId/review-decisions",
-    async (request) => results.review(
-      principal(request),
-      request.params.resultId,
-      reviewInput(bodyObject(request)),
-      clock()
-    )
+    async (request) => {
+      const outcome = results.review(
+        principal(request),
+        request.params.resultId,
+        reviewInput(bodyObject(request)),
+        clock()
+      );
+      const room = core.getRoom(outcome.result.roomId);
+      if (room) teamChanges.notify(room.teamId, {
+        kind: "room",
+        roomId: outcome.result.roomId
+      });
+      return outcome;
+    }
   );
   app.post<{ Params: { resultId: string } }>(
     "/api/results/:resultId/follow-up-tasks",
@@ -255,12 +272,23 @@ export function registerResultRoutes({
       assertKeys(body, [
         "operationId", "nextActionKey", "title", "ownerMemberId"
       ], "Child Task command");
-      return results.createChildTask(principal(request), request.params.resultId, {
+      const childTask = results.createChildTask(
+        principal(request),
+        request.params.resultId,
+        {
         operationId: requiredString(body.operationId, "operationId", 140),
         nextActionKey: requiredString(body.nextActionKey, "nextActionKey", 80),
         title: requiredString(body.title, "title", 160),
         ownerMemberId: requiredString(body.ownerMemberId, "ownerMemberId", 140)
-      }, clock());
+        },
+        clock()
+      );
+      const room = core.getRoom(childTask.roomId);
+      if (room) teamChanges.notify(room.teamId, {
+        kind: "room",
+        roomId: childTask.roomId
+      });
+      return childTask;
     }
   );
 }

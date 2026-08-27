@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
+import type { WorkbenchPage } from "@agent-room/contracts/task-result";
 
 import {
   activeRunStates,
@@ -39,6 +40,7 @@ import { TaskClarifications } from "./features/task/TaskClarifications.js";
 import { MemoryCandidateReview } from "./features/task/MemoryCandidateReview.js";
 import { ArtifactPreviewPanel } from "./features/task/ArtifactPreviewPanel.js";
 import { TaskCreateDialog, TaskSelector } from "./features/task/TaskControls.js";
+import { WorkWorkspace } from "./features/work/WorkWorkspace.js";
 import {
   type Agent,
   type AgentTask,
@@ -150,7 +152,11 @@ export function App() {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<WorkspaceView>("room");
+  const [activeView, setActiveView] = useState<WorkspaceView>("work");
+  const [workbenchItems, setWorkbenchItems] = useState<WorkbenchPage["items"]>([]);
+  const [workbenchLoading, setWorkbenchLoading] = useState(false);
+  const [workbenchError, setWorkbenchError] = useState<string | null>(null);
+  const [workScope, setWorkScope] = useState<"mine" | "team">("mine");
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
@@ -265,6 +271,18 @@ export function App() {
   const membersById = useMemo(
     () => new Map(members.map((member) => [member.memberId, member])),
     [members]
+  );
+  const roomNames = useMemo(
+    () => new Map(rooms.map((room) => [room.roomId, room.name])),
+    [rooms]
+  );
+  const memberNames = useMemo(
+    () => new Map(members.map((member) => [member.memberId, member.displayName])),
+    [members]
+  );
+  const agentNames = useMemo(
+    () => new Map(agents.map((agent) => [agent.agentId, agent.name])),
+    [agents]
   );
   const runsById = useMemo(
     () => new Map(runs.map((run) => [run.runId, run])),
@@ -716,6 +734,32 @@ export function App() {
   }, [selectedTeamId, session]);
 
   useEffect(() => {
+    if (!session || !selectedTeamId) {
+      setWorkbenchItems([]);
+      setWorkbenchError(null);
+      setWorkbenchLoading(false);
+      return;
+    }
+    let stopped = false;
+    setWorkbenchLoading(true);
+    setWorkbenchError(null);
+    void jsonRequest<WorkbenchPage>(
+      `/api/teams/${selectedTeamId}/work-items?scope=${workScope}&limit=100`,
+      {},
+      session.token
+    ).then((page) => {
+      if (!stopped) setWorkbenchItems(page.items);
+    }).catch((reason: unknown) => {
+      if (!stopped) setWorkbenchError(String(reason));
+    }).finally(() => {
+      if (!stopped) setWorkbenchLoading(false);
+    });
+    return () => {
+      stopped = true;
+    };
+  }, [selectedTeamId, session, workScope]);
+
+  useEffect(() => {
     if (!session || !selectedRoomId) {
       setMessages([]);
       setRuns([]);
@@ -985,6 +1029,21 @@ export function App() {
     const refreshRoomSingleFlight = createSingleFlight(() => refresh("room"));
     const refreshFullSingleFlight = createSingleFlight(() => refresh("full"));
     const refreshEventsSingleFlight = createSingleFlight(() => refresh("events"));
+    const refreshWorkbenchSingleFlight = createSingleFlight(async () => {
+      try {
+        const page = await jsonRequest<WorkbenchPage>(
+          `/api/teams/${selectedTeamId}/work-items?scope=${workScope}&limit=100`,
+          {},
+          session.token
+        );
+        if (!stopped) {
+          setWorkbenchItems(page.items);
+          setWorkbenchError(null);
+        }
+      } catch (reason) {
+        if (!stopped) setWorkbenchError(String(reason));
+      }
+    });
     const delay = (milliseconds: number) => new Promise<void>((resolve) => {
       retryTimer = window.setTimeout(() => {
         retryTimer = null;
@@ -1007,6 +1066,7 @@ export function App() {
           );
           cursor = change.cursor;
           if (change.changed || change.reset) {
+            await refreshWorkbenchSingleFlight();
             const refreshScope = teamChangeRefreshScope(change, selectedRoomId);
             if (refreshScope === "full") {
               await refreshFullSingleFlight();
@@ -1044,7 +1104,7 @@ export function App() {
       window.clearInterval(fallbackTimer);
       document.removeEventListener("visibilitychange", reconcileVisible);
     };
-  }, [selectedRoomId, selectedTeamId, session]);
+  }, [selectedRoomId, selectedTeamId, session, workScope]);
 
   useEffect(() => {
     if (!session || !selectedRoomId) return;
@@ -1462,6 +1522,30 @@ export function App() {
     );
   }
 
+  async function refreshWorkbenchState() {
+    if (!session || !selectedTeamId || workbenchLoading) return;
+    setWorkbenchLoading(true);
+    setWorkbenchError(null);
+    try {
+      const page = await jsonRequest<WorkbenchPage>(
+        `/api/teams/${selectedTeamId}/work-items?scope=${workScope}&limit=100`,
+        {},
+        session.token
+      );
+      setWorkbenchItems(page.items);
+    } catch (reason) {
+      setWorkbenchError(String(reason));
+    } finally {
+      setWorkbenchLoading(false);
+    }
+  }
+
+  function openWorkbenchTask(taskId: string, roomId: string) {
+    setSelectedRoomId(roomId);
+    setSelectedTaskId(taskId);
+    setActiveView("room");
+  }
+
   async function answerTaskClarification(
     event: FormEvent,
     clarification: TaskClarification
@@ -1623,6 +1707,13 @@ export function App() {
         </div>
         {selectedTeam && (
           <div className="rail-actions">
+            <button
+              aria-label={locale === "zh-CN" ? "工作台" : "Work"}
+              className={activeView === "work" ? "rail-manage active" : "rail-manage"}
+              onClick={() => setActiveView("work")}
+              title={locale === "zh-CN" ? "工作台" : "Work"}
+              type="button"
+            >▦</button>
             {currentMember?.role === "owner" && (
               <button
                 aria-label={locale === "zh-CN" ? "资源生命周期" : "Resource lifecycle"}
@@ -1703,6 +1794,7 @@ export function App() {
           <div>
             {selectedTeam && (
               <>
+                <button className={activeView === "work" ? "active" : ""} onClick={() => setActiveView("work")} type="button">{locale === "zh-CN" ? "工作" : "Work"}</button>
                 <button className={activeView === "room" ? "active" : ""} onClick={() => setActiveView("room")} type="button">{t("chat")}</button>
                 <button className={activeView === "members" ? "active" : ""} onClick={revealTeamMembers} type="button">{t("teamMembers")}</button>
                 <button className={activeView === "agents" ? "active" : ""} onClick={() => setActiveView("agents")} type="button">{t("agents")}</button>
@@ -1723,12 +1815,16 @@ export function App() {
           <div className="workspace-heading">
             <div className="workspace-heading-copy">
               <p className="eyebrow">
-                {activeView === "agents" && selectedTeam
+                {activeView === "work" && selectedTeam
+                  ? (locale === "zh-CN" ? "工作" : "WORK")
+                  : activeView === "agents" && selectedTeam
                   ? t("controlPlane")
                   : activeView === "members" && selectedTeam ? t("teamAccess") : t("room")}
               </p>
               <h2>
-                {activeView === "agents" && selectedTeam
+                {activeView === "work" && selectedTeam
+                  ? (locale === "zh-CN" ? "团队工作台" : "Team Workbench")
+                  : activeView === "agents" && selectedTeam
                   ? t("agentsDevices")
                   : activeView === "members" && selectedTeam
                     ? t("teamMembers")
@@ -1780,6 +1876,13 @@ export function App() {
             )}
           </div>
           <div className="workspace-controls">
+            {selectedTeam && (
+              <button
+                className={activeView === "work" ? "header-chat active" : "header-chat"}
+                onClick={() => setActiveView("work")}
+                type="button"
+              >▦ <span>{locale === "zh-CN" ? "工作" : "Work"}</span></button>
+            )}
             {selectedTeam && selectedRoom && (
               <>
                 <button
@@ -1862,6 +1965,20 @@ export function App() {
               <small>{t("nextRoomAgent")}</small>
             </form>
           </section>
+        ) : activeView === "work" && selectedRoom ? (
+          <WorkWorkspace
+            agentNames={agentNames}
+            error={workbenchError}
+            items={workbenchItems}
+            loading={workbenchLoading}
+            locale={locale}
+            memberNames={memberNames}
+            onOpenTask={openWorkbenchTask}
+            onRefresh={() => void refreshWorkbenchState()}
+            onScopeChange={setWorkScope}
+            roomNames={roomNames}
+            scope={workScope}
+          />
         ) : activeView === "members" ? (
           <TeamMembersWorkspace
             authMode={authMode}

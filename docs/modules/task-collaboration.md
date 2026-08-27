@@ -149,6 +149,21 @@ scheduling, budget admission, unavailable Runtime, and rejected latest Result.
 Several reasons may coexist. A Workbench primary badge follows a fixed priority
 but does not collapse, persist over, or grant authority beyond those sources.
 
+`GET /api/teams/:teamId/work-items` rebuilds this projection from Tasks, Runs,
+Results and current Room authorization. It supports stable filters for Mine or
+Team scope, Owner, Room, lifecycle, attention, priority, assigned Agent, and UTC
+update bounds. Mine means the current human Owner's Tasks plus Tasks assigned
+to an Agent owned by that Member; it does not broaden Room access. Pagination
+sorts by derived authoritative update time descending and opaque Task ID
+ascending. Its filter-fingerprinted cursor is bound to the Team and normalized
+filter set, so reusing it with another Team or filter fails closed.
+
+Required-criteria coverage counts only a current-definition/current-criteria
+Result claim marked satisfied and linked to Artifact evidence. A stale or
+non-Artifact claim contributes zero. The latest Run exposes `phase=unknown`
+until a durable diagnostic phase exists, and absent Provider token/cost
+telemetry remains `null` rather than becoming zero.
+
 ## Ownership and Boundaries
 
 - Every Run belongs to exactly one Task. A Mention still creates a bounded Run;

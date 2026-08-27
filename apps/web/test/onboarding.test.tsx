@@ -500,6 +500,9 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path === `/api/teams/${secondTeam.teamId}/members`) {
       return jsonResponse([{ ...member, memberId: "member_second", teamId: secondTeam.teamId }]);
     }
+    if (/^\/api\/teams\/[^/]+\/work-items\?scope=mine&limit=100$/u.test(path)) {
+      return jsonResponse({ items: [], nextCursor: null });
+    }
     if (path === `/api/agents/${agent.agentId}` && method === "PATCH") {
       reviewAgentEnabled = (JSON.parse(String(init.body)) as { enabled: boolean }).enabled;
       return jsonResponse({ ...agent, enabled: reviewAgentEnabled });
@@ -578,6 +581,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
 
     fireEvent.change(roomInput, { target: { value: "general" } });
     fireEvent.click(screen.getByRole("button", { name: "创建房间" }));
+    await screen.findByRole("region", { name: "工作台" });
+    fireEvent.click(screen.getAllByRole("button", { name: "对话" })[0]!);
     await screen.findByRole("heading", { name: "在房间中开始对话 #general" });
     fireEvent.click(screen.getByRole("button", { name: "新建 Team" }));
     const teamDialog = screen.getByRole("dialog", { name: "新建 Team" });
@@ -589,6 +594,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     await waitFor(() => assert.equal(screen.queryByRole("dialog", { name: "新建 Team" }), null));
     assert.ok(screen.getByTitle(secondTeam.name).classList.contains("active"));
     fireEvent.click(screen.getByTitle(team.name));
+    fireEvent.click((await screen.findAllByRole("button", { name: "对话" }))[0]!);
     await screen.findByRole("heading", { name: "在房间中开始对话 #general" });
     assert.equal(screen.queryByLabelText("新建假智能体名称"), null);
     assert.equal(screen.queryByLabelText("新 Team 名称"), null);

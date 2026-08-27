@@ -48,6 +48,7 @@ import { registerResultRoutes } from "./http/result-routes.js";
 import { registerSystemRoutes } from "./http/system-routes.js";
 import { registerTaskRoutes } from "./http/task-routes.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
+import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
 import { DiscussionRepository } from "./discussion/discussion-repository.js";
 import { TeamWaitService } from "./mcp/team-wait-service.js";
@@ -96,6 +97,7 @@ import { LongTermMemoryService } from "./task/long-term-memory-service.js";
 import { MemoryEntryRepository } from "./task/memory-entry-repository.js";
 import { ResultRepository } from "./task/result-repository.js";
 import { ResultService } from "./task/result-service.js";
+import { WorkbenchService } from "./task/workbench-service.js";
 import {
   ResultEvidenceConsumptionRepository
 } from "./task/result-evidence-consumption-repository.js";
@@ -291,6 +293,13 @@ export async function createServerApp(
     runRepository,
     resultRepository,
     results
+  );
+  const workbench = new WorkbenchService(
+    core,
+    taskRepository,
+    runRepository,
+    resultRepository,
+    auth
   );
   const clarificationRepository = new ClarificationRepository(database);
   const taskClarifications = new TaskClarificationService(
@@ -701,6 +710,7 @@ export async function createServerApp(
     teamWait,
     traces,
     webAuth,
+    workbench,
     workspaceLeases,
     ...(trustedWeb ? { trustedWeb } : {})
   };
@@ -713,6 +723,7 @@ export async function createServerApp(
   registerTeamRoomRoutes(routeContext);
   registerTaskRoutes(routeContext);
   registerResultRoutes(routeContext);
+  registerWorkbenchRoutes(routeContext);
   registerRegistryRoutes(routeContext);
   registerDevicePairingSessionRoutes(routeContext);
   registerMessageRoutes(routeContext);

@@ -115,6 +115,9 @@ function installFixture(input: {
     if (path === `/api/teams/${team.teamId}/agents`) return jsonResponse(agents);
     if (path === `/api/teams/${team.teamId}/members`) return jsonResponse([owner]);
     if (path === `/api/teams/${team.teamId}/devices`) return jsonResponse([]);
+    if (path === `/api/teams/${team.teamId}/work-items?scope=mine&limit=100`) {
+      return jsonResponse({ items: [], nextCursor: null });
+    }
     if (path === `/api/rooms/${room.roomId}/settings`) {
       return jsonResponse({
         room,
@@ -236,6 +239,7 @@ test("waiting Discussion keeps the just-closed partial Wave visible", async () =
   const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
   try {
     const view = render(<App />);
+    fireEvent.click((await view.findAllByRole("button", { name: "对话" }))[0]!);
     const panel = await view.findByRole("region", { name: "当前智能体讨论" });
     const dock = panel.closest(".room-dock");
     assert.ok(dock, "Discussion status should live in the Room dock");
@@ -304,6 +308,7 @@ test("Task clarification is visibly distinct from local approval and resumes by 
   const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
   try {
     const view = render(<App />);
+    fireEvent.click((await view.findAllByRole("button", { name: "对话" }))[0]!);
     const label = await view.findByText(/任务信息待补充/u);
     const form = label.closest("form");
     assert.ok(form);
@@ -363,9 +368,10 @@ test("Run status replaces duplicate Mention metadata in a Member message", async
     }]
   });
 
-  const { cleanup, render, within } = await import("@testing-library/react");
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
   try {
     const view = render(<App />);
+    fireEvent.click((await view.findAllByRole("button", { name: "对话" }))[0]!);
     const prompt = await view.findByText("请分析这个交付方案");
     const message = prompt.closest("article");
     assert.ok(message);
@@ -420,6 +426,7 @@ test("completed Discussion keeps a failed finalization Wave and its reasons visi
   const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
   try {
     const view = render(<App />);
+    fireEvent.click((await view.findAllByRole("button", { name: "对话" }))[0]!);
     const panel = await view.findByRole("region", { name: "当前智能体讨论" });
     within(panel).getByText("已完成");
     within(panel).getByLabelText("智能体进度 1/1");

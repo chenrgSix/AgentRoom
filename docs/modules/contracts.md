@@ -112,6 +112,8 @@ Task/definition/criteria revisions, canonical ordered criteria, human Owner,
 closed Agent assignment roles, comparable budget units, attention and
 next-action projections, Run attempt lineage, redacted Context Manifest, Result
 submission/source/criterion/evidence records, and append-only review decisions.
+The Workbench query additionally closes Owner, Room, priority, assigned Agent,
+and UTC update-bound filters while preserving bounded cursor pages.
 Opaque IDs remain authority; Team display numbers are presentation only. Old
 Task states and absent manifests remain valid only in the documented migration
 window, and no compatibility mapping may remove `outcome_unknown` or make

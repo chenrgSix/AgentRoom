@@ -591,6 +591,42 @@
           "uniqueItems": true,
           "items": { "$ref": "#/$defs/lifecycleState" }
         },
+        "priority": {
+          "type": "array",
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/priority" }
+        },
+        "ownerMemberId": {
+          "oneOf": [
+            { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId" },
+            { "type": "null" }
+          ]
+        },
+        "roomId": {
+          "oneOf": [
+            { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId" },
+            { "type": "null" }
+          ]
+        },
+        "agentId": {
+          "oneOf": [
+            { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId" },
+            { "type": "null" }
+          ]
+        },
+        "updatedAfter": {
+          "oneOf": [
+            { "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json" },
+            { "type": "null" }
+          ]
+        },
+        "updatedBefore": {
+          "oneOf": [
+            { "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json" },
+            { "type": "null" }
+          ]
+        },
         "limit": { "type": "integer", "minimum": 1, "maximum": 100 },
         "cursor": { "type": ["string", "null"], "pattern": "^[A-Za-z0-9_-]{8,512}$" }
       }

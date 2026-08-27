@@ -329,6 +329,6 @@ export interface MentionSearch {
   start: number;
 }
 
-export type WorkspaceView = "room" | "agents" | "members";
+export type WorkspaceView = "work" | "room" | "agents" | "members";
 export type ConnectionMode = "managed" | "mcp" | "demo";
 export type Theme = "dark" | "light";

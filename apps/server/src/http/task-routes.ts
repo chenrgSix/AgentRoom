@@ -143,6 +143,14 @@ export function registerTaskRoutes({
     }
     return { after, limit };
   };
+  const notifyTask = (task: { roomId: string }) => {
+    const room = core.getRoom(task.roomId);
+    if (room) teamChanges.notify(room.teamId, {
+      kind: "room",
+      roomId: task.roomId
+    });
+    return task;
+  };
   app.get<{ Params: { roomId: string } }>(
     "/api/rooms/:roomId/tasks",
     async (request) => tasks.list(principal(request), request.params.roomId)
@@ -158,7 +166,7 @@ export function registerTaskRoutes({
       const budget = body.budgetPolicy === undefined
         ? undefined
         : objectInput(body.budgetPolicy, "budgetPolicy");
-      return tasks.create(principal(request), {
+      return notifyTask(tasks.create(principal(request), {
         roomId: request.params.roomId,
         title: requiredString(body.title, "title", 160),
         goal: requiredString(body.goal, "goal", 20_000),
@@ -238,14 +246,14 @@ export function registerTaskRoutes({
                 )
               }
             })
-      }, clock());
+      }, clock()));
     }
   );
   app.patch<{ Params: { taskId: string } }>(
     "/api/tasks/:taskId",
     async (request) => {
       const body = bodyObject(request);
-      return tasks.update(principal(request), request.params.taskId, {
+      return notifyTask(tasks.update(principal(request), request.params.taskId, {
         ...(body.title === undefined
           ? {}
           : { title: requiredString(body.title, "title", 160) }),
@@ -269,7 +277,7 @@ export function registerTaskRoutes({
                 ? null
                 : requiredString(body.workspaceRef, "workspaceRef", 512)
             })
-      }, clock());
+      }, clock()));
     }
   );
   app.put<{ Params: { taskId: string } }>(
@@ -277,7 +285,7 @@ export function registerTaskRoutes({
     async (request) => {
       const body = bodyObject(request);
       const budget = objectInput(body.budgetPolicy, "budgetPolicy");
-      return tasks.updateDefinition(principal(request), request.params.taskId, {
+      return notifyTask(tasks.updateDefinition(principal(request), request.params.taskId, {
         operationId: requiredString(body.operationId, "operationId", 140),
         expectedTaskRevision: requiredPositiveInteger(
           body.expectedTaskRevision,
@@ -306,14 +314,14 @@ export function registerTaskRoutes({
             "budgetPolicy.maxExecutionDurationSeconds"
           )
         }
-      }, clock());
+      }, clock()));
     }
   );
   app.post<{ Params: { taskId: string } }>(
     "/api/tasks/:taskId/control",
     async (request) => {
       const body = bodyObject(request);
-      return tasks.updateControl(principal(request), request.params.taskId, {
+      return notifyTask(tasks.updateControl(principal(request), request.params.taskId, {
         operationId: requiredString(body.operationId, "operationId", 140),
         expectedTaskRevision: requiredPositiveInteger(
           body.expectedTaskRevision,
@@ -335,28 +343,28 @@ export function registerTaskRoutes({
                 "schedulingState"
               ) as TaskSchedulingState
             })
-      }, clock());
+      }, clock()));
     }
   );
   app.post<{ Params: { taskId: string } }>(
     "/api/tasks/:taskId/blocks",
     async (request) => {
       const body = bodyObject(request);
-      return tasks.addBlock(principal(request), request.params.taskId, {
+      return notifyTask(tasks.addBlock(principal(request), request.params.taskId, {
         operationId: requiredString(body.operationId, "operationId", 140),
         expectedTaskRevision: requiredPositiveInteger(
           body.expectedTaskRevision,
           "expectedTaskRevision"
         ),
         reason: requiredString(body.reason, "reason", 2_000)
-      }, clock());
+      }, clock()));
     }
   );
   app.post<{ Params: { taskId: string; blockId: string } }>(
     "/api/tasks/:taskId/blocks/:blockId/resolve",
     async (request) => {
       const body = bodyObject(request);
-      return tasks.resolveBlock(
+      return notifyTask(tasks.resolveBlock(
         principal(request),
         request.params.taskId,
         request.params.blockId,
@@ -368,7 +376,7 @@ export function registerTaskRoutes({
           )
         },
         clock()
-      );
+      ));
     }
   );
   app.get<{ Params: { taskId: string } }>(

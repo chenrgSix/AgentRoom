@@ -49,6 +49,7 @@ import type { LongTermMemoryService } from "../task/long-term-memory-service.js"
 import type { ResultService } from "../task/result-service.js";
 import type { TaskArtifactService } from "../task/task-artifact-service.js";
 import type { TaskClarificationService } from "../task/task-clarification-service.js";
+import type { WorkbenchService } from "../task/workbench-service.js";
 import type { WorkspaceLeaseService } from
   "../workspace/workspace-lease-service.js";
 
@@ -105,5 +106,6 @@ export interface ServerRouteContext {
   traces: TraceRepository;
   trustedWeb?: TrustedWebAccessService;
   webAuth: WebAuthConfiguration;
+  workbench: WorkbenchService;
   workspaceLeases: WorkspaceLeaseService;
 }

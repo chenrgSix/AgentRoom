@@ -407,11 +407,17 @@ export interface Review {
 export type ResultProjectionState = "proposed" | "accepted" | "rejected" | "superseded";
 
 export interface WorkbenchQuery {
+  agentId?:       null | string;
   attention:      AttentionElement[];
   cursor:         null | string;
   lifecycleState: LifecycleState[];
   limit:          number;
+  ownerMemberId?: null | string;
+  priority?:      Priority[];
+  roomId?:        null | string;
   scope:          Scope;
+  updatedAfter?:  null | string;
+  updatedBefore?: null | string;
 }
 
 export type Scope = "mine" | "team";

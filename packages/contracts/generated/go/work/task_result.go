@@ -347,11 +347,17 @@ type Review struct {
 }
 
 type WorkbenchQuery struct {
+	AgentID        *string            `json:"agentId"`
 	Attention      []AttentionElement `json:"attention"`
 	Cursor         *string            `json:"cursor"`
 	LifecycleState []LifecycleState   `json:"lifecycleState"`
 	Limit          int64              `json:"limit"`
+	OwnerMemberID  *string            `json:"ownerMemberId"`
+	Priority       []Priority         `json:"priority,omitempty"`
+	RoomID         *string            `json:"roomId"`
 	Scope          Scope              `json:"scope"`
+	UpdatedAfter   *time.Time         `json:"updatedAfter"`
+	UpdatedBefore  *time.Time         `json:"updatedBefore"`
 }
 
 type WorkbenchPage struct {
