@@ -52,12 +52,14 @@ Chinese.
   every existing checksum, archive path, architecture, embedded version, and
   license check and adds Windows installer PE, product-name, and version checks.
 
-## Remaining release gate
+## Release gate result
 
-No tag or draft GitHub Release was created for this implementation task, so the
-complete 13-asset Release workflow has not been dispatched. `BRG-039` remains
-`ACTIVE` until that workflow passes for the next release candidate. This is a
-release-evidence gap, not an installer implementation gap.
+`v0.3.0-rc.3` closes the remaining release gate. [Release run
+33036272429](https://github.com/chenrgSix/AgentRoom/actions/runs/33036272429)
+built and lifecycle-tested the installer, verified the complete 13-asset set
+before and after upload, and published it as a prerelease. A fresh public
+download passed independent Linux and macOS verification. Full evidence is in
+`docs/acceptance/qa-024-v0.3.0-rc.3.md`.
 
 The native automation also does not claim a human-observed SmartScreen prompt,
 interactive wizard layout, running-application close prompt, or missing-WebView2
