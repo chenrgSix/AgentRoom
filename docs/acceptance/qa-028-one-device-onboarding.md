@@ -2,9 +2,10 @@
 
 Date: 2026-08-28.
 
-Status: `BLOCKED` — deterministic and current-host evidence passes, but the
-required second physical machine has not been made available. This document is
-not a `PASS` record and does not mark `QA-028` or its `QA-002` dependency done.
+Status: `BLOCKED` — deterministic, current-host and matching-package evidence
+passes, but the identified second physical machine has not yet executed the
+cross-host gate. This document is not a `PASS` record and does not mark
+`QA-028` or its `QA-002` dependency done.
 
 ## Accepted deterministic behavior
 
@@ -99,6 +100,30 @@ handling, a credentialed Codex provider, or either cross-host Run. The retained
 machine-A state can be brought back by exact reentry when machine B is
 available; combining this lifecycle evidence with same-host E2E would still
 overstate the product gate.
+
+## Matching Windows Bridge candidate
+
+The same exact source now has annotated tag `v0.4.0-qa028.1` and an unpublished
+Draft Release. [Release workflow run 33123963471](https://github.com/chenrgSix/AgentRoom/actions/runs/33123963471)
+checked out commit `3497882dbb0bf60ac9e78f58e9dd17ad26d11a46` and passed:
+
+- the tagged Bridge test suite and five portable CLI builds;
+- native Intel and Apple Silicon macOS Desktop builds;
+- the native Windows amd64 Desktop test, portable package and current-user
+  installer lifecycle verification, including install, in-place upgrade,
+  uninstall, `agentroom://` registration and owner-state preservation;
+- four exact-source, checksum-pinned Central builds;
+- the closed 22-asset verifier before Draft upload; and
+- a clean Draft download followed by the same complete verifier.
+
+An independent authenticated download of
+`agentroom-bridge-desktop_0.4.0-qa028.1_windows_amd64_setup.exe` and the outer
+`SHA256SUMS` matched SHA-256
+`c89d5e90fba52b15e79155abc378d1fdfb62dff8986d7ccb828708123cb30500`.
+The candidate remains Draft and is not a published compatibility claim.
+Packaging proves that the matching installer is ready for machine B; it does
+not prove that the installer, deep link, local Codex login or either Run has
+executed on that physical host.
 
 ## Blocking physical gate
 
