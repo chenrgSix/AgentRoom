@@ -36,6 +36,29 @@ assert.equal(
   defaultConfiguration.services.caddy.environment.AGENT_ROOM_PUBLIC_ORIGIN,
   "https://team.example.com:9443"
 );
+assert.equal(defaultConfiguration.services.agentroom.user, undefined);
+assert.deepEqual(defaultConfiguration.services.agentroom.cap_drop, ["ALL"]);
+assert.equal(defaultConfiguration.services["data-init"].network_mode, "none");
+assert.equal(defaultConfiguration.services["data-init"].restart, "no");
+assert.deepEqual(defaultConfiguration.services["data-init"].cap_drop, ["ALL"]);
+assert.deepEqual(
+  [...defaultConfiguration.services["data-init"].cap_add].sort(),
+  ["CHOWN", "DAC_OVERRIDE", "FOWNER"]
+);
+assert.equal(
+  defaultConfiguration.services.agentroom.depends_on["data-init"].condition,
+  "service_completed_successfully"
+);
+
+const localEnvironment = {
+  ...baseEnvironment,
+  AGENT_ROOM_BIND_ADDRESS: "127.0.0.1"
+};
+const localConfiguration = renderCompose(localEnvironment);
+assert.equal(
+  localConfiguration.services.caddy.ports.find(({ target }) => target === 443).host_ip,
+  "127.0.0.1"
+);
 
 const customEnvironment = {
   ...baseEnvironment,

@@ -31,6 +31,7 @@ bin/
 /apps/*/var/
 /bridge/var/
 /bridge/agentroom-bridge
+/ops/agentroomctl/agentroomctl
 /backups/
 /deploy/secrets/
 *.log

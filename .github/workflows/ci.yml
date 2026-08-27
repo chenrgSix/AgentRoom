@@ -35,6 +35,7 @@ jobs:
           cache-dependency-path: |
             bridge/go.sum
             packages/contracts/go.sum
+            ops/agentroomctl/go.mod
 
       - name: Install locked dependencies
         run: npm ci
@@ -82,6 +83,7 @@ jobs:
           cache-dependency-path: |
             bridge/go.sum
             packages/contracts/go.sum
+            ops/agentroomctl/go.mod
 
       - name: Test and vet Go contracts
         working-directory: packages/contracts
@@ -94,6 +96,13 @@ jobs:
         run: |
           go test ./...
           go vet ./...
+
+      - name: Test, vet, and build central controller
+        working-directory: ops/agentroomctl
+        run: |
+          go test ./...
+          go vet ./...
+          go build ./cmd/agentroomctl
 
       - name: Check Bridge release scripts
         run: |

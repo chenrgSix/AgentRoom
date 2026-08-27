@@ -35,7 +35,8 @@ document and the task list in the same commit.
 | WEB | [Web UI](web-ui.md) | Browser presentation state | `apps/web/` | ROOM, REG, TASK, RUN, BRG, SEC |
 | DATA | [Persistence and Recovery](persistence-recovery.md) | Database and projection durability | `apps/server/` | CON |
 | SEC | [Security and Authentication](security-auth.md) | Identity, credentials, authorization | server and Bridge | CON |
-| QA/OPS | [Testing and Observability](testing-observability.md) | Evidence, telemetry, release gates | `tests/` and all modules | all |
+| OPS | [Operations and Deployment](operations-deployment.md) | Central install manifest and lifecycle orchestration | `ops/agentroomctl/`, Compose, deployment scripts | DATA, SEC |
+| QA | [Testing and Observability](testing-observability.md) | Evidence, telemetry, release gates | `tests/` and all modules | all |
 
 ## Dependency Flow
 
@@ -59,7 +60,7 @@ ROOM + REG + BRG + DATA
               │   └── WEB
               └── WEB
 
-QA/OPS verifies every layer.
+OPS composes the released central topology; QA verifies every layer.
 ```
 
 Dependencies describe contract order, not necessarily delivery order. Fake

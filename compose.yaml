@@ -34,6 +34,41 @@ services:
         read_only: true
       - agentroom_secrets:/prepared
 
+  data-init:
+    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-source-build}
+    pull_policy: never
+    command:
+      - node
+      - -e
+      - |
+        const fs = require("node:fs");
+        const node = fs.readFileSync("/etc/passwd", "utf8")
+          .split("\n")
+          .find((line) => line.startsWith("node:"));
+        if (!node) throw new Error("Container node account is missing");
+        const fields = node.split(":");
+        for (const path of ["/data", "/backups"]) {
+          fs.chownSync(path, Number(fields[2]), Number(fields[3]));
+          fs.chmodSync(path, 0o700);
+        }
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+    cap_drop:
+      - ALL
+    network_mode: none
+    read_only: true
+    restart: "no"
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    user: "0:0"
+    volumes:
+      - agentroom_data:/data
+      - agentroom_backups:/backups
+
   agentroom:
     build:
       context: .
@@ -41,6 +76,8 @@ services:
     cap_drop:
       - ALL
     depends_on:
+      data-init:
+        condition: service_completed_successfully
       secret-init:
         condition: service_completed_successfully
     environment:
@@ -92,8 +129,8 @@ services:
         max-file: "${AGENT_ROOM_LOG_MAX_FILES:-5}"
         max-size: "${AGENT_ROOM_LOG_MAX_SIZE:-10m}"
     ports:
-      - "${AGENT_ROOM_HTTP_PORT:-80}:80"
-      - "${AGENT_ROOM_HTTPS_PORT:-9443}:443"
+      - "${AGENT_ROOM_BIND_ADDRESS:-0.0.0.0}:${AGENT_ROOM_HTTP_PORT:-80}:80"
+      - "${AGENT_ROOM_BIND_ADDRESS:-0.0.0.0}:${AGENT_ROOM_HTTPS_PORT:-9443}:443"
     read_only: true
     restart: unless-stopped
     security_opt:

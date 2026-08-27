@@ -29,6 +29,8 @@ require an ADR.
 - `apps/web/`: browser-only presentation and user interaction.
 - `packages/contracts/`: authoritative JSON Schema for cross-language messages.
 - `bridge/`: local runtime discovery, invocation, and server transport.
+- `ops/agentroomctl/`: central-host release verification and lifecycle
+  orchestration over the repository-owned Compose, backup, and restore paths.
 - `tests/e2e/`: black-box scenarios spanning server and Bridge.
 
 The complete ownership and dependency map is maintained in
@@ -75,6 +77,12 @@ and out-of-order events. Security-sensitive changes must include a negative test
 
 Before opening a pull request, run the relevant formatter, unit tests, contract
 tests, and Markdown checks. Record commands and results in the PR description.
+
+The central installation controller uses Go 1.26.7. From
+`ops/agentroomctl/`, run `gofmt -w .`, `go test ./...`, `go vet ./...`, and
+`go build ./cmd/agentroomctl`. Its tests do not start Docker or mutate a real
+installation; live Compose and physical-host evidence remains in the OPS/QA
+acceptance gates.
 
 ## Pull Requests
 

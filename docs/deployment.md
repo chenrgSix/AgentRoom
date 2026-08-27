@@ -4,7 +4,8 @@
 
 The supported Compose profile runs one AgentRoom Server and Web UI behind
 Caddy on a single trusted-team host. SQLite, the prepared Owner recovery
-secret, backups, and Caddy state use private named volumes. Only Caddy publishes
+secret, backups, and Caddy state use private named volumes in the manual profile
+and owner-selected bind directories under `agentroomctl`. Only Caddy publishes
 ports: 9443 serves the application by default, while 80 is limited to ACME and
 an exact-origin HTTPS redirect. Server port 3000 and `/api/metrics` are not
 public.
@@ -53,6 +54,7 @@ Edit `.env` before starting:
 | `AGENT_ROOM_PUBLIC_ORIGIN` | Exact HTTPS origin, including a non-default port, such as `https://team.example.com:9443` |
 | `AGENT_ROOM_HTTP_PORT` | `80` for public certificate issuance and redirect |
 | `AGENT_ROOM_HTTPS_PORT` | External application port, default `9443`; it must match `AGENT_ROOM_PUBLIC_ORIGIN` |
+| `AGENT_ROOM_BIND_ADDRESS` | Ingress bind address; manual direct HTTPS defaults to `0.0.0.0`, while controller local mode uses `127.0.0.1` |
 | `AGENT_ROOM_IMAGE_TAG` | Local image label aligned with the checked-out release |
 | `AGENT_ROOM_DATABASE_PATH` | Container path under `/data`, normally `/data/agent-room.sqlite` |
 | `AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE` | Host path to the generated secret file |
@@ -79,6 +81,8 @@ Expected state:
 
 - `secret-init` is `Exited (0)` after copying the validated secret into a
   private volume;
+- `data-init` is `Exited (0)` after assigning the private database/backup
+  mounts to the image's non-root `node` account;
 - `agentroom` is running and healthy;
 - `caddy` is running after AgentRoom becomes ready.
 
@@ -90,7 +94,9 @@ docker compose logs -f agentroom caddy
 curl --fail https://team.example.com:9443/api/health/ready
 ```
 
-The initializer is network-disabled and short-lived. Server and Caddy use
+Both initializers are network-disabled and short-lived. `data-init` retains
+only the bounded ownership capabilities needed for the database and backup
+mounts; it does not run migrations or application logic. Server and Caddy use
 read-only root filesystems, no-new-privileges, bounded Docker logs, and only the
 documented writable volumes. Server runs as the non-root `node` user and drops
 all Linux capabilities; Caddy keeps only `NET_BIND_SERVICE`.
@@ -146,6 +152,7 @@ that fingerprint.
 | Symptom | Inspect | Likely boundary |
 | --- | --- | --- |
 | `secret-init` is not `Exited (0)` | `docker compose logs secret-init` | missing, unreadable, or invalid-length recovery file |
+| `data-init` is not `Exited (0)` | `docker compose logs data-init` | database/backup mount ownership or image account mismatch |
 | `agentroom` is unhealthy | `docker compose logs agentroom` | database path, migration, secret, or public-origin validation |
 | Caddy cannot obtain a certificate | `docker compose logs caddy` | DNS, ports 80/9443, firewall, or ACME egress |
 | Browser works but Bridge does not connect | Caddy and AgentRoom logs | public URL, system trust, WebSocket, or Device credential |
