@@ -144,6 +144,47 @@ type AgentStatusPayload struct {
 }
 
 // Fields shared by versioned cross-process messages.
+type AgentProvisionRequestedMessage struct {
+	MessageID string                         `json:"messageId"`
+	Payload   AgentProvisionRequestedPayload `json:"payload"`
+	// Major and minor protocol version negotiated by peers.
+	ProtocolVersion string `json:"protocolVersion"`
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	Timestamp time.Time                          `json:"timestamp"`
+	Type      AgentProvisionRequestedMessageType `json:"type"`
+}
+
+type AgentProvisionRequestedPayload struct {
+	AgentID         string `json:"agentId"`
+	DeviceID        string `json:"deviceId"`
+	ManagementCode  string `json:"managementCode"`
+	Name            string `json:"name"`
+	RequestID       string `json:"requestId"`
+	Role            string `json:"role"`
+	TemplateAgentID string `json:"templateAgentId"`
+}
+
+// Fields shared by versioned cross-process messages.
+type AgentProvisionResultMessage struct {
+	MessageID string                      `json:"messageId"`
+	Payload   AgentProvisionResultPayload `json:"payload"`
+	// Major and minor protocol version negotiated by peers.
+	ProtocolVersion string `json:"protocolVersion"`
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	Timestamp time.Time                       `json:"timestamp"`
+	Type      AgentProvisionResultMessageType `json:"type"`
+}
+
+type AgentProvisionResultPayload struct {
+	AgentID         string        `json:"agentId"`
+	DeviceID        string        `json:"deviceId"`
+	Reason          *Reason       `json:"reason,omitempty"`
+	RequestID       string        `json:"requestId"`
+	Status          PayloadStatus `json:"status"`
+	TemplateAgentID string        `json:"templateAgentId"`
+}
+
+// Fields shared by versioned cross-process messages.
 type RunRequestedMessage struct {
 	MessageID string              `json:"messageId"`
 	Payload   RunRequestedPayload `json:"payload"`
@@ -633,15 +674,47 @@ const (
 type AgentPresenceStatus string
 
 const (
-	Busy     AgentPresenceStatus = "busy"
-	Degraded AgentPresenceStatus = "degraded"
-	Ready    AgentPresenceStatus = "ready"
+	AgentPresenceStatusBusy AgentPresenceStatus = "busy"
+	Degraded                AgentPresenceStatus = "degraded"
+	Ready                   AgentPresenceStatus = "ready"
 )
 
 type AgentStatusMessageType string
 
 const (
 	AgentStatus AgentStatusMessageType = "agent.status"
+)
+
+type AgentProvisionRequestedMessageType string
+
+const (
+	AgentProvisionRequested AgentProvisionRequestedMessageType = "agent.provision.requested"
+)
+
+type Reason string
+
+const (
+	ConfigurationFailed  Reason = "configuration_failed"
+	IdentityConflict     Reason = "identity_conflict"
+	InvalidCode          Reason = "invalid_code"
+	InvalidRequest       Reason = "invalid_request"
+	ProvisioningDisabled Reason = "provisioning_disabled"
+	RateLimited          Reason = "rate_limited"
+	ReasonBusy           Reason = "busy"
+	TemplateNotFound     Reason = "template_not_found"
+)
+
+type PayloadStatus string
+
+const (
+	Accepted PayloadStatus = "accepted"
+	Rejected PayloadStatus = "rejected"
+)
+
+type AgentProvisionResultMessageType string
+
+const (
+	AgentProvisionResult AgentProvisionResultMessageType = "agent.provision.result"
 )
 
 type State string

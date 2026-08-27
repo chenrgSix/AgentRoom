@@ -29,6 +29,10 @@
       "type": "string",
       "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
     },
+    "agentProvisionRequestId": {
+      "type": "string",
+      "pattern": "^agentprov_[A-Za-z0-9_-]{8,128}$"
+    },
     "messageId": {
       "type": "string",
       "pattern": "^msg_[A-Za-z0-9_-]{8,128}$"

@@ -71,7 +71,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | CON-005 | DONE | Define recoverable Runtime output deltas | CON-004, RUN-003 | schema fixtures and generated TypeScript/Go types prove bounded, sequenced `run.output_delta` events remain distinct from the final reply |
 | CON-006 | DONE | Define recoverable Runtime activity and named context | CON-005, RUN-007 | 33 schema fixtures plus deterministic TypeScript/Go generation prove bounded `run.activity`, named context senders, and exact eligible peer identities remain additive protocol 1.0 fields |
 | CON-008 | DONE | Align opaque IDs with base64url generation | CON-002, CON-004, BRG-005 | 41 Schema fixtures, focused Go inbox and Server WebSocket acceptance/rejection coverage, and two deterministic real-Bridge E2E repetitions accept valid leading `-` and `_` suffix characters while rejecting wrong prefixes, short suffixes, and path separators |
-| CON-011 | ACTIVE | Define central Agent provisioning messages | GOV-012, CON-004 | positive and negative fixtures plus deterministic TypeScript and Go generation define bounded request/result envelopes without local Runtime configuration |
+| CON-011 | DONE | Define central Agent provisioning messages | GOV-012, CON-004 | 63 positive/negative fixtures, deterministic checked-in TypeScript/Go generation, strict type checking, and both language validators define bounded request/result envelopes while rejecting local Runtime configuration |
 | DATA-001 | DONE | Add SQLite migration runner and database location | GOV-004 | empty database migrates from zero |
 | DATA-002 | DONE | Add Team, Room, Message, and registry tables | DATA-001, CON-002 | repository tests persist and reload entities |
 | ADP-001 | DONE | Implement deterministic Fake Runtime Adapter | CON-002 | scripted events exercise success and failure |
@@ -237,7 +237,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | SEC-003 | DONE | Add credential rotation and Device revoke propagation | BRG-003, SEC-002 | revoked Bridge cannot reconnect or receive Runs |
 | SEC-004 | DONE | Add message and log redaction boundary | MCP-002, BRG-004 | seeded secrets never enter persisted output |
 | SEC-005 | DONE | Add trusted-team Web identity and recovery | SEC-001, OPS-003 | trusted mode disables public bootstrap; secure Cookie setup/recovery, Origin checks, hashed one-time member invitations, expiry, replay, and non-owner tests pass |
-| SEC-006 | PLANNED | Authorize and recover owner-scoped Agent provisioning | CON-011, SEC-002, REG-004, BRG-003 | migration, service, HTTP, WebSocket, restart, retry, foreign-owner, offline, and code non-persistence tests converge one request to one managed Agent |
+| SEC-006 | ACTIVE | Authorize and recover owner-scoped Agent provisioning | CON-011, SEC-002, REG-004, BRG-003 | migration, service, HTTP, WebSocket, restart, retry, foreign-owner, offline, and code non-persistence tests converge one request to one managed Agent |
 | OPS-001 | DONE | Propagate trace IDs through message, Run, Bridge, runtime | RUN-003 | one authorized query reconstructs persisted Message, Run, Delivery, and Runtime event entries; cross-process E2E verifies one trace |
 | OPS-002 | DONE | Add structured logs, metrics, and health endpoints | OPS-001 | safe HTTP/Bridge/Run logs, Prometheus metrics, live/ready/degraded health, and tested failure signals |
 | OPS-003 | DONE | Document and configure deployable listener topology | BRG-003, MCP-001 | loopback, proxy, and trusted-LAN modes are explicit |

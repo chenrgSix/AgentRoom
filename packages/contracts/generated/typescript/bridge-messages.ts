@@ -208,6 +208,69 @@ export type AgentStatusMessageType = "agent.status";
 /**
  * Fields shared by versioned cross-process messages.
  */
+export interface AgentProvisionRequestedMessage {
+  messageId: string;
+  payload:   AgentProvisionRequestedPayload;
+  /**
+   * Major and minor protocol version negotiated by peers.
+   */
+  protocolVersion: string;
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  timestamp: string;
+  type:      AgentProvisionRequestedMessageType;
+  [property: string]: unknown;
+}
+
+export interface AgentProvisionRequestedPayload {
+  agentId:         string;
+  deviceId:        string;
+  managementCode:  string;
+  name:            string;
+  requestId:       string;
+  role:            string;
+  templateAgentId: string;
+}
+
+export type AgentProvisionRequestedMessageType = "agent.provision.requested";
+
+/**
+ * Fields shared by versioned cross-process messages.
+ */
+export interface AgentProvisionResultMessage {
+  messageId: string;
+  payload:   AgentProvisionResultPayload;
+  /**
+   * Major and minor protocol version negotiated by peers.
+   */
+  protocolVersion: string;
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  timestamp: string;
+  type:      AgentProvisionResultMessageType;
+  [property: string]: unknown;
+}
+
+export interface AgentProvisionResultPayload {
+  agentId:         string;
+  deviceId:        string;
+  reason?:         Reason;
+  requestId:       string;
+  status:          PayloadStatus;
+  templateAgentId: string;
+}
+
+export type Reason = "provisioning_disabled" | "invalid_code" | "rate_limited" | "busy" | "template_not_found" | "identity_conflict" | "invalid_request" | "configuration_failed";
+
+export type PayloadStatus = "accepted" | "rejected";
+
+export type AgentProvisionResultMessageType = "agent.provision.result";
+
+/**
+ * Fields shared by versioned cross-process messages.
+ */
 export interface RunRequestedMessage {
   messageId: string;
   payload:   RunRequestedPayload;
@@ -798,6 +861,8 @@ export type BridgeMessage =
   | BridgeHeartbeatMessage
   | AgentPublishMessage
   | AgentStatusMessage
+  | AgentProvisionRequestedMessage
+  | AgentProvisionResultMessage
   | RunRequestedMessage
   | RunAcceptedMessage
   | RunStatusMessage

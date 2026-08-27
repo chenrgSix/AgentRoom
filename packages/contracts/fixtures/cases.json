@@ -1050,6 +1050,123 @@
         "materializationState": "downloaded"
       },
       "valid": false
+    },
+    {
+      "name": "valid fixed-code Agent provision request",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V601",
+        "timestamp": "2026-08-27T10:00:00Z",
+        "type": "agent.provision.requested",
+        "payload": {
+          "requestId": "agentprov_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "templateAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
+          "name": "Local Reviewer",
+          "role": "Review changes",
+          "managementCode": "12345678"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "valid rotating-code Agent provision request",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V602",
+        "timestamp": "2026-08-27T10:00:00Z",
+        "type": "agent.provision.requested",
+        "payload": {
+          "requestId": "agentprov_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "templateAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W8",
+          "name": "Local QA",
+          "role": "Verify changes",
+          "managementCode": "654321"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "Agent provision request rejects local Runtime configuration",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V603",
+        "timestamp": "2026-08-27T10:00:00Z",
+        "type": "agent.provision.requested",
+        "payload": {
+          "requestId": "agentprov_01K4Z6J7Y8N9P0Q1R2S3T4V5W8",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "templateAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W9",
+          "name": "Unsafe Agent",
+          "role": "Must be rejected",
+          "managementCode": "12345678",
+          "workspace": "/Users/alice/project"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Agent provision request rejects a short management code",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V604",
+        "timestamp": "2026-08-27T10:00:00Z",
+        "type": "agent.provision.requested",
+        "payload": {
+          "requestId": "agentprov_01K4Z6J7Y8N9P0Q1R2S3T4V5W9",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "templateAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5WA",
+          "name": "Short Code",
+          "role": "Must be rejected",
+          "managementCode": "12345"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "valid accepted Agent provision result",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V605",
+        "timestamp": "2026-08-27T10:00:01Z",
+        "type": "agent.provision.result",
+        "payload": {
+          "requestId": "agentprov_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "templateAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
+          "status": "accepted"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "rejected Agent provision result requires a closed reason",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V606",
+        "timestamp": "2026-08-27T10:00:01Z",
+        "type": "agent.provision.result",
+        "payload": {
+          "requestId": "agentprov_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "templateAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W7",
+          "status": "rejected"
+        }
+      },
+      "valid": false
     }
   ]
 }

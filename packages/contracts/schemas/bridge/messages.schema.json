@@ -16,6 +16,8 @@
             "bridge.heartbeat",
             "agent.publish",
             "agent.status",
+            "agent.provision.requested",
+            "agent.provision.result",
             "run.requested",
             "run.accepted",
             "run.status",
@@ -138,6 +140,44 @@
             "properties": {
               "payload": {
                 "$ref": "#/$defs/agentStatusPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "agent.provision.requested"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/agentProvisionRequestedPayload"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "agent.provision.result"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          },
+          "then": {
+            "properties": {
+              "payload": {
+                "$ref": "#/$defs/agentProvisionResultPayload"
               }
             }
           }
@@ -734,6 +774,120 @@
           "maxLength": 512
         }
       }
+    },
+    "agentProvisionRequestedPayload": {
+      "title": "Agent Provision Requested Payload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "deviceId",
+        "templateAgentId",
+        "agentId",
+        "name",
+        "role",
+        "managementCode"
+      ],
+      "properties": {
+        "requestId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentProvisionRequestId"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "templateAgentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "managementCode": {
+          "type": "string",
+          "pattern": "^(?:[0-9]{6}|[0-9]{8})$"
+        }
+      }
+    },
+    "agentProvisionResultPayload": {
+      "title": "Agent Provision Result Payload",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestId",
+        "deviceId",
+        "templateAgentId",
+        "agentId",
+        "status"
+      ],
+      "properties": {
+        "requestId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentProvisionRequestId"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "templateAgentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "status": {
+          "enum": [
+            "accepted",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "enum": [
+            "provisioning_disabled",
+            "invalid_code",
+            "rate_limited",
+            "busy",
+            "template_not_found",
+            "identity_conflict",
+            "invalid_request",
+            "configuration_failed"
+          ]
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "status": {
+              "const": "accepted"
+            }
+          },
+          "not": {
+            "properties": {
+              "reason": {}
+            },
+            "required": [
+              "reason"
+            ]
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "rejected"
+            },
+            "reason": {}
+          },
+          "required": [
+            "reason"
+          ]
+        }
+      ]
     },
     "contextMessage": {
       "type": "object",

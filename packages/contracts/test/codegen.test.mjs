@@ -15,5 +15,7 @@ test("contract generation is deterministic", async () => {
   assert.match(first.typescript, /timestamp: string;/);
   assert.doesNotMatch(first.typescript, /timestamp: Date;/);
   assert.match(first.go, /type BridgeHelloMessage struct/);
+  assert.match(first.go, /type AgentProvisionRequestedMessage struct/);
+  assert.match(first.go, /type AgentProvisionResultMessage struct/);
   assert.match(first.go, /Timestamp time.Time/);
 });
