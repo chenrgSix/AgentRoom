@@ -32,6 +32,8 @@ import type {
   WebPrincipal
 } from "../security/auth-service.js";
 import type { BridgePairingService } from "../security/bridge-pairing-service.js";
+import type { DevicePairingSessionService } from
+  "../security/device-pairing-session-service.js";
 import type { TrustedWebAccessService } from "../security/trusted-web-access-service.js";
 import type { WebAuthConfiguration } from "../security/web-auth-config.js";
 import type { MessageService } from "../team-room/message-service.js";
@@ -65,6 +67,7 @@ export interface ServerRouteContext {
   clock: () => string;
   core: CoreRepository;
   delivery: DeliveryService;
+  devicePairingSessions: DevicePairingSessionService;
   discussions: DiscussionOrchestrator;
   discussionRepository: DiscussionRepository;
   dispatchDiscussionRuns: (runs: PersistedRun[]) => Promise<void>;

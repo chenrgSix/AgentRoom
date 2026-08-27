@@ -176,10 +176,16 @@ bypass local policy. Work is tracked by `SEC-001` through `SEC-007`, with pairin
 transport under `BRG-002` and central Token transport under `BRG-025`, in
 `docs/TASKS.md`.
 
-`CON-012` and `SEC-008` track the additive ADR-0021 pairing-session contract and
-its authenticated state machine. Their completion requires response-loss,
-competing-claim, replay, expiry, enumeration, cross-Team, and legacy rolling-
-upgrade evidence before the new path may replace current onboarding.
+`CON-012` defines the additive ADR-0021 pairing-session contract. `SEC-008`
+implements its state machine in migration 0041 and the dedicated pairing
+service and HTTP routes. Focused tests prove exact create, claim, decision and
+poll recovery across a Server restart, first-attempt binding, matching Owner and
+Bridge phrases, hash-only secret persistence, atomic poll-secret credential
+promotion, manual-code rate limiting, non-enumerating replay, expiry,
+cross-Team and non-Owner rejection, cancellation, and unchanged legacy
+join/pair plus central-Token behavior. Bridge and Web presentation remain owned
+by `BRG-043` and `WEB-045`; this Server completion does not claim those product
+surfaces.
 
 `CON-013`, `TASK-012`, and `TASK-013` track the ADR-0022 Task/Result authority.
 Negative tests cover stale revisions, foreign Room/Task sources, Agent/Run

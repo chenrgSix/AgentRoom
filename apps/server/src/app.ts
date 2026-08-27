@@ -36,6 +36,8 @@ import {
   unsafeHttpMethods
 } from "./http/http-helpers.js";
 import { registerDiscussionRoutes } from "./http/discussion-routes.js";
+import { registerDevicePairingSessionRoutes } from
+  "./http/device-pairing-session-routes.js";
 import { registerMcpRoutes } from "./http/mcp-routes.js";
 import { registerMessageRoutes } from "./http/message-routes.js";
 import { registerMemoryCandidateRoutes } from "./http/memory-candidate-routes.js";
@@ -70,6 +72,8 @@ import {
   AnonymousRateLimitError
 } from "./security/anonymous-rate-limiter.js";
 import { BridgePairingService } from "./security/bridge-pairing-service.js";
+import { DevicePairingSessionService } from
+  "./security/device-pairing-session-service.js";
 import {
   assertBridgeServerToken,
   bridgeServerTokenHeader,
@@ -177,6 +181,11 @@ export async function createServerApp(
   const messages = new MessageService(core, auth);
   const teamWait = new TeamWaitService(core, auth);
   const pairing = new BridgePairingService(database, core, auth);
+  const devicePairingSessions = new DevicePairingSessionService(
+    database,
+    core,
+    auth
+  );
   const clock = options.clock ?? (() => new Date().toISOString());
   const runRepository = new RunRepository(database);
   const taskRepository = new AgentTaskRepository(database);
@@ -597,6 +606,7 @@ export async function createServerApp(
     }
     const message = error instanceof Error ? error.message : "Unexpected error";
     const statusCode = message.includes("UNIQUE constraint failed") ||
+      message.startsWith("Device pairing conflict:") ||
       message === "Room settings changed; reload and retry" ||
       message.startsWith("Agent provisioning conflict:") ||
       message.startsWith("Room already has an active Discussion:") ||
@@ -635,6 +645,7 @@ export async function createServerApp(
     clock,
     core,
     delivery,
+    devicePairingSessions,
     discussions,
     discussionRepository,
     dispatchDiscussionRuns,
@@ -678,6 +689,7 @@ export async function createServerApp(
   registerTeamRoomRoutes(routeContext);
   registerTaskRoutes(routeContext);
   registerRegistryRoutes(routeContext);
+  registerDevicePairingSessionRoutes(routeContext);
   registerMessageRoutes(routeContext);
   registerMemoryCandidateRoutes(routeContext);
   registerDiscussionRoutes(routeContext);
