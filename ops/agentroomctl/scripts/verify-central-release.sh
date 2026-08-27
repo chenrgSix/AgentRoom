@@ -89,7 +89,7 @@ for target in "${targets[@]}"; do
   fi
 
   checksum_names=$(awk '
-    !/^[0-9a-f]{64}  [A-Za-z0-9][A-Za-z0-9._+@%\/-]*$/ { invalid = 1 }
+    !/^[0-9a-f]{64}  [A-Za-z0-9.][A-Za-z0-9._+@%\/-]*$/ { invalid = 1 }
     { print $2 }
     END { if (invalid || NR == 0) exit 1 }
   ' "${root}/SHA256SUMS") || {
