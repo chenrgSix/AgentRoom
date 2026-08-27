@@ -203,11 +203,13 @@ Revoking a Device atomically marks it revoked, revokes all of its credentials,
 disables its managed Agents, and projects them offline. The active Bridge socket
 is closed immediately, and later reconnects fail authentication.
 
-Under the ADR-0021 target, revocation also prevents new deliveries and Workspace
-leases. A queued Run not yet accepted by the Bridge closes with a bounded
-Device-revoked reason. An already accepted Run is not falsely reported as
-canceled merely because the socket closed: cancellation is best effort and an
-unrecoverable execution outcome follows the existing `outcome_unknown` rule.
+Device revocation also prevents new deliveries and Workspace leases. The
+security mutation is durable before Run reconciliation: a queued Run not yet
+accepted by the Bridge closes with bounded `RUN_DEVICE_REVOKED`, while an
+already accepted Run closes with `RUN_DEVICE_REVOKED_OUTCOME_UNKNOWN` and is
+not falsely reported as canceled. Cancellation is best effort before socket
+closure for an interruptible Agent. Server startup idempotently repairs the
+crash window between durable Device revocation and Run reconciliation.
 
 Run acceptance, status, and replies require an exact Team, Device owner, and
 target Agent binding. Cross-Team and same-Team cross-owner events are rejected

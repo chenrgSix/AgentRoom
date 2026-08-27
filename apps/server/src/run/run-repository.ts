@@ -125,6 +125,11 @@ export interface AppliedRunEvent {
   run: RunRecord;
 }
 
+export interface DeviceRevocationRun {
+  run: RunRecord;
+  acceptedByBridge: boolean;
+}
+
 export interface RunReplyRoutingIntent {
   parentRunId: string;
   replySequence: number;
@@ -624,6 +629,42 @@ export class RunRepository {
       ORDER BY created_at, run_id
     `).all(agentId) as RunRow[];
     return rows.map(mapRun);
+  }
+
+  public listDeviceRevocationRuns(deviceId: string): DeviceRevocationRun[] {
+    const rows = this.database.prepare(`
+      SELECT r.*, CASE
+        WHEN d.state = 'accepted' OR r.state != 'queued' THEN 1
+        ELSE 0
+      END AS accepted_by_bridge
+      FROM runs r
+      JOIN agents a ON a.agent_id = r.target_agent_id
+      LEFT JOIN run_deliveries d ON d.run_id = r.run_id
+      WHERE a.device_id = ?
+        AND r.state NOT IN (
+          'completed', 'failed', 'canceled', 'expired', 'outcome_unknown'
+        )
+      ORDER BY r.created_at, r.run_id
+    `).all(deviceId) as Array<RunRow & { accepted_by_bridge: 0 | 1 }>;
+    return rows.map((row) => ({
+      run: mapRun(row),
+      acceptedByBridge: row.accepted_by_bridge === 1
+    }));
+  }
+
+  public listRevokedDeviceIdsWithActiveRuns(): string[] {
+    const rows = this.database.prepare(`
+      SELECT DISTINCT d.device_id
+      FROM devices d
+      JOIN agents a ON a.device_id = d.device_id
+      JOIN runs r ON r.target_agent_id = a.agent_id
+      WHERE d.status = 'revoked'
+        AND r.state NOT IN (
+          'completed', 'failed', 'canceled', 'expired', 'outcome_unknown'
+        )
+      ORDER BY d.device_id
+    `).all() as Array<{ device_id: string }>;
+    return rows.map((row) => row.device_id);
   }
 
   public expireQueued(roomId: string, now: string): RunRecord[] {

@@ -19,6 +19,8 @@ import type { AgentService } from "../registry/agent-service.js";
 import type { AgentProvisioningService } from
   "../registry/agent-provisioning-service.js";
 import type { MemberDeviceService } from "../registry/member-device-service.js";
+import type { DeviceRevocationService } from
+  "../registry/device-revocation-service.js";
 import type { PresenceService } from "../registry/presence-service.js";
 import type { BridgeRunEventService } from "../run/bridge-run-event-service.js";
 import type { CancellationService } from "../run/cancellation-service.js";
@@ -71,6 +73,7 @@ export interface ServerRouteContext {
   clock: () => string;
   core: CoreRepository;
   delivery: DeliveryService;
+  deviceRevocation: DeviceRevocationService;
   devicePairingSessions: DevicePairingSessionService;
   discussions: DiscussionOrchestrator;
   discussionRepository: DiscussionRepository;

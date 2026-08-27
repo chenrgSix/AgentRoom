@@ -99,6 +99,17 @@ Offline managed Runs remain `queued` and are delivered when the target Device
 publishes or heartbeats. A queued Run that reaches its persisted deadline moves
 to terminal `expired` and is never delivered on a later reconnect.
 
+Device revocation durably disables the Device before reconciling its active
+Runs. A Delivery that the Bridge has not accepted becomes terminal `failed`
+with `RUN_DEVICE_REVOKED`. A Delivery already accepted, including the
+conservative case where the Run advanced beyond `queued`, becomes
+`outcome_unknown` with `RUN_DEVICE_REVOKED_OUTCOME_UNKNOWN`; it is never
+reported as canceled or retried. When the active Agent advertises interrupt
+support, the Server sends one best-effort `run.cancel_requested` before closing
+the Device socket. Startup recovery repeats the idempotent Run reconciliation
+for any revoked Device left behind by a crash after the durable security
+mutation.
+
 ## Delivery Contract
 
 1. Persist Run and delivery record.

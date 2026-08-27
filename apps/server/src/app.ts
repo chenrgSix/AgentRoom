@@ -60,6 +60,8 @@ import { AgentService } from "./registry/agent-service.js";
 import { AgentProvisioningService } from
   "./registry/agent-provisioning-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
+import { DeviceRevocationService } from
+  "./registry/device-revocation-service.js";
 import { PresenceService } from "./registry/presence-service.js";
 import { DeliveryService } from "./run/delivery-service.js";
 import { BridgeRunEventService } from "./run/bridge-run-event-service.js";
@@ -341,6 +343,14 @@ export async function createServerApp(
   const cancellations = new CancellationService(
     core, runRepository, auth, bridgeConnections, clock
   );
+  const deviceRevocation = new DeviceRevocationService(
+    registry,
+    core,
+    runRepository,
+    bridgeConnections,
+    clock
+  );
+  deviceRevocation.recover();
   const discussionRepository = new DiscussionRepository(database);
   const discussions = new DiscussionOrchestrator(
     core,
@@ -676,6 +686,7 @@ export async function createServerApp(
     clock,
     core,
     delivery,
+    deviceRevocation,
     devicePairingSessions,
     discussions,
     discussionRepository,

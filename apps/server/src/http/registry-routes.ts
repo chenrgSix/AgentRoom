@@ -19,6 +19,7 @@ export function registerRegistryRoutes({
   bridgeConnections,
   clock,
   core,
+  deviceRevocation,
   fakeAdapters,
   limitAnonymous,
   pairing,
@@ -50,13 +51,11 @@ export function registerRegistryRoutes({
   app.delete<{ Params: { teamId: string; deviceId: string } }>(
     "/api/teams/:teamId/devices/:deviceId",
     async (request) => {
-      const device = registry.revokeDevice(
+      const device = deviceRevocation.revoke(
         principal(request),
         request.params.teamId,
-        request.params.deviceId,
-        clock()
+        request.params.deviceId
       );
-      bridgeConnections.revoke(device.deviceId);
       return device;
     }
   );
