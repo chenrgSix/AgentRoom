@@ -201,6 +201,10 @@ OpenSSL, and curl; it does not need Node.js or Go. Point a public DNS A/AAAA
 record at the host, allow inbound TCP 80/9443 and outbound ACME traffic, and
 ensure no other process owns those ports.
 
+A private-LAN deployment may use a stable IP or internal host name instead of
+public DNS. Keep `:9443` in `AGENT_ROOM_PUBLIC_ORIGIN`, export Caddy's local CA
+root, verify it independently, and trust that root on each Bridge machine.
+
 Use a dedicated, clean checkout and record the exact source revision. Prefer a
 reviewed release tag when it contains the desired deployment changes. Then
 prepare the ignored settings and file-backed Owner recovery secret:

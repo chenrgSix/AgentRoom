@@ -51,6 +51,7 @@ assert.equal(
 
 const caddyfile = readFileSync(new URL("../deploy/Caddyfile", import.meta.url), "utf8");
 assert.match(caddyfile, /auto_https disable_redirects/u);
+assert.match(caddyfile, /default_sni \{\$AGENT_ROOM_DOMAIN\}/u);
 assert.match(
   caddyfile,
   /redir \{\$AGENT_ROOM_PUBLIC_ORIGIN\}\{uri\} permanent/u

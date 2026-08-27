@@ -1,5 +1,6 @@
 {
 	auto_https disable_redirects
+	default_sni {$AGENT_ROOM_DOMAIN}
 }
 
 http://{$AGENT_ROOM_DOMAIN} {

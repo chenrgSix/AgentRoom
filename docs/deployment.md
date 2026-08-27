@@ -22,8 +22,8 @@ The host needs:
 - Docker Engine or Docker Desktop with Compose v2;
 - OpenSSL to generate the Owner recovery secret;
 - curl for health verification;
-- a public DNS A/AAAA record pointing to the host;
-- inbound TCP 80/9443 and outbound access required for ACME.
+- a stable public DNS name, private DNS name, or LAN IP for the host;
+- inbound TCP 80/9443; public certificates also require outbound ACME access.
 
 Node.js and Go are not required on a Compose host. Ensure no other service owns
 ports 80 or 9443. Put another reverse proxy in front only after reproducing the
@@ -49,7 +49,7 @@ Edit `.env` before starting:
 
 | Variable | Required value |
 | --- | --- |
-| `AGENT_ROOM_DOMAIN` | Host name only, such as `team.example.com` |
+| `AGENT_ROOM_DOMAIN` | Stable host name or LAN IP, such as `team.example.com` or `192.168.1.132` |
 | `AGENT_ROOM_PUBLIC_ORIGIN` | Exact HTTPS origin, including a non-default port, such as `https://team.example.com:9443` |
 | `AGENT_ROOM_HTTP_PORT` | `80` for public certificate issuance and redirect |
 | `AGENT_ROOM_HTTPS_PORT` | External application port, default `9443`; it must match `AGENT_ROOM_PUBLIC_ORIGIN` |
@@ -115,6 +115,31 @@ is acceptable only after installing its root on every client. Legacy SHA-256
 leaf pins remain a compatibility mode and must be rotated with the certificate.
 Application content is HTTPS-only; public HTTP exists solely for ACME and
 redirects, while direct plain HTTP application access remains loopback-only.
+
+For a private LAN IP, include the external port in the origin:
+
+```dotenv
+AGENT_ROOM_DOMAIN=192.168.1.132
+AGENT_ROOM_PUBLIC_ORIGIN=https://192.168.1.132:9443
+AGENT_ROOM_HTTPS_PORT=9443
+```
+
+Caddy uses its local CA for an IP certificate and renews the leaf certificate
+automatically. Export the stable root certificate after first startup:
+
+```bash
+docker compose cp \
+  caddy:/data/caddy/pki/authorities/local/root.crt \
+  deploy/secrets/caddy-local-root.crt
+openssl x509 -in deploy/secrets/caddy-local-root.crt \
+  -noout -fingerprint -sha256
+```
+
+Transfer the root certificate through an independently verified channel,
+confirm its SHA-256 value, install it in each client operating system's trusted
+root store, and keep Bridge on `system_ca`. Pinning the short-lived leaf
+certificate is suitable only for a bounded smoke test because renewal changes
+that fingerprint.
 
 ## Troubleshooting
 
