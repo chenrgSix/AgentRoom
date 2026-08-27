@@ -16,13 +16,15 @@ Devices; a Device publishes signed Agent identities; a Runtime Session acts only
 through the Agent selected for a Run. IDs are immutable and display names are
 never authorization inputs.
 
-The central server is the MVP trust authority. In the primary flow, a Bridge
-creates an unauthenticated, short-lived join request and shows its short code
-locally. Only a Team owner may approve that code in an authenticated Web
-session. The same Bridge then claims the approval using a separate high-entropy
-poll token over TLS, verifies the server through normal system-CA trust or an
-explicit legacy SHA-256 pin, and stores the resulting identity locally.
-Discovery and join creation alone never grant trust.
+The central server is the MVP Team and Device trust authority. The implemented
+primary flow is an Owner-created, short-lived pairing session consumed by
+Bridge through a deep link, QR, or bounded short-code recovery path. The older
+Bridge-created join request remains compatibility behavior. In either flow the
+Bridge uses a separate high-entropy poll proof, verifies the server before
+sending a secret, and stores the resulting identity locally. Current builds use
+normal system-CA trust or an explicit legacy leaf-certificate SHA-256 pin;
+ADR-0023 adds exact-origin private CA trust without changing Team authority.
+Discovery, link parsing and join creation alone never grant trust.
 
 Web sessions and device credentials use random bearer secrets whose SHA-256
 hashes are persisted; plaintext secrets are returned only when issued. Session
@@ -94,6 +96,31 @@ contain a Device credential, Owner recovery secret, Server Token, Runtime
 credential, or Team-history authority. Runtime kinds, commands, environments,
 provider accounts, and Workspace metadata are unnecessary before approval and
 do not enter the pairing request.
+
+### TLS identity target
+
+[ADR-0023](../adr/0023-default-public-ca-and-scope-private-bridge-trust.md)
+makes public CA plus normal system validation the default. An account password,
+Owner Cookie, pairing secret, Device credential, or matching phrase
+authenticates neither the TLS endpoint nor a CA and cannot authorize a
+verification bypass.
+
+An explicitly private-scoped installation gives the authenticated Owner
+projection a closed public descriptor binding the exact HTTPS origin, stable
+installation ID, monotonic trust epoch and canonical public CA certificate
+digest. Web carries that object only in the local pairing fragment. The Bridge
+must verify the public certificate and establish an exact-origin private trust
+pool before sending the claim or poll secret. Its claim echoes the public
+descriptor, the Server requires an exact installation-state match, and the
+phrase transcript includes it while remaining only an association check.
+
+`SEC-009` owns Server validation and projection of this public deployment state
+and authenticated next-epoch rotation offers. It cannot select a TLS profile,
+read a Caddy private key, install OS trust, make a browser trust a private CA,
+or override the Bridge's final TLS decision. A manual short code cannot
+bootstrap private trust unless the Bridge already has valid trust for that
+origin. Public sessions omit the descriptor, and absence never enables TOFU or
+verification-disabled TLS.
 
 ## Authorization Rules
 
@@ -175,7 +202,7 @@ credentials or full sensitive payloads.
 Negative tests cover replay, forged poll tokens, non-owner approval, cross-Team access, expired code,
 recovery-secret failure, invitation replay/expiry, cross-origin Cookie writes,
 revocation, unpublished Runtime launch, credential leakage, and attempts to
-bypass local policy. Work is tracked by `SEC-001` through `SEC-007`, with pairing
+bypass local policy. Work is tracked by `SEC-001` through `SEC-009`, with pairing
 transport under `BRG-002` and central Token transport under `BRG-025`, in
 `docs/TASKS.md`.
 
@@ -189,6 +216,14 @@ cross-Team and non-Owner rejection, cancellation, and unchanged legacy
 join/pair plus central-Token behavior. Bridge and Web presentation remain owned
 by `BRG-043` and `WEB-045`; this Server completion does not claim those product
 surfaces.
+
+`CON-014` and `SEC-009` extend that pairing boundary with public deployment
+trust metadata, descriptor-to-phrase binding and authenticated private-CA
+rotation. Negative tests must reject projection from a mismatched installation,
+origin or Team, epoch downgrade, descriptor mutation, private-key material,
+legacy-client private bootstrap and rotation offered outside an existing
+pin-valid Device channel. `OPS-009`, `BRG-045`, and `WEB-048` remain the owners
+of installation state, local TLS enforcement, and presentation respectively.
 
 `CON-013`, `TASK-012`, and `TASK-013` implement the central ADR-0022 Task/Result
 authority. `BRG-044` implements the Device-bound managed Agent transport, and

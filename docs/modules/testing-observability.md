@@ -45,16 +45,18 @@ a separate release check.
 
 The physical `QA-002` procedure is maintained in
 `docs/acceptance/qa-002-two-machine-managed-agent.md`. It requires two real
-machines, one verified Central/Bridge source, direct HTTPS, an installed desktop
-deep link, explicit local Codex self-test, online execution, offline
-queue/reconnect, exact trace reconstruction, and a sanitized committed PASS
-record. The repository evidence tool reads the Server database only through a
-read-only connection, accepts metrics captured inside the trusted host boundary,
-cross-checks public identities and persisted sequences, requires explicit
-physical attestations, rejects common credential/path/private-address shapes,
-and creates rather than overwrites the Markdown record. It cannot prove that
-two descriptions are physical machines, so human review remains mandatory.
-Local processes and containers cannot close this task.
+machines, one verified Central/Bridge source, direct HTTPS through either the
+default public CA or pairing-scoped private CA, no manual OS CA import, an
+installed desktop deep link, explicit local Codex self-test, online execution,
+offline queue/reconnect, exact trace reconstruction, and a sanitized committed
+PASS record. The repository evidence tool reads the Server database only
+through a read-only connection, accepts metrics captured inside the trusted
+host boundary, cross-checks public identities and persisted sequences, requires
+explicit physical attestations, rejects common credential/path/private-address
+shapes, and creates rather than overwrites the Markdown record. It cannot prove
+that two descriptions are physical machines or that an OS trust store was
+unchanged, so human review remains mandatory. Local processes, containers and a
+manual-CA reachability check cannot close this task.
 
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to
@@ -142,11 +144,14 @@ deterministic `wave_result` retry, participant-ordered context, and the three
 durable recovery cut points.
 
 The Device-onboarding release gate additionally covers clean local and direct-
-HTTPS installation, installer reentry, backup-before-upgrade, safe uninstall,
-Owner-claim response loss, link/QR/manual-code pairing, Server Token non-
-disclosure, several Agent profiles under one Device, path-free Workspace
-projection, revocation before and after Bridge acceptance, and a physical-host
-TLS/deep-link check. A local Compose run does not prove the physical-host gate.
+HTTPS installation, public-CA default without silent fallback, explicit
+origin-scoped private trust without OS CA mutation, installer reentry,
+backup-before-upgrade, safe uninstall, Owner-claim response loss, public
+link/QR/manual-code pairing, private link/QR pairing with short-code-only
+bootstrap rejection, Server Token non-disclosure, several Agent profiles under
+one Device, path-free Workspace projection, revocation before and after Bridge
+acceptance, and a physical-host TLS/deep-link check. A local Compose run or
+manual root import does not prove the physical-host gate.
 
 The committed `device-onboarding.test.ts` cross-process scenario builds and
 starts the real Go Bridge CLI and Console against a real TCP Server. It consumes
@@ -156,6 +161,15 @@ path-free Agent projections, explicitly runs a managed Pi self-test, queues work
 while offline, reconnects to one reply, and then verifies distinct accepted and
 unaccepted revocation outcomes. This deterministic same-host evidence does not
 replace the physical two-machine TLS gate.
+
+`QA-030` is the prerequisite trust gate introduced by ADR-0023. Deterministic
+coverage must prove public-default ACME/system validation and no fallback;
+closed trust-schema interoperability; fixed-path, no-secret and no-redirect
+private bootstrap; CA/digest/exact-origin enforcement; owner-only state;
+public-link omission; private short-code and legacy-client rejection; and
+strictly increasing two-CA overlap rotation. A packaged cross-host rehearsal
+then records `public_ca` or `private_scoped_ca` and confirms no OS root was
+installed. Only after `QA-030` passes does `QA-002` become executable again.
 
 The Result-gated completion release gate additionally covers current versus
 stale definitions and criteria, Agent assignment changes, all required criterion

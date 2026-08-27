@@ -210,6 +210,14 @@ no fingerprint is required. Private deployments may explicitly choose
 `--server-trust-mode pinned_sha256` together with a manually verified
 `--server-certificate-sha256`. Existing fingerprint-only configurations remain
 pinned for compatibility, while `system_ca` rejects a supplied fingerprint.
+
+The accepted deployment target defaults external installs to public CA and
+adds pairing-scoped private CA trust for one exact Central origin without an OS
+root import. That target is tracked by `CON-014`, `OPS-009`, `SEC-009`,
+`BRG-045`, and `WEB-048`; it is not implemented by the current CLI or Desktop
+build. Until those tasks complete, `pinned_sha256` and manually installed
+private roots are advanced compatibility/diagnostic choices, not the normal
+no-manual-CA onboarding flow and not grounds to bypass TLS verification.
 Enrollment stores `bridge.json` and `device-credential.json` with owner-only
 permissions. The `pair` command remains available for legacy server-issued
 invitations.

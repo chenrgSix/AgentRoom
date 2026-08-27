@@ -9,10 +9,16 @@ work through HTTPS. A same-host process, VM, container, Fake Runtime, Generic
 Runtime, scripted Pi protocol, or uncommitted binary does not satisfy QA-002.
 
 This procedure is also the final physical dependency of `QA-028`. It uses the
-ADR-0021 session-pairing flow, not the legacy Bridge invitation or central
-Server Token. The Server remains authority for Team, Device, Agent, Task and
-Run state. Machine B remains authority for Codex login, executable, Workspace,
-local permissions and Runtime self-test.
+ADR-0021 session-pairing flow plus the ADR-0023 TLS profile, not the legacy
+Bridge invitation, central Server Token, manual OS CA import, or leaf pin. The
+Server remains authority for Team, Device, Agent, Task and Run state. Machine B
+remains authority for Codex login, executable, Workspace, local permissions,
+Runtime self-test and its exact-origin Bridge trust store.
+
+Status: `BLOCKED` on `QA-030`. The current `v0.4.0-qa028.1` candidate does not
+implement pairing-scoped private trust, and its successful manual-CA
+reachability check is diagnostic only. Do not execute or mark this runbook
+`PASS` until the trust implementation and version-2 evidence verifier land.
 
 ## Preconditions
 
@@ -24,9 +30,14 @@ local permissions and Runtime self-test.
   archive SHA-256.
 - Machine A satisfies the `agentroomctl` host prerequisites. A clean
   `direct_https` install reaches ready without editing `.env` or running
-  OpenSSL. Reentry, `status`, and `doctor` pass for the same data root.
-- Machine B reaches the exact HTTPS origin with system-CA trust or an explicitly
-  reviewed installation trust method. It has a working local Codex login and a
+  OpenSSL. The omitted TLS profile selects `public_ca`; an explicit private run
+  selects `private_scoped_ca`. Reentry, `status`, and `doctor` pass for the same
+  data root, installation ID, origin and trust epoch.
+- Machine B reaches the exact HTTPS origin either through normal public system
+  trust or the pairing-scoped private CA delivered by the canonical link. No
+  root is imported into its OS trust store, no leaf fingerprint is typed, and
+  no AgentRoom claim, poll, WebSocket, or authenticated HTTP request uses a
+  verification-disabled transport. It has a working local Codex login and a
   dedicated non-sensitive acceptance Workspace.
 - The Owner has an authenticated Web session. No Server Token, Device
   credential, Owner recovery value, certificate key or provider credential is
@@ -35,8 +46,11 @@ local permissions and Runtime self-test.
 ## Installation and pairing
 
 1. On machine A, install the exact Central archive once with `agentroomctl
-   install --mode direct_https`, then run `status` and `doctor`. Repeating the
-   exact install command must preserve the database and Owner authority.
+   install --mode direct_https` for the default public-CA case, or add the
+   post-`OPS-009` explicit `--tls-profile private_scoped_ca` option for a private
+   origin. Then run `status` and `doctor`. Repeating the exact install command
+   must preserve the database, Owner authority, installation ID, TLS profile and
+   trust epoch. Public issuance failure must not fall back to a local CA.
 2. Claim initial ownership in Web, create a dedicated Team and Room named with
    the UTC acceptance date, and keep this Team isolated from unrelated Devices.
 3. On machine B, verify the matching packaged Bridge archive or installed
@@ -45,7 +59,10 @@ local permissions and Runtime self-test.
    the dedicated Workspace.
 4. In Web, create one Device pairing session. Open the canonical
    `agentroom://` deep link through the installed desktop registration. QR and
-   manual code remain recovery paths but do not replace this deep-link check.
+   manual code remain recovery paths for public/system-trusted origins but do
+   not replace this deep-link check. A private-scoped first pairing must carry
+   the exact origin/install/epoch/digest descriptor through the link; its short
+   code alone is intentionally insufficient.
 5. Compare the non-copyable phrase on both machines, approve the exact Device,
    and wait for consumption. Confirm Web shows exactly one active Device and at
    least two managed Agents with only opaque Workspace references and aliases.
@@ -81,7 +98,7 @@ file.
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "utcStart": "<UTC RFC3339>",
   "utcEnd": "<UTC RFC3339>",
   "serverCommit": "<40 lowercase hex characters>",
@@ -90,7 +107,8 @@ file.
   "bridgeVersion": "<packaged version>",
   "bridgeArchiveSha256": "<64 lowercase hex characters>",
   "codexVersion": "<safe version only>",
-  "httpsVerificationMethod": "<system CA or reviewed trust method>",
+  "tlsProfile": "<public_ca or private_scoped_ca>",
+  "httpsVerificationMethod": "<public system CA or Bridge exact-origin private CA>",
   "teamId": "team_<opaque>",
   "roomId": "room_<opaque>",
   "deviceId": "device_<opaque>",
@@ -109,6 +127,8 @@ file.
     "reconnectRunQueuedBeforeRestart": true,
     "sameDeviceReconnected": true,
     "installedWithoutManualEnvOrOpenSsl": true,
+    "noManualCaInstalled": true,
+    "noApplicationTlsVerificationBypass": true,
     "noServerTokenCopied": true,
     "noDeviceCredentialCopied": true,
     "workspaceProjectionPathFree": true
@@ -140,7 +160,10 @@ The verifier fails closed unless:
   managed Agents, no queued or pending acceptance work, and at least two
   completed Runs; and
 - every physical/pairing/self-test/reconnect assertion is explicit and the
-  output contains no credential-shaped text, private address or common home
+  selected TLS profile is `public_ca` or `private_scoped_ca`; and
+- human-observed attestations confirm no OS CA import or verification-disabled
+  application request, while the output contains no credential-shaped text,
+  private address, complete CA digest, certificate material or common home
   path.
 
 The output file is created once with mode `0600`; the verifier never overwrites
@@ -157,4 +180,6 @@ physical separation by itself.
 Commit the reviewed PASS record under `docs/acceptance/evidence/`, update both
 `QA-002` and `QA-028` to `DONE` in the same commit, and rerun documentation and
 repository gates. A failed or partial run is useful diagnostic evidence but
-cannot close either task.
+cannot close either task. A run that installs a Caddy root into machine B's OS
+trust store or manually enters a leaf fingerprint is always partial/advanced
+compatibility evidence, even if every application request succeeds.

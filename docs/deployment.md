@@ -15,6 +15,14 @@ or internet-scale identity service. Member offboarding and immediate Web
 session revocation are not yet exposed to the Owner; do not use this baseline
 where that control is mandatory.
 
+[ADR-0023](adr/0023-default-public-ca-and-scope-private-bridge-trust.md)
+accepts public-CA HTTPS as the default external deployment and origin-scoped
+private CA trust as the no-manual-CA Bridge alternative. That target is not in
+the current `v0.4.0-qa028.1` Draft candidate: `CON-014`, `OPS-009`, `SEC-009`,
+`BRG-045`, and `WEB-048` must land before a private-LAN pairing can use it. The
+current candidate's manual CA import proves only reachability and must not be
+used to close the normal onboarding acceptance.
+
 ## Host Requirements
 
 The host needs:
@@ -23,8 +31,9 @@ The host needs:
 - Docker Engine or Docker Desktop with Compose v2;
 - OpenSSL to generate the Owner recovery secret;
 - curl for health verification;
-- a stable public DNS name, private DNS name, or LAN IP for the host;
-- inbound TCP 80/9443; public certificates also require outbound ACME access.
+- a stable public DNS name for the default public-CA path, or an explicitly
+  selected private DNS name/LAN IP after scoped private trust is implemented;
+- inbound TCP 80/9443 and outbound ACME access for the default public-CA path.
 
 Node.js and Go are not required on a Compose host. Ensure no other service owns
 ports 80 or 9443. Put another reverse proxy in front only after reproducing the
@@ -115,12 +124,48 @@ join only through Owner-created 24-hour, one-time invitation links.
 
 ## TLS and Bridge Trust
 
-Caddy obtains and renews a public certificate automatically. Configure new
-Bridges with `system_ca` trust so renewal needs no client edit. An internal CA
-is acceptable only after installing its root on every client. Legacy SHA-256
-leaf pins remain a compatibility mode and must be rotated with the certificate.
-Application content is HTTPS-only; public HTTP exists solely for ACME and
-redirects, while direct plain HTTP application access remains loopback-only.
+Account login and Device credentials authenticate a principal only after TLS
+has authenticated the Central. They never replace certificate validation.
+Application content is HTTPS-only; public HTTP exists solely for ACME and the
+exact-origin redirect, while direct plain HTTP application access remains
+loopback-only.
+
+The accepted `direct_https` TLS profiles are:
+
+| Profile | Behavior | Use |
+| --- | --- | --- |
+| `public_ca` | Caddy obtains/renews a publicly trusted certificate; Bridge uses normal system chain, hostname and validity checks | default and recommended |
+| `private_scoped_ca` | pairing link/QR pins the Caddy public CA to the exact Central origin inside Bridge only; no OS root install | explicit private-network alternative |
+| `manual_ca` | operator manages OS or enterprise trust; AgentRoom never installs it | advanced compatibility only |
+
+A new external installation that omits the profile must select `public_ca`.
+DNS, ACME, hostname, or public-chain failure is a failed install with actionable
+guidance; it must not silently fall back to Caddy local CA, a leaf pin, trust on
+first use, or disabled verification.
+
+In `private_scoped_ca`, the pairing fragment carries only the exact origin,
+stable non-secret installation ID, monotonic trust epoch, and canonical CA DER
+SHA-256. Before sending any pairing or Device secret, Bridge retrieves one
+bounded public CA certificate from
+`/.well-known/agentroom/bridge-ca.pem`, verifies that digest and CA constraints,
+then reconnects with a private certificate pool scoped to that exact scheme,
+hostname, and port. It never changes Windows, macOS, or Linux trust stores.
+Public-CA pairing carries no trust override and remains on `system_ca`.
+
+This scoped trust affects Bridge only. An arbitrary browser does not inherit
+Bridge trust. Cross-machine Web without manual CA installation therefore uses a
+publicly trusted hostname or an operator-managed enterprise trust channel; do
+not click through certificate warnings. A private deployment may keep the Owner
+browser on the Central host or another already managed browser and pair the
+remote Bridge through the scoped link.
+
+The current release supports only `system_ca` and the manual legacy
+`pinned_sha256` leaf fingerprint. It does not yet publish the well-known CA or
+pairing trust descriptor. Until the implementation tasks above are complete,
+stop the private no-manual-CA flow rather than treating current manual import as
+the finished product.
+
+### Advanced current compatibility: manual CA
 
 For a private LAN IP, include the external port in the origin:
 
@@ -143,9 +188,12 @@ openssl x509 -in deploy/secrets/caddy-local-root.crt \
 
 Transfer the root certificate through an independently verified channel,
 confirm its SHA-256 value, install it in each client operating system's trusted
-root store, and keep Bridge on `system_ca`. Pinning the short-lived leaf
-certificate is suitable only for a bounded smoke test because renewal changes
-that fingerprint.
+root store, and keep Bridge on `system_ca` only when an operator explicitly
+chooses the advanced `manual_ca` compatibility path. This changes trust outside
+AgentRoom and is not the default, not required by the target private-scoped
+flow, and not valid evidence for `QA-030`, `QA-002`, or `QA-028`. Pinning the
+short-lived leaf certificate is likewise suitable only for bounded legacy
+diagnostics because renewal changes that fingerprint.
 
 ## Troubleshooting
 
@@ -154,8 +202,9 @@ that fingerprint.
 | `secret-init` is not `Exited (0)` | `docker compose logs secret-init` | missing, unreadable, or invalid-length recovery file |
 | `data-init` is not `Exited (0)` | `docker compose logs data-init` | database/backup mount ownership or image account mismatch |
 | `agentroom` is unhealthy | `docker compose logs agentroom` | database path, migration, secret, or public-origin validation |
-| Caddy cannot obtain a certificate | `docker compose logs caddy` | DNS, ports 80/9443, firewall, or ACME egress |
+| Caddy cannot obtain a public certificate | `docker compose logs caddy` | DNS, ports 80/9443, firewall, or ACME egress; do not accept silent local-CA fallback |
 | Browser works but Bridge does not connect | Caddy and AgentRoom logs | public URL, system trust, WebSocket, or Device credential |
+| Private scoped pairing is unavailable | exact release and task status | current release predates `OPS-009`/`BRG-045`; manual CA is advanced compatibility, not an automatic fallback |
 | `/api/metrics` returns `404` publicly | expected | metrics are intentionally hidden by Caddy |
 
 Do not publish Server port 3000 or switch a public deployment to local auth

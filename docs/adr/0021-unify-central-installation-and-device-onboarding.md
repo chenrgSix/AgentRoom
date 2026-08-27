@@ -3,6 +3,12 @@
 - Status: Accepted
 - Date: 2026-08-28
 - Supersedes: none
+- Amended by: ADR-0023 network trust bootstrap and physical TLS acceptance
+
+ADR-0023 makes public CA the default and replaces independently distributed
+local CA as the normal private-Bridge path with origin-scoped pairing trust.
+The installation, Device authority, and recovery decisions below remain in
+force; where TLS bootstrap or physical acceptance differs, ADR-0023 controls.
 
 ## Context
 

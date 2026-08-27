@@ -57,8 +57,15 @@ not the normal onboarding flow.
 defines the recommended Hub-created session while retaining the Bridge-created
 join request for compatibility. A deep link or QR carries only the
 public origin, pairing-session identity, one-time fragment claim secret, and
-expiry. Manual short code is a rate-limited locator plus Owner confirmation,
-not a credential.
+expiry in the current implementation. Manual short code is a rate-limited
+locator plus Owner confirmation, not a credential.
+
+[ADR-0023](../adr/0023-default-public-ca-and-scope-private-bridge-trust.md)
+adds a target-only trust descriptor for an explicitly private-scoped origin.
+Public-CA links remain unchanged. Private-scoped first pairing requires the
+canonical link or QR because a short code alone cannot prove Server identity;
+short-code recovery remains valid only after this Bridge already trusts the
+exact origin.
 
 The Bridge verifies the HTTPS origin, generates a stable pairing-attempt ID and
 high-entropy poll secret locally, and claims the session with safe Device name,
@@ -673,6 +680,32 @@ HTTPS supports `system_ca` and `pinned_sha256`. New public-CA deployments use
 normal certificate-chain, hostname, validity, and renewal verification. An old
 configuration with a fingerprint and no explicit mode remains pinned. A
 configuration may not silently provide both a system-CA mode and a fingerprint.
+
+`BRG-045` will add the separate `private_scoped_ca` target. It consumes the
+closed pairing-fragment descriptor only after checking the exact HTTPS origin,
+then uses a bootstrap-only no-secret client to retrieve one bounded public CA
+certificate from the fixed well-known path. It accepts no redirect, checks CA
+constraints and canonical DER SHA-256, and builds a private pool that still
+performs normal hostname, chain, validity and EKU verification. The permissive
+bootstrap transport cannot be reused for claim, poll, WebSocket or authenticated
+HTTP traffic.
+
+After successful pairing, Bridge stores origin, installation ID, trust epoch,
+public CA and digest under owner-only permissions and applies them only to the
+exact scheme, hostname and port. It never installs an OS root or treats an
+account, claim secret, Device credential, matching phrase or first-seen peer as
+TLS authority. Public links omit the descriptor and remain `system_ca`.
+The first private claim echoes the exact public descriptor after TLS validation
+so the Server can match it and bind the verification phrase; it never uploads
+the CA certificate or changes installation state.
+
+Private rotation accepts at most one strictly newer CA over the existing
+pin-valid authenticated Device channel, stages current plus next during the
+declared overlap, and removes old trust only after the new chain succeeds.
+Redirect, malformed/multiple/non-CA certificate, digest/origin/install mismatch,
+epoch downgrade, lost overlap, or unsupported legacy link fails closed. The
+current `pinned_sha256` leaf mode and OS-installed private roots remain explicit
+advanced compatibility and are never an automatic fallback.
 
 macOS login startup is opt-in and user-scoped. Its LaunchAgent contains the
 installed executable path, a background flag, and only the non-secret config,

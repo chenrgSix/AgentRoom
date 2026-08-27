@@ -105,6 +105,42 @@ negative projection tests and never in generated public state, logs, or
 diagnostics. Existing Bridge join and pair payloads remain valid during rolling
 compatibility.
 
+`CON-014` is the accepted but not yet implemented ADR-0023 extension. It adds a
+closed `DevicePairingTrustDescriptor` only when an installation explicitly uses
+`private_scoped_ca`:
+
+```text
+mode: private_scoped_ca
+origin: exact HTTPS origin
+installationId: stable non-secret installation identity
+trustEpoch: monotonic positive integer
+caCertificateSha256: 64 lowercase hex characters over canonical DER
+```
+
+Public-CA pairing omits the descriptor; omission never means private trust on
+first use. The authenticated Owner pairing projection may carry the descriptor,
+and Web may place the exact object in the locally generated pairing-link
+fragment. After local TLS bootstrap, the Device claim echoes the exact public
+descriptor but never the public certificate; the Server compares it with the
+installation projection. The transcript used for the verification phrase binds
+the complete descriptor so origin/install/epoch/digest substitution cannot
+silently join the intended session.
+
+The same work defines the bounded well-known CA response and authenticated
+rotation offer. The well-known response contains exactly one PEM CA certificate
+whose canonical DER matches the descriptor and no credential or private key. A
+rotation offer binds the exact Device, origin, installation ID, strictly newer
+epoch, next CA certificate/digest and overlap deadline; at most current plus
+next trust may be active. JSON Schema closes shape and scalar constraints, while
+Security and Bridge enforce persisted origin, Device, monotonicity, CA
+properties, digest, TLS and overlap semantics.
+
+Fixtures reject unknown trust modes, HTTP origins, userinfo, origin paths or
+fragments, zero/downgraded epochs, malformed digests, extra certificates,
+credentials, CA private keys, redirect metadata and a private-scoped session
+projected to an unsupported legacy Bridge. Generated TypeScript and Go types
+remain additive within the pairing protocol compatibility window.
+
 `CON-013` implements the ADR-0022 Task work-model wire contracts in
 `schemas/work/task-result.schema.json`. Closed schemas define
 Task lifecycle and scheduling state, completion policy,
@@ -300,7 +336,7 @@ traces, or internal database errors.
 
 ## Task Mapping
 
-`CON-001` through `CON-013`, plus cross-language portions of `QA-001`.
+`CON-001` through `CON-014`, plus cross-language portions of `QA-001`.
 
 ## Dependencies
 

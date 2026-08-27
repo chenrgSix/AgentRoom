@@ -12,6 +12,11 @@ SQLite topology. It does not own Team state, migrations, backup contents,
 certificate issuance, Docker state, or browser/Bridge onboarding. Those remain
 with the Server, persistence module, Caddy, Docker, Web, and Bridge.
 
+It does own selection and persistence of the deployment TLS profile and the
+public trust-bootstrap artifact consumed by those modules. Caddy still owns
+issuance and private keys; Operations cannot authorize a Device or make a Web
+browser trust a private CA.
+
 ## Controller boundary
 
 `agentroomctl` is a small Go 1.26.7 CLI supporting Linux and macOS on amd64 and
@@ -36,12 +41,12 @@ checks safe members, exact source commit, migration/schema agreement, file
 closure, binary version/architecture, license identity, and forbidden runtime
 state before upload and after a clean download.
 
-The manifest under `<data-root>/control/installation.json` records only schema
-version, exact release and checksum digest, release/data locations, data-schema
-version, isolated Compose project name, network mode, domain/origin/ports,
-whether legacy Server Token support was selected, timestamps, and the last
-successful step. It contains no secret
-value, credential, local Runtime configuration, Workspace path, or Team state.
+The current manifest under `<data-root>/control/installation.json` records only
+schema version, exact release and checksum digest, release/data locations,
+data-schema version, isolated Compose project name, network mode,
+domain/origin/ports, whether legacy Server Token support was selected,
+timestamps, and the last successful step. It contains no secret value,
+credential, local Runtime configuration, Workspace path, or Team state.
 Atomic stage recording makes exact `install` reentry converge after checksum,
 storage, secret, render, Compose-validation, service-start, or readiness cuts.
 The default Compose project is `agentroom`; an explicitly selected bounded
@@ -70,10 +75,46 @@ the Server.
 `local` binds Caddy ports to loopback and requires an exact loopback HTTPS
 origin. `direct_https` binds the selected ports for external ingress and
 requires one matching non-loopback HTTPS origin. Caddy remains certificate and
-redirect authority. Readiness verifies the exact HTTPS origin with the system
-trust store plus the installation's local Caddy root when present. An
-unauthenticated WebSocket upgrade must reach the Server authentication boundary
-and return 401/403; a generic HTTP success is not sufficient.
+redirect authority. The current controller's readiness client uses the system
+trust store plus the installation's local Caddy root when present; this is host
+diagnostic behavior, not evidence that a second-machine Bridge has safe trust.
+An unauthenticated WebSocket upgrade must reach the Server authentication
+boundary and return 401/403; a generic HTTP success is not sufficient.
+
+### Accepted TLS-profile target
+
+[ADR-0023](../adr/0023-default-public-ca-and-scope-private-bridge-trust.md)
+adds a TLS profile beneath `direct_https` without changing the network-mode
+boundary:
+
+| Profile | Controller contract |
+| --- | --- |
+| `public_ca` | default; require exact owned hostname and publicly trusted ACME chain; fail without fallback |
+| `private_scoped_ca` | explicit; retain Caddy local CA, publish its bounded public root and origin-bound descriptor for Bridge pairing |
+| `manual_ca` | explicit advanced compatibility; report instructions/state but never mutate an OS trust store |
+
+The CLI option is `--tls-profile`; omission under `direct_https` means
+`public_ca`, while any TLS profile supplied with `local` is invalid.
+
+`OPS-009` will add a stable non-secret installation ID, TLS profile, monotonic
+trust epoch and canonical public CA DER digest to the manifest schema. Reentry
+preserves them. The public root is exposed only at
+`/.well-known/agentroom/bridge-ca.pem` with one-certificate, no-redirect, size,
+media-type and cache-policy constraints. The manifest and endpoint never
+contain the Caddy private key.
+
+Public-CA readiness uses only normal system validation. Private-scoped host
+readiness verifies the exact CA/digest/hostname path separately and proves the
+well-known artifact agrees with the manifest. Manual CA and legacy leaf-pin
+state is reported as advanced compatibility. A new public install cannot
+silently become any of those modes after DNS, ACME or chain failure.
+
+An old manifest without a TLS profile remains readable. Upgrade inspects and
+reports it as publicly trusted or legacy private/manual; it does not rewrite
+Bridge state, install/remove OS roots, rotate the CA, or claim scoped migration.
+Moving a private installation into scoped mode requires the complete
+Contract/Security/Web/Bridge path and a fresh pairing or authenticated overlap,
+not a manifest-only label change.
 
 ## Lifecycle commands
 
@@ -116,7 +157,15 @@ real Docker Compose and live TLS evidence is recorded in
 direct-HTTPS host installs without claiming public ACME or a physical second
 machine; those remain separate QA evidence.
 
+`OPS-009` adds public-default selection, no-fallback errors, manifest migration,
+one bounded public-CA artifact, private digest agreement, overlap staging, and
+negative private-key/OS-trust mutation checks. Those deterministic checks do
+not by themselves prove Web projection, Bridge bootstrap, browser trust or two
+physical machines; `SEC-009`, `BRG-045`, `WEB-048`, `QA-030`, and `QA-002` own
+those boundaries.
+
 ## Tasks
 
 - `OPS-008`: reentrant central installation controller and release package.
+- `OPS-009`: public-default and scoped-private TLS deployment target.
 - `QA-028`: deterministic plus physical one-install/one-Device acceptance.

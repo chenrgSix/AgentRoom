@@ -69,6 +69,9 @@ without changing server-owned state.
 - Owner-only Device pairing with a browser-local one-time claim proof, locally
   encoded QR, manual short code, exact verification phrase, explicit
   approve/reject/cancel controls, and recoverable terminal-state projection.
+- Target pairing trust presentation that omits overrides for public CA and
+  carries one closed exact-origin private descriptor in local link/QR fragments
+  without implying that Bridge trust changes browser or OS trust.
 - Same-owner central Agent creation from an online Bridge template, with a
   transient management-code input and durable pending, rejected, or ready
   status but no local Runtime configuration or saved-code projection.
@@ -235,6 +238,24 @@ Server Token, Device credential, poll secret, Runtime configuration, command,
 environment value, tool setting, permission detail or Workspace path. Server
 authorization and pairing transitions remain authoritative; hiding the panel
 from non-Owners is presentation, not the security boundary.
+
+`WEB-048` is the accepted ADR-0023 extension and is not current behavior. For a
+public-CA session the Owner projection and generated link omit all trust
+override fields. For an explicitly private-scoped installation, the
+authenticated projection supplies one closed public descriptor containing the
+exact origin, stable installation ID, monotonic trust epoch and canonical CA
+DER digest. Web copies that object into the locally generated link/QR fragment
+beside the claim secret and includes it in the phrase transcript; it never
+fetches a CA private key, chooses a digest, or infers trust from browser state.
+
+Private-scoped first pairing does not offer a short-code-only action because a
+short code is not a Server identity proof. It may show short-code recovery only
+when the Bridge reports pre-existing valid trust for the same origin. Terminal
+clearing removes both claim proof and trust descriptor from React and
+`sessionStorage`. Copy states explicitly say that scoped trust applies only to
+Bridge and cannot make another browser trust a private certificate; the UI never
+asks a user to click through a certificate warning or install a root as the
+normal path.
 
 Discussion views render the central ProgressSnapshot, Wave, member Turns, and
 OrchestrationDecision; they do not derive completion from Agent prose. The
@@ -451,6 +472,12 @@ decision, same-proof create recovery across remount, same-operation decision
 recovery, terminal proof clearing, and non-Owner absence. Exact evidence and
 the boundary to installer and physical-host acceptance are recorded in
 [the local acceptance](../acceptance/web-045-device-pairing.md).
+
+`WEB-048` will add the public-versus-private-scoped projection described above.
+Focused tests must prove public omission, exact descriptor preservation,
+fragment-only placement, phrase binding, terminal clearing, legacy-client and
+private-short-code fencing, non-Owner absence, no third-party QR call, and no
+credential, private key, local path, or browser-verification-bypass copy.
 
 `WEB-021` replaces first-page polling with a newest-100 snapshot, resumable
 cursor deltas, duplicate suppression, and a 500-message browser history bound.

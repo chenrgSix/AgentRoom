@@ -3,9 +3,12 @@
 Date: 2026-08-28.
 
 Status: `BLOCKED` — deterministic, current-host and matching-package evidence
-passes, but the identified second physical machine has not yet executed the
-cross-host gate. This document is not a `PASS` record and does not mark
-`QA-028` or its `QA-002` dependency done.
+passes, and the identified Windows x64 machine B installed/opened the matching
+Bridge and reached Central only after a manual Caddy-root import. That is useful
+reachability evidence but is now explicitly an advanced compatibility
+diagnostic, not the accepted no-manual-CA flow. `QA-030` and then a fresh
+cross-host run remain required. This document is not a `PASS` record and does
+not mark `QA-028` or its `QA-002` dependency done.
 
 ## Accepted deterministic behavior
 
@@ -122,27 +125,51 @@ An independent authenticated download of
 `c89d5e90fba52b15e79155abc378d1fdfb62dff8986d7ccb828708123cb30500`.
 The candidate remains Draft and is not a published compatibility claim.
 Packaging proves that the matching installer is ready for machine B; it does
-not prove that the installer, deep link, local Codex login or either Run has
-executed on that physical host.
+not by itself prove physical execution, deep-link pairing, local Codex login or
+either Run.
+
+## Machine-B manual-CA diagnostic
+
+After the release workflow, the operator reported that the matching installer
+was installed and the Desktop Bridge opened on a separate Windows x64 physical
+host. Because the current candidate has no origin-scoped private trust
+bootstrap, the operator manually imported the Caddy public root and then
+observed a normal HTTPS readiness response from the exact Central origin.
+
+This confirms that the packaged application can open and that the current
+network/Caddy route is reachable when Windows system trust is modified. It does
+not prove the installed deep link, Device claim/approval, matching phrase,
+Codex self-test, authenticated WebSocket, online Run, queued Run, same-Device
+reconnect, or unchanged OS trust. No reviewed version-2 evidence record exists.
+
+[ADR-0023](../adr/0023-default-public-ca-and-scope-private-bridge-trust.md)
+therefore classifies this exact method as `manual_ca` advanced compatibility.
+It cannot be promoted to `QA-030`, `QA-002`, or `QA-028` evidence merely because
+the HTTPS output was normal.
 
 ## Blocking physical gate
 
-`QA-002` remains `READY`, so the dependency of `QA-028` is unsatisfied. A
-reviewed `PASS` still requires:
+`QA-002` is now `BLOCKED` by `QA-030`, so the dependency of `QA-028` is
+unsatisfied. Completion now requires this order:
 
-1. machine A reentering the now-verified current committed Central build behind
-   HTTPS;
-2. a different physical machine B running the matching packaged Bridge with a
-   working local Codex login;
-3. the canonical deep link reaching the installed desktop/Console flow;
-4. an explicit local Codex Runtime self-test;
-5. one online nonce Run completing with one trace and one reply;
-6. one Run queued while machine B is offline and completing exactly once after
+1. `CON-014`, `OPS-009`, `SEC-009`, `BRG-045`, and `WEB-048` implementing the
+   accepted public-default/scoped-private contract and `QA-030` proving it;
+2. one new exact-commit matching Central/Windows candidate containing that work;
+3. machine A installing either default `public_ca` or explicit
+   `private_scoped_ca` without silent fallback;
+4. a different physical machine B running the matching packaged Bridge with a
+   working local Codex login and no manually installed CA or leaf pin;
+5. the canonical trust-validating deep link reaching the installed
+   desktop/Console flow and one exact Device being approved;
+6. an explicit local Codex Runtime self-test;
+7. one online nonce Run completing with one trace and one reply;
+8. one Run queued while machine B is offline and completing exactly once after
    the same Device reconnects; and
-7. a sanitized evidence record containing the two host descriptions, exact
+9. a sanitized version-2 evidence record containing the TLS profile, no-manual-
+   CA/no-application-bypass attestations, two host descriptions, exact
    commit and archive digest, public identifiers, state sequences and metrics,
-   with no private address, token, path, prompt, certificate key, or provider
-   credential.
+   with no private address, token, path, prompt, certificate material, complete
+   CA digest, or provider credential.
 
 The executable procedure and closed evidence input are maintained in
 `qa-002-two-machine-managed-agent.md`. The repository verifier cross-checks the
@@ -150,5 +177,6 @@ live read-only Server database, internally captured metrics, exact trace chains,
 single replies, Device/Agent ownership and path-free Workspace projection; it
 also rejects common credential, home-path and private-address shapes before
 creating a mode-`0600` Markdown record. Human review must still confirm that the
-two sanitized host descriptions identify different physical machines. No code
-change or local simulation can produce that missing physical fact.
+two sanitized host descriptions identify different physical machines and that
+machine B's OS trust store was not changed for the run. No code change or local
+simulation can produce those physical facts.
