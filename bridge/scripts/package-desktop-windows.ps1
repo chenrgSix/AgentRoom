@@ -180,9 +180,11 @@ $installerFileVersion = @(
   $installerInfo.FileMinorPart,
   $installerInfo.FileBuildPart
 ) -join "."
-if ($installerInfo.ProductName -ne "AgentRoom Bridge" -or
+$installerProductName = ([string]$installerInfo.ProductName).Trim()
+if ($installerProductName -ne "AgentRoom Bridge" -or
     $installerFileVersion -ne $bundleVersion) {
-  throw "Windows Desktop installer has unexpected product metadata"
+  throw ("Windows Desktop installer has unexpected product metadata: " +
+    "ProductName='$installerProductName', FileVersion='$installerFileVersion'")
 }
 
 Write-Output $archive
