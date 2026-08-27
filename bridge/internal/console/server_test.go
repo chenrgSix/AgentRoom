@@ -766,6 +766,27 @@ func TestRuntimeDraftPreflightDoesNotPersistOrRestartAndFencesConcurrentWork(t *
 	}
 }
 
+func TestWindowsExecutablePreflightUsesLauncherExtensions(t *testing.T) {
+	directory := t.TempDir()
+	for _, extension := range []string{".exe", ".com", ".bat", ".cmd"} {
+		path := filepath.Join(directory, "codex"+extension)
+		if err := os.WriteFile(path, []byte("Windows launcher fixture"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		resolved, err := executableFileForPlatform(path, "windows")
+		if err != nil || resolved != path || !executableAvailableForPlatform(path, "windows") {
+			t.Fatalf("Windows launcher %s was rejected: resolved=%q err=%v", extension, resolved, err)
+		}
+	}
+	unsupported := filepath.Join(directory, "codex.ps1")
+	if err := os.WriteFile(unsupported, []byte("unsupported fixture"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := executableFileForPlatform(unsupported, "windows"); err == nil || executableAvailableForPlatform(unsupported, "windows") {
+		t.Fatal("unsupported Windows launcher passed preflight")
+	}
+}
+
 func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	directory := t.TempDir()
 	executablePath, err := os.Executable()

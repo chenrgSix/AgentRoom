@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"agentroom.dev/bridge/internal/launchable"
 )
 
 type RuntimeDiscovery struct {
@@ -20,18 +22,18 @@ type executableCandidate struct{ path, source string }
 
 func discoverRuntime(name string) RuntimeDiscovery {
 	homeDirectory, _ := os.UserHomeDir()
-	return discoverRuntimeFrom(name, runtimeCandidates(name, runtime.GOOS, homeDirectory, os.Getenv), exec.LookPath)
+	return discoverRuntimeFrom(name, runtime.GOOS, runtimeCandidates(name, runtime.GOOS, homeDirectory, os.Getenv), exec.LookPath)
 }
 
-func discoverRuntimeFrom(name string, candidates []executableCandidate, lookPath func(string) (string, error)) RuntimeDiscovery {
+func discoverRuntimeFrom(name, platform string, candidates []executableCandidate, lookPath func(string) (string, error)) RuntimeDiscovery {
 	if name != "codex" && name != "pi" {
 		return RuntimeDiscovery{}
 	}
-	if path, err := lookPath(name); err == nil && filepath.IsAbs(path) && executableAvailable(path) {
+	if path, err := lookPath(name); err == nil && filepath.IsAbs(path) && launchable.File(path, platform) {
 		return RuntimeDiscovery{Path: path, Source: "PATH"}
 	}
 	for _, candidate := range candidates {
-		if filepath.IsAbs(candidate.path) && executableAvailable(candidate.path) {
+		if filepath.IsAbs(candidate.path) && launchable.File(candidate.path, platform) {
 			return RuntimeDiscovery{Path: candidate.path, Source: candidate.source}
 		}
 	}
@@ -44,11 +46,9 @@ func runtimeCandidates(name, platform, homeDirectory string, getenv func(string)
 		if !filepath.IsAbs(directory) {
 			return
 		}
-		filename := name
-		if platform == "windows" {
-			filename += ".exe"
+		for _, filename := range launchable.Filenames(name, platform) {
+			result = append(result, executableCandidate{filepath.Join(directory, filename), source})
 		}
-		result = append(result, executableCandidate{filepath.Join(directory, filename), source})
 	}
 	if platform == "darwin" && name == "codex" {
 		roots := []string{"/Applications"}

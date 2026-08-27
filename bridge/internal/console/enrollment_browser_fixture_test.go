@@ -57,7 +57,7 @@ func TestPairingBrowserFixture(t *testing.T) {
 	case "fallback":
 		dependencies.DiscoverRuntime = func(kind string) RuntimeDiscovery {
 			homeDirectory, _ := os.UserHomeDir()
-			return discoverRuntimeFrom(kind, runtimeCandidates(kind, runtime.GOOS, homeDirectory, os.Getenv), missingRuntime)
+			return discoverRuntimeFrom(kind, runtime.GOOS, runtimeCandidates(kind, runtime.GOOS, homeDirectory, os.Getenv), missingRuntime)
 		}
 	}
 	dependencies.Enroll = func(ctx context.Context, cfg config.Config, show func(enrollment.Challenge)) (pairing.Credential, error) {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -33,15 +34,15 @@ func TestRuntimeDiscoveryPrefersPATHAndUsesAppFallback(t *testing.T) {
 	pathBinary := discoveryFile(t, filepath.Join(directory, "bin", "codex"), 0o700)
 	appBinary := discoveryFile(t, filepath.Join(directory, "Applications", "ChatGPT.app", "Contents", "Resources", "codex"), 0o700)
 	candidates := []executableCandidate{{appBinary, "macOS App"}}
-	fromPath := discoverRuntimeFrom("codex", candidates, func(string) (string, error) { return pathBinary, nil })
+	fromPath := discoverRuntimeFrom("codex", runtime.GOOS, candidates, func(string) (string, error) { return pathBinary, nil })
 	if fromPath.Path != pathBinary || fromPath.Source != "PATH" {
 		t.Fatalf("PATH priority changed: %#v", fromPath)
 	}
-	fromApp := discoverRuntimeFrom("codex", candidates, missingRuntime)
+	fromApp := discoverRuntimeFrom("codex", runtime.GOOS, candidates, missingRuntime)
 	if fromApp.Path != appBinary || fromApp.Source != "macOS App" {
 		t.Fatalf("desktop fallback missing: %#v", fromApp)
 	}
-	if result := discoverRuntimeFrom("unexpected", candidates, missingRuntime); result.Path != "" {
+	if result := discoverRuntimeFrom("unexpected", runtime.GOOS, candidates, missingRuntime); result.Path != "" {
 		t.Fatal("unrecognized Runtime was discovered")
 	}
 }
@@ -51,7 +52,7 @@ func TestRuntimeDiscoveryRejectsInvalidCandidatesAndPreservesSymlinkInstalls(t *
 	file := discoveryFile(t, filepath.Join(directory, "not-executable"), 0o600)
 	missing := filepath.Join(directory, "missing")
 	for _, path := range []string{"relative/codex", file, directory, missing} {
-		if result := discoverRuntimeFrom("codex", []executableCandidate{{path, "test"}}, func(string) (string, error) { return path, nil }); result.Path != "" {
+		if result := discoverRuntimeFrom("codex", runtime.GOOS, []executableCandidate{{path, "test"}}, func(string) (string, error) { return path, nil }); result.Path != "" {
 			t.Fatalf("invalid executable accepted: %s", path)
 		}
 	}
@@ -60,8 +61,45 @@ func TestRuntimeDiscoveryRejectsInvalidCandidatesAndPreservesSymlinkInstalls(t *
 	if err := os.Symlink(real, link); err != nil {
 		t.Fatal(err)
 	}
-	if result := discoverRuntimeFrom("codex", []executableCandidate{{link, "user bin"}}, missingRuntime); result.Path != link {
+	if result := discoverRuntimeFrom("codex", runtime.GOOS, []executableCandidate{{link, "user bin"}}, missingRuntime); result.Path != link {
 		t.Fatal("normal symlink installation was rejected")
+	}
+}
+
+func TestWindowsRuntimeDiscoveryAcceptsCommandShimsWithoutUnixExecuteBits(t *testing.T) {
+	directory := t.TempDir()
+	commandShim := discoveryFile(t, filepath.Join(directory, "codex.cmd"), 0o600)
+	result := discoverRuntimeFrom("codex", "windows", nil, func(string) (string, error) {
+		return commandShim, nil
+	})
+	if result.Path != commandShim || result.Source != "PATH" {
+		t.Fatalf("Windows command shim was not discovered: %#v", result)
+	}
+	unsupported := discoveryFile(t, filepath.Join(directory, "codex.ps1"), 0o700)
+	if result := discoverRuntimeFrom("codex", "windows", []executableCandidate{{unsupported, "test"}}, func(string) (string, error) {
+		return unsupported, nil
+	}); result.Path != "" {
+		t.Fatalf("unsupported Windows launcher was discovered: %#v", result)
+	}
+}
+
+func TestWindowsRuntimeCandidatesIncludeNativeAndCommandLaunchers(t *testing.T) {
+	directory := t.TempDir()
+	candidates := runtimeCandidates("codex", "windows", "", func(name string) string {
+		if name == "NVM_BIN" {
+			return directory
+		}
+		return ""
+	})
+	want := map[string]bool{}
+	for _, extension := range []string{".exe", ".com", ".bat", ".cmd"} {
+		want[filepath.Join(directory, "codex"+extension)] = true
+	}
+	for _, candidate := range candidates {
+		delete(want, candidate.path)
+	}
+	if len(want) != 0 {
+		t.Fatalf("Windows Runtime candidates omitted launchers: %#v", want)
 	}
 }
 
@@ -94,7 +132,7 @@ func TestRuntimeDiscoveryIncludesKnownMacAppsAndNumericNVMOrder(t *testing.T) {
 			t.Fatalf("missing known location %s", expected)
 		}
 	}
-	if found := discoverRuntimeFrom("codex", nvm, missingRuntime); found.Path != filepath.Join(want[0], "codex") {
+	if found := discoverRuntimeFrom("codex", "darwin", nvm, missingRuntime); found.Path != filepath.Join(want[0], "codex") {
 		t.Fatalf("nvm candidate not selected: %#v", found)
 	}
 	piCandidates := runtimeCandidates("pi", "darwin", homeDirectory, func(string) string { return "" })

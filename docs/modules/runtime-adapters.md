@@ -41,6 +41,16 @@ Codex and Generic nonzero exits include only a stable local classification,
 numeric exit code, and stderr-presence flag. The central service applies the
 same three-field allowlist before Run-event persistence; raw stderr and unknown
 detail keys never cross that boundary.
+
+Runtime discovery, readiness projection, draft preflight, configuration save,
+and CLI enrollment share one platform-aware launcher check. On Windows a path
+must identify a regular file with a case-insensitive `.exe`, `.com`, `.bat`, or
+`.cmd` extension; Unix execute permission bits are not consulted there. On
+Unix-like systems the path must identify a regular file with at least one
+execute bit, independent of its filename extension. PATH discovery continues
+to use `exec.LookPath`, while bounded known-directory discovery checks the same
+four Windows launcher names without running them.
+
 Pi uses a dedicated live parser over its non-interactive JSON event stream.
 Preset version 5 owns only the
 `--mode json` and `--print` transport flags plus the per-Run session selector;

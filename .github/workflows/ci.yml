@@ -145,6 +145,7 @@ jobs:
         shell: pwsh
         run: |
           $outputDir = Join-Path $env:RUNNER_TEMP "agentroom-desktop-windows"
+          go test ./... -run Windows
           go test -tags desktop ./cmd/agentroom-bridge-desktop
           go vet -tags desktop ./cmd/agentroom-bridge-desktop
           ./scripts/package-desktop-windows.ps1 `

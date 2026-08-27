@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ import (
 	"agentroom.dev/bridge/internal/diagnostics"
 	"agentroom.dev/bridge/internal/enrollment"
 	"agentroom.dev/bridge/internal/identity"
+	"agentroom.dev/bridge/internal/launchable"
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
 	"agentroom.dev/bridge/internal/updatecheck"
@@ -1231,8 +1233,11 @@ func formatTime(value *time.Time) string {
 }
 
 func executableAvailable(path string) bool {
-	info, err := os.Stat(path)
-	return err == nil && info.Mode().IsRegular() && info.Mode().Perm()&0o111 != 0
+	return executableAvailableForPlatform(path, runtime.GOOS)
+}
+
+func executableAvailableForPlatform(path, platform string) bool {
+	return launchable.File(path, platform)
 }
 
 func redactOperationalText(value string) string {
@@ -1311,6 +1316,10 @@ func randomToken() (string, error) {
 }
 
 func executableFile(value string) (string, error) {
+	return executableFileForPlatform(value, runtime.GOOS)
+}
+
+func executableFileForPlatform(value, platform string) (string, error) {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
 		return "", fmt.Errorf("path is required")
@@ -1319,8 +1328,7 @@ func executableFile(value string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	info, err := os.Stat(resolved)
-	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+	if !launchable.File(resolved, platform) {
 		return "", fmt.Errorf("path must identify an executable file")
 	}
 	return resolved, nil

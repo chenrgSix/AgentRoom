@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 	"time"
@@ -21,6 +22,7 @@ import (
 	"agentroom.dev/bridge/internal/console"
 	"agentroom.dev/bridge/internal/enrollment"
 	"agentroom.dev/bridge/internal/identity"
+	"agentroom.dev/bridge/internal/launchable"
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
 	"agentroom.dev/bridge/internal/updatecheck"
@@ -403,8 +405,7 @@ func join(args []string) error {
 	if err != nil {
 		return fmt.Errorf("resolve Codex executable: %w", err)
 	}
-	codexInfo, err := os.Stat(resolvedCodex)
-	if err != nil || codexInfo.IsDir() || codexInfo.Mode().Perm()&0o111 == 0 {
+	if !launchable.File(resolvedCodex, runtime.GOOS) {
 		return fmt.Errorf("Codex path must be an executable file")
 	}
 	resolvedDevice := strings.TrimSpace(*device)
