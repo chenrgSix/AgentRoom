@@ -61,6 +61,35 @@ persisting it. This is a simple deployment access parameter, not cryptographic
 Server identity. Device bearer authentication, Team ownership, revocation, and
 connection epochs remain mandatory and unchanged.
 
+### Unified Device onboarding target
+
+[ADR-0021](../adr/0021-unify-central-installation-and-device-onboarding.md)
+adds a Hub-created pairing-session path without changing the current Device,
+credential, or Agent authority. One pairing trusts one Device; local Agent and
+Runtime configuration remains subordinate to that Device and never becomes an
+independent pairing credential.
+
+The pairing session is Team- and Owner-scoped, expires after ten minutes, and
+stores only hashes of its one-time claim and Bridge-generated poll secrets. The
+first valid claim binds one stable attempt and produces the same verification
+phrase on the authenticated Owner surface and Bridge. Approval atomically
+creates one Device and promotes the already-local poll secret to the Device
+Bearer credential. Claim or approval response loss therefore returns the same
+Device and terminal state without storing or reissuing credential plaintext.
+
+The new Device claim and poll routes use the exact session proofs, expiry, rate
+limit, and transcript binding instead of the long-lived central Server Token.
+After approval, the exact Device credential is sufficient for authenticated
+Bridge HTTP and WebSocket operations. Legacy join, pair, and deployment Token
+behavior remains compatible, but a zero-copy pairing flow must not require a
+Token it never delivered.
+
+Pairing links use a URL fragment for the high-entropy claim secret. They never
+contain a Device credential, Owner recovery secret, Server Token, Runtime
+credential, or Team-history authority. Runtime kinds, commands, environments,
+provider accounts, and Workspace metadata are unnecessary before approval and
+do not enter the pairing request.
+
 ## Authorization Rules
 
 - Team membership gates Team-level Member and Agent administration.
@@ -123,9 +152,20 @@ bypass local policy. Work is tracked by `SEC-001` through `SEC-007`, with pairin
 transport under `BRG-002` and central Token transport under `BRG-025`, in
 `docs/TASKS.md`.
 
+`CON-012` and `SEC-008` track the additive ADR-0021 pairing-session contract and
+its authenticated state machine. Their completion requires response-loss,
+competing-claim, replay, expiry, enumeration, cross-Team, and legacy rolling-
+upgrade evidence before the new path may replace current onboarding.
+
 Revoking a Device atomically marks it revoked, revokes all of its credentials,
 disables its managed Agents, and projects them offline. The active Bridge socket
 is closed immediately, and later reconnects fail authentication.
+
+Under the ADR-0021 target, revocation also prevents new deliveries and Workspace
+leases. A queued Run not yet accepted by the Bridge closes with a bounded
+Device-revoked reason. An already accepted Run is not falsely reported as
+canceled merely because the socket closed: cancellation is best effort and an
+unrecoverable execution outcome follows the existing `outcome_unknown` rule.
 
 Run acceptance, status, and replies require an exact Team, Device owner, and
 target Agent binding. Cross-Team and same-Team cross-owner events are rejected

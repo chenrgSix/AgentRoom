@@ -25,6 +25,20 @@ path canonicalization, local policy, filesystem handle, repository inspection,
 and operation result. A lease authorizes coordination only; it cannot grant a
 local permission or prove that a command is safe.
 
+Under
+[ADR-0021](../adr/0021-unify-central-installation-and-device-onboarding.md),
+onboarding names the owner-local configuration a **Workspace binding**, not a
+central Workspace grant. The binding may contain a display alias, absolute root,
+per-Agent selection, filesystem policy, and network policy. The Bridge is its
+only authority. The Server may receive an opaque `workspaceRef`, generation,
+capability flags, a locally allowed alias, and the existing closed Runtime
+policy summary; none of those values creates an operating-system permission.
+
+Device pairing creates no binding and discovers no path. Adding an Agent or
+Workspace locally requires an explicit owner save. Runtime preflight and
+self-test may inspect only the local draft under their existing bounded rules
+and cannot publish or persist a broader central authority.
+
 ## Main Flows
 
 For source publication, the Bridge derives its opaque identity and generation
@@ -74,7 +88,9 @@ are rejected locally. Logs expose only lease and opaque scope IDs.
 
 ## Task Mapping
 
-`WSP-001` implements the first `read_source` lease. Write and
+`WSP-001` implements the first `read_source` lease. `WSP-002` productizes the
+Bridge-owned Workspace binding and path-free central projection required by
+ADR-0021 without changing lease authority. Write and
 worktree modes remain contract-reserved until a later Scheduler milestone.
 
 ## Dependencies

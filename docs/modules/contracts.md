@@ -93,6 +93,15 @@ alone, establishes the managed Agent as ready. `bridge.hello` optionally
 advertises `supportsAgentProvisioning`; omission means unsupported so a rolling
 upgrade never sends the new request to an older Bridge.
 
+`CON-012` reserves the additive ADR-0021 Device pairing-session HTTP contract.
+It defines opaque pairing/session/attempt IDs, closed session states, bounded
+safe Device metadata, expiry, idempotency, verification-phrase projection, and
+the claim, poll, approval, rejection, and cancellation payloads shared by the
+TypeScript Server and Go Bridge. Secret values remain transport inputs and must
+not appear in generated public state, logs, diagnostics, or fixtures except as
+explicit negative-test seeds. Existing Bridge join and pair payloads remain
+valid during rolling compatibility.
+
 `WSP-001` adds optional opaque `workspaceRef` and `workspaceGeneration` fields
 to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free
 comparison identities, not Runtime scope IDs or permission grants. Older

@@ -61,6 +61,16 @@ event sequence; Bridge durable inbox restart to `outcome_unknown`; duplicate
 ACK and event idempotency; offline reconnect delivery; expiry; and a real
 cross-process cancellation. Each case has a deterministic regression test.
 
+ADR-0021 onboarding verification treats installation, Owner claim, Device
+pairing, local Agent setup, and Runtime readiness as separate gates. Installer
+tests cut execution after every durable step and prove exact reentry without a
+new secret, database, data root, or Owner. Pairing tests cut create, claim,
+approval, credential promotion, poll, local save, and first connection; exact
+retry must converge on one Device and credential while competing attempts,
+expiry, replay, enumeration, cross-Team decisions, and legacy Token mismatch
+fail closed. Runtime discovery and self-test are explicit local tests rather than
+evidence that pairing succeeded.
+
 Discussion verification uses a deterministic evaluator fixture and fake usage
 telemetry. It covers early completion, multi-dimensional lease renewal,
 plateau detection, policy precedence, reserved finalization, stale decision
@@ -107,6 +117,13 @@ partial and total Wave failure, `input_required`, deadline classification,
 cancel-all, Reviewer same-Wave contribution and finalizer preference,
 deterministic `wave_result` retry, participant-ordered context, and the three
 durable recovery cut points.
+
+The Device-onboarding release gate additionally covers clean local and direct-
+HTTPS installation, installer reentry, backup-before-upgrade, safe uninstall,
+Owner-claim response loss, link/QR/manual-code pairing, Server Token non-
+disclosure, several Agent profiles under one Device, path-free Workspace
+projection, revocation before and after Bridge acceptance, and a physical-host
+TLS/deep-link check. A local Compose run does not prove the physical-host gate.
 
 ## Observability Contract
 

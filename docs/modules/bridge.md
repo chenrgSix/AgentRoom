@@ -51,6 +51,35 @@ credential files stop enrollment before a request is created. Server-issued
 single-use invitations remain supported by `pair` for compatibility, but are
 not the normal onboarding flow.
 
+### Hub-created Device pairing target
+
+[ADR-0021](../adr/0021-unify-central-installation-and-device-onboarding.md)
+adds a recommended Hub-created session while retaining the current Bridge-
+created join request for compatibility. A deep link or QR carries only the
+public origin, pairing-session identity, one-time fragment claim secret, and
+expiry. Manual short code is a rate-limited locator plus Owner confirmation,
+not a credential.
+
+The Bridge verifies the HTTPS origin, generates a stable pairing-attempt ID and
+high-entropy poll secret locally, and claims the session with safe Device name,
+platform, and Bridge version. It sends no Agent roster, Runtime kind, command,
+environment, provider identity, absolute path, or Workspace content before
+approval. The same transcript-derived verification phrase appears locally and
+on the Owner surface.
+
+Owner approval promotes the already-local poll secret to the Device Bearer
+credential. The Bridge can therefore recover a lost approval or poll response
+by presenting the same attempt and secret; the Server never needs to return or
+retain credential plaintext. After terminal consumption the Bridge atomically
+writes the same owner-only configuration and starts the existing authenticated
+connection and Agent publication flow.
+
+Pairing establishes Device trust only. Runtime discovery remains an explicit,
+bounded, non-executing local refresh; Runtime preflight and self-test remain
+explicit local actions; Agent save remains the point that persists local
+configuration. One paired Bridge may add, edit, or disable multiple Agent
+profiles without creating a new Device.
+
 ## Local Configuration Console
 
 `agentroom-bridge console` starts the recommended client setup surface on
@@ -120,6 +149,13 @@ local discovery and may run the existing safe Codex/Pi probe against the draft
 before save. Preflight is explicit, token-authenticated, does not persist or
 restart the Bridge, and is fenced against every active Team Run or concurrent
 Runtime probe.
+
+For the ADR-0021 target, the local form presents its configured Workspace as a
+Bridge-owned binding with a user-facing alias. Absolute path, canonicalization,
+filesystem/network policy, and the final operation remain local. Only the
+existing opaque Workspace identity, generation, capability flags, locally
+allowed alias, and closed Runtime policy summary may be published. A central
+Owner cannot use Device approval or Agent provisioning to broaden that binding.
 
 Both first-enrollment and per-Agent Codex configuration disclose the local
 multi-client ownership boundary. Codex Desktop/CLI and Bridge currently run
