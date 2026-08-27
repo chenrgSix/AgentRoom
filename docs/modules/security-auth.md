@@ -54,12 +54,15 @@ only after owner approval. Claim retries return the same Device and do not
 create duplicate identities. Legacy Bridge invitations also expire after ten
 minutes, bind the expected Device name, Team, and Member, and are single-use.
 
-A deployment may require a central Server Token on Bridge bootstrap and
-transport endpoints. The Bridge passes this opaque value in
+A deployment may require a central Server Token on legacy anonymous Bridge
+join/pair bootstrap routes. A legacy Bridge passes this opaque value in
 `X-AgentRoom-Server-Token`; the Server compares it without logging or
 persisting it. This is a simple deployment access parameter, not cryptographic
-Server identity. Device bearer authentication, Team ownership, revocation, and
-connection epochs remain mandatory and unchanged.
+Server identity. Once any flow has issued a Device credential, authenticated
+Bridge HTTP and WebSocket transport uses that Device bearer alone; presenting,
+omitting, or mistyping the legacy Token cannot upgrade or downgrade the Device
+principal. Team ownership, revocation, and connection epochs remain mandatory
+and unchanged.
 
 ### Unified Device onboarding target
 

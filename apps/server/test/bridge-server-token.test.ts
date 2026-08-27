@@ -27,7 +27,7 @@ test("central Server Token validation is optional, bounded, and normalized", () 
   );
 });
 
-test("configured central Server Token gates Bridge bootstrap and WebSocket traffic", async () => {
+test("configured Server Token gates legacy bootstrap but not Device-authenticated transport", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-server-token-"));
   const app = await createServerApp({
     bridgeServerToken: serverToken,
@@ -108,29 +108,30 @@ test("configured central Server Token gates Bridge bootstrap and WebSocket traff
 
     await assert.rejects(
       app.injectWS("/ws/bridge", {
-        headers: { authorization: `Bearer ${deviceBearer}`, host: "127.0.0.1" }
-      })
-    );
-    await assert.rejects(
-      app.injectWS("/ws/bridge", {
         headers: {
-          authorization: `Bearer ${deviceBearer}`,
-          [bridgeServerTokenHeader]: "wrong",
+          authorization: "Bearer wrong-device-credential",
+          [bridgeServerTokenHeader]: serverToken,
           host: "127.0.0.1"
         }
       })
     );
-    const socket = await app.injectWS("/ws/bridge", {
-      headers: {
-        authorization: `Bearer ${deviceBearer}`,
-        [bridgeServerTokenHeader]: serverToken,
-        host: "127.0.0.1"
-      }
-    });
-    await new Promise<void>((resolve) => {
-      socket.once("close", () => resolve());
-      socket.close();
-    });
+    for (const extraHeaders of [
+      {},
+      { [bridgeServerTokenHeader]: "wrong" },
+      { [bridgeServerTokenHeader]: serverToken }
+    ]) {
+      const socket = await app.injectWS("/ws/bridge", {
+        headers: {
+          authorization: `Bearer ${deviceBearer}`,
+          ...extraHeaders,
+          host: "127.0.0.1"
+        }
+      });
+      await new Promise<void>((resolve) => {
+        socket.once("close", () => resolve());
+        socket.close();
+      });
+    }
   } finally {
     await app.close();
   }

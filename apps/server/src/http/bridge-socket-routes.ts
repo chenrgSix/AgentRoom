@@ -78,14 +78,12 @@ export function registerBridgeSocketRoutes({
   delivery,
   pauseDiscussionForInput,
   presence,
-  requireBridgeServerToken,
   routeAgentReplyMentions,
   teamChanges
 }: ServerRouteContext): void {
   app.get("/ws/bridge", {
     websocket: true,
     preValidation: async (request) => {
-      requireBridgeServerToken(request);
       auth.authenticateDevice(bearerToken(request), clock());
     }
   }, (socket, request) => {

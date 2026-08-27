@@ -107,8 +107,7 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
     }, now);
     const credential = auth.issueDeviceCredential(device.deviceId, now);
     const headers = {
-      authorization: `Bearer ${credential.secret}`,
-      "x-agentroom-server-token": serverToken
+      authorization: `Bearer ${credential.secret}`
     };
     const refreshedGeneration = "c".repeat(64);
     const snapshotUrl =
@@ -157,7 +156,7 @@ test("Bridge HTTP publication binds bytes without exposing local storage", async
     const unauthorized = await app.inject({
       method: "POST",
       url: "/api/bridge/workspace-leases/read-source",
-      headers: { authorization: headers.authorization },
+      headers: { authorization: "Bearer wrong-device-credential" },
       payload: leasePayload
     });
     assert.equal(unauthorized.statusCode, 401);

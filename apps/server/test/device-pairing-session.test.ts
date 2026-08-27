@@ -239,6 +239,17 @@ test("zero-copy pairing promotes the poll proof exactly once and survives respon
       }
     });
     assert.deepEqual(pollRetry.json(), consumed.json());
+
+    const socket = await app.injectWS("/ws/bridge", {
+      headers: {
+        authorization: `Bearer ${pollSecret}`,
+        host: "127.0.0.1"
+      }
+    });
+    await new Promise<void>((resolve) => {
+      socket.once("close", () => resolve());
+      socket.close();
+    });
   } finally {
     await app.close();
   }

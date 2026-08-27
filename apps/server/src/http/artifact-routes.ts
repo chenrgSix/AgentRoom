@@ -76,12 +76,10 @@ export function registerArtifactRoutes({
   artifactPublications,
   auth,
   clock,
-  requireBridgeServerToken,
   teamChanges,
   workspaceLeases
 }: ServerRouteContext): void {
   const devicePrincipal = (request: Parameters<typeof bearerToken>[0]) => {
-    requireBridgeServerToken(request);
     return auth.authenticateDevice(bearerToken(request), clock());
   };
 
