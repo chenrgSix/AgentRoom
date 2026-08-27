@@ -56,6 +56,37 @@ queued
 not transition. A Runtime that may have executed but lacks a trustworthy
 outcome becomes `outcome_unknown` and is never automatically rerun.
 
+### Task/Run/Result work-model target
+
+[ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
+keeps this state machine authoritative. `connection_lost`, Delivery progress,
+context preparation, Runtime startup, tool activity, and Result submission are
+diagnostic phase projections from durable Delivery and Run events, never new
+Run states inferred from current presence. A legacy or absent phase is unknown.
+
+Every new attempt has a new Run ID, monotonic Task-local attempt number, and
+optional `retryOfRunId`. Normal unaccepted Delivery retry continues to reuse the
+same Run and Delivery identity. A terminal `outcome_unknown` Run never creates a
+new attempt automatically; a Task or Team Owner must acknowledge the ambiguity
+in an audited request before another Run may start or the Task may become
+terminal. The acknowledgement preserves `outcome_unknown` and never asserts
+whether an external side effect occurred.
+
+Run creation under the target contract atomically validates Task lifecycle,
+scheduling state, budget, Agent assignment, and expected Task revision; records
+the budget admission and Task/definition/criteria/context fences; and persists
+Run plus Delivery. Generic Run pause is unsupported. Pausing a Task prevents new
+scheduling and does not claim to suspend an already accepted provider process.
+
+Each Run exposes a redacted Context Manifest derived from its frozen durable
+Delivery rather than current live state. It names included Task definition,
+criteria, Room, Memory, Message and Artifact revisions and IDs; safe execution
+identity, Workspace alias and closed permission summaries; and categories
+intentionally not sent. It excludes credentials, paths, commands,
+environments, provider sessions, hidden reasoning, tool payloads, and unrelated
+context. Missing legacy fields render as `not_recorded`; the Web does not guess
+them.
+
 Offline managed Runs remain `queued` and are delivered when the target Device
 publishes or heartbeats. A queued Run that reaches its persisted deadline moves
 to terminal `expired` and is never delivered on a later reconnect.
@@ -254,8 +285,10 @@ resolves its own first-terminal race under the rules above.
 
 ## Task Mapping
 
-`RUN-001` through `RUN-010`, plus the in-process harness `QA-001`, recovery
-tasks `DATA-003` and `QA-004`, and parallel Wave verification `QA-010`.
+`RUN-001` through `RUN-010` implement current delivery, recovery, handoff and
+clarification behavior. `RUN-012` adds the ADR-0022 attempt-lineage and frozen
+Context Manifest target. The in-process harness is `QA-001`, recovery tasks are
+`DATA-003` and `QA-004`, and parallel Wave verification is `QA-010`.
 
 ## Dependencies
 

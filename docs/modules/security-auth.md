@@ -102,6 +102,28 @@ do not enter the pairing request.
 - Only the orchestrator may create a delivery after authorization.
 - Revocation blocks new sessions immediately and invalidates active epochs.
 
+ADR-0022 adds a human Task Owner without creating a new global role. Task reads
+and commands still require Room membership. The Task Owner or Team Owner may
+edit canonical goal/criteria, reassign ownership, replace Agent assignments,
+change scheduling/budget, review Results, and complete or cancel; assigned
+Agents may propose Results only from their own Runs, and a Discussion
+Orchestrator only from its owned aggregate. Agent prose, display numbers,
+attention, next-action projection, or cached Workbench rows never grant
+authority.
+
+Result submission validates every source, criterion and evidence edge in the
+same Task and Room. Completion acceptance validates the current definition,
+criteria, and Task revisions and one eligible human reviewer. An accepted Result
+cannot authorize a filesystem operation, Runtime permission, Agent assignment,
+or Room access.
+
+A manual-Agent MCP credential may propose only for that Agent and one of its
+assigned Runs. A Device credential may propose only for an Agent currently
+published by that Device and an exact Run assigned to both. Neither credential
+can impersonate the owning Member, review a Result, acknowledge ambiguity, or
+complete a Task. Server-side authorization is repeated even when Bridge or MCP
+validated the payload locally.
+
 The policy matrix is documented and tested alongside each protected endpoint.
 Default behavior is deny when an identity, scope, or capability is missing.
 
@@ -156,6 +178,12 @@ transport under `BRG-002` and central Token transport under `BRG-025`, in
 its authenticated state machine. Their completion requires response-loss,
 competing-claim, replay, expiry, enumeration, cross-Team, and legacy rolling-
 upgrade evidence before the new path may replace current onboarding.
+
+`CON-013`, `TASK-012`, and `TASK-013` track the ADR-0022 Task/Result authority.
+Negative tests cover stale revisions, foreign Room/Task sources, Agent/Run
+mismatch or lost current Room access, Orchestrator scope, non-Owner
+review/completion, display-ID confusion, evidence-free required criteria,
+active-work fences, and Result body or Context Manifest disclosure.
 
 Revoking a Device atomically marks it revoked, revokes all of its credentials,
 disables its managed Agents, and projects them offline. The active Bridge socket

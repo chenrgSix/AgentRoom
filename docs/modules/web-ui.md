@@ -78,6 +78,52 @@ without changing server-owned state.
 There is no native desktop GUI in the MVP. Runtime access is provided by the
 optional headless Bridge, keeping existing agent clients unchanged.
 
+## Target Work Information Architecture
+
+[ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
+changes the default authenticated destination to **Work** while retaining Chat,
+Agents, and Devices as first-class destinations. This is a target extension;
+the current released shell remains Room-first until `WEB-046` and `WEB-047`
+meet their acceptance evidence. Within Work, Task, Run, and Result lists and
+details are first-class routes rather than chat disclosures.
+
+Work consumes a Team-scoped, Room-authorized read model and groups Tasks that
+need human action, are executing, await review, are blocked, or recently
+completed. It never loops over every Room in the browser, stores independent
+dashboard counters, invents a percentage, treats unknown telemetry as zero, or
+uses a display number as an API identity. Cursor, filters, all attention reasons,
+primary badge, latest Run/Result, criteria coverage, budget usage, and next
+action come from the Server projection.
+
+Task detail opens Overview with goal, canonical criteria, human Owner, explicit
+Agent assignments, lifecycle/scheduling state, attention, current execution,
+latest Result, open questions, budget, and next action. Runs, Results, Artifacts,
+Discussion, and Audit are separate views. Result review controls appear only to
+the Task Owner or Team Owner and never infer permission from the projected next
+action.
+
+Run detail shows the authoritative state plus optional durable diagnostic phase,
+execution identity, trigger, redacted frozen Context Manifest, closed permission
+summary, ordered events, provisional output, terminal outcome, and linked Result.
+Connection loss remains metadata and `outcome_unknown` remains visible. A retry
+creates a new attempt; retry after ambiguity requires a separate explicit human
+acknowledgement. Generic Run pause is not shown.
+
+Result detail renders immutable submission version, exact source, definition,
+and criteria revisions, criterion claims, existing evidence links, risks,
+questions, next actions, and append-only review decision. Correction creates a
+new version; accept/reject never edits Agent-authored content. An authorized
+Member may turn one keyed next action into an idempotently linked same-Room child
+Task without copying evidence or acceptance. Accepted Result and Task
+completion may be one revisioned command, and a stale Result or partial Result
+with an unresolved required criterion cannot masquerade as completion.
+
+Room Chat remains the ordered discussion surface. New UI requires an explicit
+runnable Task or visible quick-work default before sending an Agent Mention.
+No-Mention messages remain ordinary conversation. Run and Result lifecycle adds
+only bounded linked summaries to the Room rather than copying output streams,
+Result bodies, review controls, or evidence.
+
 ## Data Flow
 
 HTTP reads establish a snapshot and an authenticated Team change channel wakes
@@ -404,4 +450,5 @@ full-refresh compatibility fallback.
 
 ## Dependencies
 
-Team/Room, Registry, Run Orchestration, Bridge pairing APIs, and Security.
+Team/Room, Task Collaboration, Registry, Run Orchestration, Bridge pairing APIs,
+and Security.

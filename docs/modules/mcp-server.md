@@ -50,6 +50,22 @@ remain outside MCP and the central Server.
 Read-only resources may represent Room history, a thread, or an Agent inbox.
 Tool schemas must be imported from `packages/contracts/`.
 
+### Task work-model target
+
+[ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
+adds `team.list_assigned_tasks`, `team.get_task`, `team.list_task_results`, and
+`team.propose_result` for a manual Agent. Reads remain limited to Tasks in the
+Agent's current assignments or its own Run history in Rooms it may still access.
+A proposal must pin the current definition and criteria it evaluated, cite a
+persisted event from one of that Agent's own assigned Runs, use only the closed
+source/evidence kinds, and carry a stable operation identity. Retry returns the
+same immutable Result.
+
+These tools do not expose human review, Task completion, Owner reassignment,
+assignment replacement, ambiguity acknowledgement, or budget extension. They
+route through the same Task service as HTTP and managed Bridge proposals; MCP
+authentication never substitutes for Room, Task, Run, or evidence authority.
+
 ## Participation Modes
 
 In manual mode, a client calls `team.get_mentions` or `team.wait`, then decides
@@ -75,7 +91,7 @@ to 100 newer messages or a timeout carrying the unchanged cursor.
 
 Contract tests cover every tool and resource, while integration tests cover
 authorization, long polling, retries, and capability downgrade. Delivery work
-is tracked by `MCP-001` through `MCP-005` in `docs/TASKS.md`.
+is tracked by `MCP-001` through `MCP-006` in `docs/TASKS.md`.
 
 Manual Agents use `team.get_mentions` and `team.get_run` to inspect assigned
 Runs, `team.claim_run` before longer work, and `team.complete_run` or
@@ -85,4 +101,5 @@ Agent directly.
 
 ## Dependencies
 
-Contracts, Team/Room, Run Orchestration, Registry, and Security.
+Contracts, Team/Room, Task Collaboration, Run Orchestration, Registry, and
+Security.

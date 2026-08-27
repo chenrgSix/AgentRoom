@@ -41,6 +41,15 @@ Agents report observations and recommendations. They cannot set Discussion
 state, grant budget, select unauthorized participants, or declare authoritative
 completion. Users may request finish, pause, resume, or immediate cancellation.
 
+Under
+[ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md), a
+terminal Discussion finalization may propose one immutable Task Result using the
+Discussion, its member Runs, final Message, and existing Artifacts as exact
+sources. The Orchestrator cannot accept the Result or complete the Task. Result
+proposal retry uses one stable operation identity and does not replace the
+existing final answer, Wave result anchors, evidence service, or Discussion
+budget ledger.
+
 The Orchestrator is a deterministic state machine. The current
 `SemanticEvaluator` is a standalone interface and output normalizer with
 contract tests; it is not injected into Discussion Orchestration and no model is

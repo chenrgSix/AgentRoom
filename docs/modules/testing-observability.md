@@ -71,6 +71,23 @@ expiry, replay, enumeration, cross-Team decisions, and legacy Token mismatch
 fail closed. Runtime discovery and self-test are explicit local tests rather than
 evidence that pairing succeeded.
 
+ADR-0022 work-model verification separates aggregate correctness, projection,
+browser acceptance, and end-to-end completion. Task tests cover state/scheduling
+transitions, Owner loss/reassignment, criteria revisions, budget admission,
+Agent assignment replacement, definition drift, default compatibility,
+expected-revision conflicts, and active-work fences.
+Result tests cut proposal, source/claim/evidence insertion, correction, review,
+accept-and-complete, and response delivery; every retry converges on one version,
+decision, and Task revision. Run tests retain `outcome_unknown`, create a new ID
+for a user retry, and rebuild the redacted manifest from frozen Delivery data.
+
+Workbench tests derive simultaneous attention reasons including stale Results
+and overdue Tasks, unacknowledged ambiguous Runs, plus next action from reopened
+SQLite; paginate across only authorized Rooms; preserve unknown budget
+telemetry; and prove cached projection state cannot authorize a command. Browser
+acceptance covers Work, Task, Run, Result, review, stale-state, narrow-screen,
+keyboard, focus, untrusted content, and zero-horizontal-overflow behavior.
+
 Discussion verification uses a deterministic evaluator fixture and fake usage
 telemetry. It covers early completion, multi-dimensional lease renewal,
 plateau detection, policy precedence, reserved finalization, stale decision
@@ -124,6 +141,14 @@ Owner-claim response loss, link/QR/manual-code pairing, Server Token non-
 disclosure, several Agent profiles under one Device, path-free Workspace
 projection, revocation before and after Bridge acceptance, and a physical-host
 TLS/deep-link check. A local Compose run does not prove the physical-host gate.
+
+The Result-gated completion release gate additionally covers current versus
+stale definitions and criteria, Agent assignment changes, all required criterion
+outcomes, missing/foreign evidence, concurrent accept/reject and definition-edit
+races, active work, Task pause, ambiguous Run retry acknowledgement, old-client
+default Task routing, legacy completed Tasks without synthetic Results, and one
+physical managed Runtime whose accepted Result links to verified Artifact
+evidence.
 
 ## Observability Contract
 

@@ -25,14 +25,14 @@ document and the task list in the same commit.
 | ROOM | [Team and Room](team-room.md) | Team, Room, Message | `apps/server/` | CON, DATA, SEC, REG |
 | WSP | [Workspace Coordination](workspace-coordination.md) | Opaque Workspace identity, generation, leases | Server and Bridge | CON, REG, DATA, SEC |
 | ART | [Artifact Content Transport](artifact-content-transport.md) | Sealed Blob storage and transport | Server and Bridge | CON, WSP, DATA, SEC |
-| TASK | [Task Collaboration](task-collaboration.md) | Task, shared memory, result evidence | `apps/server/` | CON, ROOM, REG, WSP, ART, DATA, SEC |
+| TASK | [Task Collaboration](task-collaboration.md) | Task, criteria, shared memory, Result review, result evidence | `apps/server/` | CON, ROOM, REG, WSP, ART, DATA, SEC |
 | REG | [Registry and Presence](agent-registry.md) | Member, Device, Agent, Presence | `apps/server/` | CON, DATA, SEC |
 | RUN | [Run Orchestration](run-orchestration.md) | Run, delivery, handoff | `apps/server/` | CON, ROOM, REG, BRG, TASK, ART, DATA |
 | DISC | [Discussion Orchestration](discussion-orchestration.md) | Discussion, progress, budget, policy | `apps/server/src/discussion/` | CON, ROOM, RUN, ADP, DATA, SEC |
-| MCP | [MCP Server](mcp-server.md) | MCP auth and Team tools | `apps/server/` | CON, ROOM, RUN, SEC |
+| MCP | [MCP Server](mcp-server.md) | MCP auth and Team tools | `apps/server/` | CON, ROOM, TASK, RUN, SEC |
 | BRG | [Bridge](bridge.md) | Connection and local delivery state | `bridge/`, `apps/server/` | CON, REG, SEC |
 | ADP | [Runtime Adapters](runtime-adapters.md) | Runtime process and Team Session | `bridge/internal/runtime/` | CON, BRG |
-| WEB | [Web UI](web-ui.md) | Browser presentation state | `apps/web/` | ROOM, REG, RUN, BRG, SEC |
+| WEB | [Web UI](web-ui.md) | Browser presentation state | `apps/web/` | ROOM, REG, TASK, RUN, BRG, SEC |
 | DATA | [Persistence and Recovery](persistence-recovery.md) | Database and projection durability | `apps/server/` | CON |
 | SEC | [Security and Authentication](security-auth.md) | Identity, credentials, authorization | server and Bridge | CON |
 | QA/OPS | [Testing and Observability](testing-observability.md) | Evidence, telemetry, release gates | `tests/` and all modules | all |

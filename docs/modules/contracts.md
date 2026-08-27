@@ -102,6 +102,23 @@ not appear in generated public state, logs, diagnostics, or fixtures except as
 explicit negative-test seeds. Existing Bridge join and pair payloads remain
 valid during rolling compatibility.
 
+`CON-013` reserves the ADR-0022 Task work-model contracts. Closed schemas define
+Task lifecycle and scheduling state, completion policy,
+Task/definition/criteria revisions, canonical ordered criteria, human Owner,
+closed Agent assignment roles, comparable budget units, attention and
+next-action projections, Run attempt lineage, redacted Context Manifest, Result
+submission/source/criterion/evidence records, and append-only review decisions.
+Opaque IDs remain authority; Team display numbers are presentation only. Old
+Task states and absent manifests remain valid only in the documented migration
+window, and no compatibility mapping may remove `outcome_unknown` or make
+`run.taskId` optional.
+
+Member HTTP, manual-Agent MCP, and managed-Agent Device proposals use distinct
+authentication envelopes but one Result semantic contract and idempotency
+identity. Fixtures reject actor/Run mismatch, unknown evidence kinds, local
+paths, copied evidence payloads, stale IDs masquerading as current revisions,
+and review or completion authority in an Agent transport request.
+
 `WSP-001` adds optional opaque `workspaceRef` and `workspaceGeneration` fields
 to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free
 comparison identities, not Runtime scope IDs or permission grants. Older

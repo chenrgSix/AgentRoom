@@ -61,6 +61,41 @@ immediate transaction. Composite Task/Room references and a source-Run trigger
 prevent evidence from crossing Task history; exactly one authenticated Member
 or Agent creator is retained for attribution.
 
+The ADR-0022 target adds Task display allocation, aggregate revision, human
+Owner, lifecycle/scheduling/completion policy, immutable criteria sets, explicit
+Agent assignments, Message/Result Task-source edges, blocks, Task budget events,
+Run-outcome acknowledgements, immutable Result submissions and
+source/evidence/criterion edges, and append-only Result review decisions. These
+are canonical rows behind the existing Task aggregate; the Team Workbench is a
+rebuildable authorized projection.
+
+Task creation allocates its Team display number, optional source edge, Owner,
+lifecycle, completion policy, initial definition/criteria revisions,
+assignments, and Task revision atomically. A goal edit advances definition and
+Task revisions. A criteria edit also appends one complete immutable set and
+advances the criteria revision in the same transaction. Run creation validates
+expected Task revision, lifecycle, scheduling, budget and assignment; appends
+budget admission and any required ambiguity acknowledgement; captures
+Task/definition/criteria/context fences; and persists Run plus Delivery in one
+transaction.
+
+Result proposal inserts content, Task-local version, sources, criterion claims,
+evidence references, and attention wakeup together under one operation identity.
+Result review inserts at most one terminal decision and may assign the Task's
+completion Result and complete it in the same transaction. Response-loss retry
+returns the same source edge, definition/criteria revision, ambiguity
+acknowledgement, Run attempt, Result version, decision, and Task revision rather
+than creating a substitute identity.
+
+Migration preserves every current Task, Run, Discussion, Artifact, Memory,
+clarification, context, and Runtime Session identity. It deterministically
+allocates Team display numbers, initializes definition/criteria revision zero,
+maps eligible primary and historical participating Agents into assignments, and
+maps existing Task states through the ADR table. It creates no fictional Result
+and labels historical completion without accepted evidence as a compatibility
+projection. A migrated block is explicit evidence; an old `blocked` enum is not
+silently discarded.
+
 After an ordinary Wave settles, Discussion Orchestration appends an idempotent
 `wave_result` system Message with an ID derived from the Wave ID. This Message is
 the next Wave's stable input anchor. It is deliberately written before the
@@ -215,7 +250,8 @@ delivery recovery, backup, restore, and corrupted input rejection. `QA-010`
 reopens SQLite at planned-member, partially settled barrier, and
 committed-next-Wave cut points, and verifies deterministic-anchor retry.
 Persistence work is tracked by `DATA-001` through `DATA-006`, `TASK-007`
-through `TASK-009`, and `ART-001`; parallel recovery
+through `TASK-009`, target Task/Result persistence by `TASK-012`/`TASK-013`, and
+Artifact storage by `ART-001`; parallel recovery
 is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
 
 ## Dependencies

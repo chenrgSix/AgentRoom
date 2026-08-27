@@ -39,6 +39,113 @@ for backward compatibility. A Task cannot enter a terminal state while it has
 an active Run or Discussion, and new routed Messages are rejected atomically
 when their Task is already terminal.
 
+## Target Work Aggregate
+
+[ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
+extends the existing Task without weakening its current Run binding, Artifact,
+Memory, context, or recovery contracts. The target adds a human Owner, monotonic
+Task revision, presentation-only Team display number, `draft`/`ready`/`active`/
+`review`/`completed`/`canceled` lifecycle, independent enabled/paused scheduling,
+completion policy, canonical criteria revision, Task budget ledger, completion
+Result reference, explicit Product-Task Agent assignments, and derived
+attention/next-action projection. Goal and criteria form a separately versioned
+Task definition so unrelated ownership, scheduling, budget, review, or display
+changes do not invalidate current execution evidence.
+
+Current and target state must remain distinguishable during migration. Existing
+nonterminal default Tasks become permanently active `owner_confirmed`
+compatibility aggregates and cannot complete or cancel. A terminal historical
+default remains terminal ordinary history while migration creates a new active
+default without moving old Messages or Runs. Existing `open` Tasks with execution
+history become active; untouched `open` Tasks become ready; `working` becomes
+active; `blocked` becomes active plus an explicit block record; historical
+terminal Tasks remain terminal without a fabricated Result.
+
+Every Task mutation uses `expectedTaskRevision` and one idempotency identity.
+Goal, Owner, criteria, Agent assignments, scheduling, budget, lifecycle,
+completion Result, and completion commands advance exactly one revision or
+return a conflict without a partial write. New UI cannot route work into a
+draft, paused, budget-exhausted, or terminal Task. Older clients retain the Room
+default Task, but a compatibility PATCH cannot bypass the same transition and
+completion service.
+
+Non-default Product Tasks carry an explicit set of current-Room Agent
+assignments with `primary`, `contributor`, or `reviewer` roles and at most one
+primary. New direct Runs, Discussion participants, and handoff targets must be
+assigned in addition to satisfying existing Room and handoff policy. The
+permanent default Task instead derives eligible Agents from the current Room
+roster for compatibility and does not persist that roster as Task assignments.
+
+### Canonical criteria
+
+Canonical acceptance criteria are complete immutable Task-local revisions. Each
+ordered row has a stable `criterionKey`, description, required flag, and ordinal.
+Editing any row appends a new full criteria revision in the same transaction that
+advances the Task definition, criteria, and aggregate revisions. Goal changes
+advance the definition and aggregate revisions without fabricating a criteria
+revision. Old revisions remain available to frozen Runs and Results.
+
+The existing long-term Memory type `acceptance_criterion` remains an attributed
+claim or context projection; it is not the canonical criterion table and cannot
+silently edit or satisfy it. Context Planner labels the two sources separately.
+
+### Result submission and review
+
+New submissions are admitted only for `active` or `review` Tasks; other states
+retain readable history but accept no new Result content.
+
+A target Result contains immutable summary, outcome, risks, questions, next
+actions with stable submission-local keys, exact definition/criteria revisions,
+proposal-time Task revision, submitter, and a task-local version. It has at least
+one in-scope source edge to a durable Run event, Discussion, Message, Memory
+entry, or Artifact and stores criterion claims plus references to existing
+evidence. Source and evidence kinds are closed and resolve exact existing IDs;
+Run events additionally pin their durable sequence. It never copies Artifact
+bytes or replaces Artifact lineage, Room Messages, Memory, Run events, or
+Discussion output as evidence authority.
+
+Result content never changes. A correction to a proposed or rejected submission
+creates a new version that supersedes the old submission. An accepted Result is
+never superseded or rewritten; additional evidence is a new independent Result.
+One version accepts at most one append-only human
+`accepted` or `rejected` decision. Proposed, accepted, rejected, and superseded
+are derived states. Agents may propose a Result from their assigned Runs;
+Discussion Orchestration may propose one from its owned Discussion; only the
+human Task Owner or Team Owner may review or complete.
+
+Member HTTP, manual-Agent MCP, managed-Agent Device/Bridge, and Discussion
+Orchestration proposals all enter the same idempotent Result service. A manual
+or managed Agent must cite a persisted event from its own assigned Run. No
+transport path infers a Result from Run success, final prose, streamed output,
+or Artifact existence.
+
+An accepted completion Result must target the current definition and criteria
+revisions and cite at least one existing in-scope evidence record for every
+satisfied required criterion. Result acceptance and Task completion may commit
+together, and only a Result that passes the completion policy becomes the
+Task's completion reference. A `partial` Result can complete only when every
+required criterion is satisfied; `not_satisfied` and `informational` never do.
+A stale, rejected, evidence-free, or foreign-scope Result remains useful history
+but cannot complete an `accepted_result_required` Task.
+
+Initial completion policies are `owner_confirmed` and
+`accepted_result_required`. Both fence active Runs, Discussions, and
+clarifications plus every unacknowledged `outcome_unknown` Run in the Task. The
+audited human ambiguity acknowledgement preserves that terminal state and never
+asserts whether an external side effect occurred. Task budget
+initially governs comparable persisted Run count and execution duration only;
+unknown provider tokens or cost remain unknown and are not hard Task admission
+units.
+
+### Attention projection
+
+Attention is rebuilt as a set from authoritative sources: open clarification,
+unacknowledged ambiguous Run outcome, current proposed Result, stale proposed
+Result, explicit block or missing Owner, advisory overdue time, paused
+scheduling, budget admission, unavailable Runtime, and rejected latest Result.
+Several reasons may coexist. A Workbench primary badge follows a fixed priority
+but does not collapse, persist over, or grant authority beyond those sources.
+
 ## Ownership and Boundaries
 
 - Every Run belongs to exactly one Task. A Mention still creates a bounded Run;
@@ -50,6 +157,10 @@ when their Task is already terminal.
   used by every resulting Run.
 - Handoff and Discussion child Runs inherit their parent Task. Agents cannot
   move a Run to a different Task through reply text or Bridge output.
+- Parent and child Tasks remain lifecycle-independent. A Result next action may
+  create one idempotently linked draft child only when an authorized Member
+  accepts it; no criteria, evidence authority, assignment, acceptance, or
+  completion state is copied into the child.
 - Agent-native session IDs, provider history, hidden reasoning, tool records,
   and local paths remain on the Bridge. The central Server owns only the
   logical Task Session scope and safe disposition/cursor metadata.
@@ -290,8 +401,12 @@ cross-task context.
 
 ## Task Mapping
 
-`TASK-001` through `TASK-011`, with wire and Runtime work in `CON-007`,
-`CON-009`, `ADP-012`, and `ADP-013`, clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those
+`TASK-001` through `TASK-011` implement the current Task continuity, Memory and
+Artifact evidence baseline. `TASK-012` and `TASK-013`, with `CON-013`, implement
+the ADR-0022 target ownership, criteria, completion and Result review contract;
+`BRG-044` and `MCP-006` add the managed and manual Agent proposal transports.
+Wire and Runtime work remains in `CON-007`, `CON-009`, `ADP-012`, and `ADP-013`,
+clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those
 behavioral milestones.
 
 ## Dependencies

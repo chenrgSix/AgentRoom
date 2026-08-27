@@ -255,6 +255,17 @@ The Bridge sorts and de-duplicates the closed relation set and includes it in
 the deterministic publication key and prepare request, so retry cannot silently
 change Artifact B's lineage.
 
+For `BRG-044`, an explicit managed Result proposal selects one configured Agent
+and its assigned Run, accepts only bounded contract-valid structured fields and
+opaque source/evidence identities, and sends them through Device-authenticated
+HTTP with a stable operation identity. A proposal must cite an already persisted
+event from that exact Run. The Bridge may preflight current Task definition and
+criteria revisions for authoring, but the Server remains final authority and may
+classify a raced proposal as stale. Exact retry returns the same Result. The
+Bridge never derives a Result from final prose, reads a Workspace file for this
+command, accepts a local path as evidence, or gains Result review and Task
+completion authority.
+
 For `BRG-029`, a managed Runtime Agent also advertises isolated Artifact
 materialization. Before sending `run.accepted` or invoking a Runtime, the Bridge
 downloads every pinned content descriptor through the exact target Device/Run
