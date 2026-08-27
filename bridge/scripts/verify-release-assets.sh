@@ -36,8 +36,20 @@ desktop_archives=(
 desktop_installers=(
   "agentroom-bridge-desktop_${version}_windows_amd64_setup.exe"
 )
+central_archives=(
+  "agentroom-central_${version}_darwin_amd64.tar.gz"
+  "agentroom-central_${version}_darwin_arm64.tar.gz"
+  "agentroom-central_${version}_linux_amd64.tar.gz"
+  "agentroom-central_${version}_linux_arm64.tar.gz"
+)
+central_pins=(
+  "agentroom-central_${version}_darwin_amd64.SHA256SUMS.sha256"
+  "agentroom-central_${version}_darwin_arm64.SHA256SUMS.sha256"
+  "agentroom-central_${version}_linux_amd64.SHA256SUMS.sha256"
+  "agentroom-central_${version}_linux_arm64.SHA256SUMS.sha256"
+)
 license_assets=(LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md)
-expected_count=$((${#cli_archives[@]} + ${#desktop_archives[@]} + ${#desktop_installers[@]} + ${#license_assets[@]} + 1))
+expected_count=$((${#cli_archives[@]} + ${#desktop_archives[@]} + ${#desktop_installers[@]} + ${#central_archives[@]} + ${#central_pins[@]} + ${#license_assets[@]} + 1))
 actual_count=$(find "${asset_dir}" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')
 
 if [[ "${actual_count}" -ne "${expected_count}" ]]; then
@@ -46,7 +58,7 @@ if [[ "${actual_count}" -ne "${expected_count}" ]]; then
   exit 1
 fi
 
-for filename in "${cli_archives[@]}" "${desktop_archives[@]}" "${desktop_installers[@]}" SHA256SUMS "${license_assets[@]}"; do
+for filename in "${cli_archives[@]}" "${desktop_archives[@]}" "${desktop_installers[@]}" "${central_archives[@]}" "${central_pins[@]}" SHA256SUMS "${license_assets[@]}"; do
   if [[ ! -f "${asset_dir}/${filename}" ]]; then
     echo "Missing release asset: ${filename}" >&2
     exit 1
@@ -68,10 +80,10 @@ checksum_names=$(awk '
   echo "SHA256SUMS contains an invalid entry" >&2
   exit 1
 }
-expected_checksum_names=$(printf '%s\n' "${cli_archives[@]}" "${desktop_archives[@]}" "${desktop_installers[@]}" | sort)
+expected_checksum_names=$(printf '%s\n' "${cli_archives[@]}" "${desktop_archives[@]}" "${desktop_installers[@]}" "${central_archives[@]}" "${central_pins[@]}" | sort)
 actual_checksum_names=$(printf '%s\n' "${checksum_names}" | sort)
 if [[ "${actual_checksum_names}" != "${expected_checksum_names}" ]]; then
-  echo "SHA256SUMS must contain each Bridge archive exactly once" >&2
+  echo "SHA256SUMS must contain each binary archive, installer, and Central pin exactly once" >&2
   exit 1
 fi
 
@@ -343,5 +355,7 @@ verify_macos_desktop_archive "${desktop_archives[0]}" amd64
 verify_macos_desktop_archive "${desktop_archives[1]}" arm64
 verify_windows_desktop_archive "${desktop_archives[2]}" amd64
 verify_windows_desktop_installer "${desktop_installers[0]}"
+ASSET_DIR="${asset_dir}" RELEASE_TAG="${release_tag}" \
+  "${repository_root}/ops/agentroomctl/scripts/verify-central-release.sh"
 
 printf 'Verified %s release assets for %s\n' "${expected_count}" "${release_tag}"

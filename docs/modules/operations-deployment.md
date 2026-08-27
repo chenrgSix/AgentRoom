@@ -26,6 +26,16 @@ to appear exactly once in `SHA256SUMS`, rejects symlinks and unchecked extras,
 and validates closed release metadata. Compose files are not executed before
 this verification passes.
 
+The release workflow builds separate Linux and macOS archives for amd64 and
+arm64 from the exact tagged commit. Each archive contains the controller,
+Compose/Docker build context, deployment scripts, license assets, closed
+release/target/schema metadata, and an exhaustive internal `SHA256SUMS`.
+Its companion `*.SHA256SUMS.sha256` asset pins that internal manifest; the
+outer Release checksum file covers both the archive and pin asset. The verifier
+checks safe members, exact source commit, migration/schema agreement, file
+closure, binary version/architecture, license identity, and forbidden runtime
+state before upload and after a clean download.
+
 The manifest under `<data-root>/control/installation.json` records only schema
 version, exact release and checksum digest, release/data locations, data-schema
 version, isolated Compose project name, network mode, domain/origin/ports,
@@ -94,13 +104,15 @@ drifted is diagnostic input only, not trusted executable installation state.
 ## Verification
 
 Focused tests use real temporary files and a fake process/readiness boundary.
-They cover the four supported host/architecture pairs, local/direct network
+They cover the four supported host/architecture pairs and release-target
+rejection, local/direct network
 rendering, exact release pin and exhaustive content validation, permissions,
 no-secret output/configuration, successful reentry with an existing database,
 each recorded external crash cut, conflicting reentry, delegated
 backup/restore, backup-before-upgrade, failed-upgrade revision reporting, and
-non-purging uninstall. Packaging, real Docker Compose, live TLS, and physical
-two-machine checks remain separate evidence; unit tests do not claim them.
+non-purging uninstall. The release verifier separately owns packaging evidence;
+real Docker Compose, live TLS, and physical two-machine checks remain separate
+evidence and unit tests do not claim them.
 
 ## Tasks
 

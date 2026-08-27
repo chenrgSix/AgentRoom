@@ -1,4 +1,4 @@
-name: Release Bridge
+name: Release AgentRoom
 
 on:
   workflow_dispatch:
@@ -110,6 +110,52 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+  central:
+    name: Build Central ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: darwin
+            goarch: amd64
+          - goos: darwin
+            goarch: arm64
+          - goos: linux
+            goarch: amd64
+          - goos: linux
+            goarch: arm64
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: refs/tags/${{ inputs.release_tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: ops/agentroomctl/go.mod
+          cache-dependency-path: ops/agentroomctl/go.mod
+
+      - name: Build checksum-pinned Central archive
+        env:
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          OUTPUT_DIR: ${{ github.workspace }}/dist
+        run: ./ops/agentroomctl/scripts/package-central-release.sh
+
+      - name: Upload Central artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: agentroom-central-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: |
+            dist/*.tar.gz
+            dist/*.SHA256SUMS.sha256
+          if-no-files-found: error
+          retention-days: 7
+
   desktop-macos:
     name: Build desktop macOS/${{ matrix.goarch }}
     needs: test
@@ -207,8 +253,8 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Attach Bridge binaries
-    needs: [build, desktop-macos, desktop-windows]
+    name: Attach AgentRoom binaries
+    needs: [build, central, desktop-macos, desktop-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -229,7 +275,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: agentroom-bridge-*
+          pattern: agentroom-*
           path: dist
           merge-multiple: true
 
@@ -247,6 +293,14 @@ jobs:
             "agentroom-bridge-desktop_${version}_darwin_arm64.zip" \
             "agentroom-bridge-desktop_${version}_windows_amd64.zip" \
             "agentroom-bridge-desktop_${version}_windows_amd64_setup.exe" \
+            "agentroom-central_${version}_darwin_amd64.tar.gz" \
+            "agentroom-central_${version}_darwin_amd64.SHA256SUMS.sha256" \
+            "agentroom-central_${version}_darwin_arm64.tar.gz" \
+            "agentroom-central_${version}_darwin_arm64.SHA256SUMS.sha256" \
+            "agentroom-central_${version}_linux_amd64.tar.gz" \
+            "agentroom-central_${version}_linux_amd64.SHA256SUMS.sha256" \
+            "agentroom-central_${version}_linux_arm64.tar.gz" \
+            "agentroom-central_${version}_linux_arm64.SHA256SUMS.sha256" \
             > SHA256SUMS
 
       - name: Add top-level license assets

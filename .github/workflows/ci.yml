@@ -103,6 +103,21 @@ jobs:
           go test ./...
           go vet ./...
           go build ./cmd/agentroomctl
+          bash -n scripts/package-central-release.sh
+          bash -n scripts/verify-central-release.sh
+
+      - name: Package and verify Central release matrix
+        env:
+          RELEASE_TAG: v0.0.0-ci
+          SOURCE_REF: HEAD
+          OUTPUT_DIR: ${{ runner.temp }}/central-dist
+        run: |
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            GOOS=${target%/*} GOARCH=${target#*/} \
+              ./ops/agentroomctl/scripts/package-central-release.sh
+          done
+          ASSET_DIR="${OUTPUT_DIR}" \
+            ./ops/agentroomctl/scripts/verify-central-release.sh
 
       - name: Check Bridge release scripts
         run: |

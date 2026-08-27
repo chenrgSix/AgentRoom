@@ -259,11 +259,13 @@ container logs, CI rendering, first setup, health, troubleshooting, upgrades,
 safe stop, off-host backup expectations, and version-aligned rollback without
 claiming public ACME or high-availability evidence.
 
-A Bridge release begins as an empty draft candidate and builds from the exact
-requested tag. The workflow requires five CLI archives, two native macOS GUI
-archives, one native Windows GUI preview archive, one Windows current-user
-installer, one checksum file, and four top-level license files. It verifies
-names, versions, archive layouts, installer metadata, launchers, licenses, and
+An AgentRoom release begins as an empty draft candidate and builds from the
+exact requested tag. The workflow requires five Bridge CLI archives, two native
+macOS GUI archives, one native Windows GUI preview archive, one Windows
+current-user installer, four Central archives, four separately published
+internal-checksum pins, one outer checksum file, and four top-level license
+files. It verifies names, versions, architectures, archive layouts, installer
+metadata, launchers, licenses, source/schema metadata, file closure and
 checksums before upload, then downloads the candidate and repeats the same
 verifier. Native Windows CI also executes install, upgrade, and uninstall smoke
 tests. Existing assets are never silently replaced.

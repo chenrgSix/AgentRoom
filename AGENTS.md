@@ -41,11 +41,13 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `go run ./cmd/agentroom-bridge artifact publish --config /path/bridge.json --agent Builder --run-id run_... --type patch --file change.patch --title "Verified patch" --summary "What changed"` from `bridge/` — publish one bounded Workspace-relative snapshot for an active assigned Run.
 - `go build -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — build the native Wails Bridge GUI for the current platform.
 - `go test -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — verify desktop-only state mapping and compile its native shell.
+- `go test ./... && go vet ./... && go build ./cmd/agentroomctl` from `ops/agentroomctl/` — verify and build the central lifecycle controller.
+- `RELEASE_TAG=v0.4.0-rc.1 SOURCE_REF=HEAD GOOS=linux GOARCH=amd64 ./scripts/package-central-release.sh` from `ops/agentroomctl/` — package one exact-commit, checksum-pinned Central archive.
 - `RELEASE_TAG=v0.2.0-rc.3 GOOS=linux GOARCH=amd64 ./scripts/package-release.sh` from `bridge/` — build one portable Bridge archive.
 - `RELEASE_TAG=v0.2.0-rc.3 GOARCH=arm64 ./scripts/package-desktop-darwin.sh` from `bridge/` — build one unsigned native macOS GUI archive.
 - `pwsh -File ./scripts/package-desktop-windows.ps1 -ReleaseTag v0.2.0-rc.3 -GoArch amd64` from `bridge/` on native Windows with Inno Setup — build one unsigned Windows GUI archive and current-user installer.
 - `pwsh -File ./scripts/verify-desktop-windows-installer.ps1 -ReleaseTag v0.2.0-rc.3 -InstallerPath /path/to/setup.exe` from `bridge/` on native Windows — smoke-test install, in-place upgrade, uninstall, and owner-state preservation.
-- Dispatching the Bridge Release workflow for an empty draft Release builds and verifies five CLI archives, two macOS GUI archives, one Windows GUI archive, one Windows installer, checksums, and license assets.
+- Dispatching the AgentRoom Release workflow for an empty draft Release builds and verifies five Bridge CLI archives, two macOS GUI archives, one Windows GUI archive, one Windows installer, four Central archives with separate internal-checksum pins, the outer checksums, and license assets.
 - `docker compose up -d --build` — run the trusted-team Server and Caddy profile.
 - `./scripts/compose-backup.sh` — create and copy a verified online SQLite backup.
 - `./scripts/compose-restore.sh /absolute/backup.sqlite` — stage a verified restore under a new database name while Server is stopped.

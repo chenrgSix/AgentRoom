@@ -83,6 +83,9 @@ The central installation controller uses Go 1.26.7. From
 `go build ./cmd/agentroomctl`. Its tests do not start Docker or mutate a real
 installation; live Compose and physical-host evidence remains in the OPS/QA
 acceptance gates.
+Use `scripts/package-central-release.sh` only with an exact `SOURCE_REF`, then
+run `scripts/verify-central-release.sh` over all four supported archives and
+their separately published internal-checksum pins.
 
 ## Pull Requests
 

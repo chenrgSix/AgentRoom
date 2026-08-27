@@ -90,12 +90,16 @@ func checksumPin(releaseDir string) string {
 }
 
 func createRelease(t *testing.T, parent, version string, dataSchema int) string {
+	return createReleaseForTarget(t, parent, version, dataSchema, "linux", "amd64")
+}
+
+func createReleaseForTarget(t *testing.T, parent, version string, dataSchema int, targetOS, targetArch string) string {
 	t.Helper()
-	releaseDir := filepath.Join(parent, strings.ReplaceAll(version, ".", "_"))
+	releaseDir := filepath.Join(parent, strings.ReplaceAll(version, ".", "_")+"_"+targetOS+"_"+targetArch)
 	files := map[string]string{
 		"agentroom-central-release.json": fmt.Sprintf(
-			"{\"schemaVersion\":1,\"releaseVersion\":%q,\"dataSchemaVersion\":%d}\n",
-			version, dataSchema,
+			"{\"schemaVersion\":1,\"releaseVersion\":%q,\"dataSchemaVersion\":%d,\"sourceCommit\":%q,\"targetOS\":%q,\"targetArch\":%q}\n",
+			version, dataSchema, strings.Repeat("a", 40), targetOS, targetArch,
 		),
 		"compose.yaml":               "services: {}\n",
 		"Dockerfile":                 "FROM scratch\n",
@@ -359,9 +363,10 @@ func TestSupportedHostAndNetworkModeValidation(t *testing.T) {
 		{goos: "darwin", goarch: "arm64"},
 	} {
 		t.Run(host.goos+"-"+host.goarch, func(t *testing.T) {
+			hostRelease := createReleaseForTarget(t, root, "v1.2.3", 1, host.goos, host.goarch)
 			dependencies := testDependencies(&fakeRunner{failOnce: map[string]int{}}, &bytes.Buffer{})
 			dependencies.GOOS, dependencies.GOARCH = host.goos, host.goarch
-			options := installOptions(releaseDir, filepath.Join(root, host.goos+host.goarch))
+			options := installOptions(hostRelease, filepath.Join(root, host.goos+host.goarch))
 			if _, err := New(dependencies).Install(context.Background(), options); err != nil {
 				t.Fatal(err)
 			}
@@ -373,6 +378,12 @@ func TestSupportedHostAndNetworkModeValidation(t *testing.T) {
 		_, err := New(unsupported).Install(context.Background(), installOptions(releaseDir, filepath.Join(root, "windows")))
 		return err
 	}(), "HOST_UNSUPPORTED")
+	darwinRelease := createReleaseForTarget(t, root, "v1.2.4", 1, "darwin", "arm64")
+	requireActionCode(t, func() error {
+		_, err := New(testDependencies(&fakeRunner{failOnce: map[string]int{}}, &bytes.Buffer{})).Install(
+			context.Background(), installOptions(darwinRelease, filepath.Join(root, "wrong-target")))
+		return err
+	}(), "RELEASE_TARGET_MISMATCH")
 	direct := installOptions(releaseDir, filepath.Join(root, "direct"))
 	direct.Mode = "direct_https"
 	direct.Domain = "team.example.com"
@@ -497,6 +508,28 @@ func TestFailedUpgradeReportsActiveImageAndPreservesOldManifest(t *testing.T) {
 	manifest, _, _ := loadManifest(installationPaths(dataRoot).ManifestPath)
 	if manifest.ReleaseVersion != "v1.2.3" {
 		t.Fatalf("failed upgrade changed the committed manifest: %s", manifest.ReleaseVersion)
+	}
+}
+
+func TestUpgradeRejectsAnotherHostTargetBeforeBackup(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createRelease(t, root, "v1.2.3", 1)
+	targetRelease := createReleaseForTarget(t, root, "v1.3.0", 2, "darwin", "arm64")
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	if _, err := control.Install(context.Background(), installOptions(currentRelease, dataRoot)); err != nil {
+		t.Fatal(err)
+	}
+	start := len(runner.commands)
+	requireActionCode(t, control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}), "RELEASE_TARGET_MISMATCH")
+	for _, command := range runner.commands[start:] {
+		if command.Name == "bash" {
+			t.Fatal("target mismatch triggered an upgrade backup or release script")
+		}
 	}
 }
 

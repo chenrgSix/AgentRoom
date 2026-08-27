@@ -41,6 +41,7 @@ var (
 	releasePattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
 	hashPattern    = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	domainPattern  = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+	commitPattern  = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 )
 
 type ActionError struct {
@@ -161,6 +162,9 @@ type ReleaseMetadata struct {
 	SchemaVersion     int    `json:"schemaVersion"`
 	ReleaseVersion    string `json:"releaseVersion"`
 	DataSchemaVersion int    `json:"dataSchemaVersion"`
+	SourceCommit      string `json:"sourceCommit"`
+	TargetOS          string `json:"targetOS"`
+	TargetArch        string `json:"targetArch"`
 }
 
 type Manifest struct {
@@ -241,6 +245,14 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	)
 	if err != nil {
 		return Installation{}, err
+	}
+	if metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH {
+		return Installation{}, actionError(
+			"RELEASE_TARGET_MISMATCH",
+			fmt.Sprintf("release targets %s/%s but this host is %s/%s", metadata.TargetOS, metadata.TargetArch, controller.dependencies.GOOS, controller.dependencies.GOARCH),
+			"Use the central release archive published for this host operating system and architecture.",
+			nil,
+		)
 	}
 	installation := installationPaths(options.DataRoot)
 	existing, exists, err := loadManifest(installation.ManifestPath)
@@ -870,10 +882,17 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 		return ReleaseMetadata{}, "", err
 	}
 	var metadata ReleaseMetadata
-	if err := decodeStrictJSON(metadataBytes, &metadata); err != nil || metadata.SchemaVersion != releaseSchemaVersion || !releasePattern.MatchString(metadata.ReleaseVersion) || metadata.DataSchemaVersion < 1 {
+	if err := decodeStrictJSON(metadataBytes, &metadata); err != nil || metadata.SchemaVersion != releaseSchemaVersion ||
+		!releasePattern.MatchString(metadata.ReleaseVersion) || metadata.DataSchemaVersion < 1 ||
+		!commitPattern.MatchString(metadata.SourceCommit) || !supportedTarget(metadata.TargetOS, metadata.TargetArch) {
 		return ReleaseMetadata{}, "", actionError("RELEASE_METADATA_INVALID", "central release metadata is invalid", "Use the metadata and checksums from one exact published release.", err)
 	}
 	return metadata, actualChecksumDigest, nil
+}
+
+func supportedTarget(targetOS, targetArch string) bool {
+	return (targetOS == "linux" || targetOS == "darwin") &&
+		(targetArch == "amd64" || targetArch == "arm64")
 }
 
 func matchInstall(existing Manifest, options InstallOptions, metadata ReleaseMetadata, digest string) error {

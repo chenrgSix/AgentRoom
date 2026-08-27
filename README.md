@@ -41,6 +41,7 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 | Team integration | Remote MCP Server |
 | Push channel | Authenticated WebSocket |
 | Local Bridge | Go 1.26.7, distributed as a macOS GUI or headless binary |
+| Central controller | Go 1.26.7, distributed for Linux and macOS |
 | MVP persistence | SQLite |
 | Server and Web tests | Node test runner and TypeScript build |
 | Bridge tests | Go test |
@@ -57,6 +58,7 @@ apps/
 packages/
   contracts/    JSON Schema and generated TypeScript/Go types
 bridge/         Go Bridge and runtime adapters
+ops/            Central release verification and lifecycle controller
 docs/modules/   Module ownership, contracts, and acceptance boundaries
 docs/adr/       Architecture decision records
 docs/TASKS.md   Authoritative milestones and delivery state
@@ -195,19 +197,48 @@ intentionally hides `/api/metrics` from the public network.
 
 ## Production Deployment
 
-For a trusted small Team, use the included non-root Server and Caddy Compose
-profile. The host needs Git, Docker Engine or Docker Desktop with Compose v2,
-OpenSSL, and curl; it does not need Node.js or Go. Point a public DNS A/AAAA
-record at the host, allow inbound TCP 80/9443 and outbound ACME traffic, and
-ensure no other process owns those ports.
+For a trusted small Team, use the checksum-pinned Central archive matching the
+host's OS and CPU. The host needs Docker Engine 24 or newer with Compose 2.20
+or newer; it does not need Git, Node.js, Go, OpenSSL, or manual `.env` editing.
+When a release includes `agentroom-central` assets, verify the matching archive
+with the outer Release `SHA256SUMS`, extract it, and retain the matching
+`*.SHA256SUMS.sha256` asset as the separately published pin for the archive's
+internal file manifest.
+
+Run the shipped controller from the extracted root:
+
+```bash
+archive=agentroom-central_0.4.0-rc.1_linux_amd64.tar.gz
+pin_asset=${archive%.tar.gz}.SHA256SUMS.sha256
+release_dir=${archive%.tar.gz}
+tar -xzf "${archive}"
+pin=$(awk '{print $1}' "${pin_asset}")
+cd "${release_dir}"
+./bin/agentroomctl install \
+  --release-dir "$PWD" \
+  --checksums-sha256 "${pin}" \
+  --data-root /absolute/persistent/agentroom-central \
+  --mode direct_https \
+  --domain team.example.com \
+  --origin https://team.example.com:9443
+./bin/agentroomctl doctor \
+  --data-root /absolute/persistent/agentroom-central
+```
+
+Point public DNS at the host, allow the selected inbound ports and outbound
+ACME traffic, and ensure no other process owns those ports. For loopback-only
+use, select `--mode local`, `--domain localhost`, and a matching localhost
+origin. The controller delegates startup migrations, backup, staged restore,
+upgrade and non-purging uninstall to the repository-owned paths while keeping
+the generated secrets out of its manifest and output.
 
 A private-LAN deployment may use a stable IP or internal host name instead of
 public DNS. Keep `:9443` in `AGENT_ROOM_PUBLIC_ORIGIN`, export Caddy's local CA
 root, verify it independently, and trust that root on each Bridge machine.
 
-Use a dedicated, clean checkout and record the exact source revision. Prefer a
-reviewed release tag when it contains the desired deployment changes. Then
-prepare the ignored settings and file-backed Owner recovery secret:
+The source-checkout Compose path remains available to maintainers and older
+releases. Use a dedicated, clean checkout and record the exact source revision,
+then prepare the ignored settings and file-backed Owner recovery secret:
 
 ```bash
 git clone https://github.com/chenrgSix/AgentRoom.git

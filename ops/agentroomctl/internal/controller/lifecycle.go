@@ -29,7 +29,7 @@ func (controller *Controller) Status(ctx context.Context, dataRoot string) error
 	if err := controller.validateHost(ctx); err != nil {
 		return err
 	}
-	if err := verifyInstalledRelease(installation); err != nil {
+	if err := controller.verifyInstalledRelease(installation); err != nil {
 		return err
 	}
 	environment, err := installationEnvironment(installation)
@@ -57,7 +57,7 @@ func (controller *Controller) Doctor(ctx context.Context, dataRoot string) error
 	if err := controller.validateHost(ctx); err != nil {
 		return err
 	}
-	if err := verifyInstalledRelease(installation); err != nil {
+	if err := controller.verifyInstalledRelease(installation); err != nil {
 		return err
 	}
 	if err := inspectPrivateFile(installation.ManifestPath); err != nil {
@@ -101,7 +101,7 @@ func (controller *Controller) Backup(ctx context.Context, dataRoot string) error
 	if err := controller.validateHost(ctx); err != nil {
 		return err
 	}
-	if err := verifyInstalledRelease(installation); err != nil {
+	if err := controller.verifyInstalledRelease(installation); err != nil {
 		return err
 	}
 	environment, err := scriptEnvironment(installation)
@@ -139,7 +139,7 @@ func (controller *Controller) Restore(ctx context.Context, dataRoot, backupPath,
 	if err := controller.validateHost(ctx); err != nil {
 		return err
 	}
-	if err := verifyInstalledRelease(installation); err != nil {
+	if err := controller.verifyInstalledRelease(installation); err != nil {
 		return err
 	}
 	environment, err := scriptEnvironment(installation)
@@ -171,7 +171,7 @@ func (controller *Controller) Uninstall(ctx context.Context, dataRoot string) er
 	if err := controller.validateHost(ctx); err != nil {
 		return err
 	}
-	if err := verifyInstalledRelease(installation); err != nil {
+	if err := controller.verifyInstalledRelease(installation); err != nil {
 		return err
 	}
 	environment, err := installationEnvironment(installation)
@@ -208,7 +208,7 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 	if err := controller.validateHost(ctx); err != nil {
 		return err
 	}
-	if err := verifyInstalledRelease(current); err != nil {
+	if err := controller.verifyInstalledRelease(current); err != nil {
 		return err
 	}
 	releaseDir, err := filepath.Abs(strings.TrimSpace(raw.ReleaseDir))
@@ -231,6 +231,9 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 	metadata, digest, err := verifyRelease(releaseDir, checksumsPath, pinnedDigest)
 	if err != nil {
 		return err
+	}
+	if metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH {
+		return actionError("RELEASE_TARGET_MISMATCH", "target release does not match this host", "Use the target Central archive published for this host operating system and architecture.", nil)
 	}
 	if metadata.ReleaseVersion == current.Manifest.ReleaseVersion && digest == current.Manifest.ReleaseDigest {
 		return actionError("UPGRADE_NOT_NEEDED", "target release is already active", "Run agentroomctl doctor instead of changing installation state.", nil)
@@ -352,7 +355,7 @@ func scriptEnvironment(installation Installation) (map[string]string, error) {
 	return environment, nil
 }
 
-func verifyInstalledRelease(installation Installation) error {
+func (controller *Controller) verifyInstalledRelease(installation Installation) error {
 	metadata, digest, err := verifyRelease(
 		installation.Manifest.ReleaseDir,
 		filepath.Join(installation.Manifest.ReleaseDir, "SHA256SUMS"),
@@ -360,6 +363,9 @@ func verifyInstalledRelease(installation Installation) error {
 	)
 	if err != nil {
 		return err
+	}
+	if metadata.TargetOS != controller.dependencies.GOOS || metadata.TargetArch != controller.dependencies.GOARCH {
+		return actionError("RELEASE_TARGET_MISMATCH", "installed release target no longer matches this host", "Use the installation on its original host architecture or perform a documented migration with the matching central release.", nil)
 	}
 	if metadata.ReleaseVersion != installation.Manifest.ReleaseVersion ||
 		metadata.DataSchemaVersion != installation.Manifest.DataSchemaVersion ||

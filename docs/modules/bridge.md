@@ -630,8 +630,10 @@ unsigned Windows amd64 GUI archive and current-user installer. Native Windows
 CI additionally smoke-tests initial installation, in-place upgrade, uninstall,
 Start menu, uninstaller and Device pairing protocol registration, and
 owner-state preservation. The
-Release tag is injected into each binary; all packages and one `SHA256SUMS`
-file are attached to the Release.
+Release tag is injected into each binary; all Bridge packages share the outer
+Release `SHA256SUMS` with the separately owned Central packages. The combined
+release verifier keeps the Bridge and deployment asset sets closed without
+moving Central lifecycle ownership into the Bridge.
 
 Each archive contains the binary, client README, and an OS-specific launcher.
 The macOS `.command` and Windows `.cmd` launchers are directly clickable; Linux
