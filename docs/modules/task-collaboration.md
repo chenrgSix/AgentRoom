@@ -435,7 +435,8 @@ cross-task context.
 evidence, versioned ownership, criteria, completion policy, scheduling,
 assignment, budget, attention, and immutable Result submission/review.
 `BRG-044` adds the managed Device-authenticated proposal transport; `MCP-006`
-still owns the manual Agent proposal and assigned-work tools.
+adds the manual Agent proposal and assigned-work tools. Neither transport can
+review a Result or complete, reassign, unblock or fund a Task.
 Wire and Runtime work remains in `CON-007`, `CON-009`, `ADP-012`, and `ADP-013`,
 clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those
 behavioral milestones.

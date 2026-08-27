@@ -220,7 +220,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | MCP-003 | DONE | Implement mentions, Run, and handoff tools | MCP-002, RUN-006 | manual Agent can complete a Team Run |
 | MCP-004 | DONE | Implement `team.wait`, Room, and inbox resources | MCP-001, ROOM-002 | bounded wait resumes by cursor and respects membership |
 | MCP-005 | DONE | Publish client-neutral setup and Skill guidance | MCP-003 | fresh client can join without source changes |
-| MCP-006 | PLANNED | Expose assigned Tasks and explicit Result proposal | TASK-013, CON-013, MCP-005 | contract and authorization tests prove a manual Agent reads only currently assigned Tasks or its own Run history in authorized Rooms, cites its own persisted Run event, submits one idempotent immutable Result with closed evidence refs, and cannot review, complete, reassign, acknowledge ambiguity, or extend budget |
+| MCP-006 | DONE | Expose assigned Tasks and explicit Result proposal | TASK-013, CON-013, MCP-005 | `team.list_assigned_tasks`, `team.get_task`, `team.list_task_results` and `team.propose_result` pass strict MCP contract and authorization regression plus 146 Server tests; a manual credential reads only current assignments/default work or its own Run history in still-authorized Rooms, cites its own persisted Run event, replays one immutable Result, and exposes no review, completion, reassignment, ambiguity-acknowledgement or budget-extension tool |
 
 ## Workstream F5: Adaptive Agent Discussion
 

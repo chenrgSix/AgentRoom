@@ -191,8 +191,9 @@ by `BRG-043` and `WEB-045`; this Server completion does not claim those product
 surfaces.
 
 `CON-013`, `TASK-012`, and `TASK-013` implement the central ADR-0022 Task/Result
-authority. `BRG-044` implements the Device-bound managed Agent transport;
-`MCP-006` still owns the manual Agent transport.
+authority. `BRG-044` implements the Device-bound managed Agent transport, and
+`MCP-006` implements the credential-bound manual Agent transport without human
+review or Task mutation authority.
 Negative tests cover stale revisions, foreign Room/Task sources, Agent/Run
 mismatch or lost current Room access, Orchestrator scope, non-Owner
 review/completion, display-ID confusion, evidence-free required criteria,

@@ -16,6 +16,7 @@ export function registerMcpRoutes({
   delivery,
   handoffs,
   manualRuns,
+  manualTaskWork,
   messages,
   taskArtifacts,
   teamWait
@@ -28,6 +29,7 @@ export function registerMcpRoutes({
       delivery,
       handoffs,
       manualRuns,
+      manualTaskWork,
       messages,
       taskArtifacts,
       wait: teamWait

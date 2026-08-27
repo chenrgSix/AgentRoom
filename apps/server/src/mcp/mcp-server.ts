@@ -1,4 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { ResultProposal } from "@agent-room/contracts/task-result";
 import * as z from "zod/v4";
 
 import type { CoreRepository } from "../data/core-repository.js";
@@ -7,6 +8,7 @@ import type { HandoffService } from "../run/handoff-service.js";
 import type { ManualRunService } from "../run/manual-run-service.js";
 import type { McpPrincipal } from "../security/auth-service.js";
 import type { MessageService } from "../team-room/message-service.js";
+import type { ManualTaskWorkService } from "./manual-task-work-service.js";
 import type { TeamWaitService } from "./team-wait-service.js";
 import type { TaskArtifactService } from "../task/task-artifact-service.js";
 
@@ -16,10 +18,70 @@ interface TeamMcpDependencies {
   delivery: DeliveryService;
   handoffs: HandoffService;
   manualRuns: ManualRunService;
+  manualTaskWork: ManualTaskWorkService;
   messages: MessageService;
   taskArtifacts: TaskArtifactService;
   wait: TeamWaitService;
 }
+
+const opaqueId = (prefix: string) => z.string()
+  .regex(new RegExp(`^${prefix}_[A-Za-z0-9_-]{8,128}$`, "u"));
+const evidenceRefId = z.string().regex(/^evidence_[A-Za-z0-9_-]{8,64}$/u);
+const criterionKey = z.string().regex(/^criterion_[A-Za-z0-9_-]{8,64}$/u);
+const nextActionKey = z.string().regex(/^next_[A-Za-z0-9_-]{8,64}$/u);
+const evidenceSource = z.discriminatedUnion("kind", [
+  z.object({
+    evidenceRefId,
+    kind: z.literal("artifact"),
+    artifactId: opaqueId("artifact")
+  }).strict(),
+  z.object({
+    evidenceRefId,
+    kind: z.literal("run_event"),
+    runId: opaqueId("run"),
+    sequence: z.number().int().positive()
+  }).strict(),
+  z.object({
+    evidenceRefId,
+    kind: z.literal("message"),
+    messageId: opaqueId("msg")
+  }).strict(),
+  z.object({
+    evidenceRefId,
+    kind: z.literal("memory"),
+    memoryId: opaqueId("memory")
+  }).strict(),
+  z.object({
+    evidenceRefId,
+    kind: z.literal("discussion"),
+    discussionId: opaqueId("discussion")
+  }).strict()
+]);
+const resultProposal = z.object({
+  operationId: opaqueId("op"),
+  taskId: opaqueId("task"),
+  definitionRevision: z.number().int().positive(),
+  criteriaRevision: z.number().int().positive(),
+  proposedAtTaskRevision: z.number().int().positive(),
+  supersedesResultId: opaqueId("result").nullable(),
+  outcome: z.enum(["satisfied", "partial", "not_satisfied", "informational"]),
+  summary: z.string().min(1).max(20_000),
+  risks: z.array(z.string().min(1).max(2_000)).max(50),
+  openQuestions: z.array(z.string().min(1).max(2_000)).max(50),
+  nextActions: z.array(z.object({
+    nextActionKey,
+    description: z.string().min(1).max(2_000)
+  }).strict()).max(50),
+  sources: z.array(evidenceSource).min(1).max(100),
+  criterionClaims: z.array(z.object({
+    criterionKey,
+    coverage: z.enum([
+      "satisfied", "unresolved", "not_satisfied", "not_applicable"
+    ]),
+    explanation: z.string().min(1).max(4_000),
+    evidenceRefIds: z.array(evidenceRefId).max(100)
+  }).strict()).max(100)
+}).strict();
 
 function toolResult(value: Record<string, unknown>) {
   return {
@@ -128,6 +190,40 @@ export function createTeamMcpServer(
     inputSchema: { runId: z.string().min(1) }
   }, async ({ runId }) => toolResult({
     run: dependencies.manualRuns.get(principal, runId)
+  }));
+  server.registerTool("team.list_assigned_tasks", {
+    description: "List Tasks currently assigned to this manual Agent or in its own Run history.",
+    inputSchema: {
+      limit: z.number().int().min(1).max(100).default(50)
+    }
+  }, async ({ limit }) => toolResult({
+    tasks: dependencies.manualTaskWork.listAssigned(principal, limit)
+  }));
+  server.registerTool("team.get_task", {
+    description: "Read one authorized Task for this manual Agent.",
+    inputSchema: { taskId: opaqueId("task") }
+  }, async ({ taskId }) => toolResult({
+    task: dependencies.manualTaskWork.get(principal, taskId)
+  }));
+  server.registerTool("team.list_task_results", {
+    description: "List immutable Results for one authorized Task.",
+    inputSchema: { taskId: opaqueId("task") }
+  }, async ({ taskId }) => toolResult({
+    results: dependencies.manualTaskWork.listResults(principal, taskId)
+  }));
+  server.registerTool("team.propose_result", {
+    description: "Explicitly propose one immutable Result from this manual Agent's assigned Run.",
+    inputSchema: {
+      runId: opaqueId("run"),
+      proposal: resultProposal
+    }
+  }, async ({ runId, proposal }) => toolResult({
+    result: dependencies.manualTaskWork.proposeResult(
+      principal,
+      runId,
+      proposal as ResultProposal,
+      dependencies.clock()
+    )
   }));
   server.registerTool("team.list_task_artifacts", {
     description: "List structured result evidence for one authorized Task.",

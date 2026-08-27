@@ -51,6 +51,8 @@ import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
 import { DiscussionRepository } from "./discussion/discussion-repository.js";
 import { TeamWaitService } from "./mcp/team-wait-service.js";
+import { ManualTaskWorkService } from
+  "./mcp/manual-task-work-service.js";
 import { OperationalMetrics } from "./observability/operational-metrics.js";
 import { TraceRepository } from "./observability/trace-repository.js";
 import { AgentService } from "./registry/agent-service.js";
@@ -282,6 +284,13 @@ export async function createServerApp(
     runRepository,
     core,
     auth
+  );
+  const manualTaskWork = new ManualTaskWorkService(
+    core,
+    taskRepository,
+    runRepository,
+    resultRepository,
+    results
   );
   const clarificationRepository = new ClarificationRepository(database);
   const taskClarifications = new TaskClarificationService(
@@ -669,6 +678,7 @@ export async function createServerApp(
     longTermMemory,
     memoryCandidates,
     manualRuns,
+    manualTaskWork,
     messages,
     operationalMetrics,
     optionalPrincipal,

@@ -11,6 +11,8 @@ import type { CoreRepository } from "../data/core-repository.js";
 import type { DiscussionOrchestrator } from "../discussion/discussion-orchestrator.js";
 import type { DiscussionRepository } from "../discussion/discussion-repository.js";
 import type { TeamWaitService } from "../mcp/team-wait-service.js";
+import type { ManualTaskWorkService } from
+  "../mcp/manual-task-work-service.js";
 import type { OperationalMetrics } from "../observability/operational-metrics.js";
 import type { TraceRepository } from "../observability/trace-repository.js";
 import type { AgentService } from "../registry/agent-service.js";
@@ -77,6 +79,7 @@ export interface ServerRouteContext {
   handoffs: HandoffService;
   limitAnonymous: (request: FastifyRequest, bucket: string) => void;
   manualRuns: ManualRunService;
+  manualTaskWork: ManualTaskWorkService;
   longTermMemory: LongTermMemoryService;
   memoryCandidates: MemoryCandidateService;
   messages: MessageService;

@@ -50,10 +50,11 @@ remain outside MCP and the central Server.
 Read-only resources may represent Room history, a thread, or an Agent inbox.
 Tool schemas must be imported from `packages/contracts/`.
 
-### Task work-model target
+### Task work model
 
 [ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
-adds `team.list_assigned_tasks`, `team.get_task`, `team.list_task_results`, and
+is implemented by `team.list_assigned_tasks`, `team.get_task`,
+`team.list_task_results`, and
 `team.propose_result` for a manual Agent. Reads remain limited to Tasks in the
 Agent's current assignments or its own Run history in Rooms it may still access.
 A proposal must pin the current definition and criteria it evaluated, cite a
@@ -65,6 +66,15 @@ These tools do not expose human review, Task completion, Owner reassignment,
 assignment replacement, ambiguity acknowledgement, or budget extension. They
 route through the same Task service as HTTP and managed Bridge proposals; MCP
 authentication never substitutes for Room, Task, Run, or evidence authority.
+
+`MCP-006` resolves the authenticated credential to one enabled manual Agent and
+its owning Member. Assigned work includes the Room default Task, current
+explicit assignments, and Tasks retained through that Agent's own Run history,
+but only while both the Member and Agent still belong to the unarchived Room.
+The strict proposal schema accepts no review, completion, reassignment,
+ambiguity acknowledgement, budget extension, path or copied evidence field.
+The shared Result service rechecks the current assignment and exact Run event
+before allocating an immutable Result version.
 
 ## Participation Modes
 

@@ -44,6 +44,7 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       payload: { name: "Core Team" }
     });
     const teamId = team.json().team.teamId as string;
+    const ownerMemberId = team.json().owner.memberId as string;
     const room = await app.inject({
       method: "POST",
       url: `/api/teams/${teamId}/rooms`,
@@ -61,6 +62,14 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
     assert.equal(manual.json().agent.integrationMode, "manual");
     const manualAgentId = manual.json().agent.agentId as string;
     const mcpToken = manual.json().credential.token as string;
+    const otherManual = await app.inject({
+      method: "POST",
+      url: `/api/teams/${teamId}/manual-agents`,
+      headers: { authorization: `Bearer ${webToken}` },
+      payload: { name: "Other Manual Agent", role: "Reviewer" }
+    });
+    assert.equal(otherManual.statusCode, 200);
+    const otherAgentId = otherManual.json().agent.agentId as string;
 
     const initialized = await app.inject({
       method: "POST",
@@ -380,6 +389,230 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
         .type,
       "verifies"
     );
+    const foreignTask = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${roomId}/tasks`,
+      headers: { authorization: `Bearer ${webToken}` },
+      payload: {
+        title: "Other Agent work",
+        goal: "Remain outside the authenticated manual Agent scope.",
+        assignments: [{ agentId: otherAgentId, role: "primary" }]
+      }
+    });
+    assert.equal(foreignTask.statusCode, 200, foreignTask.body);
+
+    const assignedTasks = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 14,
+        method: "tools/call",
+        params: {
+          name: "team.list_assigned_tasks",
+          arguments: { limit: 100 }
+        }
+      }
+    });
+    assert.equal(assignedTasks.statusCode, 200);
+    const assignedTaskIds = assignedTasks.json().result.structuredContent.tasks
+      .map((task: { taskId: string }) => task.taskId) as string[];
+    assert.equal(assignedTaskIds.includes(assignedRun.taskId), true);
+    assert.equal(assignedTaskIds.includes(foreignTask.json().taskId), false);
+
+    const taskRead = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 15,
+        method: "tools/call",
+        params: {
+          name: "team.get_task",
+          arguments: { taskId: assignedRun.taskId }
+        }
+      }
+    });
+    assert.equal(taskRead.statusCode, 200);
+    const taskProjection = taskRead.json().result.structuredContent.task;
+    assert.equal(taskProjection.taskId, assignedRun.taskId);
+
+    const deniedTask = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 16,
+        method: "tools/call",
+        params: {
+          name: "team.get_task",
+          arguments: { taskId: foreignTask.json().taskId }
+        }
+      }
+    });
+    assert.equal(deniedTask.statusCode, 200);
+    assert.equal(deniedTask.json().result.isError, true);
+
+    const proposal = {
+      operationId: "op_manual_mcp_result_0001",
+      taskId: assignedRun.taskId,
+      definitionRevision: taskProjection.definitionRevision,
+      criteriaRevision: taskProjection.criteriaRevision,
+      proposedAtTaskRevision: taskProjection.taskRevision,
+      supersedesResultId: null,
+      outcome: "satisfied",
+      summary: "The manual Agent explicitly submits its verified work.",
+      risks: [],
+      openQuestions: [],
+      nextActions: [],
+      sources: [{
+        evidenceRefId: "evidence_manual_artifact_0001",
+        kind: "artifact",
+        artifactId: sourceArtifactId
+      }, {
+        evidenceRefId: "evidence_manual_event_0001",
+        kind: "run_event",
+        runId: assignedRun.runId,
+        sequence: 3
+      }],
+      criterionClaims: []
+    };
+    const proposedResult = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 17,
+        method: "tools/call",
+        params: {
+          name: "team.propose_result",
+          arguments: { runId: assignedRun.runId, proposal }
+        }
+      }
+    });
+    assert.equal(proposedResult.statusCode, 200, proposedResult.body);
+    assert.equal(proposedResult.json().result.isError, undefined);
+    const resultProjection = proposedResult.json().result.structuredContent.result;
+    assert.deepEqual(resultProjection.proposedBy, {
+      kind: "manual_agent",
+      agentId: manualAgentId,
+      runId: assignedRun.runId
+    });
+    const proposalReplay = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 18,
+        method: "tools/call",
+        params: {
+          name: "team.propose_result",
+          arguments: { runId: assignedRun.runId, proposal }
+        }
+      }
+    });
+    assert.deepEqual(
+      proposalReplay.json().result.structuredContent.result,
+      resultProjection
+    );
+
+    const taskResults = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 19,
+        method: "tools/call",
+        params: {
+          name: "team.list_task_results",
+          arguments: { taskId: assignedRun.taskId }
+        }
+      }
+    });
+    assert.equal(taskResults.statusCode, 200);
+    assert.equal(
+      taskResults.json().result.structuredContent.results[0].resultId,
+      resultProjection.resultId
+    );
+
+    const tools = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 20,
+        method: "tools/list",
+        params: {}
+      }
+    });
+    const toolNames = tools.json().result.tools.map(
+      (tool: { name: string }) => tool.name
+    ) as string[];
+    assert.equal(toolNames.includes("team.propose_result"), true);
+    assert.equal(toolNames.some((name) => [
+      "team.review_result",
+      "team.complete_task",
+      "team.reassign_task",
+      "team.acknowledge_outcome",
+      "team.extend_budget"
+    ].includes(name)), false);
+    const removedAgent = await app.inject({
+      method: "PUT",
+      url: `/api/rooms/${roomId}/participants`,
+      headers: { authorization: `Bearer ${webToken}` },
+      payload: {
+        memberIds: [ownerMemberId],
+        agentIds: [otherAgentId]
+      }
+    });
+    assert.equal(removedAgent.statusCode, 200, removedAgent.body);
+    const lostRoomAccess = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 21,
+        method: "tools/call",
+        params: {
+          name: "team.get_task",
+          arguments: { taskId: assignedRun.taskId }
+        }
+      }
+    });
+    assert.equal(lostRoomAccess.statusCode, 200);
+    assert.equal(lostRoomAccess.json().result.isError, true);
     const timeline = await app.inject({
       method: "GET",
       url: `/api/rooms/${roomId}/messages?limit=100`,

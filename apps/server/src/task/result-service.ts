@@ -187,9 +187,11 @@ export class ResultService {
       run.targetAgentId !== input.agentId) {
       throw new Error("Result Agent Run is outside the Task scope");
     }
-    const assigned = task.isDefault
-      ? this.core.isRoomAgent(task.roomId, input.agentId)
-      : task.assignments.some(({ agentId }) => agentId === input.agentId);
+    if (!this.core.isRoomAgent(task.roomId, input.agentId)) {
+      throw new Error("Result Agent no longer has current Room access");
+    }
+    const assigned = task.isDefault ||
+      task.assignments.some(({ agentId }) => agentId === input.agentId);
     if (!assigned) throw new Error("Result Agent is not assigned to the Task");
     const runEvents = proposal.sources.filter((source) =>
       source.kind === "run_event"
