@@ -14,12 +14,17 @@ import (
 
 // EnrollmentView is local-only; it never contains a Device or claim token.
 type EnrollmentView struct {
-	Active           bool   `json:"active"`
-	Recovery         bool   `json:"recovery"`
-	CanRequest       bool   `json:"canRequest"`
-	BlockedReason    string `json:"blockedReason,omitempty"`
-	CodeExpired      bool   `json:"codeExpired"`
-	BackupConfigPath string `json:"backupConfigPath,omitempty"`
+	Active             bool   `json:"active"`
+	Recovery           bool   `json:"recovery"`
+	CanRequest         bool   `json:"canRequest"`
+	BlockedReason      string `json:"blockedReason,omitempty"`
+	CodeExpired        bool   `json:"codeExpired"`
+	BackupConfigPath   string `json:"backupConfigPath,omitempty"`
+	PairingMethod      string `json:"pairingMethod,omitempty"`
+	PairingState       string `json:"pairingState,omitempty"`
+	PairingSessionID   string `json:"pairingSessionId,omitempty"`
+	VerificationPhrase string `json:"verificationPhrase,omitempty"`
+	PairingExpiresAt   string `json:"pairingExpiresAt,omitempty"`
 }
 
 type ReEnrollmentInput struct {
@@ -54,8 +59,17 @@ func (s *Service) beginEnrollmentLocked(recovery bool) (context.Context, uint64)
 	s.state.LastError = ""
 	s.state.JoinCode = ""
 	s.state.JoinExpiresAt = ""
+	s.clearDevicePairingLocked()
 	s.state.Enrollment.Recovery = recovery
 	return ctx, s.joinEpoch
+}
+
+func (s *Service) clearDevicePairingLocked() {
+	s.state.Enrollment.PairingMethod = ""
+	s.state.Enrollment.PairingState = ""
+	s.state.Enrollment.PairingSessionID = ""
+	s.state.Enrollment.VerificationPhrase = ""
+	s.state.Enrollment.PairingExpiresAt = ""
 }
 
 func (s *Service) restartEnrollment(response http.ResponseWriter, request *http.Request) {

@@ -508,6 +508,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="share-reasoning-summaries"`, `id="connection-share-reasoning-summaries"`,
 		`id="current-reasoning-sharing"`,
 		`id="agent-discovery-status"`, `id="agent-discovery-help"`, `id="agent-install-link"`,
+		`id="device-pairing-link"`, `id="device-pairing-short-code"`,
+		`id="submit-device-pairing"`, `id="approval-title"`,
 		`id="codex-session-guide"`, `id="codex-session-guide-title"`,
 		`id="close-codex-session-guide"`, `id="acknowledge-codex-session-guide"`,
 	} {
@@ -533,6 +535,11 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if bytes.Count(javascript, []byte(`request("/api/runtime-preflight"`)) != 1 ||
 		!bytes.Contains(javascript, []byte(`elements["agent-use-detected"]`)) {
 		t.Fatal("draft Runtime preflight and detected-value action must remain explicit")
+	}
+	if bytes.Count(javascript, []byte(`request("/api/device-pairing/start"`)) != 1 ||
+		!bytes.Contains(html, []byte("配对只发送设备名称、平台和 Bridge 版本")) ||
+		!bytes.Contains(javascript, []byte(`pairingLinkFromHash(window.location.hash)`)) {
+		t.Fatal("Device pairing must remain one explicit local action with a closed metadata disclosure")
 	}
 	presentation, err := staticFiles.ReadFile("static/bridge-presentation.mjs")
 	if err != nil {
@@ -733,6 +740,155 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	case <-bridgeStopped:
 	case <-time.After(time.Second):
 		t.Fatal("Bridge process did not receive Console cancellation")
+	}
+}
+
+func TestDevicePairingPreservesLocalProfilesAndProjectsOnlyApprovalState(t *testing.T) {
+	bridgeStarted := make(chan struct{}, 1)
+	approved := make(chan struct{})
+	const pairingLink = "agentroom://pair-device?origin=http%3A%2F%2F127.0.0.1%3A3000&pairingSessionId=pairing_12345678&expiresAt=2026-08-28T12%3A00%3A00Z#claimSecret=secret-proof-never-project-to-console-state"
+	dependencies := inertDependencies()
+	dependencies.PairDevice = func(
+		_ context.Context,
+		configuration config.Config,
+		input pairing.SessionInput,
+		show func(pairing.SessionStatus),
+	) (pairing.Credential, error) {
+		if input.Link != pairingLink || input.ShortCode != "" {
+			t.Fatalf("unexpected Device pairing input: %#v", input)
+		}
+		if len(configuration.Agents) != 2 ||
+			configuration.Agents[0].WorkspaceAlias != "Customer Alpha" ||
+			configuration.Agents[1].WorkspaceAlias != "Customer Beta" {
+			t.Fatalf("local Agent profiles were not preserved for the explicit save boundary: %#v", configuration.Agents)
+		}
+		show(pairing.SessionStatus{
+			PairingSessionID: "pairing_12345678", State: "claimed",
+			VerificationPhrase: "VIOLET-RIVER-42", ExpiresAt: time.Now().Add(time.Minute),
+		})
+		<-approved
+		return pairing.Credential{
+			ServerURL: "http://127.0.0.1:3000", DeviceID: "device_pairing",
+			TeamID: "team_test1234", OwnerMemberID: "member_owner123", Token: "poll-secret-promoted",
+		}, nil
+	}
+	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential, _ operations.Observer) error {
+		bridgeStarted <- struct{}{}
+		<-ctx.Done()
+		return ctx.Err()
+	}
+	service, directory, configPath := newTestService(t, dependencies)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+	executablePath := filepath.Join(directory, "runtime")
+	if err := os.WriteFile(executablePath, []byte("runtime"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	for _, workspace := range []string{"alpha", "beta"} {
+		if err := os.Mkdir(filepath.Join(directory, workspace), 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	payload := DevicePairingInput{
+		EnrollmentInput: EnrollmentInput{
+			ServerURL: "http://127.0.0.1:3000", DeviceName: "Alice Mac",
+			Runtimes: []RuntimeInput{{
+				Kind: "codex", Enabled: true, Name: "Builder", Role: "builder",
+				ExecutablePath: executablePath, Workspace: filepath.Join(directory, "alpha"),
+				WorkspaceAlias: "Customer Alpha", Sandbox: "workspace-write",
+			}, {
+				Kind: "pi", Enabled: true, Name: "Reviewer", Role: "reviewer",
+				ExecutablePath: executablePath, Workspace: filepath.Join(directory, "beta"),
+				WorkspaceAlias: "Customer Beta",
+			}},
+		},
+		PairingLink: pairingLink,
+	}
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/device-pairing/start", payload)
+	if response.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(response.Body)
+		t.Fatalf("expected Device pairing to start: %d %s", response.StatusCode, body)
+	}
+	response.Body.Close()
+	waitState(t, service, func(state State) bool {
+		return state.Phase == PhaseApproval && state.Enrollment.PairingState == "claimed" &&
+			state.Enrollment.VerificationPhrase == "VIOLET-RIVER-42"
+	})
+	approvalState, _ := json.Marshal(service.State())
+	if bytes.Contains(approvalState, []byte("secret-proof-never-project")) ||
+		bytes.Contains(approvalState, []byte("poll-secret-promoted")) {
+		t.Fatalf("Console approval state exposed pairing proof material: %s", approvalState)
+	}
+	close(approved)
+	waitState(t, service, func(state State) bool {
+		return state.Paired && state.BridgeRunning && state.Enrollment.PairingState == "consumed"
+	})
+	waitSignal(t, bridgeStarted, "managed Bridge start after Device pairing")
+	loaded, err := config.Load(configPath)
+	if err != nil || len(loaded.Agents) != 2 || loaded.Agents[0].WorkspaceAlias != "Customer Alpha" ||
+		loaded.Agents[1].WorkspaceAlias != "Customer Beta" {
+		t.Fatalf("Device pairing did not persist the exact local profiles: %#v, %v", loaded, err)
+	}
+	credential, err := pairing.Load(loaded.DataDir)
+	if err != nil || credential.Token != "poll-secret-promoted" {
+		t.Fatalf("Device credential was not persisted exactly: %#v, %v", credential, err)
+	}
+	stateJSON, _ := json.Marshal(service.State())
+	if bytes.Contains(stateJSON, []byte("secret-proof-never-project")) ||
+		bytes.Contains(stateJSON, []byte("poll-secret-promoted")) {
+		t.Fatalf("Console state exposed pairing proof material: %s", stateJSON)
+	}
+}
+
+func TestCancelDevicePairingFencesLateApprovalProjection(t *testing.T) {
+	lateCallback := make(chan func(), 1)
+	dependencies := inertDependencies()
+	dependencies.PairDevice = func(
+		ctx context.Context,
+		_ config.Config,
+		_ pairing.SessionInput,
+		show func(pairing.SessionStatus),
+	) (pairing.Credential, error) {
+		lateCallback <- func() {
+			show(pairing.SessionStatus{
+				PairingSessionID: "pairing_late123", State: "claimed",
+				VerificationPhrase: "late phrase", ExpiresAt: time.Now().Add(time.Minute),
+			})
+		}
+		<-ctx.Done()
+		return pairing.Credential{}, ctx.Err()
+	}
+	service, directory, _ := newTestService(t, dependencies)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+	executablePath := filepath.Join(directory, "runtime")
+	if err := os.WriteFile(executablePath, []byte("runtime"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload := DevicePairingInput{
+		EnrollmentInput: EnrollmentInput{
+			ServerURL: "http://127.0.0.1:3000", DeviceName: "Alice Mac",
+			Runtimes: []RuntimeInput{{Kind: "codex", Enabled: true, Name: "Builder", Role: "builder",
+				ExecutablePath: executablePath, Workspace: directory, Sandbox: "workspace-write"}},
+		},
+		PairingShortCode: "BCDF-GHJK-MN",
+	}
+	started := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/device-pairing/start", payload)
+	if started.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected Device pairing start, got %d", started.StatusCode)
+	}
+	started.Body.Close()
+	callback := <-lateCallback
+	canceled := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/enrollment/cancel", nil)
+	if canceled.StatusCode != http.StatusOK {
+		t.Fatalf("expected cancellation, got %d", canceled.StatusCode)
+	}
+	canceled.Body.Close()
+	callback()
+	state := service.State()
+	if state.Enrollment.Active || state.Enrollment.PairingState != "" || state.Enrollment.VerificationPhrase != "" ||
+		state.Configured || state.Paired || state.BridgeRunning {
+		t.Fatalf("late Device pairing callback corrupted canceled state: %#v", state)
 	}
 }
 

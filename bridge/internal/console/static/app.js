@@ -1,4 +1,5 @@
 import { pairingView } from "./pairing-view.mjs";
+import { pairingLinkFromHash } from "./device-pairing-launch.mjs";
 import { detectedPathForDraft, runtimeDiscoveryView } from "./runtime-discovery.mjs";
 import {
   applyAgentRuntimePolicy,
@@ -11,7 +12,7 @@ import { agentPresentation, connectionPresentation } from "./bridge-presentation
 const elements = Object.fromEntries([
   "app-sidebar", "setup-intro", "page-context", "page-title", "phase", "phase-label",
   "configured", "paired", "running", "connection-state", "agent-count", "approval",
-  "join-code", "join-expiry", "cancel-enrollment", "configured-view",
+  "join-code", "join-expiry", "cancel-enrollment", "configured-view", "approval-eyebrow", "approval-title",
   "device-title", "start-bridge", "stop-bridge", "edit-connection", "add-agent", "current-server",
   "agent-provisioning-form", "agent-provisioning-mode", "fixed-management-code-field",
   "fixed-management-code", "rotating-management-code-panel", "rotating-management-code",
@@ -33,6 +34,7 @@ const elements = Object.fromEntries([
   "pi-permission-policy",
   "codex-use-detected", "codex-preflight", "codex-preflight-result",
   "pi-use-detected", "pi-preflight", "pi-preflight-result",
+  "device-pairing-link", "device-pairing-short-code", "submit-device-pairing",
   "submit-enrollment", "auth-warning", "error", "bridge-version",
   "login-startup-row", "login-startup", "login-startup-unsupported", "login-startup-warning", "export-diagnostics",
   "diagnostics-result", "check-update", "update-result", "release-link",
@@ -61,10 +63,14 @@ const sessionGuide = createSessionGuideController(
 );
 
 const query = new URLSearchParams(window.location.search);
+const suggestedPairingLink = pairingLinkFromHash(window.location.hash);
 if (query.get("token")) {
   sessionStorage.setItem("agent-room-console-token", query.get("token"));
   history.replaceState(null, "", window.location.pathname);
+} else if (window.location.hash) {
+  history.replaceState(null, "", window.location.pathname);
 }
+if (suggestedPairingLink) elements["device-pairing-link"].value = suggestedPairingLink;
 const token = sessionStorage.getItem("agent-room-console-token") || "";
 if (!token) elements["auth-warning"].classList.remove("hidden");
 let currentState = null;
@@ -493,6 +499,8 @@ function render(state) {
   elements["pairing-backup"].classList.toggle("hidden", !backup);
   elements["pairing-backup"].textContent = backup ? `旧配置备份：${backup}（旧数据目录保持原样）` : "";
   elements.approval.classList.toggle("hidden", !pairing.showApproval);
+  elements["approval-eyebrow"].textContent = pairing.approvalEyebrow;
+  elements["approval-title"].textContent = pairing.approvalTitle;
   if (elements["join-code"].textContent !== pairing.codeText) {
     elements["join-copy-result"].textContent = pairing.canCopy ? "点击代码复制；也可手动选择代码。" : "";
   }
@@ -564,8 +572,9 @@ function render(state) {
   const startupWarning = startup.pathMismatch ? "应用位置已变化，请关闭后重新开启此选项以修复。" : "";
   elements["login-startup-warning"].textContent = startupWarning;
   elements["login-startup-warning"].classList.toggle("hidden", !startupWarning);
-  elements["submit-enrollment"].textContent = "生成加入码";
+  elements["submit-enrollment"].textContent = "使用旧版加入码";
   elements["submit-enrollment"].disabled = waiting || enrollmentActionRunning || draftPreflightRunning;
+  elements["submit-device-pairing"].disabled = waiting || enrollmentActionRunning || draftPreflightRunning;
 }
 
 async function refresh() {
@@ -819,10 +828,7 @@ elements["agent-form"].addEventListener("submit", async (event) => {
   }
 });
 
-elements["enrollment-form"].addEventListener("submit", async (event) => {
-  event.preventDefault();
-  showError(null);
-  elements["submit-enrollment"].disabled = true;
+function enrollmentPayload() {
   const workspaceFallback = elements["codex-workspace"].value || elements["pi-workspace"].value;
   const runtimes = [{
     kind: "codex",
@@ -844,23 +850,53 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
     workspaceAlias: elements["pi-workspace-alias"].value,
     credentialEnvironmentVariable: elements["pi-credential-env"].value
   }];
+  return {
+    serverUrl: elements["server-url"].value,
+    serverToken: elements["server-token"].value.trim(),
+    shareReasoningSummaries: elements["share-reasoning-summaries"].checked,
+    serverTrustMode: usesHTTPS(elements["server-url"].value)
+      ? elements["trust-mode"].value
+      : "system_ca",
+    serverCertificateSha256: usesHTTPS(elements["server-url"].value) &&
+      elements["trust-mode"].value === "pinned_sha256"
+      ? elements.fingerprint.value
+      : "",
+    deviceName: elements["device-name"].value,
+    runtimes
+  };
+}
+
+elements["submit-device-pairing"].addEventListener("click", async () => {
+  showError(null);
+  if (!elements["enrollment-form"].reportValidity()) return;
+  const pairingLink = elements["device-pairing-link"].value.trim();
+  const pairingShortCode = elements["device-pairing-short-code"].value.trim();
+  if ((pairingLink === "") === (pairingShortCode === "")) {
+    showError(new Error("请只填写一个 Device 配对链接或短码"));
+    return;
+  }
+  elements["submit-device-pairing"].disabled = true;
+  try {
+    await request("/api/device-pairing/start", {
+      method: "POST",
+      body: JSON.stringify({...enrollmentPayload(), pairingLink, pairingShortCode})
+    });
+    await refresh();
+  } catch (error) {
+    showError(error);
+  } finally {
+    elements["submit-device-pairing"].disabled = false;
+  }
+});
+
+elements["enrollment-form"].addEventListener("submit", async (event) => {
+  event.preventDefault();
+  showError(null);
+  elements["submit-enrollment"].disabled = true;
   try {
     await request("/api/enrollment/start", {
       method: "POST",
-      body: JSON.stringify({
-        serverUrl: elements["server-url"].value,
-        serverToken: elements["server-token"].value.trim(),
-        shareReasoningSummaries: elements["share-reasoning-summaries"].checked,
-        serverTrustMode: usesHTTPS(elements["server-url"].value)
-          ? elements["trust-mode"].value
-          : "system_ca",
-        serverCertificateSha256: usesHTTPS(elements["server-url"].value) &&
-          elements["trust-mode"].value === "pinned_sha256"
-          ? elements.fingerprint.value
-          : "",
-        deviceName: elements["device-name"].value,
-        runtimes
-      })
+      body: JSON.stringify(enrollmentPayload())
     });
     await refresh();
   } catch (error) {

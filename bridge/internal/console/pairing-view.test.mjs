@@ -36,6 +36,22 @@ test("pending code is copyable with countdown and blocks concurrent start", () =
   assert.equal(view.canCancel, true);
 });
 
+test("Device pairing shows a non-copyable verification phrase and its own expiry", () => {
+  const view = pairingView({
+    configured: false, paired: false,
+    enrollment: {
+      active: true, pairingMethod: "link", pairingState: "claimed",
+      verificationPhrase: "violet river", pairingExpiresAt: new Date(now + 61_000).toISOString()
+    }
+  }, now);
+  assert.equal(view.status, "等待确认短语");
+  assert.equal(view.codeText, "violet river");
+  assert.equal(view.canCopy, false);
+  assert.match(view.approvalTitle, /完全相同/);
+  assert.match(view.guidance, /本机配置与 Runtime 操作保持锁定/);
+  assert.match(view.expiry, /配对有效期/);
+});
+
 test("expired code is never copyable even if the last state still contains it", () => {
   const view = pairingView({...paired, joinCode: "ABCD-1234", joinExpiresAt: new Date(now - 1).toISOString(), enrollment: {active: true}}, now);
   assert.equal(view.canCopy, false);

@@ -29,6 +29,7 @@ $stateSentinel = Join-Path $configDir "installer-smoke.keep"
 $stateValue = [guid]::NewGuid().ToString("N")
 $uninstallKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\{2FA4C87B-E4E4-4929-B229-8F2B13DB1EF6}_is1"
 $startMenuLink = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs\AgentRoom Bridge\AgentRoom Bridge.lnk"
+$protocolKey = "HKCU:\Software\Classes\agentroom"
 
 function Invoke-CheckedProcess {
   param(
@@ -72,6 +73,17 @@ function Assert-InstalledPayload {
   if (-not (Test-Path -LiteralPath $uninstallKey)) {
     throw "Installer did not register a current-user uninstaller"
   }
+  if (-not (Test-Path -LiteralPath $protocolKey)) {
+    throw "Installer did not register the agentroom Device pairing protocol"
+  }
+  $protocol = Get-ItemProperty -LiteralPath $protocolKey
+  if ($protocol.'URL Protocol' -ne '') {
+    throw "agentroom protocol registration is missing the URL Protocol marker"
+  }
+  $protocolCommand = (Get-Item -LiteralPath (Join-Path $protocolKey "shell\open\command")).GetValue("")
+  if (-not $protocolCommand.Contains('AgentRoom Bridge.exe') -or -not $protocolCommand.Contains('%1')) {
+    throw "agentroom protocol command does not pass the pairing link to Bridge"
+  }
   $registration = Get-ItemProperty -LiteralPath $uninstallKey
   if ($registration.DisplayName -ne "AgentRoom Bridge" -or $registration.DisplayVersion -ne $version) {
     throw ("Installed application registration has unexpected name or version: " +
@@ -85,7 +97,8 @@ if (Test-Path -LiteralPath $stateSentinel) {
 if (Test-Path -LiteralPath $installDir) {
   throw "Installer verification refuses to replace an existing installation: $installDir"
 }
-if ((Test-Path -LiteralPath $uninstallKey) -or (Test-Path -LiteralPath $startMenuLink)) {
+if ((Test-Path -LiteralPath $uninstallKey) -or (Test-Path -LiteralPath $startMenuLink) -or
+    (Test-Path -LiteralPath $protocolKey)) {
   throw "Installer verification refuses to replace existing Windows registration or shortcuts"
 }
 
@@ -130,6 +143,9 @@ try {
   }
   if (Test-Path -LiteralPath $uninstallKey) {
     throw "Uninstaller left its current-user registration behind"
+  }
+  if (Test-Path -LiteralPath $protocolKey) {
+    throw "Uninstaller left the agentroom protocol registration behind"
   }
   if ((Get-Content -LiteralPath $stateSentinel -Raw) -ne $stateValue) {
     throw "Uninstaller changed owner configuration state"

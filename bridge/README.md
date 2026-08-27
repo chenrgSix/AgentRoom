@@ -68,6 +68,8 @@ go run ./cmd/agentroom-bridge version
 go run ./cmd/agentroom-bridge console
 go run ./cmd/agentroom-bridge join --server http://127.0.0.1:3000 --server-token CENTRAL_SERVER_TOKEN
 go run ./cmd/agentroom-bridge validate-config --config ./bridge.json
+go run ./cmd/agentroom-bridge pair-device --config ./bridge.json --link 'agentroom://pair-device?...#claimSecret=...'
+go run ./cmd/agentroom-bridge pair-device --config ./bridge.json --code BCDF-GHJK-MN
 go run ./cmd/agentroom-bridge pair --config ./bridge.json --code ONE_TIME_CODE
 go run ./cmd/agentroom-bridge run --config ./bridge.json
 go test ./...
@@ -85,7 +87,11 @@ window hides it to the tray and keeps managed Agents online. The tray shows the
 current phase and provides open, start, stop, and explicit quit actions.
 
 Only one desktop instance may run. Launching the app again raises the existing
-window. The desktop binary is built separately from the CGO-free CLI so
+window. Installed macOS and Windows clients register `agentroom://` for the
+Device pairing link encoded by the Owner Web QR; the same local setup surface
+also accepts link paste or a manual short code. The fragment claim proof is
+cleared from the WebView URL immediately after prefill. The desktop binary is
+built separately from the CGO-free CLI so
 headless builds do not acquire GUI runtime requirements. Wails is pinned to
 `v3.0.0-beta.12`; desktop tests compile with the explicit `desktop` build tag.
 

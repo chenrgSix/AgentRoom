@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"agentroom.dev/bridge/internal/autostart"
@@ -40,12 +41,17 @@ func run() error {
 	configPath := flag.String("config", "", "path to Bridge JSON configuration")
 	dataDir := flag.String("data-dir", "", "directory for Bridge state and credential")
 	workspace := flag.String("workspace", "", "default local Runtime workspace")
+	pairingLink := flag.String("pairing-link", "", "Device pairing link from the Owner Web client")
 	showVersion := flag.Bool("version", false, "print the Bridge version and exit")
 	background := flag.Bool("background", false, "start with only the system tray visible")
 	flag.Parse()
 	if *showVersion {
 		fmt.Println(version)
 		return nil
+	}
+	initialPairingLink, err := pairingLinkFromLaunch(*pairingLink, flag.Args())
+	if err != nil {
+		return err
 	}
 	if *configPath == "" {
 		*configPath = config.DefaultPath()
@@ -79,7 +85,10 @@ func run() error {
 		Workspace:  *workspace,
 		Version:    version,
 	}, console.Dependencies{
-		Enroll:         enrollment.Join,
+		Enroll: enrollment.Join,
+		PairDevice: func(ctx context.Context, loaded config.Config, input pairing.SessionInput, show func(pairing.SessionStatus)) (pairing.Credential, error) {
+			return (pairing.SessionClient{BridgeVersion: version}).Pair(ctx, loaded, input, show)
+		},
 		SaveConfig:     config.Save,
 		ReplaceConfig:  config.Replace,
 		SaveCredential: pairing.Save,
@@ -115,8 +124,11 @@ func run() error {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID:      "dev.agentroom.bridge.desktop",
 			EncryptionKey: instanceKey,
-			OnSecondInstanceLaunch: func(application.SecondInstanceData) {
+			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
 				if window != nil {
+					if link, linkErr := pairingLinkFromLaunch("", data.Args); linkErr == nil && link != "" {
+						window.SetURL(consoleWindowURL(service.Token(), link))
+					}
 					window.Show()
 					window.Restore()
 					window.Focus()
@@ -138,7 +150,7 @@ func run() error {
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "AgentRoom Bridge",
 		Title:            "AgentRoom Bridge",
-		URL:              "/?token=" + url.QueryEscape(service.Token()),
+		URL:              consoleWindowURL(service.Token(), initialPairingLink),
 		Width:            980,
 		Height:           780,
 		MinWidth:         760,
@@ -152,6 +164,16 @@ func run() error {
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		window.Hide()
 		event.Cancel()
+	})
+	app.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(event *application.ApplicationEvent) {
+		link, linkErr := pairingLinkFromLaunch(event.Context().URL(), nil)
+		if linkErr != nil || link == "" {
+			return
+		}
+		window.SetURL(consoleWindowURL(service.Token(), link))
+		window.Show()
+		window.Restore()
+		window.Focus()
 	})
 	if runtime.GOOS == "darwin" {
 		app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
@@ -202,6 +224,37 @@ func run() error {
 		return fmt.Errorf("run desktop application: %w", err)
 	}
 	return nil
+}
+
+func pairingLinkFromLaunch(explicit string, arguments []string) (string, error) {
+	candidates := make([]string, 0, len(arguments)+1)
+	if strings.TrimSpace(explicit) != "" {
+		candidates = append(candidates, strings.TrimSpace(explicit))
+	}
+	for _, argument := range arguments {
+		trimmed := strings.TrimSpace(argument)
+		if strings.HasPrefix(strings.ToLower(trimmed), "agentroom://") {
+			candidates = append(candidates, trimmed)
+		}
+	}
+	if len(candidates) == 0 {
+		return "", nil
+	}
+	if len(candidates) != 1 {
+		return "", fmt.Errorf("desktop launch contains multiple Device pairing links")
+	}
+	if _, err := pairing.ParseSessionLink(candidates[0]); err != nil {
+		return "", err
+	}
+	return candidates[0], nil
+}
+
+func consoleWindowURL(token, pairingLink string) string {
+	result := "/?token=" + url.QueryEscape(token)
+	if pairingLink != "" {
+		result += "#pairingLink=" + url.QueryEscape(pairingLink)
+	}
+	return result
 }
 
 func loginArguments(configPath, dataDir, workspace string) []string {

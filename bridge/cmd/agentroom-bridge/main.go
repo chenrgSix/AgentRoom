@@ -58,7 +58,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("expected one of: version, console, validate-config, join, pair, artifact, run")
+		return fmt.Errorf("expected one of: version, console, validate-config, join, pair-device, pair, artifact, run")
 	}
 	switch args[0] {
 	case "version":
@@ -84,6 +84,8 @@ func run(args []string) error {
 		return nil
 	case "join":
 		return join(args[1:])
+	case "pair-device":
+		return pairDevice(args[1:])
 	case "pair":
 		command := flag.NewFlagSet("pair", flag.ContinueOnError)
 		path := command.String("config", "", "path to bridge JSON configuration")
@@ -132,6 +134,49 @@ func run(args []string) error {
 	default:
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func pairDevice(args []string) error {
+	command := flag.NewFlagSet("pair-device", flag.ContinueOnError)
+	path := command.String("config", "", "path to bridge JSON configuration")
+	link := command.String("link", "", "Device pairing link from the Owner Web client")
+	code := command.String("code", "", "manual Device pairing short code")
+	if err := command.Parse(args); err != nil {
+		return err
+	}
+	if (strings.TrimSpace(*link) == "") == (strings.TrimSpace(*code) == "") {
+		return fmt.Errorf("pair-device requires exactly one of --link or --code")
+	}
+	resolved := *path
+	if resolved == "" {
+		resolved = config.DefaultPath()
+	}
+	loaded, err := config.Load(resolved)
+	if err != nil {
+		return err
+	}
+	if _, err := pairing.EnsureAvailable(loaded.DataDir); err != nil {
+		return err
+	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	credential, err := (pairing.SessionClient{BridgeVersion: version}).Pair(
+		ctx,
+		loaded,
+		pairing.SessionInput{Link: *link, ShortCode: *code},
+		func(status pairing.SessionStatus) {
+			fmt.Printf("verify the phrase in Owner Web: %s (expires %s)\n",
+				status.VerificationPhrase, status.ExpiresAt.Format(time.RFC3339))
+		},
+	)
+	if err != nil {
+		return err
+	}
+	if err := pairing.Save(loaded.DataDir, credential); err != nil {
+		return err
+	}
+	fmt.Printf("paired device %s with Team %s\n", credential.DeviceID, credential.TeamID)
+	return nil
 }
 
 func runArtifact(args []string) error {
@@ -278,7 +323,10 @@ func runConsole(args []string) error {
 		Workspace:  *workspace,
 		Version:    version,
 	}, console.Dependencies{
-		Enroll:         enrollment.Join,
+		Enroll: enrollment.Join,
+		PairDevice: func(ctx context.Context, loaded config.Config, input pairing.SessionInput, show func(pairing.SessionStatus)) (pairing.Credential, error) {
+			return (pairing.SessionClient{BridgeVersion: version}).Pair(ctx, loaded, input, show)
+		},
 		SaveConfig:     config.Save,
 		ReplaceConfig:  config.Replace,
 		SaveCredential: pairing.Save,

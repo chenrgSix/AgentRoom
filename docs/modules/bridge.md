@@ -12,8 +12,8 @@ to local Runtime Adapters.
 
 ## Responsibilities
 
-- Request Team enrollment, store the approved credential, and establish the
-  outbound channel.
+- Claim an Owner-created Device pairing session, store the approved credential,
+  and establish the outbound channel.
 - Publish local Agents and Runtime capabilities.
 - Publish one path-free Workspace identity and observed generation for Agents
   that support source-read leases.
@@ -36,9 +36,9 @@ configure an opaque central Server Token. Bridge HTTP and WebSocket requests
 pass it in the dedicated `X-AgentRoom-Server-Token` header; it is access input,
 not a replacement for the per-Device bearer credential.
 
-## Managed Enrollment
+## Managed Enrollment Compatibility
 
-The primary setup begins on the client with
+The legacy client-created setup begins with
 `agentroom-bridge join --server <url>`. The Bridge detects the local Codex
 executable and workspace, submits Device and Agent metadata, and displays a
 ten-minute short code. A Team owner enters that code in Web. The Bridge polls
@@ -51,11 +51,11 @@ credential files stop enrollment before a request is created. Server-issued
 single-use invitations remain supported by `pair` for compatibility, but are
 not the normal onboarding flow.
 
-### Hub-created Device pairing target
+### Hub-created Device pairing
 
 [ADR-0021](../adr/0021-unify-central-installation-and-device-onboarding.md)
-adds a recommended Hub-created session while retaining the current Bridge-
-created join request for compatibility. A deep link or QR carries only the
+defines the recommended Hub-created session while retaining the Bridge-created
+join request for compatibility. A deep link or QR carries only the
 public origin, pairing-session identity, one-time fragment claim secret, and
 expiry. Manual short code is a rate-limited locator plus Owner confirmation,
 not a credential.
@@ -80,6 +80,24 @@ explicit local actions; Agent save remains the point that persists local
 configuration. One paired Bridge may add, edit, or disable multiple Agent
 profiles without creating a new Device.
 
+`BRG-043` implements the local half of this flow. The desktop app, loopback
+Console, and headless `pair-device` CLI accept the canonical fragment-bearing
+link or a manual short code. The installed macOS app and Windows current-user
+installer register `agentroom://`; a QR encodes that same link, while portable
+clients retain paste and short-code fallback. The desktop nests the link only
+inside the authenticated WebView URL fragment and clears it after local
+prefill. Claim and poll retries preserve one attempt, operation, and poll
+secret; neither anonymous request sends a central Server Token.
+
+The Console requires explicit local configuration confirmation before
+claiming. It persists the exact local Agent profiles and promoted poll-secret
+credential only after terminal consumption, displays the non-secret
+verification phrase during approval, and uses the existing enrollment epoch
+to fence cancellation and late callbacks. Pairing state blocks configuration edits, Runtime preflight,
+self-test, and Bridge start just like legacy enrollment. No local path, command,
+environment variable, Runtime kind, Workspace policy, or Agent roster crosses
+the Device claim boundary.
+
 ## Local Configuration Console
 
 `agentroom-bridge console` starts the recommended client setup surface on
@@ -88,8 +106,8 @@ automatically runs an existing paired Bridge. `--no-open` supports headless
 environments. Static assets are embedded in the Go binary, so no Node.js
 process or separate UI service is required on the client.
 
-The Console can discover Codex and Pi, create the first enrollment request,
-show the short Owner approval code, start or stop the Bridge, edit the central
+The Console can discover Codex and Pi, claim an Owner-created Device pairing
+session, show the matching verification phrase, start or stop the Bridge, edit the central
 service URL and HTTPS trust in a connection-settings modal, add multiple Codex
 or Pi Agents, and edit one selected Agent in a modal. Connection editing mutates
 only the outbound endpoint fields and never rebuilds the Agent roster. Each
@@ -522,8 +540,9 @@ not disconnect managed Agents. An explicit tray **Quit** action gracefully
 stops enrollment and Bridge work before terminating the process.
 
 The tray exposes status, open, start, stop, and quit actions. Configuration,
-Team enrollment, Codex/Pi discovery, and Owner approval remain available in
-the main window. The `console`, `join`, `run`, and diagnostic CLI commands stay
+Device pairing, legacy Team enrollment, Codex/Pi discovery, and Owner approval
+remain available in the main window. The `console`, `pair-device`, `join`,
+`run`, and diagnostic CLI commands stay
 supported as a headless fallback and do not depend on desktop libraries.
 
 macOS desktop packages are intentionally unsigned and unnotarized. Release
@@ -535,8 +554,9 @@ verified the package or recommend disabling Gatekeeper globally.
 The Windows amd64 desktop preview ships as both an unsigned portable ZIP and an
 unsigned current-user installer built on a native Windows runner. The installer
 uses a stable application identity, installs under LocalAppData without
-elevation, registers a personal Start menu shortcut and uninstaller, and offers
-an optional desktop shortcut. Upgrade and uninstall own program files only;
+elevation, registers a personal Start menu shortcut, uninstaller, and the
+`agentroom://` Device pairing protocol, and offers an optional desktop shortcut.
+Upgrade and uninstall own program files and protocol registration only;
 configuration and credentials under the user's application-data directory or a
 configured external DataDir remain outside installer ownership.
 
@@ -608,7 +628,8 @@ Linux amd64/arm64. Native macOS runners additionally build unsigned Wails GUI
 ZIPs for Apple Silicon and Intel, and a native Windows runner builds the
 unsigned Windows amd64 GUI archive and current-user installer. Native Windows
 CI additionally smoke-tests initial installation, in-place upgrade, uninstall,
-Start menu and uninstaller registration, and owner-state preservation. The
+Start menu, uninstaller and Device pairing protocol registration, and
+owner-state preservation. The
 Release tag is injected into each binary; all packages and one `SHA256SUMS`
 file are attached to the Release.
 

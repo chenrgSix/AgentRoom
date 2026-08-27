@@ -64,8 +64,8 @@
 
         <section class="approval hidden" id="approval" aria-label="当前审批码">
           <div>
-            <p class="eyebrow">等待 Owner 批准</p>
-            <h2>在中央 Web 管理界面输入此代码</h2>
+            <p class="eyebrow" id="approval-eyebrow">等待 Owner 批准</p>
+            <h2 id="approval-title">在中央 Web 管理界面输入此代码</h2>
           </div>
           <button class="join-code" id="join-code" type="button" title="复制审批码" aria-label="复制审批码"></button>
           <p id="join-expiry"></p>
@@ -288,9 +288,20 @@
       </section>
 
       <section class="submit-panel">
-        <div><p class="eyebrow">03 · OWNER APPROVAL</p><h2>请求加入 Team</h2><p>提交后在中央 Web 输入一次性代码。凭据不会展示在本页面。</p></div>
+        <div>
+          <p class="eyebrow">03 · DEVICE PAIRING</p><h2>配对这台设备</h2>
+          <p>粘贴中央 Web 生成的配对链接，或输入二维码下方的短码。确认短语一致后由 Owner 批准。</p>
+          <label>Device 配对链接
+            <input id="device-pairing-link" autocomplete="off" placeholder="agentroom://pair-device?…#claimSecret=…">
+          </label>
+          <label>或手动短码
+            <input id="device-pairing-short-code" autocomplete="off" maxlength="12" placeholder="BCDF-GHJK-MN">
+          </label>
+          <p class="runtime-policy">配对只发送设备名称、平台和 Bridge 版本。本机路径、Runtime 命令、环境变量、Workspace 策略和 Agent 配置不会发送到中央服务。</p>
+        </div>
         <div class="actions">
-          <button class="primary" id="submit-enrollment" type="submit">生成加入码</button>
+          <button class="primary" id="submit-device-pairing" type="button">确认本机配置并配对</button>
+          <button class="secondary" id="submit-enrollment" type="submit">使用旧版加入码</button>
         </div>
       </section>
     </form>

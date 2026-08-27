@@ -253,6 +253,10 @@ verify_macos_desktop_archive() {
     echo "Desktop archive has the wrong bundle version: ${archive}" >&2
     exit 1
   fi
+  if ! grep -Fq '<string>agentroom</string>' "${contents}/Info.plist"; then
+    echo "Desktop archive is missing the Device pairing URL scheme: ${archive}" >&2
+    exit 1
+  fi
   assert_binary_version "${binary}"
   assert_binary_architecture "${binary}" "darwin/${architecture}"
   assert_licenses "${resources}"

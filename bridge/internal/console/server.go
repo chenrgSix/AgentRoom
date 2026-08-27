@@ -73,6 +73,12 @@ type EnrollmentInput struct {
 	Runtimes                []RuntimeInput   `json:"runtimes"`
 }
 
+type DevicePairingInput struct {
+	EnrollmentInput
+	PairingLink      string `json:"pairingLink,omitempty"`
+	PairingShortCode string `json:"pairingShortCode,omitempty"`
+}
+
 type ConnectionSettingsInput struct {
 	ShareReasoningSummaries *bool            `json:"shareReasoningSummaries,omitempty"`
 	ServerURL               string           `json:"serverUrl"`
@@ -156,6 +162,7 @@ type State struct {
 type Dependencies struct {
 	DiscoverRuntime           func(string) RuntimeDiscovery
 	Enroll                    func(context.Context, config.Config, func(enrollment.Challenge)) (pairing.Credential, error)
+	PairDevice                func(context.Context, config.Config, pairing.SessionInput, func(pairing.SessionStatus)) (pairing.Credential, error)
 	SaveConfig                func(string, config.Config) error
 	ReplaceConfig             func(string, config.Config) error
 	SaveCredential            func(string, pairing.Credential) error
@@ -340,6 +347,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("GET /api/state", s.authorize(s.getState))
 	mux.HandleFunc("GET /api/runtime-discovery", s.authorize(s.refreshRuntimeDiscovery))
 	mux.HandleFunc("POST /api/enrollment/start", s.authorize(s.startEnrollment))
+	mux.HandleFunc("POST /api/device-pairing/start", s.authorize(s.startDevicePairing))
 	mux.HandleFunc("POST /api/enrollment/restart", s.authorize(s.restartEnrollment))
 	mux.HandleFunc("POST /api/enrollment/cancel", s.authorize(s.cancelEnrollment))
 	mux.HandleFunc("PUT /api/config", s.authorize(s.updateConfig))
@@ -680,6 +688,74 @@ func (s *Service) startEnrollment(response http.ResponseWriter, request *http.Re
 	writeJSON(response, http.StatusAccepted, map[string]string{"status": "joining"})
 }
 
+func (s *Service) startDevicePairing(response http.ResponseWriter, request *http.Request) {
+	if s.dependencies.PairDevice == nil {
+		writeError(response, http.StatusNotImplemented, "Device pairing is not available in this client")
+		return
+	}
+	var input DevicePairingInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	link := strings.TrimSpace(input.PairingLink)
+	shortCode := strings.TrimSpace(input.PairingShortCode)
+	if (link == "") == (shortCode == "") {
+		writeError(response, http.StatusBadRequest, "Provide exactly one Device pairing link or short code")
+		return
+	}
+	s.mu.Lock()
+	if reason := s.enrollmentBlockedReasonLocked(); reason != "" {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, reason)
+		return
+	}
+	if s.credential != nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, "Use explicit re-enrollment to request a new Device identity")
+		return
+	}
+	configuredBefore := s.configuration != nil
+	configuration := s.configuration
+	if configuration == nil {
+		built, err := buildConfig(input.EnrollmentInput, s.options.DataDir)
+		if err != nil {
+			s.mu.Unlock()
+			writeError(response, http.StatusBadRequest, err.Error())
+			return
+		}
+		if _, err := config.EnsureAvailable(s.options.ConfigPath); err != nil {
+			s.mu.Unlock()
+			writeError(response, http.StatusConflict, err.Error())
+			return
+		}
+		if _, err := pairing.EnsureAvailable(built.DataDir); err != nil {
+			s.mu.Unlock()
+			writeError(response, http.StatusConflict, err.Error())
+			return
+		}
+		configuration = &built
+	}
+	if err := s.applyConfigView(*configuration); err != nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
+	ctx, epoch := s.beginEnrollmentLocked(false)
+	method := "link"
+	if shortCode != "" {
+		method = "short_code"
+	}
+	s.state.Enrollment.PairingMethod = method
+	s.state.Enrollment.PairingState = "claiming"
+	s.mu.Unlock()
+
+	go s.pairDevice(ctx, *configuration, configuredBefore, epoch, pairing.SessionInput{
+		Link: link, ShortCode: shortCode,
+	})
+	writeJSON(response, http.StatusAccepted, map[string]string{"status": "pairing"})
+}
+
 func (s *Service) enroll(ctx context.Context, configuration config.Config, configuredBefore, recovery bool, epoch uint64) {
 	credential, err := s.dependencies.Enroll(ctx, configuration, func(challenge enrollment.Challenge) {
 		s.mu.Lock()
@@ -691,6 +767,40 @@ func (s *Service) enroll(ctx context.Context, configuration config.Config, confi
 		s.state.JoinCode = challenge.UserCode
 		s.state.JoinExpiresAt = challenge.ExpiresAt.Format(time.RFC3339Nano)
 	})
+	s.finishEnrollment(ctx, configuration, credential, err, configuredBefore, recovery, epoch)
+}
+
+func (s *Service) pairDevice(
+	ctx context.Context,
+	configuration config.Config,
+	configuredBefore bool,
+	epoch uint64,
+	input pairing.SessionInput,
+) {
+	credential, err := s.dependencies.PairDevice(ctx, configuration, input, func(status pairing.SessionStatus) {
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if s.joinEpoch != epoch || ctx.Err() != nil || s.joinCancel == nil {
+			return
+		}
+		s.state.Phase = PhaseApproval
+		s.state.Enrollment.PairingState = status.State
+		s.state.Enrollment.PairingSessionID = status.PairingSessionID
+		s.state.Enrollment.VerificationPhrase = status.VerificationPhrase
+		s.state.Enrollment.PairingExpiresAt = status.ExpiresAt.Format(time.RFC3339Nano)
+	})
+	s.finishEnrollment(ctx, configuration, credential, err, configuredBefore, false, epoch)
+}
+
+func (s *Service) finishEnrollment(
+	ctx context.Context,
+	configuration config.Config,
+	credential pairing.Credential,
+	err error,
+	configuredBefore bool,
+	recovery bool,
+	epoch uint64,
+) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.joinEpoch != epoch || ctx.Err() != nil {
@@ -716,6 +826,8 @@ func (s *Service) enroll(ctx context.Context, configuration config.Config, confi
 	}
 	s.state.JoinCode = ""
 	s.state.JoinExpiresAt = ""
+	pairingMethod := s.state.Enrollment.PairingMethod
+	s.clearDevicePairingLocked()
 	if errors.Is(err, context.Canceled) {
 		s.state.Phase = phaseFor(s.state.Configured, s.state.BridgeRunning)
 		s.state.LastError = ""
@@ -734,6 +846,10 @@ func (s *Service) enroll(ctx context.Context, configuration config.Config, confi
 	s.state.DeviceID = credential.DeviceID
 	s.state.JoinCode = ""
 	s.state.JoinExpiresAt = ""
+	if pairingMethod != "" {
+		s.state.Enrollment.PairingMethod = pairingMethod
+		s.state.Enrollment.PairingState = "consumed"
+	}
 	s.state.Phase = PhaseReady
 	err = s.startBridgeLocked()
 	if err != nil {
@@ -752,6 +868,7 @@ func (s *Service) cancelEnrollment(response http.ResponseWriter, _ *http.Request
 	s.joinEpoch++
 	s.state.JoinCode = ""
 	s.state.JoinExpiresAt = ""
+	s.clearDevicePairingLocked()
 	s.state.LastError = ""
 	s.state.Enrollment.Recovery = false
 	s.state.Phase = phaseFor(s.state.Configured, s.state.BridgeRunning)

@@ -73,6 +73,12 @@ Source: "{#SourceDir}\TRADEMARKS.md"; DestDir: "{app}"; Flags: ignoreversion
 Name: "{group}\AgentRoom Bridge"; Filename: "{app}\AgentRoom Bridge.exe"; WorkingDir: "{app}"
 Name: "{autodesktop}\AgentRoom Bridge"; Filename: "{app}\AgentRoom Bridge.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
+[Registry]
+Root: HKCU; Subkey: "Software\Classes\agentroom"; ValueType: string; ValueName: ""; ValueData: "URL:AgentRoom Device Pairing"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\agentroom"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\agentroom\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\AgentRoom Bridge.exe,0"
+Root: HKCU; Subkey: "Software\Classes\agentroom\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\AgentRoom Bridge.exe"" ""%1"""
+
 [Run]
 Filename: "{app}\AgentRoom Bridge.exe"; Description: "{cm:LaunchBridge}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent; Check: WebView2RuntimeInstalled
 Filename: "https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section"; Description: "{cm:DownloadWebView2}"; Flags: shellexec postinstall skipifsilent unchecked; Check: not WebView2RuntimeInstalled
