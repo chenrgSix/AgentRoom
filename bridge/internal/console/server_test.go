@@ -131,6 +131,53 @@ func TestConsoleServesEmbeddedUIAndRequiresBearerTokenForAPI(t *testing.T) {
 	}
 }
 
+func TestStartEnrollmentDecodesDesktopBodyWhenContentLengthIsZero(t *testing.T) {
+	captured := make(chan config.Config, 1)
+	dependencies := inertDependencies()
+	dependencies.Enroll = func(ctx context.Context, configuration config.Config, _ func(enrollment.Challenge)) (pairing.Credential, error) {
+		captured <- configuration
+		<-ctx.Done()
+		return pairing.Credential{}, ctx.Err()
+	}
+	service, directory, _ := newTestService(t, dependencies)
+	executablePath := filepath.Join(directory, "runtime")
+	if err := os.WriteFile(executablePath, []byte("test runtime"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	payload, err := json.Marshal(EnrollmentInput{
+		ServerURL:               "https://192.168.1.132:9443",
+		ServerTrustMode:         config.TrustPinnedSHA256,
+		ServerCertificateSHA256: "33F2C73789B5E05BC684AE0E377F115ACD0DB2E3AE685229B01086940D3D66A5",
+		DeviceName:              "Windows Bridge",
+		Runtimes: []RuntimeInput{{
+			Kind: "codex", Enabled: true, Name: "Local Codex", Role: "Implementation",
+			ExecutablePath: executablePath, Workspace: directory, Sandbox: "workspace-write",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request := httptest.NewRequest(http.MethodPost, "/api/enrollment/start", bytes.NewReader(payload))
+	request.ContentLength = 0 // Wails/WebView2 may preserve the body without reporting its length.
+	request.Header.Set("authorization", "Bearer "+service.Token())
+	request.Header.Set("content-type", "application/json")
+	response := httptest.NewRecorder()
+	service.Handler().ServeHTTP(response, request)
+	if response.Code != http.StatusAccepted {
+		t.Fatalf("expected 202, got %d: %s", response.Code, response.Body.String())
+	}
+
+	select {
+	case configuration := <-captured:
+		if configuration.ServerURL != "https://192.168.1.132:9443" {
+			t.Fatalf("desktop enrollment lost server URL: %q", configuration.ServerURL)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("desktop enrollment did not reach the central join client")
+	}
+}
+
 func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	html, err := staticFiles.ReadFile("static/index.html")
 	if err != nil {

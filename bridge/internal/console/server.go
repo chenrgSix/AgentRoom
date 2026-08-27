@@ -596,11 +596,9 @@ func (s *Service) getState(response http.ResponseWriter, _ *http.Request) {
 
 func (s *Service) startEnrollment(response http.ResponseWriter, request *http.Request) {
 	var input EnrollmentInput
-	if request.ContentLength != 0 {
-		if err := decodeJSON(request, &input); err != nil {
-			writeError(response, http.StatusBadRequest, err.Error())
-			return
-		}
+	if err := decodeJSON(request, &input); err != nil && !errors.Is(err, io.EOF) {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
 	}
 	s.mu.Lock()
 	if reason := s.enrollmentBlockedReasonLocked(); reason != "" {
