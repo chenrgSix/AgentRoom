@@ -317,6 +317,15 @@ macOS. The stable Latest release remains `v0.2.0`, and physical Windows UI,
 live Runtime launch, real macOS login restart, and two-machine gates remain
 separate.
 
+The `v0.3.0-rc.5` candidate packages the central HTTPS port 9443 and LAN IP
+profile plus the Windows Desktop enrollment request-body repair. The release
+evidence is recorded in `docs/acceptance/qa-026-v0.3.0-rc.5.md`. `QA-026` is
+complete because the exact tagged source passed main CI, the empty-draft
+workflow built nine binary artifacts and verified all 14 assets before and
+after upload, the candidate was published as a prerelease, and a fresh public
+download passed the tagged verifier on macOS. Physical Windows enrollment,
+real macOS login restart, and two-machine gates remain separate.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
