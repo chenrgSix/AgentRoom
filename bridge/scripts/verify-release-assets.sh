@@ -283,6 +283,27 @@ verify_windows_desktop_archive() {
   assert_licenses "${root}"
 }
 
+extract_utf16le_strings() {
+  local binary=$1
+  if strings -el "${binary}" >/dev/null 2>&1; then
+    strings -el "${binary}"
+    return
+  fi
+  if ! command -v python3 >/dev/null 2>&1; then
+    echo "GNU strings or python3 is required to inspect Windows installer metadata" >&2
+    exit 1
+  fi
+  python3 - "${binary}" <<'PY'
+import re
+import sys
+
+with open(sys.argv[1], "rb") as binary_file:
+    data = binary_file.read()
+for match in re.finditer(rb"(?:[\x20-\x7e]\x00){4,}", data):
+    print(match.group().decode("utf-16le"))
+PY
+}
+
 verify_windows_desktop_installer() {
   local installer=$1
   local path="${asset_dir}/${installer}"
@@ -300,7 +321,7 @@ verify_windows_desktop_installer() {
   fi
   {
     strings "${path}"
-    strings -el "${path}"
+    extract_utf16le_strings "${path}"
   } > "${installer_strings}"
   if ! grep -Fq "AgentRoom Bridge" "${installer_strings}" ||
     ! grep -Fq "${version}" "${installer_strings}"; then
