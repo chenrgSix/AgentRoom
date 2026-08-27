@@ -89,6 +89,12 @@ paths, commands, environments, provider sessions, hidden reasoning, tool
 payloads, and unrelated context. Missing legacy fields render as
 `not_recorded`; the Web does not guess them.
 
+`WEB-047` adds authorized `GET /api/tasks/:taskId/runs` and
+`GET /api/runs/:runId` reads over this repository. Both revalidate current Room
+membership; Task listing is ordered by creation time and opaque Run ID and does
+not derive a new state or diagnostic phase. Events and the frozen Context
+Manifest remain separate bounded reads.
+
 Offline managed Runs remain `queued` and are delivered when the target Device
 publishes or heartbeats. A queued Run that reaches its persisted deadline moves
 to terminal `expired` and is never delivered on a later reconnect.

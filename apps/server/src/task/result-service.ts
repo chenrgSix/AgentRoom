@@ -7,6 +7,7 @@ import type {
 } from "@agent-room/contracts/task-result";
 
 import type { CoreRepository } from "../data/core-repository.js";
+import { createOpaqueId } from "../domain/identifiers.js";
 import type { RunRepository } from "../run/run-repository.js";
 import type {
   AuthService,
@@ -245,12 +246,14 @@ export class ResultService {
       throw new Error("Only the Task Owner or Team Owner may review a Result");
     }
     const normalized = this.validateReview(command);
-    return this.results.review({
+    const outcome = this.results.review({
       resultId,
       memberId: member.memberId,
       command: normalized,
       now
     });
+    this.appendRoomSummary(task, outcome.result, "reviewed", now, outcome.completedTask);
+    return outcome;
   }
 
   public createChildTask(
@@ -301,11 +304,42 @@ export class ResultService {
     actor: ResultActor,
     now: string
   ): ResultProjection {
-    return this.results.create({
+    const result = this.results.create({
       roomId: task.roomId,
       proposal,
       actor,
       now
+    });
+    this.appendRoomSummary(task, result, "proposed", now);
+    return result;
+  }
+
+  private appendRoomSummary(
+    task: AgentTaskRecord,
+    result: ResultProjection,
+    event: "proposed" | "reviewed",
+    now: string,
+    completedTask = false
+  ): void {
+    const taskLink = `/?team=${encodeURIComponent(task.teamId)}` +
+      `&room=${encodeURIComponent(task.roomId)}` +
+      `&workTask=${encodeURIComponent(task.taskId)}`;
+    const state = event === "proposed"
+      ? "proposed"
+      : result.review?.decision ?? result.state;
+    const completion = completedTask ? " Task completed." : "";
+    this.core.appendMessageWithResult({
+      messageId: createOpaqueId("msg"),
+      roomId: task.roomId,
+      taskId: task.taskId,
+      senderType: "system",
+      senderId: "result_lifecycle",
+      content: `Result v${result.resultVersion} ${state} for ` +
+        `[TASK-${task.taskDisplayNumber}](${taskLink}).${completion}`,
+      mentions: [],
+      parentMessageId: null,
+      clientMessageId: `client_result_${event}_${result.resultId}`,
+      createdAt: now
     });
   }
 

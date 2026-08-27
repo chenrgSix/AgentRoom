@@ -92,6 +92,48 @@ test("Run retry creates new lineage only after audited ambiguity acknowledgement
     assert.equal(firstRun.attemptNumber, 1);
     assert.equal(firstRun.retryOfRunId, null);
 
+    const taskRuns = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${task.taskId as string}/runs`,
+      headers: { authorization }
+    });
+    assert.equal(taskRuns.statusCode, 200);
+    assert.deepEqual(taskRuns.json().map(({ runId }: { runId: string }) => runId), [
+      firstRun.runId
+    ]);
+
+    const runDetail = await app.inject({
+      method: "GET",
+      url: `/api/runs/${firstRun.runId as string}`,
+      headers: { authorization }
+    });
+    assert.equal(runDetail.statusCode, 200);
+    assert.equal(runDetail.json().taskId, task.taskId);
+    assert.equal(runDetail.json().instruction, "Perform the bounded attempt.");
+
+    const outsiderBootstrap = await app.inject({
+      method: "POST",
+      url: "/api/bootstrap",
+      payload: {
+        userId: "user_run_attempt_outsider_0001",
+        displayName: "Run Outsider"
+      }
+    });
+    const outsiderAuthorization =
+      `Bearer ${outsiderBootstrap.json().session.token as string}`;
+    const hiddenTaskRuns = await app.inject({
+      method: "GET",
+      url: `/api/tasks/${task.taskId as string}/runs`,
+      headers: { authorization: outsiderAuthorization }
+    });
+    assert.equal(hiddenTaskRuns.statusCode, 403);
+    const hiddenRunDetail = await app.inject({
+      method: "GET",
+      url: `/api/runs/${firstRun.runId as string}`,
+      headers: { authorization: outsiderAuthorization }
+    });
+    assert.equal(hiddenRunDetail.statusCode, 403);
+
     const firstManifestResponse = await app.inject({
       method: "GET",
       url: `/api/runs/${firstRun.runId as string}/context-manifest`,

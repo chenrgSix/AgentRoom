@@ -10,9 +10,11 @@ export function registerRunRoutes({
   auth,
   cancellations,
   clock,
+  core,
   principal,
   runRepository,
   runs,
+  teamChanges,
   traces
 }: ServerRouteContext): void {
   app.get<{ Params: { roomId: string } }>(
@@ -20,6 +22,16 @@ export function registerRunRoutes({
     async (request) => runs.listRoomRuns(
       principal(request), request.params.roomId, clock()
     )
+  );
+  app.get<{ Params: { taskId: string } }>(
+    "/api/tasks/:taskId/runs",
+    async (request) => runs.listTaskRuns(
+      principal(request), request.params.taskId
+    )
+  );
+  app.get<{ Params: { runId: string } }>(
+    "/api/runs/:runId",
+    async (request) => runs.get(principal(request), request.params.runId)
   );
   app.get<{
     Params: { runId: string };
@@ -53,7 +65,7 @@ export function registerRunRoutes({
     "/api/runs/:runId/ambiguity-acknowledgement",
     async (request) => {
       const body = bodyObject(request);
-      return runs.acknowledgeAmbiguity(
+      const acknowledgement = runs.acknowledgeAmbiguity(
         principal(request),
         request.params.runId,
         {
@@ -66,13 +78,20 @@ export function registerRunRoutes({
         },
         clock()
       );
+      const run = runRepository.getRun(request.params.runId);
+      const room = run && core.getRoom(run.roomId);
+      if (room && run) teamChanges.notify(room.teamId, {
+        kind: "room",
+        roomId: run.roomId
+      });
+      return acknowledgement;
     }
   );
   app.post<{ Params: { runId: string } }>(
     "/api/runs/:runId/retry",
     async (request) => {
       const body = bodyObject(request);
-      return runs.retry(
+      const retry = runs.retry(
         principal(request),
         request.params.runId,
         {
@@ -84,6 +103,12 @@ export function registerRunRoutes({
         },
         clock()
       );
+      const room = core.getRoom(retry.roomId);
+      if (room) teamChanges.notify(room.teamId, {
+        kind: "run",
+        roomId: retry.roomId
+      });
+      return retry;
     }
   );
   app.get<{ Params: { traceId: string } }>(
@@ -103,11 +128,17 @@ export function registerRunRoutes({
     "/api/runs/:runId/cancel",
     async (request) => {
       const body = bodyObject(request);
-      return cancellations.cancel(
+      const canceled = cancellations.cancel(
         principal(request),
         request.params.runId,
         typeof body.reason === "string" ? body.reason : "Canceled from Web"
       );
+      const room = core.getRoom(canceled.roomId);
+      if (room) teamChanges.notify(room.teamId, {
+        kind: "run",
+        roomId: canceled.roomId
+      });
+      return canceled;
     }
   );
 }

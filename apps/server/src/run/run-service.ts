@@ -81,6 +81,26 @@ export class RunService {
     return this.runs.listRoomRuns(roomId);
   }
 
+  public get(
+    principal: WebPrincipal,
+    runId: string
+  ): RunRecord {
+    const run = this.runs.getRun(runId);
+    if (!run) throw new Error(`Run not found: ${runId}`);
+    this.auth.requireRoomMember(principal, run.roomId);
+    return run;
+  }
+
+  public listTaskRuns(
+    principal: WebPrincipal,
+    taskId: string
+  ): RunRecord[] {
+    const task = this.tasks.get(taskId);
+    if (!task) throw new Error(`Task not found: ${taskId}`);
+    this.auth.requireRoomMember(principal, task.roomId);
+    return this.runs.listTaskRuns(taskId);
+  }
+
   public getContextManifest(
     principal: WebPrincipal,
     runId: string

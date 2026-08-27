@@ -40,6 +40,7 @@ import { TaskClarifications } from "./features/task/TaskClarifications.js";
 import { MemoryCandidateReview } from "./features/task/MemoryCandidateReview.js";
 import { ArtifactPreviewPanel } from "./features/task/ArtifactPreviewPanel.js";
 import { TaskCreateDialog, TaskSelector } from "./features/task/TaskControls.js";
+import { TaskWorkDetail } from "./features/work/TaskWorkDetail.js";
 import { WorkWorkspace } from "./features/work/WorkWorkspace.js";
 import {
   type Agent,
@@ -152,6 +153,7 @@ export function App() {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedRoomId, setSelectedRoomId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedWorkTaskId, setSelectedWorkTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<WorkspaceView>("work");
   const [workbenchItems, setWorkbenchItems] = useState<WorkbenchPage["items"]>([]);
   const [workbenchLoading, setWorkbenchLoading] = useState(false);
@@ -208,6 +210,7 @@ export function App() {
   const runOutputSyncRef = useRef(new Map<string, RunOutputProjection>());
   const runActivitySyncRef = useRef(new Map<string, RunActivityProjection>());
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
+  const pendingRoomTaskIdRef = useRef<string | null>(null);
   selectedTaskIdRef.current = selectedTaskId;
 
   const commitRunOutputEvents = (
@@ -850,13 +853,17 @@ export function App() {
       setDiscussions(nextDiscussions);
       setTasks(nextTasks);
       setMemoryCandidates(nextMemoryCandidates);
+      const pendingTaskId = pendingRoomTaskIdRef.current;
       setSelectedTaskId((current) =>
-        nextTasks.some(({ taskId }) => taskId === current)
+        pendingTaskId && nextTasks.some(({ taskId }) => taskId === pendingTaskId)
+          ? pendingTaskId
+          : nextTasks.some(({ taskId }) => taskId === current)
           ? current
           : nextTasks.find(({ state }) =>
               state !== "completed" && state !== "canceled"
             )?.taskId ?? nextTasks[0]?.taskId ?? null
       );
+      pendingRoomTaskIdRef.current = null;
       setRoomParticipants(nextSettings.participants);
       setRooms((current) => current.map((room) =>
         room.roomId === nextSettings.room.roomId ? nextSettings.room : room
@@ -1347,6 +1354,7 @@ export function App() {
       setDiscussions([]);
       setSelectedTeamId(null);
       setSelectedRoomId(null);
+      setSelectedWorkTaskId(null);
       setMemberInvitation(null);
       setAuthState(authMode === "local" ? "local_bootstrap" : "sign_in_required");
     } catch (reason) {
@@ -1542,7 +1550,22 @@ export function App() {
 
   function openWorkbenchTask(taskId: string, roomId: string) {
     setSelectedRoomId(roomId);
-    setSelectedTaskId(taskId);
+    setSelectedWorkTaskId(taskId);
+    setActiveView("work");
+  }
+
+  function revealWork() {
+    setSelectedWorkTaskId(null);
+    setActiveView("work");
+  }
+
+  function openTaskInRoom(roomId: string, taskId: string) {
+    if (selectedRoomId === roomId) {
+      setSelectedTaskId(taskId);
+    } else {
+      pendingRoomTaskIdRef.current = taskId;
+      setSelectedRoomId(roomId);
+    }
     setActiveView("room");
   }
 
@@ -1691,7 +1714,10 @@ export function App() {
             <button
               className={team.teamId === selectedTeamId ? "team-chip active" : "team-chip"}
               key={team.teamId}
-              onClick={() => setSelectedTeamId(team.teamId)}
+              onClick={() => {
+                setSelectedWorkTaskId(null);
+                setSelectedTeamId(team.teamId);
+              }}
               title={team.name}
             >
               {team.name.slice(0, 2).toUpperCase()}
@@ -1710,7 +1736,7 @@ export function App() {
             <button
               aria-label={locale === "zh-CN" ? "工作台" : "Work"}
               className={activeView === "work" ? "rail-manage active" : "rail-manage"}
-              onClick={() => setActiveView("work")}
+              onClick={revealWork}
               title={locale === "zh-CN" ? "工作台" : "Work"}
               type="button"
             >▦</button>
@@ -1794,7 +1820,7 @@ export function App() {
           <div>
             {selectedTeam && (
               <>
-                <button className={activeView === "work" ? "active" : ""} onClick={() => setActiveView("work")} type="button">{locale === "zh-CN" ? "工作" : "Work"}</button>
+                <button className={activeView === "work" ? "active" : ""} onClick={revealWork} type="button">{locale === "zh-CN" ? "工作" : "Work"}</button>
                 <button className={activeView === "room" ? "active" : ""} onClick={() => setActiveView("room")} type="button">{t("chat")}</button>
                 <button className={activeView === "members" ? "active" : ""} onClick={revealTeamMembers} type="button">{t("teamMembers")}</button>
                 <button className={activeView === "agents" ? "active" : ""} onClick={() => setActiveView("agents")} type="button">{t("agents")}</button>
@@ -1879,7 +1905,7 @@ export function App() {
             {selectedTeam && (
               <button
                 className={activeView === "work" ? "header-chat active" : "header-chat"}
-                onClick={() => setActiveView("work")}
+                onClick={revealWork}
                 type="button"
               >▦ <span>{locale === "zh-CN" ? "工作" : "Work"}</span></button>
             )}
@@ -1965,6 +1991,21 @@ export function App() {
               <small>{t("nextRoomAgent")}</small>
             </form>
           </section>
+        ) : activeView === "work" && selectedRoom && selectedWorkTaskId ? (
+          <TaskWorkDetail
+            agentNames={agentNames}
+            currentMember={currentMember}
+            locale={locale}
+            memberNames={memberNames}
+            onBack={() => setSelectedWorkTaskId(null)}
+            onChanged={() => void refreshWorkbenchState()}
+            onOpenRoom={openTaskInRoom}
+            onOpenTask={openWorkbenchTask}
+            refreshKey={workbenchItems.find(({ taskId }) => taskId === selectedWorkTaskId)?.updatedAt ?? ""}
+            roomNames={roomNames}
+            taskId={selectedWorkTaskId}
+            token={session?.token}
+          />
         ) : activeView === "work" && selectedRoom ? (
           <WorkWorkspace
             agentNames={agentNames}
@@ -2091,6 +2132,7 @@ export function App() {
             membersById={membersById}
             messages={messages}
             onCancelRun={cancelRun}
+            onOpenWorkTask={openWorkbenchTask}
             onRetryPendingMessage={deliverPendingMessage}
             pendingMessages={pendingRoomMessages}
             runActivities={runActivities}

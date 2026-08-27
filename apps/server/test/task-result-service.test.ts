@@ -240,6 +240,17 @@ test("Result acceptance atomically completes its Task and survives response loss
       payload: resultProposal
     });
     assert.deepEqual(repeated.json(), proposed.json());
+    const proposalMessages = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${context.roomId}/messages?limit=100&tail=true`,
+      headers: { authorization: context.authorization }
+    });
+    const proposalSummaries = proposalMessages.json().items.filter(
+      ({ senderType }: { senderType: string }) => senderType === "system"
+    );
+    assert.equal(proposalSummaries.length, 1);
+    assert.match(proposalSummaries[0].content, /Result v1 proposed for \[TASK-2\]/u);
+    assert.doesNotMatch(proposalSummaries[0].content, /bounded work is complete/u);
 
     const taskAfterProposal = await app.inject({
       method: "GET",
@@ -309,6 +320,20 @@ test("Result acceptance atomically completes its Task and survives response loss
       payload: reviewCommand
     });
     assert.deepEqual(acceptedReplay.json(), accepted.json());
+    const reviewedMessages = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${context.roomId}/messages?limit=100&tail=true`,
+      headers: { authorization: context.authorization }
+    });
+    const reviewedSummaries = reviewedMessages.json().items.filter(
+      ({ senderType }: { senderType: string }) => senderType === "system"
+    );
+    assert.equal(reviewedSummaries.length, 2);
+    assert.match(
+      reviewedSummaries[1].content,
+      /Result v1 accepted for \[TASK-2\].*Task completed/u
+    );
+    assert.doesNotMatch(reviewedSummaries[1].content, /durable and sufficient/u);
 
     const completedTask = await app.inject({
       method: "GET",

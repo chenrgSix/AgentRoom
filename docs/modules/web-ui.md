@@ -88,10 +88,10 @@ optional headless Bridge, keeping existing agent clients unchanged.
 
 [ADR-0022](../adr/0022-make-task-run-and-result-the-primary-work-model.md)
 changes the default authenticated destination to **Work** while retaining Chat,
-Agents, and Devices as first-class destinations. This is a target extension;
-`WEB-046` now provides the default Team Workbench while `WEB-047` owns the
-remaining Task, Run, and Result detail routes. Within Work, those details remain
-first-class surfaces rather than chat disclosures.
+Agents, and Devices as first-class destinations. `WEB-046` provides the default
+Team Workbench and `WEB-047` provides its Task, Run, Result, Artifact,
+Discussion, and bounded Audit detail views. These remain first-class Work
+surfaces rather than chat disclosures.
 
 Work consumes a Team-scoped, Room-authorized read model and groups Tasks that
 need human action, are executing, await review, are blocked, or recently
@@ -115,6 +115,13 @@ Discussion, and Audit are separate views. Result review controls appear only to
 the Task Owner or Team Owner and never infer permission from the projected next
 action.
 
+The detail controller reads one authorized Task and then its Task-scoped Runs,
+Results, Artifacts, and Room Discussion projection. `GET /api/tasks/:taskId/runs`
+and `GET /api/runs/:runId` authorize against the Run's current Room before
+returning immutable identity and state; existing event and Context Manifest
+routes remain the detailed evidence sources. Refresh races are last-request-wins
+and a Workbench wakeup refreshes data without resetting the selected tab.
+
 Run detail shows the authoritative state plus optional durable diagnostic phase,
 execution identity, trigger, redacted frozen Context Manifest, closed permission
 summary, ordered events, provisional output, terminal outcome, and linked Result.
@@ -136,6 +143,18 @@ runnable Task or visible quick-work default before sending an Agent Mention.
 No-Mention messages remain ordinary conversation. Run and Result lifecycle adds
 only bounded linked summaries to the Room rather than copying output streams,
 Result bodies, review controls, or evidence.
+
+Result proposal and review append idempotent system summaries containing only
+the Team-local Task label, Result version/state, optional completion fact, and
+an opaque same-origin Work link. The Room renderer accepts that navigation only
+for closed Team, Room, and Task identity shapes. It does not copy Result prose,
+review reasons, evidence, local paths, or execution logs into Chat.
+
+Work tabs implement roving focus with Arrow Left/Right, Home, End, Enter, and
+Space behavior. Untrusted Task, Run, Result, Artifact, and Discussion text is
+rendered as text rather than executable markup. At the narrow breakpoint the
+content grids become one column while the tab list owns its bounded horizontal
+scroll, preventing page-level overflow.
 
 ## Data Flow
 

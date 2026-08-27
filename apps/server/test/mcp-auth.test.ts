@@ -618,9 +618,17 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       url: `/api/rooms/${roomId}/messages?limit=100`,
       headers: { authorization: `Bearer ${webToken}` }
     });
+    const timelineItems = timeline.json().items as Array<{
+      content: string;
+      senderType: string;
+    }>;
     assert.equal(
-      timeline.json().items.at(-1).content,
+      timelineItems.filter(({ senderType }) => senderType === "agent").at(-1)?.content,
       "Completed through MCP."
+    );
+    assert.match(
+      timelineItems.find(({ senderType }) => senderType === "system")?.content ?? "",
+      /Result v1 proposed for \[TASK-1\]/u
     );
   } finally {
     await app.close();

@@ -35,7 +35,29 @@ interface RoomTimelineProps {
   runsById: Map<string, Run>;
   session: LocalSession | null;
   onCancelRun: (runId: string) => void | Promise<void>;
+  onOpenWorkTask: (taskId: string, roomId: string) => void;
   onRetryPendingMessage: (message: PendingRoomMessage) => void | Promise<void>;
+}
+
+export function parseWorkTaskLink(
+  href: string,
+  origin: string
+): { roomId: string; taskId: string } | null {
+  try {
+    const url = new URL(href, origin);
+    const teamId = url.searchParams.get("team");
+    const roomId = url.searchParams.get("room");
+    const taskId = url.searchParams.get("workTask");
+    if (
+      url.origin === new URL(origin).origin &&
+      teamId && /^team_[A-Za-z0-9_-]{8,128}$/u.test(teamId) &&
+      roomId && /^room_[A-Za-z0-9_-]{8,128}$/u.test(roomId) &&
+      taskId && /^task_[A-Za-z0-9_-]{8,128}$/u.test(taskId)
+    ) return { roomId, taskId };
+  } catch {
+    // Untrusted links must never create a Work navigation intent.
+  }
+  return null;
 }
 
 export function RoomTimeline({
@@ -45,6 +67,7 @@ export function RoomTimeline({
   membersById,
   messages,
   onCancelRun,
+  onOpenWorkTask,
   onRetryPendingMessage,
   pendingMessages,
   runActivities,
@@ -55,6 +78,10 @@ export function RoomTimeline({
   session
 }: RoomTimelineProps) {
   const t = (key: TranslationKey) => translate(locale, key);
+  const navigateInternal = (href: string): void => {
+    const target = parseWorkTaskLink(href, window.location.origin);
+    if (target) onOpenWorkTask(target.taskId, target.roomId);
+  };
 
   return (
     <section className="timeline" aria-label={t("roomMessages")}>
@@ -83,7 +110,10 @@ export function RoomTimeline({
                 <strong>{senderName}</strong>
                 <time>{new Date(message.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</time>
               </header>
-              <MarkdownMessage content={message.content} />
+              <MarkdownMessage
+                content={message.content}
+                onInternalNavigate={navigateInternal}
+              />
               {sourceRun && (
                 <AgentRunActivity
                   active={false}

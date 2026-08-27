@@ -201,6 +201,68 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .work-card footer { display: flex; min-width: 0; justify-content: space-between; gap: 10px; color: #7f8977; font-size: 8px; }
 .work-card footer span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+.work-detail { display: grid; min-height: 0; flex: 1; align-content: start; gap: 17px; overflow-y: auto; padding: 26px 34px 48px; }
+.work-detail.loading, .work-detail.error { place-content: center; color: #9aa391; }
+.work-detail-header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 16px; }
+.work-detail-header h3 { margin: 0; color: #edf1e8; font-size: clamp(22px, 3vw, 31px); letter-spacing: -.035em; }
+.work-detail-header > div:nth-child(2) > p:last-child { max-width: 760px; margin: 7px 0 0; color: #929b8c; font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
+.work-back, .work-panel-card button, .work-run-list button, .work-review-controls button, .work-follow-ups button, .work-inline-link { border: 1px solid #46523a; border-radius: 8px; background: #20261c; color: #bfd27f; font-size: 10px; font-weight: 750; cursor: pointer; }
+.work-back { padding: 8px 10px; }
+.work-detail-badges { display: flex; max-width: 260px; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.work-detail-badges span { padding: 5px 8px; border: 1px solid #465139; border-radius: 999px; color: #acb99a; font-size: 8px; font-weight: 800; text-transform: uppercase; }
+.work-tabs { display: flex; overflow-x: auto; gap: 4px; padding: 4px; border: 1px solid #30372c; border-radius: 11px; background: #11140f; }
+.work-tabs button { flex: 0 0 auto; padding: 8px 12px; border: 0; border-radius: 7px; background: transparent; color: #7f8877; font-size: 10px; font-weight: 750; cursor: pointer; }
+.work-tabs button[aria-selected="true"] { background: #2a331f; color: #d7eb9c; }
+.work-command-error { margin: 0; padding: 11px 13px; border: 1px solid #765d38; border-radius: 9px; background: #2d2719; color: #e1c17f; font-size: 10px; line-height: 1.5; }
+.work-detail-panel { min-width: 0; }
+.work-overview-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.work-panel-card, .work-run-detail, .work-result-card, .work-artifact-list article, .work-discussion-list article, .work-audit { min-width: 0; padding: 17px; border: 1px solid #343b30; border-radius: 13px; background: #171a15; }
+.work-panel-card h4, .work-run-detail h4, .work-audit h4 { margin: 0 0 12px; color: #e5eadf; font-size: 14px; }
+.work-panel-card dl, .work-run-detail dl, .work-audit dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0 0 12px; }
+.work-panel-card dl > div, .work-run-detail dl > div, .work-audit dl > div { min-width: 0; padding: 8px; border-radius: 8px; background: #10130f; }
+.work-panel-card dt, .work-run-detail dt, .work-audit dt { color: #747d6d; font-size: 8px; text-transform: uppercase; }
+.work-panel-card dd, .work-run-detail dd, .work-audit dd { overflow-wrap: anywhere; margin: 4px 0 0; color: #cdd5c4; font-size: 10px; white-space: pre-wrap; }
+.work-panel-card ol, .work-panel-card ul { margin: 10px 0; padding-left: 20px; color: #aeb7a6; font-size: 10px; line-height: 1.55; }
+.work-panel-card li { margin: 6px 0; }
+.work-panel-card li span { display: block; color: #7f8a76; font-size: 8px; text-transform: uppercase; }
+.work-panel-card > p { color: #a9b2a1; font-size: 10px; line-height: 1.55; }
+.work-panel-card button { padding: 8px 10px; }
+.work-run-layout { display: grid; grid-template-columns: minmax(160px, .33fr) minmax(0, 1fr); gap: 12px; }
+.work-run-list { display: grid; align-content: start; gap: 7px; }
+.work-run-list button { display: grid; gap: 4px; padding: 11px; text-align: left; }
+.work-run-list button[aria-pressed="true"] { border-color: #849b4d; background: #29331f; }
+.work-run-list span { color: #899282; font-size: 8px; text-transform: uppercase; }
+.work-run-detail { display: grid; gap: 15px; }
+.work-run-detail section { padding-top: 13px; border-top: 1px solid #2e342b; }
+.work-run-detail h5, .work-result-card h5, .work-follow-ups h5 { margin: 0 0 8px; color: #c7d3b7; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+.work-run-detail p, .work-audit p { color: #99a291; font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
+.work-inline-link { justify-self: start; padding: 8px 10px; }
+.work-warning { padding: 9px 11px; border-left: 3px solid #d29b56; background: #2c2518; color: #e0b978 !important; }
+.work-event-list { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }
+.work-event-list li { display: grid; grid-template-columns: 34px 65px minmax(0, 1fr); gap: 8px; padding: 8px; border-radius: 8px; background: #10130f; }
+.work-event-list span, .work-event-list strong { color: #7d8973; font-family: "SFMono-Regular", Consolas, monospace; font-size: 8px; }
+.work-event-list pre { overflow-wrap: anywhere; margin: 0; color: #c4cdc0; font: 9px/1.5 "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; word-break: break-word; }
+.work-result-list, .work-artifact-list, .work-discussion-list { display: grid; gap: 12px; }
+.work-result-card { display: grid; gap: 11px; }
+.work-result-card > header, .work-discussion-list header { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; }
+.work-result-card > header span, .work-discussion-list header span { padding: 4px 7px; border-radius: 999px; background: #283021; color: #adbf82; font-size: 8px; text-transform: uppercase; }
+.work-result-summary { margin: 0; color: #d6ddd0; font-size: 12px; line-height: 1.65; white-space: pre-wrap; }
+.work-result-card > p, .work-result-card li, .work-artifact-list p, .work-discussion-list p { color: #9ca596; font-size: 10px; line-height: 1.55; white-space: pre-wrap; }
+.work-result-card ul { display: grid; gap: 6px; margin: 0; padding-left: 19px; }
+.work-result-card li small { display: block; overflow-wrap: anywhere; color: #747e6f; }
+.work-review-controls, .work-follow-ups { display: grid; gap: 9px; padding: 12px; border: 1px solid #4b573e; border-radius: 10px; background: #12160f; }
+.work-review-controls label { display: grid; gap: 5px; color: #aab5a0; font-size: 9px; }
+.work-review-controls label:nth-child(2) { display: flex; align-items: center; }
+.work-review-controls textarea, .work-follow-ups input { min-width: 0; padding: 8px 9px; border: 1px solid #3e4835; border-radius: 7px; outline: none; background: #0d100c; color: #d6ddd0; font: inherit; }
+.work-review-controls textarea { min-height: 66px; resize: vertical; }
+.work-review-controls div, .work-follow-ups div { display: flex; gap: 7px; }
+.work-review-controls button, .work-follow-ups button { padding: 8px 11px; }
+.work-review-controls button:disabled, .work-follow-ups button:disabled { cursor: default; opacity: .5; }
+.work-follow-ups input { flex: 1; }
+.work-artifact-list article, .work-discussion-list article { display: grid; gap: 6px; }
+.work-artifact-list span, .work-artifact-list small { color: #849079; font-size: 8px; text-transform: uppercase; }
+.work-artifact-list p, .work-discussion-list p { margin: 0; }
+
 .management-workspace { display: grid; min-height: 0; flex: 1; align-content: start; gap: 18px; overflow-y: auto; padding: 30px 34px 42px; }
 .management-intro { display: flex; align-items: end; justify-content: space-between; gap: 24px; padding: 4px 2px 10px; }
 .management-intro h3 { margin: 0; font-size: clamp(22px, 3vw, 32px); letter-spacing: -.025em; }
@@ -1033,6 +1095,15 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .work-intro h3 { font-size: 23px; }
   .work-toolbar { width: 100%; justify-content: space-between; }
   .work-card-grid { grid-template-columns: minmax(0, 1fr); }
+  .work-detail { padding: 20px 14px 32px; }
+  .work-detail-header { grid-template-columns: minmax(0, 1fr); }
+  .work-back { justify-self: start; }
+  .work-detail-badges { max-width: none; justify-content: flex-start; }
+  .work-overview-grid, .work-run-layout { grid-template-columns: minmax(0, 1fr); }
+  .work-run-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .work-event-list li { grid-template-columns: 30px minmax(0, 1fr); }
+  .work-event-list pre { grid-column: 1 / 3; }
+  .work-follow-ups div { align-items: stretch; flex-direction: column; }
   .management-intro { align-items: start; flex-direction: column; gap: 14px; }
   .management-intro h3 { font-size: 23px; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
