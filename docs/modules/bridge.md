@@ -150,12 +150,16 @@ before save. Preflight is explicit, token-authenticated, does not persist or
 restart the Bridge, and is fenced against every active Team Run or concurrent
 Runtime probe.
 
-For the ADR-0021 target, the local form presents its configured Workspace as a
+The ADR-0021 implementation presents each configured Workspace as a
 Bridge-owned binding with a user-facing alias. Absolute path, canonicalization,
 filesystem/network policy, and the final operation remain local. Only the
 existing opaque Workspace identity, generation, capability flags, locally
 allowed alias, and closed Runtime policy summary may be published. A central
 Owner cannot use Device approval or Agent provisioning to broaden that binding.
+Older configurations derive their alias locally from the directory name during
+in-memory migration; loading alone does not rewrite the file. The Console shows
+the absolute root only on loopback, labels both local policy summaries, and
+publishes neither those values nor Runtime commands or environment fields.
 
 Both first-enrollment and per-Agent Codex configuration disclose the local
 multi-client ownership boundary. Codex Desktop/CLI and Bridge currently run

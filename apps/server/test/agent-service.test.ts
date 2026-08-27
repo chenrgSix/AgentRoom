@@ -102,6 +102,9 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
         supportsStreaming: true
       },
       runtimePolicy: { filesystemAccess: "workspace-write" },
+      workspaceRef: `workspace_${"a".repeat(64)}`,
+      workspaceGeneration: "b".repeat(64),
+      workspaceAlias: "Payments API",
       now
     });
     const republished = agents.publishDeviceAgent(devicePrincipal, {
@@ -130,6 +133,8 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
     assert.deepEqual(republished.runtimePolicy, {
       filesystemAccess: "read-only"
     });
+    assert.equal(remote.workspaceAlias, "Payments API");
+    assert.equal(republished.workspaceAlias, null);
     assert.equal(disabled.enabled, false);
     assert.equal(republishedDisabled.enabled, false);
     assert.equal(republishedDisabled.presence, "offline");
@@ -170,6 +175,16 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
       },
       now
     }), /requires Workspace leases/u);
+    assert.throws(() => agents.publishDeviceAgent(devicePrincipal, {
+      agentId: "agent_invalid_alias_12345678",
+      name: "Invalid Alias",
+      role: "Managed",
+      capabilities: remote.capabilities,
+      workspaceRef: `workspace_${"c".repeat(64)}`,
+      workspaceGeneration: "d".repeat(64),
+      workspaceAlias: "../private",
+      now
+    }), /Workspace alias is invalid/u);
     assert.throws(() => agents.publishAgent(principal, {
       teamId: created.team.teamId,
       deviceId: null,

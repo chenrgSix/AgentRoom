@@ -222,6 +222,17 @@ export function registerBridgeSocketRoutes({
         }
         if (message.type === "agent.publish" && registeredEpoch !== undefined) {
           const publicationPayload = message.payload;
+          const forbiddenLocalFields = [
+            "workspace",
+            "workspacePath",
+            "workspaceRoot",
+            "filesystemPolicy",
+            "networkPolicy",
+            "command",
+            "runtimeCommand",
+            "env",
+            "environment"
+          ];
           const capabilities = publicationPayload.capabilities as
             | Record<string, unknown>
             | undefined;
@@ -243,6 +254,9 @@ export function registerBridgeSocketRoutes({
             typeof publicationPayload.agentId !== "string" ||
             typeof publicationPayload.name !== "string" ||
             typeof publicationPayload.role !== "string" ||
+            forbiddenLocalFields.some((field) =>
+              Object.prototype.hasOwnProperty.call(publicationPayload, field)
+            ) ||
             capabilities?.invocationMode !== "managed" ||
             !validRuntimePolicy
           ) {
@@ -288,6 +302,9 @@ export function registerBridgeSocketRoutes({
                 : {}),
               ...(typeof publicationPayload.workspaceGeneration === "string"
                 ? { workspaceGeneration: publicationPayload.workspaceGeneration }
+                : {}),
+              ...(typeof publicationPayload.workspaceAlias === "string"
+                ? { workspaceAlias: publicationPayload.workspaceAlias }
                 : {}),
               now: clock()
             })

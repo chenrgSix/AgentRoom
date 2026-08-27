@@ -27,9 +27,9 @@ const elements = Object.fromEntries([
   "connection-technical", "connection-technical-message", "connection-fix",
   "enrollment-form", "server-url", "server-token", "device-name", "trust-mode", "fingerprint-field",
   "fingerprint", "codex-enabled", "codex-fields", "codex-name", "codex-role",
-  "codex-path", "codex-workspace", "codex-sandbox", "codex-session-conflict-policy",
+  "codex-path", "codex-workspace", "codex-workspace-alias", "codex-sandbox", "codex-session-conflict-policy",
   "codex-session-ownership-policy-copy", "pi-enabled", "pi-fields",
-  "pi-name", "pi-role", "pi-path", "pi-workspace", "pi-credential-env",
+  "pi-name", "pi-role", "pi-path", "pi-workspace", "pi-workspace-alias", "pi-credential-env",
   "pi-permission-policy",
   "codex-use-detected", "codex-preflight", "codex-preflight-result",
   "pi-use-detected", "pi-preflight", "pi-preflight-result",
@@ -38,7 +38,7 @@ const elements = Object.fromEntries([
   "diagnostics-result", "check-update", "update-result", "release-link",
   "agent-modal-backdrop", "agent-modal-title", "close-agent-modal", "cancel-agent-modal",
   "agent-modal-error",
-  "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace",
+  "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace", "agent-workspace-alias",
   "agent-sandbox-field", "agent-sandbox", "agent-session-conflict-policy-field",
   "agent-session-conflict-policy", "agent-credential-field", "agent-credential-env",
   "agent-codex-session-ownership-policy", "agent-codex-session-ownership-policy-copy",
@@ -157,6 +157,7 @@ function runtimeDraft(kind, source) {
     role: elements[`${prefix}-role`].value,
     executablePath: elements[`${prefix}-path`].value,
     workspace: elements[`${prefix}-workspace`].value,
+    workspaceAlias: elements[`${prefix}-workspace-alias`].value,
     sandbox: kind === "codex" ? elements[`${prefix}-sandbox`].value : "",
     codexSessionConflictPolicy: kind === "codex"
       ? elements[`${prefix}-session-conflict-policy`].value
@@ -228,6 +229,7 @@ function renderAgent(agent, {compact = false} = {}) {
   facts.className = "agent-facts";
   const factRows = [
     ["文件策略", view.filesystemPolicy],
+    ["网络策略", view.networkPolicy],
     ["工作区", view.workspaceName],
     ["Runtime", view.executableSummary, "runtime-fact"]
   ];
@@ -400,6 +402,7 @@ function openAgentModal(agent = null) {
   elements["agent-path"].value = agent?.executablePath ||
     (kind === "pi" ? currentState.detectedPi : currentState.detectedCodex) || "";
   elements["agent-workspace"].value = agent?.workspace || currentState.agents[0]?.workspace || currentState.workspace || "";
+  elements["agent-workspace-alias"].value = agent?.workspaceAlias || "";
   elements["agent-sandbox"].value = agent?.sandbox || "workspace-write";
   elements["agent-session-conflict-policy"].value =
     agent?.codexSessionConflictPolicy || "preserve_and_retry";
@@ -828,6 +831,7 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
     role: elements["codex-role"].value,
     executablePath: elements["codex-path"].value,
     workspace: elements["codex-workspace"].value || workspaceFallback,
+    workspaceAlias: elements["codex-workspace-alias"].value,
     sandbox: elements["codex-sandbox"].value,
     codexSessionConflictPolicy: elements["codex-session-conflict-policy"].value
   }, {
@@ -837,6 +841,7 @@ elements["enrollment-form"].addEventListener("submit", async (event) => {
     role: elements["pi-role"].value,
     executablePath: elements["pi-path"].value,
     workspace: elements["pi-workspace"].value || workspaceFallback,
+    workspaceAlias: elements["pi-workspace-alias"].value,
     credentialEnvironmentVariable: elements["pi-credential-env"].value
   }];
   try {

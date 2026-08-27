@@ -222,6 +222,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			c.ArtifactMaterializationAgentNames[configured.Name]
 		capabilities.SupportsArtifactMaterialization = &supportsArtifactMaterialization
 		runtimePolicy := publishedRuntimePolicy(configured)
+		workspaceAlias := configured.ResolvedWorkspaceAlias()
 		publication := contracts.AgentPublishMessage{
 			ProtocolVersion: "1.0",
 			MessageID:       newID("msg"),
@@ -236,6 +237,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 				Role:                configured.Role,
 				RuntimePolicy:       &runtimePolicy,
 				RuntimeScopeID:      &runtimeScopeID,
+				WorkspaceAlias:      &workspaceAlias,
 				WorkspaceRef:        &workspaceSnapshot.WorkspaceRef,
 				WorkspaceGeneration: &workspaceSnapshot.Generation,
 				TeamID:              c.Credential.TeamID,

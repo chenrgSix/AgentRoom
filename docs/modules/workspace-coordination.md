@@ -1,7 +1,7 @@
 # Workspace Coordination Module
 
 - Prefix: `WSP`
-- Implementation: `apps/server/src/workspace/`, migration 0035, and
+- Implementation: `apps/server/src/workspace/`, migrations 0035 and 0042, and
   `bridge/internal/workspace/`
 - Owns: opaque Workspace identity, generation snapshots, and Run-scoped access
   leases
@@ -38,6 +38,14 @@ Device pairing creates no binding and discovers no path. Adding an Agent or
 Workspace locally requires an explicit owner save. Runtime preflight and
 self-test may inspect only the local draft under their existing bounded rules
 and cannot publish or persist a broader central authority.
+
+`WSP-002` implements that boundary. Bridge configuration schema version 5
+stores one optional owner-facing alias beside each absolute local root and
+derives a safe directory-name alias when migrating older files. The local
+Console exposes the alias, absolute root, per-Agent selection, derived
+filesystem policy, and Runtime-managed network policy; only the alias is new
+wire data. Migration 0042 persists that alias in the Agent projection. It does
+not persist a root, command, environment, or mutable filesystem/network policy.
 
 ## Main Flows
 

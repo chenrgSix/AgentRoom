@@ -1198,7 +1198,7 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	waitSignal(t, started, "initial Bridge start")
 	added := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/agents", RuntimeInput{
 		Kind: "codex", Name: "Second Codex", Role: "Reviewer",
-		ExecutablePath: executablePath, Workspace: directory, Sandbox: "read-only",
+		ExecutablePath: executablePath, Workspace: directory, WorkspaceAlias: "Review Workspace", Sandbox: "read-only",
 		CodexSessionConflictPolicy: config.CodexSessionConflictStartNew,
 	})
 	var addedView AgentView
@@ -1207,7 +1207,10 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	}
 	added.Body.Close()
 	if added.StatusCode != http.StatusCreated || addedView.AgentID == "" || addedView.AgentID == firstID ||
-		addedView.CodexSessionConflictPolicy != config.CodexSessionConflictStartNew {
+		addedView.CodexSessionConflictPolicy != config.CodexSessionConflictStartNew ||
+		addedView.WorkspaceAlias != "Review Workspace" ||
+		addedView.WorkspaceFilesystemPolicy != "read-only" ||
+		addedView.WorkspaceNetworkPolicy != "runtime-managed" {
 		t.Fatalf("unexpected added Agent: %d %#v", added.StatusCode, addedView)
 	}
 	waitSignal(t, stopped, "old Bridge stop after Agent addition")
@@ -1234,7 +1237,8 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	}
 	persisted, err := config.Load(configPath)
 	if err != nil || len(persisted.Agents) != 2 || persisted.Agents[1].Name != "Second Codex" ||
-		persisted.Agents[1].CodexSessionConflictPolicy != config.CodexSessionConflictStartNew {
+		persisted.Agents[1].CodexSessionConflictPolicy != config.CodexSessionConflictStartNew ||
+		persisted.Agents[1].WorkspaceAlias != "Review Workspace" {
 		t.Fatalf("unexpected persisted Agents: %#v, %v", persisted.Agents, err)
 	}
 	reloaded, err := New(Options{

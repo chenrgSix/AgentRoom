@@ -332,6 +332,14 @@
       "type": "string",
       "pattern": "^workspace_[0-9a-f]{64}$"
     },
+    "workspaceAlias": {
+      "title": "Workspace Display Alias",
+      "description": "Bridge-authorized path-free label for one local Workspace binding. It grants no filesystem or network authority.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^[^/\\\\]+$"
+    },
     "workspaceGeneration": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
@@ -696,6 +704,21 @@
     "agentPublishPayload": {
       "type": "object",
       "additionalProperties": true,
+      "propertyNames": {
+        "not": {
+          "enum": [
+            "workspace",
+            "workspacePath",
+            "workspaceRoot",
+            "filesystemPolicy",
+            "networkPolicy",
+            "command",
+            "runtimeCommand",
+            "env",
+            "environment"
+          ]
+        }
+      },
       "required": [
         "teamId",
         "agentId",
@@ -739,6 +762,9 @@
         },
         "workspaceRef": {
           "$ref": "#/$defs/workspaceRef"
+        },
+        "workspaceAlias": {
+          "$ref": "#/$defs/workspaceAlias"
         },
         "workspaceGeneration": {
           "$ref": "#/$defs/workspaceGeneration"

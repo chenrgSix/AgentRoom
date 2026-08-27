@@ -27,16 +27,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 41);
+  assert.equal(first.currentVersion, 42);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -91,7 +91,7 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       .prepare("PRAGMA table_info(agents)")
       .all() as Array<{ name: string }>;
 
-    assert.equal(migrationCount.count, 41);
+    assert.equal(migrationCount.count, 42);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
     assert.equal(clarificationTable.count, 1);
@@ -101,6 +101,9 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
     assert.equal(devicePairingSessionTable.count, 1);
     assert.equal(agentColumns.some((column) =>
       column.name === "runtime_policy_json"
+    ), true);
+    assert.equal(agentColumns.some((column) =>
+      column.name === "workspace_alias"
     ), true);
   } finally {
     database.close();
@@ -181,7 +184,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -339,7 +342,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41]
+    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42]
   );
   const database = openDatabase(databasePath);
   try {

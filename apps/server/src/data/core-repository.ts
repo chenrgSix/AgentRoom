@@ -85,6 +85,7 @@ export interface AgentRecord {
   runtimeScopeId?: string | null;
   workspaceRef?: string | null;
   workspaceGeneration?: string | null;
+  workspaceAlias?: string | null;
   enabled: boolean;
   presence: "ready" | "busy" | "degraded" | "manual" | "offline";
   createdAt: string;

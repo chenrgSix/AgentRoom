@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 )
 
 type Config struct {
@@ -71,6 +73,7 @@ type AgentConfig struct {
 	PresetVersion              int                        `json:"presetVersion"`
 	Command                    []string                   `json:"command"`
 	Workspace                  string                     `json:"workspace"`
+	WorkspaceAlias             string                     `json:"workspaceAlias,omitempty"`
 	Sandbox                    string                     `json:"sandbox,omitempty"`
 	CodexSessionConflictPolicy CodexSessionConflictPolicy `json:"codexSessionConflictPolicy,omitempty"`
 	OutputProtocol             string                     `json:"outputProtocol,omitempty"`
@@ -83,7 +86,7 @@ const (
 	CodexSessionConflictPreserveAndRetry CodexSessionConflictPolicy = "preserve_and_retry"
 	CodexSessionConflictStartNew         CodexSessionConflictPolicy = "start_new"
 
-	CurrentSchemaVersion           = 4
+	CurrentSchemaVersion           = 5
 	CurrentPresetVersion           = 5
 	OutputProtocolAgentRoomJSONLV1 = "agentroom-jsonl-v1"
 	ServerTokenHeader              = "X-AgentRoom-Server-Token"
@@ -94,6 +97,58 @@ func (a AgentConfig) ResolvedCodexSessionConflictPolicy() CodexSessionConflictPo
 		return CodexSessionConflictPreserveAndRetry
 	}
 	return a.CodexSessionConflictPolicy
+}
+
+func (a AgentConfig) ResolvedWorkspaceAlias() string {
+	if a.WorkspaceAlias != "" {
+		return a.WorkspaceAlias
+	}
+	return DefaultWorkspaceAlias(a.Workspace)
+}
+
+func (a AgentConfig) WorkspaceFilesystemPolicy() string {
+	if a.RuntimeKind == "codex" || a.Adapter == "codex" {
+		if a.Sandbox == "read-only" {
+			return "read-only"
+		}
+		return "workspace-write"
+	}
+	return "runtime-managed"
+}
+
+func (a AgentConfig) WorkspaceNetworkPolicy() string {
+	return "runtime-managed"
+}
+
+func DefaultWorkspaceAlias(root string) string {
+	candidate := strings.TrimSpace(filepath.Base(filepath.Clean(root)))
+	if candidate == "" || candidate == "." || candidate == ".." ||
+		candidate == string(filepath.Separator) {
+		return "Workspace"
+	}
+	if utf8.RuneCountInString(candidate) > 80 {
+		candidate = string([]rune(candidate)[:80])
+	}
+	if err := ValidateWorkspaceAlias(candidate); err != nil {
+		return "Workspace"
+	}
+	return candidate
+}
+
+func ValidateWorkspaceAlias(value string) error {
+	if value == "" || strings.TrimSpace(value) != value ||
+		utf8.RuneCountInString(value) > 80 || value == "." || value == ".." {
+		return fmt.Errorf("workspaceAlias must contain 1 to 80 visible characters without surrounding whitespace")
+	}
+	if strings.ContainsAny(value, `/\\`) {
+		return fmt.Errorf("workspaceAlias must not contain path separators")
+	}
+	for _, character := range value {
+		if unicode.IsControl(character) {
+			return fmt.Errorf("workspaceAlias must not contain control characters")
+		}
+	}
+	return nil
 }
 
 func CodexPresetCommand(executable string) []string {
@@ -209,6 +264,9 @@ func Migrate(value Config) (Config, error) {
 		}
 		if agent.RuntimeKind == "codex" && agent.CodexSessionConflictPolicy == "" {
 			agent.CodexSessionConflictPolicy = CodexSessionConflictPreserveAndRetry
+		}
+		if agent.WorkspaceAlias == "" {
+			agent.WorkspaceAlias = DefaultWorkspaceAlias(agent.Workspace)
 		}
 		if agent.PresetVersion == CurrentPresetVersion || agent.RuntimeKind == "generic" {
 			continue
@@ -528,6 +586,11 @@ func (a AgentConfig) validate() error {
 	}
 	if !filepath.IsAbs(a.Workspace) {
 		return fmt.Errorf("workspace must be an absolute path")
+	}
+	if a.WorkspaceAlias != "" {
+		if err := ValidateWorkspaceAlias(a.WorkspaceAlias); err != nil {
+			return err
+		}
 	}
 	for _, name := range a.EnvAllowlist {
 		if name == "" || strings.Contains(name, "=") {

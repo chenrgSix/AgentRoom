@@ -57,6 +57,7 @@ type RuntimeInput struct {
 	Role                       string                            `json:"role"`
 	ExecutablePath             string                            `json:"executablePath"`
 	Workspace                  string                            `json:"workspace"`
+	WorkspaceAlias             string                            `json:"workspaceAlias,omitempty"`
 	Sandbox                    string                            `json:"sandbox,omitempty"`
 	CodexSessionConflictPolicy config.CodexSessionConflictPolicy `json:"codexSessionConflictPolicy,omitempty"`
 	CredentialEnvironmentVar   string                            `json:"credentialEnvironmentVariable,omitempty"`
@@ -100,6 +101,9 @@ type AgentView struct {
 	Role                       string                            `json:"role"`
 	ExecutablePath             string                            `json:"executablePath"`
 	Workspace                  string                            `json:"workspace"`
+	WorkspaceAlias             string                            `json:"workspaceAlias"`
+	WorkspaceFilesystemPolicy  string                            `json:"workspaceFilesystemPolicy"`
+	WorkspaceNetworkPolicy     string                            `json:"workspaceNetworkPolicy"`
 	Sandbox                    string                            `json:"sandbox,omitempty"`
 	CodexSessionConflictPolicy config.CodexSessionConflictPolicy `json:"codexSessionConflictPolicy,omitempty"`
 	CredentialEnvironmentVar   string                            `json:"credentialEnvironmentVariable,omitempty"`
@@ -1216,11 +1220,18 @@ func buildRuntime(runtime RuntimeInput) (config.AgentConfig, error) {
 		return config.AgentConfig{}, fmt.Errorf("%s workspace: %w", runtime.Kind, err)
 	}
 	agent := config.AgentConfig{
-		Name:          strings.TrimSpace(runtime.Name),
-		Role:          strings.TrimSpace(runtime.Role),
-		Workspace:     workspace,
-		RuntimeKind:   runtime.Kind,
-		PresetVersion: config.CurrentPresetVersion,
+		Name:           strings.TrimSpace(runtime.Name),
+		Role:           strings.TrimSpace(runtime.Role),
+		Workspace:      workspace,
+		WorkspaceAlias: strings.TrimSpace(runtime.WorkspaceAlias),
+		RuntimeKind:    runtime.Kind,
+		PresetVersion:  config.CurrentPresetVersion,
+	}
+	if agent.WorkspaceAlias == "" {
+		agent.WorkspaceAlias = config.DefaultWorkspaceAlias(workspace)
+	}
+	if err := config.ValidateWorkspaceAlias(agent.WorkspaceAlias); err != nil {
+		return config.AgentConfig{}, err
 	}
 	switch runtime.Kind {
 	case "codex":
@@ -1302,7 +1313,10 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 		s.state.Agents = append(s.state.Agents, AgentView{
 			AgentID: identities[agent.Name], Kind: kind, Name: agent.Name, Role: agent.Role,
 			ExecutablePath: executablePath, Workspace: agent.Workspace,
-			Sandbox: sandbox, CodexSessionConflictPolicy: agent.CodexSessionConflictPolicy,
+			WorkspaceAlias:            agent.ResolvedWorkspaceAlias(),
+			WorkspaceFilesystemPolicy: agent.WorkspaceFilesystemPolicy(),
+			WorkspaceNetworkPolicy:    agent.WorkspaceNetworkPolicy(),
+			Sandbox:                   sandbox, CodexSessionConflictPolicy: agent.CodexSessionConflictPolicy,
 			CredentialEnvironmentVar: credentialEnvironmentVar,
 			ExecutableReady:          executableReady, RuntimeState: runtimeState,
 		})

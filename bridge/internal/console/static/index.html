@@ -252,6 +252,7 @@
               <span id="codex-preflight-result">预检不会保存配置或重启 Bridge。</span>
             </div>
             <label>工作区<input class="workspace" id="codex-workspace" required></label>
+            <label>工作区别名（仅此别名可同步到中央）<input id="codex-workspace-alias" maxlength="80" placeholder="留空则使用目录名"></label>
             <label>文件沙箱<select id="codex-sandbox"><option value="workspace-write">允许修改工作区</option><option value="read-only">只读</option></select></label>
             <label>会话占用策略
               <select id="codex-session-conflict-policy" aria-describedby="codex-session-ownership-policy">
@@ -279,6 +280,7 @@
               <span id="pi-preflight-result">预检不会保存配置或重启 Bridge。</span>
             </div>
             <label>工作区<input class="workspace" id="pi-workspace"></label>
+            <label>工作区别名（仅此别名可同步到中央）<input id="pi-workspace-alias" maxlength="80" placeholder="留空则使用目录名"></label>
             <label>凭据环境变量名称（可选）<input id="pi-credential-env" placeholder="例如 ANTHROPIC_API_KEY"></label>
             <p class="runtime-policy" id="pi-permission-policy">权限跟随本机 Pi：本地启用的工具、扩展、Skills 与项目上下文保持生效；中央服务无法提升权限。</p>
           </div>
@@ -378,6 +380,7 @@
             <span id="agent-preflight-result">先验证当前表单；不会写入文件或重启 Bridge。</span>
           </div>
           <label>工作区<input id="agent-workspace" required></label>
+          <label>工作区别名（仅此别名可同步到中央）<input id="agent-workspace-alias" maxlength="80" placeholder="留空则使用目录名"></label>
           <label id="agent-sandbox-field">文件沙箱
             <select id="agent-sandbox">
               <option value="workspace-write">允许修改工作区</option>
@@ -395,7 +398,7 @@
           </label>
           <p class="runtime-policy runtime-policy-warning" id="agent-codex-session-ownership-policy">当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server。<span id="agent-codex-session-ownership-policy-copy">若会话正被其他客户端使用，Bridge 会保留原绑定并提示稍后重试，不会另建会话。</span><button class="inline-guide-link" type="button" data-open-codex-session-guide>查看完整说明</button></p>
           <p class="runtime-policy hidden" id="agent-pi-permission-policy">权限跟随本机 Pi；Bridge 仅固定 JSON 输出与无会话运行方式。</p>
-          <p class="modal-help">保存只会更新这个智能体；若 Bridge 正在运行，将安全重启连接。任务或自检执行期间禁止修改。</p>
+          <p class="modal-help">绝对路径、文件与网络权限、命令和环境变量只保存在本机。中央仅收到安全别名、不透明 Workspace 引用和闭合能力摘要。保存只会更新这个智能体；若 Bridge 正在运行，将安全重启连接。任务或自检执行期间禁止修改。</p>
           <div class="actions modal-actions">
             <button class="secondary" id="cancel-agent-modal" type="button">取消</button>
             <button class="primary" id="save-agent" type="submit">保存</button>

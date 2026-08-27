@@ -34,6 +34,22 @@ function normalizedLabel(value: string, label: string): string {
   return normalized;
 }
 
+function normalizedWorkspaceAlias(value: string | undefined): string | null {
+  if (value === undefined) return null;
+  const normalized = value.trim();
+  if (
+    normalized !== value ||
+    normalized.length === 0 ||
+    [...normalized].length > 80 ||
+    normalized === "." ||
+    normalized === ".." ||
+    /[\/\\\u0000-\u001F\u007F]/u.test(normalized)
+  ) {
+    throw new Error("Bridge Workspace alias is invalid");
+  }
+  return normalized;
+}
+
 function validateCapabilities(input: PublishAgentInput): void {
   if (
     input.runtimePolicy != null &&
@@ -157,6 +173,7 @@ export class AgentService {
       runtimeScopeId?: string;
       workspaceRef?: string;
       workspaceGeneration?: string;
+      workspaceAlias?: string;
       now: string;
     }
   ): AgentRecord {
@@ -189,6 +206,10 @@ export class AgentService {
         !/^[0-9a-f]{64}$/u.test(input.workspaceGeneration))
     ) {
       throw new Error("Bridge Workspace snapshot identity is invalid");
+    }
+    const workspaceAlias = normalizedWorkspaceAlias(input.workspaceAlias);
+    if (workspaceAlias !== null && input.workspaceRef === undefined) {
+      throw new Error("Bridge Workspace alias requires a snapshot identity");
     }
     if (
       input.capabilities.supportsWorkspaceLeases === true &&
@@ -230,6 +251,7 @@ export class AgentService {
       workspaceRef: input.workspaceRef ?? existing?.workspaceRef ?? null,
       workspaceGeneration: input.workspaceGeneration ??
         existing?.workspaceGeneration ?? null,
+      workspaceAlias,
       enabled: existing?.enabled ?? true,
       presence: existing?.enabled === false ? "offline" : "ready",
       createdAt: existing?.createdAt ?? input.now,

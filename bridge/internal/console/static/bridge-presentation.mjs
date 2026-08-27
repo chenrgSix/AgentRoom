@@ -175,6 +175,9 @@ export function agentPresentation(agent, {bridgeRunning} = {}) {
     : agent.sandbox === "workspace-write"
     ? "可修改工作区"
     : "本机策略";
+  const networkPolicy = agent.workspaceNetworkPolicy === "runtime-managed"
+    ? "跟随本机策略"
+    : "本机策略";
   const sessionConflictPolicy = agent.kind === "codex"
     ? agent.codexSessionConflictPolicy === "start_new"
       ? "占用时新建会话"
@@ -188,8 +191,9 @@ export function agentPresentation(agent, {bridgeRunning} = {}) {
     status,
     tone,
     filesystemPolicy,
+    networkPolicy,
     sessionConflictPolicy,
-    workspaceName: workspaceName(agent.workspace),
+    workspaceName: agent.workspaceAlias || workspaceName(agent.workspace),
     executableSummary: agent.executableReady ? "Runtime 已找到" : "Runtime 不可用"
   };
 }

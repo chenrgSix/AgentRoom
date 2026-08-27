@@ -22,6 +22,7 @@ interface AgentRow {
   runtime_scope_id: string | null;
   workspace_ref: string | null;
   workspace_generation: string | null;
+  workspace_alias: string | null;
   enabled: number;
   presence: AgentRecord["presence"];
   created_at: string;
@@ -50,12 +51,12 @@ export class AgentDeviceRepository {
         INSERT INTO agents (
           agent_id, team_id, owner_member_id, device_id, name, role,
           integration_mode, capabilities_json, runtime_policy_json,
-          runtime_scope_id, workspace_ref, workspace_generation, enabled,
+          runtime_scope_id, workspace_ref, workspace_generation, workspace_alias, enabled,
           presence, created_at, updated_at
         ) VALUES (
           @agentId, @teamId, @ownerMemberId, @deviceId, @name, @role,
           @integrationMode, @capabilitiesJson, @runtimePolicyJson,
-          @runtimeScopeId, @workspaceRef, @workspaceGeneration, @enabled,
+          @runtimeScopeId, @workspaceRef, @workspaceGeneration, @workspaceAlias, @enabled,
           @presence, @createdAt, @updatedAt
         )
       `).run({
@@ -63,6 +64,7 @@ export class AgentDeviceRepository {
         runtimeScopeId: agent.runtimeScopeId ?? null,
         workspaceRef: agent.workspaceRef ?? null,
         workspaceGeneration: agent.workspaceGeneration ?? null,
+        workspaceAlias: agent.workspaceAlias ?? null,
         capabilitiesJson: JSON.stringify(agent.capabilities),
         runtimePolicyJson: agent.runtimePolicy
           ? JSON.stringify(agent.runtimePolicy)
@@ -88,7 +90,8 @@ export class AgentDeviceRepository {
       SET name = @name, role = @role, capabilities_json = @capabilitiesJson,
           runtime_policy_json = @runtimePolicyJson,
           runtime_scope_id = @runtimeScopeId, workspace_ref = @workspaceRef,
-          workspace_generation = @workspaceGeneration, enabled = @enabled,
+          workspace_generation = @workspaceGeneration, workspace_alias = @workspaceAlias,
+          enabled = @enabled,
           presence = @presence, updated_at = @updatedAt
       WHERE agent_id = @agentId
     `).run({
@@ -96,6 +99,7 @@ export class AgentDeviceRepository {
       runtimeScopeId: agent.runtimeScopeId ?? null,
       workspaceRef: agent.workspaceRef ?? null,
       workspaceGeneration: agent.workspaceGeneration ?? null,
+      workspaceAlias: agent.workspaceAlias ?? null,
       capabilitiesJson: JSON.stringify(agent.capabilities),
       runtimePolicyJson: agent.runtimePolicy
         ? JSON.stringify(agent.runtimePolicy)
@@ -312,6 +316,7 @@ export class AgentDeviceRepository {
       runtimeScopeId: row.runtime_scope_id,
       workspaceRef: row.workspace_ref,
       workspaceGeneration: row.workspace_generation,
+      workspaceAlias: row.workspace_alias,
       enabled: row.enabled === 1,
       presence: row.presence,
       createdAt: row.created_at,

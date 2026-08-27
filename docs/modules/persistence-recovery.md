@@ -11,6 +11,10 @@ Room participation, Message, Agent projection, Run, delivery, Discussion Wave,
 Agent Task, and audit records. SQLite is the MVP database for a single central
 server instance.
 
+Migration 0042 adds the nullable, bounded `workspace_alias` Agent projection.
+It deliberately adds no Workspace root, command, environment, filesystem
+policy, or network policy column; those remain Bridge-owned configuration.
+
 ## Storage Model
 
 Repositories expose domain operations rather than raw SQL to other modules.

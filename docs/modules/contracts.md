@@ -126,6 +126,14 @@ to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free
 comparison identities, not Runtime scope IDs or permission grants. Older
 Bridges omit them and remain limited to reference-only Artifact evidence.
 
+`WSP-002` adds optional `workspaceAlias` to the same managed Agent publication.
+It is a trimmed, path-separator-free display label of at most 80 characters and
+requires no authority interpretation. The schema explicitly rejects known
+local-binding keys such as Workspace path/root, command, environment, and
+filesystem/network policy while retaining additive unknown-field compatibility.
+The Server repeats those negative checks and rejects invalid aliases; an older
+Bridge may omit the alias without changing Device or Agent identity.
+
 `REG-005` adds optional `runtimePolicy` to managed Agent publication. The
 closed summary contains exactly one `filesystemAccess` enum with
 `read-only`, `workspace-write`, or `local-policy`; local paths, commands,

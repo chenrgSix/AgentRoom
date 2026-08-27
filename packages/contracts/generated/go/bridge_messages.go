@@ -97,17 +97,20 @@ type AgentPublishMessage struct {
 }
 
 type AgentPublishPayload struct {
-	AgentID             string         `json:"agentId"`
-	Capabilities        Capabilities   `json:"capabilities"`
-	DeviceID            string         `json:"deviceId"`
-	Name                string         `json:"name"`
-	OwnerMemberID       string         `json:"ownerMemberId"`
-	Role                string         `json:"role"`
-	RuntimePolicy       *RuntimePolicy `json:"runtimePolicy,omitempty"`
-	RuntimeScopeID      *string        `json:"runtimeScopeId,omitempty"`
-	TeamID              string         `json:"teamId"`
-	WorkspaceGeneration *string        `json:"workspaceGeneration,omitempty"`
-	WorkspaceRef        *string        `json:"workspaceRef,omitempty"`
+	AgentID        string         `json:"agentId"`
+	Capabilities   Capabilities   `json:"capabilities"`
+	DeviceID       string         `json:"deviceId"`
+	Name           string         `json:"name"`
+	OwnerMemberID  string         `json:"ownerMemberId"`
+	Role           string         `json:"role"`
+	RuntimePolicy  *RuntimePolicy `json:"runtimePolicy,omitempty"`
+	RuntimeScopeID *string        `json:"runtimeScopeId,omitempty"`
+	TeamID         string         `json:"teamId"`
+	// Bridge-authorized path-free label for one local Workspace binding. It grants no
+	// filesystem or network authority.
+	WorkspaceAlias      *string `json:"workspaceAlias,omitempty"`
+	WorkspaceGeneration *string `json:"workspaceGeneration,omitempty"`
+	WorkspaceRef        *string `json:"workspaceRef,omitempty"`
 }
 
 type Capabilities struct {

@@ -141,15 +141,20 @@ export interface AgentPublishMessage {
 }
 
 export interface AgentPublishPayload {
-  agentId:              string;
-  capabilities:         Capabilities;
-  deviceId:             string;
-  name:                 string;
-  ownerMemberId:        string;
-  role:                 string;
-  runtimePolicy?:       RuntimePolicy;
-  runtimeScopeId?:      string;
-  teamId:               string;
+  agentId:         string;
+  capabilities:    Capabilities;
+  deviceId:        string;
+  name:            string;
+  ownerMemberId:   string;
+  role:            string;
+  runtimePolicy?:  RuntimePolicy;
+  runtimeScopeId?: string;
+  teamId:          string;
+  /**
+   * Bridge-authorized path-free label for one local Workspace binding. It grants no
+   * filesystem or network authority.
+   */
+  workspaceAlias?:      string;
   workspaceGeneration?: string;
   workspaceRef?:        string;
   [property: string]: unknown;

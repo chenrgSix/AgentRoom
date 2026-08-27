@@ -187,6 +187,7 @@
           "name": "Bob",
           "role": "Backend",
           "runtimeScopeId": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "workspaceAlias": "Payments API",
           "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "workspaceGeneration": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
           "runtimePolicy": {
@@ -206,6 +207,40 @@
         }
       },
       "valid": true
+    },
+    {
+      "name": "Agent publication rejects a local Workspace path",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_agent_workspace_path_reject_1234",
+        "timestamp": "2026-08-22T10:00:09Z",
+        "type": "agent.publish",
+        "payload": {
+          "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "name": "Unsafe Builder",
+          "role": "Backend",
+          "workspacePath": "/Users/alice/private",
+          "capabilities": {
+            "invocationMode": "managed",
+            "supportsStart": true,
+            "supportsResume": true,
+            "supportsStreaming": true,
+            "supportsInterrupt": true,
+            "supportsHandoff": false
+          }
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Workspace alias rejects path separators",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/workspaceAlias",
+      "instance": "Users/alice/private",
+      "valid": false
     },
     {
       "name": "Agent Runtime policy rejects local configuration detail",

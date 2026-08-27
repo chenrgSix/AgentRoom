@@ -58,7 +58,7 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 			DataDir:     directory,
 			Agents: []config.AgentConfig{{
 				Name: "Builder", Role: "Implementation", Adapter: "generic",
-				Command: []string{"agent"}, Workspace: directory,
+				Command: []string{"agent"}, Workspace: directory, WorkspaceAlias: "Payments API",
 			}},
 		},
 		Credential: pairing.Credential{
@@ -117,6 +117,17 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 		!generationOK || len(workspaceGeneration) != 64 ||
 		strings.Contains(workspaceRef, directory) || strings.Contains(workspaceGeneration, directory) {
 		t.Fatalf("opaque Workspace snapshot was not published safely: %#v", publication)
+	}
+	if payload["workspaceAlias"] != "Payments API" {
+		t.Fatalf("safe Workspace alias was not published: %#v", publication)
+	}
+	for _, localField := range []string{
+		"workspace", "workspacePath", "workspaceRoot", "filesystemPolicy",
+		"networkPolicy", "command", "runtimeCommand", "env", "environment",
+	} {
+		if _, exists := payload[localField]; exists {
+			t.Fatalf("local Workspace detail %q crossed the Bridge boundary: %#v", localField, publication)
+		}
 	}
 	cancel()
 	select {

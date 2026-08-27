@@ -199,6 +199,9 @@ async function createFixture(
     ownerMemberId: paired.device.ownerMemberId,
     role: "Protocol Test",
     runtimePolicy: { filesystemAccess: "read-only" },
+    workspaceAlias: "Protocol Workspace",
+    workspaceRef: `workspace_${"a".repeat(64)}`,
+    workspaceGeneration: "b".repeat(64),
     teamId: paired.device.teamId
   }));
   await waitFor(async () => {
@@ -211,9 +214,11 @@ async function createFixture(
       agentId: string;
       presence: string;
       runtimePolicy?: { filesystemAccess?: string };
+      workspaceAlias?: string;
     }) =>
       agent.agentId === agentId &&
       agent.presence === "ready" &&
+      agent.workspaceAlias === "Protocol Workspace" &&
       agent.runtimePolicy?.filesystemAccess === "read-only"
     );
   });
@@ -1011,6 +1016,45 @@ test("Bridge rejects local details inside a Runtime policy summary", async () =>
       code: 4_008,
       reason: "Bridge message rejected: agent_publication_rejected"
     });
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("Bridge rejects local Workspace binding detail without changing its safe projection", async () => {
+  const fixture = await createFixture();
+  try {
+    const closed = nextClose(fixture.socket);
+    send(fixture.socket, envelope("agent.publish", {
+      agentId,
+      capabilities: {
+        invocationMode: "managed",
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: false
+      },
+      deviceId: fixture.deviceId,
+      name: "Unsafe Agent",
+      ownerMemberId: fixture.ownerMemberId,
+      role: "Unsafe",
+      workspaceAlias: "Private",
+      workspacePath: "/Users/alice/private",
+      teamId: fixture.teamId
+    }));
+    assert.equal((await closed).code, 4_008);
+    const listed = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/agents`,
+      headers: fixture.authorization
+    });
+    const projected = listed.json().find((agent: { agentId: string }) =>
+      agent.agentId === agentId
+    ) as Record<string, unknown>;
+    assert.equal(projected.workspaceAlias, "Protocol Workspace");
+    assert.equal("workspacePath" in projected, false);
+    assert.equal(JSON.stringify(projected).includes("/Users/alice/private"), false);
   } finally {
     await closeFixture(fixture);
   }

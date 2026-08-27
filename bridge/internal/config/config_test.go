@@ -194,6 +194,9 @@ func TestLoadMigratesLegacyRuntimePresetsWithoutLosingOwnerFields(t *testing.T) 
 	if loaded.SchemaVersion != CurrentSchemaVersion {
 		t.Fatalf("legacy schema was not migrated: %#v", loaded)
 	}
+	if loaded.Agents[0].WorkspaceAlias != "repo" || loaded.Agents[1].WorkspaceAlias != "repo" {
+		t.Fatalf("legacy Workspace aliases were not derived locally: %#v", loaded.Agents)
+	}
 	if loaded.DeviceName != "Owner Mac" || loaded.Agents[0].Name != "My Codex" ||
 		loaded.Agents[0].Role != "Builder" || loaded.Agents[0].Workspace != workspace {
 		t.Fatalf("Codex owner fields changed during migration: %#v", loaded.Agents[0])
@@ -368,6 +371,31 @@ func TestMigrateRejectsFutureConfigAndPresetVersions(t *testing.T) {
 		PresetVersion: CurrentPresetVersion + 1,
 	}}}); err == nil {
 		t.Fatal("expected a future Runtime preset to fail closed")
+	}
+}
+
+func TestWorkspaceAliasMigrationAndValidationStayPathFree(t *testing.T) {
+	workspace := filepath.Join(t.TempDir(), "Payments API")
+	migrated, err := Migrate(Config{Agents: []AgentConfig{{
+		Name: "Builder", Role: "Implementation", Adapter: "generic", RuntimeKind: "generic",
+		Command: []string{"/usr/local/bin/agent"}, Workspace: workspace,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if migrated.Agents[0].WorkspaceAlias != "Payments API" {
+		t.Fatalf("unexpected migrated Workspace alias: %#v", migrated.Agents[0])
+	}
+	if migrated.Agents[0].WorkspaceFilesystemPolicy() != "runtime-managed" ||
+		migrated.Agents[0].WorkspaceNetworkPolicy() != "runtime-managed" {
+		t.Fatalf("local policies were not closed: %#v", migrated.Agents[0])
+	}
+	for _, invalid := range []string{" users ", "../private", `Users\\private`, ".", "line\nbreak"} {
+		candidate := migrated.Agents[0]
+		candidate.WorkspaceAlias = invalid
+		if err := candidate.validate(); err == nil {
+			t.Fatalf("unsafe Workspace alias was accepted: %q", invalid)
+		}
 	}
 }
 

@@ -51,7 +51,7 @@ test("credential, certificate, protocol, and unknown failures remain distinct", 
   }
 });
 
-test("Agent presentation prioritizes availability, local authority, and Workspace basename", () => {
+test("Agent presentation prioritizes availability and the local Workspace binding", () => {
   assert.deepEqual(agentPresentation({
     name: "Codex-设计",
     role: "产品经理",
@@ -59,7 +59,9 @@ test("Agent presentation prioritizes availability, local authority, and Workspac
     runtimeState: "idle",
     executableReady: true,
     sandbox: "read-only",
-    workspace: "/Users/owner/Code/AgentRoom"
+    workspace: "/Users/owner/Code/AgentRoom",
+    workspaceAlias: "Payments API",
+    workspaceNetworkPolicy: "runtime-managed"
   }), {
     initials: "CO",
     kindLabel: "Codex",
@@ -67,8 +69,9 @@ test("Agent presentation prioritizes availability, local authority, and Workspac
     status: "可用",
     tone: "success",
     filesystemPolicy: "只读",
+    networkPolicy: "跟随本机策略",
     sessionConflictPolicy: "占用时保留并重试",
-    workspaceName: "AgentRoom",
+    workspaceName: "Payments API",
     executableSummary: "Runtime 已找到"
   });
 
@@ -82,6 +85,7 @@ test("Agent presentation prioritizes availability, local authority, and Workspac
   });
   assert.equal(pi.status, "执行中 · 2");
   assert.equal(pi.filesystemPolicy, "跟随本机策略");
+  assert.equal(pi.networkPolicy, "本机策略");
   assert.equal(pi.sessionConflictPolicy, "");
   assert.equal(pi.workspaceName, "room");
 
