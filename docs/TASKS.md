@@ -237,7 +237,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | SEC-003 | DONE | Add credential rotation and Device revoke propagation | BRG-003, SEC-002 | revoked Bridge cannot reconnect or receive Runs |
 | SEC-004 | DONE | Add message and log redaction boundary | MCP-002, BRG-004 | seeded secrets never enter persisted output |
 | SEC-005 | DONE | Add trusted-team Web identity and recovery | SEC-001, OPS-003 | trusted mode disables public bootstrap; secure Cookie setup/recovery, Origin checks, hashed one-time member invitations, expiry, replay, and non-owner tests pass |
-| SEC-006 | ACTIVE | Authorize and recover owner-scoped Agent provisioning | CON-011, SEC-002, REG-004, BRG-003 | migration, service, HTTP, WebSocket, restart, retry, foreign-owner, offline, and code non-persistence tests converge one request to one managed Agent |
+| SEC-006 | DONE | Authorize and recover owner-scoped Agent provisioning | CON-011, SEC-002, REG-004, BRG-003 | migration, service, HTTP, WebSocket, restart, retry, foreign-owner, offline, and code non-persistence tests converge one request to one managed Agent |
 | OPS-001 | DONE | Propagate trace IDs through message, Run, Bridge, runtime | RUN-003 | one authorized query reconstructs persisted Message, Run, Delivery, and Runtime event entries; cross-process E2E verifies one trace |
 | OPS-002 | DONE | Add structured logs, metrics, and health endpoints | OPS-001 | safe HTTP/Bridge/Run logs, Prometheus metrics, live/ready/degraded health, and tested failure signals |
 | OPS-003 | DONE | Document and configure deployable listener topology | BRG-003, MCP-001 | loopback, proxy, and trusted-LAN modes are explicit |

@@ -1,3 +1,7 @@
+import type { AgentProvisionRequestedMessage } from
+  "@agent-room/contracts/bridge-messages";
+
+import { createOpaqueId } from "../domain/identifiers.js";
 import { FakeRuntimeAdapter } from "../runtime/fake-runtime-adapter.js";
 import {
   bodyObject,
@@ -8,6 +12,7 @@ import {
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerRegistryRoutes({
+  agentProvisioning,
   agents,
   app,
   auth,
@@ -88,6 +93,65 @@ export function registerRegistryRoutes({
       request.params.teamId,
       clock()
     )
+  );
+  app.get<{ Params: { teamId: string } }>(
+    "/api/teams/:teamId/agent-provision-requests",
+    async (request) => agentProvisioning.listOwnRequests(
+      principal(request),
+      request.params.teamId
+    )
+  );
+  app.post<{ Params: { teamId: string } }>(
+    "/api/teams/:teamId/agent-provision-requests",
+    async (request) => {
+      const body = bodyObject(request);
+      const managementCode = requiredString(
+        body.managementCode,
+        "managementCode",
+        8
+      );
+      if (!/^(?:[0-9]{6}|[0-9]{8})$/u.test(managementCode)) {
+        throw new Error("Management code must contain exactly 6 or 8 digits");
+      }
+      const now = clock();
+      const provision = agentProvisioning.createRequest(principal(request), {
+        requestId: requiredString(body.requestId, "requestId", 140),
+        teamId: request.params.teamId,
+        deviceId: requiredString(body.deviceId, "deviceId", 140),
+        templateAgentId: requiredString(
+          body.templateAgentId,
+          "templateAgentId",
+          140
+        ),
+        name: requiredString(body.name, "name"),
+        role: requiredString(body.role, "role"),
+        now
+      });
+      if (["accepted", "ready", "rejected"].includes(provision.status)) {
+        return provision;
+      }
+      const message: AgentProvisionRequestedMessage = {
+        protocolVersion: "1.0",
+        messageId: createOpaqueId("msg"),
+        timestamp: now,
+        type: "agent.provision.requested",
+        payload: {
+          requestId: provision.requestId,
+          deviceId: provision.deviceId,
+          templateAgentId: provision.templateAgentId,
+          agentId: provision.agentId,
+          name: provision.name,
+          role: provision.role,
+          managementCode
+        }
+      };
+      if (!bridgeConnections.send(provision.deviceId, message)) {
+        throw new Error(
+          "Agent provisioning conflict: Bridge is offline; retry with the same request ID"
+        );
+      }
+      return agentProvisioning.markDelivered(provision.requestId, now);
+    }
   );
   app.post<{ Params: { teamId: string } }>(
     "/api/teams/:teamId/fake-agents",

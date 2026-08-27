@@ -14,6 +14,8 @@ import type { TeamWaitService } from "../mcp/team-wait-service.js";
 import type { OperationalMetrics } from "../observability/operational-metrics.js";
 import type { TraceRepository } from "../observability/trace-repository.js";
 import type { AgentService } from "../registry/agent-service.js";
+import type { AgentProvisioningService } from
+  "../registry/agent-provisioning-service.js";
 import type { MemberDeviceService } from "../registry/member-device-service.js";
 import type { PresenceService } from "../registry/presence-service.js";
 import type { BridgeRunEventService } from "../run/bridge-run-event-service.js";
@@ -55,6 +57,7 @@ export interface ServerRouteContext {
   artifactPublications: ArtifactPublicationService;
   advanceDiscussion: (runId: string) => Promise<void>;
   agents: AgentService;
+  agentProvisioning: AgentProvisioningService;
   auth: AuthService;
   bridgeConnections: BridgeConnectionRegistry;
   bridgeRunEvents: BridgeRunEventService;

@@ -14,6 +14,7 @@ type BridgeRejectionCategory =
   | "invalid_hello"
   | "heartbeat_identity_mismatch"
   | "agent_publication_rejected"
+  | "agent_provision_result_rejected"
   | "invalid_trace_id"
   | "run_acceptance_rejected"
   | "run_status_rejected"
@@ -29,6 +30,7 @@ const bridgeLogMessageTypes = new Set([
   "bridge.hello",
   "bridge.heartbeat",
   "agent.publish",
+  "agent.provision.result",
   "run.accepted",
   "run.status",
   "run.activity",
@@ -66,6 +68,7 @@ function safeBridgeLogMessageType(value: unknown): string {
 
 export function registerBridgeSocketRoutes({
   advanceDiscussion,
+  agentProvisioning,
   agents,
   app,
   auth,
@@ -237,7 +240,7 @@ export function registerBridgeSocketRoutes({
             rejectMessage("agent_publication_rejected");
             return;
           }
-          agents.publishDeviceAgent(devicePrincipal, {
+          const publishedAgent = agents.publishDeviceAgent(devicePrincipal, {
             agentId: message.payload.agentId,
             name: message.payload.name,
             role: message.payload.role,
@@ -275,7 +278,65 @@ export function registerBridgeSocketRoutes({
               : {}),
             now: clock()
           });
+          agentProvisioning.markReadyForPublishedAgent(
+            devicePrincipal,
+            publishedAgent.agentId,
+            clock()
+          );
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
+          teamChanges.notify(devicePrincipal.teamId);
+          return;
+        }
+        if (
+          message.type === "agent.provision.result" &&
+          registeredEpoch !== undefined
+        ) {
+          const validReasons = new Set([
+            "provisioning_disabled",
+            "invalid_code",
+            "rate_limited",
+            "busy",
+            "template_not_found",
+            "identity_conflict",
+            "invalid_request",
+            "configuration_failed"
+          ]);
+          if (
+            typeof message.payload.requestId !== "string" ||
+            typeof message.payload.deviceId !== "string" ||
+            typeof message.payload.templateAgentId !== "string" ||
+            typeof message.payload.agentId !== "string" ||
+            !["accepted", "rejected"].includes(
+              String(message.payload.status)
+            ) ||
+            (message.payload.status === "accepted" &&
+              message.payload.reason !== undefined) ||
+            (message.payload.status === "rejected" &&
+              !validReasons.has(String(message.payload.reason)))
+          ) {
+            rejectMessage("agent_provision_result_rejected");
+            return;
+          }
+          agentProvisioning.applyResult(devicePrincipal, {
+            requestId: message.payload.requestId,
+            deviceId: message.payload.deviceId,
+            templateAgentId: message.payload.templateAgentId,
+            agentId: message.payload.agentId,
+            status: message.payload.status as "accepted" | "rejected",
+            ...(typeof message.payload.reason === "string"
+              ? {
+                  reason: message.payload.reason as
+                    | "provisioning_disabled"
+                    | "invalid_code"
+                    | "rate_limited"
+                    | "busy"
+                    | "template_not_found"
+                    | "identity_conflict"
+                    | "invalid_request"
+                    | "configuration_failed"
+                }
+              : {})
+          }, clock());
           teamChanges.notify(devicePrincipal.teamId);
           return;
         }
@@ -629,6 +690,8 @@ export function registerBridgeSocketRoutes({
               ? "run_output_rejected"
             : message.type === "run.reply"
               ? "run_reply_rejected"
+              : message.type === "agent.provision.result"
+                ? "agent_provision_result_rejected"
               : message.type === "agent.publish"
                 ? "agent_publication_rejected"
                 : "invalid_envelope";

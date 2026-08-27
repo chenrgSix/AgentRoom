@@ -296,6 +296,148 @@ test("Bridge trace validation accepts every contract-valid base64url prefix", ()
   assert.equal(isBridgeTraceId("trace_short"), false);
 });
 
+test("central provisioning keeps the code transient and converges after Bridge publication", async () => {
+  const fixture = await createFixture();
+  try {
+    const requestId = "agentprov_websocket_12345678";
+    const deliveredMessage = nextMessage(fixture.socket);
+    const submitted = await fixture.app.inject({
+      method: "POST",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization,
+      payload: {
+        requestId,
+        deviceId: fixture.deviceId,
+        templateAgentId: agentId,
+        name: "Provisioned Reviewer",
+        role: "Review",
+        managementCode: "87654321"
+      }
+    });
+    assert.equal(submitted.statusCode, 200);
+    assert.equal(submitted.json().status, "delivered");
+    const provisionedAgentId = submitted.json().agentId as string;
+
+    const delivered = await deliveredMessage;
+    assert.equal(delivered.type, "agent.provision.requested");
+    assert.deepEqual(delivered.payload, {
+      requestId,
+      deviceId: fixture.deviceId,
+      templateAgentId: agentId,
+      agentId: provisionedAgentId,
+      name: "Provisioned Reviewer",
+      role: "Review",
+      managementCode: "87654321"
+    });
+
+    const retriedMessage = nextMessage(fixture.socket);
+    const retried = await fixture.app.inject({
+      method: "POST",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization,
+      payload: {
+        requestId,
+        deviceId: fixture.deviceId,
+        templateAgentId: agentId,
+        name: "Provisioned Reviewer",
+        role: "Review",
+        managementCode: "87654321"
+      }
+    });
+    assert.equal(retried.statusCode, 200);
+    assert.equal(retried.json().agentId, provisionedAgentId);
+    assert.equal((await retriedMessage).payload.agentId, provisionedAgentId);
+
+    const listed = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization
+    });
+    assert.equal(listed.statusCode, 200);
+    assert.equal(JSON.stringify(listed.json()).includes("87654321"), false);
+    assert.equal(JSON.stringify(listed.json()).includes("managementCode"), false);
+
+    await sendAndFlush(fixture.socket, envelope("agent.provision.result", {
+      requestId,
+      deviceId: fixture.deviceId,
+      templateAgentId: agentId,
+      agentId: provisionedAgentId,
+      status: "accepted"
+    }));
+    await waitFor(async () => {
+      const response = await fixture.app.inject({
+        method: "GET",
+        url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+        headers: fixture.authorization
+      });
+      return response.json()[0]?.status === "accepted";
+    });
+
+    await sendAndFlush(fixture.socket, envelope("agent.publish", {
+      agentId: provisionedAgentId,
+      capabilities: {
+        invocationMode: "managed",
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: false
+      },
+      deviceId: fixture.deviceId,
+      name: "Provisioned Reviewer",
+      ownerMemberId: fixture.ownerMemberId,
+      role: "Review",
+      teamId: fixture.teamId
+    }));
+    await waitFor(async () => {
+      const response = await fixture.app.inject({
+        method: "GET",
+        url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+        headers: fixture.authorization
+      });
+      return response.json()[0]?.status === "ready";
+    });
+
+    const agents = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/agents`,
+      headers: fixture.authorization
+    });
+    assert.equal(agents.json().some((agent: { agentId: string }) =>
+      agent.agentId === provisionedAgentId
+    ), true);
+
+    const closed = nextClose(fixture.socket);
+    fixture.socket.terminate();
+    await closed;
+    await new Promise((resolve) => setImmediate(resolve));
+    const offline = await fixture.app.inject({
+      method: "POST",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization,
+      payload: {
+        requestId: "agentprov_offline_12345678",
+        deviceId: fixture.deviceId,
+        templateAgentId: agentId,
+        name: "Offline Agent",
+        role: "Deferred",
+        managementCode: "87654321"
+      }
+    });
+    assert.equal(offline.statusCode, 409);
+    const pending = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/agent-provision-requests`,
+      headers: fixture.authorization
+    });
+    assert.equal(pending.json().find((request: { requestId: string }) =>
+      request.requestId === "agentprov_offline_12345678"
+    )?.status, "pending");
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
 test("Bridge rejects missing traceId as a processed message, not malformed JSON", async () => {
   const fixture = await createFixture();
   try {

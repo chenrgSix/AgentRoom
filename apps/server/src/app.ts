@@ -51,6 +51,8 @@ import { TeamWaitService } from "./mcp/team-wait-service.js";
 import { OperationalMetrics } from "./observability/operational-metrics.js";
 import { TraceRepository } from "./observability/trace-repository.js";
 import { AgentService } from "./registry/agent-service.js";
+import { AgentProvisioningService } from
+  "./registry/agent-provisioning-service.js";
 import { MemberDeviceService } from "./registry/member-device-service.js";
 import { PresenceService } from "./registry/presence-service.js";
 import { DeliveryService } from "./run/delivery-service.js";
@@ -165,6 +167,7 @@ export async function createServerApp(
   const teamChanges = new TeamChangeService();
   const registry = new MemberDeviceService(core, auth);
   const agents = new AgentService(core, auth);
+  const agentProvisioning = new AgentProvisioningService(database, core, auth);
   const presence = new PresenceService(core, auth);
   const messages = new MessageService(core, auth);
   const teamWait = new TeamWaitService(core, auth);
@@ -590,6 +593,7 @@ export async function createServerApp(
     const message = error instanceof Error ? error.message : "Unexpected error";
     const statusCode = message.includes("UNIQUE constraint failed") ||
       message === "Room settings changed; reload and retry" ||
+      message.startsWith("Agent provisioning conflict:") ||
       message.startsWith("Room already has an active Discussion:") ||
       message.startsWith("Task already has an active Discussion:")
       ? 409
@@ -618,6 +622,7 @@ export async function createServerApp(
     artifactPublications,
     advanceDiscussion,
     agents,
+    agentProvisioning,
     auth,
     bridgeConnections,
     bridgeRunEvents,
