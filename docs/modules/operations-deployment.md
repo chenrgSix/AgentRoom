@@ -111,8 +111,10 @@ no-secret output/configuration, successful reentry with an existing database,
 each recorded external crash cut, conflicting reentry, delegated
 backup/restore, backup-before-upgrade, failed-upgrade revision reporting, and
 non-purging uninstall. The release verifier separately owns packaging evidence;
-real Docker Compose, live TLS, and physical two-machine checks remain separate
-evidence and unit tests do not claim them.
+real Docker Compose and live TLS evidence is recorded in
+`docs/acceptance/ops-008-central-controller.md`. It covers isolated local and
+direct-HTTPS host installs without claiming public ACME or a physical second
+machine; those remain separate QA evidence.
 
 ## Tasks
 
