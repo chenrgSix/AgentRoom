@@ -20,7 +20,7 @@ if ($LASTEXITCODE -ne 0 -or $hostOS -ne "windows") {
 }
 
 $verificationRoot = Join-Path ([IO.Path]::GetTempPath()) ("agentroom-installer-" + [guid]::NewGuid().ToString("N"))
-$installDir = Join-Path $verificationRoot "AgentRoom Bridge"
+$installDir = Join-Path $env:LOCALAPPDATA "Programs\AgentRoom Bridge"
 $installLog = Join-Path $verificationRoot "install.log"
 $upgradeLog = Join-Path $verificationRoot "upgrade.log"
 $uninstallLog = Join-Path $verificationRoot "uninstall.log"
@@ -81,6 +81,12 @@ function Assert-InstalledPayload {
 if (Test-Path -LiteralPath $stateSentinel) {
   throw "Installer verification refuses to replace existing owner state: $stateSentinel"
 }
+if (Test-Path -LiteralPath $installDir) {
+  throw "Installer verification refuses to replace an existing installation: $installDir"
+}
+if ((Test-Path -LiteralPath $uninstallKey) -or (Test-Path -LiteralPath $startMenuLink)) {
+  throw "Installer verification refuses to replace existing Windows registration or shortcuts"
+}
 
 New-Item -ItemType Directory -Path $verificationRoot -Force | Out-Null
 New-Item -ItemType Directory -Path $configDir -Force | Out-Null
@@ -90,7 +96,6 @@ try {
     "/VERYSILENT",
     "/SUPPRESSMSGBOXES",
     "/NORESTART",
-    "/DIR=`"$installDir`"",
     "/LOG=`"$installLog`""
   )
   Invoke-CheckedProcess $installer $installArguments "Initial installer run" $installLog
@@ -100,7 +105,6 @@ try {
     "/VERYSILENT",
     "/SUPPRESSMSGBOXES",
     "/NORESTART",
-    "/DIR=`"$installDir`"",
     "/LOG=`"$upgradeLog`""
   )
   Invoke-CheckedProcess $installer $upgradeArguments "Installer upgrade run" $upgradeLog
