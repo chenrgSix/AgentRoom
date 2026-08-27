@@ -56,7 +56,6 @@ LicenseFile={#SourceDir}\LICENSE
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"
-Name: "chinesesimplified"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
@@ -80,9 +79,6 @@ Filename: "https://developer.microsoft.com/en-us/microsoft-edge/webview2/#downlo
 english.LaunchBridge=Launch AgentRoom Bridge
 english.DownloadWebView2=Open the official Microsoft WebView2 Runtime download page
 english.WebView2Missing=Microsoft Edge WebView2 Runtime was not detected. AgentRoom Bridge can still be installed, but it needs WebView2 before first launch. The final page can open Microsoft's official download page.
-chinesesimplified.LaunchBridge=启动 AgentRoom Bridge
-chinesesimplified.DownloadWebView2=打开 Microsoft WebView2 Runtime 官方下载页
-chinesesimplified.WebView2Missing=未检测到 Microsoft Edge WebView2 Runtime。AgentRoom Bridge 仍可安装，但首次启动前必须安装 WebView2；完成页可以打开 Microsoft 官方下载页。
 
 [Code]
 const
