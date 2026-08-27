@@ -81,6 +81,16 @@ every Bridge Run event starts with sequence 1. `run.cancel_requested` is the
 server-to-Bridge interrupt command required by the documented cancellation
 flow.
 
+`CON-011` adds `agent.provision.requested` and `agent.provision.result`. The
+Server request carries one provision-request ID, target Device ID, existing
+template Agent ID, Server-selected new Agent ID, bounded name and role, and a
+transient six- or eight-digit management code. It carries no Runtime kind,
+command, path, environment, Provider field, credential, tool, or permission
+configuration. The Bridge result repeats the exact request, Device, template,
+and proposed Agent identities and returns only `accepted` or `rejected` plus a
+closed safe reason. A following authenticated `agent.publish`, not the result
+alone, establishes the managed Agent as ready.
+
 `WSP-001` adds optional opaque `workspaceRef` and `workspaceGeneration` fields
 to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free
 comparison identities, not Runtime scope IDs or permission grants. Older

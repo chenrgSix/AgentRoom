@@ -80,6 +80,25 @@ credential remains unchanged: the replacement endpoint must belong to the same
 central deployment and accept that credential, otherwise the normal
 authenticated connection fails visibly without silently enrolling elsewhere.
 
+### Locally authorized central provisioning
+
+`BRG-042` follows
+[ADR-0020](../adr/0020-authorize-central-agent-provisioning-locally.md). The
+paired Console Settings surface lets the local owner disable provisioning,
+save a reusable eight-digit fixed code, or display a locally generated
+six-digit code that rotates every five minutes. Code configuration is local,
+token-authenticated, omitted from public state and diagnostics, and fenced
+while enrollment, probes, or Team work is active.
+
+An authenticated central request names an existing Agent on the same Device as
+its template. The Bridge resolves that stable identity, validates the local
+mode and code, clones the complete local Agent configuration with only the new
+name and role, binds the Server-reserved Agent identity, atomically replaces
+the configuration, and rebuilds the connection. No request may supply or
+override a command, Workspace, environment, Runtime credential, Provider,
+sandbox, tool, or permission field. Rejection returns only a closed reason and
+never the code or local mismatch detail.
+
 The HTTP listener rejects non-loopback addresses. Every API call requires a
 32-byte random Bearer token that is removed from browser history and kept only
 in tab session storage. Public state omits Console tokens, Device credentials,

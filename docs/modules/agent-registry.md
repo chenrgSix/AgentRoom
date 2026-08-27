@@ -94,6 +94,14 @@ Rooms. Room ownership may later remove that Agent independently per Room;
 republication of the same stable Agent updates metadata and Presence without
 silently restoring removed Room assignments.
 
+For `SEC-006`, the Registry also exposes durable owner-scoped provisioning
+requests. A request reserves one new Agent ID and references one existing
+managed template Agent on the same active Device. It is not an Agent, cannot be
+mentioned or receive work, and contains no local Runtime configuration. Only
+the exact Device may accept or reject it. Acceptance remains pending until that
+Device publishes the reserved Agent ID; publication atomically converges the
+request to `ready`, while exact retries preserve the same request and identity.
+
 ## Verification
 
 - Reconnect converges publication without duplicate Agents.

@@ -83,6 +83,23 @@ command, file, network, and approval controls remain authoritative, and neither
 the server nor Bridge may bypass them. Login state and Runtime credentials stay
 on the owner machine.
 
+### Central Agent provisioning
+
+[ADR-0020](../adr/0020-authorize-central-agent-provisioning-locally.md) permits
+an authenticated Web User to request a sibling Agent only on an active Device
+owned by that User's exact Team Member. Team Owner role never substitutes for
+Device ownership. The Server persists request metadata but never the submitted
+management code and sends the request only over the Device-authenticated
+outbound Bridge connection.
+
+The Bridge locally owns `disabled`, reusable eight-digit `fixed`, and
+five-minute six-digit `rotating` modes. It validates the code and exact request
+under its existing configuration mutation fence. Central success means only
+that the request was accepted; the normal Device-authenticated publication is
+still required before the Agent becomes ready. Management codes do not grant
+Room access, Run authority, filesystem access, Runtime permission, or account
+recovery.
+
 ## Data Protection
 
 Room context, replies, handoff summaries, and logs may leave the owner machine

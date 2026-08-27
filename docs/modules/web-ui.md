@@ -63,6 +63,9 @@ without changing server-owned state.
   budget as a completion target.
 - Dedicated Agent management workspace with roster and availability summaries.
 - Managed Bridge approval, MCP setup, Device revocation, and local policy guidance.
+- Same-owner central Agent creation from an online Bridge template, with a
+  transient management-code input and durable pending, rejected, or ready
+  status but no local Runtime configuration or saved-code projection.
 - Selected Room participant roster projected from Team members and visible Agents.
 - Owner-only Room settings for participant access, multi-Agent Discussion,
   `@all`, Agent-to-Agent handoffs, and maximum handoff depth.
