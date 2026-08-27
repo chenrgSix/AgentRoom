@@ -1,6 +1,8 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -10,22 +12,36 @@ import (
 )
 
 type Config struct {
-	SchemaVersion           int           `json:"schemaVersion"`
-	ServerURL               string        `json:"serverUrl"`
-	ServerToken             string        `json:"serverToken,omitempty"`
-	ServerTrustMode         TrustMode     `json:"serverTrustMode,omitempty"`
-	ServerCertificateSHA256 string        `json:"serverCertificateSha256,omitempty"`
-	ShareReasoningSummaries bool          `json:"shareReasoningSummaries,omitempty"`
-	DeviceName              string        `json:"deviceName"`
-	DataDir                 string        `json:"dataDir"`
-	Agents                  []AgentConfig `json:"agents"`
+	SchemaVersion           int                     `json:"schemaVersion"`
+	ServerURL               string                  `json:"serverUrl"`
+	ServerToken             string                  `json:"serverToken,omitempty"`
+	ServerTrustMode         TrustMode               `json:"serverTrustMode,omitempty"`
+	ServerCertificateSHA256 string                  `json:"serverCertificateSha256,omitempty"`
+	ShareReasoningSummaries bool                    `json:"shareReasoningSummaries,omitempty"`
+	AgentProvisioning       AgentProvisioningConfig `json:"agentProvisioning,omitempty"`
+	DeviceName              string                  `json:"deviceName"`
+	DataDir                 string                  `json:"dataDir"`
+	Agents                  []AgentConfig           `json:"agents"`
 }
 
 type TrustMode string
 
+type AgentProvisioningMode string
+
+type AgentProvisioningConfig struct {
+	Mode           AgentProvisioningMode `json:"mode,omitempty"`
+	FixedCodeSalt  string                `json:"fixedCodeSalt,omitempty"`
+	FixedCodeHash  string                `json:"fixedCodeHash,omitempty"`
+	RotatingSecret string                `json:"rotatingSecret,omitempty"`
+}
+
 const (
 	TrustSystemCA     TrustMode = "system_ca"
 	TrustPinnedSHA256 TrustMode = "pinned_sha256"
+
+	AgentProvisioningDisabled AgentProvisioningMode = "disabled"
+	AgentProvisioningFixed    AgentProvisioningMode = "fixed"
+	AgentProvisioningRotating AgentProvisioningMode = "rotating"
 )
 
 // ResolvedTrustMode keeps existing fingerprint-only configurations working
@@ -38,6 +54,13 @@ func (c Config) ResolvedTrustMode() TrustMode {
 		return TrustPinnedSHA256
 	}
 	return TrustSystemCA
+}
+
+func (c Config) ResolvedAgentProvisioningMode() AgentProvisioningMode {
+	if c.AgentProvisioning.Mode == "" {
+		return AgentProvisioningDisabled
+	}
+	return c.AgentProvisioning.Mode
 }
 
 type AgentConfig struct {
@@ -60,7 +83,7 @@ const (
 	CodexSessionConflictPreserveAndRetry CodexSessionConflictPolicy = "preserve_and_retry"
 	CodexSessionConflictStartNew         CodexSessionConflictPolicy = "start_new"
 
-	CurrentSchemaVersion           = 3
+	CurrentSchemaVersion           = 4
 	CurrentPresetVersion           = 5
 	OutputProtocolAgentRoomJSONLV1 = "agentroom-jsonl-v1"
 	ServerTokenHeader              = "X-AgentRoom-Server-Token"
@@ -408,6 +431,9 @@ func (c Config) Validate() error {
 	if strings.TrimSpace(c.DeviceName) == "" || len(c.DeviceName) > 80 {
 		return fmt.Errorf("deviceName must contain 1 to 80 characters")
 	}
+	if err := c.validateAgentProvisioning(); err != nil {
+		return err
+	}
 	if !filepath.IsAbs(c.DataDir) {
 		return fmt.Errorf("dataDir must resolve to an absolute path")
 	}
@@ -423,6 +449,38 @@ func (c Config) Validate() error {
 			return fmt.Errorf("duplicate Agent name %q", agent.Name)
 		}
 		names[agent.Name] = struct{}{}
+	}
+	return nil
+}
+
+func (c Config) validateAgentProvisioning() error {
+	settings := c.AgentProvisioning
+	switch c.ResolvedAgentProvisioningMode() {
+	case AgentProvisioningDisabled:
+		if settings.FixedCodeSalt != "" || settings.FixedCodeHash != "" || settings.RotatingSecret != "" {
+			return fmt.Errorf("disabled agentProvisioning cannot contain code material")
+		}
+	case AgentProvisioningFixed:
+		if settings.FixedCodeSalt == "" || settings.FixedCodeHash == "" || settings.RotatingSecret != "" {
+			return fmt.Errorf("fixed agentProvisioning requires only a salt and hash")
+		}
+		if _, err := base64.RawURLEncoding.DecodeString(settings.FixedCodeSalt); err != nil {
+			return fmt.Errorf("agentProvisioning fixedCodeSalt is invalid")
+		}
+		digest, err := base64.RawURLEncoding.DecodeString(settings.FixedCodeHash)
+		if err != nil || len(digest) != sha256.Size {
+			return fmt.Errorf("agentProvisioning fixedCodeHash is invalid")
+		}
+	case AgentProvisioningRotating:
+		if settings.FixedCodeSalt != "" || settings.FixedCodeHash != "" || settings.RotatingSecret == "" {
+			return fmt.Errorf("rotating agentProvisioning requires only a local secret")
+		}
+		secret, err := base64.RawURLEncoding.DecodeString(settings.RotatingSecret)
+		if err != nil || len(secret) != 32 {
+			return fmt.Errorf("agentProvisioning rotatingSecret is invalid")
+		}
+	default:
+		return fmt.Errorf("agentProvisioning mode must be disabled, fixed, or rotating")
 	}
 	return nil
 }

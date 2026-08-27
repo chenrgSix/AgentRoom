@@ -96,7 +96,8 @@ func TestConsoleServesEmbeddedUIAndRequiresBearerTokenForAPI(t *testing.T) {
 	response.Body.Close()
 	if response.StatusCode != http.StatusOK ||
 		!bytes.Contains(source, []byte(`id="setup-intro"`)) ||
-		!bytes.Contains(source, []byte(`id="configured-view"`)) {
+		!bytes.Contains(source, []byte(`id="configured-view"`)) ||
+		!bytes.Contains(source, []byte(`id="agent-provisioning-form"`)) {
 		t.Fatalf("unexpected Console page: %d %s", response.StatusCode, source)
 	}
 	if response.Header.Get("content-security-policy") == "" {
@@ -128,6 +129,91 @@ func TestConsoleServesEmbeddedUIAndRequiresBearerTokenForAPI(t *testing.T) {
 	}
 	if !bytes.Contains(body, []byte(`"agents":[]`)) {
 		t.Fatalf("Console must serialize an empty Agent list as an array: %s", body)
+	}
+}
+
+func TestConsolePersistsManagementCodeMaterialWithoutExposingIt(t *testing.T) {
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	workspace := filepath.Join(directory, "workspace")
+	if err := os.Mkdir(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	configuration := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "http://127.0.0.1:3000",
+		DeviceName:    "Local Bridge",
+		DataDir:       dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "Builder", Role: "Implementation", Adapter: "generic",
+			RuntimeKind: "generic", Command: []string{"runtime"}, Workspace: workspace,
+		}},
+	}
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	if err := pairing.Save(dataDir, pairing.Credential{
+		Token: "device-secret", DeviceID: "device_local_12345678",
+		TeamID: "team_local_12345678", OwnerMemberID: "member_local_12345678",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: workspace,
+		Token: "test-console-token",
+	}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	fixed := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agent-provisioning", AgentProvisioningInput{
+		Mode: config.AgentProvisioningFixed, FixedCode: "87654321",
+	})
+	fixedBody, _ := io.ReadAll(fixed.Body)
+	fixed.Body.Close()
+	if fixed.StatusCode != http.StatusOK {
+		t.Fatalf("fixed code update failed: %d %s", fixed.StatusCode, fixedBody)
+	}
+	if bytes.Contains(fixedBody, []byte("87654321")) ||
+		bytes.Contains(fixedBody, []byte("fixedCodeHash")) ||
+		bytes.Contains(fixedBody, []byte("fixedCodeSalt")) {
+		t.Fatalf("Console response exposed fixed code material: %s", fixedBody)
+	}
+	loaded, err := config.Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.AgentProvisioning.Mode != config.AgentProvisioningFixed ||
+		loaded.AgentProvisioning.FixedCodeHash == "" ||
+		loaded.AgentProvisioning.FixedCodeHash == "87654321" {
+		t.Fatalf("fixed code was not persisted as local-only material: %#v", loaded.AgentProvisioning)
+	}
+
+	rotating := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agent-provisioning", AgentProvisioningInput{
+		Mode: config.AgentProvisioningRotating,
+	})
+	var rotatingState State
+	if err := json.NewDecoder(rotating.Body).Decode(&rotatingState); err != nil {
+		rotating.Body.Close()
+		t.Fatal(err)
+	}
+	rotating.Body.Close()
+	if rotating.StatusCode != http.StatusOK ||
+		len(rotatingState.AgentProvisioning.RotatingCode) != 6 ||
+		rotatingState.AgentProvisioning.RotatesAt == "" {
+		t.Fatalf("rotating code state is incomplete: %#v", rotatingState.AgentProvisioning)
+	}
+	stateBody, _ := json.Marshal(rotatingState)
+	loaded, err = config.Load(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(stateBody, []byte(loaded.AgentProvisioning.RotatingSecret)) {
+		t.Fatal("Console state exposed the rotating secret")
 	}
 }
 

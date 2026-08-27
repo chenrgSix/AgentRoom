@@ -13,6 +13,9 @@ const elements = Object.fromEntries([
   "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view",
   "device-title", "start-bridge", "stop-bridge", "edit-connection", "add-agent", "current-server",
+  "agent-provisioning-form", "agent-provisioning-mode", "fixed-management-code-field",
+  "fixed-management-code", "rotating-management-code-panel", "rotating-management-code",
+  "rotating-management-code-expiry", "save-agent-provisioning", "agent-provisioning-result",
   "pairing-status", "pairing-binding", "pairing-guidance", "pairing-blocked", "pairing-backup",
   "request-enrollment", "start-existing-pairing", "join-copy-result",
   "pairing-modal-backdrop", "close-pairing-modal", "cancel-pairing-modal", "confirm-reenrollment", "pairing-modal-error",
@@ -70,6 +73,7 @@ let draftPreflightRunning = false;
 let enrollmentActionRunning = false;
 let expectedPairingDeviceId = null;
 let discoveryRunning = false;
+let agentProvisioningDirty = false;
 let activePage = "overview";
 const runtimeTestResults = new Map();
 
@@ -324,6 +328,14 @@ function syncConnectionTokenFields() {
   elements["connection-server-token"].disabled = elements["clear-server-token"].checked;
 }
 
+function syncAgentProvisioningFields() {
+  const mode = elements["agent-provisioning-mode"].value;
+  elements["fixed-management-code-field"].classList.toggle("hidden", mode !== "fixed");
+  elements["rotating-management-code-panel"].classList.toggle("hidden", mode !== "rotating");
+  const fixedReady = mode !== "fixed" || /^[0-9]{8}$/.test(elements["fixed-management-code"].value);
+  elements["save-agent-provisioning"].disabled = !fixedReady;
+}
+
 function syncAgentKindFields() {
   const codex = elements["agent-kind"].value === "codex";
   elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
@@ -512,6 +524,23 @@ function render(state) {
     elements["add-agent"].disabled = mutationBlocked;
     elements["edit-connection"].classList.toggle("hidden", !state.paired);
     elements["edit-connection"].disabled = mutationBlocked;
+    if (!agentProvisioningDirty) {
+      const provisioning = state.agentProvisioning || {mode: "disabled"};
+      elements["agent-provisioning-mode"].value = provisioning.mode || "disabled";
+      elements["fixed-management-code"].value = "";
+      elements["fixed-management-code"].placeholder = provisioning.fixedCodeConfigured
+        ? "已设置；输入新的 8 位码可替换"
+        : "输入 8 位数字";
+    }
+    const provisioning = state.agentProvisioning || {mode: "disabled"};
+    elements["rotating-management-code"].textContent = provisioning.rotatingCode || "------";
+    elements["rotating-management-code-expiry"].textContent = provisioning.rotatesAt
+      ? `将在 ${new Date(provisioning.rotatesAt).toLocaleTimeString()} 自动轮换`
+      : "";
+    syncAgentProvisioningFields();
+    elements["agent-provisioning-mode"].disabled = mutationBlocked;
+    elements["fixed-management-code"].disabled = mutationBlocked;
+    if (mutationBlocked) elements["save-agent-provisioning"].disabled = true;
     elements["connection-fix"].disabled = mutationBlocked;
     elements["agent-list"].replaceChildren(...state.agents.map(renderAgent));
     elements["overview-agent-list"].replaceChildren(
@@ -563,6 +592,25 @@ elements["connection-trust-mode"].addEventListener("change", syncConnectionTrust
 elements["clear-server-token"].addEventListener("change", () => {
   if (elements["clear-server-token"].checked) elements["connection-server-token"].value = "";
   syncConnectionTokenFields();
+});
+elements["agent-provisioning-mode"].addEventListener("change", () => {
+  agentProvisioningDirty = true;
+  syncAgentProvisioningFields();
+});
+elements["fixed-management-code"].addEventListener("input", () => {
+  agentProvisioningDirty = true;
+  elements["fixed-management-code"].value = elements["fixed-management-code"].value.replace(/[^0-9]/g, "");
+  syncAgentProvisioningFields();
+});
+elements["rotating-management-code"].addEventListener("click", async () => {
+  const code = currentState?.agentProvisioning?.rotatingCode;
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    elements["agent-provisioning-result"].textContent = "动态管理码已复制。";
+  } catch {
+    elements["agent-provisioning-result"].textContent = "无法自动复制，请手动选择代码。";
+  }
 });
 elements["codex-enabled"].addEventListener("change", () => setRuntime("codex", elements["codex-enabled"].checked));
 elements["server-url"].addEventListener("input", () => { elements["share-reasoning-summaries"].checked = false; });
@@ -719,6 +767,32 @@ elements["connection-form"].addEventListener("submit", async (event) => {
     showError(error);
   } finally {
     elements["save-connection"].disabled = false;
+  }
+});
+
+elements["agent-provisioning-form"].addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const mode = elements["agent-provisioning-mode"].value;
+  elements["save-agent-provisioning"].disabled = true;
+  elements["agent-provisioning-result"].textContent = "正在保存…";
+  showError(null);
+  try {
+    await request("/api/agent-provisioning", {
+      method: "PUT",
+      body: JSON.stringify({
+        mode,
+        ...(mode === "fixed" ? {fixedCode: elements["fixed-management-code"].value} : {})
+      })
+    });
+    agentProvisioningDirty = false;
+    elements["fixed-management-code"].value = "";
+    elements["agent-provisioning-result"].textContent = "已保存；Bridge 已按新模式安全重连。";
+    await refresh();
+  } catch (error) {
+    elements["agent-provisioning-result"].textContent = "保存失败。";
+    showError(error);
+  } finally {
+    syncAgentProvisioningFields();
   }
 });
 

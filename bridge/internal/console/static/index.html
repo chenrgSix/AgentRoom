@@ -126,6 +126,29 @@
             </section>
 
             <section class="settings-card">
+              <div class="setting-heading"><div><h3>中央创建 Agent</h3><p>只有通过本机管理码后，中央服务才能按现有 Agent 模板创建新的本机 Agent。</p></div></div>
+              <form id="agent-provisioning-form">
+                <label>管理码模式
+                  <select id="agent-provisioning-mode">
+                    <option value="disabled">关闭（默认）</option>
+                    <option value="fixed">固定 8 位码（适合受信局域网）</option>
+                    <option value="rotating">动态 6 位码（每 5 分钟轮换）</option>
+                  </select>
+                </label>
+                <label class="hidden" id="fixed-management-code-field">固定管理码
+                  <input id="fixed-management-code" type="password" inputmode="numeric" pattern="[0-9]{8}" minlength="8" maxlength="8" autocomplete="new-password" placeholder="输入 8 位数字">
+                </label>
+                <div class="hidden" id="rotating-management-code-panel">
+                  <p class="eyebrow">当前动态管理码</p>
+                  <button class="join-code" id="rotating-management-code" type="button" title="复制动态管理码" aria-label="复制动态管理码"></button>
+                  <p class="tool-result" id="rotating-management-code-expiry"></p>
+                </div>
+                <p class="runtime-policy">固定码可以重复创建多个 Agent，直到你在本机替换或关闭；公网环境建议使用动态码。管理码、Runtime 命令、工作区、环境变量和凭据都不会保存到中央服务。</p>
+                <div class="actions"><button class="secondary" id="save-agent-provisioning" type="submit">保存并应用</button><span class="tool-result" id="agent-provisioning-result"></span></div>
+              </form>
+            </section>
+
+            <section class="settings-card">
               <div class="setting-heading"><div><h3>隐私</h3><p>中央策略不能扩大本机 Runtime 权限。</p></div></div>
               <dl class="setting-summary single">
                 <div><dt>思考摘要共享</dt><dd id="current-reasoning-sharing">未授权（不共享摘要）</dd></div>

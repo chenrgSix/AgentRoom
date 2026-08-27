@@ -30,6 +30,7 @@ import (
 	"agentroom.dev/bridge/internal/launchable"
 	"agentroom.dev/bridge/internal/operations"
 	"agentroom.dev/bridge/internal/pairing"
+	"agentroom.dev/bridge/internal/provisioning"
 	"agentroom.dev/bridge/internal/updatecheck"
 )
 
@@ -76,6 +77,18 @@ type ConnectionSettingsInput struct {
 	ClearServerToken        bool             `json:"clearServerToken,omitempty"`
 	ServerTrustMode         config.TrustMode `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string           `json:"serverCertificateSha256,omitempty"`
+}
+
+type AgentProvisioningInput struct {
+	Mode      config.AgentProvisioningMode `json:"mode"`
+	FixedCode string                       `json:"fixedCode,omitempty"`
+}
+
+type AgentProvisioningView struct {
+	Mode                config.AgentProvisioningMode `json:"mode"`
+	FixedCodeConfigured bool                         `json:"fixedCodeConfigured"`
+	RotatingCode        string                       `json:"rotatingCode,omitempty"`
+	RotatesAt           string                       `json:"rotatesAt,omitempty"`
 }
 
 type AgentView struct {
@@ -129,6 +142,7 @@ type State struct {
 	DetectedPi              string                      `json:"detectedPi,omitempty"`
 	RuntimeDiscovery        map[string]RuntimeDiscovery `json:"runtimeDiscovery"`
 	Connection              ConnectionView              `json:"connection"`
+	AgentProvisioning       AgentProvisioningView       `json:"agentProvisioning"`
 	LoginStartup            autostart.State             `json:"loginStartup"`
 	Enrollment              EnrollmentView              `json:"enrollment"`
 }
@@ -155,22 +169,23 @@ type Options struct {
 }
 
 type Service struct {
-	mu               sync.Mutex
-	options          Options
-	dependencies     Dependencies
-	tokenHash        [32]byte
-	token            string
-	state            State
-	configuration    *config.Config
-	credential       *pairing.Credential
-	joinCancel       context.CancelFunc
-	joinEpoch        uint64
-	bridgeCancel     context.CancelFunc
-	bridgeEpoch      uint64
-	bridgeWorkers    int
-	events           []diagnostics.Event
-	runtimeTests     map[string]struct{}
-	runtimePreflight bool
+	mu                     sync.Mutex
+	options                Options
+	dependencies           Dependencies
+	tokenHash              [32]byte
+	token                  string
+	state                  State
+	configuration          *config.Config
+	credential             *pairing.Credential
+	joinCancel             context.CancelFunc
+	joinEpoch              uint64
+	bridgeCancel           context.CancelFunc
+	bridgeEpoch            uint64
+	bridgeWorkers          int
+	events                 []diagnostics.Event
+	runtimeTests           map[string]struct{}
+	runtimePreflight       bool
+	provisioningAuthorizer provisioning.Authorizer
 }
 
 var environmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,79}$`)
@@ -228,12 +243,13 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 		token:        token,
 		tokenHash:    sha256.Sum256([]byte(token)),
 		state: State{
-			Phase:      PhaseUnconfigured,
-			ConfigPath: resolvedConfig,
-			Workspace:  workspace,
-			Version:    bridgeVersion,
-			Agents:     []AgentView{},
-			Connection: ConnectionView{State: operations.ConnectionStopped},
+			Phase:             PhaseUnconfigured,
+			ConfigPath:        resolvedConfig,
+			Workspace:         workspace,
+			Version:           bridgeVersion,
+			Agents:            []AgentView{},
+			Connection:        ConnectionView{State: operations.ConnectionStopped},
+			AgentProvisioning: AgentProvisioningView{Mode: config.AgentProvisioningDisabled},
 		},
 		runtimeTests: make(map[string]struct{}),
 	}
@@ -275,6 +291,12 @@ func (s *Service) State() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snapshot := cloneState(s.state)
+	if s.configuration != nil {
+		snapshot.AgentProvisioning = agentProvisioningView(
+			s.configuration.AgentProvisioning,
+			time.Now(),
+		)
+	}
 	snapshot.Enrollment.Active = s.joinCancel != nil
 	snapshot.Enrollment.BlockedReason = s.enrollmentBlockedReasonLocked()
 	snapshot.Enrollment.CanRequest = snapshot.Enrollment.BlockedReason == ""
@@ -309,6 +331,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("POST /api/enrollment/cancel", s.authorize(s.cancelEnrollment))
 	mux.HandleFunc("PUT /api/config", s.authorize(s.updateConfig))
 	mux.HandleFunc("PUT /api/connection-settings", s.authorize(s.updateConnectionSettings))
+	mux.HandleFunc("PUT /api/agent-provisioning", s.authorize(s.updateAgentProvisioning))
 	mux.HandleFunc("POST /api/agents", s.authorize(s.addAgent))
 	mux.HandleFunc("PUT /api/agents/{agentId}", s.authorize(s.updateAgent))
 	mux.HandleFunc("POST /api/runtime-tests", s.authorize(s.testRuntime))
@@ -1009,6 +1032,41 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 	writeJSON(response, http.StatusOK, s.state)
 }
 
+func (s *Service) updateAgentProvisioning(response http.ResponseWriter, request *http.Request) {
+	var input AgentProvisioningInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	settings, err := provisioning.NewSettings(input.Mode, strings.TrimSpace(input.FixedCode))
+	if err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	s.mu.Lock()
+	if err := s.requireConfigurationMutationLocked(); err != nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
+	candidate := cloneConfiguration(*s.configuration)
+	candidate.AgentProvisioning = settings
+	if err := candidate.Validate(); err != nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	if err := s.replaceConfigurationLocked(candidate); err != nil {
+		s.mu.Unlock()
+		writeError(response, http.StatusInternalServerError, publicError(err))
+		return
+	}
+	s.provisioningAuthorizer.Reset()
+	s.recordEventLocked("agent_provisioning.changed", "", string(candidate.ResolvedAgentProvisioningMode()))
+	s.mu.Unlock()
+	writeJSON(response, http.StatusOK, s.State())
+}
+
 func (s *Service) updateConfig(response http.ResponseWriter, request *http.Request) {
 	var input EnrollmentInput
 	if err := decodeJSON(request, &input); err != nil {
@@ -1029,6 +1087,7 @@ func (s *Service) updateConfig(response http.ResponseWriter, request *http.Reque
 	if configuration.ServerToken == "" {
 		configuration.ServerToken = s.configuration.ServerToken
 	}
+	configuration.AgentProvisioning = s.configuration.AgentProvisioning
 	configuration.ShareReasoningSummaries = reasoningConsentForUpdate(
 		*s.configuration, configuration.ServerURL, input.ShareReasoningSummaries,
 	)
@@ -1133,6 +1192,10 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 	s.state.ServerTrustMode = configuration.ResolvedTrustMode()
 	s.state.ServerCertificateSHA256 = configuration.ServerCertificateSHA256
 	s.state.DeviceName = configuration.DeviceName
+	s.state.AgentProvisioning = agentProvisioningView(
+		configuration.AgentProvisioning,
+		time.Now(),
+	)
 	s.state.Agents = make([]AgentView, 0, len(configuration.Agents))
 	for _, agent := range configuration.Agents {
 		kind := agent.RuntimeKind
@@ -1170,6 +1233,28 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 		})
 	}
 	return nil
+}
+
+func agentProvisioningView(
+	settings config.AgentProvisioningConfig,
+	now time.Time,
+) AgentProvisioningView {
+	mode := settings.Mode
+	if mode == "" {
+		mode = config.AgentProvisioningDisabled
+	}
+	view := AgentProvisioningView{
+		Mode:                mode,
+		FixedCodeConfigured: mode == config.AgentProvisioningFixed && settings.FixedCodeHash != "",
+	}
+	if mode == config.AgentProvisioningRotating {
+		code, rotatesAt, err := provisioning.CurrentCode(settings, now)
+		if err == nil {
+			view.RotatingCode = code
+			view.RotatesAt = rotatesAt.Format(time.RFC3339Nano)
+		}
+	}
+	return view
 }
 
 func (s *Service) operationalObserver(epoch uint64) operations.Observer {
