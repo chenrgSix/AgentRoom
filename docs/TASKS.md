@@ -57,6 +57,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | GOV-007 | DONE | Publish installation and usage quick start | GOV-003, BRG-008, MCP-005 | README guides a clean clone through Team setup, Bridge and MCP enrollment, Agent invocation, Discussion controls, production deployment, and diagnostics |
 | GOV-009 | DONE | Define canonical cross-Bridge Artifact content ownership | GOV-008, TASK-005, QA-019 | accepted ADRs 0015/0016, Workspace and Artifact transport module boundaries, Task/Run/Persistence extensions, crash matrix, compatibility rules, P17 dependency graph, and deterministic-versus-physical acceptance boundary agree |
 | GOV-010 | DONE | Add the project-owner tagline to the README | GOV-003 | the requested line appears directly below the project title and docs lint passes |
+| GOV-011 | DONE | Adopt the AgentRoom Community License 1.0 | GOV-006 | the versioned community license, commercial summary, trademark policy, contributor agreement, README and npm metadata, Docker and four-file release packaging, docs lint, schema validation, production builds, 129 Server tests, 42 Web tests, 4 Contracts tests with Go checks, 23 Bridge UI tests, and a native macOS CLI archive prove single-organization commercial self-hosting and dedicated single-customer deployments are allowed while multi-customer hosting and external white-label use remain commercially licensed |
 
 ## Workstream F0: Contracts and Fake System
 

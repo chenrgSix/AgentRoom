@@ -274,12 +274,18 @@ artifact.
 ## License
 
 AgentRoom is source-available under the
-[PolyForm Noncommercial License 1.0.0](LICENSE). Personal, educational,
-research, charitable, and other permitted noncommercial uses are allowed under
-its terms. Commercial use—including paid products, client work, internal
-commercial operations, hosted services, and SaaS—requires prior written
-permission. See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for the request
-process and [NOTICE](NOTICE) for the required copyright notice.
+[AgentRoom Community License 1.0](LICENSE). It permits commercial and
+noncommercial use inside one organization, any number of Team and Room records,
+source modification, self-hosting, product integrations, and one dedicated
+deployment for one customer. A separate commercial license is required for
+multi-customer hosted services, a competing standalone resale, or external
+white-label distribution without the required attribution.
 
-Because commercial use is restricted, this project is not OSI-approved open
-source. Third-party dependencies retain their own licenses.
+See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md) for a practical use-case
+summary, [TRADEMARKS.md](TRADEMARKS.md) for brand usage, [NOTICE](NOTICE) for
+the required copyright notice, and
+[CONTRIBUTOR-LICENSE-AGREEMENT.md](CONTRIBUTOR-LICENSE-AGREEMENT.md) for the
+contribution grant. Because the license restricts specific hosted and
+white-label uses, it is source-available rather than OSI-approved open source.
+Third-party dependencies retain their own licenses. Released versions remain
+under the license shipped with that version.

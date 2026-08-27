@@ -250,7 +250,7 @@ jobs:
             > SHA256SUMS
 
       - name: Add top-level license assets
-        run: cp LICENSE NOTICE COMMERCIAL-LICENSE.md dist/
+        run: cp LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md dist/
 
       - name: Verify release assets before upload
         env:

@@ -36,7 +36,7 @@ desktop_archives=(
 desktop_installers=(
   "agentroom-bridge-desktop_${version}_windows_amd64_setup.exe"
 )
-license_assets=(LICENSE NOTICE COMMERCIAL-LICENSE.md)
+license_assets=(LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md)
 expected_count=$((${#cli_archives[@]} + ${#desktop_archives[@]} + ${#desktop_installers[@]} + ${#license_assets[@]} + 1))
 actual_count=$(find "${asset_dir}" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')
 
@@ -200,7 +200,7 @@ verify_cli_archive() {
       ;;
   esac
 
-  for filename in README.md LICENSE NOTICE COMMERCIAL-LICENSE.md; do
+  for filename in README.md LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md; do
     if [[ ! -s "${root}/${filename}" ]]; then
       echo "Missing or empty archive file: ${archive}:${filename}" >&2
       exit 1

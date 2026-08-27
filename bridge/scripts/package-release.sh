@@ -47,6 +47,7 @@ cp "${bridge_root}/README.md" "${staging}/README.md"
 cp "${repository_root}/LICENSE" "${staging}/LICENSE"
 cp "${repository_root}/NOTICE" "${staging}/NOTICE"
 cp "${repository_root}/COMMERCIAL-LICENSE.md" "${staging}/COMMERCIAL-LICENSE.md"
+cp "${repository_root}/TRADEMARKS.md" "${staging}/TRADEMARKS.md"
 
 host_os=$(go env GOHOSTOS)
 host_arch=$(go env GOHOSTARCH)

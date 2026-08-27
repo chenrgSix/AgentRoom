@@ -1,131 +1,203 @@
-# PolyForm Noncommercial License 1.0.0
+# AgentRoom Community License 1.0
 
-<https://polyformproject.org/licenses/noncommercial/1.0.0>
+Version 1.0, August 27, 2026
 
-## Acceptance
+Copyright 2026 chenrgSix (https://github.com/chenrgSix)
 
-In order to get any license under these terms, you must agree
-to them as both strict obligations and conditions to all
-your licenses.
+This license is a source-available license. It is not an Open Source Initiative
+approved open-source license.
 
-## Copyright License
+## 1. Acceptance
 
-The licensor grants you a copyright license for the
-software to do everything you might do with the software
-that would otherwise infringe the licensor's copyright
-in it for any permitted purpose.  However, you may
-only distribute the software according to [Distribution
-License](#distribution-license) and make changes or new works
-based on the software according to [Changes and New Works
-License](#changes-and-new-works-license).
+By using, copying, modifying, or distributing the Software, You accept these
+terms. If You do not accept them, You receive no rights under this license.
 
-## Distribution License
+## 2. Definitions
 
-The licensor grants you an additional copyright license
-to distribute copies of the software.  Your license
-to distribute covers distributing the software with
-changes and new works permitted by [Changes and New Works
-License](#changes-and-new-works-license).
+**Licensor** means the copyright holder identified in the NOTICE file.
 
-## Notices
+**Software** means the AgentRoom source code, object code, documentation, and
+other material distributed with this license, including modifications and
+derivative works based on that material.
 
-You must ensure that anyone who gets a copy of any part of
-the software from you also gets a copy of these terms or the
-URL for them above, as well as copies of any plain-text lines
-beginning with `Required Notice:` that the licensor provided
-with the software.  For example:
+**You** means the individual or legal entity exercising rights under this
+license.
 
-> Required Notice: Copyright Yoyodyne, Inc. (http://example.com)
+**Your Organization** means You and every legal entity that directly or
+indirectly controls, is controlled by, or is under common control with You.
+**Control** means ownership of more than fifty percent of the voting interests
+or the legal power to direct management and policies. Departments, business
+units, project teams, research groups, and government departments within the
+same legal organization do not become separate organizations merely because
+they use separate Team, Room, Agent, Device, project, or deployment records.
 
-## Changes and New Works License
+**Customer Organization** means a legal organization that is not part of Your
+Organization and receives services from You.
 
-The licensor grants you an additional copyright license to
-make changes and new works based on the software for any
-permitted purpose.
+**Dedicated Customer Deployment** means one deployment of the Software that:
 
-## Patent License
+1. serves exactly one Customer Organization;
+2. keeps that customer's data, credentials, configuration, and administrative
+   boundary separate from every unrelated customer;
+3. is owned or controlled by that customer, with You acting only at that
+   customer's direction for installation, configuration, training, support,
+   hosting, or maintenance; and
+4. is not joined to a shared AgentRoom control plane operated for unrelated
+   customers.
 
-The licensor grants you a patent license for the software that
-covers patent claims the licensor can license, or becomes able
-to license, that you would infringe by using the software.
+Development, test, staging, disaster-recovery, and production environments for
+the same Customer Organization may together form one Dedicated Customer
+Deployment.
 
-## Noncommercial Purposes
+**Multi-Customer Service** means a hosted, managed, cloud, or software-as-a-
+service offering in which You provide the Software or its Core Functions to two
+or more unrelated Customer Organizations through a shared service, shared
+administrative control plane, or standardized service operated primarily by
+You. Separate Team, Room, Agent, Device, project, workspace, database, or
+logical-tenant records do not make those customers one organization.
+A set of Dedicated Customer Deployments does not become a Multi-Customer
+Service merely because the same contractor installs or supports them, provided
+each customer retains its own control and no shared AgentRoom control plane
+joins the deployments.
 
-Any noncommercial purpose is a permitted purpose.
+**Core Functions** means the Software's Team, Room, Agent, Device, Bridge, Run,
+Task, Discussion, Artifact, and related collaboration or control-plane
+capabilities, taken as a whole.
 
-## Personal Uses
+**Product Integration** means use of the Software as a component of a larger
+product whose primary marketed and commercial value is not the Software or its
+Core Functions and that does not expose a complete, substitutable AgentRoom
+control plane to customers.
 
-Personal use for research, experiment, and testing for
-the benefit of public knowledge, personal study, private
-entertainment, hobby projects, amateur pursuits, or religious
-observance, without any anticipated commercial application,
-is use for a permitted purpose.
+## 3. Copyright Grant
 
-## Noncommercial Organizations
+Subject to these terms, the Licensor grants You a worldwide, royalty-free,
+non-exclusive, non-transferable license to use, reproduce, modify, prepare
+derivative works of, display, perform, and distribute the Software solely for
+the permitted uses in Section 4 and subject to the distribution conditions in
+Section 7.
 
-Use by any charitable organization, educational institution,
-public research organization, public safety or health
-organization, environmental protection organization,
-or government institution is use for a permitted purpose
-regardless of the source of funding or obligations resulting
-from the funding.
+This license does not grant a right to sublicense the Software. A recipient of
+a permitted distribution receives rights directly from the Licensor under this
+license.
 
-## Fair Use
+## 4. Permitted Uses
 
-You may have "fair use" rights for the software under the
-law. These terms do not limit them.
+You may, without a separate commercial license:
 
-## No Other Rights
+1. use and modify the Software for personal, educational, research,
+   charitable, governmental, or other noncommercial purposes;
+2. deploy and use the Software for Your Organization's internal commercial or
+   noncommercial operations, with any number of Team, Room, Agent, Device,
+   project, user, or environment records;
+3. allow Your Organization's employees and contractors to use, install,
+   modify, host, and maintain the Software on Your Organization's behalf;
+4. operate a Dedicated Customer Deployment and provide that customer with
+   installation, configuration, training, support, hosting, and maintenance;
+5. create and operate a Product Integration; and
+6. make and distribute modified or unmodified copies when the distribution is
+   necessary for one of the preceding permitted uses and complies with
+   Section 7.
 
-These terms do not allow you to sublicense or transfer any of
-your licenses to anyone else, or prevent the licensor from
-granting licenses to anyone else.  These terms do not imply
-any other licenses.
+## 5. Uses Requiring a Commercial License
 
-## Patent Defense
+You must obtain a separate written commercial license from the Licensor before
+You:
 
-If you make any written claim that the software infringes or
-contributes to infringement of any patent, your patent license
-for the software granted under these terms ends immediately. If
-your company makes such a claim, your patent license ends
-immediately for work on behalf of your company.
+1. offer or operate a Multi-Customer Service;
+2. sell, license, or distribute the Software or its Core Functions as a
+   standalone product whose primary commercial value is substantially the same
+   as AgentRoom;
+3. white-label or rebrand the Software for external distribution or customer-
+   facing use without the attribution required by Section 6; or
+4. provide another party with rights to do any of the preceding activities.
 
-## Violations
+For clarity, creating multiple Team or Room records for Your Organization,
+using the Software for internal paid work, and operating a Dedicated Customer
+Deployment do not by themselves require a commercial license.
 
-The first time you are notified in writing that you have
-violated any of these terms, or done anything with the software
-not covered by your licenses, your licenses can nonetheless
-continue if you come into full compliance with these terms,
-and take practical steps to correct past violations, within
-32 days of receiving notice.  Otherwise, all your licenses
-end immediately.
+## 6. Attribution and Branding
 
-## No Liability
+You may change themes, colors, layouts, internal titles, and add Your
+Organization's logo. If You use or distribute the AgentRoom web interface, You
+must retain a reasonably accessible attribution reading `Powered by AgentRoom`
+in the interface or its About page, together with access to the copyright and
+license notices. The attribution need not be displayed on every screen.
 
-***As far as the law allows, the software comes as is, without
-any warranty or condition, and the licensor will not be liable
-to you for any damages arising out of these terms or the use
-or nature of the software, under any kind of legal claim.***
+You may not remove the LICENSE or NOTICE files, conceal the Software's origin,
+claim that a modified version is an official AgentRoom release, or use the
+AgentRoom name or marks in a way that creates a likelihood of confusion.
+Descriptive use of the AgentRoom name and the required attribution are allowed
+only as described in TRADEMARKS.md.
 
-## Definitions
+## 7. Distribution Conditions
 
-The **licensor** is the individual or entity offering these
-terms, and the **software** is the software the licensor makes
-available under these terms.
+Every permitted distribution of source code or object code must:
 
-**You** refers to the individual or entity agreeing to these
-terms.
+1. include complete copies of this LICENSE, NOTICE, COMMERCIAL-LICENSE.md, and
+   TRADEMARKS.md;
+2. retain existing copyright, patent, attribution, and authorship notices;
+3. state prominently that You changed the Software if You distribute a
+   modified version; and
+4. be limited to a use permitted by Section 4 unless the recipient has a
+   separate commercial license from the Licensor.
 
-**Your company** is any legal entity, sole proprietorship,
-or other kind of organization that you work for, plus all
-organizations that have control over, are under the control of,
-or are under common control with that organization.  **Control**
-means ownership of substantially all the assets of an entity,
-or the power to direct its management and policies by vote,
-contract, or otherwise.  Control can be direct or indirect.
+This license does not require software merely linked to, communicating with,
+or distributed alongside the Software to use this license.
 
-**Your licenses** are all the licenses granted to you for the
-software under these terms.
+## 8. Patent Grant and Termination
 
-**Use** means anything you do with the software requiring one
-of your licenses.
+Subject to these terms, the Licensor grants You a worldwide, royalty-free,
+non-exclusive patent license under patent claims the Licensor can license that
+are necessarily infringed by Your permitted use of the Software.
+
+If You or Your Organization initiate a patent claim alleging that the Software
+or a contribution incorporated into it infringes a patent, the patent licenses
+granted to You under this license terminate immediately.
+
+## 9. Third-Party Material
+
+Third-party components included with or used by the Software remain subject to
+their own license terms. This license does not expand or restrict rights under
+those third-party licenses.
+
+## 10. Compliance and Termination
+
+If the Licensor notifies You in writing of a first violation, Your licenses
+continue if You stop the violation, correct its practical effects, and come
+into full compliance within thirty days after receiving notice. If You do not
+do so, or if You commit another violation after receiving a prior notice, all
+licenses granted to You under these terms terminate automatically.
+
+Sections that by their nature should survive termination, including Sections
+8, 11, 12, and 13, survive termination.
+
+## 11. Disclaimer of Warranty
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE SOFTWARE IS PROVIDED "AS IS" AND
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING
+WARRANTIES OF TITLE, NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A
+PARTICULAR PURPOSE. YOU BEAR ALL RISK ARISING FROM USE OF THE SOFTWARE.
+
+## 12. Limitation of Liability
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSOR WILL NOT BE LIABLE FOR ANY
+DIRECT, INDIRECT, SPECIAL, INCIDENTAL, CONSEQUENTIAL, EXEMPLARY, OR PUNITIVE
+DAMAGES, OR FOR LOST PROFITS, REVENUE, DATA, OR GOODWILL, ARISING FROM THE
+SOFTWARE OR THESE TERMS, UNDER ANY LEGAL THEORY, EVEN IF ADVISED OF THE
+POSSIBILITY OF THOSE DAMAGES.
+
+## 13. General Terms
+
+These terms do not limit rights You may have under applicable law without a
+license. No failure to enforce a term waives it. If a term is unenforceable, it
+will be modified only to the minimum extent necessary, and the remaining terms
+will continue in effect.
+
+This version of the license applies only to Software distributed with it. The
+Licensor may release future versions of the Software under different terms,
+but doing so does not change the license for a version already distributed.
+
+Commercial permissions exist only in a separate written agreement signed by
+the Licensor. COMMERCIAL-LICENSE.md is an explanatory summary and does not
+replace or amend this license.

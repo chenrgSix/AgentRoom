@@ -2,7 +2,7 @@
   "name": "agent-room-network",
   "version": "0.0.0",
   "private": true,
-  "license": "PolyForm-Noncommercial-1.0.0",
+  "license": "SEE LICENSE IN LICENSE",
   "description": "Lightweight Team collaboration for existing AI coding runtimes",
   "engines": {
     "node": ">=22"

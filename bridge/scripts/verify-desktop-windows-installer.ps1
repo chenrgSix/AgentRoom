@@ -53,6 +53,7 @@ function Assert-InstalledPayload {
     "LICENSE",
     "NOTICE",
     "COMMERCIAL-LICENSE.md",
+    "TRADEMARKS.md",
     "unins000.exe"
   )
   foreach ($filename in $required) {

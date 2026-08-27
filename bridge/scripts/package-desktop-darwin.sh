@@ -60,6 +60,7 @@ cp "${repository_root}/LICENSE" "${contents}/Resources/LICENSE"
 cp "${repository_root}/NOTICE" "${contents}/Resources/NOTICE"
 cp "${repository_root}/COMMERCIAL-LICENSE.md" \
   "${contents}/Resources/COMMERCIAL-LICENSE.md"
+cp "${repository_root}/TRADEMARKS.md" "${contents}/Resources/TRADEMARKS.md"
 
 plutil -lint "${contents}/Info.plist"
 built_version=$("${binary}" --version)

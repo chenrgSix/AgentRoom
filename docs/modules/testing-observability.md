@@ -215,7 +215,7 @@ claiming public ACME or high-availability evidence.
 A Bridge release begins as an empty draft candidate and builds from the exact
 requested tag. The workflow requires five CLI archives, two native macOS GUI
 archives, one native Windows GUI preview archive, one Windows current-user
-installer, one checksum file, and three top-level license files. It verifies
+installer, one checksum file, and four top-level license files. It verifies
 names, versions, archive layouts, installer metadata, launchers, licenses, and
 checksums before upload, then downloads the candidate and repeats the same
 verifier. Native Windows CI also executes install, upgrade, and uninstall smoke

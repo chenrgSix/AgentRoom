@@ -92,6 +92,7 @@ Copy-Item (Join-Path $bridgeRoot "README.md") (Join-Path $staging "README.md")
 Copy-Item (Join-Path $repositoryRoot "LICENSE") (Join-Path $staging "LICENSE")
 Copy-Item (Join-Path $repositoryRoot "NOTICE") (Join-Path $staging "NOTICE")
 Copy-Item (Join-Path $repositoryRoot "COMMERCIAL-LICENSE.md") (Join-Path $staging "COMMERCIAL-LICENSE.md")
+Copy-Item (Join-Path $repositoryRoot "TRADEMARKS.md") (Join-Path $staging "TRADEMARKS.md")
 
 $binaryBytes = [IO.File]::ReadAllBytes($binary)
 if ($binaryBytes.Length -lt 64 -or $binaryBytes[0] -ne 0x4d -or $binaryBytes[1] -ne 0x5a) {
@@ -132,7 +133,8 @@ try {
     "$package/README.md",
     "$package/LICENSE",
     "$package/NOTICE",
-    "$package/COMMERCIAL-LICENSE.md"
+    "$package/COMMERCIAL-LICENSE.md",
+    "$package/TRADEMARKS.md"
   )
   foreach ($requiredMember in $requiredMembers) {
     if ($members -notcontains $requiredMember) {

@@ -84,9 +84,12 @@ for Web UI changes and example payloads for protocol changes.
 
 ## Contribution Licensing
 
-The repository is source-available under the PolyForm Noncommercial License
-1.0.0 and may also be offered under separate commercial terms. Issues and
-design discussions are welcome. Before submitting code, documentation, or
-assets, contact the maintainer: external contributions require a separate
-written contribution agreement that preserves the maintainer's ability to
-offer commercial licenses. A pull request alone does not create that agreement.
+The repository is source-available under the AgentRoom Community License 1.0
+and may also be offered under separate commercial terms. Issues and design
+discussions are welcome. Before submitting code, documentation, or assets,
+contact the maintainer: external contributions require an executed
+[AgentRoom Contributor License Agreement](CONTRIBUTOR-LICENSE-AGREEMENT.md).
+It grants the Project Owner the rights needed to publish contributions under
+the community license, commercial licenses, and hosted AgentRoom offerings
+while contributors retain ownership of their work. A pull request alone does
+not execute the agreement.

@@ -67,6 +67,7 @@ Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\COMMERCIAL-LICENSE.md"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\TRADEMARKS.md"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\AgentRoom Bridge"; Filename: "{app}\AgentRoom Bridge.exe"; WorkingDir: "{app}"
