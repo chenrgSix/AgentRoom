@@ -301,6 +301,17 @@ candidate was published as a prerelease, and a fresh public download passed
 the tag's committed verifier. The stable Latest release remains `v0.2.0`, and
 the separate real-login and two-physical-machine gates remain open.
 
+The `v0.3.0-rc.4` candidate admits the AgentRoom Community License 1.0 and the
+platform-aware Windows Runtime launcher repair. The release evidence is
+recorded in `docs/acceptance/qa-025-v0.3.0-rc.4.md`. `QA-025` is complete
+because the exact tagged source passed main CI including the native Windows
+`codex.cmd` regression, the empty-draft workflow built nine binary artifacts
+and verified all 14 assets before and after upload, the candidate was published
+as a prerelease, and a fresh public download passed the tagged verifier on
+macOS. The stable Latest release remains `v0.2.0`, and physical Windows UI,
+live Runtime launch, real macOS login restart, and two-machine gates remain
+separate.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
