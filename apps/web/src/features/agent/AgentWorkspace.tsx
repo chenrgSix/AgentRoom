@@ -1,6 +1,7 @@
 import React, { type FormEvent } from "react";
 
 import { BridgeConnectionPanel } from "../bridge/BridgeConnectionPanel.js";
+import { AgentProvisioningPanel } from "./AgentProvisioningPanel.js";
 import { type Locale, type TranslationKey, translate } from "../../i18n.js";
 import type { Agent, ConnectionMode, Device } from "../../models.js";
 
@@ -126,6 +127,7 @@ interface AgentWorkspaceProps {
   busy: boolean;
   connectionMode: ConnectionMode;
   currentMemberIsOwner: boolean;
+  currentMemberId: string | null;
   devices: Device[];
   deviceName: string;
   joinCode: string;
@@ -135,6 +137,8 @@ interface AgentWorkspaceProps {
   manualAgentName: string;
   readyAgents: number;
   setupOutput: string | null;
+  sessionToken: string | undefined;
+  teamId: string;
   onAgentNameChange: (value: string) => void;
   onApproveBridgeJoin: (event: FormEvent) => void | Promise<void>;
   onConnectionModeChange: (mode: ConnectionMode) => void;
@@ -155,6 +159,7 @@ export function AgentWorkspace({
   busy,
   connectionMode,
   currentMemberIsOwner,
+  currentMemberId,
   devices,
   deviceName,
   joinCode,
@@ -174,7 +179,9 @@ export function AgentWorkspace({
   onRevokeDevice,
   onSetAgentEnabled,
   readyAgents,
-  setupOutput
+  sessionToken,
+  setupOutput,
+  teamId
 }: AgentWorkspaceProps) {
   const t = (key: TranslationKey) => translate(locale, key);
 
@@ -270,6 +277,15 @@ export function AgentWorkspace({
           setupOutput={setupOutput}
         />
       </div>
+
+      <AgentProvisioningPanel
+        agents={agents}
+        currentMemberId={currentMemberId}
+        devices={devices}
+        locale={locale}
+        sessionToken={sessionToken}
+        teamId={teamId}
+      />
 
       <section className="control-panel device-panel" aria-labelledby="device-panel-title">
         <div className="panel-header">

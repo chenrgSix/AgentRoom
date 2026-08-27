@@ -40,6 +40,8 @@ export interface Room {
 
 export interface Agent {
   agentId: string;
+  ownerMemberId?: string;
+  deviceId?: string | null;
   enabled?: boolean;
   name: string;
   role: string;
@@ -94,8 +96,34 @@ export interface TeamChangeCursor {
 
 export interface Device {
   deviceId: string;
+  ownerMemberId?: string;
   name: string;
   status: "active" | "revoked";
+}
+
+export type AgentProvisionRequestStatus =
+  | "pending"
+  | "delivered"
+  | "accepted"
+  | "ready"
+  | "rejected";
+
+export interface AgentProvisionRequest {
+  requestId: string;
+  teamId: string;
+  deviceId: string;
+  templateAgentId: string;
+  agentId: string;
+  requestedByMemberId: string;
+  name: string;
+  role: string;
+  status: AgentProvisionRequestStatus;
+  rejectionReason: string | null;
+  createdAt: string;
+  deliveredAt: string | null;
+  respondedAt: string | null;
+  readyAt: string | null;
+  updatedAt: string;
 }
 
 export interface Run {

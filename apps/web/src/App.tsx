@@ -1886,6 +1886,7 @@ export function App() {
             busy={busy}
             connectionMode={connectionMode}
             currentMemberIsOwner={currentMember?.role === "owner"}
+            currentMemberId={currentMember?.memberId ?? null}
             devices={devices}
             deviceName={deviceName}
             joinCode={joinCode}
@@ -1906,6 +1907,8 @@ export function App() {
             onSetAgentEnabled={setAgentEnabled}
             readyAgents={readyAgents}
             setupOutput={setupOutput}
+            sessionToken={session?.token}
+            teamId={selectedTeam.teamId}
           />
         ) : !selectedRoom ? (
           <section className="empty-stage onboarding-stage">
