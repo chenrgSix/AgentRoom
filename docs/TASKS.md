@@ -254,6 +254,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | QA-021 | DONE | Publish and verify v0.2.0 | QA-019, QA-020, QA-008 | `docs/acceptance/qa-021-v0.2.0.md` records the Trace ID and stable-version verifier corrections, exact-tag CI, seven verified archives, public Latest Release publication, and an independent 11-asset clean-download verification while retaining `BRG-013` and `QA-002` as explicit post-release physical-environment evidence |
 | QA-022 | DONE | Publish and verify v0.3.0-rc.1 | QA-021, BRG-035, REG-005, WEB-043, QA-008 | `docs/acceptance/qa-022-v0.3.0-rc.1.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
 | QA-023 | DONE | Publish and verify v0.3.0-rc.2 | QA-022, BRG-036, BRG-037, ADP-017, QA-008 | `docs/acceptance/qa-023-v0.3.0-rc.2.md` records exact-tag CI, seven verified archives, public prerelease publication, and an independent 11-asset clean-download verification while retaining the separate physical gates |
+| QA-024 | ACTIVE | Publish and verify v0.3.0-rc.3 | QA-023, BRG-038, BRG-039, QA-008 | exact tagged source must pass main CI; the no-clobber workflow must build, upload, and verify five CLI archives, three Desktop archives, one Windows installer, checksums, and license assets; the public prerelease must pass an independent 13-asset clean-download verification |
 
 ## Workstream F7: Task Continuity and Shared Results
 
