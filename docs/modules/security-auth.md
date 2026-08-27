@@ -69,13 +69,15 @@ credential, or Agent authority. One pairing trusts one Device; local Agent and
 Runtime configuration remains subordinate to that Device and never becomes an
 independent pairing credential.
 
-The pairing session is Team- and Owner-scoped, expires after ten minutes, and
-stores only hashes of its one-time claim and Bridge-generated poll secrets. The
-first valid claim binds one stable attempt and produces the same verification
-phrase on the authenticated Owner surface and Bridge. Approval atomically
-creates one Device and promotes the already-local poll secret to the Device
-Bearer credential. Claim or approval response loss therefore returns the same
-Device and terminal state without storing or reissuing credential plaintext.
+The pairing session is Team- and Owner-scoped and expires after ten minutes. The
+Owner client generates and resends the same claim secret under one create
+operation identity; the Bridge generates the poll secret. The Server stores only
+their hashes and never echoes either secret. The first valid claim binds one
+stable attempt and produces the same verification phrase on the authenticated
+Owner surface and Bridge. Approval atomically creates one Device and promotes
+the already-local poll secret to the Device Bearer credential. Claim or approval
+response loss therefore returns the same Device and terminal state without
+storing or reissuing credential plaintext.
 
 The new Device claim and poll routes use the exact session proofs, expiry, rate
 limit, and transcript binding instead of the long-lived central Server Token.

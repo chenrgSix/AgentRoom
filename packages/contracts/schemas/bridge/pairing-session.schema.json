@@ -1,0 +1,598 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json",
+  "title": "Agent Room Device Pairing Session",
+  "description": "Transport-neutral payloads for Owner-created, zero-copy Device pairing sessions. Public projections never contain claim, poll, Device, Server, Runtime, or Owner credential plaintext.",
+  "$ref": "#/$defs/ownerProjection",
+  "$defs": {
+    "pairingSessionState": {
+      "type": "string",
+      "enum": [
+        "issued",
+        "claimed",
+        "approved",
+        "consumed",
+        "rejected",
+        "canceled",
+        "expired"
+      ]
+    },
+    "highEntropySecret": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "shortCode": {
+      "type": "string",
+      "pattern": "^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{2}$"
+    },
+    "verificationPhrase": {
+      "type": "string",
+      "minLength": 8,
+      "maxLength": 48,
+      "pattern": "^[A-Z]{2,20}-[A-Z]{2,20}-[0-9]{2}$"
+    },
+    "deviceMetadata": {
+      "title": "Pairing Device Metadata",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "displayName",
+        "platform",
+        "bridgeVersion"
+      ],
+      "properties": {
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "platform": {
+          "type": "string",
+          "enum": [
+            "darwin-amd64",
+            "darwin-arm64",
+            "linux-amd64",
+            "linux-arm64",
+            "windows-amd64",
+            "windows-arm64"
+          ]
+        },
+        "bridgeVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$"
+        }
+      }
+    },
+    "createRequest": {
+      "title": "Device Pairing Session Create Request",
+      "description": "The authenticated Owner client generates claimSecret and resends the same secret with operationId after response loss; the Server stores only its hash and never echoes it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "claimSecret"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "claimSecret": {
+          "$ref": "#/$defs/highEntropySecret"
+        }
+      }
+    },
+    "created": {
+      "title": "Device Pairing Session Created",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingSessionId",
+        "teamId",
+        "ownerMemberId",
+        "state",
+        "shortCode",
+        "createdAt",
+        "expiresAt"
+      ],
+      "properties": {
+        "pairingSessionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingSessionId"
+        },
+        "teamId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/teamId"
+        },
+        "ownerMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "state": {
+          "const": "issued"
+        },
+        "shortCode": {
+          "$ref": "#/$defs/shortCode"
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "ownerProjection": {
+      "title": "Device Pairing Session Owner Projection",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingSessionId",
+        "teamId",
+        "ownerMemberId",
+        "state",
+        "createdAt",
+        "expiresAt"
+      ],
+      "properties": {
+        "pairingSessionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingSessionId"
+        },
+        "teamId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/teamId"
+        },
+        "ownerMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "state": {
+          "$ref": "#/$defs/pairingSessionState"
+        },
+        "pairingAttemptId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingAttemptId"
+        },
+        "device": {
+          "$ref": "#/$defs/deviceMetadata"
+        },
+        "verificationPhrase": {
+          "$ref": "#/$defs/verificationPhrase"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "claimedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "decidedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "consumedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "claimed",
+                  "approved",
+                  "consumed",
+                  "rejected"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "pairingAttemptId": {},
+              "device": {},
+              "verificationPhrase": {},
+              "claimedAt": {}
+            },
+            "required": [
+              "pairingAttemptId",
+              "device",
+              "verificationPhrase",
+              "claimedAt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": [
+                  "approved",
+                  "consumed"
+                ]
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "deviceId": {},
+              "decidedAt": {}
+            },
+            "required": [
+              "deviceId",
+              "decidedAt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "rejected"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "decidedAt": {}
+            },
+            "required": [
+              "decidedAt"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "consumed"
+              }
+            },
+            "required": [
+              "state"
+            ]
+          },
+          "then": {
+            "properties": {
+              "consumedAt": {}
+            },
+            "required": [
+              "consumedAt"
+            ]
+          }
+        }
+      ]
+    },
+    "claimRequest": {
+      "title": "Device Pairing Session Claim Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "pairingAttemptId",
+        "pollSecret",
+        "device"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "pairingSessionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingSessionId"
+        },
+        "claimSecret": {
+          "$ref": "#/$defs/highEntropySecret"
+        },
+        "shortCode": {
+          "$ref": "#/$defs/shortCode"
+        },
+        "pairingAttemptId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingAttemptId"
+        },
+        "pollSecret": {
+          "$ref": "#/$defs/highEntropySecret"
+        },
+        "device": {
+          "$ref": "#/$defs/deviceMetadata"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "pairingSessionId": {},
+            "claimSecret": {}
+          },
+          "required": [
+            "pairingSessionId",
+            "claimSecret"
+          ],
+          "not": {
+            "properties": {
+              "shortCode": {}
+            },
+            "required": [
+              "shortCode"
+            ]
+          }
+        },
+        {
+          "properties": {
+            "shortCode": {}
+          },
+          "required": [
+            "shortCode"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "properties": {
+                  "pairingSessionId": {}
+                },
+                "required": [
+                  "pairingSessionId"
+                ]
+              },
+              {
+                "properties": {
+                  "claimSecret": {}
+                },
+                "required": [
+                  "claimSecret"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "claimed": {
+      "title": "Device Pairing Session Claimed",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingSessionId",
+        "pairingAttemptId",
+        "state",
+        "verificationPhrase",
+        "expiresAt",
+        "pollIntervalMs"
+      ],
+      "properties": {
+        "pairingSessionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingSessionId"
+        },
+        "pairingAttemptId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingAttemptId"
+        },
+        "state": {
+          "const": "claimed"
+        },
+        "verificationPhrase": {
+          "$ref": "#/$defs/verificationPhrase"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "pollIntervalMs": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 10000
+        }
+      }
+    },
+    "pollRequest": {
+      "title": "Device Pairing Session Poll Request",
+      "description": "pairingAttemptId and pollSecret are the stable proof identity. Pending polls are not response-cached; terminal consumption is idempotent by this proof pair.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingSessionId",
+        "pairingAttemptId",
+        "pollSecret"
+      ],
+      "properties": {
+        "pairingSessionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingSessionId"
+        },
+        "pairingAttemptId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingAttemptId"
+        },
+        "pollSecret": {
+          "$ref": "#/$defs/highEntropySecret"
+        }
+      }
+    },
+    "pollPending": {
+      "title": "Device Pairing Session Poll Pending",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingSessionId",
+        "pairingAttemptId",
+        "state",
+        "verificationPhrase",
+        "expiresAt",
+        "retryAfterMs"
+      ],
+      "properties": {
+        "pairingSessionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingSessionId"
+        },
+        "pairingAttemptId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingAttemptId"
+        },
+        "state": {
+          "const": "claimed"
+        },
+        "verificationPhrase": {
+          "$ref": "#/$defs/verificationPhrase"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "retryAfterMs": {
+          "type": "integer",
+          "minimum": 500,
+          "maximum": 10000
+        }
+      }
+    },
+    "pollConsumed": {
+      "title": "Device Pairing Session Poll Consumed",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingSessionId",
+        "pairingAttemptId",
+        "state",
+        "deviceId",
+        "teamId",
+        "ownerMemberId",
+        "credentialSource"
+      ],
+      "properties": {
+        "pairingSessionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingSessionId"
+        },
+        "pairingAttemptId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingAttemptId"
+        },
+        "state": {
+          "const": "consumed"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "teamId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/teamId"
+        },
+        "ownerMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "credentialSource": {
+          "const": "poll_secret"
+        }
+      }
+    },
+    "pollTerminal": {
+      "title": "Device Pairing Session Poll Terminal",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pairingSessionId",
+        "pairingAttemptId",
+        "state",
+        "expiresAt"
+      ],
+      "properties": {
+        "pairingSessionId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingSessionId"
+        },
+        "pairingAttemptId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/pairingAttemptId"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "rejected",
+            "canceled",
+            "expired"
+          ]
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "pollProjection": {
+      "title": "Device Pairing Session Poll Projection",
+      "oneOf": [
+        {
+          "$ref": "#/$defs/pollPending"
+        },
+        {
+          "$ref": "#/$defs/pollConsumed"
+        },
+        {
+          "$ref": "#/$defs/pollTerminal"
+        }
+      ]
+    },
+    "approveRequest": {
+      "title": "Device Pairing Session Approve Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedState"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedState": {
+          "const": "claimed"
+        }
+      }
+    },
+    "rejectRequest": {
+      "title": "Device Pairing Session Reject Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedState"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedState": {
+          "const": "claimed"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280
+        }
+      }
+    },
+    "cancelRequest": {
+      "title": "Device Pairing Session Cancel Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedState"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedState": {
+          "type": "string",
+          "enum": [
+            "issued",
+            "claimed"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 280
+        }
+      }
+    }
+  }
+}

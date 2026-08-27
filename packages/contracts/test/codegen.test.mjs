@@ -17,5 +17,12 @@ test("contract generation is deterministic", async () => {
   assert.match(first.go, /type BridgeHelloMessage struct/);
   assert.match(first.go, /type AgentProvisionRequestedMessage struct/);
   assert.match(first.go, /type AgentProvisionResultMessage struct/);
+  assert.match(first.pairingGo, /package pairingcontracts/);
+  assert.match(first.pairingGo, /type DevicePairingSessionClaimRequest struct/);
+  assert.match(first.pairingGo, /type DevicePairingSessionPollProjection struct/);
+  assert.match(
+    first.pairingTypescript,
+    /export interface DevicePairingSessionOwnerProjection/
+  );
   assert.match(first.go, /Timestamp time.Time/);
 });

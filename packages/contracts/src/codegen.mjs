@@ -11,6 +11,8 @@ import {
 
 const BRIDGE_SCHEMA_ID =
   "https://agentroom.dev/schemas/bridge/messages.schema.json";
+const PAIRING_SCHEMA_ID =
+  "https://agentroom.dev/schemas/bridge/pairing-session.schema.json";
 
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
@@ -161,6 +163,17 @@ function createBridgeCodegenSchemas(bridgeSchema) {
   return { messages, types: [...messages, ...enrollment] };
 }
 
+function createDefinitionCodegenSchemas(schema, definitions) {
+  return definitions.map(([name, definition]) => ({
+    name,
+    schema: {
+      title: name,
+      $ref: `#/$defs/${definition}`
+    },
+    sourceSchema: schema
+  }));
+}
+
 async function render(sources, language, rendererOptions) {
   const schemaInput = new JSONSchemaInput(new FetchingJSONSchemaStore());
   for (const source of sources) {
@@ -222,20 +235,52 @@ function preserveTypeScriptWireStrings(value) {
 export async function generateContractTypes(packageRoot) {
   const schemas = await loadSchemas(packageRoot);
   const bridgeSchema = schemas.get(BRIDGE_SCHEMA_ID);
+  const pairingSchema = schemas.get(PAIRING_SCHEMA_ID);
 
   if (!bridgeSchema) {
     throw new Error(`Missing code generation schema: ${BRIDGE_SCHEMA_ID}`);
   }
+  if (!pairingSchema) {
+    throw new Error(`Missing code generation schema: ${PAIRING_SCHEMA_ID}`);
+  }
 
-  const codegen = createBridgeCodegenSchemas(bridgeSchema);
-  const codegenSchemas = codegen.types;
-  const bundledSchemas = codegenSchemas.map(({ name, schema }) => ({
-    name,
-    schema: dereference(schema, bridgeSchema, schemas)
+  const bridgeCodegen = createBridgeCodegenSchemas(bridgeSchema);
+  const pairingCodegen = createDefinitionCodegenSchemas(pairingSchema, [
+    ["DevicePairingSessionCreated", "created"],
+    ["DevicePairingSessionCreateRequest", "createRequest"],
+    ["DevicePairingSessionOwnerProjection", "ownerProjection"],
+    ["DevicePairingSessionClaimRequest", "claimRequest"],
+    ["DevicePairingSessionClaimed", "claimed"],
+    ["DevicePairingSessionPollRequest", "pollRequest"],
+    ["DevicePairingSessionPollProjection", "pollProjection"],
+    ["DevicePairingSessionApproveRequest", "approveRequest"],
+    ["DevicePairingSessionRejectRequest", "rejectRequest"],
+    ["DevicePairingSessionCancelRequest", "cancelRequest"]
+  ]);
+  const bridgeSchemas = bridgeCodegen.types.map((entry) => ({
+    ...entry,
+    sourceSchema: bridgeSchema
   }));
-  const [renderedTypeScript, renderedGo] = await Promise.all([
+  const bundledBridgeSchemas = bridgeSchemas.map(
+    ({ name, schema, sourceSchema }) => ({
+      name,
+      schema: dereference(schema, sourceSchema, schemas)
+    })
+  );
+  const bundledPairingSchemas = pairingCodegen.map(
+    ({ name, schema, sourceSchema }) => ({
+      name,
+      schema: dereference(schema, sourceSchema, schemas)
+    })
+  );
+  const [
+    renderedTypeScript,
+    renderedGo,
+    renderedPairingTypeScript,
+    renderedPairingGo
+  ] = await Promise.all([
     render(
-      bundledSchemas.map(({ name, schema }) => ({
+      bundledBridgeSchemas.map(({ name, schema }) => ({
         name,
         schema: preserveTypeScriptWireStrings(schema)
       })),
@@ -245,13 +290,28 @@ export async function generateContractTypes(packageRoot) {
         "prefer-unions": "true"
       }
     ),
-    render(bundledSchemas, "go", {
+    render(bundledBridgeSchemas, "go", {
       "just-types-and-package": "true",
       package: "contracts"
+    }),
+    render(
+      bundledPairingSchemas.map(({ name, schema }) => ({
+        name,
+        schema: preserveTypeScriptWireStrings(schema)
+      })),
+      "typescript",
+      {
+        "just-types": "true",
+        "prefer-unions": "true"
+      }
+    ),
+    render(bundledPairingSchemas, "go", {
+      "just-types-and-package": "true",
+      package: "pairingcontracts"
     })
   ]);
 
-  const union = codegen.messages
+  const union = bridgeCodegen.messages
     .map(({ name }) => `  | ${name}`)
     .join("\n");
   const typescript =
@@ -261,6 +321,13 @@ export async function generateContractTypes(packageRoot) {
   const go = formatGo(
     "// Code generated from JSON Schema; DO NOT EDIT.\n\n" + renderedGo
   );
+  const pairingTypescript =
+    "// Code generated from JSON Schema; DO NOT EDIT.\n\n" +
+    formatTypeScript(renderedPairingTypeScript).trimEnd() +
+    "\n";
+  const pairingGo = formatGo(
+    "// Code generated from JSON Schema; DO NOT EDIT.\n\n" + renderedPairingGo
+  );
 
-  return { go, typescript };
+  return { go, pairingGo, pairingTypescript, typescript };
 }

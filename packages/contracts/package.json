@@ -6,7 +6,8 @@
   "description": "Authoritative JSON Schema contracts for Agent Room Network",
   "type": "module",
   "exports": {
-    "./bridge-messages": "./generated/typescript/bridge-messages.ts"
+    "./bridge-messages": "./generated/typescript/bridge-messages.ts",
+    "./pairing-session": "./generated/typescript/pairing-session.ts"
   },
   "files": [
     "dist"
@@ -14,9 +15,9 @@
   "scripts": {
     "build": "npm run check:generated && node scripts/build.mjs",
     "check:generated": "node scripts/check-generated.mjs",
-    "check:types": "tsc --noEmit --strict --skipLibCheck --target ES2022 generated/typescript/bridge-messages.ts",
+    "check:types": "tsc --noEmit --strict --skipLibCheck --target ES2022 generated/typescript/bridge-messages.ts generated/typescript/pairing-session.ts",
     "generate": "node scripts/generate.mjs",
-    "test": "node --test && npm run check:generated && npm run check:types && go test ./generated/go ./test/go",
+    "test": "node --test && npm run check:generated && npm run check:types && go test ./generated/go/... ./test/go",
     "validate": "node scripts/validate.mjs"
   },
   "dependencies": {

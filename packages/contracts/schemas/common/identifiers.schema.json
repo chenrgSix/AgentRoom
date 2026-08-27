@@ -33,6 +33,14 @@
       "type": "string",
       "pattern": "^agentprov_[A-Za-z0-9_-]{8,128}$"
     },
+    "pairingSessionId": {
+      "type": "string",
+      "pattern": "^pairing_[A-Za-z0-9_-]{8,128}$"
+    },
+    "pairingAttemptId": {
+      "type": "string",
+      "pattern": "^pairattempt_[A-Za-z0-9_-]{8,128}$"
+    },
     "messageId": {
       "type": "string",
       "pattern": "^msg_[A-Za-z0-9_-]{8,128}$"
@@ -68,6 +76,10 @@
     "sessionId": {
       "type": "string",
       "pattern": "^session_[A-Za-z0-9_-]{8,128}$"
+    },
+    "operationId": {
+      "type": "string",
+      "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
     }
   }
 }

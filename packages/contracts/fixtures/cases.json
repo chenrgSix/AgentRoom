@@ -1188,6 +1188,218 @@
         }
       },
       "valid": false
+    },
+    {
+      "name": "valid Device pairing session create request",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/createRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V700",
+        "claimSecret": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"
+      },
+      "valid": true
+    },
+    {
+      "name": "Device pairing session create rejects a short claim secret",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/createRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V701",
+        "claimSecret": "too-short"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid issued Device pairing session",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/created",
+      "instance": {
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "state": "issued",
+        "shortCode": "WAVE-LAKE-73",
+        "createdAt": "2026-08-28T10:00:00Z",
+        "expiresAt": "2026-08-28T10:10:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "issued Device pairing session never echoes claim secret",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/created",
+      "instance": {
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "state": "issued",
+        "shortCode": "WAVE-LAKE-73",
+        "createdAt": "2026-08-28T10:00:00Z",
+        "expiresAt": "2026-08-28T10:10:00Z",
+        "claimSecret": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid Device pairing claim by fragment secret",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/claimRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V702",
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "claimSecret": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pollSecret": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+        "device": {
+          "displayName": "Bob MacBook",
+          "platform": "darwin-arm64",
+          "bridgeVersion": "0.3.0-rc.6"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "valid Device pairing claim by manual short code",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/claimRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V703",
+        "shortCode": "WAVE-LAKE-73",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pollSecret": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+        "device": {
+          "displayName": "Bob MacBook",
+          "platform": "darwin-arm64",
+          "bridgeVersion": "0.3.0-rc.6"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "Device pairing claim rejects mixed fragment and short-code locators",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/claimRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V704",
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "claimSecret": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+        "shortCode": "WAVE-LAKE-73",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pollSecret": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+        "device": {
+          "displayName": "Bob MacBook",
+          "platform": "darwin-arm64",
+          "bridgeVersion": "0.3.0-rc.6"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Device pairing claim rejects Runtime and Workspace disclosure",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/claimRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V705",
+        "shortCode": "WAVE-LAKE-73",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pollSecret": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+        "device": {
+          "displayName": "Bob MacBook",
+          "platform": "darwin-arm64",
+          "bridgeVersion": "0.3.0-rc.6"
+        },
+        "runtimeKinds": [
+          "codex"
+        ],
+        "workspacePath": "/Users/bob/project"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid claimed Device pairing Owner projection",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/ownerProjection",
+      "instance": {
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "state": "claimed",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "device": {
+          "displayName": "Bob MacBook",
+          "platform": "darwin-arm64",
+          "bridgeVersion": "0.3.0-rc.6"
+        },
+        "verificationPhrase": "GREEN-RIVER-28",
+        "createdAt": "2026-08-28T10:00:00Z",
+        "expiresAt": "2026-08-28T10:10:00Z",
+        "claimedAt": "2026-08-28T10:01:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "Device pairing Owner projection rejects secret material",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/ownerProjection",
+      "instance": {
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "state": "issued",
+        "createdAt": "2026-08-28T10:00:00Z",
+        "expiresAt": "2026-08-28T10:10:00Z",
+        "pollSecret": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid Device pairing poll proof",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/pollRequest",
+      "instance": {
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pollSecret": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+      },
+      "valid": true
+    },
+    {
+      "name": "valid consumed Device pairing poll projection",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/pollProjection",
+      "instance": {
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "state": "consumed",
+        "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "credentialSource": "poll_secret"
+      },
+      "valid": true
+    },
+    {
+      "name": "consumed Device pairing poll never returns credential plaintext",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/pollProjection",
+      "instance": {
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "state": "consumed",
+        "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "credentialSource": "poll_secret",
+        "credential": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid Device pairing approval command",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/approveRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V706",
+        "expectedState": "claimed"
+      },
+      "valid": true
+    },
+    {
+      "name": "Device pairing rejection rejects embedded Server Token",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/rejectRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V707",
+        "expectedState": "claimed",
+        "reason": "Not recognized",
+        "serverToken": "must-not-cross-this-boundary"
+      },
+      "valid": false
     }
   ]
 }

@@ -15,13 +15,21 @@ const actual = {
   typescript: await readFile(
     path.join(generatedRoot, "typescript", "bridge-messages.ts"),
     "utf8"
+  ),
+  pairingGo: await readFile(
+    path.join(generatedRoot, "go", "pairing", "session.go"),
+    "utf8"
+  ),
+  pairingTypescript: await readFile(
+    path.join(generatedRoot, "typescript", "pairing-session.ts"),
+    "utf8"
   )
 };
 
-for (const language of ["typescript", "go"]) {
-  if (actual[language] !== expected[language]) {
+for (const output of ["typescript", "go", "pairingTypescript", "pairingGo"]) {
+  if (actual[output] !== expected[output]) {
     throw new Error(
-      `Generated ${language} contracts are stale; run npm run generate`
+      `Generated ${output} contracts are stale; run npm run generate`
     );
   }
 }

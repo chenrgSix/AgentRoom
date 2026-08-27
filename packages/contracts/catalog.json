@@ -12,6 +12,11 @@
       "path": "schemas/bridge/messages.schema.json"
     },
     {
+      "id": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json",
+      "kind": "bridge",
+      "path": "schemas/bridge/pairing-session.schema.json"
+    },
+    {
       "id": "https://agentroom.dev/schemas/common/error.schema.json",
       "kind": "common",
       "path": "schemas/common/error.schema.json"

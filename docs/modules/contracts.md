@@ -93,14 +93,16 @@ alone, establishes the managed Agent as ready. `bridge.hello` optionally
 advertises `supportsAgentProvisioning`; omission means unsupported so a rolling
 upgrade never sends the new request to an older Bridge.
 
-`CON-012` reserves the additive ADR-0021 Device pairing-session HTTP contract.
+`CON-012` defines the additive ADR-0021 Device pairing-session HTTP contract.
 It defines opaque pairing/session/attempt IDs, closed session states, bounded
 safe Device metadata, expiry, idempotency, verification-phrase projection, and
 the claim, poll, approval, rejection, and cancellation payloads shared by the
-TypeScript Server and Go Bridge. Secret values remain transport inputs and must
-not appear in generated public state, logs, diagnostics, or fixtures except as
-explicit negative-test seeds. Existing Bridge join and pair payloads remain
-valid during rolling compatibility.
+TypeScript Server and Go Bridge. The Owner client supplies the create-time claim
+secret, and the Bridge supplies the poll secret; generated public projections
+never echo either. Synthetic secrets appear only in request fixtures or explicit
+negative projection tests and never in generated public state, logs, or
+diagnostics. Existing Bridge join and pair payloads remain valid during rolling
+compatibility.
 
 `CON-013` reserves the ADR-0022 Task work-model contracts. Closed schemas define
 Task lifecycle and scheduling state, completion policy,

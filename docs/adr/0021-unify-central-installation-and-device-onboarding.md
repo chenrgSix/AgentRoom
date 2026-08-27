@@ -169,11 +169,17 @@ trusted claim path does not re-enable that route in trusted-Team mode.
 ### Hub-created Device pairing session
 
 The recommended flow starts when a Team Owner chooses **Add Device**. The Server
-creates a ten-minute `pairingSession` scoped to that Team and Owner. The setup
-surface may show a fragment-based deep link, QR code, or human short code. The
-fragment contains the high-entropy one-time claim secret and is removed before
-any network request. It contains no Server Token, Device credential, Owner
-secret, Runtime credential, or Team history authority.
+creates a ten-minute `pairingSession` scoped to that Team and Owner. The Owner
+client first generates the high-entropy one-time claim secret and sends it with
+one stable operation ID; the Server stores only its hash and never echoes the
+secret. Exact create retry resends the same operation ID and secret, allowing
+response-loss recovery without retained plaintext. The short code is derived
+and indexed without storing recoverable secret material.
+
+The setup surface may show a fragment-based deep link, QR code, or human short
+code. The fragment contains the locally retained claim secret and is removed
+before any network request. It contains no Server Token, Device credential,
+Owner secret, Runtime credential, or Team history authority.
 
 The Bridge validates the HTTPS origin using normal system-CA trust or the
 existing explicit private-deployment pin. It then creates a stable
@@ -222,10 +228,12 @@ issued
 Only `issued -> claimed` binds an attempt. Only the creating Team Owner or
 another current Team Owner may approve, reject, or cancel. `approved` creates
 the Device and credential exactly once; `consumed` records that the Bridge
-observed the result. Repeated create, claim, approval, and poll requests with the
-same idempotency identity return the same state. A different attempt, expired
-secret, reused short code, or cross-Team approval fails without revealing the
-bound Device.
+observed the result. Repeated create, claim, and Owner-decision commands with the
+same operation identity return the same state. Polling uses the bound attempt
+and poll-secret proof rather than response-caching a pending read; after approval,
+consumption and exact retry converge on the same terminal Device. A
+different attempt, expired secret, reused short code, or cross-Team approval
+fails without revealing the bound Device.
 
 The existing Bridge-created join request remains a compatibility flow. Both
 flows converge on the same Device, credential, revocation, Agent publication,
@@ -297,16 +305,20 @@ POST /api/setup/claim
 POST /api/teams/:teamId/device-pairing-sessions
 GET  /api/teams/:teamId/device-pairing-sessions/:pairingSessionId
 POST /api/device-pairing-sessions/:pairingSessionId/claim
+POST /api/device-pairing-session-claims
 POST /api/device-pairing-sessions/:pairingSessionId/poll
 POST /api/teams/:teamId/device-pairing-sessions/:pairingSessionId/approve
 POST /api/teams/:teamId/device-pairing-sessions/:pairingSessionId/reject
 POST /api/teams/:teamId/device-pairing-sessions/:pairingSessionId/cancel
 ```
 
-Every mutation carries a bounded idempotency identity. Owner reads and decisions
-require Team authorization. Device claim and poll responses are `no-store`,
-contain only the pairing projection needed by the Bridge, and do not permit
-session enumeration.
+Create, claim, and Owner-decision commands carry a bounded idempotency identity.
+The alternate claim collection route accepts the rate-limited human short code;
+the session-specific route requires its ID and high-entropy fragment secret.
+Poll carries the exact attempt and poll-secret proof and may advance only
+`approved -> consumed`. Owner reads and decisions require Team authorization.
+Device claim and poll responses are `no-store`, contain only the pairing
+projection needed by the Bridge, and do not permit session enumeration.
 
 ## Alternatives
 
