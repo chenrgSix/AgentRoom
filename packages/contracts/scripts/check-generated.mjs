@@ -23,10 +23,25 @@ const actual = {
   pairingTypescript: await readFile(
     path.join(generatedRoot, "typescript", "pairing-session.ts"),
     "utf8"
+  ),
+  workGo: await readFile(
+    path.join(generatedRoot, "go", "work", "task_result.go"),
+    "utf8"
+  ),
+  workTypescript: await readFile(
+    path.join(generatedRoot, "typescript", "task-result.ts"),
+    "utf8"
   )
 };
 
-for (const output of ["typescript", "go", "pairingTypescript", "pairingGo"]) {
+for (const output of [
+  "typescript",
+  "go",
+  "pairingTypescript",
+  "pairingGo",
+  "workTypescript",
+  "workGo"
+]) {
   if (actual[output] !== expected[output]) {
     throw new Error(
       `Generated ${output} contracts are stale; run npm run generate`

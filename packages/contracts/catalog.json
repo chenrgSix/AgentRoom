@@ -40,6 +40,11 @@
       "id": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json",
       "kind": "common",
       "path": "schemas/common/utc-timestamp.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/work/task-result.schema.json",
+      "kind": "work",
+      "path": "schemas/work/task-result.schema.json"
     }
   ]
 }

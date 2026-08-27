@@ -1435,6 +1435,446 @@
         "serverToken": "must-not-cross-this-boundary"
       },
       "valid": false
+    },
+    {
+      "name": "valid Task definition command",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/taskDefinitionCommand",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V801",
+        "expectedTaskRevision": 1,
+        "title": "Ship the work model",
+        "goal": "Make Task, Run, and Result the primary work model.",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "completionPolicy": "accepted_result_required",
+        "priority": "high",
+        "dueAt": null,
+        "criteria": [
+          {
+            "criterionKey": "criterion_acceptance01",
+            "description": "Focused acceptance evidence exists.",
+            "required": true,
+            "ordinal": 1
+          }
+        ],
+        "assignments": [
+          {
+            "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "role": "primary"
+          }
+        ],
+        "budgetPolicy": {
+          "maxRunAttempts": 3,
+          "maxExecutionDurationSeconds": 3600
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "Task definition command rejects assignment audit authority",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/taskDefinitionCommand",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V802",
+        "expectedTaskRevision": 1,
+        "title": "Ship the work model",
+        "goal": "Keep audit fields Server-owned.",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "completionPolicy": "owner_confirmed",
+        "priority": "normal",
+        "dueAt": null,
+        "criteria": [],
+        "assignments": [
+          {
+            "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "role": "primary",
+            "assignedAt": "2026-08-28T10:00:00Z"
+          }
+        ],
+        "budgetPolicy": {
+          "maxRunAttempts": 1,
+          "maxExecutionDurationSeconds": 600
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "valid frozen Run Context Manifest",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/contextManifest",
+      "instance": {
+        "manifestVersion": "1.0",
+        "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "taskRevision": 2,
+        "definitionRevision": 2,
+        "criteriaRevision": 1,
+        "goal": "Prove delivery from a frozen bounded context.",
+        "criteria": [
+          {
+            "criterionKey": "criterion_manifest01",
+            "description": "Manifest records the frozen acceptance criterion.",
+            "required": true,
+            "ordinal": 1
+          }
+        ],
+        "target": {
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "deviceId": null,
+          "runtimeKind": "manual",
+          "workspaceAlias": "agentroom"
+        },
+        "included": {
+          "messageIds": ["msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"],
+          "artifactIds": [],
+          "memoryIds": [],
+          "parentRunIds": [],
+          "roomContextRevision": 4,
+          "taskMemoryRevision": 0,
+          "artifactRevision": 0
+        },
+        "permissions": {
+          "filesystemAccess": "workspace-write",
+          "networkAccess": "local-policy",
+          "interrupt": "supported",
+          "handoff": "unsupported",
+          "maxDurationSeconds": 3600
+        },
+        "omittedCategories": ["local_paths", "environment_values", "provider_credentials", "provider_session_ids"],
+        "recordedAt": "2026-08-28T10:00:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "Run Context Manifest rejects a local path",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/contextManifest",
+      "instance": {
+        "manifestVersion": "1.0",
+        "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "taskRevision": 1,
+        "definitionRevision": 1,
+        "criteriaRevision": 1,
+        "goal": "Reject ambient local state.",
+        "criteria": [],
+        "target": {
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "runtimeKind": "codex",
+          "workspaceAlias": "agentroom"
+        },
+        "included": {
+          "messageIds": [],
+          "artifactIds": [],
+          "memoryIds": [],
+          "parentRunIds": [],
+          "roomContextRevision": 0,
+          "taskMemoryRevision": 0,
+          "artifactRevision": 0
+        },
+        "permissions": {
+          "filesystemAccess": "workspace-write",
+          "networkAccess": "local-policy",
+          "interrupt": "supported",
+          "handoff": "unsupported",
+          "maxDurationSeconds": 3600
+        },
+        "omittedCategories": ["local_paths"],
+        "recordedAt": "2026-08-28T10:00:00Z",
+        "workspacePath": "/Users/operator/private-workspace"
+      },
+      "valid": false
+    },
+    {
+      "name": "Run Context Manifest rejects a provider credential",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/contextManifest",
+      "instance": {
+        "manifestVersion": "1.0",
+        "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "taskRevision": 1,
+        "definitionRevision": 1,
+        "criteriaRevision": 1,
+        "goal": "Reject credentials.",
+        "criteria": [],
+        "target": {
+          "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "runtimeKind": "codex",
+          "workspaceAlias": "agentroom"
+        },
+        "included": {
+          "messageIds": [],
+          "artifactIds": [],
+          "memoryIds": [],
+          "parentRunIds": [],
+          "roomContextRevision": 0,
+          "taskMemoryRevision": 0,
+          "artifactRevision": 0
+        },
+        "permissions": {
+          "filesystemAccess": "workspace-write",
+          "networkAccess": "local-policy",
+          "interrupt": "supported",
+          "handoff": "unsupported",
+          "maxDurationSeconds": 3600
+        },
+        "omittedCategories": ["provider_credentials"],
+        "recordedAt": "2026-08-28T10:00:00Z",
+        "providerCredential": "secret"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid artifact-backed Result proposal",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/resultProposal",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V803",
+        "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "definitionRevision": 2,
+        "criteriaRevision": 1,
+        "proposedAtTaskRevision": 3,
+        "supersedesResultId": null,
+        "outcome": "satisfied",
+        "summary": "The bounded change is verified.",
+        "risks": [],
+        "openQuestions": [],
+        "nextActions": [],
+        "sources": [
+          {
+            "evidenceRefId": "evidence_artifact01",
+            "kind": "artifact",
+            "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+          }
+        ],
+        "criterionClaims": [
+          {
+            "criterionKey": "criterion_acceptance01",
+            "coverage": "satisfied",
+            "explanation": "The artifact contains the focused evidence.",
+            "evidenceRefIds": ["evidence_artifact01"]
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "valid Run-event-backed Result proposal",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/resultProposal",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V804",
+        "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "definitionRevision": 2,
+        "criteriaRevision": 1,
+        "proposedAtTaskRevision": 3,
+        "supersedesResultId": null,
+        "outcome": "partial",
+        "summary": "The Run completed with one open question.",
+        "risks": [],
+        "openQuestions": ["Owner confirmation remains."],
+        "nextActions": [
+          {
+            "nextActionKey": "next_confirmowner01",
+            "description": "Confirm the result with the owner."
+          }
+        ],
+        "sources": [
+          {
+            "evidenceRefId": "evidence_runevent01",
+            "kind": "run_event",
+            "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "sequence": 7
+          }
+        ],
+        "criterionClaims": []
+      },
+      "valid": true
+    },
+    {
+      "name": "Result proposal rejects an ambient provider session source",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/resultProposal",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V805",
+        "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "definitionRevision": 1,
+        "criteriaRevision": 1,
+        "proposedAtTaskRevision": 1,
+        "supersedesResultId": null,
+        "outcome": "informational",
+        "summary": "Unsafe evidence source.",
+        "risks": [],
+        "openQuestions": [],
+        "nextActions": [],
+        "sources": [
+          {
+            "evidenceRefId": "evidence_session01",
+            "kind": "provider_session",
+            "providerSessionId": "session-secret"
+          }
+        ],
+        "criterionClaims": []
+      },
+      "valid": false
+    },
+    {
+      "name": "Result proposal rejects a raw filesystem source",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/resultProposal",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V806",
+        "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "definitionRevision": 1,
+        "criteriaRevision": 1,
+        "proposedAtTaskRevision": 1,
+        "supersedesResultId": null,
+        "outcome": "informational",
+        "summary": "Unsafe evidence source.",
+        "risks": [],
+        "openQuestions": [],
+        "nextActions": [],
+        "sources": [
+          {
+            "evidenceRefId": "evidence_artifact02",
+            "kind": "artifact",
+            "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "path": "/private/result.txt"
+          }
+        ],
+        "criterionClaims": []
+      },
+      "valid": false
+    },
+    {
+      "name": "valid manual Agent Result proposal envelope",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/agentResultProposal",
+      "instance": {
+        "actorKind": "manual_agent",
+        "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "proposal": {
+          "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V807",
+          "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "definitionRevision": 1,
+          "criteriaRevision": 1,
+          "proposedAtTaskRevision": 2,
+          "supersedesResultId": null,
+          "outcome": "informational",
+          "summary": "Manual Agent reported bounded evidence.",
+          "risks": [],
+          "openQuestions": [],
+          "nextActions": [],
+          "sources": [
+            {
+              "evidenceRefId": "evidence_discuss01",
+              "kind": "discussion",
+              "discussionId": "discussion_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+            }
+          ],
+          "criterionClaims": []
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "Agent Result proposal requires an explicit actor kind",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/agentResultProposal",
+      "instance": {
+        "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "proposal": {
+          "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V808",
+          "taskId": "task_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "definitionRevision": 1,
+          "criteriaRevision": 1,
+          "proposedAtTaskRevision": 2,
+          "supersedesResultId": null,
+          "outcome": "informational",
+          "summary": "Actor authority is ambiguous.",
+          "risks": [],
+          "openQuestions": [],
+          "nextActions": [],
+          "sources": [
+            {
+              "evidenceRefId": "evidence_message01",
+              "kind": "message",
+              "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+            }
+          ],
+          "criterionClaims": []
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "valid Result review command",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/resultReviewCommand",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V809",
+        "decision": "accepted",
+        "expectedTaskRevision": 4,
+        "expectedReviewRevision": 0,
+        "reason": "All required criteria are evidenced.",
+        "completeTask": true
+      },
+      "valid": true
+    },
+    {
+      "name": "Result review command rejects lifecycle authority",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/resultReviewCommand",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V810",
+        "decision": "completed",
+        "expectedTaskRevision": 4,
+        "expectedReviewRevision": 0,
+        "reason": "Lifecycle transitions remain Server-owned.",
+        "completeTask": true
+      },
+      "valid": false
+    },
+    {
+      "name": "valid authorized Workbench query",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "mine",
+        "attention": ["needs_approval", "outcome_unknown"],
+        "lifecycleState": ["active", "review"],
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Workbench query rejects an unbounded page",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "limit": 101,
+        "cursor": null
+      },
+      "valid": false
+    },
+    {
+      "name": "valid legacy default Task mapping",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/legacyTaskMapping",
+      "instance": {
+        "legacyState": "working",
+        "lifecycleState": "active",
+        "schedulingState": "enabled",
+        "completionPolicy": "owner_confirmed",
+        "isDefault": true
+      },
+      "valid": true
+    },
+    {
+      "name": "legacy Task mapping rejects hidden identity authority",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/legacyTaskMapping",
+      "instance": {
+        "legacyState": "open",
+        "lifecycleState": "ready",
+        "schedulingState": "enabled",
+        "completionPolicy": "owner_confirmed",
+        "isDefault": false,
+        "taskId": "task_client_chosen_identity"
+      },
+      "valid": false
     }
   ]
 }

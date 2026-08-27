@@ -53,6 +53,18 @@
       "type": "string",
       "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
     },
+    "resultId": {
+      "type": "string",
+      "pattern": "^result_[A-Za-z0-9_-]{8,128}$"
+    },
+    "discussionId": {
+      "type": "string",
+      "pattern": "^discussion_[A-Za-z0-9_-]{8,128}$"
+    },
+    "memoryId": {
+      "type": "string",
+      "pattern": "^memory_[A-Za-z0-9_-]{8,128}$"
+    },
     "artifactId": {
       "type": "string",
       "pattern": "^artifact_[A-Za-z0-9_-]{8,128}$"

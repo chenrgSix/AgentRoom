@@ -38,6 +38,7 @@ packages/contracts/
     room/
     run/
     registry/
+    work/
   fixtures/
   generated/typescript/
   generated/go/
@@ -104,7 +105,8 @@ negative projection tests and never in generated public state, logs, or
 diagnostics. Existing Bridge join and pair payloads remain valid during rolling
 compatibility.
 
-`CON-013` reserves the ADR-0022 Task work-model contracts. Closed schemas define
+`CON-013` implements the ADR-0022 Task work-model wire contracts in
+`schemas/work/task-result.schema.json`. Closed schemas define
 Task lifecycle and scheduling state, completion policy,
 Task/definition/criteria revisions, canonical ordered criteria, human Owner,
 closed Agent assignment roles, comparable budget units, attention and
@@ -115,11 +117,14 @@ Task states and absent manifests remain valid only in the documented migration
 window, and no compatibility mapping may remove `outcome_unknown` or make
 `run.taskId` optional.
 
-Member HTTP, manual-Agent MCP, and managed-Agent Device proposals use distinct
-authentication envelopes but one Result semantic contract and idempotency
-identity. Fixtures reject actor/Run mismatch, unknown evidence kinds, local
-paths, copied evidence payloads, stale IDs masquerading as current revisions,
-and review or completion authority in an Agent transport request.
+Member HTTP and the manual/managed Agent transports share one Result semantic
+contract and idempotency identity. Agent envelopes name the closed actor kind,
+Agent and Run; the owning service must bind all three to authenticated state and
+the current assignment before accepting the proposal. Fixtures reject unknown
+evidence kinds, local paths, credential material, assignment audit authority,
+unbounded Workbench pages, and review or completion authority in Result review
+input. Cross-record actor/Run/source membership remains an owning-service
+authorization check because JSON Schema cannot query central persistence.
 
 `WSP-001` adds optional opaque `workspaceRef` and `workspaceGeneration` fields
 to managed Agent publication plus `supportsWorkspaceLeases`. They are path-free
@@ -286,7 +291,7 @@ traces, or internal database errors.
 
 ## Task Mapping
 
-`CON-001` through `CON-010`, plus cross-language portions of `QA-001`.
+`CON-001` through `CON-013`, plus cross-language portions of `QA-001`.
 
 ## Dependencies
 

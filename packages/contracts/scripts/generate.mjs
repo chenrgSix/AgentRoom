@@ -10,7 +10,8 @@ const output = await generateContractTypes(packageRoot);
 
 await Promise.all([
   mkdir(path.join(generatedRoot, "typescript"), { recursive: true }),
-  mkdir(path.join(generatedRoot, "go", "pairing"), { recursive: true })
+  mkdir(path.join(generatedRoot, "go", "pairing"), { recursive: true }),
+  mkdir(path.join(generatedRoot, "go", "work"), { recursive: true })
 ]);
 await Promise.all([
   writeFile(
@@ -28,6 +29,14 @@ await Promise.all([
   writeFile(
     path.join(generatedRoot, "go", "pairing", "session.go"),
     output.pairingGo
+  ),
+  writeFile(
+    path.join(generatedRoot, "typescript", "task-result.ts"),
+    output.workTypescript
+  ),
+  writeFile(
+    path.join(generatedRoot, "go", "work", "task_result.go"),
+    output.workGo
   )
 ]);
 

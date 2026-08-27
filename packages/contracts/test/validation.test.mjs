@@ -15,7 +15,7 @@ test("the checked-in contract package is internally consistent", async () => {
 
   assert.deepEqual(result, {
     catalogVersion: "0.1.0",
-    schemaCount: 8
+    schemaCount: 9
   });
 });
 
@@ -23,10 +23,10 @@ test("positive and negative golden fixtures match their schemas", async () => {
   const result = await validateContractFixtures(packageRoot);
 
   assert.deepEqual(result, {
-    fixtureCount: 81,
+    fixtureCount: 98,
     fixtureVersion: "1.0",
-    invalidCount: 44,
-    validCount: 37
+    invalidCount: 53,
+    validCount: 45
   });
 });
 

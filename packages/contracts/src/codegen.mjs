@@ -13,6 +13,8 @@ const BRIDGE_SCHEMA_ID =
   "https://agentroom.dev/schemas/bridge/messages.schema.json";
 const PAIRING_SCHEMA_ID =
   "https://agentroom.dev/schemas/bridge/pairing-session.schema.json";
+const WORK_SCHEMA_ID =
+  "https://agentroom.dev/schemas/work/task-result.schema.json";
 
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
@@ -236,12 +238,16 @@ export async function generateContractTypes(packageRoot) {
   const schemas = await loadSchemas(packageRoot);
   const bridgeSchema = schemas.get(BRIDGE_SCHEMA_ID);
   const pairingSchema = schemas.get(PAIRING_SCHEMA_ID);
+  const workSchema = schemas.get(WORK_SCHEMA_ID);
 
   if (!bridgeSchema) {
     throw new Error(`Missing code generation schema: ${BRIDGE_SCHEMA_ID}`);
   }
   if (!pairingSchema) {
     throw new Error(`Missing code generation schema: ${PAIRING_SCHEMA_ID}`);
+  }
+  if (!workSchema) {
+    throw new Error(`Missing code generation schema: ${WORK_SCHEMA_ID}`);
   }
 
   const bridgeCodegen = createBridgeCodegenSchemas(bridgeSchema);
@@ -256,6 +262,21 @@ export async function generateContractTypes(packageRoot) {
     ["DevicePairingSessionApproveRequest", "approveRequest"],
     ["DevicePairingSessionRejectRequest", "rejectRequest"],
     ["DevicePairingSessionCancelRequest", "cancelRequest"]
+  ]);
+  const workCodegen = createDefinitionCodegenSchemas(workSchema, [
+    ["TaskProjection", "taskProjection"],
+    ["TaskDefinitionCommand", "taskDefinitionCommand"],
+    ["RunAttemptProjection", "runAttemptProjection"],
+    ["RunContextManifest", "contextManifest"],
+    ["AmbiguityAcknowledgement", "ambiguityAcknowledgement"],
+    ["ResultProposal", "resultProposal"],
+    ["AgentResultProposal", "agentResultProposal"],
+    ["ResultReviewCommand", "resultReviewCommand"],
+    ["ResultProjection", "resultProjection"],
+    ["WorkbenchQuery", "workbenchQuery"],
+    ["WorkbenchPage", "workbenchPage"],
+    ["LegacyTaskMapping", "legacyTaskMapping"],
+    ["ChildTaskFromResultCommand", "childTaskFromResultCommand"]
   ]);
   const bridgeSchemas = bridgeCodegen.types.map((entry) => ({
     ...entry,
@@ -273,11 +294,19 @@ export async function generateContractTypes(packageRoot) {
       schema: dereference(schema, sourceSchema, schemas)
     })
   );
+  const bundledWorkSchemas = workCodegen.map(
+    ({ name, schema, sourceSchema }) => ({
+      name,
+      schema: dereference(schema, sourceSchema, schemas)
+    })
+  );
   const [
     renderedTypeScript,
     renderedGo,
     renderedPairingTypeScript,
-    renderedPairingGo
+    renderedPairingGo,
+    renderedWorkTypeScript,
+    renderedWorkGo
   ] = await Promise.all([
     render(
       bundledBridgeSchemas.map(({ name, schema }) => ({
@@ -308,6 +337,21 @@ export async function generateContractTypes(packageRoot) {
     render(bundledPairingSchemas, "go", {
       "just-types-and-package": "true",
       package: "pairingcontracts"
+    }),
+    render(
+      bundledWorkSchemas.map(({ name, schema }) => ({
+        name,
+        schema: preserveTypeScriptWireStrings(schema)
+      })),
+      "typescript",
+      {
+        "just-types": "true",
+        "prefer-unions": "true"
+      }
+    ),
+    render(bundledWorkSchemas, "go", {
+      "just-types-and-package": "true",
+      package: "workcontracts"
     })
   ]);
 
@@ -328,6 +372,20 @@ export async function generateContractTypes(packageRoot) {
   const pairingGo = formatGo(
     "// Code generated from JSON Schema; DO NOT EDIT.\n\n" + renderedPairingGo
   );
+  const workTypescript =
+    "// Code generated from JSON Schema; DO NOT EDIT.\n\n" +
+    formatTypeScript(renderedWorkTypeScript).trimEnd() +
+    "\n";
+  const workGo = formatGo(
+    "// Code generated from JSON Schema; DO NOT EDIT.\n\n" + renderedWorkGo
+  );
 
-  return { go, pairingGo, pairingTypescript, typescript };
+  return {
+    go,
+    pairingGo,
+    pairingTypescript,
+    typescript,
+    workGo,
+    workTypescript
+  };
 }

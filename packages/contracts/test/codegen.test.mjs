@@ -25,4 +25,10 @@ test("contract generation is deterministic", async () => {
     /export interface DevicePairingSessionOwnerProjection/
   );
   assert.match(first.go, /Timestamp time.Time/);
+  assert.match(first.workGo, /package workcontracts/);
+  assert.match(first.workGo, /type ResultProposal struct/);
+  assert.match(first.workGo, /type RunContextManifest struct/);
+  assert.match(first.workTypescript, /export interface TaskProjection/);
+  assert.match(first.workTypescript, /export interface WorkbenchQuery/);
+  assert.match(first.workTypescript, /export interface WorkbenchPage/);
 });
