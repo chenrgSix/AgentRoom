@@ -453,13 +453,24 @@ trust the app on first launch. Apple Developer ID signing and notarization are
 outside the accepted distribution boundary; the GUI must not claim that Apple
 verified the package or recommend disabling Gatekeeper globally.
 
-The Windows amd64 desktop preview is an unsigned portable ZIP built on a native
-Windows runner. It uses the installed Microsoft Edge WebView2 Runtime and may
-trigger an unknown-publisher SmartScreen warning. Documentation requires
-checksum verification and must not recommend disabling SmartScreen or Defender.
-The preview has no installer, code-signing claim, automatic updater, or Windows
-login-startup integration; unsupported login startup remains visible in local
-Settings instead of appearing as a working toggle.
+The Windows amd64 desktop preview ships as both an unsigned portable ZIP and an
+unsigned current-user installer built on a native Windows runner. The installer
+uses a stable application identity, installs under LocalAppData without
+elevation, registers a personal Start menu shortcut and uninstaller, and offers
+an optional desktop shortcut. Upgrade and uninstall own program files only;
+configuration and credentials under the user's application-data directory or a
+configured external DataDir remain outside installer ownership.
+
+The app uses the installed Microsoft Edge WebView2 Runtime and may trigger an
+unknown-publisher SmartScreen warning. The installer checks Microsoft's
+documented per-machine and per-user Runtime registrations. If WebView2 is
+missing, it explains the prerequisite and may open Microsoft's official
+download page only after an explicit user choice; it never downloads or runs a
+Runtime installer. Documentation requires checksum verification and must not
+recommend disabling SmartScreen or Defender. The preview has no code-signing
+claim, automatic updater, or Windows login-startup integration; unsupported
+login startup remains visible in local Settings instead of appearing as a
+working toggle.
 
 Wails is pinned to `v3.0.0-beta.12` behind the `desktop` Go build tag. Ordinary
 CGO-free CLI tests and builds do not compile the desktop package. Desktop tests
@@ -516,8 +527,11 @@ GitHub Release triggers `.github/workflows/release-bridge.yml`, which tests and
 cross-compiles CGO-free CLI archives for macOS amd64/arm64, Windows amd64, and
 Linux amd64/arm64. Native macOS runners additionally build unsigned Wails GUI
 ZIPs for Apple Silicon and Intel, and a native Windows runner builds the
-unsigned Windows amd64 GUI preview. The Release tag is injected into each
-binary; all archives and one `SHA256SUMS` file are attached to the Release.
+unsigned Windows amd64 GUI archive and current-user installer. Native Windows
+CI additionally smoke-tests initial installation, in-place upgrade, uninstall,
+Start menu and uninstaller registration, and owner-state preservation. The
+Release tag is injected into each binary; all packages and one `SHA256SUMS`
+file are attached to the Release.
 
 Each archive contains the binary, client README, and an OS-specific launcher.
 The macOS `.command` and Windows `.cmd` launchers are directly clickable; Linux
@@ -526,11 +540,13 @@ the token-authenticated loopback UI without requiring terminal configuration.
 The GUI archive contains **AgentRoom Bridge.app** and its license material; it
 does not contain or require an Apple signature or notarization ticket.
 
-The first release artifacts are unsigned portable binaries. Desktop packages
-remain unsigned by product decision and rely on checksum verification plus
-explicit user trust. Login startup remains opt-in on macOS and unsupported on
-Windows; update checks remain manual-only. Neither capability installs or
-executes downloaded code.
+The first release artifacts are unsigned. Desktop packages remain unsigned by
+product decision and rely on checksum verification plus explicit user trust.
+The Windows installer changes only current-user program files, shortcuts, and
+its uninstall registration; it does not fetch dependencies or claim publisher
+verification. Login startup remains opt-in on macOS and unsupported on Windows;
+update checks remain manual-only. Neither capability downloads or executes
+update code.
 
 `v0.2.0-rc.1` predates `BRG-016` and cannot repair an incompatible inbox by
 itself. For a strict central-service deployment, replace the Bridge first and

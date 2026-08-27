@@ -33,8 +33,11 @@ desktop_archives=(
   "agentroom-bridge-desktop_${version}_darwin_arm64.zip"
   "agentroom-bridge-desktop_${version}_windows_amd64.zip"
 )
+desktop_installers=(
+  "agentroom-bridge-desktop_${version}_windows_amd64_setup.exe"
+)
 license_assets=(LICENSE NOTICE COMMERCIAL-LICENSE.md)
-expected_count=$((${#cli_archives[@]} + ${#desktop_archives[@]} + ${#license_assets[@]} + 1))
+expected_count=$((${#cli_archives[@]} + ${#desktop_archives[@]} + ${#desktop_installers[@]} + ${#license_assets[@]} + 1))
 actual_count=$(find "${asset_dir}" -mindepth 1 -maxdepth 1 -print | wc -l | tr -d ' ')
 
 if [[ "${actual_count}" -ne "${expected_count}" ]]; then
@@ -43,7 +46,7 @@ if [[ "${actual_count}" -ne "${expected_count}" ]]; then
   exit 1
 fi
 
-for filename in "${cli_archives[@]}" "${desktop_archives[@]}" SHA256SUMS "${license_assets[@]}"; do
+for filename in "${cli_archives[@]}" "${desktop_archives[@]}" "${desktop_installers[@]}" SHA256SUMS "${license_assets[@]}"; do
   if [[ ! -f "${asset_dir}/${filename}" ]]; then
     echo "Missing release asset: ${filename}" >&2
     exit 1
@@ -65,7 +68,7 @@ checksum_names=$(awk '
   echo "SHA256SUMS contains an invalid entry" >&2
   exit 1
 }
-expected_checksum_names=$(printf '%s\n' "${cli_archives[@]}" "${desktop_archives[@]}" | sort)
+expected_checksum_names=$(printf '%s\n' "${cli_archives[@]}" "${desktop_archives[@]}" "${desktop_installers[@]}" | sort)
 actual_checksum_names=$(printf '%s\n' "${checksum_names}" | sort)
 if [[ "${actual_checksum_names}" != "${expected_checksum_names}" ]]; then
   echo "SHA256SUMS must contain each Bridge archive exactly once" >&2
@@ -280,6 +283,32 @@ verify_windows_desktop_archive() {
   assert_licenses "${root}"
 }
 
+verify_windows_desktop_installer() {
+  local installer=$1
+  local path="${asset_dir}/${installer}"
+  local description
+  local installer_strings="${temporary_root}/${installer}.strings"
+
+  if [[ ! -s "${path}" ]]; then
+    echo "Windows Desktop installer is missing or empty: ${installer}" >&2
+    exit 1
+  fi
+  description=$(file -b "${path}")
+  if [[ ! "${description}" =~ PE32(\+)?\ executable.*(Intel\ 80386|x86-64) ]]; then
+    echo "Windows Desktop installer is not a Windows GUI executable: ${description}" >&2
+    exit 1
+  fi
+  {
+    strings "${path}"
+    strings -el "${path}"
+  } > "${installer_strings}"
+  if ! grep -Fq "AgentRoom Bridge" "${installer_strings}" ||
+    ! grep -Fq "${version}" "${installer_strings}"; then
+    echo "Windows Desktop installer is missing product or version metadata: ${installer}" >&2
+    exit 1
+  fi
+}
+
 verify_cli_archive "${cli_archives[0]}" darwin amd64
 verify_cli_archive "${cli_archives[1]}" darwin arm64
 verify_cli_archive "${cli_archives[2]}" linux amd64
@@ -288,5 +317,6 @@ verify_cli_archive "${cli_archives[4]}" windows amd64
 verify_macos_desktop_archive "${desktop_archives[0]}" amd64
 verify_macos_desktop_archive "${desktop_archives[1]}" arm64
 verify_windows_desktop_archive "${desktop_archives[2]}" amd64
+verify_windows_desktop_installer "${desktop_installers[0]}"
 
 printf 'Verified %s release assets for %s\n' "${expected_count}" "${release_tag}"

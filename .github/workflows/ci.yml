@@ -144,9 +144,23 @@ jobs:
         working-directory: bridge
         shell: pwsh
         run: |
+          $outputDir = Join-Path $env:RUNNER_TEMP "agentroom-desktop-windows"
           go test -tags desktop ./cmd/agentroom-bridge-desktop
           go vet -tags desktop ./cmd/agentroom-bridge-desktop
           ./scripts/package-desktop-windows.ps1 `
             -ReleaseTag v0.0.0-ci `
             -GoArch amd64 `
-            -OutputDir (Join-Path $env:RUNNER_TEMP "agentroom-desktop-windows")
+            -OutputDir $outputDir
+          ./scripts/verify-desktop-windows-installer.ps1 `
+            -ReleaseTag v0.0.0-ci `
+            -InstallerPath (Join-Path $outputDir "agentroom-bridge-desktop_0.0.0-ci_windows_amd64_setup.exe")
+
+      - name: Upload Windows package smoke artifacts
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: agentroom-bridge-desktop-windows-ci
+          path: |
+            ${{ runner.temp }}/agentroom-desktop-windows/*.zip
+            ${{ runner.temp }}/agentroom-desktop-windows/*_setup.exe
+          if-no-files-found: error
+          retention-days: 3

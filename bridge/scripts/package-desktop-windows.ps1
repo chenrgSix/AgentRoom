@@ -33,6 +33,7 @@ if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+(?:[-.][0-9A-Za-z._-]+)?$') {
 if ($GoArch -ne "amd64") {
   throw "Unsupported Windows desktop architecture: $GoArch"
 }
+$bundleVersion = ($version -split '-', 2)[0]
 
 $hostOS = (& go env GOHOSTOS).Trim()
 $hostArch = (& go env GOHOSTARCH).Trim()
@@ -47,7 +48,10 @@ $package = "agentroom-bridge-desktop_${version}_windows_${GoArch}"
 $staging = Join-Path $OutputDir $package
 $binary = Join-Path $staging "AgentRoom Bridge.exe"
 $archive = Join-Path $OutputDir "${package}.zip"
-if ((Test-Path -LiteralPath $staging) -or (Test-Path -LiteralPath $archive)) {
+$installerBase = "${package}_setup"
+$installer = Join-Path $OutputDir "${installerBase}.exe"
+if ((Test-Path -LiteralPath $staging) -or (Test-Path -LiteralPath $archive) -or
+    (Test-Path -LiteralPath $installer)) {
   throw "Desktop package output already exists: $package"
 }
 
@@ -139,4 +143,42 @@ try {
 finally {
   $zip.Dispose()
 }
+
+$compilerCandidates = @(
+  $env:ISCC_PATH,
+  (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 6\ISCC.exe"),
+  (Join-Path $env:ProgramFiles "Inno Setup 6\ISCC.exe"),
+  (Join-Path ${env:ProgramFiles(x86)} "Inno Setup 7\ISCC.exe"),
+  (Join-Path $env:ProgramFiles "Inno Setup 7\ISCC.exe")
+)
+$compiler = $compilerCandidates |
+  Where-Object { -not [string]::IsNullOrWhiteSpace($_) -and (Test-Path -LiteralPath $_) } |
+  Select-Object -First 1
+if ([string]::IsNullOrWhiteSpace($compiler)) {
+  throw "Inno Setup Compiler was not found; set ISCC_PATH or install Inno Setup 6 or 7"
+}
+
+$installerScript = Join-Path $bridgeRoot "desktop\windows\installer.iss"
+$compilerArguments = @(
+  "/DAppVersion=$version",
+  "/DBundleVersion=$bundleVersion",
+  "/DSourceDir=$staging",
+  "/DOutputDir=$OutputDir",
+  "/DOutputBaseFilename=$installerBase",
+  $installerScript
+)
+& $compiler @compilerArguments
+if ($LASTEXITCODE -ne 0) {
+  throw "Windows Desktop installer build failed"
+}
+if (-not (Test-Path -LiteralPath $installer) -or (Get-Item -LiteralPath $installer).Length -eq 0) {
+  throw "Windows Desktop installer was not created"
+}
+$installerInfo = [Diagnostics.FileVersionInfo]::GetVersionInfo($installer)
+if ($installerInfo.ProductName -ne "AgentRoom Bridge" -or
+    $installerInfo.ProductVersion -ne $version) {
+  throw "Windows Desktop installer has unexpected product metadata"
+}
+
 Write-Output $archive
+Write-Output $installer

@@ -109,8 +109,9 @@ machines do not need Go or Node.js:
    [GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases). On macOS,
    choose the `agentroom-bridge-desktop` ZIP for Apple Silicon (`arm64`) or
    Intel (`amd64`), then move **AgentRoom Bridge.app** to `/Applications`. On
-   64-bit Windows, choose the `agentroom-bridge-desktop` ZIP ending in
-   `windows_amd64`, extract it, and open **AgentRoom Bridge.exe**.
+   64-bit Windows, use the `agentroom-bridge-desktop` executable ending in
+   `windows_amd64_setup.exe` for a current-user installation, or choose the ZIP
+   ending in `windows_amd64` for a portable copy.
 2. Download `SHA256SUMS`, verify the archive, and extract it. Desktop packages
    are intentionally unsigned. The macOS app is also unnotarized; approve it
    under **Privacy & Security**, or remove quarantine from that app only after
@@ -123,7 +124,12 @@ machines do not need Go or Node.js:
    Windows may show a Microsoft Defender SmartScreen warning for the unsigned
    executable. Continue only after verifying the checksum; do not disable
    SmartScreen or Defender globally. The Windows app uses Microsoft Edge
-   WebView2 and asks the user to install its Runtime if it is missing.
+   WebView2. The installer detects a missing Runtime and can open Microsoft's
+   official download page; it never downloads or runs the Runtime by itself.
+   Installation needs no administrator access, creates a current-user Start
+   menu entry and uninstaller, and leaves Bridge configuration and credentials
+   under the user's application-data directory untouched during upgrades and
+   uninstall.
 3. Open the desktop app. For a headless system, use the portable CLI archive
    and its launcher, or run:
 

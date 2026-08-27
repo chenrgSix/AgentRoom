@@ -12,9 +12,10 @@ End users download the archive matching their operating system and CPU from
 should choose `agentroom-bridge-desktop_*_darwin_arm64.zip` on Apple Silicon or
 `agentroom-bridge-desktop_*_darwin_amd64.zip` on an Intel Mac. Extract it, move
 **AgentRoom Bridge.app** to `/Applications`, and open it. Go, Node.js, and a
-terminal session are not required. Windows users should choose
-`agentroom-bridge-desktop_*_windows_amd64.zip`, extract it, and open
-**AgentRoom Bridge.exe**. Verify the archive before extraction:
+terminal session are not required. Windows users can run the current-user
+`agentroom-bridge-desktop_*_windows_amd64_setup.exe` installer, or choose the
+matching ZIP for a portable copy. Verify the selected package before opening
+it:
 
 ```bash
 # Linux
@@ -39,10 +40,13 @@ verification; users explicitly choose whether to trust the downloaded build.
 The Windows desktop package is also unsigned. Microsoft Defender SmartScreen
 may show an unknown-publisher warning; continue only after checking the
 published SHA-256 value, and never disable SmartScreen or Defender globally.
-The app uses the system Microsoft Edge WebView2 Runtime and reports its normal
-missing-Runtime error if WebView2 is not installed. Windows login startup is
-not part of this preview, so the Settings page retains an explicit manual-start
-notice. Updates remain manual on both platforms.
+The app uses the system Microsoft Edge WebView2 Runtime. The installer checks
+for the Runtime and, when it is absent, can open Microsoft's official download
+page; it does not download or execute the Runtime. The installer runs without
+administrator access, creates current-user Start menu and uninstall entries,
+and does not own or remove `%AppData%\agentroom` configuration and credentials.
+Windows login startup is not part of this preview, so the Settings page retains
+an explicit manual-start notice. Updates remain manual on both platforms.
 
 The portable CLI archives remain available. On macOS, double-click **Start
 AgentRoom Bridge.command**; on Windows, double-click **Start AgentRoom
@@ -88,8 +92,10 @@ Current macOS desktop builds are unsigned and unnotarized by design. Apple
 Silicon and Intel packages are built on native GitHub-hosted macOS runners and
 published with the same `SHA256SUMS` file as the portable CLI archives. The
 Windows amd64 preview is built and tested on a native GitHub-hosted Windows
-runner, uses the system WebView2 Runtime, and ships as an unsigned portable ZIP
-without an installer or login-startup integration.
+runner, uses the system WebView2 Runtime, and ships as both an unsigned portable
+ZIP and an unsigned current-user installer. Native CI performs an initial
+install, in-place upgrade, and uninstall while proving owner configuration is
+preserved. Windows login-startup integration remains unsupported.
 
 `console` is the headless compatibility setup path. It opens the complete token-bearing
 URL in the default browser and also prints it as a fallback. Pass `--no-open`
