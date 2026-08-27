@@ -2,7 +2,7 @@
 
 - Prefix: `TASK`
 - Implementation: `apps/server/src/task/`, migrations
-  0024/0026/0027/0028/0029/0030/0031/0032/0033/0034/0037/0038/0043, and the Web Room
+  0024/0026/0027/0028/0029/0030/0031/0032/0033/0034/0037/0038/0043/0045, and the Web Room
   composer
 - Owns: Agent Task identity, Task lifecycle, shared Task memory projections,
   and structured result evidence
@@ -123,8 +123,8 @@ transport path infers a Result from Run success, final prose, streamed output,
 or Artifact existence.
 
 An accepted completion Result must target the current definition and criteria
-revisions and cite at least one existing in-scope evidence record for every
-satisfied required criterion. Result acceptance and Task completion may commit
+revisions and bind every required satisfied criterion to at least one existing
+in-scope Artifact evidence record. Result acceptance and Task completion may commit
 together, and only a Result that passes the completion policy becomes the
 Task's completion reference. A `partial` Result can complete only when every
 required criterion is satisfied; `not_satisfied` and `informational` never do.
@@ -373,6 +373,14 @@ evidence; a new permanent active default is created for the Room. Database
 triggers protect that default, validate Task Team/Room/Owner identity, and
 account new Run attempts and terminal duration in the same Run transaction.
 
+Migration 0045 implements Result authority as immutable Task-local versions,
+closed exact source edges, criterion claims and evidence links, append-only
+single review decisions, and Result-to-child Task source edges. Proposals and
+reviews advance the Task revision exactly once; response-loss retries return
+the original Result/version/review/task revision. Database triggers protect
+proposal content, evidence, claims, decisions and child provenance from update
+or deletion and reject stale/foreign completion references.
+
 The old PATCH endpoint remains a bounded compatibility adapter over the same
 repository transition and active-work fences. New definition, control, block,
 and block-resolution endpoints require an explicit operation ID and expected
@@ -423,10 +431,9 @@ cross-task context.
 
 ## Task Mapping
 
-`TASK-001` through `TASK-012` implement Task continuity, Memory/Artifact
+`TASK-001` through `TASK-013` implement Task continuity, Memory/Artifact
 evidence, versioned ownership, criteria, completion policy, scheduling,
-assignment, budget and attention. `TASK-013`, with `CON-013`, implements
-immutable Result submission and review;
+assignment, budget, attention, and immutable Result submission/review.
 `BRG-044` and `MCP-006` add the managed and manual Agent proposal transports.
 Wire and Runtime work remains in `CON-007`, `CON-009`, `ADP-012`, and `ADP-013`,
 clarification in `RUN-009`/`RUN-010`, and structural cleanup only after those

@@ -44,6 +44,7 @@ import { registerMemoryCandidateRoutes } from "./http/memory-candidate-routes.js
 import { registerRegistryRoutes } from "./http/registry-routes.js";
 import type { ServerRouteContext } from "./http/route-context.js";
 import { registerRunRoutes } from "./http/run-routes.js";
+import { registerResultRoutes } from "./http/result-routes.js";
 import { registerSystemRoutes } from "./http/system-routes.js";
 import { registerTaskRoutes } from "./http/task-routes.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
@@ -91,6 +92,8 @@ import { ArtifactRepository } from "./task/artifact-repository.js";
 import { ContextPlanner } from "./task/context-planner.js";
 import { LongTermMemoryService } from "./task/long-term-memory-service.js";
 import { MemoryEntryRepository } from "./task/memory-entry-repository.js";
+import { ResultRepository } from "./task/result-repository.js";
+import { ResultService } from "./task/result-service.js";
 import {
   ResultEvidenceConsumptionRepository
 } from "./task/result-evidence-consumption-repository.js";
@@ -270,6 +273,16 @@ export async function createServerApp(
   const resultEvidenceConsumption = new ResultEvidenceConsumptionRepository(database);
   const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth, taskRepository);
+  const resultRepository = new ResultRepository(database);
+  const results = new ResultService(
+    database,
+    resultRepository,
+    tasks,
+    taskRepository,
+    runRepository,
+    core,
+    auth
+  );
   const clarificationRepository = new ClarificationRepository(database);
   const taskClarifications = new TaskClarificationService(
     transactions,
@@ -669,6 +682,7 @@ export async function createServerApp(
     routeAgentReplyMentions,
     runRepository,
     runs,
+    results,
     taskArtifacts,
     taskClarifications,
     tasks,
@@ -688,6 +702,7 @@ export async function createServerApp(
 
   registerTeamRoomRoutes(routeContext);
   registerTaskRoutes(routeContext);
+  registerResultRoutes(routeContext);
   registerRegistryRoutes(routeContext);
   registerDevicePairingSessionRoutes(routeContext);
   registerMessageRoutes(routeContext);

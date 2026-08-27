@@ -708,6 +708,42 @@ export class AgentTaskRepository {
         "member", row.owner_member_id
       );
     }
+    const pendingResult = this.database.prepare(`
+      SELECT result.result_id, result.state, result.definition_revision,
+        result.criteria_revision,
+        COALESCE(review.reviewed_at, result.proposed_at) AS occurred_at
+      FROM task_results result
+      LEFT JOIN result_reviews review ON review.result_id = result.result_id
+      WHERE result.task_id = ? AND result.state IN ('proposed', 'rejected')
+      ORDER BY result.result_version DESC, result.result_id DESC LIMIT 1
+    `).get(row.task_id) as {
+      result_id: string;
+      state: "proposed" | "rejected";
+      definition_revision: number;
+      criteria_revision: number;
+      occurred_at: string;
+    } | undefined;
+    if (pendingResult?.state === "proposed") {
+      push(
+        pendingResult.definition_revision === row.definition_revision &&
+            pendingResult.criteria_revision === row.criteria_revision
+          ? "needs_approval"
+          : "result_stale",
+        pendingResult.result_id,
+        pendingResult.occurred_at,
+        "member",
+        row.owner_member_id
+      );
+    } else if (pendingResult?.state === "rejected") {
+      push(
+        "result_rejected",
+        pendingResult.result_id,
+        pendingResult.occurred_at,
+        "agent",
+        null,
+        assignments[0]?.agentId ?? null
+      );
+    }
     const block = this.database.prepare(`
       SELECT block_id, created_at FROM task_blocks WHERE task_id = ?
         AND state = 'open' ORDER BY created_at, block_id LIMIT 1

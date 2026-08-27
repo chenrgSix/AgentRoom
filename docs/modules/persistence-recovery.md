@@ -79,7 +79,7 @@ immediate transaction. Composite Task/Room references and a source-Run trigger
 prevent evidence from crossing Task history; exactly one authenticated Member
 or Agent creator is retained for attribution.
 
-The ADR-0022 target adds Task display allocation, aggregate revision, human
+Migrations 0043 through 0045 add Task display allocation, aggregate revision, human
 Owner, lifecycle/scheduling/completion policy, immutable criteria sets, explicit
 Agent assignments, Message/Result Task-source edges, blocks, Task budget events,
 Run-outcome acknowledgements, immutable Result submissions and
@@ -105,6 +105,15 @@ completion Result and complete it in the same transaction. Response-loss retry
 returns the same source edge, definition/criteria revision, ambiguity
 acknowledgement, Run attempt, Result version, decision, and Task revision rather
 than creating a substitute identity.
+
+Migration 0045 leaves all historical Tasks unchanged and creates no fictional
+Result. New Result rows use a Task-local version and retain exact definition,
+criteria and proposal-time Task revisions. Artifact, Run-event sequence,
+Message, Memory and Discussion sources remain foreign-keyed to their original
+authorities; claims only reference evidence IDs in the same immutable Result.
+Accept-and-complete verifies current revisions, no active work or unresolved
+ambiguity/block, a completable outcome, and Artifact evidence for every required
+criterion before one transaction appends the review and completes the Task.
 
 Migration preserves every current Task, Run, Discussion, Artifact, Memory,
 clarification, context, and Runtime Session identity. It deterministically
