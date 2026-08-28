@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentroom.dev/schemas/common/error.schema.json",
-  "title": "Agent Room Error",
+  "title": "ConveneWire Error",
   "description": "Stable, client-safe error returned at a protocol boundary.",
   "type": "object",
   "required": [

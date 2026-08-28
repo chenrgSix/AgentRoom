@@ -59,7 +59,7 @@ test("Agent presentation prioritizes availability and the local Workspace bindin
     runtimeState: "idle",
     executableReady: true,
     sandbox: "read-only",
-    workspace: "/Users/owner/Code/AgentRoom",
+    workspace: "/Users/owner/Code/ConveneWire",
     workspaceAlias: "Payments API",
     workspaceNetworkPolicy: "runtime-managed"
   }), {

@@ -3,7 +3,7 @@ import path from "node:path";
 
 import type {
   DevicePairingPrivateTrustDescriptor
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 
 export type DeploymentTrustProvider =
   () => DevicePairingPrivateTrustDescriptor | undefined;

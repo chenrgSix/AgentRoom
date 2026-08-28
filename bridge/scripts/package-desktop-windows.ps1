@@ -44,9 +44,9 @@ if ("$hostOS/$hostArch" -ne "windows/$GoArch") {
   throw "Desktop package requires a native windows/$GoArch builder; found $hostOS/$hostArch"
 }
 
-$package = "agentroom-bridge-desktop_${version}_windows_${GoArch}"
+$package = "convenewire-bridge-desktop_${version}_windows_${GoArch}"
 $staging = Join-Path $OutputDir $package
-$binary = Join-Path $staging "AgentRoom Bridge.exe"
+$binary = Join-Path $staging "ConveneWire Bridge.exe"
 $archive = Join-Path $OutputDir "${package}.zip"
 $installerBase = "${package}_setup"
 $installer = Join-Path $OutputDir "${installerBase}.exe"
@@ -71,7 +71,7 @@ try {
       "-trimpath",
       "-ldflags=-s -w -H=windowsgui -X=main.version=$ReleaseTag",
       "-o", $binary,
-      "./cmd/agentroom-bridge-desktop"
+      "./cmd/convenewire-bridge-desktop"
     )
     & go @buildArguments
     if ($LASTEXITCODE -ne 0) {
@@ -129,7 +129,7 @@ try {
     }
   }
   $requiredMembers = @(
-    "$package/AgentRoom Bridge.exe",
+    "$package/ConveneWire Bridge.exe",
     "$package/README.md",
     "$package/LICENSE",
     "$package/NOTICE",
@@ -183,7 +183,7 @@ $installerFileVersion = @(
   $installerInfo.FileBuildPart
 ) -join "."
 $installerProductName = ([string]$installerInfo.ProductName).Trim()
-if ($installerProductName -ne "AgentRoom Bridge" -or
+if ($installerProductName -ne "ConveneWire Bridge" -or
     $installerFileVersion -ne $bundleVersion) {
   throw ("Windows Desktop installer has unexpected product metadata: " +
     "ProductName='$installerProductName', FileVersion='$installerFileVersion'")

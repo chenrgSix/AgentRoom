@@ -29,9 +29,9 @@ test("trusted-team configuration requires an HTTPS origin and strong file secret
   const configuration = await loadWebAuthConfiguration({
     cwd: "/service",
     env: {
-      AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE: "secrets/owner",
-      AGENT_ROOM_PUBLIC_ORIGIN: "https://team.example.com/",
-      AGENT_ROOM_WEB_AUTH_MODE: "trusted-team"
+      CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: "secrets/owner",
+      CONVENE_WIRE_PUBLIC_ORIGIN: "https://team.example.com/",
+      CONVENE_WIRE_WEB_AUTH_MODE: "trusted-team"
     },
     loadFile: async (filename) => {
       assert.equal(filename, "/service/secrets/owner");
@@ -49,9 +49,9 @@ test("trusted-team configuration requires an HTTPS origin and strong file secret
   await assert.rejects(
     loadWebAuthConfiguration({
       env: {
-        AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE: "/secret",
-        AGENT_ROOM_PUBLIC_ORIGIN: "http://team.example.com",
-        AGENT_ROOM_WEB_AUTH_MODE: "trusted-team"
+        CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: "/secret",
+        CONVENE_WIRE_PUBLIC_ORIGIN: "http://team.example.com",
+        CONVENE_WIRE_WEB_AUTH_MODE: "trusted-team"
       },
       loadFile: async () => token
     }),
@@ -60,9 +60,9 @@ test("trusted-team configuration requires an HTTPS origin and strong file secret
   await assert.rejects(
     loadWebAuthConfiguration({
       env: {
-        AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE: "/secret",
-        AGENT_ROOM_PUBLIC_ORIGIN: "https://team.example.com",
-        AGENT_ROOM_WEB_AUTH_MODE: "trusted-team"
+        CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: "/secret",
+        CONVENE_WIRE_PUBLIC_ORIGIN: "https://team.example.com",
+        CONVENE_WIRE_WEB_AUTH_MODE: "trusted-team"
       },
       loadFile: async () => "short"
     }),
@@ -73,17 +73,51 @@ test("trusted-team configuration requires an HTTPS origin and strong file secret
 test("unknown Web auth modes and missing recovery files fail closed", async () => {
   await assert.rejects(
     loadWebAuthConfiguration({
-      env: { AGENT_ROOM_WEB_AUTH_MODE: "public" }
+      env: { CONVENE_WIRE_WEB_AUTH_MODE: "public" }
     }),
     /local or trusted-team/u
   );
   await assert.rejects(
     loadWebAuthConfiguration({
       env: {
-        AGENT_ROOM_PUBLIC_ORIGIN: "https://team.example.com",
-        AGENT_ROOM_WEB_AUTH_MODE: "trusted-team"
+        CONVENE_WIRE_PUBLIC_ORIGIN: "https://team.example.com",
+        CONVENE_WIRE_WEB_AUTH_MODE: "trusted-team"
       }
     }),
     /OWNER_RECOVERY_TOKEN_FILE/u
+  );
+});
+
+test("accepts released AgentRoom authentication environment names", async () => {
+  const token = "r".repeat(32);
+  const configuration = await loadWebAuthConfiguration({
+    cwd: "/runtime",
+    env: {
+      AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE: "secrets/owner",
+      AGENT_ROOM_PUBLIC_ORIGIN: "https://team.example.com/",
+      AGENT_ROOM_WEB_AUTH_MODE: "trusted-team"
+    },
+    loadFile: async (filename) => {
+      assert.equal(filename, "/runtime/secrets/owner");
+      return token;
+    }
+  });
+
+  assert.deepEqual(configuration, {
+    mode: "trusted-team",
+    ownerRecoveryToken: token,
+    publicOrigin: "https://team.example.com"
+  });
+});
+
+test("rejects conflicting ConveneWire and AgentRoom authentication values", async () => {
+  await assert.rejects(
+    loadWebAuthConfiguration({
+      env: {
+        CONVENE_WIRE_WEB_AUTH_MODE: "trusted-team",
+        AGENT_ROOM_WEB_AUTH_MODE: "local"
+      }
+    }),
+    /CONVENE_WIRE_WEB_AUTH_MODE conflicts with legacy AGENT_ROOM_WEB_AUTH_MODE/u
   );
 });

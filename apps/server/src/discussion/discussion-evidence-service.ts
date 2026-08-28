@@ -98,7 +98,7 @@ export class DiscussionEvidenceService {
       : "Make an independent, useful contribution for this Wave. Resolve a question, add evidence, " +
         "or challenge the current conclusion; do not merely repeat agreement.";
     return [
-      "# Agent Room Discussion Context",
+      "# ConveneWire Discussion Context",
       `Discussion ID: ${discussion.discussionId}`,
       `Wave: ${wave.ordinal}`,
       `Wave member: ${(turn.waveMemberOrdinal ?? 0) + 1}/${wave.expectedMembers}`,

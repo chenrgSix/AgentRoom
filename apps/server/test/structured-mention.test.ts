@@ -26,7 +26,7 @@ test("Agent reply commands use the longest known exact name before eligibility",
 });
 
 test("only a structured visible Agent Mention is persisted for routing", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-mention-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-mention-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

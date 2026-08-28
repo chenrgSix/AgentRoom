@@ -256,7 +256,7 @@ continuous; the existing extractive projection remains the fallback and never
 masquerades as rolling coverage.
 
 Reduction stays disabled unless the deployment supplies a
-`MemoryReducerRunner`. `AGENT_ROOM_MEMORY_REDUCER=extractive-v1` opts into the
+`MemoryReducerRunner`. `CONVENE_WIRE_MEMORY_REDUCER=extractive-v1` opts into the
 bounded extractive baseline: the Server enables Room scheduler rows, scans the
 durable desired watermark, leases one Room at a time, redacts input before the
 runner, and commits only contiguous validated output. The extractive baseline

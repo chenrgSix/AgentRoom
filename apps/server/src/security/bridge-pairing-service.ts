@@ -4,7 +4,7 @@ import type {
   BridgeJoinApproval,
   BridgeJoinChallenge,
   BridgeJoinRequest
-} from "@agent-room/contracts/bridge-messages";
+} from "@convene-wire/contracts/bridge-messages";
 import type Database from "better-sqlite3";
 
 import type { CoreRepository, DeviceRecord } from "../data/core-repository.js";

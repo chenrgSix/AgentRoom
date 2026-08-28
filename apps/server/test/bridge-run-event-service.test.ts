@@ -20,7 +20,7 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 const now = "2026-08-22T10:00:00.000Z";
 
 test("Bridge events enforce ownership, ordering, and one reply projection", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-events-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-events-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

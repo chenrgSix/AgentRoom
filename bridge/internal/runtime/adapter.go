@@ -3,7 +3,7 @@ package runtime
 import (
 	"context"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type Capabilities struct {
@@ -26,7 +26,7 @@ type Event struct {
 	Reply         string
 	Assessment    *contracts.Assessment
 	Clarification *contracts.TaskClarificationRequest
-	Error         *contracts.AgentRoomError
+	Error         *contracts.ConveneWireError
 	Session       *contracts.LogicalSessionStatus
 }
 

@@ -14,8 +14,8 @@ import (
 	"sort"
 	"strings"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/pairing"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/pairing"
 )
 
 const chunkBytes = 256 << 10

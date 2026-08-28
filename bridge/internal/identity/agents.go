@@ -8,7 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 const filename = "agent-identities.json"

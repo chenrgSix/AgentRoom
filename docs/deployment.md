@@ -2,10 +2,10 @@
 
 ## Supported Boundary
 
-The supported Compose profile runs one AgentRoom Server and Web UI behind
+The supported Compose profile runs one ConveneWire Server and Web UI behind
 Caddy on a single trusted-team host. SQLite, the prepared Owner recovery
 secret, backups, and Caddy state use private named volumes in the manual profile
-and owner-selected bind directories under `agentroomctl`. Only Caddy publishes
+and owner-selected bind directories under `convenewirectl`. Only Caddy publishes
 ports: 9443 serves the application by default, while 80 is limited to ACME and
 an exact-origin HTTPS redirect. Server port 3000 and `/api/metrics` are not
 public.
@@ -27,7 +27,7 @@ CA import proves only reachability and cannot close normal onboarding.
 
 The host needs:
 
-- Git and a dedicated clean AgentRoom checkout;
+- Git and a dedicated clean ConveneWire checkout;
 - Docker Engine or Docker Desktop with Compose v2;
 - OpenSSL to generate the Owner recovery secret;
 - curl for health verification;
@@ -47,7 +47,7 @@ revision before deployment:
 
 ```bash
 git clone https://github.com/chenrgSix/AgentRoom.git
-cd AgentRoom
+cd AgentRoom                       # Repository hosting rename is still pending.
 git rev-parse HEAD
 cp deploy/.env.example .env
 mkdir -p deploy/secrets
@@ -59,21 +59,21 @@ Edit `.env` before starting:
 
 | Variable | Required value |
 | --- | --- |
-| `AGENT_ROOM_DOMAIN` | Stable host name or LAN IP, such as `team.example.com` or `192.168.1.132` |
-| `AGENT_ROOM_PUBLIC_ORIGIN` | Exact HTTPS origin, including a non-default port, such as `https://team.example.com:9443` |
-| `AGENT_ROOM_HTTP_PORT` | `80` for public certificate issuance and redirect |
-| `AGENT_ROOM_HTTPS_PORT` | External application port, default `9443`; it must match `AGENT_ROOM_PUBLIC_ORIGIN` |
-| `AGENT_ROOM_BIND_ADDRESS` | Ingress bind address; manual direct HTTPS defaults to `0.0.0.0`, while controller local mode uses `127.0.0.1` |
-| `AGENT_ROOM_IMAGE_TAG` | Local image label aligned with the checked-out release |
-| `AGENT_ROOM_DATABASE_PATH` | Container path under `/data`, normally `/data/agent-room.sqlite` |
-| `AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE` | Host path to the generated secret file |
-| `AGENT_ROOM_LOG_MAX_SIZE` | Per-file Docker log limit, default `10m` |
-| `AGENT_ROOM_LOG_MAX_FILES` | Retained Docker log files, default `5` |
+| `CONVENE_WIRE_DOMAIN` | Stable host name or LAN IP, such as `team.example.com` or `192.168.1.132` |
+| `CONVENE_WIRE_PUBLIC_ORIGIN` | Exact HTTPS origin, including a non-default port, such as `https://team.example.com:9443` |
+| `CONVENE_WIRE_HTTP_PORT` | `80` for public certificate issuance and redirect |
+| `CONVENE_WIRE_HTTPS_PORT` | External application port, default `9443`; it must match `CONVENE_WIRE_PUBLIC_ORIGIN` |
+| `CONVENE_WIRE_BIND_ADDRESS` | Ingress bind address; manual direct HTTPS defaults to `0.0.0.0`, while controller local mode uses `127.0.0.1` |
+| `CONVENE_WIRE_IMAGE_TAG` | Local image label aligned with the checked-out release |
+| `CONVENE_WIRE_DATABASE_PATH` | Container path under `/data`, normally the upgrade-stable `/data/agent-room.sqlite` |
+| `CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE` | Host path to the generated secret file |
+| `CONVENE_WIRE_LOG_MAX_SIZE` | Per-file Docker log limit, default `10m` |
+| `CONVENE_WIRE_LOG_MAX_FILES` | Retained Docker log files, default `5` |
 
-`AGENT_ROOM_IMAGE_TAG` is a local label, not a pulled immutable digest. The
+`CONVENE_WIRE_IMAGE_TAG` is a local label, not a pulled immutable digest. The
 checked-out Git tag is the source version. Never put a host absolute database
-path in `AGENT_ROOM_DATABASE_PATH`; only `/data` is persisted by the
-`agentroom_data` volume.
+path in `CONVENE_WIRE_DATABASE_PATH`; only `/data` is persisted by the
+upgrade-stable `agentroom_data` volume.
 
 ## Start and Verify
 
@@ -92,8 +92,9 @@ Expected state:
   private volume;
 - `data-init` is `Exited (0)` after assigning the private database/backup
   mounts to the image's non-root `node` account;
-- `agentroom` is running and healthy;
-- `caddy` is running after AgentRoom becomes ready.
+- `agentroom` is running and healthy (the service name is retained for
+  in-place Compose upgrades);
+- `caddy` is running after ConveneWire becomes ready.
 
 Check logs and the public readiness endpoint:
 
@@ -136,7 +137,7 @@ The accepted `direct_https` TLS profiles are:
 | --- | --- | --- |
 | `public_ca` | Caddy obtains/renews a publicly trusted certificate; Bridge uses normal system chain, hostname and validity checks | default and recommended |
 | `private_scoped_ca` | pairing link/QR pins the Caddy public CA to the exact Central origin inside Bridge only; no OS root install | explicit private-network alternative |
-| `manual_ca` | operator manages OS or enterprise trust; AgentRoom never installs it | advanced compatibility only |
+| `manual_ca` | operator manages OS or enterprise trust; ConveneWire never installs it | advanced compatibility only |
 
 A new external installation that omits the profile must select `public_ca`.
 DNS, ACME, hostname, or public-chain failure is a failed install with actionable
@@ -147,7 +148,7 @@ In `private_scoped_ca`, the pairing fragment carries only the exact origin,
 stable non-secret installation ID, monotonic trust epoch, and canonical CA DER
 SHA-256. Before sending any pairing or Device secret, Bridge retrieves one
 bounded public CA certificate from
-`/.well-known/agentroom/bridge-ca.pem`, verifies that digest and CA constraints,
+`/.well-known/convenewire/bridge-ca.pem`, verifies that digest and CA constraints,
 then reconnects with a private certificate pool scoped to that exact scheme,
 hostname, and port. It never changes Windows, macOS, or Linux trust stores.
 Public-CA pairing carries no trust override and remains on `system_ca`.
@@ -171,9 +172,9 @@ reported as physical no-manual-CA acceptance.
 For a private LAN IP, include the external port in the origin:
 
 ```dotenv
-AGENT_ROOM_DOMAIN=192.168.1.132
-AGENT_ROOM_PUBLIC_ORIGIN=https://192.168.1.132:9443
-AGENT_ROOM_HTTPS_PORT=9443
+CONVENE_WIRE_DOMAIN=192.168.1.132
+CONVENE_WIRE_PUBLIC_ORIGIN=https://192.168.1.132:9443
+CONVENE_WIRE_HTTPS_PORT=9443
 ```
 
 Caddy uses its local CA for an IP certificate and renews the leaf certificate
@@ -191,7 +192,7 @@ Transfer the root certificate through an independently verified channel,
 confirm its SHA-256 value, install it in each client operating system's trusted
 root store, and keep Bridge on `system_ca` only when an operator explicitly
 chooses the advanced `manual_ca` compatibility path. This changes trust outside
-AgentRoom and is not the default, not required by the target private-scoped
+ConveneWire and is not the default, not required by the target private-scoped
 flow, and not valid evidence for `QA-030`, `QA-002`, or `QA-028`. Pinning the
 short-lived leaf certificate is likewise suitable only for bounded legacy
 diagnostics because renewal changes that fingerprint.
@@ -201,12 +202,12 @@ diagnostics because renewal changes that fingerprint.
 | Symptom | Inspect | Likely boundary |
 | --- | --- | --- |
 | `secret-init` is not `Exited (0)` | `docker compose logs secret-init` | missing, unreadable, or invalid-length recovery file |
-| `agentroomctl doctor` reports `SECRET_INVALID` or upgrade reports `UPGRADE_SECRET_INVALID` | mode and bounded format of the recorded recovery file | restore the exact original mode-`0600` credential from authorized recovery storage; never generate a new value for an existing Owner |
+| `convenewirectl doctor` reports `SECRET_INVALID` or upgrade reports `UPGRADE_SECRET_INVALID` | mode and bounded format of the recorded recovery file | restore the exact original mode-`0600` credential from authorized recovery storage; never generate a new value for an existing Owner |
 | `data-init` is not `Exited (0)` | `docker compose logs data-init` | database/backup mount ownership or image account mismatch |
-| `agentroom` is unhealthy | `docker compose logs agentroom` | database path, migration, secret, or public-origin validation |
+| `agentroom` is unhealthy | `docker compose logs agentroom` | stable compatibility service name; check database path, migration, secret, or public-origin validation |
 | Caddy cannot obtain a public certificate | `docker compose logs caddy` | DNS, ports 80/9443, firewall, or ACME egress; do not accept silent local-CA fallback |
-| Browser works but Bridge does not connect | Caddy and AgentRoom logs | public URL, system trust, WebSocket, or Device credential |
-| Private scoped pairing is unavailable | exact release tag and `agentroomctl status` | the installed release predates completed `OPS-009`/`BRG-045`, or the deployment did not select `private_scoped_ca`; manual CA is not a fallback |
+| Browser works but Bridge does not connect | Caddy and ConveneWire logs | public URL, system trust, WebSocket, or Device credential |
+| Private scoped pairing is unavailable | exact release tag and `convenewirectl status` | the installed release predates completed `OPS-009`/`BRG-045`, or the deployment did not select `private_scoped_ca`; manual CA is not a fallback |
 | `/api/metrics` returns `404` publicly | expected | metrics are intentionally hidden by Caddy |
 
 Do not publish Server port 3000 or switch a public deployment to local auth
@@ -225,7 +226,7 @@ git fetch --tags
 TARGET_RELEASE_TAG=REPLACE_WITH_REVIEWED_TAG
 git checkout "$TARGET_RELEASE_TAG"
 git describe --tags --exact-match
-# Set AGENT_ROOM_IMAGE_TAG in .env to the same target release.
+# Set CONVENE_WIRE_IMAGE_TAG in .env to the same target release.
 docker compose build --pull agentroom
 docker compose up -d
 docker compose ps --all
@@ -244,11 +245,11 @@ A database rollback must also use the source/image version that owns that
 schema. Restoring a pre-migration database and immediately starting the newer
 image only reapplies the newer migrations. If rollback is required:
 
-1. Stop Caddy and AgentRoom.
+1. Stop Caddy and ConveneWire.
 2. Stage the verified backup under a new `/data` filename with
    `compose-restore.sh`.
-3. Set `.env` to the printed `AGENT_ROOM_DATABASE_PATH`.
-4. Check out the previous release and align `AGENT_ROOM_IMAGE_TAG`.
+3. Set `.env` to the printed `CONVENE_WIRE_DATABASE_PATH`.
+4. Check out the previous release and align `CONVENE_WIRE_IMAGE_TAG`.
 5. Rebuild, start, and repeat health/history/Agent/MCP checks.
 
 Keep the old and restored database files until the selected version is fully
@@ -276,10 +277,10 @@ and run the Node service without exposing it to another machine:
 ```bash
 npm ci
 npm run build
-AGENT_ROOM_WEB_ROOT="$PWD/apps/web/dist" \
-AGENT_ROOM_DATABASE_PATH="$PWD/var/server.sqlite" \
-AGENT_ROOM_HOST=127.0.0.1 \
-npm run start --workspace @agent-room/server
+CONVENE_WIRE_WEB_ROOT="$PWD/apps/web/dist" \
+CONVENE_WIRE_DATABASE_PATH="$PWD/var/server.sqlite" \
+CONVENE_WIRE_HOST=127.0.0.1 \
+npm run start --workspace @convene-wire/server
 ```
 
 The local `/api/bootstrap` flow is for one machine. The process refuses a

@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 func TestGenericAdapterPassesInstructionOnStdin(t *testing.T) {
@@ -91,7 +91,7 @@ func TestGenericAdapterStreamsOptInStructuredOutput(t *testing.T) {
 	script := "printf '%s\\n' '" + firstLine + "'; sleep 0.2; printf '%s\\n' '" + finalLine + "'"
 	adapter := GenericAdapter{Config: config.AgentConfig{
 		Command: []string{"/bin/sh", "-c", script}, Workspace: t.TempDir(),
-		RuntimeKind: "generic", OutputProtocol: config.OutputProtocolAgentRoomJSONLV1,
+		RuntimeKind: "generic", OutputProtocol: config.OutputProtocolConveneWireJSONLV1,
 	}}
 	if !adapter.Capabilities().SupportsStreaming {
 		t.Fatal("structured Generic Runtime did not publish streaming capability")
@@ -182,7 +182,7 @@ func TestGenericStructuredAdapterFailsClosedOnInvalidStreams(t *testing.T) {
 			t.Setenv("AGENTROOM_GENERIC_HELPER", mode)
 			adapter := GenericAdapter{Config: config.AgentConfig{
 				Command: []string{os.Args[0], "-test.run=TestGenericHelperProcess"}, Workspace: t.TempDir(),
-				RuntimeKind: "generic", OutputProtocol: config.OutputProtocolAgentRoomJSONLV1,
+				RuntimeKind: "generic", OutputProtocol: config.OutputProtocolConveneWireJSONLV1,
 				EnvAllowlist: []string{"AGENTROOM_GENERIC_HELPER"},
 			}}
 			var terminal Event
@@ -337,7 +337,7 @@ func TestGenericAdapterClassifiesFailureWithoutLeakingStderr(t *testing.T) {
 
 func TestGenericAdapterDistinguishesStartFailure(t *testing.T) {
 	adapter := GenericAdapter{Config: config.AgentConfig{
-		Command: []string{"/missing/agentroom-runtime"}, Workspace: t.TempDir(),
+		Command: []string{"/missing/convenewire-runtime"}, Workspace: t.TempDir(),
 	}}
 	var terminal Event
 	if err := adapter.Execute(context.Background(), Request{}, func(_ context.Context, event Event) error {

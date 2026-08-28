@@ -212,18 +212,18 @@ function input(overrides = {}) {
   };
 }
 
-const metrics = `agentroom_up 1
-agentroom_bridge_connections 1
-agentroom_managed_agents 2
-agentroom_run_queue_depth 0
-agentroom_delivery_pending 0
-agentroom_delivery_retries_total 1
-agentroom_run_event_lag_seconds 0
-agentroom_runs{state="completed"} 2
+const metrics = `convenewire_up 1
+convenewire_bridge_connections 1
+convenewire_managed_agents 2
+convenewire_run_queue_depth 0
+convenewire_delivery_pending 0
+convenewire_delivery_retries_total 1
+convenewire_run_event_lag_seconds 0
+convenewire_runs{state="completed"} 2
 `;
 
 async function fixture() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-qa002-evidence-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-qa002-evidence-"));
   const databasePath = path.join(directory, "server.sqlite");
   const database = new Database(databasePath);
   seed(database);

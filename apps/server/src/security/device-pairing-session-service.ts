@@ -15,7 +15,7 @@ import type {
   DevicePairingPrivateTrustDescriptor,
   DevicePairingSessionRejectRequest,
   Platform
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 import type Database from "better-sqlite3";
 
 import type { CoreRepository, DeviceRecord } from "../data/core-repository.js";

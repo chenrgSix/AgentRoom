@@ -23,7 +23,7 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 const now = "2026-08-25T12:00:00.000Z";
 
 test("Context Planner builds stable provenance projections and bounded relevant events", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-context-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-context-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
@@ -169,7 +169,7 @@ test("Context Planner builds stable provenance projections and bounded relevant 
     const sourceArtifact = artifacts.create(principal, task.taskId, {
       type: "commit",
       workspaceRef: "workspace_oauth",
-      repository: "agent-room/network",
+      repository: "convene-wire/network",
       commitSha: "21f9e8c",
       title: "OAuth implementation",
       summary: "Focused OAuth tests passed."
@@ -202,7 +202,7 @@ test("Context Planner builds stable provenance projections and bounded relevant 
       artifactRevision: 1,
       type: "commit",
       workspaceRef: "workspace_oauth",
-      repository: "agent-room/network",
+      repository: "convene-wire/network",
       commitSha: "21f9e8c",
       title: "OAuth implementation",
       summary: "Focused OAuth tests passed.",

@@ -4,7 +4,7 @@ import type {
   ResultProjection,
   ResultProposal,
   ResultReviewCommand
-} from "@agent-room/contracts/task-result";
+} from "@convene-wire/contracts/task-result";
 
 import { createOpaqueId } from "../domain/identifiers.js";
 

@@ -14,7 +14,7 @@ func TestManualCheckComparesVersionsWithoutDownloading(t *testing.T) {
 	requests := 0
 	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
 		requests++
-		if request.Method != http.MethodGet || request.Header.Get("user-agent") != "AgentRoom-Bridge" {
+		if request.Method != http.MethodGet || request.Header.Get("user-agent") != "ConveneWire-Bridge" {
 			t.Errorf("unexpected request: %s %#v", request.Method, request.Header)
 		}
 		response.Header().Set("content-type", "application/json")

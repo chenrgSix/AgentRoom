@@ -2,13 +2,26 @@ name: agentroom
 
 services:
   secret-init:
-    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-source-build}
+    image: convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}
     pull_policy: never
     command:
       - node
       - -e
       - |
         const fs = require("node:fs");
+        for (const suffix of [
+          "BIND_ADDRESS", "BRIDGE_SERVER_TOKEN", "CADDY_PKI_PROFILE_FILE",
+          "CADDY_TLS_PROFILE_FILE", "DATABASE_PATH", "DEPLOYMENT_TRUST_FILE",
+          "DEPLOYMENT_TRUST_ROTATION_FILE", "DOMAIN", "HTTPS_PORT", "HTTP_PORT",
+          "IMAGE_TAG", "LOG_MAX_FILES", "LOG_MAX_SIZE",
+          "OWNER_RECOVERY_TOKEN_FILE", "PUBLIC_ORIGIN"
+        ]) {
+          const current = process.env[`CONVENE_WIRE_$${suffix}`]?.trim();
+          const legacy = process.env[`AGENT_ROOM_$${suffix}`]?.trim();
+          if (current && legacy && current !== legacy) {
+            throw new Error(`CONVENE_WIRE_$${suffix} conflicts with legacy AGENT_ROOM_$${suffix}`);
+          }
+        }
         const source = "/source/owner_recovery_token";
         const target = "/prepared/owner_recovery_token";
         const value = fs.readFileSync(source, "utf8").trim();
@@ -20,6 +33,37 @@ services:
         fs.chmodSync(temporary, 0o444);
         fs.renameSync(temporary, target);
     network_mode: none
+    environment:
+      AGENT_ROOM_BIND_ADDRESS: ${AGENT_ROOM_BIND_ADDRESS:-}
+      AGENT_ROOM_BRIDGE_SERVER_TOKEN: ${AGENT_ROOM_BRIDGE_SERVER_TOKEN:-}
+      AGENT_ROOM_CADDY_PKI_PROFILE_FILE: ${AGENT_ROOM_CADDY_PKI_PROFILE_FILE:-}
+      AGENT_ROOM_CADDY_TLS_PROFILE_FILE: ${AGENT_ROOM_CADDY_TLS_PROFILE_FILE:-}
+      AGENT_ROOM_DATABASE_PATH: ${AGENT_ROOM_DATABASE_PATH:-}
+      AGENT_ROOM_DEPLOYMENT_TRUST_FILE: ${AGENT_ROOM_DEPLOYMENT_TRUST_FILE:-}
+      AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE: ${AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE:-}
+      AGENT_ROOM_DOMAIN: ${AGENT_ROOM_DOMAIN:-}
+      AGENT_ROOM_HTTPS_PORT: ${AGENT_ROOM_HTTPS_PORT:-}
+      AGENT_ROOM_HTTP_PORT: ${AGENT_ROOM_HTTP_PORT:-}
+      AGENT_ROOM_IMAGE_TAG: ${AGENT_ROOM_IMAGE_TAG:-}
+      AGENT_ROOM_LOG_MAX_FILES: ${AGENT_ROOM_LOG_MAX_FILES:-}
+      AGENT_ROOM_LOG_MAX_SIZE: ${AGENT_ROOM_LOG_MAX_SIZE:-}
+      AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE: ${AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE:-}
+      AGENT_ROOM_PUBLIC_ORIGIN: ${AGENT_ROOM_PUBLIC_ORIGIN:-}
+      CONVENE_WIRE_BIND_ADDRESS: ${CONVENE_WIRE_BIND_ADDRESS:-}
+      CONVENE_WIRE_BRIDGE_SERVER_TOKEN: ${CONVENE_WIRE_BRIDGE_SERVER_TOKEN:-}
+      CONVENE_WIRE_CADDY_PKI_PROFILE_FILE: ${CONVENE_WIRE_CADDY_PKI_PROFILE_FILE:-}
+      CONVENE_WIRE_CADDY_TLS_PROFILE_FILE: ${CONVENE_WIRE_CADDY_TLS_PROFILE_FILE:-}
+      CONVENE_WIRE_DATABASE_PATH: ${CONVENE_WIRE_DATABASE_PATH:-}
+      CONVENE_WIRE_DEPLOYMENT_TRUST_FILE: ${CONVENE_WIRE_DEPLOYMENT_TRUST_FILE:-}
+      CONVENE_WIRE_DEPLOYMENT_TRUST_ROTATION_FILE: ${CONVENE_WIRE_DEPLOYMENT_TRUST_ROTATION_FILE:-}
+      CONVENE_WIRE_DOMAIN: ${CONVENE_WIRE_DOMAIN:-}
+      CONVENE_WIRE_HTTPS_PORT: ${CONVENE_WIRE_HTTPS_PORT:-}
+      CONVENE_WIRE_HTTP_PORT: ${CONVENE_WIRE_HTTP_PORT:-}
+      CONVENE_WIRE_IMAGE_TAG: ${CONVENE_WIRE_IMAGE_TAG:-}
+      CONVENE_WIRE_LOG_MAX_FILES: ${CONVENE_WIRE_LOG_MAX_FILES:-}
+      CONVENE_WIRE_LOG_MAX_SIZE: ${CONVENE_WIRE_LOG_MAX_SIZE:-}
+      CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: ${CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE:-}
+      CONVENE_WIRE_PUBLIC_ORIGIN: ${CONVENE_WIRE_PUBLIC_ORIGIN:-}
     read_only: true
     restart: "no"
     security_opt:
@@ -29,13 +73,13 @@ services:
     user: "0:0"
     volumes:
       - type: bind
-        source: ${AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE:-./deploy/secrets/owner_recovery_token}
+        source: ${CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE:-${AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE:-./deploy/secrets/owner_recovery_token}}
         target: /source/owner_recovery_token
         read_only: true
       - agentroom_secrets:/prepared
 
   data-init:
-    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-source-build}
+    image: convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}
     pull_policy: never
     command:
       - node
@@ -82,11 +126,29 @@ services:
         condition: service_completed_successfully
     environment:
       AGENT_ROOM_BRIDGE_SERVER_TOKEN: ${AGENT_ROOM_BRIDGE_SERVER_TOKEN:-}
-      AGENT_ROOM_DATABASE_PATH: ${AGENT_ROOM_DATABASE_PATH:-/data/agent-room.sqlite}
+      AGENT_ROOM_DATABASE_PATH: ${AGENT_ROOM_DATABASE_PATH:-}
       AGENT_ROOM_DEPLOYMENT_TRUST_FILE: ${AGENT_ROOM_DEPLOYMENT_TRUST_FILE:-}
       AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE: ${AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE:-}
-      AGENT_ROOM_PUBLIC_ORIGIN: ${AGENT_ROOM_PUBLIC_ORIGIN:?Set AGENT_ROOM_PUBLIC_ORIGIN to the public HTTPS origin}
-    image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-source-build}
+      AGENT_ROOM_HOST: ${AGENT_ROOM_HOST:-}
+      AGENT_ROOM_MEMORY_REDUCER: ${AGENT_ROOM_MEMORY_REDUCER:-}
+      AGENT_ROOM_PORT: ${AGENT_ROOM_PORT:-}
+      AGENT_ROOM_PUBLIC_ORIGIN: ${AGENT_ROOM_PUBLIC_ORIGIN:-}
+      AGENT_ROOM_TRUST_PROXY_HOPS: ${AGENT_ROOM_TRUST_PROXY_HOPS:-}
+      AGENT_ROOM_WEB_AUTH_MODE: ${AGENT_ROOM_WEB_AUTH_MODE:-}
+      AGENT_ROOM_WEB_ROOT: ${AGENT_ROOM_WEB_ROOT:-}
+      CONVENE_WIRE_BRIDGE_SERVER_TOKEN: ${CONVENE_WIRE_BRIDGE_SERVER_TOKEN:-${AGENT_ROOM_BRIDGE_SERVER_TOKEN:-}}
+      CONVENE_WIRE_DATABASE_PATH: ${CONVENE_WIRE_DATABASE_PATH:-${AGENT_ROOM_DATABASE_PATH:-/data/agent-room.sqlite}}
+      CONVENE_WIRE_DEPLOYMENT_TRUST_FILE: ${CONVENE_WIRE_DEPLOYMENT_TRUST_FILE:-${AGENT_ROOM_DEPLOYMENT_TRUST_FILE:-}}
+      CONVENE_WIRE_DEPLOYMENT_TRUST_ROTATION_FILE: ${CONVENE_WIRE_DEPLOYMENT_TRUST_ROTATION_FILE:-${AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE:-}}
+      CONVENE_WIRE_HOST: ${CONVENE_WIRE_HOST:-${AGENT_ROOM_HOST:-0.0.0.0}}
+      CONVENE_WIRE_MEMORY_REDUCER: ${CONVENE_WIRE_MEMORY_REDUCER:-${AGENT_ROOM_MEMORY_REDUCER:-}}
+      CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: /run/secrets/owner_recovery_token
+      CONVENE_WIRE_PORT: ${CONVENE_WIRE_PORT:-${AGENT_ROOM_PORT:-3000}}
+      CONVENE_WIRE_PUBLIC_ORIGIN: ${CONVENE_WIRE_PUBLIC_ORIGIN:-${AGENT_ROOM_PUBLIC_ORIGIN:?Set CONVENE_WIRE_PUBLIC_ORIGIN (legacy AGENT_ROOM_PUBLIC_ORIGIN is also accepted)}}
+      CONVENE_WIRE_TRUST_PROXY_HOPS: ${CONVENE_WIRE_TRUST_PROXY_HOPS:-${AGENT_ROOM_TRUST_PROXY_HOPS:-1}}
+      CONVENE_WIRE_WEB_AUTH_MODE: ${CONVENE_WIRE_WEB_AUTH_MODE:-${AGENT_ROOM_WEB_AUTH_MODE:-trusted-team}}
+      CONVENE_WIRE_WEB_ROOT: ${CONVENE_WIRE_WEB_ROOT:-${AGENT_ROOM_WEB_ROOT:-/app/apps/web/dist}}
+    image: convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}
     expose:
       - "3000"
     healthcheck:
@@ -99,8 +161,8 @@ services:
     logging:
       driver: json-file
       options:
-        max-file: "${AGENT_ROOM_LOG_MAX_FILES:-5}"
-        max-size: "${AGENT_ROOM_LOG_MAX_SIZE:-10m}"
+        max-file: "${CONVENE_WIRE_LOG_MAX_FILES:-${AGENT_ROOM_LOG_MAX_FILES:-5}}"
+        max-size: "${CONVENE_WIRE_LOG_MAX_SIZE:-${AGENT_ROOM_LOG_MAX_SIZE:-10m}}"
     read_only: true
     restart: unless-stopped
     security_opt:
@@ -123,16 +185,16 @@ services:
       agentroom:
         condition: service_healthy
     environment:
-      AGENT_ROOM_DOMAIN: ${AGENT_ROOM_DOMAIN:?Set AGENT_ROOM_DOMAIN to the HTTPS host name}
-      AGENT_ROOM_PUBLIC_ORIGIN: ${AGENT_ROOM_PUBLIC_ORIGIN:?Set AGENT_ROOM_PUBLIC_ORIGIN to the public HTTPS origin}
+      CONVENE_WIRE_DOMAIN: ${CONVENE_WIRE_DOMAIN:-${AGENT_ROOM_DOMAIN:?Set CONVENE_WIRE_DOMAIN (legacy AGENT_ROOM_DOMAIN is also accepted)}}
+      CONVENE_WIRE_PUBLIC_ORIGIN: ${CONVENE_WIRE_PUBLIC_ORIGIN:-${AGENT_ROOM_PUBLIC_ORIGIN:?Set CONVENE_WIRE_PUBLIC_ORIGIN (legacy AGENT_ROOM_PUBLIC_ORIGIN is also accepted)}}
     logging:
       driver: json-file
       options:
-        max-file: "${AGENT_ROOM_LOG_MAX_FILES:-5}"
-        max-size: "${AGENT_ROOM_LOG_MAX_SIZE:-10m}"
+        max-file: "${CONVENE_WIRE_LOG_MAX_FILES:-${AGENT_ROOM_LOG_MAX_FILES:-5}}"
+        max-size: "${CONVENE_WIRE_LOG_MAX_SIZE:-${AGENT_ROOM_LOG_MAX_SIZE:-10m}}"
     ports:
-      - "${AGENT_ROOM_BIND_ADDRESS:-0.0.0.0}:${AGENT_ROOM_HTTP_PORT:-80}:80"
-      - "${AGENT_ROOM_BIND_ADDRESS:-0.0.0.0}:${AGENT_ROOM_HTTPS_PORT:-9443}:443"
+      - "${CONVENE_WIRE_BIND_ADDRESS:-${AGENT_ROOM_BIND_ADDRESS:-0.0.0.0}}:${CONVENE_WIRE_HTTP_PORT:-${AGENT_ROOM_HTTP_PORT:-80}}:80"
+      - "${CONVENE_WIRE_BIND_ADDRESS:-${AGENT_ROOM_BIND_ADDRESS:-0.0.0.0}}:${CONVENE_WIRE_HTTPS_PORT:-${AGENT_ROOM_HTTPS_PORT:-9443}}:443"
     read_only: true
     restart: unless-stopped
     security_opt:
@@ -141,8 +203,8 @@ services:
       - /tmp
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ${AGENT_ROOM_CADDY_TLS_PROFILE_FILE:-./deploy/tls/public-ca.caddy}:/etc/caddy/tls-profile.caddy:ro
-      - ${AGENT_ROOM_CADDY_PKI_PROFILE_FILE:-./deploy/tls/pki-none.caddy}:/etc/caddy/pki-profile.caddy:ro
+      - ${CONVENE_WIRE_CADDY_TLS_PROFILE_FILE:-${AGENT_ROOM_CADDY_TLS_PROFILE_FILE:-./deploy/tls/public-ca.caddy}}:/etc/caddy/tls-profile.caddy:ro
+      - ${CONVENE_WIRE_CADDY_PKI_PROFILE_FILE:-${AGENT_ROOM_CADDY_PKI_PROFILE_FILE:-./deploy/tls/pki-none.caddy}}:/etc/caddy/pki-profile.caddy:ro
       - caddy_data:/data
       - caddy_config:/config
 

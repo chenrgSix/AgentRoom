@@ -11,7 +11,7 @@ import { createServerApp } from "../src/app.js";
 const now = "2026-08-28T12:00:00.000Z";
 
 test("Run retry creates new lineage only after audited ambiguity acknowledgement", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-run-attempt-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-run-attempt-"));
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({ databasePath, clock: () => now, logger: false });
   try {

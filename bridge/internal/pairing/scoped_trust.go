@@ -20,13 +20,13 @@ import (
 	"strings"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	pairingcontracts "agentroom.dev/contracts/generated/go/pairing"
+	"convenewire.dev/bridge/internal/config"
+	pairingcontracts "convenewire.dev/contracts/generated/go/pairing"
 )
 
 const (
 	maxScopedCAPEMBytes = 8 << 10
-	privateCAPath       = "/.well-known/agentroom/bridge-ca.pem"
+	privateCAPath       = "/.well-known/convenewire/bridge-ca.pem"
 )
 
 var installationIDPattern = regexp.MustCompile(`^install_[A-Za-z0-9_-]{16,128}$`)

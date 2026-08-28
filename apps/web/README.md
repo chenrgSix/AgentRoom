@@ -1,4 +1,4 @@
-# Agent Room Web
+# ConveneWire Web
 
 The browser UI is the central Team surface; it is not a desktop client. It
 supports the compatible local bootstrap flow and the `trusted-team` Web flow
@@ -9,7 +9,7 @@ API.
 ```bash
 npm run dev:server
 npm run dev:web
-npm run test --workspace @agent-room/web
+npm run test --workspace @convene-wire/web
 ```
 
 Vite runs on port 5173 and proxies `/api` to the central server on port 3000.

@@ -509,7 +509,7 @@ type RunStatusPayload struct {
 	TraceID       string                    `json:"traceId"`
 	Clarification *TaskClarificationRequest `json:"clarification,omitempty"`
 	// Stable, client-safe error returned at a protocol boundary.
-	Error   *AgentRoomError       `json:"error,omitempty"`
+	Error   *ConveneWireError     `json:"error,omitempty"`
 	Session *LogicalSessionStatus `json:"session,omitempty"`
 	Status  RunExecutionStatus    `json:"status"`
 }
@@ -521,7 +521,7 @@ type TaskClarificationRequest struct {
 }
 
 // Stable, client-safe error returned at a protocol boundary.
-type AgentRoomError struct {
+type ConveneWireError struct {
 	Code      string                 `json:"code"`
 	Details   map[string]interface{} `json:"details,omitempty"`
 	Message   string                 `json:"message"`

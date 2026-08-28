@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 func TestJoinShowsCodePollsAndReturnsCredential(t *testing.T) {

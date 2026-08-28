@@ -19,7 +19,7 @@ import { AuthService } from "../src/security/auth-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
 async function temporaryDirectory(name: string): Promise<string> {
-  return mkdtemp(path.join(os.tmpdir(), `agent-room-${name}-`));
+  return mkdtemp(path.join(os.tmpdir(), `convene-wire-${name}-`));
 }
 
 test("an empty database migrates from zero and reruns idempotently", async () => {

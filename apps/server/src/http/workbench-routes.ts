@@ -4,7 +4,7 @@ import type {
   Priority,
   Scope,
   WorkbenchQuery
-} from "@agent-room/contracts/task-result";
+} from "@convene-wire/contracts/task-result";
 
 import { noStore } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";

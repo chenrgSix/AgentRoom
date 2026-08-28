@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentroom.dev/schemas/common/message-envelope.schema.json",
-  "title": "Agent Room Message Envelope",
+  "title": "ConveneWire Message Envelope",
   "description": "Fields shared by versioned cross-process messages.",
   "type": "object",
   "required": [

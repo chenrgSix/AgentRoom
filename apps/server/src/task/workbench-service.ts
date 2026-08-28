@@ -5,7 +5,7 @@ import type {
   Item as WorkbenchItem,
   WorkbenchPage,
   WorkbenchQuery
-} from "@agent-room/contracts/task-result";
+} from "@convene-wire/contracts/task-result";
 
 import type { CoreRepository } from "../data/core-repository.js";
 import type { RunRecord, RunRepository } from "../run/run-repository.js";

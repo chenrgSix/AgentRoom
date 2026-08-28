@@ -1,5 +1,5 @@
 import type { AgentProvisionResultPayload } from
-  "@agent-room/contracts/bridge-messages";
+  "@convene-wire/contracts/bridge-messages";
 import type Database from "better-sqlite3";
 
 import type { CoreRepository } from "../data/core-repository.js";

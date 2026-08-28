@@ -11,9 +11,9 @@ import (
 	"regexp"
 	"strings"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/pairing"
-	workcontracts "agentroom.dev/contracts/generated/go/work"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/pairing"
+	workcontracts "convenewire.dev/contracts/generated/go/work"
 )
 
 const maximumProposalJSONBytes = 64 << 10

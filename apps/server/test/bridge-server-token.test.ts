@@ -28,7 +28,7 @@ test("central Server Token validation is optional, bounded, and normalized", () 
 });
 
 test("configured Server Token gates legacy bootstrap but not Device-authenticated transport", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-server-token-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-server-token-"));
   const app = await createServerApp({
     bridgeServerToken: serverToken,
     clock: () => now,

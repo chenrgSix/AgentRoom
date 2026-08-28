@@ -60,7 +60,7 @@ func (c *Checker) Check(ctx context.Context, currentVersion string) (Result, err
 		return Result{}, err
 	}
 	request.Header.Set("accept", "application/vnd.github+json")
-	request.Header.Set("user-agent", "AgentRoom-Bridge")
+	request.Header.Set("user-agent", "ConveneWire-Bridge")
 	response, err := client.Do(request)
 	if err != nil {
 		return Result{}, fmt.Errorf("check latest Bridge release: %w", err)
@@ -161,7 +161,7 @@ func validateReleaseURL(value, releaseTag string) error {
 		return fmt.Errorf("GitHub release URL is not trusted")
 	}
 	if parsed.EscapedPath() != "/chenrgSix/AgentRoom/releases/tag/"+url.PathEscape(releaseTag) || parsed.RawQuery != "" || parsed.Fragment != "" {
-		return fmt.Errorf("GitHub release URL is outside the AgentRoom repository")
+		return fmt.Errorf("GitHub release URL is outside the ConveneWire repository")
 	}
 	return nil
 }

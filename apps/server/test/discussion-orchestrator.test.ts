@@ -42,7 +42,7 @@ interface OrchestratorFixture {
 async function fixture(
   clock: { value: string } = { value: now }
 ): Promise<OrchestratorFixture> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-orchestrator-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-orchestrator-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

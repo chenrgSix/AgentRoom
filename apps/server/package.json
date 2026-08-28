@@ -1,9 +1,9 @@
 {
-  "name": "@agent-room/server",
+  "name": "@convene-wire/server",
   "version": "0.1.0",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
-  "description": "Central Agent Room Team service",
+  "description": "Central ConveneWire Team service",
   "type": "module",
   "scripts": {
     "build": "tsc --project tsconfig.json",
@@ -14,7 +14,7 @@
     "test": "tsx --test test/**/*.test.ts"
   },
   "dependencies": {
-    "@agent-room/contracts": "0.1.0",
+    "@convene-wire/contracts": "0.1.0",
     "@fastify/static": "10.1.3",
     "@fastify/websocket": "11.3.0",
     "@modelcontextprotocol/sdk": "1.30.0",

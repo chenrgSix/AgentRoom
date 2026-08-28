@@ -40,7 +40,7 @@ class CapturingSocket implements BridgeSocket {
 
 test("an offline canceled Run is not an actionable pending delivery", async () => {
   const directory = await mkdtemp(
-    path.join(os.tmpdir(), "agent-room-cancel-metrics-")
+    path.join(os.tmpdir(), "convene-wire-cancel-metrics-")
   );
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);

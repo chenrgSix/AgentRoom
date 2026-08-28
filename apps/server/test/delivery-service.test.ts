@@ -40,7 +40,7 @@ class CapturingSocket implements BridgeSocket {
 }
 
 test("ACK loss resends one durable Delivery identity and converges once", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-delivery-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-delivery-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

@@ -12,7 +12,7 @@ import (
 	"runtime"
 	"testing"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 func TestWindowsRuntimeDiscoveryAndPreflightAcceptNPMCommandShim(t *testing.T) {

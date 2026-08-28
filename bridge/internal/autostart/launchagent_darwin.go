@@ -15,6 +15,8 @@ import (
 	"strings"
 )
 
+// Keep the released label so enabling startup repairs the existing job instead
+// of creating a second Bridge process under the new display name.
 const launchAgentLabel = "dev.agentroom.bridge.desktop"
 
 type commandRunner func(context.Context, string, ...string) ([]byte, error)
@@ -137,7 +139,7 @@ func writeAtomic(path string, source []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("create LaunchAgents directory: %w", err)
 	}
-	temporary, err := os.CreateTemp(filepath.Dir(path), ".agentroom-launchagent-*")
+	temporary, err := os.CreateTemp(filepath.Dir(path), ".convenewire-launchagent-*")
 	if err != nil {
 		return err
 	}

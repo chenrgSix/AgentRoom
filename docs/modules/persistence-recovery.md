@@ -41,8 +41,8 @@ tables in one immediate transaction; removing a participant never cascades into
 Message, Run, or Discussion history.
 
 The Node.js server uses `better-sqlite3`. The database location resolves from
-`AGENT_ROOM_DATABASE_PATH`, then `AGENT_ROOM_DATA_DIR`, then the local
-`var/agent-room.sqlite` default. Applied migration filenames and SHA-256 values
+`CONVENE_WIRE_DATABASE_PATH`, then `CONVENE_WIRE_DATA_DIR`, then the local
+`var/agent-room.sqlite` upgrade-stable default. Applied migration filenames and SHA-256 values
 are immutable; startup rejects missing, reordered, or changed history.
 
 Run transitions append contiguous `run_events`; deliveries persist their stable

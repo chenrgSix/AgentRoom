@@ -17,17 +17,17 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/autostart"
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/connection"
-	"agentroom.dev/bridge/internal/diagnostics"
-	"agentroom.dev/bridge/internal/enrollment"
-	"agentroom.dev/bridge/internal/identity"
-	"agentroom.dev/bridge/internal/operations"
-	"agentroom.dev/bridge/internal/pairing"
-	"agentroom.dev/bridge/internal/provisioning"
-	"agentroom.dev/bridge/internal/updatecheck"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/autostart"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/connection"
+	"convenewire.dev/bridge/internal/diagnostics"
+	"convenewire.dev/bridge/internal/enrollment"
+	"convenewire.dev/bridge/internal/identity"
+	"convenewire.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/pairing"
+	"convenewire.dev/bridge/internal/provisioning"
+	"convenewire.dev/bridge/internal/updatecheck"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type fakeLoginStartup struct {
@@ -567,7 +567,7 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	}
 	if bytes.Count(html, []byte(`data-open-codex-session-guide`)) != 3 ||
 		!bytes.Contains(html, []byte(`>使用说明</button>`)) ||
-		!bytes.Contains(html, []byte("AgentRoom Bridge 使用说明")) ||
+		!bytes.Contains(html, []byte("ConveneWire Bridge 使用说明")) ||
 		!bytes.Contains(html, []byte("Bridge 是做什么的")) ||
 		!bytes.Contains(html, []byte("日常怎么用")) ||
 		!bytes.Contains(html, []byte("Codex 会话说明")) ||
@@ -575,7 +575,7 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		bytes.Count(html, []byte("当前 Bridge 不与 Codex Desktop/CLI 共享同一个 App Server")) != 2 ||
 		!bytes.Contains(html, []byte("CODEX_SESSION_IN_USE")) ||
 		!bytes.Contains(html, []byte("CODEX_SESSION_RESUME_FAILED")) ||
-		!bytes.Contains(html, []byte("当前 AgentRoom 版本没有启用共享 daemon")) ||
+		!bytes.Contains(html, []byte("当前 ConveneWire 版本没有启用共享 daemon")) ||
 		!bytes.Contains(html, []byte("一条消息不等于一个新会话")) ||
 		bytes.Count(html, []byte(`value="preserve_and_retry"`)) != 2 ||
 		bytes.Count(html, []byte(`value="start_new"`)) != 2 ||
@@ -762,7 +762,7 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 func TestDevicePairingPreservesLocalProfilesAndProjectsOnlyApprovalState(t *testing.T) {
 	bridgeStarted := make(chan struct{}, 1)
 	approved := make(chan struct{})
-	const pairingLink = "agentroom://pair-device?origin=http%3A%2F%2F127.0.0.1%3A3000&pairingSessionId=pairing_12345678&expiresAt=2026-08-28T12%3A00%3A00Z#claimSecret=secret-proof-never-project-to-console-state"
+	const pairingLink = "convenewire://pair-device?origin=http%3A%2F%2F127.0.0.1%3A3000&pairingSessionId=pairing_12345678&expiresAt=2026-08-28T12%3A00%3A00Z#claimSecret=secret-proof-never-project-to-console-state"
 	dependencies := inertDependencies()
 	dependencies.PairDevice = func(
 		_ context.Context,

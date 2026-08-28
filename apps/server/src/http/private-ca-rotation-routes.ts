@@ -1,6 +1,6 @@
 import type {
   DevicePairingPrivateCARotationAcknowledgeRequest
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 
 import {
   bearerToken,

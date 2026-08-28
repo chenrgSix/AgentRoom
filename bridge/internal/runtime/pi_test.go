@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 var (
@@ -135,7 +135,7 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 	artifactAlias := VerifiedArtifactAlias{
 		ArtifactID: "artifact_pi_12345678", ContentID: content.ContentID,
 		LogicalAlias: content.LogicalAlias,
-		LocalPath:    "/private/tmp/agentroom/pi/result.patch",
+		LocalPath:    "/private/tmp/convenewire/pi/result.patch",
 		MediaType:    content.MediaType, SHA256: content.Sha256, SizeBytes: content.SizeBytes,
 	}
 	request := Request{Run: contracts.RunRequestedPayload{

@@ -51,7 +51,7 @@ type privateCARotationAcknowledgements struct {
 
 func privateCAID(installationID string, epoch int) string {
 	digest := sha256.Sum256([]byte(installationID))
-	return fmt.Sprintf("agentroom-%d-%s", epoch, hex.EncodeToString(digest[:8]))
+	return fmt.Sprintf("convenewire-%d-%s", epoch, hex.EncodeToString(digest[:8]))
 }
 
 func activePrivateCAID(manifest Manifest) string {
@@ -89,7 +89,7 @@ func privateCaddyTLSProfile(caIDs ...string) ([]byte, error) {
 	}
 	value.WriteString(`}
 
-handle /.well-known/agentroom/bridge-ca.pem {
+handle /.well-known/convenewire/bridge-ca.pem {
   rewrite * /bridge-ca.pem
   root * /run/agentroom/trust
   header Content-Type application/x-pem-file
@@ -198,7 +198,7 @@ func validatePrivateRotationInstallation(installation Installation) error {
 		return actionError(
 			"PRIVATE_ROTATION_INELIGIBLE",
 			"only a ready scoped-private installation with recorded CA trust can rotate",
-			"Run agentroomctl doctor and complete the original private installation before rotating its CA.",
+			"Run convenewirectl doctor and complete the original private installation before rotating its CA.",
 			nil,
 		)
 	}
@@ -342,7 +342,7 @@ func (controller *Controller) PreparePrivateCARotation(
 	if _, found, journalErr := loadPrivateCARotationOffer(
 		installation.RotationJournalPath, installation.Manifest, now,
 	); journalErr != nil || found {
-		return actionError("PRIVATE_ROTATION_IN_PROGRESS", "a private CA activation journal already exists", "Retry agentroomctl trust-rotation activate before preparing another epoch.", journalErr)
+		return actionError("PRIVATE_ROTATION_IN_PROGRESS", "a private CA activation journal already exists", "Retry convenewirectl trust-rotation activate before preparing another epoch.", journalErr)
 	}
 	if offer, found, offerErr := loadPrivateCARotationOffer(
 		installation.TrustRotationPath, installation.Manifest, now,
@@ -391,7 +391,7 @@ func (controller *Controller) PreparePrivateCARotation(
 		return actionError("PRIVATE_ROTATION_OFFER_FAILED", "could not atomically publish the authenticated next-CA offer", "The current CA remains active. Repair trust-directory permissions and retry.", err)
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"Staged private CA epoch %d through %s (CA %s).\nNext: keep Bridges online, then run agentroomctl trust-rotation activate after every eligible Device acknowledges.\n",
+		"Staged private CA epoch %d through %s (CA %s).\nNext: keep Bridges online, then run convenewirectl trust-rotation activate after every eligible Device acknowledges.\n",
 		offer.NextTrust.TrustEpoch, offer.OverlapEndsAt, redactedDigest(digest),
 	)
 	return nil
@@ -399,7 +399,7 @@ func (controller *Controller) PreparePrivateCARotation(
 
 const privateCARotationAcknowledgementScript = `
 const Database = require("better-sqlite3");
-const database = new Database(process.env.AGENT_ROOM_DATABASE_PATH || "/data/agent-room.sqlite", { readonly: true });
+const database = new Database(process.env.CONVENE_WIRE_DATABASE_PATH || "/data/agent-room.sqlite", { readonly: true });
 const installationId = process.argv[1];
 const currentEpoch = Number(process.argv[2]);
 const nextEpoch = Number(process.argv[3]);
@@ -531,7 +531,7 @@ func (controller *Controller) ActivatePrivateCARotation(ctx context.Context, dat
 			installation.TrustRotationPath, installation.Manifest, now,
 		)
 		if err != nil || !found {
-			return actionError("PRIVATE_ROTATION_NOT_PREPARED", "no valid private CA rotation offer is staged", "Run agentroomctl trust-rotation prepare first and keep the old CA available through activation.", err)
+			return actionError("PRIVATE_ROTATION_NOT_PREPARED", "no valid private CA rotation offer is staged", "Run convenewirectl trust-rotation prepare first and keep the old CA available through activation.", err)
 		}
 		acknowledgements, ackErr := controller.privateCARotationAcknowledgements(ctx, installation, offer)
 		if ackErr != nil {

@@ -22,31 +22,31 @@ if [[ ! -d "${asset_dir}" ]]; then
 fi
 
 cli_archives=(
-  "agentroom-bridge_${version}_darwin_amd64.tar.gz"
-  "agentroom-bridge_${version}_darwin_arm64.tar.gz"
-  "agentroom-bridge_${version}_linux_amd64.tar.gz"
-  "agentroom-bridge_${version}_linux_arm64.tar.gz"
-  "agentroom-bridge_${version}_windows_amd64.zip"
+  "convenewire-bridge_${version}_darwin_amd64.tar.gz"
+  "convenewire-bridge_${version}_darwin_arm64.tar.gz"
+  "convenewire-bridge_${version}_linux_amd64.tar.gz"
+  "convenewire-bridge_${version}_linux_arm64.tar.gz"
+  "convenewire-bridge_${version}_windows_amd64.zip"
 )
 desktop_archives=(
-  "agentroom-bridge-desktop_${version}_darwin_amd64.zip"
-  "agentroom-bridge-desktop_${version}_darwin_arm64.zip"
-  "agentroom-bridge-desktop_${version}_windows_amd64.zip"
+  "convenewire-bridge-desktop_${version}_darwin_amd64.zip"
+  "convenewire-bridge-desktop_${version}_darwin_arm64.zip"
+  "convenewire-bridge-desktop_${version}_windows_amd64.zip"
 )
 desktop_installers=(
-  "agentroom-bridge-desktop_${version}_windows_amd64_setup.exe"
+  "convenewire-bridge-desktop_${version}_windows_amd64_setup.exe"
 )
 central_archives=(
-  "agentroom-central_${version}_darwin_amd64.tar.gz"
-  "agentroom-central_${version}_darwin_arm64.tar.gz"
-  "agentroom-central_${version}_linux_amd64.tar.gz"
-  "agentroom-central_${version}_linux_arm64.tar.gz"
+  "convenewire-central_${version}_darwin_amd64.tar.gz"
+  "convenewire-central_${version}_darwin_arm64.tar.gz"
+  "convenewire-central_${version}_linux_amd64.tar.gz"
+  "convenewire-central_${version}_linux_arm64.tar.gz"
 )
 central_pins=(
-  "agentroom-central_${version}_darwin_amd64.SHA256SUMS.sha256"
-  "agentroom-central_${version}_darwin_arm64.SHA256SUMS.sha256"
-  "agentroom-central_${version}_linux_amd64.SHA256SUMS.sha256"
-  "agentroom-central_${version}_linux_arm64.SHA256SUMS.sha256"
+  "convenewire-central_${version}_darwin_amd64.SHA256SUMS.sha256"
+  "convenewire-central_${version}_darwin_arm64.SHA256SUMS.sha256"
+  "convenewire-central_${version}_linux_amd64.SHA256SUMS.sha256"
+  "convenewire-central_${version}_linux_arm64.SHA256SUMS.sha256"
 )
 license_assets=(LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md)
 expected_count=$((${#cli_archives[@]} + ${#desktop_archives[@]} + ${#desktop_installers[@]} + ${#central_archives[@]} + ${#central_pins[@]} + ${#license_assets[@]} + 1))
@@ -96,7 +96,7 @@ else
   exit 1
 fi
 
-temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/agentroom-release-verify.XXXXXX")
+temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/convenewire-release-verify.XXXXXX")
 cleanup() {
   rm -rf "${temporary_root}"
 }
@@ -198,17 +198,17 @@ verify_cli_archive() {
   esac
 
   root="${extraction}/${package}"
-  binary="${root}/agentroom-bridge"
+  binary="${root}/convenewire-bridge"
   case "${platform}" in
     darwin)
-      launcher="${root}/Start AgentRoom Bridge.command"
+      launcher="${root}/Start ConveneWire Bridge.command"
       ;;
     linux)
-      launcher="${root}/start-agentroom-bridge.sh"
+      launcher="${root}/start-convenewire-bridge.sh"
       ;;
     windows)
       binary="${binary}.exe"
-      launcher="${root}/Start AgentRoom Bridge.cmd"
+      launcher="${root}/Start ConveneWire Bridge.cmd"
       ;;
   esac
 
@@ -222,7 +222,7 @@ verify_cli_archive() {
     echo "Archive is missing its binary or launcher: ${archive}" >&2
     exit 1
   fi
-  if ! grep -Fq agentroom-bridge "${launcher}" || ! grep -Fq console "${launcher}"; then
+  if ! grep -Fq convenewire-bridge "${launcher}" || ! grep -Fq console "${launcher}"; then
     echo "Archive launcher does not start the Bridge Console: ${archive}" >&2
     exit 1
   fi
@@ -250,9 +250,9 @@ verify_macos_desktop_archive() {
   assert_safe_members "${archive}" "${members}"
   unzip -q "${asset_dir}/${archive}" -d "${extraction}"
 
-  contents="${extraction}/${package}/AgentRoom Bridge.app/Contents"
+  contents="${extraction}/${package}/ConveneWire Bridge.app/Contents"
   resources="${contents}/Resources"
-  binary="${contents}/MacOS/agentroom-bridge-desktop"
+  binary="${contents}/MacOS/convenewire-bridge-desktop"
   if [[ ! -s "${contents}/Info.plist" || ! -x "${binary}" || ! -s "${resources}/README.md" ]]; then
     echo "Desktop archive is missing its application metadata, executable, or README: ${archive}" >&2
     exit 1
@@ -265,8 +265,12 @@ verify_macos_desktop_archive() {
     echo "Desktop archive has the wrong bundle version: ${archive}" >&2
     exit 1
   fi
-  if ! grep -Fq '<string>agentroom</string>' "${contents}/Info.plist"; then
+  if ! grep -Fq '<string>convenewire</string>' "${contents}/Info.plist"; then
     echo "Desktop archive is missing the Device pairing URL scheme: ${archive}" >&2
+    exit 1
+  fi
+  if ! grep -Fq '<string>agentroom</string>' "${contents}/Info.plist"; then
+    echo "Desktop archive is missing the legacy Device pairing URL scheme: ${archive}" >&2
     exit 1
   fi
   assert_binary_version "${binary}"
@@ -289,7 +293,7 @@ verify_windows_desktop_archive() {
   unzip -q "${asset_dir}/${archive}" -d "${extraction}"
 
   root="${extraction}/${package}"
-  binary="${root}/AgentRoom Bridge.exe"
+  binary="${root}/ConveneWire Bridge.exe"
   if [[ ! -s "${binary}" || ! -s "${root}/README.md" ]]; then
     echo "Windows Desktop archive is missing its executable or README: ${archive}" >&2
     exit 1
@@ -339,7 +343,7 @@ verify_windows_desktop_installer() {
     strings "${path}"
     extract_utf16le_strings "${path}"
   } > "${installer_strings}"
-  if ! grep -Fq "AgentRoom Bridge" "${installer_strings}" ||
+  if ! grep -Fq "ConveneWire Bridge" "${installer_strings}" ||
     ! grep -Fq "${version}" "${installer_strings}"; then
     echo "Windows Desktop installer is missing product or version metadata: ${installer}" >&2
     exit 1
@@ -356,6 +360,6 @@ verify_macos_desktop_archive "${desktop_archives[1]}" arm64
 verify_windows_desktop_archive "${desktop_archives[2]}" amd64
 verify_windows_desktop_installer "${desktop_installers[0]}"
 ASSET_DIR="${asset_dir}" RELEASE_TAG="${release_tag}" \
-  "${repository_root}/ops/agentroomctl/scripts/verify-central-release.sh"
+  "${repository_root}/ops/convenewirectl/scripts/verify-central-release.sh"
 
 printf 'Verified %s release assets for %s\n' "${expected_count}" "${release_tag}"

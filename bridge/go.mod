@@ -1,8 +1,8 @@
-module agentroom.dev/bridge
+module convenewire.dev/bridge
 
 go 1.26.7
 
-require agentroom.dev/contracts v0.0.0
+require convenewire.dev/contracts v0.0.0
 
 require github.com/coder/websocket v1.8.15
 
@@ -17,4 +17,4 @@ require (
 	golang.org/x/sys v0.46.0 // indirect
 )
 
-replace agentroom.dev/contracts => ../packages/contracts
+replace convenewire.dev/contracts => ../packages/contracts

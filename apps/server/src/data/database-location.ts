@@ -1,6 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
+import { renamedEnvironmentValue } from "../config/environment.js";
 
+// Keep the released filename so an upgrade cannot create an empty second Team.
 export const databaseFilename = "agent-room.sqlite";
 
 export interface DatabaseLocationOptions {
@@ -18,13 +20,21 @@ export function resolveDatabasePath(
 ): string {
   const cwd = path.resolve(options.cwd ?? process.cwd());
   const env = options.env ?? process.env;
-  const explicitPath = definedValue(env.AGENT_ROOM_DATABASE_PATH);
+  const explicitPath = definedValue(renamedEnvironmentValue(
+    env,
+    "CONVENE_WIRE_DATABASE_PATH",
+    "AGENT_ROOM_DATABASE_PATH"
+  ));
 
   if (explicitPath) {
     return path.resolve(cwd, explicitPath);
   }
 
-  const configuredDataDirectory = definedValue(env.AGENT_ROOM_DATA_DIR);
+  const configuredDataDirectory = definedValue(renamedEnvironmentValue(
+    env,
+    "CONVENE_WIRE_DATA_DIR",
+    "AGENT_ROOM_DATA_DIR"
+  ));
   const dataDirectory = configuredDataDirectory
     ? path.resolve(cwd, configuredDataDirectory)
     : path.join(cwd, "var");

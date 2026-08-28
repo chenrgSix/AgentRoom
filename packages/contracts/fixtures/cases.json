@@ -416,7 +416,7 @@
                   "artifactRevision": 1,
                   "type": "commit",
                   "workspaceRef": "workspace_oauth",
-                  "repository": "agent-room/network",
+                  "repository": "convene-wire/network",
                   "commitSha": "21f9e8c",
                   "title": "OAuth migration",
                   "summary": "Eight files changed and focused tests passed.",
@@ -468,7 +468,7 @@
               "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
               "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
               "runtimeKind": "generic",
-              "workspaceAlias": "agentroom-main"
+              "workspaceAlias": "convenewire-main"
             },
             "included": {
               "messageIds": [
@@ -1182,7 +1182,7 @@
         "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
         "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/change.patch",
         "materializationState": "verified",
-        "localPath": "/tmp/agent-room/change.patch"
+        "localPath": "/tmp/convene-wire/change.patch"
       },
       "valid": false
     },
@@ -1853,7 +1853,7 @@
           "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "deviceId": null,
           "runtimeKind": "manual",
-          "workspaceAlias": "agentroom"
+          "workspaceAlias": "convenewire"
         },
         "included": {
           "messageIds": ["msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"],
@@ -1892,7 +1892,7 @@
           "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "runtimeKind": "codex",
-          "workspaceAlias": "agentroom"
+          "workspaceAlias": "convenewire"
         },
         "included": {
           "messageIds": [],
@@ -1932,7 +1932,7 @@
           "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "runtimeKind": "codex",
-          "workspaceAlias": "agentroom"
+          "workspaceAlias": "convenewire"
         },
         "included": {
           "messageIds": [],

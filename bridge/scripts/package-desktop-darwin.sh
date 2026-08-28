@@ -29,11 +29,11 @@ if [[ "${host_os}/${host_arch}" != "darwin/${goarch}" ]]; then
   exit 1
 fi
 
-package="agentroom-bridge-desktop_${version}_darwin_${goarch}"
+package="convenewire-bridge-desktop_${version}_darwin_${goarch}"
 staging="${output_dir}/${package}"
-app="${staging}/AgentRoom Bridge.app"
+app="${staging}/ConveneWire Bridge.app"
 contents="${app}/Contents"
-binary="${contents}/MacOS/agentroom-bridge-desktop"
+binary="${contents}/MacOS/convenewire-bridge-desktop"
 archive="${output_dir}/${package}.zip"
 
 if [[ -e "${staging}" || -e "${archive}" ]]; then
@@ -52,7 +52,7 @@ sed "s/__VERSION__/${bundle_version}/g" \
     -trimpath \
     -ldflags="-s -w -X main.version=${release_tag}" \
     -o "${binary}" \
-    ./cmd/agentroom-bridge-desktop
+    ./cmd/convenewire-bridge-desktop
 )
 
 cp "${bridge_root}/README.md" "${contents}/Resources/README.md"

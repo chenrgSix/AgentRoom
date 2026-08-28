@@ -40,7 +40,7 @@ if [[ ! "${data_schema_version}" =~ ^[1-9][0-9]*$ ]]; then
   exit 1
 fi
 
-package="agentroom-central_${version}_${target_os}_${target_arch}"
+package="convenewire-central_${version}_${target_os}_${target_arch}"
 archive="${output_dir}/${package}.tar.gz"
 pin_asset="${output_dir}/${package}.SHA256SUMS.sha256"
 mkdir -p "${output_dir}"
@@ -49,7 +49,7 @@ if [[ -e "${archive}" || -e "${pin_asset}" ]]; then
   exit 1
 fi
 
-temporary_root=$(mktemp -d "${output_dir}/.agentroom-central-package.XXXXXX")
+temporary_root=$(mktemp -d "${output_dir}/.convenewire-central-package.XXXXXX")
 cleanup() {
   rm -rf -- "${temporary_root}"
 }
@@ -74,30 +74,30 @@ source_paths=(
   deploy/tls
   scripts/compose-backup.sh
   scripts/compose-restore.sh
-  ops/agentroomctl
+  ops/convenewirectl
 )
 git -C "${repository_root}" archive --format=tar "${source_commit}" -- "${source_paths[@]}" |
   tar -xf - -C "${staging}"
 
-cp "${staging}/ops/agentroomctl/README.md" "${staging}/CENTRAL-INSTALL.md"
+cp "${staging}/ops/convenewirectl/README.md" "${staging}/CENTRAL-INSTALL.md"
 (
-  cd "${staging}/ops/agentroomctl"
+  cd "${staging}/ops/convenewirectl"
   CGO_ENABLED=0 GOOS="${target_os}" GOARCH="${target_arch}" go build \
     -trimpath \
     -ldflags="-s -w -X main.version=${release_tag}" \
-    -o "${staging}/bin/agentroomctl" \
-    ./cmd/agentroomctl
+    -o "${staging}/bin/convenewirectl" \
+    ./cmd/convenewirectl
 )
 rm -rf -- "${staging}/ops"
 
 printf '{"schemaVersion":1,"releaseVersion":"%s","dataSchemaVersion":%s,"sourceCommit":"%s","targetOS":"%s","targetArch":"%s"}\n' \
   "${release_tag}" "${data_schema_version}" "${source_commit}" "${target_os}" "${target_arch}" \
-  > "${staging}/agentroom-central-release.json"
+  > "${staging}/convenewire-central-release.json"
 
 host_os=$(go env GOHOSTOS)
 host_arch=$(go env GOHOSTARCH)
 if [[ "${target_os}/${target_arch}" == "${host_os}/${host_arch}" ]]; then
-  built_version=$("${staging}/bin/agentroomctl" version)
+  built_version=$("${staging}/bin/convenewirectl" version)
   if [[ "${built_version}" != "${release_tag}" ]]; then
     echo "Built controller reports ${built_version}, expected ${release_tag}" >&2
     exit 1

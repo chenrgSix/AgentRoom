@@ -1,5 +1,5 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { ResultProposal } from "@agent-room/contracts/task-result";
+import type { ResultProposal } from "@convene-wire/contracts/task-result";
 import * as z from "zod/v4";
 
 import type { CoreRepository } from "../data/core-repository.js";
@@ -95,11 +95,11 @@ export function createTeamMcpServer(
   dependencies: TeamMcpDependencies
 ): McpServer {
   const server = new McpServer({
-    name: "agent-room",
+    name: "convene-wire",
     version: "0.1.0"
   });
   server.registerTool("team.whoami", {
-    description: "Return the authenticated Agent Room Team identity."
+    description: "Return the authenticated ConveneWire Team identity."
   }, async () => toolResult({
     agentId: principal.agentId,
     memberId: principal.memberId,

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentroom.dev/schemas/bridge/messages.schema.json",
-  "title": "Agent Room Bridge Message",
+  "title": "ConveneWire Bridge Message",
   "description": "Versioned messages exchanged over the authenticated Bridge WebSocket.",
   "allOf": [
     {

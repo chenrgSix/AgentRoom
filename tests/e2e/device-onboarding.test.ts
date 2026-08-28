@@ -128,7 +128,7 @@ async function consoleRequest<T>(
 test("one link pairs one Device with several Agents and recovers real Bridge work", {
   timeout: 120_000
 }, async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-device-e2e-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-device-e2e-"));
   const bridgeServerToken = "unused-zero-copy-server-token-12345678901234567890";
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
@@ -169,15 +169,15 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
     const roomId = roomResponse.json().roomId as string;
 
     stage = "build Bridge";
-    const bridgeBinary = path.join(directory, "agentroom-bridge");
-    const goBinary = process.env.AGENT_ROOM_GO_BIN ?? "go";
+    const bridgeBinary = path.join(directory, "convenewire-bridge");
+    const goBinary = process.env.CONVENE_WIRE_GO_BIN ?? "go";
     await execFileAsync(goBinary, [
       "build",
       "-ldflags",
       "-X main.version=0.4.0-e2e",
       "-o",
       bridgeBinary,
-      "./cmd/agentroom-bridge"
+      "./cmd/convenewire-bridge"
     ], { cwd: path.join(repositoryRoot, "bridge") });
 
     const dataDir = path.join(directory, "bridge-data");
@@ -232,7 +232,7 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
     });
     assert.equal(created.statusCode, 200, created.body);
     const pairingSessionId = created.json().pairingSessionId as string;
-    const pairingLink = `agentroom://pair-device?${new URLSearchParams({
+    const pairingLink = `convenewire://pair-device?${new URLSearchParams({
       origin: serverUrl,
       pairingSessionId,
       expiresAt: created.json().expiresAt as string

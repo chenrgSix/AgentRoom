@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json",
-  "title": "Agent Room Device Pairing Session",
+  "title": "ConveneWire Device Pairing Session",
   "description": "Transport-neutral payloads for Owner-created, zero-copy Device pairing sessions. Public projections never contain claim, poll, Device, Server, Runtime, or Owner credential plaintext.",
   "$ref": "#/$defs/ownerProjection",
   "$defs": {

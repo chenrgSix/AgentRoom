@@ -48,7 +48,7 @@ class CapturingReducer implements MemoryReducerRunner {
 }
 
 test("configured Room reduction drains, rebases, redacts, and isolates candidates", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-reducer-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-reducer-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

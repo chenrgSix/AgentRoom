@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 func artifactAliasFixture() (contracts.RunRequestedPayload, VerifiedArtifactAlias) {
@@ -27,7 +27,7 @@ func artifactAliasFixture() (contracts.RunRequestedPayload, VerifiedArtifactAlia
 	alias := VerifiedArtifactAlias{
 		ArtifactID: "artifact_runtime_alias_12345678",
 		ContentID:  content.ContentID, LogicalAlias: content.LogicalAlias,
-		LocalPath: "/private/tmp/agentroom/runtime/result.patch",
+		LocalPath: "/private/tmp/convenewire/runtime/result.patch",
 		MediaType: content.MediaType, SHA256: content.Sha256,
 		SizeBytes: content.SizeBytes,
 	}

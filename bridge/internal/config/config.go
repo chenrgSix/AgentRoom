@@ -86,10 +86,11 @@ const (
 	CodexSessionConflictPreserveAndRetry CodexSessionConflictPolicy = "preserve_and_retry"
 	CodexSessionConflictStartNew         CodexSessionConflictPolicy = "start_new"
 
-	CurrentSchemaVersion           = 5
-	CurrentPresetVersion           = 5
-	OutputProtocolAgentRoomJSONLV1 = "agentroom-jsonl-v1"
-	ServerTokenHeader              = "X-AgentRoom-Server-Token"
+	CurrentSchemaVersion = 5
+	CurrentPresetVersion = 5
+	// These released wire identifiers remain stable across the product rename.
+	OutputProtocolConveneWireJSONLV1 = "agentroom-jsonl-v1"
+	ServerTokenHeader                = "X-AgentRoom-Server-Token"
 )
 
 func (a AgentConfig) ResolvedCodexSessionConflictPolicy() CodexSessionConflictPolicy {
@@ -172,6 +173,7 @@ func DefaultPath() string {
 	if err != nil {
 		return "bridge.json"
 	}
+	// Keep the released owner-scoped path so upgrades load the existing Device.
 	return filepath.Join(directory, "agentroom", "bridge.json")
 }
 
@@ -576,8 +578,8 @@ func (a AgentConfig) validate() error {
 		return fmt.Errorf("pi and generic runtimeKind require the generic adapter")
 	}
 	if a.OutputProtocol != "" &&
-		(a.RuntimeKind != "generic" || a.OutputProtocol != OutputProtocolAgentRoomJSONLV1) {
-		return fmt.Errorf("outputProtocol is supported only for generic runtimeKind as %s", OutputProtocolAgentRoomJSONLV1)
+		(a.RuntimeKind != "generic" || a.OutputProtocol != OutputProtocolConveneWireJSONLV1) {
+		return fmt.Errorf("outputProtocol is supported only for generic runtimeKind as %s", OutputProtocolConveneWireJSONLV1)
 	}
 	if a.PresetVersion < 0 || a.PresetVersion > CurrentPresetVersion {
 		return fmt.Errorf("presetVersion must be between 0 and %d", CurrentPresetVersion)

@@ -14,7 +14,7 @@ import { TeamRoomService } from "../src/team-room/team-room-service.js";
 const now = "2026-08-22T10:00:00.000Z";
 
 test("an owner adds a Member and each Member owns their registered Device", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-registry-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-registry-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

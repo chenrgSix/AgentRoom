@@ -9,7 +9,7 @@ import { createServerApp } from "../src/app.js";
 const now = "2026-08-22T10:00:00.000Z";
 
 test("Remote MCP authenticates a manual Agent bearer token", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-mcp-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-mcp-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => now
@@ -90,7 +90,7 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       }
     });
     assert.equal(initialized.statusCode, 200);
-    assert.equal(initialized.json().result.serverInfo.name, "agent-room");
+    assert.equal(initialized.json().result.serverInfo.name, "convene-wire");
 
     const whoami = await app.inject({
       method: "POST",
@@ -311,7 +311,7 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
             taskId: assignedRun.taskId,
             type: "commit",
             workspaceRef: "workspace_manual_agent",
-            repository: "agent-room/network",
+            repository: "convene-wire/network",
             commitSha: "21f9e8c",
             title: "Completed MCP change",
             summary: "Manual Agent reports a commit for independent verification.",

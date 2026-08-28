@@ -1,4 +1,4 @@
-module agentroom.dev/contracts
+module convenewire.dev/contracts
 
 go 1.26.7
 

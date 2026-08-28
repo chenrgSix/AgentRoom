@@ -238,7 +238,7 @@ function artifactId(stdout: string): string {
 test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts", {
   timeout: 120_000
 }, async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-artifact-e2e-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-artifact-e2e-"));
   const workspaceA = path.join(directory, "workspace-a");
   const workspaceB = path.join(directory, "workspace-b");
   const dataA = path.join(directory, "data-a");
@@ -311,9 +311,9 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
     assert.equal(taskResponse.statusCode, 200, taskResponse.body);
     const taskId = taskResponse.json().taskId as string;
 
-    const bridgeBinary = path.join(directory, "agentroom-bridge");
-    const goBinary = process.env.AGENT_ROOM_GO_BIN ?? "go";
-    await execFileAsync(goBinary, ["build", "-o", bridgeBinary, "./cmd/agentroom-bridge"], {
+    const bridgeBinary = path.join(directory, "convenewire-bridge");
+    const goBinary = process.env.CONVENE_WIRE_GO_BIN ?? "go";
+    await execFileAsync(goBinary, ["build", "-o", bridgeBinary, "./cmd/convenewire-bridge"], {
       cwd: path.join(repositoryRoot, "bridge")
     });
 

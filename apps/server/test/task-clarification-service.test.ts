@@ -27,7 +27,7 @@ import { TaskClarificationService } from "../src/task/task-clarification-service
 const now = "2026-08-25T10:00:00.000Z";
 
 test("Task clarification resumes the same Task session in a new bounded Run", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-clarification-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-clarification-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

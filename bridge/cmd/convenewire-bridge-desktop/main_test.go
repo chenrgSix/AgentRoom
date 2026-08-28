@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"agentroom.dev/bridge/internal/console"
-	"agentroom.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/console"
+	"convenewire.dev/bridge/internal/operations"
 )
 
 func TestPhaseLabelCoversDesktopTrayStates(t *testing.T) {
@@ -52,8 +52,10 @@ func TestDesktopPackagesRegisterDevicePairingProtocolWithoutOwningState(t *testi
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(macMetadata), "<key>CFBundleURLSchemes</key>") ||
-		!strings.Contains(string(macMetadata), "<string>agentroom</string>") {
-		t.Fatal("macOS app metadata omitted the agentroom URL scheme")
+		!strings.Contains(string(macMetadata), "<string>convenewire</string>") ||
+		!strings.Contains(string(macMetadata), "<string>agentroom</string>") ||
+		!strings.Contains(string(macMetadata), "<string>dev.agentroom.bridge</string>") {
+		t.Fatal("macOS app metadata omitted a current or stable compatibility identity")
 	}
 	windowsInstaller, err := os.ReadFile("../../desktop/windows/installer.iss")
 	if err != nil {
@@ -61,20 +63,21 @@ func TestDesktopPackagesRegisterDevicePairingProtocolWithoutOwningState(t *testi
 	}
 	installer := string(windowsInstaller)
 	for _, required := range []string{
-		`Software\Classes\agentroom`, `ValueName: "URL Protocol"`,
-		`AgentRoom Bridge.exe"" ""%1`, "Flags: uninsdeletekey",
+		`Software\Classes\convenewire`, `Software\Classes\agentroom`,
+		`ValueName: "URL Protocol"`,
+		`ConveneWire Bridge.exe"" ""%1`, "Flags: uninsdeletekey",
 	} {
 		if !strings.Contains(installer, required) {
 			t.Fatalf("Windows installer omitted protocol registration fragment %q", required)
 		}
 	}
-	if strings.Contains(strings.ToLower(installer), `%appdata%\agentroom`) {
+	if strings.Contains(strings.ToLower(installer), `%appdata%\convenewire`) {
 		t.Fatal("protocol registration must not turn owner state into installer-owned data")
 	}
 }
 
 func TestDesktopLaunchCarriesOneValidatedPairingLinkOnlyInTheFragment(t *testing.T) {
-	link := "agentroom://pair-device?origin=https%3A%2F%2Fteam.example&pairingSessionId=pairing_12345678&expiresAt=2026-08-28T12%3A00%3A00Z#claimSecret=" + strings.Repeat("s", 43)
+	link := "convenewire://pair-device?origin=https%3A%2F%2Fteam.example&pairingSessionId=pairing_12345678&expiresAt=2026-08-28T12%3A00%3A00Z#claimSecret=" + strings.Repeat("s", 43)
 	selected, err := pairingLinkFromLaunch("", []string{"--background", link})
 	if err != nil || selected != link {
 		t.Fatalf("expected protocol launch link: %q, %v", selected, err)
@@ -92,8 +95,12 @@ func TestDesktopLaunchCarriesOneValidatedPairingLinkOnlyInTheFragment(t *testing
 	if _, err := pairingLinkFromLaunch(link, []string{link}); err == nil {
 		t.Fatal("multiple pairing links must be rejected")
 	}
-	if _, err := pairingLinkFromLaunch("agentroom://unexpected", nil); err == nil {
+	if _, err := pairingLinkFromLaunch("convenewire://unexpected", nil); err == nil {
 		t.Fatal("invalid protocol target must be rejected")
+	}
+	legacyLink := strings.Replace(link, "convenewire://", "agentroom://", 1)
+	if selected, err := pairingLinkFromLaunch(legacyLink, nil); err != nil || selected != legacyLink {
+		t.Fatalf("released AgentRoom scheme must remain accepted: %q, %v", selected, err)
 	}
 }
 

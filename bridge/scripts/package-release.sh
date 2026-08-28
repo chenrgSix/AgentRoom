@@ -27,11 +27,11 @@ case "${goos}/${goarch}" in
     ;;
 esac
 
-package="agentroom-bridge_${version}_${goos}_${goarch}"
+package="convenewire-bridge_${version}_${goos}_${goarch}"
 staging="${output_dir}/${package}"
-binary=agentroom-bridge
+binary=convenewire-bridge
 if [[ "${goos}" == windows ]]; then
-  binary=agentroom-bridge.exe
+  binary=convenewire-bridge.exe
 fi
 
 mkdir -p "${staging}"
@@ -41,7 +41,7 @@ mkdir -p "${staging}"
     -trimpath \
     -ldflags="-s -w -X main.version=${release_tag}" \
     -o "${staging}/${binary}" \
-    ./cmd/agentroom-bridge
+    ./cmd/convenewire-bridge
 )
 cp "${bridge_root}/README.md" "${staging}/README.md"
 cp "${repository_root}/LICENSE" "${staging}/LICENSE"
@@ -61,18 +61,18 @@ fi
 
 case "${goos}" in
   darwin)
-    cp "${bridge_root}/release/start-agentroom-bridge.command" \
-      "${staging}/Start AgentRoom Bridge.command"
-    chmod +x "${staging}/Start AgentRoom Bridge.command"
+    cp "${bridge_root}/release/start-convenewire-bridge.command" \
+      "${staging}/Start ConveneWire Bridge.command"
+    chmod +x "${staging}/Start ConveneWire Bridge.command"
     ;;
   linux)
-    cp "${bridge_root}/release/start-agentroom-bridge.sh" \
-      "${staging}/start-agentroom-bridge.sh"
-    chmod +x "${staging}/start-agentroom-bridge.sh"
+    cp "${bridge_root}/release/start-convenewire-bridge.sh" \
+      "${staging}/start-convenewire-bridge.sh"
+    chmod +x "${staging}/start-convenewire-bridge.sh"
     ;;
   windows)
-    cp "${bridge_root}/release/start-agentroom-bridge.cmd" \
-      "${staging}/Start AgentRoom Bridge.cmd"
+    cp "${bridge_root}/release/start-convenewire-bridge.cmd" \
+      "${staging}/Start ConveneWire Bridge.cmd"
     ;;
 esac
 

@@ -3,7 +3,7 @@
 ## Scope
 
 - Prefix: `OPS`
-- Code: `ops/agentroomctl/`, `compose.yaml`, `deploy/`, and repository-owned
+- Code: `ops/convenewirectl/`, `compose.yaml`, `deploy/`, and repository-owned
   deployment scripts
 - Owns: central-host installation manifest and lifecycle orchestration
 
@@ -19,7 +19,7 @@ browser trust a private CA.
 
 ## Controller boundary
 
-`agentroomctl` is a small Go 1.26.7 CLI supporting Linux and macOS on amd64 and
+`convenewirectl` is a small Go 1.26.7 CLI supporting Linux and macOS on amd64 and
 arm64. It invokes the existing Compose, startup migration, readiness, backup,
 and staged-restore paths. It does not contain a second SQL migration or SQLite
 copy implementation.
@@ -50,7 +50,7 @@ and last successful step. It contains no secret value,
 credential, local Runtime configuration, Workspace path, or Team state.
 Atomic stage recording makes exact `install` reentry converge after checksum,
 storage, secret, render, Compose-validation, service-start, or readiness cuts.
-The default Compose project is `agentroom`; an explicitly selected bounded
+The default Compose project remains the upgrade-stable `agentroom`; an explicitly selected bounded
 project name supports isolated acceptance or an intentionally separate host
 installation and becomes part of the reentry identity.
 
@@ -105,7 +105,7 @@ in manifest schema v2; reentry preserves them. Schema-v2 manifests created
 before named authorities retain the exact built-in `local` ID rather than
 silently generating a different root. The controller copies exactly one validated canonical
 certificate into a bounded public-artifact directory. It is exposed only at
-`/.well-known/agentroom/bridge-ca.pem` with one-certificate, no-redirect, size,
+`/.well-known/convenewire/bridge-ca.pem` with one-certificate, no-redirect, size,
 media-type and cache-policy constraints. The manifest and endpoint never
 contain the Caddy private key.
 

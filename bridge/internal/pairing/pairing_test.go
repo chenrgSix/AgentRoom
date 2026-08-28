@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 func TestHTTPClientUsesSystemRootsOrExplicitPin(t *testing.T) {

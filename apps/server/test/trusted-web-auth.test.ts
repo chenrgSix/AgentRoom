@@ -28,7 +28,7 @@ function responseCookie(response: { headers: Record<string, unknown> }): string 
 }
 
 test("trusted-team setup, invitations, CSRF, recovery, and logout are governed", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-trusted-web-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-trusted-web-"));
   const databasePath = path.join(directory, "server.sqlite");
   let now = initialNow;
   const app = await createServerApp({
@@ -154,7 +154,7 @@ test("trusted-team setup, invitations, CSRF, recovery, and logout are governed",
       }
     });
     assert.equal(mcpInitialize.statusCode, 200);
-    assert.equal(mcpInitialize.json().result.serverInfo.name, "agent-room");
+    assert.equal(mcpInitialize.json().result.serverInfo.name, "convene-wire");
 
     const invitation = await app.inject({
       method: "POST",
@@ -300,7 +300,7 @@ test("trusted-team setup, invitations, CSRF, recovery, and logout are governed",
 });
 
 test("anonymous trusted Web authentication attempts are rate limited", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-rate-limit-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-rate-limit-"));
   const app = await createServerApp({
     anonymousRateLimit: { maximumAttempts: 2, windowMilliseconds: 60_000 },
     databasePath: path.join(directory, "server.sqlite"),
@@ -337,7 +337,7 @@ test("anonymous trusted Web authentication attempts are rate limited", async () 
 });
 
 test("trusted setup adopts one existing local Owner without changing identity", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-adopt-owner-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-adopt-owner-"));
   const databasePath = path.join(directory, "server.sqlite");
   const local = await createServerApp({ databasePath, clock: () => initialNow });
   let existingUserId = "";
@@ -417,7 +417,7 @@ test("trusted setup adopts one existing local Owner without changing identity", 
 });
 
 test("trusted setup adopts one bootstrap User before any Team exists", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-adopt-bootstrap-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-adopt-bootstrap-"));
   const databasePath = path.join(directory, "server.sqlite");
   const local = await createServerApp({ databasePath, clock: () => initialNow });
   let existingUserId = "";
@@ -457,7 +457,7 @@ test("trusted setup adopts one bootstrap User before any Team exists", async () 
 });
 
 test("trusted setup fails closed for anonymous legacy Team ownership", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-ambiguous-owner-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-ambiguous-owner-"));
   const databasePath = path.join(directory, "server.sqlite");
   const local = await createServerApp({ databasePath, clock: () => initialNow });
   await local.close();
@@ -511,7 +511,7 @@ test("trusted setup fails closed for anonymous legacy Team ownership", async () 
 });
 
 test("local Web APIs reject a non-loopback Host", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-local-host-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-local-host-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => initialNow

@@ -14,7 +14,7 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 const now = "2026-08-25T09:00:00.000Z";
 
 test("shared repository boundary rolls back cross-aggregate writes", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-uow-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-uow-"));
   const databasePath = path.join(directory, "server.sqlite");
   await prepareDatabaseDirectory(databasePath);
   await migrateDatabase(databasePath);

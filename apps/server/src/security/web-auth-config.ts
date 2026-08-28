@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { renamedEnvironmentValue } from "../config/environment.js";
 
 export type WebAuthConfiguration =
   | { mode: "local" }
@@ -18,13 +19,13 @@ export interface WebAuthEnvironmentOptions {
 function trustedOrigin(source: string | undefined): string {
   const value = source?.trim();
   if (!value) {
-    throw new Error("AGENT_ROOM_PUBLIC_ORIGIN is required in trusted-team mode");
+    throw new Error("CONVENE_WIRE_PUBLIC_ORIGIN is required in trusted-team mode");
   }
   let parsed: URL;
   try {
     parsed = new URL(value);
   } catch {
-    throw new Error("AGENT_ROOM_PUBLIC_ORIGIN must be an absolute HTTPS origin");
+    throw new Error("CONVENE_WIRE_PUBLIC_ORIGIN must be an absolute HTTPS origin");
   }
   if (
     parsed.protocol !== "https:" ||
@@ -34,7 +35,7 @@ function trustedOrigin(source: string | undefined): string {
     parsed.search !== "" ||
     parsed.hash !== ""
   ) {
-    throw new Error("AGENT_ROOM_PUBLIC_ORIGIN must be an absolute HTTPS origin");
+    throw new Error("CONVENE_WIRE_PUBLIC_ORIGIN must be an absolute HTTPS origin");
   }
   return parsed.origin;
 }
@@ -52,16 +53,24 @@ export async function loadWebAuthConfiguration(
   options: WebAuthEnvironmentOptions = {}
 ): Promise<WebAuthConfiguration> {
   const env = options.env ?? process.env;
-  const mode = env.AGENT_ROOM_WEB_AUTH_MODE?.trim() || "local";
+  const mode = renamedEnvironmentValue(
+    env,
+    "CONVENE_WIRE_WEB_AUTH_MODE",
+    "AGENT_ROOM_WEB_AUTH_MODE"
+  ) || "local";
   if (mode === "local") return { mode };
   if (mode !== "trusted-team") {
-    throw new Error("AGENT_ROOM_WEB_AUTH_MODE must be local or trusted-team");
+    throw new Error("CONVENE_WIRE_WEB_AUTH_MODE must be local or trusted-team");
   }
 
-  const configuredPath = env.AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE?.trim();
+  const configuredPath = renamedEnvironmentValue(
+    env,
+    "CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE",
+    "AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE"
+  );
   if (!configuredPath) {
     throw new Error(
-      "AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE is required in trusted-team mode"
+      "CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE is required in trusted-team mode"
     );
   }
   const filename = path.resolve(options.cwd ?? process.cwd(), configuredPath);
@@ -71,7 +80,11 @@ export async function loadWebAuthConfiguration(
   return {
     mode,
     ownerRecoveryToken: validateRecoveryToken(source),
-    publicOrigin: trustedOrigin(env.AGENT_ROOM_PUBLIC_ORIGIN)
+    publicOrigin: trustedOrigin(renamedEnvironmentValue(
+      env,
+      "CONVENE_WIRE_PUBLIC_ORIGIN",
+      "AGENT_ROOM_PUBLIC_ORIGIN"
+    ))
   };
 }
 

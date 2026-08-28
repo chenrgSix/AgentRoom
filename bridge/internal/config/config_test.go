@@ -9,6 +9,18 @@ import (
 	"testing"
 )
 
+func TestRenameKeepsReleasedConfigAndWireIdentifiers(t *testing.T) {
+	if !strings.HasSuffix(DefaultPath(), filepath.Join("agentroom", "bridge.json")) {
+		t.Fatalf("released config path changed: %s", DefaultPath())
+	}
+	if OutputProtocolConveneWireJSONLV1 != "agentroom-jsonl-v1" {
+		t.Fatalf("released output protocol changed: %s", OutputProtocolConveneWireJSONLV1)
+	}
+	if ServerTokenHeader != "X-AgentRoom-Server-Token" {
+		t.Fatalf("released Server Token header changed: %s", ServerTokenHeader)
+	}
+}
+
 func TestLoadValidConfig(t *testing.T) {
 	directory := t.TempDir()
 	workspace := filepath.Join(directory, "repo")
@@ -415,7 +427,7 @@ func TestAgentConfigScopesStructuredOutputProtocolToGenericRuntime(t *testing.T)
 	base := AgentConfig{
 		Name: "Generic", Role: "Worker", Adapter: "generic", RuntimeKind: "generic",
 		Command: []string{"/usr/local/bin/runtime"}, Workspace: t.TempDir(),
-		OutputProtocol: OutputProtocolAgentRoomJSONLV1,
+		OutputProtocol: OutputProtocolConveneWireJSONLV1,
 	}
 	if err := base.validate(); err != nil {
 		t.Fatalf("valid Generic output protocol was rejected: %v", err)

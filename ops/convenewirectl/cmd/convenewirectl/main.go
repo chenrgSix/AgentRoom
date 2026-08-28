@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"agentroom.dev/agentroomctl/internal/controller"
+	"convenewire.dev/convenewirectl/internal/controller"
 )
 
 var version = "development"
@@ -36,7 +36,7 @@ func main() {
 
 func run(ctx context.Context, arguments []string) error {
 	if len(arguments) == 0 {
-		return fmt.Errorf("usage: agentroomctl <install|status|doctor|backup|restore|upgrade|trust-rotation|migrate-public-ca|uninstall|version>")
+		return fmt.Errorf("usage: convenewirectl <install|status|doctor|backup|restore|upgrade|trust-rotation|migrate-public-ca|uninstall|version>")
 	}
 	if arguments[0] == "version" {
 		fmt.Println(version)
@@ -50,7 +50,7 @@ func run(ctx context.Context, arguments []string) error {
 		releaseDir := flags.String("release-dir", defaultReleaseDir(), "extracted checksum-pinned central release")
 		checksums := flags.String("checksums", "", "SHA256SUMS inside the release root")
 		checksumPin := flags.String("checksums-sha256", "", "published SHA-256 of SHA256SUMS")
-		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
 		mode := flags.String("mode", "local", "local or direct_https")
 		tlsProfile := flags.String("tls-profile", "", "direct_https TLS profile: public_ca (default), private_scoped_ca, or manual_ca")
 		domain := flags.String("domain", "localhost", "exact HTTPS host name or IP")
@@ -58,7 +58,7 @@ func run(ctx context.Context, arguments []string) error {
 		httpPort := flags.Int("http-port", 9080, "published HTTP redirect/ACME port")
 		httpsPort := flags.Int("https-port", 9443, "published application HTTPS port")
 		legacyToken := flags.Bool("legacy-server-token", false, "generate a private legacy Bridge Server Token")
-		projectName := flags.String("project-name", "agentroom", "isolated Docker Compose project name")
+		projectName := flags.String("project-name", "agentroom", "stable Docker Compose project identity")
 		if err := flags.Parse(arguments[1:]); err != nil {
 			return err
 		}
@@ -77,7 +77,7 @@ func run(ctx context.Context, arguments []string) error {
 	case "status", "doctor", "backup", "uninstall":
 		flags := flag.NewFlagSet(arguments[0], flag.ContinueOnError)
 		flags.SetOutput(os.Stderr)
-		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
 		if err := flags.Parse(arguments[1:]); err != nil {
 			return err
 		}
@@ -97,19 +97,19 @@ func run(ctx context.Context, arguments []string) error {
 	case "restore":
 		flags := flag.NewFlagSet("restore", flag.ContinueOnError)
 		flags.SetOutput(os.Stderr)
-		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
 		targetName := flags.String("target-name", "", "optional unique staged .sqlite filename")
 		if err := flags.Parse(arguments[1:]); err != nil {
 			return err
 		}
 		if flags.NArg() != 1 {
-			return fmt.Errorf("usage: agentroomctl restore [flags] /absolute/backup.sqlite")
+			return fmt.Errorf("usage: convenewirectl restore [flags] /absolute/backup.sqlite")
 		}
 		return control.Restore(ctx, *dataRoot, flags.Arg(0), *targetName)
 	case "upgrade":
 		flags := flag.NewFlagSet("upgrade", flag.ContinueOnError)
 		flags.SetOutput(os.Stderr)
-		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
 		releaseDir := flags.String("release-dir", "", "target extracted checksum-pinned central release")
 		checksums := flags.String("checksums", "", "SHA256SUMS inside the target release root")
 		checksumPin := flags.String("checksums-sha256", "", "published SHA-256 of target SHA256SUMS")
@@ -125,11 +125,11 @@ func run(ctx context.Context, arguments []string) error {
 		})
 	case "trust-rotation":
 		if len(arguments) < 2 || (arguments[1] != "prepare" && arguments[1] != "activate") {
-			return fmt.Errorf("usage: agentroomctl trust-rotation <prepare|activate> [flags]")
+			return fmt.Errorf("usage: convenewirectl trust-rotation <prepare|activate> [flags]")
 		}
 		flags := flag.NewFlagSet("trust-rotation "+arguments[1], flag.ContinueOnError)
 		flags.SetOutput(os.Stderr)
-		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
 		overlap := flags.String("overlap", "24h", "prepare-only current/next CA overlap from 1h through 720h")
 		if err := flags.Parse(arguments[2:]); err != nil {
 			return err
@@ -154,7 +154,7 @@ func run(ctx context.Context, arguments []string) error {
 	case "migrate-public-ca":
 		flags := flag.NewFlagSet("migrate-public-ca", flag.ContinueOnError)
 		flags.SetOutput(os.Stderr)
-		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
 		if err := flags.Parse(arguments[1:]); err != nil {
 			return err
 		}
@@ -174,7 +174,7 @@ func defaultReleaseDir() string {
 		if filepath.Base(root) == "bin" {
 			root = filepath.Dir(root)
 		}
-		if _, err := os.Stat(filepath.Join(root, "agentroom-central-release.json")); err == nil {
+		if _, err := os.Stat(filepath.Join(root, "convenewire-central-release.json")); err == nil {
 			return root
 		}
 	}

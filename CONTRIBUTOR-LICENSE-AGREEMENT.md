@@ -1,7 +1,7 @@
-# AgentRoom Contributor License Agreement 1.0
+# ConveneWire Contributor License Agreement 1.0
 
 This Contributor License Agreement (the **Agreement**) is between the person or
-entity signing it (the **Contributor**) and the AgentRoom Licensor identified in
+entity signing it (the **Contributor**) and the ConveneWire Licensor identified in
 the repository NOTICE file (the **Project Owner**). It applies only after the
 Contributor and Project Owner execute it in writing. Opening a pull request,
 filing an issue, or participating in a discussion does not by itself execute
@@ -11,7 +11,7 @@ this Agreement.
 
 **Contribution** means code, documentation, designs, tests, assets, or other
 material intentionally submitted by the Contributor for inclusion in
-AgentRoom, excluding material clearly marked in writing as not a contribution.
+ConveneWire, excluding material clearly marked in writing as not a contribution.
 
 ## 2. Copyright License
 
@@ -23,10 +23,10 @@ and otherwise exploit each Contribution in source or object form.
 
 This grant includes the right to:
 
-- publish Contributions under the AgentRoom Community License or any later
-  community license used for a future AgentRoom release;
+- publish Contributions under the ConveneWire Community License or any later
+  community license used for a future ConveneWire release;
 - include Contributions in commercial, enterprise, hosted, cloud, managed, and
-  white-label AgentRoom offerings;
+  white-label ConveneWire offerings;
 - grant separate proprietary or commercial licenses; and
 - combine Contributions with other material and enforce the resulting work.
 
@@ -34,13 +34,13 @@ The Contributor retains ownership of its Contribution and may use it elsewhere.
 
 ## 3. Patent License
 
-The Contributor grants the Project Owner and recipients of AgentRoom a
+The Contributor grants the Project Owner and recipients of ConveneWire a
 perpetual, worldwide, non-exclusive, irrevocable, royalty-free patent license
 under patent claims the Contributor can license that are necessarily infringed
-by the Contribution alone or by its combination with AgentRoom as submitted.
+by the Contribution alone or by its combination with ConveneWire as submitted.
 
 If a recipient initiates patent litigation alleging that a Contribution or
-AgentRoom incorporating it infringes a patent, the patent licenses granted to
+ConveneWire incorporating it infringes a patent, the patent licenses granted to
 that recipient under this section terminate on the filing date.
 
 ## 4. Contributor Representations

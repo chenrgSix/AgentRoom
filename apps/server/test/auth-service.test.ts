@@ -21,7 +21,7 @@ const memberId = "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6";
 const deviceId = "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6";
 
 async function createFixture() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-auth-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-auth-"));
   const databasePath = path.join(directory, "server.sqlite");
   await prepareDatabaseDirectory(databasePath);
   await migrateDatabase(databasePath);

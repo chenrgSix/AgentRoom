@@ -9,7 +9,7 @@ ownership, interfaces, dependencies, failure behavior, and verification.
 When documents disagree, use this order:
 
 1. Accepted ADRs in `docs/adr/`;
-2. `agent_room_network_design_v0.2.md`;
+2. `convenewire_network_design_v0.2.md`;
 3. module documents in this directory;
 4. `docs/TASKS.md` for delivery status, never for architecture;
 5. code and generated API documentation.
@@ -35,7 +35,7 @@ document and the task list in the same commit.
 | WEB | [Web UI](web-ui.md) | Browser presentation state | `apps/web/` | ROOM, REG, TASK, RUN, BRG, SEC |
 | DATA | [Persistence and Recovery](persistence-recovery.md) | Database and projection durability | `apps/server/` | CON |
 | SEC | [Security and Authentication](security-auth.md) | Identity, credentials, authorization | server and Bridge | CON |
-| OPS | [Operations and Deployment](operations-deployment.md) | Central install manifest and lifecycle orchestration | `ops/agentroomctl/`, Compose, deployment scripts | DATA, SEC |
+| OPS | [Operations and Deployment](operations-deployment.md) | Central install manifest and lifecycle orchestration | `ops/convenewirectl/`, Compose, deployment scripts | DATA, SEC |
 | QA | [Testing and Observability](testing-observability.md) | Evidence, telemetry, release gates | `tests/`, `scripts/qa/`, and all modules | all |
 
 ## Dependency Flow

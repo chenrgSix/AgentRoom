@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"agentroom.dev/bridge/internal/workspace"
+	"convenewire.dev/bridge/internal/workspace"
 )
 
 const MaximumSourceBytes = 4 << 20

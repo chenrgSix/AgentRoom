@@ -1,5 +1,5 @@
 import type { ResultProjection, ResultProposal } from
-  "@agent-room/contracts/task-result";
+  "@convene-wire/contracts/task-result";
 
 import type { CoreRepository } from "../data/core-repository.js";
 import type { RunRepository } from "../run/run-repository.js";

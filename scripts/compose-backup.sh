@@ -2,9 +2,14 @@
 set -euo pipefail
 
 repository_root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
-backup_root=${AGENT_ROOM_BACKUP_DIR:-"${repository_root}/backups"}
+if [[ -n "${CONVENE_WIRE_BACKUP_DIR:-}" && -n "${AGENT_ROOM_BACKUP_DIR:-}" &&
+  "${CONVENE_WIRE_BACKUP_DIR}" != "${AGENT_ROOM_BACKUP_DIR}" ]]; then
+  echo "CONVENE_WIRE_BACKUP_DIR conflicts with legacy AGENT_ROOM_BACKUP_DIR" >&2
+  exit 1
+fi
+backup_root=${CONVENE_WIRE_BACKUP_DIR:-${AGENT_ROOM_BACKUP_DIR:-"${repository_root}/backups"}}
 timestamp=$(date -u +%Y%m%dT%H%M%SZ)
-backup_name="agent-room-${timestamp}.sqlite"
+backup_name="convene-wire-${timestamp}.sqlite"
 host_backup="${backup_root}/${backup_name}"
 temporary_backup=""
 
@@ -22,7 +27,7 @@ fi
 
 mkdir -p "${backup_root}"
 chmod 0700 "${backup_root}"
-temporary_backup=$(mktemp "${backup_root}/.agent-room-backup.XXXXXX")
+temporary_backup=$(mktemp "${backup_root}/.convene-wire-backup.XXXXXX")
 
 cd "${repository_root}"
 docker compose exec -T agentroom \

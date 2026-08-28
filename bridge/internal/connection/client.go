@@ -18,13 +18,13 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/identity"
-	"agentroom.dev/bridge/internal/operations"
-	"agentroom.dev/bridge/internal/pairing"
-	bridgeruntime "agentroom.dev/bridge/internal/runtime"
-	"agentroom.dev/bridge/internal/workspace"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/identity"
+	"convenewire.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/pairing"
+	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	"convenewire.dev/bridge/internal/workspace"
+	contracts "convenewire.dev/contracts/generated/go"
 	"github.com/coder/websocket"
 )
 

@@ -19,7 +19,7 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 const now = "2026-08-22T10:00:00.000Z";
 
 test("MCP Agent handoff creates a bounded child and rejects lineage loops", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-handoff-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-handoff-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

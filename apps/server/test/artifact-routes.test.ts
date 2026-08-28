@@ -29,7 +29,7 @@ const workspaceRef = `workspace_${"a".repeat(64)}`;
 const workspaceGeneration = "b".repeat(64);
 
 test("Bridge HTTP publication binds bytes without exposing local storage", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-artifact-http-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-artifact-http-"));
   const databasePath = path.join(directory, "server.sqlite");
   const blobRoot = path.join(directory, "private-artifact-blobs");
   const app = await createServerApp({

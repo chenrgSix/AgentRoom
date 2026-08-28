@@ -14,7 +14,7 @@ import { TeamRoomService } from "../src/team-room/team-room-service.js";
 const now = "2026-08-22T10:00:00.000Z";
 
 test("Room Message pagination remains ordered after a database restart", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-message-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-message-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   let database = openDatabase(databasePath);
@@ -81,7 +81,7 @@ test("Room Message pagination remains ordered after a database restart", async (
 });
 
 test("Room Message tail snapshot resumes after the newest message", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-tail-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-tail-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
@@ -147,7 +147,7 @@ test("Room Message tail snapshot resumes after the newest message", async () => 
 });
 
 test("Room policy rejects only the exact reserved @all command", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-all-policy-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-all-policy-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
@@ -195,7 +195,7 @@ test("Room policy rejects only the exact reserved @all command", async () => {
 });
 
 test("a client Message ID makes ambiguous member retries idempotent", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-client-message-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-client-message-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

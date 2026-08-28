@@ -25,7 +25,7 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 const now = "2026-08-22T10:00:00.000Z";
 
 test("server restart preserves Run, Delivery, and contiguous event authority", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-recovery-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-recovery-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   let database = openDatabase(databasePath);
@@ -123,7 +123,7 @@ test("server restart preserves Run, Delivery, and contiguous event authority", a
 });
 
 test("server restart completes a partially routed Agent reply exactly once", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-reply-routing-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-reply-routing-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   let database = openDatabase(databasePath);

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agent Room Bridge</title>
+  <title>ConveneWire Bridge</title>
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
@@ -11,7 +11,7 @@
     <aside class="sidebar hidden" id="app-sidebar">
       <div class="sidebar-brand">
         <span class="brand-mark" aria-hidden="true">AR</span>
-        <div><strong>AgentRoom</strong><small>Bridge</small></div>
+        <div><strong>ConveneWire</strong><small>Bridge</small></div>
       </div>
       <nav class="sidebar-nav" aria-label="Bridge 页面">
         <button class="nav-item active" type="button" data-page-target="overview" aria-current="page">
@@ -192,7 +192,7 @@
                 <input id="login-startup" type="checkbox">
                 <span><strong>登录后自动启动</strong><small>只启动托盘和已配对 Bridge，不保存凭据。</small></span>
               </label>
-              <p class="tool-result hidden" id="login-startup-unsupported">当前系统暂不支持登录后自动启动，请手动打开 AgentRoom Bridge。</p>
+              <p class="tool-result hidden" id="login-startup-unsupported">当前系统暂不支持登录后自动启动，请手动打开 ConveneWire Bridge。</p>
               <p class="inline-error hidden" id="login-startup-warning"></p>
               <div class="maintenance-actions">
                 <div>
@@ -300,7 +300,7 @@
           <p class="eyebrow">03 · DEVICE PAIRING</p><h2>配对这台设备</h2>
           <p>粘贴中央 Web 生成的配对链接，或输入二维码下方的短码。确认短语一致后由 Owner 批准。</p>
           <label>Device 配对链接
-            <input id="device-pairing-link" autocomplete="off" placeholder="agentroom://pair-device?…#claimSecret=…">
+            <input id="device-pairing-link" autocomplete="off" placeholder="convenewire://pair-device?…#claimSecret=…">
           </label>
           <label>或手动短码
             <input id="device-pairing-short-code" autocomplete="off" maxlength="12" placeholder="BCDF-GHJK-MN">
@@ -428,7 +428,7 @@
 
     <dialog class="agent-modal session-guide-dialog" id="codex-session-guide" aria-labelledby="codex-session-guide-title" aria-describedby="codex-session-guide-summary">
       <div class="section-heading">
-        <div><p class="eyebrow">AGENTROOM BRIDGE GUIDE</p><h2 id="codex-session-guide-title">AgentRoom Bridge 使用说明</h2></div>
+        <div><p class="eyebrow">CONVENEWIRE BRIDGE GUIDE</p><h2 id="codex-session-guide-title">ConveneWire Bridge 使用说明</h2></div>
         <button class="icon-button" id="close-codex-session-guide" type="button" aria-label="关闭使用说明">×</button>
       </div>
       <div class="guide-callout" id="codex-session-guide-summary">
@@ -440,18 +440,18 @@
         <ol class="guide-steps">
           <li>在“概览”确认 Bridge 正在运行，并查看中央服务是否已连接。</li>
           <li>在“本机 Agent”检查 Runtime、工作区和文件策略；测试或修改配置需要在本机明确操作。</li>
-          <li>在中央 AgentRoom 中提及对应 Agent 即可分配任务；Bridge 会在本机执行并返回结果。</li>
+          <li>在中央 ConveneWire 中提及对应 Agent 即可分配任务；Bridge 会在本机执行并返回结果。</li>
           <li>连接、隐私、配对恢复、更新和诊断入口都集中在“设置”。</li>
         </ol>
       </section>
       <section class="guide-section" aria-labelledby="codex-session-overview-title">
         <h3 id="codex-session-overview-title">Codex 会话说明</h3>
-        <p>AgentRoom Bridge 与 Codex Desktop/CLI 各自运行本地 App Server；当前 AgentRoom 版本没有启用共享 daemon。App Server 能接受多个连接，不代表 Desktop 已配置为连接 Bridge 的进程。</p>
+        <p>ConveneWire Bridge 与 Codex Desktop/CLI 各自运行本地 App Server；当前 ConveneWire 版本没有启用共享 daemon。App Server 能接受多个连接，不代表 Desktop 已配置为连接 Bridge 的进程。</p>
       </section>
       <section class="guide-section" aria-labelledby="codex-session-terms-title">
         <h3 id="codex-session-terms-title">先分清三个概念</h3>
         <dl class="guide-terms">
-          <div><dt>Task</dt><dd>AgentRoom 中持续协作的上下文。切换 Task 会隔离会话。</dd></div>
+          <div><dt>Task</dt><dd>ConveneWire 中持续协作的上下文。切换 Task 会隔离会话。</dd></div>
           <div><dt>Run</dt><dd>每次提及智能体触发的一次执行。同一 Task 可以有多个 Run。</dd></div>
           <div><dt>Codex 会话</dt><dd>Bridge 在本机保存并尝试恢复的底层执行上下文；一条消息不等于一个新会话。</dd></div>
         </dl>
@@ -462,7 +462,7 @@
       </section>
       <section class="guide-section" aria-labelledby="codex-session-errors-title">
         <h3 id="codex-session-errors-title">遇到会话错误怎么办</h3>
-        <p>每个本机 Codex Agent 都可以选择会话占用策略。“保留原会话”维持底层上下文并等待重试；“新建会话”只在 Bridge 明确识别到另一个客户端持有会话时生效。旧 Codex 会话不会被删除，但 AgentRoom 后续执行会切换到新的会话并重新注入当前 Task 上下文。</p>
+        <p>每个本机 Codex Agent 都可以选择会话占用策略。“保留原会话”维持底层上下文并等待重试；“新建会话”只在 Bridge 明确识别到另一个客户端持有会话时生效。旧 Codex 会话不会被删除，但 ConveneWire 后续执行会切换到新的会话并重新注入当前 Task 上下文。</p>
         <div class="guide-code-list">
           <p><code>CODEX_SESSION_IN_USE</code><span>另一个本机客户端正在持有该会话，且当前策略选择保留原绑定。可以等待后重试。</span></p>
           <p><code>CODEX_SESSION_RESUME_FAILED</code><span>恢复被拒绝，但 Bridge 无法安全判断为会话缺失。可以重试；Bridge 不会创建替代会话。</span></p>
@@ -470,7 +470,7 @@
         <ol class="guide-steps">
           <li>先等待 Codex Desktop 或 CLI 中相关操作结束。</li>
           <li>仍提示占用时，完全退出持有该会话的 Desktop 或 CLI 进程。</li>
-          <li>回到原 AgentRoom Task 重试，不要为了绕过错误新建 Task 或修改工作区、沙箱。</li>
+          <li>回到原 ConveneWire Task 重试，不要为了绕过错误新建 Task 或修改工作区、沙箱。</li>
           <li>恢复失败持续出现时，在“客户端维护”中导出脱敏诊断包再排查；不要手动删除本机会话。</li>
         </ol>
       </section>

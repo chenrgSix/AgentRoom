@@ -10,7 +10,7 @@ repository_root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 source_directory=$(CDPATH= cd -- "$(dirname -- "$1")" && pwd)
 source_name=$(basename -- "$1")
 source_path="${source_directory}/${source_name}"
-target_name=${2:-"agent-room-restore-$(date -u +%Y%m%dT%H%M%SZ).sqlite"}
+target_name=${2:-"convene-wire-restore-$(date -u +%Y%m%dT%H%M%SZ).sqlite"}
 
 if [[ ! -f "${source_path}" ]]; then
   echo "Backup does not exist: ${source_path}" >&2
@@ -82,5 +82,5 @@ docker compose run --rm --no-deps -T --user root \
     });
   ' /restore/source.sqlite "/data/${target_name}"
 
-printf 'Set AGENT_ROOM_DATABASE_PATH=/data/%s, then run docker compose up -d.\n' \
+printf 'Set CONVENE_WIRE_DATABASE_PATH=/data/%s, then run docker compose up -d.\n' \
   "${target_name}"

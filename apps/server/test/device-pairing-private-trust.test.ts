@@ -6,7 +6,7 @@ import test from "node:test";
 
 import type {
   DevicePairingPrivateTrustDescriptor
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 
 import { createServerApp } from "../src/app.js";
 import {
@@ -80,7 +80,7 @@ function responseCookie(response: { headers: Record<string, unknown> }): string 
 }
 
 test("private pairing snapshots controller trust and requires an exact capable echo", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-private-trust-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-private-trust-"));
   const trustPath = path.join(directory, "deployment-trust.json");
   await writeFile(trustPath, trustFileValue(), { mode: 0o644 });
   const app = await createServerApp({
@@ -237,7 +237,7 @@ test("deployment trust parsing rejects tampering, extra fields, and origin misma
     /does not match/u
   );
 
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-trust-file-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-trust-file-"));
   const trustPath = path.join(directory, "deployment-trust.json");
   await writeFile(trustPath, trustFileValue(), { mode: 0o644 });
   const provider = createDeploymentTrustProvider(trustPath, publicOrigin);
@@ -247,7 +247,7 @@ test("deployment trust parsing rejects tampering, extra fields, and origin misma
 });
 
 test("authenticated private Device receives and idempotently acknowledges one next CA", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-private-rotation-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-private-rotation-"));
   const trustPath = path.join(directory, "deployment-trust.json");
   const rotationPath = path.join(directory, "deployment-trust-rotation.json");
   await writeFile(trustPath, trustFileValue(), { mode: 0o644 });
@@ -385,7 +385,7 @@ test("authenticated private Device receives and idempotently acknowledges one ne
 });
 
 test("public pairing rejects an unsolicited private trust descriptor", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-public-pairing-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-public-pairing-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => now

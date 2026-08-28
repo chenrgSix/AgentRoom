@@ -8,8 +8,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"agentroom.dev/bridge/internal/config"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 const maxRuntimeOutput = 20_000
@@ -25,7 +25,7 @@ func (g GenericAdapter) Name() string { return "generic" }
 
 func (g GenericAdapter) Capabilities() Capabilities {
 	return Capabilities{
-		SupportsStreaming: g.Config.OutputProtocol == config.OutputProtocolAgentRoomJSONLV1,
+		SupportsStreaming: g.Config.OutputProtocol == config.OutputProtocolConveneWireJSONLV1,
 		SupportsInterrupt: true,
 	}
 }
@@ -42,7 +42,7 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 	if err := emit(ctx, Event{Status: &working}); err != nil {
 		return err
 	}
-	if g.Config.OutputProtocol == config.OutputProtocolAgentRoomJSONLV1 {
+	if g.Config.OutputProtocol == config.OutputProtocolConveneWireJSONLV1 {
 		return g.executeStructured(ctx, request, emit)
 	}
 	runContext := ctx
@@ -138,8 +138,8 @@ func allowedEnvironment(allowlist []string) []string {
 	return environment
 }
 
-func runtimeError(code, message string) *contracts.AgentRoomError {
-	return &contracts.AgentRoomError{
+func runtimeError(code, message string) *contracts.ConveneWireError {
+	return &contracts.ConveneWireError{
 		Code: code, Message: message, Retryable: false,
 	}
 }
@@ -148,7 +148,7 @@ func runtimeErrorWithDetails(
 	code string,
 	message string,
 	details map[string]interface{},
-) *contracts.AgentRoomError {
+) *contracts.ConveneWireError {
 	errorValue := runtimeError(code, message)
 	errorValue.Details = details
 	return errorValue

@@ -1,7 +1,7 @@
 package console
 
 import (
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 	"fmt"
 )
 

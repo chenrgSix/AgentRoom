@@ -19,7 +19,7 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 const now = "2026-08-28T16:00:00.000Z";
 
 test("Device-authenticated managed Result proposal is explicit and idempotent", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-result-http-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-result-http-"));
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({ databasePath, clock: () => now, logger: false });
   const database = openDatabase(databasePath);

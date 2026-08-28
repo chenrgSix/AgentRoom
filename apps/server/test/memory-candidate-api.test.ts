@@ -65,7 +65,7 @@ async function waitForPendingCandidates(
 }
 
 test("Members atomically accept or reject non-authoritative memory candidates", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-candidate-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-candidate-"));
   let defaultTaskId = "";
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),

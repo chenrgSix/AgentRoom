@@ -12,8 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"agentroom.dev/bridge/internal/config"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 const maxCodexProtocolOutput = 4 * 1024 * 1024
@@ -120,7 +120,7 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	if err := write(map[string]any{
 		"id": 1, "method": "initialize",
 		"params": map[string]any{"clientInfo": map[string]string{
-			"name": "agentroom_bridge", "title": "AgentRoom Bridge", "version": "0.2",
+			"name": "convenewire_bridge", "title": "ConveneWire Bridge", "version": "0.2",
 		}},
 	}); err != nil {
 		cancelProcess()
@@ -386,7 +386,7 @@ func (p *codexAppServerParser) consume(source []byte) (*OutputDelta, []any, erro
 		return nil, []any{map[string]any{
 			"id": requestID,
 			"error": map[string]any{
-				"code": -32601, "message": "AgentRoom Bridge cannot answer interactive Codex requests",
+				"code": -32601, "message": "ConveneWire Bridge cannot answer interactive Codex requests",
 			},
 		}}, nil
 	}

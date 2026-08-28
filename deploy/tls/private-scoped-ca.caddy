@@ -1,10 +1,10 @@
 tls {
 	issuer internal {
-		ca {$AGENT_ROOM_PRIVATE_CA_ID:local}
+		ca {$CONVENE_WIRE_PRIVATE_CA_ID:local}
 	}
 }
 
-handle /.well-known/agentroom/bridge-ca.pem {
+handle /.well-known/convenewire/bridge-ca.pem {
 	rewrite * /bridge-ca.pem
 	root * /run/agentroom/trust
 	header Content-Type application/x-pem-file

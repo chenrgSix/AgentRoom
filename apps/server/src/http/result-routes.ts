@@ -1,7 +1,7 @@
 import type {
   ResultProposal,
   ResultReviewCommand
-} from "@agent-room/contracts/task-result";
+} from "@convene-wire/contracts/task-result";
 
 import {
   bodyObject,

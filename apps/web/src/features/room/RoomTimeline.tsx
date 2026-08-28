@@ -90,7 +90,7 @@ export function RoomTimeline({
           ? agentsById.get(message.senderId)?.name ?? t("agent")
           : message.senderType === "member"
             ? membersById.get(message.senderId)?.displayName ?? session?.displayName ?? ""
-            : "Agent Room";
+            : "ConveneWire";
         const avatarLabel = senderName.trim().slice(0, 1).toLocaleUpperCase(locale) || "A";
         const messageRuns = runs.filter(
           (run) => run.triggerMessageId === message.messageId

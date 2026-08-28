@@ -106,43 +106,47 @@ export class OperationalMetrics {
   public renderPrometheus(): string {
     const snapshot = this.snapshot();
     const lines = [
-      "# HELP agentroom_up Whether the central service database is ready.",
-      "# TYPE agentroom_up gauge",
-      `agentroom_up ${this.databaseReady() ? 1 : 0}`,
-      "# HELP agentroom_bridge_connections Active authenticated Bridge connections.",
-      "# TYPE agentroom_bridge_connections gauge",
-      `agentroom_bridge_connections ${snapshot.activeBridgeConnections}`,
-      "# HELP agentroom_managed_agents Enabled managed Agents.",
-      "# TYPE agentroom_managed_agents gauge",
-      `agentroom_managed_agents ${snapshot.managedAgents}`,
-      "# HELP agentroom_run_queue_depth Runs waiting for a Runtime delivery.",
-      "# TYPE agentroom_run_queue_depth gauge",
-      `agentroom_run_queue_depth ${snapshot.queueDepth}`,
-      "# HELP agentroom_delivery_pending Pending durable deliveries for queued Runs.",
-      "# TYPE agentroom_delivery_pending gauge",
-      `agentroom_delivery_pending ${snapshot.pendingDeliveries}`,
-      "# HELP agentroom_delivery_oldest_age_seconds Age of the oldest pending delivery.",
-      "# TYPE agentroom_delivery_oldest_age_seconds gauge",
-      `agentroom_delivery_oldest_age_seconds ${snapshot.oldestPendingDeliveryAgeSeconds}`,
-      "# HELP agentroom_delivery_retries_total Durable delivery sends after the first attempt.",
-      "# TYPE agentroom_delivery_retries_total counter",
-      `agentroom_delivery_retries_total ${snapshot.deliveryRetries}`,
-      "# HELP agentroom_run_event_lag_seconds Age of the latest event on active Runs.",
-      "# TYPE agentroom_run_event_lag_seconds gauge",
-      `agentroom_run_event_lag_seconds ${snapshot.runEventLagSeconds}`
+      "# HELP convenewire_up Whether the central service database is ready.",
+      "# TYPE convenewire_up gauge",
+      `convenewire_up ${this.databaseReady() ? 1 : 0}`,
+      "# HELP convenewire_bridge_connections Active authenticated Bridge connections.",
+      "# TYPE convenewire_bridge_connections gauge",
+      `convenewire_bridge_connections ${snapshot.activeBridgeConnections}`,
+      "# HELP convenewire_managed_agents Enabled managed Agents.",
+      "# TYPE convenewire_managed_agents gauge",
+      `convenewire_managed_agents ${snapshot.managedAgents}`,
+      "# HELP convenewire_run_queue_depth Runs waiting for a Runtime delivery.",
+      "# TYPE convenewire_run_queue_depth gauge",
+      `convenewire_run_queue_depth ${snapshot.queueDepth}`,
+      "# HELP convenewire_delivery_pending Pending durable deliveries for queued Runs.",
+      "# TYPE convenewire_delivery_pending gauge",
+      `convenewire_delivery_pending ${snapshot.pendingDeliveries}`,
+      "# HELP convenewire_delivery_oldest_age_seconds Age of the oldest pending delivery.",
+      "# TYPE convenewire_delivery_oldest_age_seconds gauge",
+      `convenewire_delivery_oldest_age_seconds ${snapshot.oldestPendingDeliveryAgeSeconds}`,
+      "# HELP convenewire_delivery_retries_total Durable delivery sends after the first attempt.",
+      "# TYPE convenewire_delivery_retries_total counter",
+      `convenewire_delivery_retries_total ${snapshot.deliveryRetries}`,
+      "# HELP convenewire_run_event_lag_seconds Age of the latest event on active Runs.",
+      "# TYPE convenewire_run_event_lag_seconds gauge",
+      `convenewire_run_event_lag_seconds ${snapshot.runEventLagSeconds}`
     ];
     for (const [state, count] of Object.entries(snapshot.runOutcomes)) {
-      lines.push(`agentroom_runs{state="${state}"} ${count}`);
+      lines.push(`convenewire_runs{state="${state}"} ${count}`);
     }
     for (const [presence, count] of Object.entries(snapshot.agentPresence)) {
-      lines.push(`agentroom_agents{presence="${presence}"} ${count}`);
+      lines.push(`convenewire_agents{presence="${presence}"} ${count}`);
     }
     for (const [key, count] of [...this.httpRequests.entries()].sort()) {
       const [method, statusClass] = key.split("|");
       lines.push(
-        `agentroom_http_requests_total{method="${method}",status_class="${statusClass}"} ${count}`
+        `convenewire_http_requests_total{method="${method}",status_class="${statusClass}"} ${count}`
       );
     }
-    return `${lines.join("\n")}\n`;
+    const legacyLines = lines.map((line) => line.replaceAll(
+      "convenewire_",
+      "agentroom_"
+    ));
+    return `${[...lines, ...legacyLines].join("\n")}\n`;
   }
 }

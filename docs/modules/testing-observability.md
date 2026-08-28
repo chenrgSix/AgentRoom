@@ -273,7 +273,7 @@ messages are never log fields.
 
 | Failure | Dashboard signal | Default interpretation |
 | --- | --- | --- |
-| Database unavailable | readiness `503`, `agentroom_up 0` | page immediately |
+| Database unavailable | readiness `503`, `convenewire_up 0` | page immediately |
 | Managed Bridge absent | health `degraded`, zero Bridge connections | investigate connectivity |
 | Queue not draining | queue depth plus oldest delivery age rising | investigate routing/Bridge |
 | Delivery instability | delivery retry total rising | investigate ACK/network loss |
@@ -314,7 +314,7 @@ container logs, CI rendering, first setup, health, troubleshooting, upgrades,
 safe stop, off-host backup expectations, and version-aligned rollback without
 claiming public ACME or high-availability evidence.
 
-An AgentRoom release begins as an empty draft candidate and builds from the
+A ConveneWire release begins as an empty draft candidate and builds from the
 exact requested tag. The workflow requires five Bridge CLI archives, two native
 macOS GUI archives, one native Windows GUI preview archive, one Windows
 current-user installer, four Central archives, four separately published
@@ -405,7 +405,7 @@ candidate was published as a prerelease, and a fresh public download passed
 the tag's committed verifier. The stable Latest release remains `v0.2.0`, and
 the separate real-login and two-physical-machine gates remain open.
 
-The `v0.3.0-rc.4` candidate admits the AgentRoom Community License 1.0 and the
+The `v0.3.0-rc.4` candidate admits the ConveneWire Community License 1.0 and the
 platform-aware Windows Runtime launcher repair. The release evidence is
 recorded in `docs/acceptance/qa-025-v0.3.0-rc.4.md`. `QA-025` is complete
 because the exact tagged source passed main CI including the native Windows

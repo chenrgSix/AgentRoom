@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentroom.dev/schemas/work/task-result.schema.json",
-  "title": "AgentRoom Task, Run, Result, and Workbench Contracts",
+  "title": "ConveneWire Task, Run, Result, and Workbench Contracts",
   "description": "Closed cross-boundary work-model contracts. These objects carry no local path, command, environment, provider credential, or mutable display identity authority.",
   "$ref": "#/$defs/resultProposal",
   "$defs": {

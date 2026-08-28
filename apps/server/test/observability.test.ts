@@ -9,7 +9,7 @@ import { createServerApp } from "../src/app.js";
 const now = "2026-08-23T10:00:00.000Z";
 
 test("health and metrics expose safe operational failure signals", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-ops-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-ops-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => now
@@ -64,6 +64,15 @@ test("health and metrics expose safe operational failure signals", async () => {
     const metrics = await app.inject({ method: "GET", url: "/api/metrics" });
     assert.equal(metrics.statusCode, 200);
     assert.match(metrics.headers["content-type"] ?? "", /text\/plain/u);
+    assert.match(metrics.body, /^convenewire_up 1$/mu);
+    assert.match(metrics.body, /^convenewire_bridge_connections 0$/mu);
+    assert.match(metrics.body, /^convenewire_managed_agents 0$/mu);
+    assert.match(metrics.body, /^convenewire_run_queue_depth 1$/mu);
+    assert.match(metrics.body, /^convenewire_runs\{state="queued"\} 1$/mu);
+    assert.match(
+      metrics.body,
+      /^convenewire_http_requests_total\{method="GET",status_class="4xx"\} 1$/mu
+    );
     assert.match(metrics.body, /^agentroom_up 1$/mu);
     assert.match(metrics.body, /^agentroom_bridge_connections 0$/mu);
     assert.match(metrics.body, /^agentroom_managed_agents 0$/mu);

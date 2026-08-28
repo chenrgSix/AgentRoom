@@ -13,8 +13,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"agentroom.dev/bridge/internal/config"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 const maxPiProtocolOutput = 512 * 1024
@@ -371,6 +371,8 @@ func piSessionID(key RuntimeSessionKey, seed string) string {
 		Key  RuntimeSessionKey `json:"key"`
 		Seed string            `json:"seed"`
 	}{Key: key, Seed: seed})
+	// This namespace contributes to persisted Pi session IDs and must survive
+	// display-name changes.
 	digest := sha256.Sum256(append([]byte("agentroom/pi/v2\x00"), encoded...))
 	digest[6] = (digest[6] & 0x0f) | 0x50
 	digest[8] = (digest[8] & 0x3f) | 0x80
@@ -394,7 +396,7 @@ func piSessionName(run contracts.RunRequestedPayload) string {
 		name = strings.Join(strings.Fields(*run.TargetAgentName), " ")
 	}
 	roomDigest := sha256.Sum256([]byte(run.RoomID))
-	value := fmt.Sprintf("AgentRoom · %s · %x", name, roomDigest[:4])
+	value := fmt.Sprintf("ConveneWire · %s · %x", name, roomDigest[:4])
 	runes := []rune(value)
 	if len(runes) > 120 {
 		value = string(runes[:120])

@@ -1,5 +1,5 @@
 import type { AgentProvisionRequestedMessage } from
-  "@agent-room/contracts/bridge-messages";
+  "@convene-wire/contracts/bridge-messages";
 
 import { createOpaqueId } from "../domain/identifiers.js";
 import { FakeRuntimeAdapter } from "../runtime/fake-runtime-adapter.js";

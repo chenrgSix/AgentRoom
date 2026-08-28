@@ -10,7 +10,7 @@ import { backupDatabase } from "../src/data/backup.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
 
 test("verified SQLite backup restores an acceptance marker", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-backup-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-backup-"));
   const source = path.join(directory, "server.sqlite");
   const backup = path.join(directory, "backups", "acceptance.sqlite");
   await migrateDatabase(source);

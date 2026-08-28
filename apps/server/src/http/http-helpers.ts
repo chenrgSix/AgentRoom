@@ -5,6 +5,7 @@ import {
   type IssuedCredential
 } from "../security/auth-service.js";
 
+// Keep the released cookie name so the product rename does not sign Owners out.
 export const trustedSessionCookie = "__Host-agentroom_session";
 export const unsafeHttpMethods = new Set(["DELETE", "PATCH", "POST", "PUT"]);
 

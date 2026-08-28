@@ -1,9 +1,9 @@
 {
-  "name": "@agent-room/web",
+  "name": "@convene-wire/web",
   "version": "0.1.0",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
-  "description": "Browser Team and Room interface for Agent Room Network",
+  "description": "Browser Team and Room interface for ConveneWire",
   "type": "module",
   "scripts": {
     "build": "tsc --noEmit && vite build",
@@ -11,7 +11,7 @@
     "test": "tsx --test test/**/*.test.tsx && tsc --noEmit"
   },
   "dependencies": {
-    "@agent-room/contracts": "0.1.0",
+    "@convene-wire/contracts": "0.1.0",
     "qrcode": "1.5.4",
     "react": "19.2.8",
     "react-dom": "19.2.8",

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 const defaultPreviewSafetyRunes = 64

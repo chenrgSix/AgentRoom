@@ -25,8 +25,8 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	pairingcontracts "agentroom.dev/contracts/generated/go/pairing"
+	"convenewire.dev/bridge/internal/config"
+	pairingcontracts "convenewire.dev/contracts/generated/go/pairing"
 )
 
 type privateTLSServer struct {
@@ -44,7 +44,7 @@ func newPrivateTLSServer(t *testing.T, handler http.Handler) privateTLSServer {
 		t.Fatal(err)
 	}
 	caTemplate := &x509.Certificate{
-		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "AgentRoom test CA"},
+		SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "ConveneWire test CA"},
 		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour),
 		IsCA: true, BasicConstraintsValid: true,
 		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign,

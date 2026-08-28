@@ -91,7 +91,7 @@ function seed(core: CoreRepository): void {
 }
 
 test("Discussion aggregate versions fence duplicate turn scheduling", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-discussion-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-discussion-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
@@ -179,7 +179,7 @@ test("Discussion aggregate versions fence duplicate turn scheduling", async () =
 });
 
 test("Discussion decisions are atomic with aggregate updates", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-decision-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-decision-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
@@ -274,7 +274,7 @@ test("Discussion decisions are atomic with aggregate updates", async () => {
 });
 
 test("parallel Wave planning, settlement, and Barrier advancement are atomic", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-wave-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-wave-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
@@ -619,7 +619,7 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
 });
 
 test("Run orchestration keys provide a unique durable lookup", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-run-key-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-run-key-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

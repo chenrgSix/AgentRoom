@@ -35,7 +35,7 @@ jobs:
           cache-dependency-path: |
             bridge/go.sum
             packages/contracts/go.sum
-            ops/agentroomctl/go.mod
+            ops/convenewirectl/go.mod
 
       - name: Install locked dependencies
         run: npm ci
@@ -60,9 +60,9 @@ jobs:
 
       - name: Validate central Compose deployment
         env:
-          AGENT_ROOM_DOMAIN: team.example.com
-          AGENT_ROOM_PUBLIC_ORIGIN: https://team.example.com:9443
-          AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE: ./deploy/secrets/owner_recovery_token
+          CONVENE_WIRE_DOMAIN: team.example.com
+          CONVENE_WIRE_PUBLIC_ORIGIN: https://team.example.com:9443
+          CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: ./deploy/secrets/owner_recovery_token
         run: |
           npm run test:compose
           bash -n scripts/compose-backup.sh
@@ -83,7 +83,7 @@ jobs:
           cache-dependency-path: |
             bridge/go.sum
             packages/contracts/go.sum
-            ops/agentroomctl/go.mod
+            ops/convenewirectl/go.mod
 
       - name: Test and vet Go contracts
         working-directory: packages/contracts
@@ -98,11 +98,11 @@ jobs:
           go vet ./...
 
       - name: Test, vet, and build central controller
-        working-directory: ops/agentroomctl
+        working-directory: ops/convenewirectl
         run: |
           go test ./...
           go vet ./...
-          go build ./cmd/agentroomctl
+          go build ./cmd/convenewirectl
           bash -n scripts/package-central-release.sh
           bash -n scripts/verify-central-release.sh
 
@@ -114,10 +114,10 @@ jobs:
         run: |
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             GOOS=${target%/*} GOARCH=${target#*/} \
-              ./ops/agentroomctl/scripts/package-central-release.sh
+              ./ops/convenewirectl/scripts/package-central-release.sh
           done
           ASSET_DIR="${OUTPUT_DIR}" \
-            ./ops/agentroomctl/scripts/verify-central-release.sh
+            ./ops/convenewirectl/scripts/verify-central-release.sh
 
       - name: Check Bridge release scripts
         run: |
@@ -144,9 +144,9 @@ jobs:
       - name: Test, vet, and build desktop shell
         working-directory: bridge
         run: |
-          go test -tags desktop ./cmd/agentroom-bridge-desktop
-          go vet -tags desktop ./cmd/agentroom-bridge-desktop
-          go build -tags desktop ./cmd/agentroom-bridge-desktop
+          go test -tags desktop ./cmd/convenewire-bridge-desktop
+          go vet -tags desktop ./cmd/convenewire-bridge-desktop
+          go build -tags desktop ./cmd/convenewire-bridge-desktop
 
   desktop-windows:
     name: Desktop Windows
@@ -168,24 +168,24 @@ jobs:
         working-directory: bridge
         shell: pwsh
         run: |
-          $outputDir = Join-Path $env:RUNNER_TEMP "agentroom-desktop-windows"
+          $outputDir = Join-Path $env:RUNNER_TEMP "convenewire-desktop-windows"
           go test ./... -run Windows
-          go test -tags desktop ./cmd/agentroom-bridge-desktop
-          go vet -tags desktop ./cmd/agentroom-bridge-desktop
+          go test -tags desktop ./cmd/convenewire-bridge-desktop
+          go vet -tags desktop ./cmd/convenewire-bridge-desktop
           ./scripts/package-desktop-windows.ps1 `
             -ReleaseTag v0.0.0-ci `
             -GoArch amd64 `
             -OutputDir $outputDir
           ./scripts/verify-desktop-windows-installer.ps1 `
             -ReleaseTag v0.0.0-ci `
-            -InstallerPath (Join-Path $outputDir "agentroom-bridge-desktop_0.0.0-ci_windows_amd64_setup.exe")
+            -InstallerPath (Join-Path $outputDir "convenewire-bridge-desktop_0.0.0-ci_windows_amd64_setup.exe")
 
       - name: Upload Windows package smoke artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: agentroom-bridge-desktop-windows-ci
+          name: convenewire-bridge-desktop-windows-ci
           path: |
-            ${{ runner.temp }}/agentroom-desktop-windows/*.zip
-            ${{ runner.temp }}/agentroom-desktop-windows/*_setup.exe
+            ${{ runner.temp }}/convenewire-desktop-windows/*.zip
+            ${{ runner.temp }}/convenewire-desktop-windows/*_setup.exe
           if-no-files-found: error
           retention-days: 3

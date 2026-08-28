@@ -16,9 +16,9 @@ import (
 	"sync"
 	"testing"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/pairing"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/pairing"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type downloadServer struct {
@@ -323,7 +323,7 @@ func TestMaterializerRejectsNonRegularPartialFile(t *testing.T) {
 		t.Skip("Unix-domain socket fixture is not portable to Windows")
 	}
 	download := newDownloadServer(t, []byte("verified source"))
-	dataDir, err := os.MkdirTemp("/tmp", "agentroom-materializer-")
+	dataDir, err := os.MkdirTemp("/tmp", "convenewire-materializer-")
 	if err != nil {
 		t.Fatal(err)
 	}

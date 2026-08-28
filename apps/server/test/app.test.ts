@@ -9,7 +9,7 @@ import { createServerApp } from "../src/app.js";
 const now = "2026-08-22T10:00:00.000Z";
 
 test("local Web API bootstraps a user and manages authorized Teams and Rooms", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-api-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-api-"));
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({
     databasePath,

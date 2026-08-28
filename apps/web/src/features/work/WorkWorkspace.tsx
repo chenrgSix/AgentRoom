@@ -1,4 +1,4 @@
-import type { WorkbenchPage } from "@agent-room/contracts/task-result";
+import type { WorkbenchPage } from "@convene-wire/contracts/task-result";
 import React from "react";
 
 import type { Locale } from "../../i18n.js";

@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/identity"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/identity"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type ReplaceConfig func(string, config.Config) error

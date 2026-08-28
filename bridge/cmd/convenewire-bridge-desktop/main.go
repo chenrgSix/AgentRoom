@@ -15,15 +15,15 @@ import (
 	"strings"
 	"time"
 
-	"agentroom.dev/bridge/internal/autostart"
-	"agentroom.dev/bridge/internal/bridgecore"
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/connection"
-	"agentroom.dev/bridge/internal/console"
-	"agentroom.dev/bridge/internal/enrollment"
-	"agentroom.dev/bridge/internal/operations"
-	"agentroom.dev/bridge/internal/pairing"
-	"agentroom.dev/bridge/internal/updatecheck"
+	"convenewire.dev/bridge/internal/autostart"
+	"convenewire.dev/bridge/internal/bridgecore"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/connection"
+	"convenewire.dev/bridge/internal/console"
+	"convenewire.dev/bridge/internal/enrollment"
+	"convenewire.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/pairing"
+	"convenewire.dev/bridge/internal/updatecheck"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/icons"
@@ -112,10 +112,12 @@ func run() error {
 
 	var window *application.WebviewWindow
 	stopStatus := make(chan struct{})
+	// Stable across the rename so the old and new display names cannot run as
+	// separate owners of the same Bridge state.
 	instanceKey := sha256.Sum256([]byte("agentroom.dev.bridge.desktop.instance.v1"))
 	app := application.New(application.Options{
-		Name:        "AgentRoom Bridge",
-		Description: "Connect local Codex and Pi runtimes to an AgentRoom Team",
+		Name:        "ConveneWire Bridge",
+		Description: "Connect local Codex and Pi runtimes to an ConveneWire Team",
 		Icon:        icons.ApplicationLightMode256,
 		Assets: application.AssetOptions{
 			Handler:        service.Handler(),
@@ -148,8 +150,8 @@ func run() error {
 	})
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:             "AgentRoom Bridge",
-		Title:            "AgentRoom Bridge",
+		Name:             "ConveneWire Bridge",
+		Title:            "ConveneWire Bridge",
 		URL:              consoleWindowURL(service.Token(), initialPairingLink),
 		Width:            980,
 		Height:           780,
@@ -189,10 +191,10 @@ func run() error {
 	} else {
 		tray.SetIcon(icons.SystrayLight)
 	}
-	tray.SetTooltip("AgentRoom Bridge")
+	tray.SetTooltip("ConveneWire Bridge")
 	menu := app.NewMenu()
 	statusItem := menu.Add("状态：正在读取").SetEnabled(false)
-	menu.Add("打开 AgentRoom Bridge").OnClick(func(*application.Context) {
+	menu.Add("打开 ConveneWire Bridge").OnClick(func(*application.Context) {
 		window.Show()
 		window.Restore()
 		window.Focus()
@@ -233,7 +235,8 @@ func pairingLinkFromLaunch(explicit string, arguments []string) (string, error) 
 	}
 	for _, argument := range arguments {
 		trimmed := strings.TrimSpace(argument)
-		if strings.HasPrefix(strings.ToLower(trimmed), "agentroom://") {
+		lower := strings.ToLower(trimmed)
+		if strings.HasPrefix(lower, "convenewire://") || strings.HasPrefix(lower, "agentroom://") {
 			candidates = append(candidates, trimmed)
 		}
 	}

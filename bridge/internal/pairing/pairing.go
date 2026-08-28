@@ -18,7 +18,7 @@ import (
 	"strings"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 const credentialFilename = "device-credential.json"

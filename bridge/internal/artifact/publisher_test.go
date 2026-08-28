@@ -12,8 +12,8 @@ import (
 	"sync"
 	"testing"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/pairing"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/pairing"
 )
 
 func TestPublisherRecoversLostResponsesWithoutSendingLocalPaths(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"sync"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type FakeScript struct {

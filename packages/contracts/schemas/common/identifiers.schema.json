@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentroom.dev/schemas/common/identifiers.schema.json",
-  "title": "Agent Room Opaque Identifier",
+  "title": "ConveneWire Opaque Identifier",
   "description": "Opaque identifier with a lowercase type prefix and non-semantic suffix.",
   "$ref": "#/$defs/opaqueId",
   "$defs": {

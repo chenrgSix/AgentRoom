@@ -1,4 +1,4 @@
-# Agent Room Bridge
+# ConveneWire Bridge
 
 The Bridge is an optional local Go companion for managed Agents. It reads an
 explicit JSON configuration and never accepts shell command strings. The
@@ -9,11 +9,11 @@ for headless environments and diagnostics.
 
 End users download the archive matching their operating system and CPU from
 [GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases). macOS users
-should choose `agentroom-bridge-desktop_*_darwin_arm64.zip` on Apple Silicon or
-`agentroom-bridge-desktop_*_darwin_amd64.zip` on an Intel Mac. Extract it, move
-**AgentRoom Bridge.app** to `/Applications`, and open it. Go, Node.js, and a
+should choose `convenewire-bridge-desktop_*_darwin_arm64.zip` on Apple Silicon or
+`convenewire-bridge-desktop_*_darwin_amd64.zip` on an Intel Mac. Extract it, move
+**ConveneWire Bridge.app** to `/Applications`, and open it. Go, Node.js, and a
 terminal session are not required. Windows users can run the current-user
-`agentroom-bridge-desktop_*_windows_amd64_setup.exe` installer, or choose the
+`convenewire-bridge-desktop_*_windows_amd64_setup.exe` installer, or choose the
 matching ZIP for a portable copy. Verify the selected package before opening
 it:
 
@@ -22,7 +22,7 @@ it:
 sha256sum -c SHA256SUMS --ignore-missing
 
 # macOS (set this to the archive you downloaded)
-ARCHIVE=agentroom-bridge-desktop_0.2.0-rc.4_darwin_arm64.zip
+ARCHIVE=convenewire-bridge-desktop_0.2.0-rc.4_darwin_arm64.zip
 grep "  ${ARCHIVE}$" SHA256SUMS | shasum -a 256 -c -
 ```
 
@@ -31,7 +31,7 @@ verifying the checksum, either approve the blocked app under **System Settings
 → Privacy & Security → Open Anyway**, or remove quarantine from this app only:
 
 ```bash
-xattr -dr com.apple.quarantine "/Applications/AgentRoom Bridge.app"
+xattr -dr com.apple.quarantine "/Applications/ConveneWire Bridge.app"
 ```
 
 Do not disable Gatekeeper globally. The project does not claim Apple
@@ -44,39 +44,40 @@ The app uses the system Microsoft Edge WebView2 Runtime. The installer checks
 for the Runtime and, when it is absent, can open Microsoft's official download
 page; it does not download or execute the Runtime. The installer runs without
 administrator access, creates current-user Start menu and uninstall entries,
-and does not own or remove `%AppData%\agentroom` configuration and credentials.
+and does not own or remove the upgrade-stable `%AppData%\agentroom`
+configuration and credentials.
 Windows login startup is not part of this preview, so the Settings page retains
 an explicit manual-start notice. Updates remain manual on both platforms.
 
 The portable CLI archives remain available. On macOS, double-click **Start
-AgentRoom Bridge.command**; on Windows, double-click **Start AgentRoom
-Bridge.cmd**; on Linux, run `./start-agentroom-bridge.sh`. Each launcher starts
+ConveneWire Bridge.command**; on Windows, double-click **Start ConveneWire
+Bridge.cmd**; on Linux, run `./start-convenewire-bridge.sh`. Each launcher starts
 the Bridge and opens the local configuration Console in the default browser.
 
 The portable binaries are currently unsigned. macOS users may need to approve
 the first launch in system security settings. The `go run` commands below are
 developer alternatives.
 
-AgentRoom is source-available under the AgentRoom Community License 1.0.
+ConveneWire is source-available under the ConveneWire Community License 1.0.
 Release archives include `LICENSE`, `NOTICE`, `COMMERCIAL-LICENSE.md`, and
 `TRADEMARKS.md`.
 Commercial use, including SaaS or another paid hosted service, requires prior
 written permission.
 
 ```bash
-go run ./cmd/agentroom-bridge version
-go run ./cmd/agentroom-bridge console
-go run ./cmd/agentroom-bridge join --server http://127.0.0.1:3000 --server-token CENTRAL_SERVER_TOKEN
-go run ./cmd/agentroom-bridge validate-config --config ./bridge.json
-go run ./cmd/agentroom-bridge pair-device --config ./bridge.json --link 'agentroom://pair-device?...#claimSecret=...'
-go run ./cmd/agentroom-bridge pair-device --config ./bridge.json --code BCDF-GHJK-MN
-go run ./cmd/agentroom-bridge pair --config ./bridge.json --code ONE_TIME_CODE
-go run ./cmd/agentroom-bridge result propose --help
-go run ./cmd/agentroom-bridge run --config ./bridge.json
+go run ./cmd/convenewire-bridge version
+go run ./cmd/convenewire-bridge console
+go run ./cmd/convenewire-bridge join --server http://127.0.0.1:3000 --server-token CENTRAL_SERVER_TOKEN
+go run ./cmd/convenewire-bridge validate-config --config ./bridge.json
+go run ./cmd/convenewire-bridge pair-device --config ./bridge.json --link 'convenewire://pair-device?...#claimSecret=...'
+go run ./cmd/convenewire-bridge pair-device --config ./bridge.json --code BCDF-GHJK-MN
+go run ./cmd/convenewire-bridge pair --config ./bridge.json --code ONE_TIME_CODE
+go run ./cmd/convenewire-bridge result propose --help
+go run ./cmd/convenewire-bridge run --config ./bridge.json
 go test ./...
-go build ./cmd/agentroom-bridge
-go test -tags desktop ./cmd/agentroom-bridge-desktop
-go build -tags desktop ./cmd/agentroom-bridge-desktop
+go build ./cmd/convenewire-bridge
+go test -tags desktop ./cmd/convenewire-bridge-desktop
+go build -tags desktop ./cmd/convenewire-bridge-desktop
 ```
 
 `result propose` submits one explicit managed-Agent Result through the paired
@@ -98,9 +99,10 @@ window hides it to the tray and keeps managed Agents online. The tray shows the
 current phase and provides open, start, stop, and explicit quit actions.
 
 Only one desktop instance may run. Launching the app again raises the existing
-window. Installed macOS and Windows clients register `agentroom://` for the
-Device pairing link encoded by the Owner Web QR; the same local setup surface
-also accepts link paste or a manual short code. The fragment claim proof is
+window. Installed macOS and Windows clients register `convenewire://` for the
+Device pairing link encoded by the Owner Web QR and keep `agentroom://` as an
+upgrade-compatible alias; the same local setup surface also accepts link paste
+or a manual short code. The fragment claim proof is
 cleared from the WebView URL immediately after prefill. The desktop binary is
 built separately from the CGO-free CLI so
 headless builds do not acquire GUI runtime requirements. Wails is pinned to
@@ -123,7 +125,7 @@ Agent configuration. It listens only on `127.0.0.1:3210` by default; static UI
 assets are embedded in the Bridge binary.
 
 ```bash
-agentroom-bridge console \
+convenewire-bridge console \
   --workspace /absolute/path/to/project \
   --config /absolute/path/to/bridge.json
 ```

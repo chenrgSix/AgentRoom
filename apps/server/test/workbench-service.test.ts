@@ -7,7 +7,7 @@ import test from "node:test";
 import { createServerApp } from "../src/app.js";
 
 test("Team Workbench pages one authorized projection with stable filters", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-workbench-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-workbench-"));
   const databasePath = path.join(directory, "server.sqlite");
   let now = "2026-08-28T10:00:00.000Z";
   let app = await createServerApp({

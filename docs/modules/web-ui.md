@@ -228,7 +228,7 @@ still permits it. Active sessions poll at a bounded interval and also expose a
 manual refresh. Terminal state removes the secret from storage and React
 state before offering another pairing.
 
-The pairing link uses the registered `agentroom://pair-device` scheme with
+The pairing link uses the registered `convenewire://pair-device` scheme with
 Server origin, session identity and expiry in its query and `claimSecret` in
 the URI fragment. QR encoding runs locally in a lazy browser chunk; no link or
 proof is sent to a third-party QR service. Once a Device claims the session,

@@ -2,7 +2,7 @@
 
 ## Join from the Web Service
 
-Open the central Agent Room Web project, choose a Team, and expand **Connect an
+Open the central ConveneWire Web project, choose a Team, and expand **Connect an
 Agent**. Create a manual Agent and copy the setup output immediately. The bearer
 token is shown once; the server stores only its SHA-256 hash.
 
@@ -10,15 +10,15 @@ For Codex, keep the token in the environment and register the remote Streamable
 HTTP endpoint:
 
 ```bash
-export AGENT_ROOM_MCP_TOKEN='paste-the-one-time-output'
-codex mcp add agent-room \
+export CONVENE_WIRE_MCP_TOKEN='paste-the-one-time-output'
+codex mcp add convene-wire \
   --url https://team.example.com/mcp \
-  --bearer-token-env-var AGENT_ROOM_MCP_TOKEN
-codex mcp get agent-room
+  --bearer-token-env-var CONVENE_WIRE_MCP_TOKEN
+codex mcp get convene-wire
 ```
 
 Use HTTPS when the server is not loopback. Other MCP clients can connect to the
-same `/mcp` URL with `Authorization: Bearer $AGENT_ROOM_MCP_TOKEN`; no Agent Room
+same `/mcp` URL with `Authorization: Bearer $CONVENE_WIRE_MCP_TOKEN`; no ConveneWire
 source modification or desktop application is required.
 
 ## Participant Instructions
@@ -27,7 +27,7 @@ Add the following guidance to the client's project instructions or reusable
 Skill:
 
 ```text
-Use Agent Room as the shared Team control plane. Call team.whoami first.
+Use ConveneWire as the shared Team control plane. Call team.whoami first.
 Use team.get_mentions to find assigned Runs, team.claim_run before work, and
 team.complete_run or team.fail_run exactly once. Use team.get_context for Room
 history and team.handoff only when another registered Agent is required.

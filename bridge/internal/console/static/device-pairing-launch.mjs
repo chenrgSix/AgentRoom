@@ -5,6 +5,9 @@ export function pairingLinkFromHash(hash) {
   const links = values.getAll("pairingLink");
   if (links.length !== 1) return "";
   const link = links[0].trim();
-  if (!link.startsWith("agentroom://pair-device?")) return "";
+  if (
+    !link.startsWith("convenewire://pair-device?") &&
+    !link.startsWith("agentroom://pair-device?")
+  ) return "";
   return link;
 }

@@ -21,7 +21,7 @@ function digest(value: string): string {
 }
 
 test("rolling Room checkpoints drain a durable watermark without cursor regression", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-rolling-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-rolling-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   let database = openDatabase(databasePath);

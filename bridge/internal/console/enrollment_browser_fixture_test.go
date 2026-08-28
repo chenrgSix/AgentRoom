@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/enrollment"
-	"agentroom.dev/bridge/internal/operations"
-	"agentroom.dev/bridge/internal/pairing"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/enrollment"
+	"convenewire.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/pairing"
 )
 
 // Opt-in first-run fixture: an empty temporary configuration and no central or

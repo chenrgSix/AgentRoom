@@ -215,7 +215,7 @@ func Sanitize(value string) string {
 }
 
 func createExclusive(directory string, now time.Time) (*os.File, string, error) {
-	base := "agentroom-bridge-diagnostics-" + now.Format("20060102T150405Z")
+	base := "convenewire-bridge-diagnostics-" + now.Format("20060102T150405Z")
 	for index := 0; index < 100; index++ {
 		name := base + ".zip"
 		if index > 0 {

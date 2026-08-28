@@ -9,7 +9,7 @@ import { createServerApp } from "../../apps/server/src/app.js";
 const now = "2026-08-23T12:00:00.000Z";
 
 test("three Remote MCP Agents complete one guarded handoff chain", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-handoff-e2e-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-handoff-e2e-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => now

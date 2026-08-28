@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type State string

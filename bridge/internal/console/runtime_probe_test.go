@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 func TestProbeRuntimeAcceptsExpectedReplyAndNeverReturnsProcessOutput(t *testing.T) {

@@ -5,7 +5,7 @@ import path from "node:path";
 import type {
   DevicePairingPrivateCARotationOffer,
   DevicePairingPrivateTrustDescriptor
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 
 import type { DeploymentTrustProvider } from "./deployment-trust.js";
 

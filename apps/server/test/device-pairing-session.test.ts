@@ -64,7 +64,7 @@ function claimPayload(
 }
 
 test("zero-copy pairing promotes the poll proof exactly once and survives response loss", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-zero-copy-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-zero-copy-"));
   const databasePath = path.join(directory, "server.sqlite");
   let app = await createServerApp({
     databasePath,
@@ -288,7 +288,7 @@ test("zero-copy pairing promotes the poll proof exactly once and survives respon
 });
 
 test("manual pairing is Owner-scoped, non-enumerating, and terminal decisions are idempotent", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-manual-pair-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-manual-pair-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => initialNow
@@ -462,7 +462,7 @@ test("manual pairing is Owner-scoped, non-enumerating, and terminal decisions ar
 });
 
 test("pairing expiry and anonymous rate limits fail closed", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-pair-expiry-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-pair-expiry-"));
   let currentNow = initialNow;
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 func TestParseTaskClarificationEnvelope(t *testing.T) {

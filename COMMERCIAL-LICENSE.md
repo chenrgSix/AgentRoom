@@ -1,6 +1,6 @@
 # Commercial Licensing
 
-AgentRoom is source-available under the AgentRoom Community License 1.0. The
+ConveneWire is source-available under the ConveneWire Community License 1.0. The
 LICENSE file controls; this document is a practical summary and does not amend
 the license.
 
@@ -17,21 +17,21 @@ The community license permits:
 - contractors acting for that organization;
 - one dedicated, isolated deployment for one customer that owns or controls
   the deployment; and
-- integration as a component of a larger product when AgentRoom's control-plane
+- integration as a component of a larger product when ConveneWire's control-plane
   functions are not the product's primary commercial value.
 
 ## Commercial License Required
 
 Contact the Licensor before:
 
-- operating AgentRoom SaaS or another shared service for two or more unrelated
+- operating ConveneWire SaaS or another shared service for two or more unrelated
   customer organizations;
 - operating a shared managed Agent control plane for multiple customers;
-- selling AgentRoom or substantially all of its core functions as a competing
+- selling ConveneWire or substantially all of its core functions as a competing
   standalone product;
-- removing the required `Powered by AgentRoom` attribution for external or
+- removing the required `Powered by ConveneWire` attribution for external or
   customer-facing use; or
-- white-labeling or rebranding AgentRoom for external distribution.
+- white-labeling or rebranding ConveneWire for external distribution.
 
 One organization may create many Team and Room records without becoming
 multi-tenant. One customer may also use separate development, test, staging,

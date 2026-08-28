@@ -1,4 +1,4 @@
-# Agent Room Network
+# ConveneWire
 
 中央 Web Team Hub · 轻量 Bridge · MCP 协作接入
 
@@ -16,7 +16,7 @@
 
 ## 1. 执行摘要
 
-Agent Room 是现有 AI 客户端之上的轻量 Team Layer。用户在中央 Web 项目的 Room 中组织 Member 和 Agent，通过结构化 `@mention` 发起协作；中央服务保存消息、路由 Mention，并将任务推送到目标机器上的 AgentRoom Bridge。Bridge 使用目标 Runtime 已有的机器接口启动或恢复一次 Team Session，再把状态和回复送回 Room。多 Agent Discussion 在 Room 中表现为 Agent 直接对话；同一逻辑轮次使用 durable parallel Wave 并发唤醒参与者，中央 Orchestrator 在 all-settled barrier 后依据进展、预算和策略决定下一步，不建立 Bridge 间直连。
+ConveneWire 是现有 AI 客户端之上的轻量 Team Layer。用户在中央 Web 项目的 Room 中组织 Member 和 Agent，通过结构化 `@mention` 发起协作；中央服务保存消息、路由 Mention，并将任务推送到目标机器上的 ConveneWire Bridge。Bridge 使用目标 Runtime 已有的机器接口启动或恢复一次 Team Session，再把状态和回复送回 Room。多 Agent Discussion 在 Room 中表现为 Agent 直接对话；同一逻辑轮次使用 durable parallel Wave 并发唤醒参与者，中央 Orchestrator 在 all-settled barrier 后依据进展、预算和策略决定下一步，不建立 Bridge 间直连。
 
 MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Room、发送消息和 handoff。MCP Server 不能可靠地凭空启动 Codex Turn，因此主动唤醒由中央服务与 Bridge 之间的 WebSocket 通道承担。
 
@@ -43,7 +43,7 @@ MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Ro
 
 ### 2.2 非目标
 
-- 不开发 Agent Room 桌面 GUI。
+- 不开发 ConveneWire 桌面 GUI。
 - 不远程暴露 Codex App Server、CLI 或用户文件系统。
 - 不统一不同 Runtime 的内部工具协议。
 - MVP 不实现 A2A、CRDT、P2P 历史同步或跨站点 Federation。
@@ -57,7 +57,7 @@ MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Ro
 Browser
   │
   ▼
-Central Agent Room Web
+Central ConveneWire Web
 ├── Team / Room UI
 ├── Member / Agent Registry
 ├── Message / Mention Router
@@ -69,7 +69,7 @@ Central Agent Room Web
        │
        │ outbound WebSocket connection
        ▼
-AgentRoom Bridge on each machine
+ConveneWire Bridge on each machine
 ├── Runtime Registry
 ├── Codex Adapter
 ├── MCP-native Adapter
@@ -96,7 +96,7 @@ Codex / WorkBuddy / Claude Code / other CLI
 
 中央服务不直接访问成员机器的 Runtime、Token、工作目录或命令执行环境。
 
-### 3.2 AgentRoom Bridge
+### 3.2 ConveneWire Bridge
 
 每台需要自动接收 Team 任务的机器运行一个 Bridge。Bridge 只负责：
 
@@ -191,7 +191,7 @@ Presence：
 ### 5.1 发布 Agent
 
 1. 用户在中央 Web 创建 Team 并生成一次性设备邀请码。
-2. 本机运行 `agentroom-bridge pair <server-url> <invite-code>`。
+2. 本机运行 `convenewire-bridge pair <server-url> <invite-code>`。
 3. Bridge 生成设备密钥，交换短期邀请码并取得设备凭据。
 4. Bridge 检测或由用户配置本机 Runtime。
 5. 用户选择 Agent 名称、角色和 integration mode 后发布。
@@ -334,7 +334,7 @@ dispose(sessionRef) -> Result
 
 ### 7.3 MCP-native Runtime
 
-MCP-native 客户端通过 Agent Room MCP Tools 主动加入和操作 Team。若客户端没有被外部启动或恢复的接口，则注册为 `manual`，不能宣称自动唤醒。
+MCP-native 客户端通过 ConveneWire MCP Tools 主动加入和操作 Team。若客户端没有被外部启动或恢复的接口，则注册为 `manual`，不能宣称自动唤醒。
 
 ### 7.4 Generic CLI
 
@@ -393,7 +393,7 @@ apps/
 packages/
   contracts/           # JSON Schema and generated TypeScript types
 bridge/
-  cmd/agentroom-bridge/
+  cmd/convenewire-bridge/
   internal/runtime/
   internal/transport/
   internal/state/
@@ -536,4 +536,4 @@ discussion.state_changed
 - [Model Context Protocol 2026-07-28](https://blog.modelcontextprotocol.io/posts/2026-07-28/)
 - [OpenAI API MCP Tools](https://developers.openai.com/api/reference/cli/resources/responses/methods/create)
 
-一句话定义：**Agent Room 是中央 Web 上的轻量 Team 协作层；MCP 让 Agent 使用 Team，Bridge 让 Team 唤醒 Agent。**
+一句话定义：**ConveneWire 是中央 Web 上的轻量 Team 协作层；MCP 让 Agent 使用 Team，Bridge 让 Team 唤醒 Agent。**

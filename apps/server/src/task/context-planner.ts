@@ -521,7 +521,7 @@ export class ContextPlanner {
       ? this.core.getMember(message.senderId)?.displayName ?? "Member"
       : message.senderType === "agent"
         ? this.core.getAgent(message.senderId)?.name ?? "Agent"
-        : "Agent Room";
+        : "ConveneWire";
     return `- [sequence ${message.sequence}; ${normalizedExcerpt(sender)}] ${
       normalizedExcerpt(message.content)
     }`;

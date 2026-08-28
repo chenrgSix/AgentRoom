@@ -3,7 +3,7 @@ import type {
   DevicePairingSessionCreatedTrust,
   DevicePairingSessionOwnerProjection,
   DevicePairingSessionOwnerProjectionTrust
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { bridgeServerURL, jsonRequest } from "../../api-client.js";
@@ -318,7 +318,7 @@ export function buildDevicePairingLink(
     fragment.set("trustEpoch", String(trust.trustEpoch));
     fragment.set("caCertificateSha256", trust.caCertificateSha256);
   }
-  return `agentroom://pair-device?${parameters.toString()}#${fragment.toString()}`;
+  return `convenewire://pair-device?${parameters.toString()}#${fragment.toString()}`;
 }
 
 function stateLabel(state: string, locale: Locale): string {
@@ -638,8 +638,8 @@ export function DevicePairingPanel({
 
       <p className="device-pairing-intro">
         {zh
-          ? "在这台浏览器生成一次性配对证明，再到新 Device 打开 AgentRoom。中央服务不会下发 Server Token、Device 凭据、Runtime 配置或 Workspace 路径。"
-          : "Create a one-time proof in this tab, then open AgentRoom on the new Device. The Server never sends a Server Token, Device credential, Runtime configuration, or Workspace path."}
+          ? "在这台浏览器生成一次性配对证明，再到新 Device 打开 ConveneWire。中央服务不会下发 Server Token、Device 凭据、Runtime 配置或 Workspace 路径。"
+          : "Create a one-time proof in this tab, then open ConveneWire on the new Device. The Server never sends a Server Token, Device credential, Runtime configuration, or Workspace path."}
       </p>
 
       {attempt?.created && (
@@ -790,8 +790,8 @@ export function DevicePairingPanel({
       {projection?.state === "approved" && (
         <p className="pairing-terminal-note" aria-live="polite">
           {zh
-            ? "批准已记录。Device 正在用本地 pollSecret 完成凭据提升，请勿关闭 AgentRoom。"
-            : "Approval is recorded. The Device is promoting its local pollSecret; keep AgentRoom open."}
+            ? "批准已记录。Device 正在用本地 pollSecret 完成凭据提升，请勿关闭 ConveneWire。"
+            : "Approval is recorded. The Device is promoting its local pollSecret; keep ConveneWire open."}
         </p>
       )}
 

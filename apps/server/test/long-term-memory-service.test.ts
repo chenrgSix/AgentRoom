@@ -22,7 +22,7 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 const now = "2026-08-25T14:00:00.000Z";
 
 test("long-term Memory preserves old provenance and explicit lifecycle", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-memory-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-memory-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

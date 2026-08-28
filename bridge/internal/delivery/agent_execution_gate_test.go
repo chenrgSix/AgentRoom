@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 var errExplicitTestCancel = errors.New("explicit test cancellation")

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	bridgeruntime "agentroom.dev/bridge/internal/runtime"
-	contracts "agentroom.dev/contracts/generated/go"
+	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 func reasoningConsentFixture(t *testing.T, share bool) (RuntimeExecutor, Record) {

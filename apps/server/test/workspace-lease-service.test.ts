@@ -25,7 +25,7 @@ const workspaceRef = `workspace_${"a".repeat(64)}`;
 const workspaceGeneration = "b".repeat(64);
 
 test("source-read leases bind exact Run, Agent, Device, and Workspace snapshot", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-workspace-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-workspace-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
@@ -197,7 +197,7 @@ test("source-read leases bind exact Run, Agent, Device, and Workspace snapshot",
 });
 
 test("source-read lease rejects stale snapshot and non-active Run", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-workspace-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-workspace-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

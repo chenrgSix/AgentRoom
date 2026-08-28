@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://agentroom.dev/schemas/catalog.schema.json",
-  "title": "Agent Room Contract Catalog",
+  "title": "ConveneWire Contract Catalog",
   "description": "Manifest for the versioned schemas published by the contracts package.",
   "type": "object",
   "additionalProperties": false,

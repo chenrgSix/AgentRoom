@@ -236,30 +236,30 @@ function parseMetrics(source) {
     if (match) metrics.set(match[1], Number(match[2]));
   }
   const required = [
-    "agentroom_up",
-    "agentroom_bridge_connections",
-    "agentroom_managed_agents",
-    "agentroom_run_queue_depth",
-    "agentroom_delivery_pending",
-    "agentroom_delivery_retries_total",
-    "agentroom_run_event_lag_seconds",
-    'agentroom_runs{state="completed"}'
+    "convenewire_up",
+    "convenewire_bridge_connections",
+    "convenewire_managed_agents",
+    "convenewire_run_queue_depth",
+    "convenewire_delivery_pending",
+    "convenewire_delivery_retries_total",
+    "convenewire_run_event_lag_seconds",
+    'convenewire_runs{state="completed"}'
   ];
   for (const name of required) {
     if (!Number.isFinite(metrics.get(name))) fail(`metrics omitted ${name}`);
   }
-  if (metrics.get("agentroom_up") !== 1) fail("Server was not ready");
-  if (metrics.get("agentroom_bridge_connections") < 1) {
+  if (metrics.get("convenewire_up") !== 1) fail("Server was not ready");
+  if (metrics.get("convenewire_bridge_connections") < 1) {
     fail("no authenticated Bridge was connected at capture time");
   }
-  if (metrics.get("agentroom_managed_agents") < 2) {
+  if (metrics.get("convenewire_managed_agents") < 2) {
     fail("fewer than two managed Agents were enabled at capture time");
   }
-  if (metrics.get("agentroom_run_queue_depth") !== 0 ||
-      metrics.get("agentroom_delivery_pending") !== 0) {
+  if (metrics.get("convenewire_run_queue_depth") !== 0 ||
+      metrics.get("convenewire_delivery_pending") !== 0) {
     fail("acceptance work was still pending at capture time");
   }
-  if (metrics.get('agentroom_runs{state="completed"}') < 2) {
+  if (metrics.get('convenewire_runs{state="completed"}') < 2) {
     fail("metrics did not contain both completed Runs");
   }
   return Object.fromEntries(required.map((name) => [name, metrics.get(name)]));

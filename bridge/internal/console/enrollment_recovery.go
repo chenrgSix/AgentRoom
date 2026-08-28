@@ -8,8 +8,8 @@ import (
 	"path/filepath"
 	"reflect"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/pairing"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/pairing"
 )
 
 // EnrollmentView is local-only; it never contains a Device or claim token.
@@ -122,7 +122,7 @@ func (s *Service) installReEnrollmentLocked(previous config.Config, credential p
 	if err := s.verifyPairingUnchangedLocked(previous); err != nil {
 		return previous, err
 	}
-	directory, err := os.MkdirTemp(filepath.Dir(previous.DataDir), "agentroom-pairing-")
+	directory, err := os.MkdirTemp(filepath.Dir(previous.DataDir), "convenewire-pairing-")
 	if err != nil {
 		return previous, fmt.Errorf("Unable to stage new pairing; previous pairing is unchanged")
 	}

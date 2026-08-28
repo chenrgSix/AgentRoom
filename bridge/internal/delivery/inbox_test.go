@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 func TestDuplicateDeliveryIsAcknowledgedButRunsOnce(t *testing.T) {

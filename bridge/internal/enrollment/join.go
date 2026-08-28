@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/pairing"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/pairing"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type Challenge struct {

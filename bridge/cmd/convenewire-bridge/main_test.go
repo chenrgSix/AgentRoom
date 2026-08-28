@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 func TestArtifactCommandRequiresBoundedPublishInputs(t *testing.T) {

@@ -39,7 +39,7 @@ const workspaceRef = `workspace_${"a".repeat(64)}`;
 const workspaceGeneration = "b".repeat(64);
 
 async function createFixture() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-artifact-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-artifact-"));
   const databasePath = path.join(directory, "server.sqlite");
   const blobRoot = path.join(directory, "blobs");
   await migrateDatabase(databasePath);

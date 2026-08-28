@@ -1,7 +1,7 @@
 import type {
   DevicePairingPrivateCARotationAcknowledgeRequest,
   DevicePairingPrivateCARotationOffer
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 import type Database from "better-sqlite3";
 
 import {

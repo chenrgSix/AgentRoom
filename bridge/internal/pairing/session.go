@@ -15,8 +15,8 @@ import (
 	"strings"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	pairingcontracts "agentroom.dev/contracts/generated/go/pairing"
+	"convenewire.dev/bridge/internal/config"
+	pairingcontracts "convenewire.dev/contracts/generated/go/pairing"
 )
 
 const maxPairingResponseBytes = 1 << 20
@@ -68,7 +68,7 @@ func ParseSessionLink(raw string) (SessionLink, error) {
 	query := parsed.Query()
 	serverURL := ""
 	switch strings.ToLower(parsed.Scheme) {
-	case "agentroom":
+	case "convenewire", "agentroom":
 		if parsed.Host != "pair-device" || parsed.Path != "" ||
 			!hasExactQueryKeys(query, "origin", "pairingSessionId", "expiresAt") {
 			return SessionLink{}, fmt.Errorf("pairing link target is invalid")

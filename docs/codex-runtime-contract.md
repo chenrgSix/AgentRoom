@@ -3,7 +3,7 @@
 ## Supported Invocation
 
 The managed Bridge invokes the owner-configured argument array for
-`codex app-server --listen stdio://` in a fixed workspace. Agent Room never
+`codex app-server --listen stdio://` in a fixed workspace. ConveneWire never
 adds approval bypass flags or weakens the owner's selected Codex sandbox. Only
 explicitly allowlisted environment variables reach the process.
 

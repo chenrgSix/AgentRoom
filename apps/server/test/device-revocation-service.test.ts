@@ -58,7 +58,7 @@ async function createFixture(): Promise<{
   socket: CapturingSocket;
   runs: RunRepository;
 }> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-revoke-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-revoke-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);

@@ -6,7 +6,7 @@ import (
 	"io"
 	"strings"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 const (

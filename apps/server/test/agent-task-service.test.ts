@@ -9,7 +9,7 @@ import { createServerApp } from "../src/app.js";
 const now = "2026-08-25T10:00:00.000Z";
 
 test("Agent Tasks scope Runs and allow independent Room Discussions", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-task-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-task-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => now,
@@ -77,7 +77,7 @@ test("Agent Tasks scope Runs and allow independent Room Discussions", async () =
       payload: {
         type: "file",
         workspaceRef: "workspace_oauth",
-        repository: "agent-room/network",
+        repository: "convene-wire/network",
         path: "src/oauth/migration.ts",
         title: "OAuth migration source",
         summary: "Workspace-relative implementation reference."

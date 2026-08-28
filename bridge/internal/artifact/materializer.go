@@ -17,10 +17,10 @@ import (
 	"strings"
 	"sync"
 
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/pairing"
-	bridgeruntime "agentroom.dev/bridge/internal/runtime"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/pairing"
+	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 const materializationChunkBytes = 256 << 10

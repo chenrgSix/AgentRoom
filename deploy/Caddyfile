@@ -1,14 +1,14 @@
 {
 	auto_https disable_redirects
-	default_sni {$AGENT_ROOM_DOMAIN}
+	default_sni {$CONVENE_WIRE_DOMAIN}
 	import /etc/caddy/pki-profile.caddy
 }
 
-http://{$AGENT_ROOM_DOMAIN} {
-	redir {$AGENT_ROOM_PUBLIC_ORIGIN}{uri} permanent
+http://{$CONVENE_WIRE_DOMAIN} {
+	redir {$CONVENE_WIRE_PUBLIC_ORIGIN}{uri} permanent
 }
 
-https://{$AGENT_ROOM_DOMAIN} {
+https://{$CONVENE_WIRE_DOMAIN} {
 	import /etc/caddy/tls-profile.caddy
 
 	encode zstd gzip

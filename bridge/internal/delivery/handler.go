@@ -6,7 +6,7 @@ import (
 	"encoding/base64"
 	"time"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type Sender func(context.Context, any) error

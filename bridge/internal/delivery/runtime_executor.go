@@ -9,9 +9,9 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"agentroom.dev/bridge/internal/operations"
-	bridgeruntime "agentroom.dev/bridge/internal/runtime"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/operations"
+	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type RuntimeExecutor struct {
@@ -301,7 +301,7 @@ func (e RuntimeExecutor) failBeforeRuntime(
 			RunID: latest.RunID, AgentID: latest.Request.TargetAgentID,
 			TraceID: latest.Request.TraceID, Sequence: sequence,
 			Status: contracts.Failed,
-			Error: &contracts.AgentRoomError{
+			Error: &contracts.ConveneWireError{
 				Code:      code,
 				Message:   messageText,
 				Retryable: false,
@@ -352,9 +352,9 @@ func redactRuntimeClarification(
 }
 
 func redactRuntimeError(
-	runtimeBoundaryError *contracts.AgentRoomError,
+	runtimeBoundaryError *contracts.ConveneWireError,
 	artifacts []bridgeruntime.VerifiedArtifactAlias,
-) *contracts.AgentRoomError {
+) *contracts.ConveneWireError {
 	if runtimeBoundaryError == nil {
 		return nil
 	}
@@ -460,7 +460,7 @@ func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Se
 			RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 			TraceID:  record.Request.TraceID,
 			Sequence: sequence, Status: contracts.OutcomeUnknown,
-			Error: &contracts.AgentRoomError{
+			Error: &contracts.ConveneWireError{
 				Code: code, Message: "Runtime outcome could not be determined.", Retryable: false,
 			},
 		},
@@ -586,7 +586,7 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 					RunID: record.RunID, AgentID: record.Request.TargetAgentID,
 					TraceID:  record.Request.TraceID,
 					Sequence: sequence, Status: contracts.OutcomeUnknown,
-					Error: &contracts.AgentRoomError{
+					Error: &contracts.ConveneWireError{
 						Code:      "RUNTIME_PROCESS_RESTARTED",
 						Message:   "Bridge restarted before the Runtime terminal outcome was persisted.",
 						Retryable: false,
@@ -613,7 +613,7 @@ func hasPersistedMaterializationFailure(record Record) bool {
 			Type    string `json:"type"`
 			Payload struct {
 				Status contracts.RunExecutionStatus `json:"status"`
-				Error  *contracts.AgentRoomError    `json:"error"`
+				Error  *contracts.ConveneWireError  `json:"error"`
 			} `json:"payload"`
 		}
 		if err := json.Unmarshal(record.Events[index], &envelope); err != nil {

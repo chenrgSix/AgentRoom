@@ -60,7 +60,7 @@ export function AccessGate({
         </button>
       </div>
       <section className="access-card" aria-live="polite">
-        <div className="brand-mark" aria-label="Agent Room">AR</div>
+        <div className="brand-mark" aria-label="ConveneWire">CW</div>
         <p className="eyebrow">{t("secureTeamAccess")}</p>
         {state === "loading" && (
           <>

@@ -1,4 +1,4 @@
-# AgentRoom Community License 1.0
+# ConveneWire Community License 1.0
 
 Version 1.0, August 27, 2026
 
@@ -16,7 +16,7 @@ terms. If You do not accept them, You receive no rights under this license.
 
 **Licensor** means the copyright holder identified in the NOTICE file.
 
-**Software** means the AgentRoom source code, object code, documentation, and
+**Software** means the ConveneWire source code, object code, documentation, and
 other material distributed with this license, including modifications and
 derivative works based on that material.
 
@@ -42,7 +42,7 @@ Organization and receives services from You.
 3. is owned or controlled by that customer, with You acting only at that
    customer's direction for installation, configuration, training, support,
    hosting, or maintenance; and
-4. is not joined to a shared AgentRoom control plane operated for unrelated
+4. is not joined to a shared ConveneWire control plane operated for unrelated
    customers.
 
 Development, test, staging, disaster-recovery, and production environments for
@@ -57,7 +57,7 @@ You. Separate Team, Room, Agent, Device, project, workspace, database, or
 logical-tenant records do not make those customers one organization.
 A set of Dedicated Customer Deployments does not become a Multi-Customer
 Service merely because the same contractor installs or supports them, provided
-each customer retains its own control and no shared AgentRoom control plane
+each customer retains its own control and no shared ConveneWire control plane
 joins the deployments.
 
 **Core Functions** means the Software's Team, Room, Agent, Device, Bridge, Run,
@@ -66,7 +66,7 @@ capabilities, taken as a whole.
 
 **Product Integration** means use of the Software as a component of a larger
 product whose primary marketed and commercial value is not the Software or its
-Core Functions and that does not expose a complete, substitutable AgentRoom
+Core Functions and that does not expose a complete, substitutable ConveneWire
 control plane to customers.
 
 ## 3. Copyright Grant
@@ -107,7 +107,7 @@ You:
 1. offer or operate a Multi-Customer Service;
 2. sell, license, or distribute the Software or its Core Functions as a
    standalone product whose primary commercial value is substantially the same
-   as AgentRoom;
+   as ConveneWire;
 3. white-label or rebrand the Software for external distribution or customer-
    facing use without the attribution required by Section 6; or
 4. provide another party with rights to do any of the preceding activities.
@@ -119,15 +119,15 @@ Deployment do not by themselves require a commercial license.
 ## 6. Attribution and Branding
 
 You may change themes, colors, layouts, internal titles, and add Your
-Organization's logo. If You use or distribute the AgentRoom web interface, You
-must retain a reasonably accessible attribution reading `Powered by AgentRoom`
+Organization's logo. If You use or distribute the ConveneWire web interface, You
+must retain a reasonably accessible attribution reading `Powered by ConveneWire`
 in the interface or its About page, together with access to the copyright and
 license notices. The attribution need not be displayed on every screen.
 
 You may not remove the LICENSE or NOTICE files, conceal the Software's origin,
-claim that a modified version is an official AgentRoom release, or use the
-AgentRoom name or marks in a way that creates a likelihood of confusion.
-Descriptive use of the AgentRoom name and the required attribution are allowed
+claim that a modified version is an official ConveneWire release, or use the
+ConveneWire name or marks in a way that creates a likelihood of confusion.
+Descriptive use of the ConveneWire name and the required attribution are allowed
 only as described in TRADEMARKS.md.
 
 ## 7. Distribution Conditions

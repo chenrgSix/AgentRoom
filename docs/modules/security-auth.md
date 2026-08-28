@@ -127,7 +127,7 @@ verification-disabled TLS.
 - Team membership gates Team-level Member and Agent administration.
 - Explicit human Room participation gates Room discovery, history, messages,
   Runs, and replies; a Team role alone does not grant Room access.
-- Explicit Agent Room participation gates mentions, Discussions, and handoffs.
+- Explicit ConveneWire participation gates mentions, Discussions, and handoffs.
 - Only a Team Owner may replace a Room roster, and every Team Owner remains in
   every Room roster to preserve an administration path.
 - Agent ownership and capability gate managed execution.

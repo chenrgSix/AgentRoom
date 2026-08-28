@@ -19,7 +19,7 @@ fi
 source_commit=$(git -C "${repository_root}" rev-parse --verify "${source_ref}^{commit}")
 
 targets=(darwin/amd64 darwin/arm64 linux/amd64 linux/arm64)
-temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/agentroom-central-verify.XXXXXX")
+temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/convenewire-central-verify.XXXXXX")
 cleanup() {
   rm -rf -- "${temporary_root}"
 }
@@ -52,7 +52,7 @@ assert_binary_architecture() {
 for target in "${targets[@]}"; do
   target_os=${target%/*}
   target_arch=${target#*/}
-  package="agentroom-central_${version}_${target_os}_${target_arch}"
+  package="convenewire-central_${version}_${target_os}_${target_arch}"
   archive="${asset_dir}/${package}.tar.gz"
   pin_asset="${asset_dir}/${package}.SHA256SUMS.sha256"
   members="${temporary_root}/${package}.members"
@@ -110,7 +110,7 @@ for target in "${targets[@]}"; do
   fi
 
   for required in \
-    agentroom-central-release.json CENTRAL-INSTALL.md bin/agentroomctl \
+    convenewire-central-release.json CENTRAL-INSTALL.md bin/convenewirectl \
     compose.yaml Dockerfile package.json package-lock.json deploy/Caddyfile \
     deploy/tls/public-ca.caddy deploy/tls/private-scoped-ca.caddy deploy/tls/internal-ca.caddy deploy/tls/legacy-auto.caddy deploy/tls/pki-none.caddy \
     scripts/compose-backup.sh scripts/compose-restore.sh \
@@ -120,7 +120,7 @@ for target in "${targets[@]}"; do
       exit 1
     fi
   done
-  if [[ ! -x "${root}/bin/agentroomctl" ]]; then
+  if [[ ! -x "${root}/bin/convenewirectl" ]]; then
     echo "Central controller is not executable: ${package}" >&2
     exit 1
   fi
@@ -139,7 +139,7 @@ for target in "${targets[@]}"; do
 const fs = require("node:fs");
 const path = require("node:path");
 const [root, releaseTag, targetOS, targetArch, sourceCommit] = process.argv.slice(2);
-const filename = path.join(root, "agentroom-central-release.json");
+const filename = path.join(root, "convenewire-central-release.json");
 const value = JSON.parse(fs.readFileSync(filename, "utf8"));
 const keys = Object.keys(value).sort();
 const expected = ["dataSchemaVersion", "releaseVersion", "schemaVersion", "sourceCommit", "targetArch", "targetOS"];
@@ -157,14 +157,14 @@ if (JSON.stringify(keys) !== JSON.stringify(expected) ||
 }
 NODE
 
-  assert_binary_architecture "${root}/bin/agentroomctl" "${target}"
+  assert_binary_architecture "${root}/bin/convenewirectl" "${target}"
   escaped_release_tag=${release_tag//./\\.}
-  if ! strings "${root}/bin/agentroomctl" | grep -E "${escaped_release_tag}([^0-9A-Za-z._-]|$)" >/dev/null; then
+  if ! strings "${root}/bin/convenewirectl" | grep -E "${escaped_release_tag}([^0-9A-Za-z._-]|$)" >/dev/null; then
     echo "Central controller omits injected version ${release_tag}: ${package}" >&2
     exit 1
   fi
   if [[ "${target_os}/${target_arch}" == "$(go env GOHOSTOS)/$(go env GOHOSTARCH)" ]]; then
-    if [[ "$("${root}/bin/agentroomctl" version)" != "${release_tag}" ]]; then
+    if [[ "$("${root}/bin/convenewirectl" version)" != "${release_tag}" ]]; then
       echo "Central controller reports the wrong version: ${package}" >&2
       exit 1
     fi

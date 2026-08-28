@@ -1,8 +1,8 @@
-# Agent Room Network
+# ConveneWire
 
 > “有什么事跟我的Codex说去吧。”
 
-Agent Room Network is a lightweight collaboration layer that organizes existing
+ConveneWire is a lightweight collaboration layer that organizes existing
 AI coding runtimes into a centrally managed Team. The central Web service owns
 Rooms, messages, mentions, routing, and history. A small, headless Bridge on
 each participant machine receives routed work and invokes the local runtime.
@@ -19,9 +19,10 @@ Agents under progress and budget policy. Remote MCP supports pull participants,
 while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 
 - Current baseline:
-  [agent_room_network_design_v0.2.md](agent_room_network_design_v0.2.md)
+  [convenewire_network_design_v0.2.md](convenewire_network_design_v0.2.md)
 - Stable release:
   [AgentRoom v0.2.0](https://github.com/chenrgSix/AgentRoom/releases/tag/v0.2.0)
+  (the latest stable release predates the ConveneWire rename)
 - Historical baseline:
   [agent_room_network_design_v0.1.md](agent_room_network_design_v0.1.md)
 - Contributor rules: [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -77,7 +78,7 @@ instance:
 
 ```bash
 git clone https://github.com/chenrgSix/AgentRoom.git
-cd AgentRoom
+cd AgentRoom                       # Repository hosting rename is still pending.
 nvm use 22                       # optional when Node 22 is already active
 npm ci
 npm run db:migrate
@@ -109,9 +110,9 @@ machines do not need Go or Node.js:
 
 1. Download the archive for the client's OS and CPU from
    [GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases). On macOS,
-   choose the `agentroom-bridge-desktop` ZIP for Apple Silicon (`arm64`) or
-   Intel (`amd64`), then move **AgentRoom Bridge.app** to `/Applications`. On
-   64-bit Windows, use the `agentroom-bridge-desktop` executable ending in
+   choose the `convenewire-bridge-desktop` ZIP for Apple Silicon (`arm64`) or
+   Intel (`amd64`), then move **ConveneWire Bridge.app** to `/Applications`. On
+   64-bit Windows, use the `convenewire-bridge-desktop` executable ending in
    `windows_amd64_setup.exe` for a current-user installation, or choose the ZIP
    ending in `windows_amd64` for a portable copy.
 2. Download `SHA256SUMS`, verify the archive, and extract it. Desktop packages
@@ -120,7 +121,7 @@ machines do not need Go or Node.js:
    verification:
 
    ```bash
-   xattr -dr com.apple.quarantine "/Applications/AgentRoom Bridge.app"
+   xattr -dr com.apple.quarantine "/Applications/ConveneWire Bridge.app"
    ```
 
    Windows may show a Microsoft Defender SmartScreen warning for the unsigned
@@ -136,7 +137,7 @@ machines do not need Go or Node.js:
    and its launcher, or run:
 
    ```bash
-   agentroom-bridge console --workspace /absolute/path/to/project
+   convenewire-bridge console --workspace /absolute/path/to/project
    ```
 
 4. In the local Console, enter the central server URL and select the detected
@@ -164,11 +165,11 @@ the Team, but MCP alone cannot wake an idle client.
    endpoint:
 
    ```bash
-   export AGENT_ROOM_MCP_TOKEN='paste-the-one-time-token'
-   codex mcp add agent-room \
+   export CONVENE_WIRE_MCP_TOKEN='paste-the-one-time-token'
+   codex mcp add convene-wire \
      --url https://team.example.com/mcp \
-     --bearer-token-env-var AGENT_ROOM_MCP_TOKEN
-   codex mcp get agent-room
+     --bearer-token-env-var CONVENE_WIRE_MCP_TOKEN
+   codex mcp get convene-wire
    ```
 
 3. Ask the running client to call `team.whoami`, then use `team.wait` or
@@ -200,7 +201,7 @@ intentionally hides `/api/metrics` from the public network.
 For a trusted small Team, use the checksum-pinned Central archive matching the
 host's OS and CPU. The host needs Docker Engine 24 or newer with Compose 2.20
 or newer; it does not need Git, Node.js, Go, OpenSSL, or manual `.env` editing.
-When a release includes `agentroom-central` assets, verify the matching archive
+When a release includes `convenewire-central` assets, verify the matching archive
 with the outer Release `SHA256SUMS`, extract it, and retain the matching
 `*.SHA256SUMS.sha256` asset as the separately published pin for the archive's
 internal file manifest.
@@ -208,21 +209,21 @@ internal file manifest.
 Run the shipped controller from the extracted root:
 
 ```bash
-archive=agentroom-central_0.4.0-rc.1_linux_amd64.tar.gz
+archive=convenewire-central_0.4.0-rc.1_linux_amd64.tar.gz
 pin_asset=${archive%.tar.gz}.SHA256SUMS.sha256
 release_dir=${archive%.tar.gz}
 tar -xzf "${archive}"
 pin=$(awk '{print $1}' "${pin_asset}")
 cd "${release_dir}"
-./bin/agentroomctl install \
+./bin/convenewirectl install \
   --release-dir "$PWD" \
   --checksums-sha256 "${pin}" \
-  --data-root /absolute/persistent/agentroom-central \
+  --data-root /absolute/persistent/convenewire-central \
   --mode direct_https \
   --domain team.example.com \
   --origin https://team.example.com:9443
-./bin/agentroomctl doctor \
-  --data-root /absolute/persistent/agentroom-central
+./bin/convenewirectl doctor \
+  --data-root /absolute/persistent/convenewire-central
 ```
 
 Point public DNS at the host, allow the selected inbound ports and outbound
@@ -248,14 +249,14 @@ then prepare the ignored settings and file-backed Owner recovery secret:
 
 ```bash
 git clone https://github.com/chenrgSix/AgentRoom.git
-cd AgentRoom
+cd AgentRoom                       # Repository hosting rename is still pending.
 git rev-parse HEAD                 # Record the exact deployed source revision.
 cp deploy/.env.example .env
 mkdir -p deploy/secrets
 umask 077
 openssl rand -hex 32 > deploy/secrets/owner_recovery_token
-openssl rand -hex 32                    # Paste as AGENT_ROOM_BRIDGE_SERVER_TOKEN.
-# Edit AGENT_ROOM_DOMAIN, AGENT_ROOM_PUBLIC_ORIGIN, and the Bridge Token in .env.
+openssl rand -hex 32                    # Paste as CONVENE_WIRE_BRIDGE_SERVER_TOKEN.
+# Edit CONVENE_WIRE_DOMAIN, CONVENE_WIRE_PUBLIC_ORIGIN, and the Bridge Token in .env.
 docker compose config --quiet
 docker compose build --pull agentroom
 docker compose up -d
@@ -290,7 +291,7 @@ npm run validate
 npm run build
 npm test
 npm run test:e2e
-cd bridge && go test ./... && go build ./cmd/agentroom-bridge
+cd bridge && go test ./... && go build ./cmd/convenewire-bridge
 ```
 
 `npm run test:e2e:live` explicitly invokes local Codex and Pi with bounded
@@ -315,8 +316,8 @@ artifact.
 
 ## License
 
-AgentRoom is source-available under the
-[AgentRoom Community License 1.0](LICENSE). It permits commercial and
+ConveneWire is source-available under the
+[ConveneWire Community License 1.0](LICENSE). It permits commercial and
 noncommercial use inside one organization, any number of Team and Room records,
 source modification, self-hosting, product integrations, and one dedicated
 deployment for one customer. A separate commercial license is required for

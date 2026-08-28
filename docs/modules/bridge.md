@@ -39,7 +39,7 @@ not a replacement for the per-Device bearer credential.
 ## Managed Enrollment Compatibility
 
 The legacy client-created setup begins with
-`agentroom-bridge join --server <url>`. The Bridge detects the local Codex
+`convenewire-bridge join --server <url>`. The Bridge detects the local Codex
 executable and workspace, submits Device and Agent metadata, and displays a
 ten-minute short code. A Team owner enters that code in Web. The Bridge polls
 with a separate high-entropy token, claims the approved identity, atomically
@@ -90,7 +90,7 @@ profiles without creating a new Device.
 `BRG-043` implements the local half of this flow. The desktop app, loopback
 Console, and headless `pair-device` CLI accept the canonical fragment-bearing
 link or a manual short code. The installed macOS app and Windows current-user
-installer register `agentroom://`; a QR encodes that same link, while portable
+installer register `convenewire://`; a QR encodes that same link, while portable
 clients retain paste and short-code fallback. The desktop nests the link only
 inside the authenticated WebView URL fragment and clears it after local
 prefill. Claim and poll retries preserve one attempt, operation, and poll
@@ -107,7 +107,7 @@ the Device claim boundary.
 
 ## Local Configuration Console
 
-`agentroom-bridge console` starts the recommended client setup surface on
+`convenewire-bridge console` starts the recommended client setup surface on
 `127.0.0.1:3210`, opens and prints a one-time random Console URL, and
 automatically runs an existing paired Bridge. `--no-open` supports headless
 environments. Static assets are embedded in the Go binary, so no Node.js
@@ -199,7 +199,7 @@ description associated with that selector.
 
 `BRG-035` keeps the configuration warning concise and adds an embedded,
 always-available Codex Task Session guide to the Console. The guide separates
-AgentRoom Task, Run, and native Codex session semantics; explains the exact
+ConveneWire Task, Run, and native Codex session semantics; explains the exact
 reuse and recreation boundaries; provides recovery steps for retryable
 `CODEX_SESSION_IN_USE` and `CODEX_SESSION_RESUME_FAILED`; and explicitly states
 that shared App Server daemon operation is not enabled by the current Bridge.
@@ -585,7 +585,7 @@ The Windows amd64 desktop preview ships as both an unsigned portable ZIP and an
 unsigned current-user installer built on a native Windows runner. The installer
 uses a stable application identity, installs under LocalAppData without
 elevation, registers a personal Start menu shortcut, uninstaller, and the
-`agentroom://` Device pairing protocol, and offers an optional desktop shortcut.
+`convenewire://` Device pairing protocol, and offers an optional desktop shortcut.
 Upgrade and uninstall own program files and protocol registration only;
 configuration and credentials under the user's application-data directory or a
 configured external DataDir remain outside installer ownership.
@@ -677,7 +677,7 @@ Each archive contains the binary, client README, and an OS-specific launcher.
 The macOS `.command` and Windows `.cmd` launchers are directly clickable; Linux
 ships an executable shell launcher. The launchers start `console`, which opens
 the token-authenticated loopback UI without requiring terminal configuration.
-The GUI archive contains **AgentRoom Bridge.app** and its license material; it
+The GUI archive contains **ConveneWire Bridge.app** and its license material; it
 does not contain or require an Apple signature or notarization ticket.
 
 The first release artifacts are unsigned. Desktop packages remain unsigned by

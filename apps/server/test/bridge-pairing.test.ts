@@ -11,7 +11,7 @@ import { createServerApp } from "../src/app.js";
 const now = "2026-08-22T10:00:00.000Z";
 
 test("a Bridge pairing invitation is short-lived and single-use", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-pair-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-pair-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => now
@@ -65,7 +65,7 @@ test("a Bridge pairing invitation is short-lived and single-use", async () => {
 });
 
 test("a client join request requires Owner approval and claims one stable Device", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-join-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-join-"));
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({ databasePath, clock: () => now });
   let pollToken = "";

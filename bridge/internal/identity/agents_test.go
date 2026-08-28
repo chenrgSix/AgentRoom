@@ -3,7 +3,7 @@ package identity
 import (
 	"testing"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 func TestAgentIdentitySurvivesReload(t *testing.T) {

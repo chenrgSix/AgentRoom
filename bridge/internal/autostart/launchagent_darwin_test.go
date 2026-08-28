@@ -15,7 +15,7 @@ func TestLaunchAgentEnableDisableIsIdempotentAndContainsNoCredential(t *testing.
 	plistPath := filepath.Join(directory, "LaunchAgents", "bridge.plist")
 	calls := 0
 	controller := newLaunchAgentController(
-		"/Applications/AgentRoom Bridge.app/Contents/MacOS/agentroom-bridge-desktop",
+		"/Applications/ConveneWire Bridge.app/Contents/MacOS/convenewire-bridge-desktop",
 		[]string{"--background", "--config", filepath.Join(directory, "bridge.json")},
 		plistPath,
 		"gui/501",
@@ -58,11 +58,11 @@ func TestLaunchAgentEnableDisableIsIdempotentAndContainsNoCredential(t *testing.
 func TestLaunchAgentStateDetectsMovedApplication(t *testing.T) {
 	directory := t.TempDir()
 	plistPath := filepath.Join(directory, "bridge.plist")
-	first := newLaunchAgentController("/Applications/AgentRoom Bridge.app/Contents/MacOS/agentroom-bridge-desktop", nil, plistPath, "gui/501", func(context.Context, string, ...string) ([]byte, error) { return nil, nil })
+	first := newLaunchAgentController("/Applications/ConveneWire Bridge.app/Contents/MacOS/convenewire-bridge-desktop", nil, plistPath, "gui/501", func(context.Context, string, ...string) ([]byte, error) { return nil, nil })
 	if _, err := first.SetEnabled(context.Background(), true); err != nil {
 		t.Fatal(err)
 	}
-	moved := newLaunchAgentController("/Users/test/AgentRoom Bridge.app/Contents/MacOS/agentroom-bridge-desktop", nil, plistPath, "gui/501", func(context.Context, string, ...string) ([]byte, error) { return nil, nil })
+	moved := newLaunchAgentController("/Users/test/ConveneWire Bridge.app/Contents/MacOS/convenewire-bridge-desktop", nil, plistPath, "gui/501", func(context.Context, string, ...string) ([]byte, error) { return nil, nil })
 	state, err := moved.State()
 	if err != nil || !state.Enabled || !state.PathMismatch {
 		t.Fatalf("expected moved app mismatch, got %#v, %v", state, err)

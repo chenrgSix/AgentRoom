@@ -17,7 +17,7 @@ import { TeamRoomService } from "../src/team-room/team-room-service.js";
 const now = "2026-08-27T08:00:00.000Z";
 
 test("Agent provisioning is owner-scoped, idempotent, and converges on publication", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-provision-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-provision-"));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   let database = openDatabase(databasePath);

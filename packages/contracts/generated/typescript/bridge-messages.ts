@@ -690,7 +690,7 @@ export interface RunStatusPayload {
   /**
    * Stable, client-safe error returned at a protocol boundary.
    */
-  error?:   AgentRoomError;
+  error?:   ConveneWireError;
   session?: LogicalSessionStatus;
   status:   RunExecutionStatus;
   [property: string]: unknown;
@@ -705,7 +705,7 @@ export interface TaskClarificationRequest {
 /**
  * Stable, client-safe error returned at a protocol boundary.
  */
-export interface AgentRoomError {
+export interface ConveneWireError {
   code:      string;
   details?:  { [key: string]: unknown };
   message:   string;

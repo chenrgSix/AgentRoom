@@ -2,6 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 
 import { AuthorizationError } from "./auth-service.js";
 
+// This released authentication header is a stable wire identifier.
 export const bridgeServerTokenHeader = "x-agentroom-server-token";
 
 export function normalizeBridgeServerToken(value: string | undefined): string | undefined {
@@ -9,7 +10,7 @@ export function normalizeBridgeServerToken(value: string | undefined): string | 
   const normalized = value.trim();
   const length = Buffer.byteLength(normalized, "utf8");
   if (length < 32 || length > 512 || /[\r\n]/u.test(normalized)) {
-    throw new Error("AGENT_ROOM_BRIDGE_SERVER_TOKEN must contain 32 to 512 bytes");
+    throw new Error("CONVENE_WIRE_BRIDGE_SERVER_TOKEN must contain 32 to 512 bytes");
   }
   return normalized;
 }

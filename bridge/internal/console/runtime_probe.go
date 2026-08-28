@@ -5,9 +5,9 @@ import (
 	"strings"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	bridgeruntime "agentroom.dev/bridge/internal/runtime"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 const runtimeProbeTimeout = 45 * time.Second
@@ -49,7 +49,7 @@ func ProbeRuntime(ctx context.Context, agent config.AgentConfig) RuntimeProbeRes
 
 	var reply string
 	var terminalStatus *contracts.RunExecutionStatus
-	var terminalError *contracts.AgentRoomError
+	var terminalError *contracts.ConveneWireError
 	err := adapter.Execute(probeContext, bridgeruntime.Request{
 		Run: contracts.RunRequestedPayload{
 			Instruction: "Reply exactly AGENTROOM_READY. Do not inspect or modify files.",

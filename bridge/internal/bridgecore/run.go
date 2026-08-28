@@ -5,15 +5,15 @@ import (
 	"errors"
 	"path/filepath"
 
-	bridgeartifact "agentroom.dev/bridge/internal/artifact"
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/connection"
-	"agentroom.dev/bridge/internal/delivery"
-	"agentroom.dev/bridge/internal/identity"
-	"agentroom.dev/bridge/internal/operations"
-	"agentroom.dev/bridge/internal/pairing"
-	bridgeruntime "agentroom.dev/bridge/internal/runtime"
-	contracts "agentroom.dev/contracts/generated/go"
+	bridgeartifact "convenewire.dev/bridge/internal/artifact"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/connection"
+	"convenewire.dev/bridge/internal/delivery"
+	"convenewire.dev/bridge/internal/identity"
+	"convenewire.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/pairing"
+	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 // Run starts one managed Bridge connection and blocks until the context ends.

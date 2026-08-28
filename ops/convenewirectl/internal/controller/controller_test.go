@@ -50,7 +50,7 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 		return "2.33.1\n", nil
 	}
 	if strings.Contains(joined, " images ") {
-		return `{"Repository":"agentroom/server","Tag":"target"}` + "\n", nil
+		return `{"Repository":"convenewire/server","Tag":"target"}` + "\n", nil
 	}
 	if strings.Contains(joined, " ps ") {
 		return `[{"Service":"agentroom","State":"running"}]` + "\n", nil
@@ -65,7 +65,7 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 		return strings.Repeat("a", 64) + "  /safe/agent-room.sqlite\n", nil
 	}
 	if command.Name == "bash" && strings.Contains(joined, "compose-restore.sh") {
-		return "Set AGENT_ROOM_DATABASE_PATH=/data/restored.sqlite, then run docker compose up -d.\n", nil
+		return "Set CONVENE_WIRE_DATABASE_PATH=/data/restored.sqlite, then run docker compose up -d.\n", nil
 	}
 	return "", nil
 }
@@ -78,7 +78,7 @@ func writeTestCA(t *testing.T, path string, now time.Time) string {
 	}
 	template := &x509.Certificate{
 		SerialNumber:          big.NewInt(1),
-		Subject:               pkix.Name{CommonName: "AgentRoom test CA"},
+		Subject:               pkix.Name{CommonName: "ConveneWire test CA"},
 		NotBefore:             now.Add(-time.Hour),
 		NotAfter:              now.Add(24 * time.Hour),
 		IsCA:                  true,
@@ -124,7 +124,7 @@ func installOptions(releaseDir, dataRoot string) InstallOptions {
 		Mode:     "local", Domain: "localhost",
 		PublicOrigin: "https://localhost:19443",
 		HTTPPort:     19080, HTTPSPort: 19443,
-		ProjectName: "agentroom-test",
+		ProjectName: "convenewire-test",
 	}
 }
 
@@ -145,7 +145,7 @@ func createReleaseForTarget(t *testing.T, parent, version string, dataSchema int
 	t.Helper()
 	releaseDir := filepath.Join(parent, strings.ReplaceAll(version, ".", "_")+"_"+targetOS+"_"+targetArch)
 	files := map[string]string{
-		"agentroom-central-release.json": fmt.Sprintf(
+		"convenewire-central-release.json": fmt.Sprintf(
 			"{\"schemaVersion\":1,\"releaseVersion\":%q,\"dataSchemaVersion\":%d,\"sourceCommit\":%q,\"targetOS\":%q,\"targetArch\":%q}\n",
 			version, dataSchema, strings.Repeat("a", 40), targetOS, targetArch,
 		),
@@ -252,10 +252,10 @@ func TestInstallIsReentrantAndKeepsSecretsOutOfConfiguration(t *testing.T) {
 		t.Fatalf("running reentry must not claim service ports again: %d", portChecks)
 	}
 	environment, _ := os.ReadFile(second.EnvironmentPath)
-	if bytes.Contains(environment, bytes.TrimSpace(secretBefore)) || bytes.Contains(environment, []byte("AGENT_ROOM_BRIDGE_SERVER_TOKEN")) {
+	if bytes.Contains(environment, bytes.TrimSpace(secretBefore)) || bytes.Contains(environment, []byte("CONVENE_WIRE_BRIDGE_SERVER_TOKEN")) {
 		t.Fatal("generated environment retained a plaintext authority secret")
 	}
-	if !bytes.Contains(environment, []byte("AGENT_ROOM_BIND_ADDRESS=127.0.0.1")) {
+	if !bytes.Contains(environment, []byte("CONVENE_WIRE_BIND_ADDRESS=127.0.0.1")) {
 		t.Fatal("local install did not bind ingress to loopback")
 	}
 	override, _ := os.ReadFile(second.OverridePath)
@@ -445,7 +445,7 @@ func TestSupportedHostAndNetworkModeValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	value, _ := os.ReadFile(filepath.Join(direct.DataRoot, "control", "agentroom.env"))
-	if !bytes.Contains(value, []byte("AGENT_ROOM_BIND_ADDRESS=0.0.0.0")) {
+	if !bytes.Contains(value, []byte("CONVENE_WIRE_BIND_ADDRESS=0.0.0.0")) {
 		t.Fatal("direct_https did not publish through the direct bind boundary")
 	}
 }
@@ -555,7 +555,7 @@ func TestFailedUpgradeReportsActiveImageAndPreservesOldManifest(t *testing.T) {
 		ChecksumsSHA256: checksumPin(targetRelease),
 	})
 	action := requireActionCode(t, err, "UPGRADE_START_FAILED")
-	if !strings.Contains(action.Message, "agentroom/server") {
+	if !strings.Contains(action.Message, "convenewire/server") {
 		t.Fatalf("failed upgrade omitted active image state: %s", action.Message)
 	}
 	manifest, _, _ := loadManifest(installationPaths(dataRoot).ManifestPath)

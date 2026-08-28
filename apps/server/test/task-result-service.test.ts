@@ -6,7 +6,7 @@ import test from "node:test";
 
 import Database from "better-sqlite3";
 
-import type { ResultProposal } from "@agent-room/contracts/task-result";
+import type { ResultProposal } from "@convene-wire/contracts/task-result";
 
 import { createServerApp } from "../src/app.js";
 import { CoreRepository } from "../src/data/core-repository.js";
@@ -20,7 +20,7 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 const now = "2026-08-28T14:00:00.000Z";
 
 async function setup() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-result-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-result-"));
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({ databasePath, clock: () => now, logger: false });
   const bootstrap = await app.inject({

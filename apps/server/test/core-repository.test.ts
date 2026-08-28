@@ -12,7 +12,7 @@ import { migrateDatabase } from "../src/data/migration-runner.js";
 const createdAt = "2026-08-22T10:00:00.000Z";
 
 async function createDatabasePath(): Promise<string> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-core-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-core-"));
   const databasePath = path.join(directory, "data", "server.sqlite");
   await prepareDatabaseDirectory(databasePath);
   await migrateDatabase(databasePath);

@@ -1,9 +1,14 @@
-# AgentRoom Central Controller
+# ConveneWire Central Controller
 
-Use the `agentroomctl` binary shipped in the Central archive for the host's
+Use the `convenewirectl` binary shipped in the Central archive for the host's
 operating system and architecture. Keep the extracted release directory
 unchanged: every lifecycle command re-verifies it before executing Compose or a
 release-owned script.
+
+Default owner-state directories and the hidden Compose project, service,
+manifest, and database identities retain their released `AgentRoom` names so
+an in-place upgrade reopens the same installation. New archives, commands,
+images, and generated environment variables use ConveneWire naming.
 
 The separately downloaded `*.SHA256SUMS.sha256` asset contains the digest to
 pass with `--checksums-sha256`. It is not the same as the outer Release
@@ -12,10 +17,10 @@ pass with `--checksums-sha256`. It is not the same as the outer Release
 For a loopback-only first installation:
 
 ```sh
-./bin/agentroomctl install \
+./bin/convenewirectl install \
   --release-dir "$PWD" \
   --checksums-sha256 '<published internal checksum digest>' \
-  --data-root '/absolute/persistent/agentroom-central' \
+  --data-root '/absolute/persistent/convenewire-central' \
   --mode local \
   --domain localhost \
   --origin https://localhost:9443
@@ -27,10 +32,10 @@ Omitting `--tls-profile` selects fail-closed public ACME and normal system
 trust. For a private IP or name, explicitly select Bridge-scoped trust:
 
 ```sh
-./bin/agentroomctl install \
+./bin/convenewirectl install \
   --release-dir "$PWD" \
   --checksums-sha256 '<published internal checksum digest>' \
-  --data-root '/absolute/persistent/agentroom-central' \
+  --data-root '/absolute/persistent/convenewire-central' \
   --mode direct_https \
   --tls-profile private_scoped_ca \
   --domain 192.168.1.132 \
@@ -47,12 +52,12 @@ root. Rotate that deployment in two explicit phases while the current CA is
 still serving:
 
 ```sh
-./bin/agentroomctl trust-rotation prepare \
-  --data-root '/absolute/persistent/agentroom-central' \
+./bin/convenewirectl trust-rotation prepare \
+  --data-root '/absolute/persistent/convenewire-central' \
   --overlap 24h
 
-./bin/agentroomctl trust-rotation activate \
-  --data-root '/absolute/persistent/agentroom-central'
+./bin/convenewirectl trust-rotation activate \
+  --data-root '/absolute/persistent/convenewire-central'
 ```
 
 `prepare` makes Caddy provision one named next authority and publishes only its
@@ -67,8 +72,8 @@ For a schema-v1 legacy installation already serving a publicly trusted DNS
 certificate, the explicit inspected migration is:
 
 ```sh
-./bin/agentroomctl migrate-public-ca \
-  --data-root '/absolute/persistent/agentroom-central'
+./bin/convenewirectl migrate-public-ca \
+  --data-root '/absolute/persistent/convenewire-central'
 ```
 
 It requires system-only HTTPS/WebSocket readiness both before and after the

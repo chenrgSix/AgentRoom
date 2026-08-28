@@ -2,7 +2,7 @@ import type {
   ResultProjection,
   RunContextManifest,
   TaskProjection
-} from "@agent-room/contracts/task-result";
+} from "@convene-wire/contracts/task-result";
 import React from "react";
 import {
   type KeyboardEvent,

@@ -1,4 +1,4 @@
-# Agent Room Contracts
+# ConveneWire Contracts
 
 This package is the authoritative source for cross-language wire schemas.
 Generated TypeScript and Go types consume these files; handwritten wire models
@@ -7,12 +7,12 @@ are not allowed. Node.js 22 and Go 1.26.7 are required.
 ## Commands
 
 ```bash
-npm run validate --workspace @agent-room/contracts
-npm run generate --workspace @agent-room/contracts
-npm run check:generated --workspace @agent-room/contracts
-npm run check:types --workspace @agent-room/contracts
-npm run build --workspace @agent-room/contracts
-npm test --workspace @agent-room/contracts
+npm run validate --workspace @convene-wire/contracts
+npm run generate --workspace @convene-wire/contracts
+npm run check:generated --workspace @convene-wire/contracts
+npm run check:types --workspace @convene-wire/contracts
+npm run build --workspace @convene-wire/contracts
+npm test --workspace @convene-wire/contracts
 ```
 
 `validate` checks every schema against JSON Schema 2020-12, verifies that

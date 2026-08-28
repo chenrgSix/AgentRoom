@@ -34,7 +34,7 @@ async function stopProcess(process: ChildProcess): Promise<void> {
 }
 
 async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<void> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-e2e-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-e2e-"));
   const bridgeServerToken = "managed-e2e-central-token-12345678901234567890";
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
@@ -81,9 +81,9 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
     });
     const pairingCode = inviteResponse.json().code as string;
 
-    const bridgeBinary = path.join(directory, "agentroom-bridge");
-    const goBinary = process.env.AGENT_ROOM_GO_BIN ?? "go";
-    await execFileAsync(goBinary, ["build", "-o", bridgeBinary, "./cmd/agentroom-bridge"], {
+    const bridgeBinary = path.join(directory, "convenewire-bridge");
+    const goBinary = process.env.CONVENE_WIRE_GO_BIN ?? "go";
+    await execFileAsync(goBinary, ["build", "-o", bridgeBinary, "./cmd/convenewire-bridge"], {
       cwd: path.join(repositoryRoot, "bridge")
     });
     const piReply = `PI STREAMING FINAL ${"RESULT ".repeat(14).trim()}`;
@@ -94,7 +94,7 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
       "const sessionIndex = process.argv.indexOf('--session-id');",
       "const nameIndex = process.argv.indexOf('--name');",
       "if (sessionIndex < 0 || !/^[0-9a-f-]{36}$/.test(process.argv[sessionIndex + 1] ?? '') ||",
-      "    nameIndex < 0 || !(process.argv[nameIndex + 1] ?? '').startsWith('AgentRoom · Pi Builder · ')) process.exit(2);",
+      "    nameIndex < 0 || !(process.argv[nameIndex + 1] ?? '').startsWith('ConveneWire · Pi Builder · ')) process.exit(2);",
       "const send = (event) => process.stdout.write(`${JSON.stringify(event)}\\n`);",
       "send({ type: 'message_start', message: { role: 'assistant', content: [] } });",
       `send({ type: 'message_update', assistantMessageEvent: { type: 'thinking_delta', delta: ${JSON.stringify(`${piReasoning} token=split`)} } });`,

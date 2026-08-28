@@ -39,7 +39,7 @@ func (controller *Controller) Status(ctx context.Context, dataRoot string) error
 	output, err := controller.runCompose(ctx, installation, environment,
 		"ps", "--all", "--format", "json")
 	if err != nil {
-		return actionError("STATUS_FAILED", "could not read the AgentRoom Compose state", "Check Docker access and run agentroomctl doctor with the same data root.", err)
+		return actionError("STATUS_FAILED", "could not read the ConveneWire Compose state", "Check Docker access and run convenewirectl doctor with the same data root.", err)
 	}
 	fmt.Fprintf(controller.dependencies.Output,
 		"Release: %s\nOrigin: %s\nTLS profile: %s\nInstallation ID: %s\nLast successful step: %s\nCompose state:\n%s",
@@ -116,7 +116,7 @@ func (controller *Controller) Backup(ctx context.Context, dataRoot string) error
 	if err != nil {
 		return err
 	}
-	environment["AGENT_ROOM_BACKUP_DIR"] = filepath.Join(installation.Manifest.DataRoot, "exports")
+	environment["CONVENE_WIRE_BACKUP_DIR"] = filepath.Join(installation.Manifest.DataRoot, "exports")
 	output, err := controller.dependencies.Runner.Run(ctx, Command{
 		Dir: installation.Manifest.ReleaseDir, Env: environment, Name: "bash",
 		Args: []string{filepath.Join(installation.Manifest.ReleaseDir, "scripts", "compose-backup.sh")},
@@ -135,7 +135,7 @@ func (controller *Controller) Restore(ctx context.Context, dataRoot, backupPath,
 	}
 	absoluteBackup, err := filepath.Abs(strings.TrimSpace(backupPath))
 	if err != nil || absoluteBackup != filepath.Clean(backupPath) {
-		return actionError("RESTORE_PATH_INVALID", "restore source must be an absolute file path", "Pass the verified absolute backup path printed by agentroomctl backup.", err)
+		return actionError("RESTORE_PATH_INVALID", "restore source must be an absolute file path", "Pass the verified absolute backup path printed by convenewirectl backup.", err)
 	}
 	info, err := os.Lstat(absoluteBackup)
 	if err != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
@@ -187,7 +187,7 @@ func (controller *Controller) Uninstall(ctx context.Context, dataRoot string) er
 		return err
 	}
 	if _, err := controller.runCompose(ctx, installation, environment, "down", "--remove-orphans"); err != nil {
-		return actionError("UNINSTALL_FAILED", "AgentRoom containers could not be removed safely", "Resolve Docker access or container errors and retry; no data volume or host data was requested for deletion.", err)
+		return actionError("UNINSTALL_FAILED", "ConveneWire containers could not be removed safely", "Resolve Docker access or container errors and retry; no data volume or host data was requested for deletion.", err)
 	}
 	for _, path := range []string{installation.EnvironmentPath, installation.OverridePath} {
 		if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
@@ -199,7 +199,7 @@ func (controller *Controller) Uninstall(ctx context.Context, dataRoot string) er
 		return err
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"AgentRoom containers and generated runtime configuration were removed.\nPreserved data root: %s\nPreserved recovery file: %s\nNo purge was performed.\n",
+		"ConveneWire containers and generated runtime configuration were removed.\nPreserved data root: %s\nPreserved recovery file: %s\nNo purge was performed.\n",
 		installation.Manifest.DataRoot, installation.OwnerSecretPath,
 	)
 	return nil
@@ -244,7 +244,7 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 		return actionError("RELEASE_TARGET_MISMATCH", "target release does not match this host", "Use the target Central archive published for this host operating system and architecture.", nil)
 	}
 	if metadata.ReleaseVersion == current.Manifest.ReleaseVersion && digest == current.Manifest.ReleaseDigest {
-		return actionError("UPGRADE_NOT_NEEDED", "target release is already active", "Run agentroomctl doctor instead of changing installation state.", nil)
+		return actionError("UPGRADE_NOT_NEEDED", "target release is already active", "Run convenewirectl doctor instead of changing installation state.", nil)
 	}
 	if metadata.DataSchemaVersion < current.Manifest.DataSchemaVersion {
 		return actionError("UPGRADE_SCHEMA_INCOMPATIBLE", "target release owns an older data schema", "Select a forward-compatible release; automatic database downgrade is not supported.", nil)
@@ -326,7 +326,7 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 		return err
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"Upgraded AgentRoom from %s to %s after a verified backup.\nOrigin: %s\n",
+		"Upgraded ConveneWire from %s to %s after a verified backup.\nOrigin: %s\n",
 		current.Manifest.ReleaseVersion, targetManifest.ReleaseVersion,
 		targetManifest.PublicOrigin,
 	)
@@ -355,7 +355,7 @@ func (controller *Controller) activeRevisionState(ctx context.Context, installat
 	}
 	value := strings.TrimSpace(output)
 	if value == "" {
-		return "no agentroom image reported"
+		return "no convenewire image reported"
 	}
 	if len(value) > 500 {
 		value = value[:500]
@@ -374,7 +374,7 @@ func openInstallation(dataRoot string) (Installation, error) {
 		return Installation{}, err
 	}
 	if !found {
-		return Installation{}, actionError("INSTALLATION_NOT_FOUND", "no AgentRoom installation manifest exists at the selected data root", "Run agentroomctl install or select the original data root.", nil)
+		return Installation{}, actionError("INSTALLATION_NOT_FOUND", "no ConveneWire installation manifest exists at the selected data root", "Run convenewirectl install or select the original data root.", nil)
 	}
 	if manifest.DataRoot != absolute {
 		return Installation{}, actionError("MANIFEST_INVALID", "manifest data root does not match its resolved location", "Use the original data root; moving an installation requires an explicit future migration.", nil)

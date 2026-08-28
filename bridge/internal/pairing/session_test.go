@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/config"
 )
 
 func TestParseSessionLinkRequiresCanonicalSecretBearingLink(t *testing.T) {
@@ -24,7 +24,7 @@ func TestParseSessionLinkRequiresCanonicalSecretBearingLink(t *testing.T) {
 		"pairingSessionId": {"pairing_12345678"},
 		"expiresAt":        {expiresAt.Format(time.RFC3339)},
 	}
-	raw := "agentroom://pair-device?" + values.Encode() + "#claimSecret=" + claimSecret
+	raw := "convenewire://pair-device?" + values.Encode() + "#claimSecret=" + claimSecret
 
 	parsed, err := ParseSessionLink(raw)
 	if err != nil {
@@ -33,6 +33,9 @@ func TestParseSessionLinkRequiresCanonicalSecretBearingLink(t *testing.T) {
 	if parsed.ServerURL != "https://team.example" || parsed.PairingSessionID != "pairing_12345678" ||
 		parsed.ClaimSecret != claimSecret || !parsed.ExpiresAt.Equal(expiresAt) {
 		t.Fatalf("unexpected parsed link: %#v", parsed)
+	}
+	if _, err := ParseSessionLink(strings.Replace(raw, "convenewire://", "agentroom://", 1)); err != nil {
+		t.Fatalf("released AgentRoom scheme should remain accepted: %v", err)
 	}
 
 	httpsValues := url.Values{
@@ -46,7 +49,7 @@ func TestParseSessionLinkRequiresCanonicalSecretBearingLink(t *testing.T) {
 	}
 
 	invalid := []string{
-		"agentroom://pair-device?" + values.Encode() + "&claimSecret=" + claimSecret,
+		"convenewire://pair-device?" + values.Encode() + "&claimSecret=" + claimSecret,
 		raw + "&extra=value",
 		strings.Replace(raw, "https%3A%2F%2Fteam.example", "http%3A%2F%2Fteam.example", 1),
 		strings.Replace(raw, "pair-device", "other", 1),
@@ -128,7 +131,7 @@ func TestSessionClientRecoversClaimAndPollResponseLossWithoutChangingProof(t *te
 	defer server.Close()
 
 	expiresAt := sessionExpiresAt.Format(time.RFC3339)
-	link := "agentroom://pair-device?" + url.Values{
+	link := "convenewire://pair-device?" + url.Values{
 		"origin": {server.URL}, "pairingSessionId": {pairingSessionID}, "expiresAt": {expiresAt},
 	}.Encode() + "#claimSecret=" + claimSecret
 	var shown SessionStatus
@@ -280,7 +283,7 @@ func TestSessionClientBootstrapsPrivateTrustBeforeSendingClaimProof(t *testing.T
 		"trustEpoch":          {"1"},
 		"caCertificateSha256": {server.Digest},
 	}
-	link := "agentroom://pair-device?" + url.Values{
+	link := "convenewire://pair-device?" + url.Values{
 		"origin": {server.Server.URL}, "pairingSessionId": {"pairing_private123"},
 		"expiresAt": {expiresAt.Format(time.RFC3339)},
 	}.Encode() + "#" + fragment.Encode()
@@ -297,7 +300,7 @@ func TestSessionClientBootstrapsPrivateTrustBeforeSendingClaimProof(t *testing.T
 
 	wrongFragment := fragment
 	wrongFragment.Set("caCertificateSha256", strings.Repeat("b", 64))
-	wrongLink := "agentroom://pair-device?" + url.Values{
+	wrongLink := "convenewire://pair-device?" + url.Values{
 		"origin": {server.Server.URL}, "pairingSessionId": {"pairing_private124"},
 		"expiresAt": {expiresAt.Format(time.RFC3339)},
 	}.Encode() + "#" + wrongFragment.Encode()

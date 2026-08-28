@@ -1,4 +1,5 @@
 import { createServerApp } from "./app.js";
+import { renamedEnvironmentValue } from "./config/environment.js";
 import { resolveDatabasePath } from "./data/database-location.js";
 import { installGracefulShutdown } from "./graceful-shutdown.js";
 import {
@@ -10,19 +11,27 @@ import {
   ExtractiveMemoryReducerRunner
 } from "./memory/memory-reducer-runner.js";
 
-const port = Number.parseInt(process.env.AGENT_ROOM_PORT ?? "3000", 10);
+const environmentValue = (
+  suffix: string
+): string | undefined => renamedEnvironmentValue(
+  process.env,
+  `CONVENE_WIRE_${suffix}`,
+  `AGENT_ROOM_${suffix}`
+);
+
+const port = Number.parseInt(environmentValue("PORT") ?? "3000", 10);
 if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) {
-  throw new Error("AGENT_ROOM_PORT must be a valid TCP port");
+  throw new Error("CONVENE_WIRE_PORT must be a valid TCP port");
 }
-const host = process.env.AGENT_ROOM_HOST ?? "127.0.0.1";
+const host = environmentValue("HOST") ?? "127.0.0.1";
 if (host.trim().length === 0 || host.length > 253 || /[\s/]/u.test(host)) {
-  throw new Error("AGENT_ROOM_HOST must be a valid host or IP address");
+  throw new Error("CONVENE_WIRE_HOST must be a valid host or IP address");
 }
 const webAuth = await loadWebAuthConfiguration();
 const bridgeServerToken = normalizeBridgeServerToken(
-  process.env.AGENT_ROOM_BRIDGE_SERVER_TOKEN
+  environmentValue("BRIDGE_SERVER_TOKEN")
 );
-const trustProxySource = process.env.AGENT_ROOM_TRUST_PROXY_HOPS?.trim();
+const trustProxySource = environmentValue("TRUST_PROXY_HOPS");
 const trustProxyHops = trustProxySource === undefined || trustProxySource === ""
   ? undefined
   : Number.parseInt(trustProxySource, 10);
@@ -30,25 +39,26 @@ if (
   trustProxyHops !== undefined &&
   (!Number.isSafeInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 4)
 ) {
-  throw new Error("AGENT_ROOM_TRUST_PROXY_HOPS must be an integer from 0 to 4");
+  throw new Error("CONVENE_WIRE_TRUST_PROXY_HOPS must be an integer from 0 to 4");
 }
 assertWebAuthListener(webAuth, host, trustProxyHops);
-const memoryReducerKind = process.env.AGENT_ROOM_MEMORY_REDUCER?.trim();
+const memoryReducerKind = environmentValue("MEMORY_REDUCER");
 if (
   memoryReducerKind !== undefined && memoryReducerKind !== "" &&
   memoryReducerKind !== "extractive-v1"
 ) {
   throw new Error(
-    "AGENT_ROOM_MEMORY_REDUCER must be empty or extractive-v1"
+    "CONVENE_WIRE_MEMORY_REDUCER must be empty or extractive-v1"
   );
 }
 const memoryReducer = memoryReducerKind === "extractive-v1"
   ? new ExtractiveMemoryReducerRunner()
   : undefined;
 const deploymentTrustFile =
-  process.env.AGENT_ROOM_DEPLOYMENT_TRUST_FILE?.trim() || undefined;
+  environmentValue("DEPLOYMENT_TRUST_FILE");
 const deploymentTrustRotationFile =
-  process.env.AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE?.trim() || undefined;
+  environmentValue("DEPLOYMENT_TRUST_ROTATION_FILE");
+const webRoot = environmentValue("WEB_ROOT");
 
 const app = await createServerApp({
   databasePath: resolveDatabasePath(),
@@ -59,9 +69,7 @@ const app = await createServerApp({
   ...(memoryReducer ? { memoryReducer } : {}),
   ...(bridgeServerToken === undefined ? {} : { bridgeServerToken }),
   ...(trustProxyHops === undefined ? {} : { trustProxyHops }),
-  ...(process.env.AGENT_ROOM_WEB_ROOT
-    ? { webRoot: process.env.AGENT_ROOM_WEB_ROOT }
-    : {})
+  ...(webRoot ? { webRoot } : {})
 });
 
 await app.listen({ host, port });

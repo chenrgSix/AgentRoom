@@ -127,7 +127,7 @@ async function createFixture(
   loggerInstance?: FastifyBaseLogger,
   supportsAgentProvisioning = true
 ): Promise<BridgeFixture> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-bridge-ws-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-bridge-ws-"));
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({
     databasePath,

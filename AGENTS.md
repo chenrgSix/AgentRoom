@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-The implementation baseline is `agent_room_network_design_v0.2.md`;
+The implementation baseline is `convenewire_network_design_v0.2.md`;
 `agent_room_network_design_v0.1.md` is immutable historical context. Repository
 policy lives in `CONTRIBUTING.md`, and architecture decisions belong in
 `docs/adr/`. Module boundaries live in `docs/modules/`, and delivery state is
@@ -39,25 +39,25 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run db:migrate` — migrate the configured central SQLite database.
 - `npm run dev:server` — run the Fastify API on port 3000.
 - `npm run dev:web` — run the Vite browser UI with an API proxy.
-- `go run ./cmd/agentroom-bridge console` from `bridge/` — run the token-authenticated local client setup UI.
-- `go run ./cmd/agentroom-bridge artifact publish --config /path/bridge.json --agent Builder --run-id run_... --type patch --file change.patch --title "Verified patch" --summary "What changed"` from `bridge/` — publish one bounded Workspace-relative snapshot for an active assigned Run.
-- `go run ./cmd/agentroom-bridge result propose --help` from `bridge/` — submit one inline, contract-valid immutable Result for a configured Agent and exact assigned Run; the command never accepts a proposal file or review/completion action.
-- `go build -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — build the native Wails Bridge GUI for the current platform.
-- `go test -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — verify desktop-only state mapping and compile its native shell.
-- `go test ./... && go vet ./... && go build ./cmd/agentroomctl` from `ops/agentroomctl/` — verify and build the central lifecycle controller.
-- `agentroomctl trust-rotation prepare --data-root /path --overlap 24h` followed by `agentroomctl trust-rotation activate --data-root /path` — stage an authenticated two-CA Bridge overlap, wait for every eligible Device acknowledgement, and switch the private Caddy authority with rollback-safe readiness.
-- `agentroomctl migrate-public-ca --data-root /path` — explicitly relabel only a legacy direct-HTTPS installation whose existing origin passes system-only public-CA readiness before and after migration.
-- `RELEASE_TAG=v0.4.0-rc.1 SOURCE_REF=HEAD GOOS=linux GOARCH=amd64 ./scripts/package-central-release.sh` from `ops/agentroomctl/` — package one exact-commit, checksum-pinned Central archive.
+- `go run ./cmd/convenewire-bridge console` from `bridge/` — run the token-authenticated local client setup UI.
+- `go run ./cmd/convenewire-bridge artifact publish --config /path/bridge.json --agent Builder --run-id run_... --type patch --file change.patch --title "Verified patch" --summary "What changed"` from `bridge/` — publish one bounded Workspace-relative snapshot for an active assigned Run.
+- `go run ./cmd/convenewire-bridge result propose --help` from `bridge/` — submit one inline, contract-valid immutable Result for a configured Agent and exact assigned Run; the command never accepts a proposal file or review/completion action.
+- `go build -tags desktop ./cmd/convenewire-bridge-desktop` from `bridge/` — build the native Wails Bridge GUI for the current platform.
+- `go test -tags desktop ./cmd/convenewire-bridge-desktop` from `bridge/` — verify desktop-only state mapping and compile its native shell.
+- `go test ./... && go vet ./... && go build ./cmd/convenewirectl` from `ops/convenewirectl/` — verify and build the central lifecycle controller.
+- `convenewirectl trust-rotation prepare --data-root /path --overlap 24h` followed by `convenewirectl trust-rotation activate --data-root /path` — stage an authenticated two-CA Bridge overlap, wait for every eligible Device acknowledgement, and switch the private Caddy authority with rollback-safe readiness.
+- `convenewirectl migrate-public-ca --data-root /path` — explicitly relabel only a legacy direct-HTTPS installation whose existing origin passes system-only public-CA readiness before and after migration.
+- `RELEASE_TAG=v0.4.0-rc.1 SOURCE_REF=HEAD GOOS=linux GOARCH=amd64 ./scripts/package-central-release.sh` from `ops/convenewirectl/` — package one exact-commit, checksum-pinned Central archive.
 - `RELEASE_TAG=v0.2.0-rc.3 GOOS=linux GOARCH=amd64 ./scripts/package-release.sh` from `bridge/` — build one portable Bridge archive.
 - `RELEASE_TAG=v0.2.0-rc.3 GOARCH=arm64 ./scripts/package-desktop-darwin.sh` from `bridge/` — build one unsigned native macOS GUI archive.
 - `pwsh -File ./scripts/package-desktop-windows.ps1 -ReleaseTag v0.2.0-rc.3 -GoArch amd64` from `bridge/` on native Windows with Inno Setup — build one unsigned Windows GUI archive and current-user installer.
 - `pwsh -File ./scripts/verify-desktop-windows-installer.ps1 -ReleaseTag v0.2.0-rc.3 -InstallerPath /path/to/setup.exe` from `bridge/` on native Windows — smoke-test install, in-place upgrade, uninstall, and owner-state preservation.
-- Dispatching the AgentRoom Release workflow for an empty draft Release builds and verifies five Bridge CLI archives, two macOS GUI archives, one Windows GUI archive, one Windows installer, four Central archives with separate internal-checksum pins, the outer checksums, and license assets.
+- Dispatching the ConveneWire Release workflow for an empty draft Release builds and verifies five Bridge CLI archives, two macOS GUI archives, one Windows GUI archive, one Windows installer, four Central archives with separate internal-checksum pins, the outer checksums, and license assets.
 - `docker compose up -d --build` — run the trusted-team Server and Caddy profile.
 - `./scripts/compose-backup.sh` — create and copy a verified online SQLite backup.
 - `./scripts/compose-restore.sh /absolute/backup.sqlite` — stage a verified restore under a new database name while Server is stopped.
-- `npm run generate --workspace @agent-room/contracts` — regenerate wire types.
-- `rg '^#' agent_room_network_design_v0.2.md` — review heading hierarchy.
+- `npm run generate --workspace @convene-wire/contracts` — regenerate wire types.
+- `rg '^#' convenewire_network_design_v0.2.md` — review heading hierarchy.
 - `npm run lint:docs` — lint maintained Markdown.
 - `rg '^\| [A-Z]+-[0-9]+' docs/TASKS.md` — review registered task IDs.
 

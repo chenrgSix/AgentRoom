@@ -30,8 +30,9 @@ bin/
 /var/
 /apps/*/var/
 /bridge/var/
-/bridge/agentroom-bridge
-/ops/agentroomctl/agentroomctl
+/bridge/convenewire-bridge
+/ops/convenewirectl/convenewirectl
+/ops/convenewirectl/agentroomctl
 /backups/
 /deploy/secrets/
 *.log

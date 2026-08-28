@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"agentroom.dev/bridge/internal/config"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 type CodexAdapter struct {

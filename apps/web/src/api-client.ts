@@ -31,7 +31,14 @@ export async function jsonRequest<T>(
 }
 
 export function bridgeServerURL(): string {
-  const configured = import.meta.env?.VITE_AGENT_ROOM_SERVER_URL?.trim();
+  const current = import.meta.env?.VITE_CONVENE_WIRE_SERVER_URL?.trim();
+  const legacy = import.meta.env?.VITE_AGENT_ROOM_SERVER_URL?.trim();
+  if (current && legacy && current !== legacy) {
+    throw new Error(
+      "VITE_CONVENE_WIRE_SERVER_URL conflicts with legacy VITE_AGENT_ROOM_SERVER_URL"
+    );
+  }
+  const configured = current || legacy;
   if (configured) return configured.replace(/\/$/u, "");
   if (window.location.port === "5173") {
     return `${window.location.protocol}//${window.location.hostname}:3000`;

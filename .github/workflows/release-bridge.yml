@@ -1,4 +1,4 @@
-name: Release AgentRoom
+name: Release ConveneWire
 
 on:
   workflow_dispatch:
@@ -103,7 +103,7 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: agentroom-bridge-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: convenewire-bridge-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             dist/*.tar.gz
             dist/*.zip
@@ -136,20 +136,20 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
         with:
-          go-version-file: ops/agentroomctl/go.mod
-          cache-dependency-path: ops/agentroomctl/go.mod
+          go-version-file: ops/convenewirectl/go.mod
+          cache-dependency-path: ops/convenewirectl/go.mod
 
       - name: Build checksum-pinned Central archive
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
-        run: ./ops/agentroomctl/scripts/package-central-release.sh
+        run: ./ops/convenewirectl/scripts/package-central-release.sh
 
       - name: Upload Central artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: agentroom-central-${{ matrix.goos }}-${{ matrix.goarch }}
+          name: convenewire-central-${{ matrix.goos }}-${{ matrix.goarch }}
           path: |
             dist/*.tar.gz
             dist/*.SHA256SUMS.sha256
@@ -185,7 +185,7 @@ jobs:
 
       - name: Test desktop shell
         working-directory: bridge
-        run: go test -tags desktop ./cmd/agentroom-bridge-desktop
+        run: go test -tags desktop ./cmd/convenewire-bridge-desktop
 
       - name: Build unsigned desktop archive
         shell: bash
@@ -198,7 +198,7 @@ jobs:
       - name: Upload desktop artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: agentroom-bridge-desktop-darwin-${{ matrix.goarch }}
+          name: convenewire-bridge-desktop-darwin-${{ matrix.goarch }}
           path: dist/*.zip
           if-no-files-found: error
           retention-days: 7
@@ -226,8 +226,8 @@ jobs:
         working-directory: bridge
         shell: pwsh
         run: |
-          go test -tags desktop ./cmd/agentroom-bridge-desktop
-          go vet -tags desktop ./cmd/agentroom-bridge-desktop
+          go test -tags desktop ./cmd/convenewire-bridge-desktop
+          go vet -tags desktop ./cmd/convenewire-bridge-desktop
 
       - name: Build and verify unsigned desktop packages
         working-directory: bridge
@@ -240,12 +240,12 @@ jobs:
           $version = $env:RELEASE_TAG.Substring(1)
           ./scripts/verify-desktop-windows-installer.ps1 `
             -ReleaseTag $env:RELEASE_TAG `
-            -InstallerPath (Join-Path $env:OUTPUT_DIR "agentroom-bridge-desktop_${version}_windows_amd64_setup.exe")
+            -InstallerPath (Join-Path $env:OUTPUT_DIR "convenewire-bridge-desktop_${version}_windows_amd64_setup.exe")
 
       - name: Upload desktop artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: agentroom-bridge-desktop-windows-amd64
+          name: convenewire-bridge-desktop-windows-amd64
           path: |
             dist/*.zip
             dist/*_setup.exe
@@ -253,7 +253,7 @@ jobs:
           retention-days: 7
 
   publish:
-    name: Attach AgentRoom binaries
+    name: Attach ConveneWire binaries
     needs: [build, central, desktop-macos, desktop-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -275,7 +275,7 @@ jobs:
       - name: Download build artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
-          pattern: agentroom-*
+          pattern: convenewire-*
           path: dist
           merge-multiple: true
 
@@ -284,23 +284,23 @@ jobs:
         run: |
           version=${RELEASE_TAG#v}
           sha256sum \
-            "agentroom-bridge_${version}_darwin_amd64.tar.gz" \
-            "agentroom-bridge_${version}_darwin_arm64.tar.gz" \
-            "agentroom-bridge_${version}_linux_amd64.tar.gz" \
-            "agentroom-bridge_${version}_linux_arm64.tar.gz" \
-            "agentroom-bridge_${version}_windows_amd64.zip" \
-            "agentroom-bridge-desktop_${version}_darwin_amd64.zip" \
-            "agentroom-bridge-desktop_${version}_darwin_arm64.zip" \
-            "agentroom-bridge-desktop_${version}_windows_amd64.zip" \
-            "agentroom-bridge-desktop_${version}_windows_amd64_setup.exe" \
-            "agentroom-central_${version}_darwin_amd64.tar.gz" \
-            "agentroom-central_${version}_darwin_amd64.SHA256SUMS.sha256" \
-            "agentroom-central_${version}_darwin_arm64.tar.gz" \
-            "agentroom-central_${version}_darwin_arm64.SHA256SUMS.sha256" \
-            "agentroom-central_${version}_linux_amd64.tar.gz" \
-            "agentroom-central_${version}_linux_amd64.SHA256SUMS.sha256" \
-            "agentroom-central_${version}_linux_arm64.tar.gz" \
-            "agentroom-central_${version}_linux_arm64.SHA256SUMS.sha256" \
+            "convenewire-bridge_${version}_darwin_amd64.tar.gz" \
+            "convenewire-bridge_${version}_darwin_arm64.tar.gz" \
+            "convenewire-bridge_${version}_linux_amd64.tar.gz" \
+            "convenewire-bridge_${version}_linux_arm64.tar.gz" \
+            "convenewire-bridge_${version}_windows_amd64.zip" \
+            "convenewire-bridge-desktop_${version}_darwin_amd64.zip" \
+            "convenewire-bridge-desktop_${version}_darwin_arm64.zip" \
+            "convenewire-bridge-desktop_${version}_windows_amd64.zip" \
+            "convenewire-bridge-desktop_${version}_windows_amd64_setup.exe" \
+            "convenewire-central_${version}_darwin_amd64.tar.gz" \
+            "convenewire-central_${version}_darwin_amd64.SHA256SUMS.sha256" \
+            "convenewire-central_${version}_darwin_arm64.tar.gz" \
+            "convenewire-central_${version}_darwin_arm64.SHA256SUMS.sha256" \
+            "convenewire-central_${version}_linux_amd64.tar.gz" \
+            "convenewire-central_${version}_linux_amd64.SHA256SUMS.sha256" \
+            "convenewire-central_${version}_linux_arm64.tar.gz" \
+            "convenewire-central_${version}_linux_arm64.SHA256SUMS.sha256" \
             > SHA256SUMS
 
       - name: Add top-level license assets

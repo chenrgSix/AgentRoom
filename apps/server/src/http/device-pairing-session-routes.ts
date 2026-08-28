@@ -1,7 +1,7 @@
 import type {
   DevicePairingPrivateTrustDescriptor,
   Platform
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 
 import {
   bodyObject,

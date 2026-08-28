@@ -6,9 +6,9 @@ The server can stay online while SQLite creates a consistent backup through its
 native backup API. The destination must not already exist:
 
 ```bash
-AGENT_ROOM_DATABASE_PATH=/srv/agent-room/server.sqlite \
-  npm run db:backup --workspace @agent-room/server -- \
-  /srv/backups/agent-room-2026-08-22.sqlite
+CONVENE_WIRE_DATABASE_PATH=/srv/convene-wire/server.sqlite \
+  npm run db:backup --workspace @convene-wire/server -- \
+  /srv/backups/convene-wire-2026-08-22.sqlite
 ```
 
 The command runs `quick_check` before reporting success. Store backups outside
@@ -37,7 +37,7 @@ test a restore from that copy.
 
 Migrations are forward-only. To restore, stop the central server, preserve the
 current database and its WAL/SHM siblings, copy a verified backup to a new
-explicit path, and start with `AGENT_ROOM_DATABASE_PATH` pointing to that copy.
+explicit path, and start with `CONVENE_WIRE_DATABASE_PATH` pointing to that copy.
 The startup migration runner validates checksums and applies only newer source
 migrations. Confirm `/api/health`, Team/Room history, Agents, Runs, and one
 read-only MCP context call before retiring the previous files.
@@ -57,9 +57,9 @@ restore helper's later copy check cannot determine whether a valid SQLite file
 is the wrong backup.
 
 ```bash
-sha256sum "$PWD/backups/agent-room-20260823T120000Z.sqlite"
+sha256sum "$PWD/backups/convene-wire-20260823T120000Z.sqlite"
 # On macOS when sha256sum is unavailable:
-shasum -a 256 "$PWD/backups/agent-room-20260823T120000Z.sqlite"
+shasum -a 256 "$PWD/backups/convene-wire-20260823T120000Z.sqlite"
 ```
 
 Only after that independent comparison passes, stop and stage the restore:
@@ -67,14 +67,14 @@ Only after that independent comparison passes, stop and stage the restore:
 ```bash
 docker compose stop caddy agentroom
 ./scripts/compose-restore.sh \
-  "$PWD/backups/agent-room-20260823T120000Z.sqlite" \
-  agent-room-rollback.sqlite
+  "$PWD/backups/convene-wire-20260823T120000Z.sqlite" \
+  convene-wire-rollback.sqlite
 ```
 
 Set the exact printed container path in `.env`:
 
 ```dotenv
-AGENT_ROOM_DATABASE_PATH=/data/agent-room-rollback.sqlite
+CONVENE_WIRE_DATABASE_PATH=/data/convene-wire-rollback.sqlite
 ```
 
 If the backup predates an application migration, also check out and rebuild the
@@ -86,6 +86,6 @@ Run `docker compose up -d`, inspect `docker compose ps --all` and
 `/api/health/ready`, Team/Room history, one Agent connection, and one read-only
 MCP call. Keep the original database path and restored file until verification
 succeeds. To abandon the restore, stop the services, put the original
-`AGENT_ROOM_DATABASE_PATH` and matching application release back in place, and
+`CONVENE_WIRE_DATABASE_PATH` and matching application release back in place, and
 start again; do not overwrite or delete either database while evaluating the
 result.

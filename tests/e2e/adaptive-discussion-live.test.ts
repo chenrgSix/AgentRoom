@@ -12,7 +12,7 @@ import { createServerApp } from "../../apps/server/src/app.js";
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(testDirectory, "../..");
-const liveRuntimeEnabled = process.env.AGENT_ROOM_LIVE_RUNTIME_E2E === "1";
+const liveRuntimeEnabled = process.env.CONVENE_WIRE_LIVE_RUNTIME_E2E === "1";
 
 interface DiscussionView {
   discussion: {
@@ -80,7 +80,7 @@ test("real Codex and Pi complete one governed Discussion", {
   timeout: 300_000,
   skip: !liveRuntimeEnabled
 }, async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-live-discussion-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-live-discussion-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite")
   });
@@ -88,8 +88,8 @@ test("real Codex and Pi complete one governed Discussion", {
   let bridgeStderr = "";
   try {
     const [codexBinary, piBinary] = await Promise.all([
-      executable("codex", process.env.AGENT_ROOM_CODEX_BIN),
-      executable("pi", process.env.AGENT_ROOM_PI_BIN)
+      executable("codex", process.env.CONVENE_WIRE_CODEX_BIN),
+      executable("pi", process.env.CONVENE_WIRE_PI_BIN)
     ]);
     await app.listen({ host: "127.0.0.1", port: 0 });
     const address = app.server.address();
@@ -130,9 +130,9 @@ test("real Codex and Pi complete one governed Discussion", {
     });
     assert.equal(inviteResponse.statusCode, 200);
 
-    const bridgeBinary = path.join(directory, "agentroom-bridge");
-    await execFileAsync(process.env.AGENT_ROOM_GO_BIN ?? "go", [
-      "build", "-o", bridgeBinary, "./cmd/agentroom-bridge"
+    const bridgeBinary = path.join(directory, "convenewire-bridge");
+    await execFileAsync(process.env.CONVENE_WIRE_GO_BIN ?? "go", [
+      "build", "-o", bridgeBinary, "./cmd/convenewire-bridge"
     ], { cwd: path.join(repositoryRoot, "bridge") });
     const configPath = path.join(directory, "bridge.json");
     await writeFile(configPath, JSON.stringify({
@@ -209,7 +209,7 @@ test("real Codex and Pi complete one governed Discussion", {
       headers: authorization,
       payload: {
         goal: [
-          "用简短中文确定一条 Agent Room 控制原则：Agent 提供结构化判断，",
+          "用简短中文确定一条 ConveneWire 控制原则：Agent 提供结构化判断，",
           "Orchestrator 决定流程，用户保留最终控制。不要调用工具或修改文件。",
           "每个普通 Wave 中，Solver 与 Reviewer 会并行且独立地提出、审查或改进表述，",
           "不要等待或假设同一 Wave 的另一方先回答。每轮报告 newInformationAdded=true；",

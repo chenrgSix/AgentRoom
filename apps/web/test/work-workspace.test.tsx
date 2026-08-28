@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-import type { WorkbenchPage } from "@agent-room/contracts/task-result";
+import type { WorkbenchPage } from "@convene-wire/contracts/task-result";
 import { JSDOM } from "jsdom";
 import React from "react";
 

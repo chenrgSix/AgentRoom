@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/config"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/config"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 func TestCodexAdapterMapsAppServerEventsToRuntimeEvents(t *testing.T) {

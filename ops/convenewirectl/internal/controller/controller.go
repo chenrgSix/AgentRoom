@@ -43,7 +43,7 @@ var (
 	releasePattern     = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
 	hashPattern        = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	installIDPattern   = regexp.MustCompile(`^install_[A-Za-z0-9_-]{16,128}$`)
-	privateCAIDPattern = regexp.MustCompile(`^(?:local|agentroom-[0-9]+-[0-9a-f]{16})$`)
+	privateCAIDPattern = regexp.MustCompile(`^(?:local|(?:agentroom|convenewire)-[0-9]+-[0-9a-f]{16})$`)
 	domainPattern      = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
 	commitPattern      = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 )
@@ -298,7 +298,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	} else if dataRootHasState(options.DataRoot) {
 		return Installation{}, actionError(
 			"EXISTING_DATA_WITHOUT_MANIFEST",
-			"the selected data root is not empty and has no AgentRoom installation manifest",
+			"the selected data root is not empty and has no ConveneWire installation manifest",
 			"Choose an empty data root or recover the original installation manifest; automatic adoption is intentionally disabled.",
 			nil,
 		)
@@ -311,7 +311,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		if err := controller.dependencies.CheckPorts(bindAddress, options.HTTPPort, options.HTTPSPort); err != nil {
 			return Installation{}, actionError(
 				"PORT_UNAVAILABLE",
-				"an AgentRoom ingress port is unavailable",
+				"an ConveneWire ingress port is unavailable",
 				"Stop the process that owns the reported port or select different HTTP and HTTPS ports.",
 				err,
 			)
@@ -321,7 +321,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		return Installation{}, actionError(
 			"STORAGE_PREPARE_FAILED",
 			"could not prepare the installation control directory",
-			"Check ownership and permissions on the parent directory; AgentRoom will not widen them automatically.",
+			"Check ownership and permissions on the parent directory; ConveneWire will not widen them automatically.",
 			err,
 		)
 	}
@@ -401,14 +401,14 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		return Installation{}, err
 	}
 	if _, err := controller.runCompose(ctx, installation, commandEnvironment, "config", "--quiet"); err != nil {
-		return Installation{}, actionError("COMPOSE_INVALID", "Docker Compose rejected the complete AgentRoom model", "Inspect the reported Compose error; generated secrets and data were preserved for an exact retry.", err)
+		return Installation{}, actionError("COMPOSE_INVALID", "Docker Compose rejected the complete ConveneWire model", "Inspect the reported Compose error; generated secrets and data were preserved for an exact retry.", err)
 	}
 	if err := controller.recordStep(&manifest, installation.ManifestPath, "compose_validated"); err != nil {
 		return Installation{}, err
 	}
 	if _, err := controller.runCompose(ctx, installation, commandEnvironment,
 		"up", "-d", "--build", "--wait", "--wait-timeout", "180"); err != nil {
-		return Installation{}, actionError("SERVICES_START_FAILED", "AgentRoom services did not reach the Compose running boundary", "Run agentroomctl doctor for bounded service and log guidance, then retry install with the same arguments.", err)
+		return Installation{}, actionError("SERVICES_START_FAILED", "ConveneWire services did not reach the Compose running boundary", "Run convenewirectl doctor for bounded service and log guidance, then retry install with the same arguments.", err)
 	}
 	if err := controller.recordStep(&manifest, installation.ManifestPath, "services_started"); err != nil {
 		return Installation{}, err
@@ -434,7 +434,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		Timeout:          defaultReadyTimeout,
 	}
 	if err := controller.dependencies.CheckReadiness(ctx, readiness); err != nil {
-		return Installation{}, actionError("READINESS_FAILED", "the public HTTPS origin did not pass readiness and WebSocket checks", "Check DNS, certificate trust, port forwarding, public origin agreement, and Caddy/AgentRoom logs; the same install command is safe to retry.", err)
+		return Installation{}, actionError("READINESS_FAILED", "the public HTTPS origin did not pass readiness and WebSocket checks", "Check DNS, certificate trust, port forwarding, public origin agreement, and Caddy/ConveneWire logs; the same install command is safe to retry.", err)
 	}
 	if err := controller.recordStep(&manifest, installation.ManifestPath, "ready"); err != nil {
 		return Installation{}, err
@@ -445,7 +445,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		trustSummary += " (CA " + redactedDigest(manifest.CACertificateSHA256) + ")"
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"AgentRoom %s is ready at %s\nData root: %s\nOwner recovery file: %s\nTLS profile: %s\nInstallation ID: %s\nNext: open the origin and claim the Owner using the recovery file.\n",
+		"ConveneWire %s is ready at %s\nData root: %s\nOwner recovery file: %s\nTLS profile: %s\nInstallation ID: %s\nNext: open the origin and claim the Owner using the recovery file.\n",
 		manifest.ReleaseVersion, manifest.PublicOrigin, manifest.DataRoot,
 		installation.OwnerSecretPath, trustSummary, manifest.InstallationID,
 	)
@@ -572,7 +572,7 @@ func (controller *Controller) validateHost(ctx context.Context) error {
 		return actionError("DOCKER_UNAVAILABLE", "Docker Engine is unavailable", "Install/start Docker Engine or Docker Desktop and confirm the current user can run docker version.", err)
 	}
 	if !versionAtLeast(strings.TrimSpace(dockerVersion), 24, 0) {
-		return actionError("DOCKER_VERSION_UNSUPPORTED", "Docker Engine 24.0 or newer is required", "Upgrade Docker before installing AgentRoom.", nil)
+		return actionError("DOCKER_VERSION_UNSUPPORTED", "Docker Engine 24.0 or newer is required", "Upgrade Docker before installing ConveneWire.", nil)
 	}
 	composeVersion, err := controller.dependencies.Runner.Run(ctx, Command{
 		Name: "docker", Args: []string{"compose", "version", "--short"},
@@ -581,7 +581,7 @@ func (controller *Controller) validateHost(ctx context.Context) error {
 		return actionError("COMPOSE_UNAVAILABLE", "Docker Compose v2 is unavailable", "Install the Docker Compose v2 plugin and confirm docker compose version works.", err)
 	}
 	if !versionAtLeast(strings.TrimSpace(composeVersion), 2, 20) {
-		return actionError("COMPOSE_VERSION_UNSUPPORTED", "Docker Compose 2.20 or newer is required", "Upgrade the Docker Compose plugin before installing AgentRoom.", nil)
+		return actionError("COMPOSE_VERSION_UNSUPPORTED", "Docker Compose 2.20 or newer is required", "Upgrade the Docker Compose plugin before installing ConveneWire.", nil)
 	}
 	return nil
 }
@@ -766,20 +766,20 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 		tlsProfilePath = installation.CaddyTLSProfilePath
 	}
 	environment := strings.Join([]string{
-		"AGENT_ROOM_DOMAIN=" + dotenvQuote(options.Domain),
-		"AGENT_ROOM_PUBLIC_ORIGIN=" + dotenvQuote(options.PublicOrigin),
-		"AGENT_ROOM_BIND_ADDRESS=" + bindAddress,
-		"AGENT_ROOM_HTTP_PORT=" + strconv.Itoa(options.HTTPPort),
-		"AGENT_ROOM_HTTPS_PORT=" + strconv.Itoa(options.HTTPSPort),
-		"AGENT_ROOM_IMAGE_TAG=" + dotenvQuote(strings.TrimPrefix(releaseVersion, "v")),
-		"AGENT_ROOM_DATABASE_PATH=/data/agent-room.sqlite",
-		"AGENT_ROOM_CADDY_TLS_PROFILE_FILE=" + dotenvQuote(tlsProfilePath),
-		"AGENT_ROOM_CADDY_PKI_PROFILE_FILE=" + dotenvQuote(caddyPKIProfilePath(options, installation)),
-		"AGENT_ROOM_DEPLOYMENT_TRUST_FILE=" + dotenvQuote(deploymentTrustFile),
-		"AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE=" + dotenvQuote(deploymentTrustRotationFile),
-		"AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE=" + dotenvQuote(installation.OwnerSecretPath),
-		"AGENT_ROOM_LOG_MAX_SIZE=10m",
-		"AGENT_ROOM_LOG_MAX_FILES=5",
+		"CONVENE_WIRE_DOMAIN=" + dotenvQuote(options.Domain),
+		"CONVENE_WIRE_PUBLIC_ORIGIN=" + dotenvQuote(options.PublicOrigin),
+		"CONVENE_WIRE_BIND_ADDRESS=" + bindAddress,
+		"CONVENE_WIRE_HTTP_PORT=" + strconv.Itoa(options.HTTPPort),
+		"CONVENE_WIRE_HTTPS_PORT=" + strconv.Itoa(options.HTTPSPort),
+		"CONVENE_WIRE_IMAGE_TAG=" + dotenvQuote(strings.TrimPrefix(releaseVersion, "v")),
+		"CONVENE_WIRE_DATABASE_PATH=/data/agent-room.sqlite",
+		"CONVENE_WIRE_CADDY_TLS_PROFILE_FILE=" + dotenvQuote(tlsProfilePath),
+		"CONVENE_WIRE_CADDY_PKI_PROFILE_FILE=" + dotenvQuote(caddyPKIProfilePath(options, installation)),
+		"CONVENE_WIRE_DEPLOYMENT_TRUST_FILE=" + dotenvQuote(deploymentTrustFile),
+		"CONVENE_WIRE_DEPLOYMENT_TRUST_ROTATION_FILE=" + dotenvQuote(deploymentTrustRotationFile),
+		"CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE=" + dotenvQuote(installation.OwnerSecretPath),
+		"CONVENE_WIRE_LOG_MAX_SIZE=10m",
+		"CONVENE_WIRE_LOG_MAX_FILES=5",
 		"",
 	}, "\n")
 	if err := writeAtomic(installation.EnvironmentPath, []byte(environment), 0o600); err != nil {
@@ -878,9 +878,9 @@ func installationEnvironment(installation Installation) (map[string]string, erro
 		if err != nil {
 			return nil, actionError("SECRET_READ_FAILED", "could not read the configured legacy Server Token", "Check the secret file ownership and permissions; do not copy it into the environment file.", err)
 		}
-		environment["AGENT_ROOM_BRIDGE_SERVER_TOKEN"] = strings.TrimSpace(string(value))
+		environment["CONVENE_WIRE_BRIDGE_SERVER_TOKEN"] = strings.TrimSpace(string(value))
 	} else {
-		environment["AGENT_ROOM_BRIDGE_SERVER_TOKEN"] = ""
+		environment["CONVENE_WIRE_BRIDGE_SERVER_TOKEN"] = ""
 	}
 	return environment, nil
 }
@@ -918,7 +918,7 @@ func loadManifest(path string) (Manifest, bool, error) {
 		return Manifest{}, false, actionError("MANIFEST_INVALID", "installation manifest is malformed", "Restore the exact manifest from backup or use a different empty data root.", err)
 	}
 	if manifest.SchemaVersion != legacyManifestSchemaVersion && manifest.SchemaVersion != manifestSchemaVersion {
-		return Manifest{}, false, actionError("MANIFEST_VERSION_UNSUPPORTED", "installation manifest schema is unsupported", "Use the agentroomctl version that owns this manifest before upgrading.", nil)
+		return Manifest{}, false, actionError("MANIFEST_VERSION_UNSUPPORTED", "installation manifest schema is unsupported", "Use the convenewirectl version that owns this manifest before upgrading.", nil)
 	}
 	if err := validateManifest(manifest); err != nil {
 		return Manifest{}, false, actionError("MANIFEST_INVALID", "installation manifest TLS identity is invalid", "Restore the exact manifest from backup; do not infer or replace trust identity fields.", err)
@@ -971,7 +971,7 @@ func writeAtomic(path string, value []byte, mode fs.FileMode) error {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return err
 	}
-	temporary, err := os.CreateTemp(directory, ".agentroomctl-*.tmp")
+	temporary, err := os.CreateTemp(directory, ".convenewirectl-*.tmp")
 	if err != nil {
 		return err
 	}
@@ -1077,7 +1077,7 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 		}
 	}
 	for _, required := range []string{
-		"agentroom-central-release.json", "compose.yaml", "Dockerfile",
+		"convenewire-central-release.json", "compose.yaml", "Dockerfile",
 		"package.json", "package-lock.json", "deploy/Caddyfile",
 		"deploy/tls/public-ca.caddy", "deploy/tls/private-scoped-ca.caddy",
 		"deploy/tls/internal-ca.caddy", "deploy/tls/legacy-auto.caddy",
@@ -1085,10 +1085,10 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 		"scripts/compose-backup.sh", "scripts/compose-restore.sh",
 	} {
 		if _, found := actual[required]; !found {
-			return ReleaseMetadata{}, "", actionError("RELEASE_INCOMPLETE", "central release omits a required owned path", "Use an AgentRoom central release archive, not a source fragment or Bridge-only archive.", fmt.Errorf("missing %s", required))
+			return ReleaseMetadata{}, "", actionError("RELEASE_INCOMPLETE", "central release omits a required owned path", "Use an ConveneWire central release archive, not a source fragment or Bridge-only archive.", fmt.Errorf("missing %s", required))
 		}
 	}
-	metadataBytes, err := readBoundedFile(filepath.Join(releaseDir, "agentroom-central-release.json"), 1<<20)
+	metadataBytes, err := readBoundedFile(filepath.Join(releaseDir, "convenewire-central-release.json"), 1<<20)
 	if err != nil {
 		return ReleaseMetadata{}, "", err
 	}
@@ -1114,7 +1114,7 @@ func matchInstall(existing Manifest, options InstallOptions, metadata ReleaseMet
 		existing.PublicOrigin != options.PublicOrigin || existing.HTTPPort != options.HTTPPort ||
 		existing.HTTPSPort != options.HTTPSPort || existing.LegacyServerToken != options.LegacyServerToken ||
 		existing.ProjectName != options.ProjectName {
-		return actionError("INSTALL_CONFLICT", "install arguments differ from the existing installation manifest", "Retry with the original arguments. Use agentroomctl upgrade for a new release; do not edit the manifest or replace secrets.", nil)
+		return actionError("INSTALL_CONFLICT", "install arguments differ from the existing installation manifest", "Retry with the original arguments. Use convenewirectl upgrade for a new release; do not edit the manifest or replace secrets.", nil)
 	}
 	if existing.SchemaVersion == manifestSchemaVersion && existing.TLSProfile != options.TLSProfile {
 		return actionError("INSTALL_CONFLICT", "TLS profile differs from the existing installation manifest", "Retry without changing --tls-profile. Trust-mode migration is an explicit lifecycle operation, not install reentry.", nil)

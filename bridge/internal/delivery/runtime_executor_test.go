@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"agentroom.dev/bridge/internal/operations"
-	bridgeruntime "agentroom.dev/bridge/internal/runtime"
-	contracts "agentroom.dev/contracts/generated/go"
+	"convenewire.dev/bridge/internal/operations"
+	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 func rawRunEvent(t *testing.T, value any) json.RawMessage {
@@ -48,7 +48,7 @@ func runtimeArtifactFixture() (contracts.RunRequestedPayload, bridgeruntime.Veri
 	alias := bridgeruntime.VerifiedArtifactAlias{
 		ArtifactID: "artifact_executor_alias_12345678",
 		ContentID:  content.ContentID, LogicalAlias: content.LogicalAlias,
-		LocalPath: "/private/tmp/agentroom/materialized/result.patch",
+		LocalPath: "/private/tmp/convenewire/materialized/result.patch",
 		MediaType: content.MediaType, SHA256: content.Sha256,
 		SizeBytes: content.SizeBytes,
 	}
@@ -185,7 +185,7 @@ func TestRuntimeExecutorAdmitsExactAliasesAndRedactsEveryRuntimeTextBoundary(t *
 
 func TestRuntimeErrorDetailsReplaceNestedLocalArtifactPaths(t *testing.T) {
 	_, alias := runtimeArtifactFixture()
-	redacted := redactRuntimeError(&contracts.AgentRoomError{
+	redacted := redactRuntimeError(&contracts.ConveneWireError{
 		Code: "RUNTIME_FAILED", Message: "failed at " + alias.LocalPath,
 		Details: map[string]interface{}{
 			alias.LocalPath: alias.LocalPath,

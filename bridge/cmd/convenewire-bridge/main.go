@@ -16,21 +16,21 @@ import (
 	"syscall"
 	"time"
 
-	bridgeartifact "agentroom.dev/bridge/internal/artifact"
-	"agentroom.dev/bridge/internal/bridgecore"
-	"agentroom.dev/bridge/internal/browserlaunch"
-	"agentroom.dev/bridge/internal/config"
-	"agentroom.dev/bridge/internal/connection"
-	"agentroom.dev/bridge/internal/console"
-	"agentroom.dev/bridge/internal/enrollment"
-	"agentroom.dev/bridge/internal/identity"
-	"agentroom.dev/bridge/internal/launchable"
-	"agentroom.dev/bridge/internal/operations"
-	"agentroom.dev/bridge/internal/pairing"
-	"agentroom.dev/bridge/internal/provisioning"
-	bridgeresult "agentroom.dev/bridge/internal/result"
-	"agentroom.dev/bridge/internal/updatecheck"
-	contracts "agentroom.dev/contracts/generated/go"
+	bridgeartifact "convenewire.dev/bridge/internal/artifact"
+	"convenewire.dev/bridge/internal/bridgecore"
+	"convenewire.dev/bridge/internal/browserlaunch"
+	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/connection"
+	"convenewire.dev/bridge/internal/console"
+	"convenewire.dev/bridge/internal/enrollment"
+	"convenewire.dev/bridge/internal/identity"
+	"convenewire.dev/bridge/internal/launchable"
+	"convenewire.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/pairing"
+	"convenewire.dev/bridge/internal/provisioning"
+	bridgeresult "convenewire.dev/bridge/internal/result"
+	"convenewire.dev/bridge/internal/updatecheck"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 var version = "dev"
@@ -52,7 +52,7 @@ func (values *repeatedStringFlag) Set(value string) error {
 
 func main() {
 	if err := run(os.Args[1:]); err != nil {
-		fmt.Fprintln(os.Stderr, "agentroom-bridge:", err)
+		fmt.Fprintln(os.Stderr, "convenewire-bridge:", err)
 		os.Exit(1)
 	}
 }
@@ -458,14 +458,14 @@ func runConsole(args []string) error {
 
 func join(args []string) error {
 	command := flag.NewFlagSet("join", flag.ContinueOnError)
-	serverURL := command.String("server", "", "Agent Room server URL")
+	serverURL := command.String("server", "", "ConveneWire server URL")
 	serverToken := command.String("server-token", "", "central Server Token")
 	path := command.String("config", "", "path for generated bridge JSON configuration")
 	dataDir := command.String("data-dir", "", "directory for Bridge state and credential")
 	workspace := command.String("workspace", "", "local Codex workspace")
-	device := command.String("device-name", "", "Device name shown in Agent Room")
-	agent := command.String("agent-name", "Local Codex", "Agent name shown in Agent Room")
-	role := command.String("role", "Codex implementer", "Agent role shown in Agent Room")
+	device := command.String("device-name", "", "Device name shown in ConveneWire")
+	agent := command.String("agent-name", "Local Codex", "Agent name shown in ConveneWire")
+	role := command.String("role", "Codex implementer", "Agent role shown in ConveneWire")
 	codex := command.String("codex", "", "path to the Codex executable")
 	sandbox := command.String("sandbox", "workspace-write", "Codex sandbox: read-only or workspace-write")
 	sessionConflictPolicy := command.String(
@@ -570,7 +570,7 @@ func join(args []string) error {
 	defer stop()
 	credential, err := enrollment.Join(ctx, loaded, func(challenge enrollment.Challenge) {
 		fmt.Printf("Bridge join code: %s\n", challenge.UserCode)
-		fmt.Printf("Approve this code in Agent Room Web before %s\n", challenge.ExpiresAt.Local().Format("2006-01-02 15:04:05 MST"))
+		fmt.Printf("Approve this code in ConveneWire Web before %s\n", challenge.ExpiresAt.Local().Format("2006-01-02 15:04:05 MST"))
 	})
 	if err != nil {
 		return err

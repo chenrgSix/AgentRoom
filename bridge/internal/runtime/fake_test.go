@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 func status(value contracts.RunExecutionStatus) *contracts.RunExecutionStatus {

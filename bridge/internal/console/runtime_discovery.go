@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"agentroom.dev/bridge/internal/launchable"
+	"convenewire.dev/bridge/internal/launchable"
 )
 
 type RuntimeDiscovery struct {

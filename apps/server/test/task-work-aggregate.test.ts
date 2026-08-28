@@ -11,7 +11,7 @@ import { createServerApp } from "../src/app.js";
 const now = "2026-08-28T10:00:00.000Z";
 
 test("versioned Task work aggregate enforces ownership, CAS, and recovery", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-work-task-"));
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-work-task-"));
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({ databasePath, clock: () => now, logger: false });
   try {

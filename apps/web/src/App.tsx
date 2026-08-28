@@ -7,8 +7,8 @@ import {
   useState
 } from "react";
 
-import type { BridgeJoinApproval } from "@agent-room/contracts/bridge-messages";
-import type { WorkbenchPage } from "@agent-room/contracts/task-result";
+import type { BridgeJoinApproval } from "@convene-wire/contracts/bridge-messages";
+import type { WorkbenchPage } from "@convene-wire/contracts/task-result";
 
 import {
   activeRunStates,
@@ -106,6 +106,7 @@ async function loadPendingMemoryCandidates(
     return [];
   }
 }
+// Browser storage keys are installation state, not visible branding.
 const localeKey = "agent-room.locale";
 const themeKey = "agent-room.theme";
 
@@ -1403,8 +1404,8 @@ export function App() {
       setAgents((current) => [...current, result.agent]);
       setManualAgentName("");
       setSetupOutput([
-        `export AGENT_ROOM_MCP_TOKEN='${result.credential.token}'`,
-        `codex mcp add agent-room --url ${window.location.origin}/mcp --bearer-token-env-var AGENT_ROOM_MCP_TOKEN`
+        `export CONVENE_WIRE_MCP_TOKEN='${result.credential.token}'`,
+        `codex mcp add convene-wire --url ${window.location.origin}/mcp --bearer-token-env-var CONVENE_WIRE_MCP_TOKEN`
       ].join("\n"));
     } catch (reason) {
       setError(String(reason));
@@ -1432,7 +1433,7 @@ export function App() {
         locale === "zh-CN"
           ? `# 配对码将在 ${invite.expiresAt} 过期`
           : `# Pairing code expires at ${invite.expiresAt}`,
-        `agentroom-bridge pair --config bridge.json --code '${invite.code}'`
+        `convenewire-bridge pair --config bridge.json --code '${invite.code}'`
       ].join("\n"));
     } catch (reason) {
       setError(String(reason));
@@ -1708,7 +1709,7 @@ export function App() {
   return (
     <div className="app-shell">
       <aside className="team-rail" aria-label={t("teamSpace")}>
-        <div className="brand-mark" aria-label="Agent Room">AR</div>
+        <div className="brand-mark" aria-label="ConveneWire">CW</div>
         <div className="team-list">
           {teams.map((team) => (
             <button
@@ -1770,7 +1771,7 @@ export function App() {
       <aside className="room-sidebar">
         <header>
           <p className="eyebrow">{t("teamSpace")}</p>
-          <h1>{selectedTeam?.name ?? "Agent Room"}</h1>
+          <h1>{selectedTeam?.name ?? "ConveneWire"}</h1>
         </header>
         {selectedTeam && selectedRoom && (
           <section className="participant-panel" aria-label={t("roomParticipants")}>
@@ -1816,7 +1817,7 @@ export function App() {
 
       <main className="workspace">
         <nav className="mobile-nav" aria-label={t("workspace")}>
-          <strong>{selectedTeam?.name ?? "Agent Room"}</strong>
+          <strong>{selectedTeam?.name ?? "ConveneWire"}</strong>
           <div>
             {selectedTeam && (
               <>

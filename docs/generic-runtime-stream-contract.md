@@ -11,7 +11,7 @@ when the owner adds this exact configuration field:
   "role": "Implementer",
   "adapter": "generic",
   "runtimeKind": "generic",
-  "command": ["/absolute/path/to/runtime", "--agentroom-jsonl"],
+  "command": ["/absolute/path/to/runtime", "--convenewire-jsonl"],
   "workspace": "/absolute/path/to/project",
   "outputProtocol": "agentroom-jsonl-v1",
   "envAllowlist": ["HOME", "PATH"]

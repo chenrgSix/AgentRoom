@@ -5,15 +5,15 @@
   <key>CFBundleDevelopmentRegion</key>
   <string>zh_CN</string>
   <key>CFBundleDisplayName</key>
-  <string>AgentRoom Bridge</string>
+  <string>ConveneWire Bridge</string>
   <key>CFBundleExecutable</key>
-  <string>agentroom-bridge-desktop</string>
+  <string>convenewire-bridge-desktop</string>
   <key>CFBundleIdentifier</key>
   <string>dev.agentroom.bridge</string>
   <key>CFBundleInfoDictionaryVersion</key>
   <string>6.0</string>
   <key>CFBundleName</key>
-  <string>AgentRoom Bridge</string>
+  <string>ConveneWire Bridge</string>
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
@@ -27,6 +27,7 @@
       <string>dev.agentroom.bridge.device-pairing</string>
       <key>CFBundleURLSchemes</key>
       <array>
+        <string>convenewire</string>
         <string>agentroom</string>
       </array>
     </dict>
@@ -36,6 +37,6 @@
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSHumanReadableCopyright</key>
-  <string>Distributed under the AgentRoom Community License 1.0</string>
+  <string>Distributed under the ConveneWire Community License 1.0</string>
 </dict>
 </plist>

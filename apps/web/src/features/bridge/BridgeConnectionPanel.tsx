@@ -63,7 +63,7 @@ export function BridgeConnectionPanel({
           <ol className="setup-steps">
             <li><span>1</span><div><strong>{t("startBridge")}</strong><p>{t("startBridgeHelp")}</p></div></li>
           </ol>
-          <div className="command-box"><code>agentroom-bridge join --server {serverURL}</code><button onClick={() => void navigator.clipboard.writeText(`agentroom-bridge join --server ${serverURL}`)} type="button">{t("copy")}</button></div>
+          <div className="command-box"><code>convenewire-bridge join --server {serverURL}</code><button onClick={() => void navigator.clipboard.writeText(`convenewire-bridge join --server ${serverURL}`)} type="button">{t("copy")}</button></div>
           <ol className="setup-steps" start={2}>
             <li><span>2</span><div><strong>{t("approveCodeTitle")}</strong><p>{t("approveCodeHelp")}</p></div></li>
           </ol>

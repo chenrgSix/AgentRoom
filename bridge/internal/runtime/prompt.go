@@ -5,7 +5,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	contracts "agentroom.dev/contracts/generated/go"
+	contracts "convenewire.dev/contracts/generated/go"
 )
 
 const maxProjectedContextBytes = 12 * 1024
@@ -28,7 +28,7 @@ func runtimePromptWithArtifacts(
 		return instruction
 	}
 	sections := []string{
-		"You are handling one AgentRoom task in a shared Room.",
+		"You are handling one ConveneWire task in a shared Room.",
 		"If a specific piece of human domain information is required to continue, return only " +
 			"<agentroom-clarification>{\"kind\":\"task\",\"question\":\"...\",\"choices\":[\"...\",\"...\"]}</agentroom-clarification>. " +
 			"Omit choices for an open answer. Never use this for filesystem, shell, network, tool, Runtime, or permission approval; those decisions stay local.",

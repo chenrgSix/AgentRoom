@@ -16,15 +16,15 @@
 
 [Setup]
 AppId={{2FA4C87B-E4E4-4929-B229-8F2B13DB1EF6}
-AppName=AgentRoom Bridge
+AppName=ConveneWire Bridge
 AppVersion={#AppVersion}
-AppVerName=AgentRoom Bridge {#AppVersion}
-AppPublisher=AgentRoom
+AppVerName=ConveneWire Bridge {#AppVersion}
+AppPublisher=ConveneWire
 AppPublisherURL=https://github.com/chenrgSix/AgentRoom
 AppSupportURL=https://github.com/chenrgSix/AgentRoom/issues
 AppUpdatesURL=https://github.com/chenrgSix/AgentRoom/releases
-DefaultDirName={localappdata}\Programs\AgentRoom Bridge
-DefaultGroupName=AgentRoom Bridge
+DefaultDirName={localappdata}\Programs\ConveneWire Bridge
+DefaultGroupName=ConveneWire Bridge
 DisableDirPage=auto
 DisableProgramGroupPage=yes
 AllowNoIcons=no
@@ -34,11 +34,11 @@ ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 MinVersion=10.0
 CloseApplications=yes
-CloseApplicationsFilter=AgentRoom Bridge.exe
+CloseApplicationsFilter=ConveneWire Bridge.exe,AgentRoom Bridge.exe
 RestartApplications=no
 Uninstallable=yes
-UninstallDisplayName=AgentRoom Bridge
-UninstallDisplayIcon={app}\AgentRoom Bridge.exe
+UninstallDisplayName=ConveneWire Bridge
+UninstallDisplayIcon={app}\ConveneWire Bridge.exe
 UsePreviousAppDir=yes
 OutputDir={#OutputDir}
 OutputBaseFilename={#OutputBaseFilename}
@@ -50,9 +50,9 @@ VersionInfoVersion={#BundleVersion}
 VersionInfoProductVersion={#BundleVersion}
 VersionInfoProductTextVersion={#AppVersion}
 VersionInfoTextVersion={#AppVersion}
-VersionInfoProductName=AgentRoom Bridge
-VersionInfoCompany=AgentRoom
-VersionInfoDescription=AgentRoom Bridge per-user installer
+VersionInfoProductName=ConveneWire Bridge
+VersionInfoCompany=ConveneWire
+VersionInfoDescription=ConveneWire Bridge per-user installer
 LicenseFile={#SourceDir}\LICENSE
 
 [Languages]
@@ -62,31 +62,38 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-Source: "{#SourceDir}\AgentRoom Bridge.exe"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\ConveneWire Bridge.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\README.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\NOTICE"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\COMMERCIAL-LICENSE.md"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\TRADEMARKS.md"; DestDir: "{app}"; Flags: ignoreversion
 
+[InstallDelete]
+Type: files; Name: "{app}\AgentRoom Bridge.exe"
+
 [Icons]
-Name: "{group}\AgentRoom Bridge"; Filename: "{app}\AgentRoom Bridge.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\AgentRoom Bridge"; Filename: "{app}\AgentRoom Bridge.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\ConveneWire Bridge"; Filename: "{app}\ConveneWire Bridge.exe"; WorkingDir: "{app}"
+Name: "{autodesktop}\ConveneWire Bridge"; Filename: "{app}\ConveneWire Bridge.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Registry]
-Root: HKCU; Subkey: "Software\Classes\agentroom"; ValueType: string; ValueName: ""; ValueData: "URL:AgentRoom Device Pairing"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\convenewire"; ValueType: string; ValueName: ""; ValueData: "URL:ConveneWire Device Pairing"; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\convenewire"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKCU; Subkey: "Software\Classes\convenewire\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\ConveneWire Bridge.exe,0"
+Root: HKCU; Subkey: "Software\Classes\convenewire\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\ConveneWire Bridge.exe"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\agentroom"; ValueType: string; ValueName: ""; ValueData: "URL:ConveneWire Device Pairing (legacy scheme)"; Flags: uninsdeletekey
 Root: HKCU; Subkey: "Software\Classes\agentroom"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
-Root: HKCU; Subkey: "Software\Classes\agentroom\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\AgentRoom Bridge.exe,0"
-Root: HKCU; Subkey: "Software\Classes\agentroom\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\AgentRoom Bridge.exe"" ""%1"""
+Root: HKCU; Subkey: "Software\Classes\agentroom\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\ConveneWire Bridge.exe,0"
+Root: HKCU; Subkey: "Software\Classes\agentroom\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\ConveneWire Bridge.exe"" ""%1"""
 
 [Run]
-Filename: "{app}\AgentRoom Bridge.exe"; Description: "{cm:LaunchBridge}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent; Check: WebView2RuntimeInstalled
+Filename: "{app}\ConveneWire Bridge.exe"; Description: "{cm:LaunchBridge}"; WorkingDir: "{app}"; Flags: nowait postinstall skipifsilent; Check: WebView2RuntimeInstalled
 Filename: "https://developer.microsoft.com/en-us/microsoft-edge/webview2/#download-section"; Description: "{cm:DownloadWebView2}"; Flags: shellexec postinstall skipifsilent unchecked; Check: not WebView2RuntimeInstalled
 
 [CustomMessages]
-english.LaunchBridge=Launch AgentRoom Bridge
+english.LaunchBridge=Launch ConveneWire Bridge
 english.DownloadWebView2=Open the official Microsoft WebView2 Runtime download page
-english.WebView2Missing=Microsoft Edge WebView2 Runtime was not detected. AgentRoom Bridge can still be installed, but it needs WebView2 before first launch. The final page can open Microsoft's official download page.
+english.WebView2Missing=Microsoft Edge WebView2 Runtime was not detected. ConveneWire Bridge can still be installed, but it needs WebView2 before first launch. The final page can open Microsoft's official download page.
 
 [Code]
 const

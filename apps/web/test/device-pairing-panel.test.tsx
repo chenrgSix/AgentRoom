@@ -4,7 +4,7 @@ import test from "node:test";
 import type {
   DevicePairingSessionCreated,
   DevicePairingSessionOwnerProjection
-} from "@agent-room/contracts/pairing-session";
+} from "@convene-wire/contracts/pairing-session";
 import { JSDOM } from "jsdom";
 import React from "react";
 
@@ -114,7 +114,7 @@ test("pairing link keeps the browser proof in the fragment", () => {
     "secret_abcdefghijklmnopqrstuvwxyz0123456789"
   );
   const parsed = new URL(link);
-  assert.equal(parsed.protocol, "agentroom:");
+  assert.equal(parsed.protocol, "convenewire:");
   assert.equal(parsed.host, "pair-device");
   assert.equal(parsed.searchParams.get("origin"), "https://team.example.com");
   assert.equal(parsed.searchParams.get("pairingSessionId"), pairingSessionId);

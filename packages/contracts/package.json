@@ -1,9 +1,9 @@
 {
-  "name": "@agent-room/contracts",
+  "name": "@convene-wire/contracts",
   "version": "0.1.0",
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
-  "description": "Authoritative JSON Schema contracts for Agent Room Network",
+  "description": "Authoritative JSON Schema contracts for ConveneWire",
   "type": "module",
   "exports": {
     "./bridge-messages": "./generated/typescript/bridge-messages.ts",
