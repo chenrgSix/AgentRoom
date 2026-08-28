@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -131,6 +132,49 @@ func Save(dataDir string, credential Credential) error {
 	}
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return fmt.Errorf("install credential: %w", err)
+	}
+	return nil
+}
+
+func Replace(dataDir string, previous Credential, credential Credential) error {
+	if err := validateCredentialTrust(credential); err != nil {
+		return err
+	}
+	current, err := Load(dataDir)
+	if err != nil {
+		return err
+	}
+	if !reflect.DeepEqual(current, previous) {
+		return fmt.Errorf("credential changed while updating scoped private trust")
+	}
+	path := filepath.Join(dataDir, credentialFilename)
+	source, err := json.MarshalIndent(credential, "", "  ")
+	if err != nil {
+		return err
+	}
+	temporary, err := os.CreateTemp(dataDir, ".credential-rotation-*")
+	if err != nil {
+		return fmt.Errorf("create credential rotation file: %w", err)
+	}
+	temporaryPath := temporary.Name()
+	defer os.Remove(temporaryPath)
+	if err := temporary.Chmod(0o600); err != nil {
+		temporary.Close()
+		return err
+	}
+	if _, err := temporary.Write(append(source, '\n')); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
+	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return fmt.Errorf("install credential rotation: %w", err)
 	}
 	return nil
 }

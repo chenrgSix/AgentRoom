@@ -1,6 +1,7 @@
 package pairing
 
 import (
+	"bytes"
 	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
@@ -10,7 +11,9 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
+	"io"
 	"math/big"
 	"net"
 	"net/http"
@@ -23,12 +26,14 @@ import (
 	"time"
 
 	"agentroom.dev/bridge/internal/config"
+	pairingcontracts "agentroom.dev/contracts/generated/go/pairing"
 )
 
 type privateTLSServer struct {
-	Server *httptest.Server
-	CAPEM  []byte
-	Digest string
+	Server        *httptest.Server
+	CAPEM         []byte
+	CACertificate *x509.Certificate
+	Digest        string
 }
 
 func newPrivateTLSServer(t *testing.T, handler http.Handler) privateTLSServer {
@@ -89,9 +94,122 @@ func newPrivateTLSServer(t *testing.T, handler http.Handler) privateTLSServer {
 	t.Cleanup(server.Close)
 	digest := sha256.Sum256(caDER)
 	return privateTLSServer{
-		Server: server,
-		CAPEM:  pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
-		Digest: hex.EncodeToString(digest[:]),
+		Server:        server,
+		CAPEM:         pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}),
+		CACertificate: caCertificate,
+		Digest:        hex.EncodeToString(digest[:]),
+	}
+}
+
+func TestScopedPrivateTrustRotationStagesAcknowledgesAndPromotesAfterNewChain(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	next := newPrivateTLSServer(t, http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+	}))
+	var caPEM []byte
+	var offer pairingcontracts.DevicePairingPrivateCARotationOffer
+	var acknowledgementBodies [][]byte
+	ackAttempts := 0
+	offerAvailable := true
+	current := newPrivateTLSServer(t, http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("authorization") != "Bearer device-secret" {
+			t.Errorf("rotation request omitted the Device credential")
+		}
+		switch request.URL.Path {
+		case privateCAPath:
+			response.Header().Set("content-type", "application/x-pem-file")
+			_, _ = response.Write(caPEM)
+		case "/api/health/ready":
+			response.WriteHeader(http.StatusOK)
+		case "/api/bridge/private-ca-rotation":
+			if !offerAvailable {
+				response.WriteHeader(http.StatusNoContent)
+				return
+			}
+			response.Header().Set("content-type", "application/json")
+			_ = json.NewEncoder(response).Encode(offer)
+		case "/api/bridge/private-ca-rotation/acknowledge":
+			body, _ := io.ReadAll(request.Body)
+			acknowledgementBodies = append(acknowledgementBodies, body)
+			ackAttempts++
+			if ackAttempts == 1 {
+				panic(http.ErrAbortHandler)
+			}
+			response.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	caPEM = current.CAPEM
+	currentTrust := ScopedPrivateTrust{
+		ScopedPrivateTrustDescriptor: ScopedPrivateTrustDescriptor{
+			Mode: "private_scoped_ca", Origin: current.Server.URL,
+			InstallationID: "install_0123456789abcdefghijklmn",
+			TrustEpoch:     1, CACertificateSHA256: current.Digest,
+		},
+		CACertificatePEM: string(current.CAPEM),
+	}
+	offer = pairingcontracts.DevicePairingPrivateCARotationOffer{
+		CurrentTrustEpoch: 1,
+		NextTrust: pairingcontracts.NextTrustClass{
+			Mode: pairingcontracts.PrivateScopedCA, Origin: current.Server.URL,
+			InstallationID: currentTrust.InstallationID,
+			TrustEpoch:     2, CACertificateSha256: next.Digest,
+		},
+		CACertificatePem: string(next.CAPEM),
+		OverlapEndsAt:    now.Add(time.Hour),
+	}
+	directory := t.TempDir()
+	credential := Credential{
+		ServerURL: current.Server.URL, DeviceID: "device_private", TeamID: "team_private",
+		OwnerMemberID: "member_private", Token: "device-secret",
+		ScopedPrivateTrust: &currentTrust,
+	}
+	if err := Save(directory, credential); err != nil {
+		t.Fatal(err)
+	}
+	cfg := config.Config{ServerURL: current.Server.URL, DataDir: directory}
+	_, changed, err := SyncScopedPrivateTrustRotation(context.Background(), cfg, credential, now)
+	if !changed || err == nil || !strings.Contains(err.Error(), "acknowledge") {
+		t.Fatalf("lost acknowledgement response did not preserve staged state: changed=%v err=%v", changed, err)
+	}
+	staged, err := Load(directory)
+	if err != nil || staged.ScopedPrivateTrust.Rotation == nil ||
+		staged.ScopedPrivateTrust.Rotation.Acknowledged {
+		t.Fatalf("next CA was not staged before acknowledgement: %#v %v", staged, err)
+	}
+	operationID := staged.ScopedPrivateTrust.Rotation.AcknowledgeOperationID
+	acknowledged, changed, err := SyncScopedPrivateTrustRotation(
+		context.Background(), cfg, staged, now,
+	)
+	if err != nil || !changed || !acknowledged.ScopedPrivateTrust.Rotation.Acknowledged {
+		t.Fatalf("rotation acknowledgement did not converge: %#v changed=%v err=%v", acknowledged, changed, err)
+	}
+	if len(acknowledgementBodies) != 2 ||
+		!bytes.Equal(acknowledgementBodies[0], acknowledgementBodies[1]) ||
+		!bytes.Contains(acknowledgementBodies[1], []byte(operationID)) {
+		t.Fatalf("rotation acknowledgement did not reuse its proof: %q", acknowledgementBodies)
+	}
+
+	offerAvailable = false
+	if _, changed, err := SyncScopedPrivateTrustRotation(
+		context.Background(), cfg, acknowledged, now,
+	); changed || err == nil || !strings.Contains(err.Error(), "disappeared") {
+		t.Fatalf("lost overlap did not fail closed: changed=%v err=%v", changed, err)
+	}
+	promoted, err := promoteScopedPrivateTrustIfServed(
+		directory,
+		acknowledged,
+		&tls.ConnectionState{VerifiedChains: [][]*x509.Certificate{{next.CACertificate}}},
+	)
+	if err != nil || !promoted {
+		t.Fatalf("new verified chain did not promote trust: promoted=%v err=%v", promoted, err)
+	}
+	loaded, err := Load(directory)
+	if err != nil || loaded.ScopedPrivateTrust.TrustEpoch != 2 ||
+		loaded.ScopedPrivateTrust.Rotation != nil ||
+		loaded.ScopedPrivateTrust.CACertificateSHA256 != next.Digest {
+		t.Fatalf("old CA was not retired after new-chain success: %#v %v", loaded, err)
 	}
 }
 

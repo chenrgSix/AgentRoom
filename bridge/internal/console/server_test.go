@@ -352,7 +352,7 @@ func TestCentralProvisioningClonesOnlyLocalTemplateAndBindsReservedIdentity(t *t
 	}
 }
 
-func TestAcceptedCentralProvisioningRestartsBridgeWithNewConfiguration(t *testing.T) {
+func TestAcceptedCentralProvisioningRestartsBridgeWithNewConfigurationAndCredential(t *testing.T) {
 	directory := t.TempDir()
 	configPath := filepath.Join(directory, "bridge.json")
 	dataDir := filepath.Join(directory, "data")
@@ -391,13 +391,17 @@ func TestAcceptedCentralProvisioningRestartsBridgeWithNewConfiguration(t *testin
 			Name: "Reviewer", Role: "Review", ManagementCode: "87654321",
 		},
 	}
-	secondStart := make(chan config.Config, 1)
+	type bridgeStart struct {
+		configuration config.Config
+		credential    pairing.Credential
+	}
+	secondStart := make(chan bridgeStart, 1)
 	var starts atomic.Int32
 	dependencies := inertDependencies()
 	dependencies.RunBridgeWithProvisioning = func(
 		ctx context.Context,
 		loaded config.Config,
-		_ pairing.Credential,
+		loadedCredential pairing.Credential,
 		_ operations.Observer,
 		handler connection.ProvisionHandler,
 	) error {
@@ -406,9 +410,14 @@ func TestAcceptedCentralProvisioningRestartsBridgeWithNewConfiguration(t *testin
 			if result.Payload.Status != contracts.Accepted {
 				return errors.New("provisioning was not accepted")
 			}
+			rotatedCredential := loadedCredential
+			rotatedCredential.Token = "rotated-device-secret"
+			if err := pairing.Replace(dataDir, loadedCredential, rotatedCredential); err != nil {
+				return err
+			}
 			return connection.ErrConfigurationChanged
 		}
-		secondStart <- loaded
+		secondStart <- bridgeStart{configuration: loaded, credential: loadedCredential}
 		<-ctx.Done()
 		return ctx.Err()
 	}
@@ -425,8 +434,11 @@ func TestAcceptedCentralProvisioningRestartsBridgeWithNewConfiguration(t *testin
 	}
 	select {
 	case reloaded := <-secondStart:
-		if len(reloaded.Agents) != 2 || reloaded.Agents[1].Name != "Reviewer" {
-			t.Fatalf("Bridge restarted with stale configuration: %#v", reloaded.Agents)
+		if len(reloaded.configuration.Agents) != 2 || reloaded.configuration.Agents[1].Name != "Reviewer" {
+			t.Fatalf("Bridge restarted with stale configuration: %#v", reloaded.configuration.Agents)
+		}
+		if reloaded.credential.Token != "rotated-device-secret" {
+			t.Fatalf("Bridge restarted with stale credential: %#v", reloaded.credential)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("Bridge did not restart after accepted provisioning")

@@ -632,5 +632,10 @@ func runManaged(
 			return loadErr
 		}
 		loaded = reloaded
+		reloadedCredential, credentialErr := pairing.Load(loaded.DataDir)
+		if credentialErr != nil {
+			return credentialErr
+		}
+		credential = reloadedCredential
 	}
 }

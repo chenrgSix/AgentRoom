@@ -38,6 +38,8 @@ import type {
 import type { BridgePairingService } from "../security/bridge-pairing-service.js";
 import type { DevicePairingSessionService } from
   "../security/device-pairing-session-service.js";
+import type { PrivateCARotationService } from
+  "../security/private-ca-rotation-service.js";
 import type { TrustedWebAccessService } from "../security/trusted-web-access-service.js";
 import type { WebAuthConfiguration } from "../security/web-auth-config.js";
 import type { MessageService } from "../team-room/message-service.js";
@@ -92,6 +94,7 @@ export interface ServerRouteContext {
   pairing: BridgePairingService;
   pauseDiscussionForInput: (runId: string) => Promise<void>;
   presence: PresenceService;
+  privateCARotation: PrivateCARotationService;
   principal: (request: FastifyRequest) => WebPrincipal;
   registry: MemberDeviceService;
   requireBridgeServerToken: (request: FastifyRequest) => void;

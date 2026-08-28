@@ -681,7 +681,7 @@ normal certificate-chain, hostname, validity, and renewal verification. An old
 configuration with a fingerprint and no explicit mode remains pinned. A
 configuration may not silently provide both a system-CA mode and a fingerprint.
 
-Active `BRG-045` adds the separate `private_scoped_ca` target. The implemented
+`BRG-045` adds the separate `private_scoped_ca` target. The implemented
 bootstrap consumes the closed pairing-fragment descriptor only after checking
 the exact HTTPS origin, then uses a bootstrap-only no-secret client to retrieve
 one bounded public CA certificate from the fixed well-known path. It accepts no
@@ -706,11 +706,15 @@ mode, epoch and a 12-character digest prefix; the full digest and certificate
 remain out of those projections. Connection settings cannot silently move a
 scoped credential to another origin.
 
-The remaining `BRG-045` rotation work accepts at most one strictly newer CA over the existing
-pin-valid authenticated Device channel, stages current plus next during the
-declared overlap, and removes old trust only after the new chain succeeds.
-Redirect, malformed/multiple/non-CA certificate, digest/origin/install mismatch,
-epoch downgrade, lost overlap, or unsupported legacy link fails closed. The
+Rotation accepts at most one strictly newer CA over the existing pin-valid,
+Device-authenticated channel. Bridge persists current plus next before sending
+one stable idempotent acknowledgement, rebuilds every authenticated client after
+credential change, and defers heartbeat rotation while a Run is active. It
+removes the old root only after a response verifies through the acknowledged new
+root; a lost offer or expired overlap then fails closed. An older pin-valid
+Central may omit the endpoint only before any overlap is staged. Redirect,
+malformed/multiple/non-CA certificate, digest/origin/install mismatch, epoch
+downgrade, lost overlap, or unsupported legacy link also fails closed. The
 current `pinned_sha256` leaf mode and OS-installed private roots remain explicit
 advanced compatibility and are never an automatic fallback.
 

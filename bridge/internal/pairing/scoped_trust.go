@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"io"
@@ -18,6 +19,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"agentroom.dev/bridge/internal/config"
+	pairingcontracts "agentroom.dev/contracts/generated/go/pairing"
 )
 
 const (
@@ -37,29 +41,65 @@ type ScopedPrivateTrustDescriptor struct {
 
 type ScopedPrivateTrust struct {
 	ScopedPrivateTrustDescriptor
-	CACertificatePEM string `json:"caCertificatePem"`
+	CACertificatePEM string                      `json:"caCertificatePem"`
+	Rotation         *ScopedPrivateTrustRotation `json:"rotation,omitempty"`
+}
+
+type ScopedPrivateTrustRotation struct {
+	Next                   ScopedPrivateTrust `json:"next"`
+	OverlapEndsAt          string             `json:"overlapEndsAt"`
+	AcknowledgeOperationID string             `json:"acknowledgeOperationId"`
+	Acknowledged           bool               `json:"acknowledged"`
 }
 
 func (trust ScopedPrivateTrust) validate(expectedOrigin string, now time.Time) (*x509.Certificate, error) {
+	certificate, _, err := trust.certificates(expectedOrigin, now)
+	return certificate, err
+}
+
+func (trust ScopedPrivateTrust) certificates(
+	expectedOrigin string,
+	now time.Time,
+) (*x509.Certificate, *x509.Certificate, error) {
 	if trust.Mode != "private_scoped_ca" || !installationIDPattern.MatchString(trust.InstallationID) ||
 		trust.TrustEpoch < 1 || trust.TrustEpoch > 2_147_483_647 ||
 		!isLowerHexDigest(trust.CACertificateSHA256) {
-		return nil, fmt.Errorf("scoped private trust descriptor is invalid")
+		return nil, nil, fmt.Errorf("scoped private trust descriptor is invalid")
 	}
 	origin, err := exactHTTPSOrigin(trust.Origin)
 	if err != nil || origin != expectedOrigin {
-		return nil, fmt.Errorf("scoped private trust origin does not match the configured Server")
+		return nil, nil, fmt.Errorf("scoped private trust origin does not match the configured Server")
 	}
 	certificate, err := parseSingleCA([]byte(trust.CACertificatePEM), now)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	digest := sha256.Sum256(certificate.Raw)
 	expected, err := hex.DecodeString(trust.CACertificateSHA256)
 	if err != nil || subtle.ConstantTimeCompare(digest[:], expected) != 1 {
-		return nil, fmt.Errorf("scoped private CA digest mismatch")
+		return nil, nil, fmt.Errorf("scoped private CA digest mismatch")
 	}
-	return certificate, nil
+	if trust.Rotation == nil {
+		return certificate, nil, nil
+	}
+	rotation := trust.Rotation
+	if rotation.Next.Rotation != nil ||
+		rotation.Next.Origin != trust.Origin ||
+		rotation.Next.InstallationID != trust.InstallationID ||
+		rotation.Next.TrustEpoch != trust.TrustEpoch+1 ||
+		rotation.Next.CACertificateSHA256 == trust.CACertificateSHA256 ||
+		!pairingSessionOperationIDPattern.MatchString(rotation.AcknowledgeOperationID) {
+		return nil, nil, fmt.Errorf("scoped private CA rotation state is invalid")
+	}
+	overlapEndsAt, err := time.Parse(time.RFC3339, rotation.OverlapEndsAt)
+	if err != nil || !now.Before(overlapEndsAt) {
+		return nil, nil, fmt.Errorf("scoped private CA rotation overlap is expired")
+	}
+	nextCertificate, err := rotation.Next.validate(expectedOrigin, now)
+	if err != nil {
+		return nil, nil, fmt.Errorf("scoped private CA rotation next trust is invalid: %w", err)
+	}
+	return certificate, nextCertificate, nil
 }
 
 func BootstrapScopedPrivateTrust(
@@ -154,12 +194,15 @@ func newScopedHTTPClient(
 	if err != nil {
 		return nil, err
 	}
-	certificate, err := trust.validate(origin, now)
+	certificate, nextCertificate, err := trust.certificates(origin, now)
 	if err != nil {
 		return nil, err
 	}
 	roots := x509.NewCertPool()
 	roots.AddCert(certificate)
+	if nextCertificate != nil {
+		roots.AddCert(nextCertificate)
+	}
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.TLSClientConfig = &tls.Config{
 		MinVersion: tls.VersionTLS12,
@@ -171,6 +214,221 @@ func newScopedHTTPClient(
 			return fmt.Errorf("scoped private trust redirects are forbidden")
 		},
 	}, nil
+}
+
+func SyncScopedPrivateTrustRotation(
+	ctx context.Context,
+	cfg config.Config,
+	credential Credential,
+	now time.Time,
+) (Credential, bool, error) {
+	if credential.ScopedPrivateTrust == nil {
+		return credential, false, nil
+	}
+	client, err := newScopedHTTPClient(cfg.ServerURL, *credential.ScopedPrivateTrust, now)
+	if err != nil {
+		return credential, false, err
+	}
+	client.Timeout = 10 * time.Second
+	request, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodGet,
+		strings.TrimRight(cfg.ServerURL, "/")+"/api/bridge/private-ca-rotation",
+		nil,
+	)
+	if err != nil {
+		return credential, false, err
+	}
+	request.Header.Set("authorization", "Bearer "+credential.Token)
+	response, err := client.Do(request)
+	if err != nil {
+		return credential, false, fmt.Errorf("fetch private CA rotation: %w", err)
+	}
+	defer response.Body.Close()
+	if promoted, promoteErr := promoteScopedPrivateTrustIfServed(
+		cfg.DataDir,
+		credential,
+		response.TLS,
+	); promoted || promoteErr != nil {
+		return credential, promoted, promoteErr
+	}
+	if response.StatusCode == http.StatusNoContent {
+		if credential.ScopedPrivateTrust.Rotation != nil {
+			return credential, false, fmt.Errorf("private CA rotation offer disappeared before the new chain was served")
+		}
+		return credential, false, nil
+	}
+	if response.StatusCode == http.StatusNotFound && credential.ScopedPrivateTrust.Rotation == nil {
+		// A pin-valid older Central has no rotation endpoint. Once an overlap is
+		// staged, the same response is rejected below instead of becoming a
+		// downgrade path.
+		return credential, false, nil
+	}
+	if response.StatusCode != http.StatusOK {
+		return credential, false, fmt.Errorf("private CA rotation returned status %d", response.StatusCode)
+	}
+	source, err := io.ReadAll(io.LimitReader(response.Body, 16_385))
+	if err != nil {
+		return credential, false, fmt.Errorf("read private CA rotation: %w", err)
+	}
+	if len(source) > 16_384 {
+		return credential, false, fmt.Errorf("private CA rotation response is too large")
+	}
+	var offer pairingcontracts.DevicePairingPrivateCARotationOffer
+	if err := decodePairingResponse(source, &offer); err != nil {
+		return credential, false, fmt.Errorf("decode private CA rotation: %w", err)
+	}
+	staged, err := stageScopedPrivateTrustRotation(credential, offer, now)
+	if err != nil {
+		return credential, false, err
+	}
+	changed := staged.ScopedPrivateTrust.Rotation != credential.ScopedPrivateTrust.Rotation
+	if changed {
+		if err := Replace(cfg.DataDir, credential, staged); err != nil {
+			return credential, false, fmt.Errorf("stage private CA rotation: %w", err)
+		}
+		credential = staged
+	}
+	rotation := credential.ScopedPrivateTrust.Rotation
+	if rotation.Acknowledged {
+		return credential, changed, nil
+	}
+	acknowledgement := pairingcontracts.DevicePairingPrivateCARotationAcknowledgeRequest{
+		OperationID:               rotation.AcknowledgeOperationID,
+		ExpectedCurrentTrustEpoch: credential.ScopedPrivateTrust.TrustEpoch,
+		AcceptedNextTrustEpoch:    rotation.Next.TrustEpoch,
+		CACertificateSha256:       rotation.Next.CACertificateSHA256,
+	}
+	body, err := json.Marshal(acknowledgement)
+	if err != nil {
+		return credential, changed, err
+	}
+	ackRequest, err := http.NewRequestWithContext(
+		ctx,
+		http.MethodPost,
+		strings.TrimRight(cfg.ServerURL, "/")+"/api/bridge/private-ca-rotation/acknowledge",
+		bytes.NewReader(body),
+	)
+	if err != nil {
+		return credential, changed, err
+	}
+	ackRequest.Header.Set("authorization", "Bearer "+credential.Token)
+	ackRequest.Header.Set("content-type", "application/json")
+	ackResponse, err := client.Do(ackRequest)
+	if err != nil {
+		return credential, changed, fmt.Errorf("acknowledge private CA rotation: %w", err)
+	}
+	ackResponse.Body.Close()
+	if ackResponse.StatusCode != http.StatusNoContent {
+		return credential, changed, fmt.Errorf("private CA rotation acknowledgement returned status %d", ackResponse.StatusCode)
+	}
+	acknowledged := credential
+	acknowledgedTrust := *credential.ScopedPrivateTrust
+	acknowledgedRotation := *acknowledgedTrust.Rotation
+	acknowledgedRotation.Acknowledged = true
+	acknowledgedTrust.Rotation = &acknowledgedRotation
+	acknowledged.ScopedPrivateTrust = &acknowledgedTrust
+	if err := Replace(cfg.DataDir, credential, acknowledged); err != nil {
+		return credential, true, fmt.Errorf("persist private CA rotation acknowledgement: %w", err)
+	}
+	return acknowledged, true, nil
+}
+
+func stageScopedPrivateTrustRotation(
+	credential Credential,
+	offer pairingcontracts.DevicePairingPrivateCARotationOffer,
+	now time.Time,
+) (Credential, error) {
+	current := credential.ScopedPrivateTrust
+	if current == nil || offer.CurrentTrustEpoch != current.TrustEpoch ||
+		offer.NextTrust.Mode != pairingcontracts.PrivateScopedCA ||
+		offer.NextTrust.Origin != current.Origin ||
+		offer.NextTrust.InstallationID != current.InstallationID ||
+		offer.NextTrust.TrustEpoch != current.TrustEpoch+1 ||
+		offer.NextTrust.CACertificateSha256 == current.CACertificateSHA256 ||
+		!isLowerHexDigest(offer.NextTrust.CACertificateSha256) ||
+		!now.Before(offer.OverlapEndsAt) || offer.OverlapEndsAt.After(now.Add(30*24*time.Hour)) {
+		return credential, fmt.Errorf("private CA rotation offer does not extend current trust")
+	}
+	certificate, err := parseSingleCA([]byte(offer.CACertificatePem), now)
+	if err != nil {
+		return credential, err
+	}
+	digest := sha256.Sum256(certificate.Raw)
+	expected, _ := hex.DecodeString(offer.NextTrust.CACertificateSha256)
+	if subtle.ConstantTimeCompare(digest[:], expected) != 1 {
+		return credential, fmt.Errorf("private CA rotation certificate digest mismatch")
+	}
+	next := ScopedPrivateTrust{
+		ScopedPrivateTrustDescriptor: ScopedPrivateTrustDescriptor{
+			Mode: string(offer.NextTrust.Mode), Origin: offer.NextTrust.Origin,
+			InstallationID:      offer.NextTrust.InstallationID,
+			TrustEpoch:          offer.NextTrust.TrustEpoch,
+			CACertificateSHA256: offer.NextTrust.CACertificateSha256,
+		},
+		CACertificatePEM: string(pem.EncodeToMemory(&pem.Block{
+			Type: "CERTIFICATE", Bytes: certificate.Raw,
+		})),
+	}
+	if current.Rotation != nil {
+		if current.Rotation.Next.CACertificateSHA256 != next.CACertificateSHA256 ||
+			current.Rotation.OverlapEndsAt != offer.OverlapEndsAt.Format(time.RFC3339) {
+			return credential, fmt.Errorf("private CA rotation offer changed during overlap")
+		}
+		return credential, nil
+	}
+	operationID, err := randomPairingID("op")
+	if err != nil {
+		return credential, err
+	}
+	updated := credential
+	updatedTrust := *current
+	updatedTrust.Rotation = &ScopedPrivateTrustRotation{
+		Next: next, OverlapEndsAt: offer.OverlapEndsAt.Format(time.RFC3339),
+		AcknowledgeOperationID: operationID,
+	}
+	updated.ScopedPrivateTrust = &updatedTrust
+	if _, _, err := updatedTrust.certificates(current.Origin, now); err != nil {
+		return credential, err
+	}
+	return updated, nil
+}
+
+func promoteScopedPrivateTrustIfServed(
+	dataDir string,
+	credential Credential,
+	state *tls.ConnectionState,
+) (bool, error) {
+	trust := credential.ScopedPrivateTrust
+	if trust == nil || trust.Rotation == nil || state == nil {
+		return false, nil
+	}
+	servedDigest := ""
+	for _, chain := range state.VerifiedChains {
+		if len(chain) == 0 {
+			continue
+		}
+		digest := sha256.Sum256(chain[len(chain)-1].Raw)
+		candidate := hex.EncodeToString(digest[:])
+		if candidate == trust.Rotation.Next.CACertificateSHA256 {
+			servedDigest = candidate
+			break
+		}
+	}
+	if servedDigest == "" {
+		return false, nil
+	}
+	if !trust.Rotation.Acknowledged {
+		return false, fmt.Errorf("private CA switched before the staged trust was acknowledged")
+	}
+	promoted := credential
+	next := trust.Rotation.Next
+	next.Rotation = nil
+	promoted.ScopedPrivateTrust = &next
+	if err := Replace(dataDir, credential, promoted); err != nil {
+		return false, fmt.Errorf("promote private CA rotation: %w", err)
+	}
+	return true, nil
 }
 
 type originScopedTransport struct {

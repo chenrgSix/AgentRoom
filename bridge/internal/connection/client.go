@@ -144,6 +144,19 @@ func (c Client) retryBounds() (time.Duration, time.Duration) {
 }
 
 func (c Client) connectOnce(ctx context.Context) (bool, error) {
+	credential, trustChanged, trustErr := pairing.SyncScopedPrivateTrustRotation(
+		ctx, c.Config, c.Credential, time.Now(),
+	)
+	if trustChanged {
+		if trustErr != nil {
+			return false, fmt.Errorf("%w: %v", ErrConfigurationChanged, trustErr)
+		}
+		return false, ErrConfigurationChanged
+	}
+	if trustErr != nil {
+		return false, trustErr
+	}
+	c.Credential = credential
 	epoch, err := nextEpoch(c.Config.DataDir)
 	if err != nil {
 		return false, err
@@ -395,6 +408,24 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		case err := <-readError:
 			return true, err
 		case now := <-ticker.C:
+			activeMu.Lock()
+			busy := len(active) > 0
+			activeMu.Unlock()
+			if !busy {
+				credential, trustChanged, trustErr := pairing.SyncScopedPrivateTrustRotation(
+					ctx, c.Config, c.Credential, now,
+				)
+				if trustChanged {
+					if trustErr != nil {
+						return true, fmt.Errorf("%w: %v", ErrConfigurationChanged, trustErr)
+					}
+					return true, ErrConfigurationChanged
+				}
+				if trustErr != nil {
+					return true, trustErr
+				}
+				c.Credential = credential
+			}
 			heartbeat := contracts.BridgeHeartbeatMessage{
 				ProtocolVersion: "1.0",
 				MessageID:       newID("msg"),

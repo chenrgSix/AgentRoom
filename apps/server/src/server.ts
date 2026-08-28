@@ -47,12 +47,15 @@ const memoryReducer = memoryReducerKind === "extractive-v1"
   : undefined;
 const deploymentTrustFile =
   process.env.AGENT_ROOM_DEPLOYMENT_TRUST_FILE?.trim() || undefined;
+const deploymentTrustRotationFile =
+  process.env.AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE?.trim() || undefined;
 
 const app = await createServerApp({
   databasePath: resolveDatabasePath(),
   logger: true,
   webAuth,
   ...(deploymentTrustFile ? { deploymentTrustFile } : {}),
+  ...(deploymentTrustRotationFile ? { deploymentTrustRotationFile } : {}),
   ...(memoryReducer ? { memoryReducer } : {}),
   ...(bridgeServerToken === undefined ? {} : { bridgeServerToken }),
   ...(trustProxyHops === undefined ? {} : { trustProxyHops }),

@@ -38,6 +38,8 @@ import {
 import { registerDiscussionRoutes } from "./http/discussion-routes.js";
 import { registerDevicePairingSessionRoutes } from
   "./http/device-pairing-session-routes.js";
+import { registerPrivateCARotationRoutes } from
+  "./http/private-ca-rotation-routes.js";
 import { registerMcpRoutes } from "./http/mcp-routes.js";
 import { registerMessageRoutes } from "./http/message-routes.js";
 import { registerMemoryCandidateRoutes } from "./http/memory-candidate-routes.js";
@@ -82,6 +84,10 @@ import { DevicePairingSessionService } from
   "./security/device-pairing-session-service.js";
 import { createDeploymentTrustProvider } from
   "./security/deployment-trust.js";
+import { createDeploymentTrustRotationProvider } from
+  "./security/deployment-trust-rotation.js";
+import { PrivateCARotationService } from
+  "./security/private-ca-rotation-service.js";
 import {
   assertBridgeServerToken,
   bridgeServerTokenHeader,
@@ -131,6 +137,7 @@ export interface ServerAppOptions {
   };
   databasePath: string;
   deploymentTrustFile?: string;
+  deploymentTrustRotationFile?: string;
   artifactBlobRoot?: string;
   bridgeServerToken?: string;
   clock?: () => string;
@@ -169,6 +176,15 @@ export async function createServerApp(
   const deploymentTrust = createDeploymentTrustProvider(
     options.deploymentTrustFile,
     webAuth.mode === "trusted-team" ? webAuth.publicOrigin : undefined
+  );
+  const deploymentTrustRotation = createDeploymentTrustRotationProvider(
+    options.deploymentTrustRotationFile,
+    deploymentTrust
+  );
+  const privateCARotation = new PrivateCARotationService(
+    database,
+    deploymentTrust,
+    deploymentTrustRotation
   );
   const trustedWeb = webAuth.mode === "trusted-team"
     ? new TrustedWebAccessService(
@@ -713,6 +729,7 @@ export async function createServerApp(
     pairing,
     pauseDiscussionForInput,
     presence,
+    privateCARotation,
     principal,
     registry,
     requireBridgeServerToken,
@@ -745,6 +762,7 @@ export async function createServerApp(
   registerWorkbenchRoutes(routeContext);
   registerRegistryRoutes(routeContext);
   registerDevicePairingSessionRoutes(routeContext);
+  registerPrivateCARotationRoutes(routeContext);
   registerMessageRoutes(routeContext);
   registerMemoryCandidateRoutes(routeContext);
   registerDiscussionRoutes(routeContext);

@@ -948,6 +948,16 @@ func (s *Service) startBridgeLocked() error {
 		s.state.BridgeRunning = false
 		s.state.Connection.State = operations.ConnectionStopped
 		if errors.Is(err, connection.ErrConfigurationChanged) && ctx.Err() == nil {
+			if s.configuration != nil {
+				reloadedCredential, credentialErr := pairing.Load(s.configuration.DataDir)
+				if credentialErr != nil {
+					s.state.Phase = PhaseError
+					s.state.LastError = publicError(credentialErr)
+					return
+				}
+				s.credential = &reloadedCredential
+				s.applyCredentialTrustViewLocked(reloadedCredential)
+			}
 			s.state.Phase = PhaseReady
 			if restartErr := s.startBridgeLocked(); restartErr != nil {
 				s.state.Phase = PhaseError
