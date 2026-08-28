@@ -25,9 +25,21 @@ const created: DevicePairingSessionCreated = {
   state: "issued",
   teamId
 };
+const privateTrust = {
+  caCertificateSha256: "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  installationId: "install_0123456789abcdefghijklmn",
+  mode: "private_scoped_ca" as const,
+  origin: "https://team.example.com",
+  trustEpoch: 3
+};
+const privateCreated: DevicePairingSessionCreated = {
+  ...created,
+  trust: privateTrust
+};
 
 function projection(
-  state: DevicePairingSessionOwnerProjection["state"]
+  state: DevicePairingSessionOwnerProjection["state"],
+  source = created
 ): DevicePairingSessionOwnerProjection {
   return {
     createdAt: created.createdAt,
@@ -36,6 +48,7 @@ function projection(
     pairingSessionId,
     state,
     teamId,
+    ...(source.trust === undefined ? {} : { trust: source.trust }),
     ...(state === "claimed" || state === "approved" || state === "consumed"
       ? {
           claimedAt: "2099-08-28T00:01:00.000Z",
@@ -43,7 +56,8 @@ function projection(
           device: {
             bridgeVersion: "0.2.0-rc.3",
             displayName: "Alice Mac",
-            platform: "darwin-arm64" as const
+            platform: "darwin-arm64" as const,
+            ...(source.trust === undefined ? {} : { supportsScopedPrivateTrust: true })
           }
         }
       : {}),
@@ -107,6 +121,91 @@ test("pairing link keeps the browser proof in the fragment", () => {
   assert.equal(parsed.searchParams.get("expiresAt"), created.expiresAt);
   assert.equal(parsed.hash, "#claimSecret=secret_abcdefghijklmnopqrstuvwxyz0123456789");
   assert.equal(createPairingOperationId("12345678-abcd"), "op_12345678-abcd");
+});
+
+test("private pairing link preserves only the exact trust descriptor in its fragment", () => {
+  const claimSecret = "secret_abcdefghijklmnopqrstuvwxyz0123456789";
+  const link = buildDevicePairingLink(
+    "https://team.example.com",
+    privateCreated,
+    claimSecret
+  );
+  const parsed = new URL(link);
+  assert.equal(parsed.searchParams.get("origin"), privateTrust.origin);
+  assert.doesNotMatch(parsed.search, /trust|install|sha256/iu);
+  const fragment = new URLSearchParams(parsed.hash.slice(1));
+  assert.deepEqual([...fragment.keys()].sort(), [
+    "caCertificateSha256",
+    "claimSecret",
+    "installationId",
+    "trustEpoch",
+    "trustMode",
+    "trustOrigin"
+  ]);
+  assert.equal(fragment.get("claimSecret"), claimSecret);
+  assert.equal(fragment.get("trustMode"), privateTrust.mode);
+  assert.equal(fragment.get("trustOrigin"), privateTrust.origin);
+  assert.equal(fragment.get("installationId"), privateTrust.installationId);
+  assert.equal(fragment.get("trustEpoch"), String(privateTrust.trustEpoch));
+  assert.equal(fragment.get("caCertificateSha256"), privateTrust.caCertificateSha256);
+  assert.throws(() => buildDevicePairingLink(
+    privateTrust.origin,
+    {
+      ...privateCreated,
+      trust: { ...privateTrust, origin: "https://other.example.com" }
+    },
+    claimSecret
+  ), /trust descriptor is invalid/u);
+});
+
+test("private pairing explains Bridge-only trust, hides short code, and clears the descriptor", async () => {
+  const dom = installDom();
+  let current = projection("issued", privateCreated);
+  globalThis.fetch = async (input, init = {}) => {
+    const path = pathOf(input);
+    if ((init.method ?? "GET") === "POST" && path.endsWith("/device-pairing-sessions")) {
+      return jsonResponse(privateCreated);
+    }
+    if (path.endsWith("/cancel")) {
+      current = projection("canceled", privateCreated);
+      return jsonResponse(current);
+    }
+    return jsonResponse(current);
+  };
+
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  try {
+    render(
+      <DevicePairingPanel
+        currentMemberIsOwner
+        currentMemberId={created.ownerMemberId}
+        locale="zh-CN"
+        sessionToken="session_owner"
+        teamId={teamId}
+      />
+    );
+    const page = within(dom.window.document.body);
+    fireEvent.click(page.getByRole("button", { name: "创建设备配对" }));
+    await page.findByText("Bridge 定向私有 CA");
+    page.getByText(/无需在 Windows 或 macOS 安装 CA/u);
+    page.getByText(/不适用于浏览器/u);
+    page.getByText(/首次配对不提供短码入口/u);
+    assert.equal(page.queryByText(privateCreated.shortCode), null);
+    const link = page.getByLabelText("一次性配对链接") as HTMLInputElement;
+    assert.equal(
+      new URLSearchParams(new URL(link.value).hash.slice(1)).get("caCertificateSha256"),
+      privateTrust.caCertificateSha256
+    );
+    const proofKey = `agent-room.device-pairing.${teamId}.${created.ownerMemberId}`;
+    assert.match(globalThis.sessionStorage.getItem(proofKey) ?? "", /private_scoped_ca/u);
+    fireEvent.click(page.getByRole("button", { name: "取消本次配对" }));
+    await page.findByText(/本次配对已取消/u);
+    assert.equal(globalThis.sessionStorage.getItem(proofKey), null);
+    assert.doesNotMatch(dom.window.document.body.innerHTML, new RegExp(privateTrust.caCertificateSha256));
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
 });
 
 test("non-Owners cannot see or invoke Device pairing controls", async () => {

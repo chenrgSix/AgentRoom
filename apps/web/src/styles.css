@@ -352,6 +352,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .device-pairing-panel { display: grid; gap: 15px; }
 .device-pairing-heading { margin-bottom: 0; }
 .device-pairing-intro { max-width: 900px; margin: 0; color: #858e7d; font-size: 10px; line-height: 1.65; }
+.pairing-trust-note { display: grid; gap: 5px; padding: 11px 12px; border: 1px solid #46513c; border-radius: 10px; background: #181d15; }
+.pairing-trust-note.private { border-color: #6e6339; background: #211e13; }
+.pairing-trust-note strong { color: #c8da9b; font-size: 10px; }
+.pairing-trust-note.private strong { color: #e3cc79; }
+.pairing-trust-note p, .pairing-trust-note small { margin: 0; color: #89927f; font-size: 9px; line-height: 1.55; }
+.pairing-trust-note code { width: fit-content; max-width: 100%; overflow-wrap: anywhere; color: #c6cfb9; font-size: 9px; }
 .pairing-state { border: 1px solid #4b563f; }
 .pairing-state.claimed, .pairing-state.approved { border-color: #887840; color: #e0c773; }
 .pairing-state.consumed { border-color: #506b3c; color: #b8d879; }
@@ -881,6 +887,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .provisioning-form,
 :root[data-theme="light"] .provisioning-request-list li,
 :root[data-theme="light"] .pairing-issued-grid { border-color: #d5dccd; background: #f5f8f1; }
+:root[data-theme="light"] .pairing-trust-note { border-color: #ccd6c2; background: #f3f7ee; }
+:root[data-theme="light"] .pairing-trust-note.private { border-color: #d4c98f; background: #fbf8e9; }
+:root[data-theme="light"] .pairing-trust-note strong,
+:root[data-theme="light"] .pairing-trust-note code { color: #4c5f36; }
+:root[data-theme="light"] .pairing-trust-note.private strong { color: #806b20; }
 :root[data-theme="light"] .provisioning-intro,
 :root[data-theme="light"] .device-pairing-intro,
 :root[data-theme="light"] .provisioning-request-list p,

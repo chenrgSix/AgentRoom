@@ -1,6 +1,8 @@
 import type {
   DevicePairingSessionCreated,
-  DevicePairingSessionOwnerProjection
+  DevicePairingSessionCreatedTrust,
+  DevicePairingSessionOwnerProjection,
+  DevicePairingSessionOwnerProjectionTrust
 } from "@agent-room/contracts/pairing-session";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
@@ -43,6 +45,62 @@ const terminalStates = new Set([
   "expired"
 ]);
 const recoverableStates = new Set(["issued", "claimed", "approved"]);
+const installationIdPattern = /^install_[A-Za-z0-9_-]{16,128}$/u;
+const caDigestPattern = /^[a-f0-9]{64}$/u;
+
+function exactHTTPSOrigin(value: string): string {
+  let parsed: URL;
+  try {
+    parsed = new URL(value);
+  } catch {
+    throw new Error("Device pairing trust origin is invalid");
+  }
+  if (
+    parsed.protocol !== "https:" || parsed.username !== "" ||
+    parsed.password !== "" || parsed.pathname !== "/" ||
+    parsed.search !== "" || parsed.hash !== "" || parsed.origin !== value
+  ) {
+    throw new Error("Device pairing trust origin is invalid");
+  }
+  return value;
+}
+
+function safeTrust(
+  value: DevicePairingSessionCreatedTrust | DevicePairingSessionOwnerProjectionTrust | undefined,
+  expectedOrigin: string
+): DevicePairingSessionCreatedTrust | undefined {
+  if (value === undefined) return undefined;
+  const keys = Object.keys(value).sort();
+  if (
+    keys.join(",") !== "caCertificateSha256,installationId,mode,origin,trustEpoch" ||
+    value.mode !== "private_scoped_ca" ||
+    exactHTTPSOrigin(value.origin) !== expectedOrigin ||
+    !installationIdPattern.test(value.installationId) ||
+    !Number.isSafeInteger(value.trustEpoch) || value.trustEpoch < 1 ||
+    value.trustEpoch > 2_147_483_647 ||
+    !caDigestPattern.test(value.caCertificateSha256)
+  ) {
+    throw new Error("Device pairing trust descriptor is invalid");
+  }
+  return {
+    caCertificateSha256: value.caCertificateSha256,
+    installationId: value.installationId,
+    mode: value.mode,
+    origin: value.origin,
+    trustEpoch: value.trustEpoch
+  };
+}
+
+function sameTrust(
+  left: DevicePairingSessionCreatedTrust | undefined,
+  right: DevicePairingSessionCreatedTrust | undefined
+): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return left.mode === right.mode && left.origin === right.origin &&
+    left.installationId === right.installationId &&
+    left.trustEpoch === right.trustEpoch &&
+    left.caCertificateSha256 === right.caCertificateSha256;
+}
 
 function storageKey(teamId: string, memberId: string): string {
   return `agent-room.device-pairing.${teamId}.${memberId}`;
@@ -90,12 +148,27 @@ function readStoredAttempt(
       globalThis.sessionStorage.removeItem(key);
       return null;
     }
-    if (candidate.created !== undefined && (
-      candidate.created.teamId !== teamId ||
-      candidate.created.ownerMemberId !== memberId
-    )) {
-      globalThis.sessionStorage.removeItem(key);
-      return null;
+    if (candidate.created !== undefined) {
+      candidate.created = safeCreated(
+        candidate.created,
+        teamId,
+        memberId,
+        new URL(bridgeServerURL()).origin
+      );
+    }
+    if (candidate.projection !== undefined) {
+      if (!candidate.created) {
+        globalThis.sessionStorage.removeItem(key);
+        return null;
+      }
+      candidate.projection = safeProjection(
+        candidate.projection,
+        teamId,
+        candidate.created.pairingSessionId,
+        memberId,
+        new URL(bridgeServerURL()).origin,
+        candidate.created.trust
+      );
     }
     if (candidate.projection && terminalStates.has(candidate.projection.state)) {
       globalThis.sessionStorage.removeItem(key);
@@ -133,7 +206,8 @@ function forgetAttempt(teamId: string, memberId: string): void {
 function safeCreated(
   value: DevicePairingSessionCreated,
   teamId: string,
-  memberId: string
+  memberId: string,
+  expectedOrigin: string
 ): DevicePairingSessionCreated {
   if (
     value.teamId !== teamId ||
@@ -147,6 +221,7 @@ function safeCreated(
   ) {
     throw new Error("Device pairing creation response is invalid");
   }
+  const trust = safeTrust(value.trust, expectedOrigin);
   return {
     createdAt: value.createdAt,
     expiresAt: value.expiresAt,
@@ -154,7 +229,8 @@ function safeCreated(
     pairingSessionId: value.pairingSessionId,
     shortCode: value.shortCode,
     state: value.state,
-    teamId: value.teamId
+    teamId: value.teamId,
+    ...(trust === undefined ? {} : { trust })
   };
 }
 
@@ -162,7 +238,9 @@ function safeProjection(
   value: DevicePairingSessionOwnerProjection,
   teamId: string,
   pairingSessionId: string,
-  memberId: string
+  memberId: string,
+  expectedOrigin: string,
+  expectedTrust: DevicePairingSessionCreatedTrust | undefined
 ): DevicePairingSessionOwnerProjection {
   if (
     value.teamId !== teamId ||
@@ -182,6 +260,13 @@ function safeProjection(
   ) {
     throw new Error("Device pairing status response is invalid");
   }
+  const trust = safeTrust(value.trust, expectedOrigin);
+  if (!sameTrust(trust, expectedTrust)) {
+    throw new Error("Device pairing status changed its trust descriptor");
+  }
+  if (trust && value.device && value.device.supportsScopedPrivateTrust !== true) {
+    throw new Error("Device pairing status omitted scoped trust capability");
+  }
   return {
     createdAt: value.createdAt,
     expiresAt: value.expiresAt,
@@ -196,7 +281,10 @@ function safeProjection(
       device: {
         bridgeVersion: value.device.bridgeVersion,
         displayName: value.device.displayName,
-        platform: value.device.platform
+        platform: value.device.platform,
+        ...(value.device.supportsScopedPrivateTrust === undefined
+          ? {}
+          : { supportsScopedPrivateTrust: value.device.supportsScopedPrivateTrust })
       }
     }),
     ...(value.deviceId === undefined ? {} : { deviceId: value.deviceId }),
@@ -205,7 +293,8 @@ function safeProjection(
       : { pairingAttemptId: value.pairingAttemptId }),
     ...(value.verificationPhrase === undefined
       ? {}
-      : { verificationPhrase: value.verificationPhrase })
+      : { verificationPhrase: value.verificationPhrase }),
+    ...(trust === undefined ? {} : { trust })
   };
 }
 
@@ -214,12 +303,22 @@ export function buildDevicePairingLink(
   created: DevicePairingSessionCreated,
   claimSecret: string
 ): string {
+  const normalizedOrigin = new URL(origin).origin;
+  const trust = safeTrust(created.trust, normalizedOrigin);
   const parameters = new URLSearchParams({
-    origin: new URL(origin).origin,
+    origin: normalizedOrigin,
     pairingSessionId: created.pairingSessionId,
     expiresAt: created.expiresAt
   });
-  return `agentroom://pair-device?${parameters.toString()}#claimSecret=${encodeURIComponent(claimSecret)}`;
+  const fragment = new URLSearchParams({ claimSecret });
+  if (trust) {
+    fragment.set("trustMode", trust.mode);
+    fragment.set("trustOrigin", trust.origin);
+    fragment.set("installationId", trust.installationId);
+    fragment.set("trustEpoch", String(trust.trustEpoch));
+    fragment.set("caCertificateSha256", trust.caCertificateSha256);
+  }
+  return `agentroom://pair-device?${parameters.toString()}#${fragment.toString()}`;
 }
 
 function stateLabel(state: string, locale: Locale): string {
@@ -318,7 +417,12 @@ export function DevicePairingPanel({
         sessionToken
       );
       if (scopeRef.current !== requestScope) return;
-      const created = safeCreated(response, teamId, currentMemberId);
+      const created = safeCreated(
+        response,
+        teamId,
+        currentMemberId,
+        new URL(bridgeServerURL()).origin
+      );
       commitAttempt({
         ...pending,
         created,
@@ -328,7 +432,8 @@ export function DevicePairingPanel({
           ownerMemberId: created.ownerMemberId,
           pairingSessionId: created.pairingSessionId,
           state: "issued",
-          teamId: created.teamId
+          teamId: created.teamId,
+          ...(created.trust === undefined ? {} : { trust: created.trust })
         }
       });
     } catch (reason) {
@@ -354,7 +459,9 @@ export function DevicePairingPanel({
       response,
       teamId,
       source.created.pairingSessionId,
-      currentMemberId
+      currentMemberId,
+      new URL(bridgeServerURL()).origin,
+      source.created.trust
     );
   }
 
@@ -425,7 +532,9 @@ export function DevicePairingPanel({
         response,
         teamId,
         attempt.created.pairingSessionId,
-        currentMemberId
+        currentMemberId,
+        new URL(bridgeServerURL()).origin,
+        attempt.created.trust
       );
       if (scopeRef.current !== requestScope) return;
       const { decision: completedDecision, ...withoutDecision } = pending;
@@ -515,6 +624,7 @@ export function DevicePairingPanel({
 
   const zh = locale === "zh-CN";
   const retryDecision = attempt?.decision;
+  const activeTrust = attempt?.created?.trust ?? projection?.trust;
 
   return (
     <section className="control-panel device-pairing-panel" aria-labelledby="device-pairing-title">
@@ -531,6 +641,38 @@ export function DevicePairingPanel({
           ? "在这台浏览器生成一次性配对证明，再到新 Device 打开 AgentRoom。中央服务不会下发 Server Token、Device 凭据、Runtime 配置或 Workspace 路径。"
           : "Create a one-time proof in this tab, then open AgentRoom on the new Device. The Server never sends a Server Token, Device credential, Runtime configuration, or Workspace path."}
       </p>
+
+      {attempt?.created && (
+        <div className={`pairing-trust-note ${activeTrust ? "private" : "public"}`}>
+          <strong>
+            {activeTrust
+              ? (zh ? "Bridge 定向私有 CA" : "Bridge-scoped private CA")
+              : (zh ? "系统 CA 信任（默认）" : "System CA trust (default)")}
+          </strong>
+          {activeTrust
+            ? <>
+                <p>
+                  {zh
+                    ? "CA 只写入这台 Bridge，并且只信任下方 Central 的精确地址；无需在 Windows 或 macOS 安装 CA。"
+                    : "The CA is stored only by this Bridge and trusts only the exact Central origin below. No Windows or macOS CA installation is required."}
+                </p>
+                <code>{activeTrust.origin}</code>
+                <small>
+                  epoch {activeTrust.trustEpoch} · SHA-256 {activeTrust.caCertificateSha256.slice(0, 12)}…
+                </small>
+                <p>
+                  {zh
+                    ? "此信任不适用于浏览器，也不会绕过浏览器证书校验。首次配对必须使用此链接或二维码。"
+                    : "This trust does not apply to browsers or bypass browser certificate checks. First pairing must use this link or QR code."}
+                </p>
+              </>
+            : <p>
+                {zh
+                  ? "链接不携带 CA 覆盖；Bridge 使用操作系统的公开 CA 与主机名校验。"
+                  : "The link carries no CA override; Bridge uses operating-system public CA and hostname validation."}
+              </p>}
+        </div>
+      )}
 
       {!attempt?.created && !terminalProjection && (
         <div className="device-pairing-start">
@@ -578,8 +720,16 @@ export function DevicePairingPanel({
                 {copied ? (zh ? "已复制" : "Copied") : (zh ? "复制" : "Copy")}
               </button>
             </div>
-            <span className="pairing-or">{zh ? "或手动输入短码" : "or enter the short code"}</span>
-            <strong className="pairing-short-code">{attempt.created.shortCode}</strong>
+            {activeTrust
+              ? <span className="pairing-or">
+                  {zh
+                    ? "私有 CA 首次配对不提供短码入口；短码不能证明服务器身份。"
+                    : "Private-CA first pairing does not offer short-code entry; a short code cannot prove server identity."}
+                </span>
+              : <>
+                  <span className="pairing-or">{zh ? "或手动输入短码" : "or enter the short code"}</span>
+                  <strong className="pairing-short-code">{attempt.created.shortCode}</strong>
+                </>}
             <small>
               {zh ? `有效期至 ${new Date(attempt.created.expiresAt).toLocaleString()}` :
                 `Expires ${new Date(attempt.created.expiresAt).toLocaleString()}`}
