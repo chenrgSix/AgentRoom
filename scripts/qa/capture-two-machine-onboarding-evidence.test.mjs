@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, utimes, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -232,6 +232,8 @@ async function fixture() {
   const metricsPath = path.join(directory, "metrics.txt");
   const outputPath = path.join(directory, "evidence.md");
   await writeFile(metricsPath, metrics);
+  const metricsCapturedAt = new Date("2026-08-28T10:09:45.000Z");
+  await utimes(metricsPath, metricsCapturedAt, metricsCapturedAt);
   return { directory, databasePath, inputPath, metricsPath, outputPath };
 }
 
@@ -465,6 +467,8 @@ test("physical evidence capture binds every observation to one bounded time wind
   });
   delete future.secondAgentId;
   await writeFile(files.inputPath, JSON.stringify(future));
+  const futureMetricsTime = new Date("2026-08-29T10:09:45.000Z");
+  await utimes(files.metricsPath, futureMetricsTime, futureMetricsTime);
   await assert.rejects(() => captureEvidence({
     inputPath: files.inputPath,
     databasePath: files.databasePath,
@@ -539,6 +543,17 @@ test("physical evidence capture binds metrics to the live observed connection", 
   `).run();
   stale.close();
   await assert.rejects(capture, /current Bridge heartbeat was stale/u);
+
+  const displacedFiles = await fixture();
+  await writeFile(displacedFiles.inputPath, JSON.stringify(source));
+  const displacedTime = new Date("2026-08-28T10:08:00.000Z");
+  await utimes(displacedFiles.metricsPath, displacedTime, displacedTime);
+  await assert.rejects(() => captureEvidence({
+    inputPath: displacedFiles.inputPath,
+    databasePath: displacedFiles.databasePath,
+    metricsPath: displacedFiles.metricsPath,
+    outputPath: displacedFiles.outputPath
+  }), /metricsCapturedAt does not match the metrics snapshot file time/u);
 });
 
 test("physical evidence capture proves current-build online and reconnect execution", async () => {

@@ -67,7 +67,8 @@ historical diagnostic evidence only. `QA-031` implements schema version 4: the
 consumed pairing, latest current-build hello, matching live connection epoch,
 fresh heartbeat, reconnect Delivery, online Run, metrics capture and explicit
 human review receipt all satisfy one ordered time boundary no longer than 24
-hours. Ten focused evidence cases reject missing, stale, reordered or
+hours. The claimed metrics time must also match the snapshot file time within
+five seconds. Ten focused evidence cases reject missing, stale, reordered or
 mismatched components, unsafe TLS claims and unexpected Runtime console
 windows. This closes the verifier defect, not the physical gate: `QA-002`,
 `QA-028`, `QA-030` and `BRG-046` still require a fresh installed-Windows run.

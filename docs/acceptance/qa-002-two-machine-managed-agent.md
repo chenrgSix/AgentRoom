@@ -191,6 +191,8 @@ The verifier fails closed unless:
   packaged version independently of the immutable pairing version, and current
   Device presence uses the same connection epoch with an available adapter;
 - the persisted heartbeat precedes metrics capture by no more than 30 seconds;
+- `metricsCapturedAt` matches the metrics snapshot file modification time within
+  five seconds, preventing an old snapshot from being relabeled as current;
 - both Runs, their trigger Messages, Deliveries and contiguous events use the
   exact supplied Room, Agent, Device and trace identities;
 - the reconnect Run was created before the latest hello but sent, accepted and

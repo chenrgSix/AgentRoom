@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -616,8 +616,16 @@ PASS
 }
 
 export async function captureEvidence({ inputPath, databasePath, metricsPath, outputPath }) {
-  const input = validateInput(JSON.parse(await readFile(inputPath, "utf8")));
-  const metrics = parseMetrics(await readFile(metricsPath, "utf8"));
+  const [inputSource, metricsSource, metricsStat] = await Promise.all([
+    readFile(inputPath, "utf8"),
+    readFile(metricsPath, "utf8"),
+    stat(metricsPath)
+  ]);
+  const input = validateInput(JSON.parse(inputSource));
+  if (Math.abs(metricsStat.mtimeMs - Date.parse(input.metricsCapturedAt)) > 5_000) {
+    fail("metricsCapturedAt does not match the metrics snapshot file time");
+  }
+  const metrics = parseMetrics(metricsSource);
   const database = new Database(databasePath, { readonly: true, fileMustExist: true });
   let output;
   try {
