@@ -73,6 +73,15 @@ non-root with all capabilities dropped. `secret-init` remains a separate
 network-disabled copy boundary; the raw host recovery file is not mounted into
 the Server.
 
+Compose normalizes authoritative `CONVENE_WIRE_DOMAIN` and
+`CONVENE_WIRE_PUBLIC_ORIGIN` values with an optional legacy `AGENT_ROOM_*`
+fallback. It does not use a nested Compose `:?` assertion because Compose
+evaluates that inner assertion even when the authoritative value is present.
+Missing authority still fails closed in the Server/Caddy/controller validation
+path; no default hostname, origin or TLS bypass is synthesized. The Compose
+regression runs current-only and legacy-only environments without inheriting
+the operator's local aliases.
+
 `local` binds Caddy ports to loopback and requires an exact loopback HTTPS
 origin. `direct_https` binds the selected ports for external ingress and
 requires one matching non-loopback HTTPS origin. Caddy remains certificate and

@@ -8,6 +8,8 @@ import { fileURLToPath } from "node:url";
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const baseEnvironment = {
   ...process.env,
+  AGENT_ROOM_DOMAIN: "",
+  AGENT_ROOM_PUBLIC_ORIGIN: "",
   CONVENE_WIRE_DOMAIN: "team.example.com",
   CONVENE_WIRE_HTTP_PORT: "80",
   CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: "./deploy/secrets/owner_recovery_token",
@@ -131,8 +133,8 @@ const legacyEnvironment = {
   AGENT_ROOM_CADDY_TLS_PROFILE_FILE: "./deploy/tls/public-ca.caddy",
   AGENT_ROOM_CADDY_PKI_PROFILE_FILE: "./deploy/tls/pki-none.caddy"
 };
-for (const name of Object.keys(legacyEnvironment)) {
-  if (name.startsWith("CONVENE_WIRE_")) delete legacyEnvironment[name];
+for (const name of Object.keys(baseEnvironment)) {
+  if (name.startsWith("CONVENE_WIRE_")) legacyEnvironment[name] = "";
 }
 const legacyConfiguration = renderCompose(legacyEnvironment);
 assert.equal(publishedPort(legacyConfiguration, 80), "8080");
