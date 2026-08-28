@@ -185,6 +185,52 @@ func BootstrapScopedPrivateTrust(
 	return staged, nil
 }
 
+// MigrateScopedPrivateTrustOrigin verifies a replacement HTTPS origin through
+// the already pinned private CA before changing any credential field. It sends
+// no Device credential to the candidate and leaves persistence to the caller so
+// the credential and owner-authored configuration can be replaced together.
+func MigrateScopedPrivateTrustOrigin(
+	ctx context.Context,
+	credential Credential,
+	targetOrigin string,
+	now time.Time,
+) (Credential, error) {
+	current := credential.ScopedPrivateTrust
+	if current == nil {
+		return Credential{}, fmt.Errorf("scoped private trust is required for origin migration")
+	}
+	currentOrigin, err := exactHTTPSOrigin(credential.ServerURL)
+	if err != nil {
+		return Credential{}, fmt.Errorf("current scoped private origin is invalid: %w", err)
+	}
+	if current.Rotation != nil {
+		return Credential{}, fmt.Errorf("finish the active private CA rotation before changing origin")
+	}
+	if _, err := current.validate(currentOrigin, now); err != nil {
+		return Credential{}, fmt.Errorf("current scoped private trust is invalid: %w", err)
+	}
+	target, err := exactHTTPSOrigin(strings.TrimSpace(targetOrigin))
+	if err != nil {
+		return Credential{}, fmt.Errorf("target scoped private origin is invalid: %w", err)
+	}
+	if target == currentOrigin {
+		return credential, nil
+	}
+	descriptor := current.ScopedPrivateTrustDescriptor
+	descriptor.Origin = target
+	migratedTrust, err := BootstrapScopedPrivateTrust(ctx, descriptor, now)
+	if err != nil {
+		return Credential{}, fmt.Errorf("verify target scoped private origin: %w", err)
+	}
+	migrated := credential
+	migrated.ServerURL = target
+	migrated.ScopedPrivateTrust = &migratedTrust
+	if err := validateCredentialTrust(migrated); err != nil {
+		return Credential{}, err
+	}
+	return migrated, nil
+}
+
 func newScopedHTTPClient(
 	expectedOrigin string,
 	trust ScopedPrivateTrust,

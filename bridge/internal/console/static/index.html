@@ -362,7 +362,7 @@
             <span>信任此中央服务，允许共享思考摘要</span>
           </label>
           <p id="connection-reasoning-sharing-help" class="modal-help">只共享 Runtime 公开且经脱敏的思考摘要，不开放原始私密推理、命令参数、工具输出、密钥或文件权限。此授权独立于 HTTPS 信任；请先停止 Bridge 并等待任务退出后再更改。修改服务地址会清除此勾选，需要重新授权。关闭后，旧缓存重放也隐藏摘要，但已上传内容不能撤回。</p>
-          <p class="modal-help">只更新本机 Bridge 的出站连接与摘要共享授权，不会重建智能体或修改 Device 凭据。Token 留空时保留原值；普通连接配置保存后会安全重连。</p>
+          <p class="modal-help">只更新本机 Bridge 的出站连接与摘要共享授权，不会重建智能体或修改 Device 凭据。Token 留空时保留原值；普通连接配置保存后会安全重连。已配对私有 CA 时，地址迁移只接受由当前 CA 签发并通过主机名校验的新 HTTPS 地址。</p>
           <div class="actions modal-actions">
             <button class="secondary" id="cancel-connection-modal" type="button">取消</button>
             <button class="primary" id="save-connection" type="submit">保存并应用</button>

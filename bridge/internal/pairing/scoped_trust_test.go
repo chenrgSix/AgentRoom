@@ -67,6 +67,7 @@ func newPrivateTLSServer(t *testing.T, handler http.Handler) privateTLSServer {
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+		DNSNames:    []string{"localhost"},
 	}
 	leafDER, err := x509.CreateCertificate(
 		rand.Reader, leafTemplate, caCertificate, &leafKey.PublicKey, caKey,
@@ -338,5 +339,103 @@ func TestBootstrapScopedPrivateTrustRejectsDigestRedirectAndCertificateCount(t *
 				t.Fatalf("expected %q, got %v", test.expectError, err)
 			}
 		})
+	}
+}
+
+func TestMigrateScopedPrivateTrustOriginKeepsAuthorityAndSendsNoCredential(t *testing.T) {
+	var caPEM []byte
+	var credentialSeen atomic.Bool
+	server := newPrivateTLSServer(t, http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("authorization") != "" || request.Header.Get("cookie") != "" ||
+			request.Header.Get(config.ServerTokenHeader) != "" {
+			credentialSeen.Store(true)
+		}
+		switch request.URL.Path {
+		case privateCAPath:
+			response.Header().Set("content-type", "application/x-pem-file")
+			_, _ = response.Write(caPEM)
+		case "/api/health/ready":
+			response.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	caPEM = server.CAPEM
+	currentOrigin := server.Server.URL
+	targetOrigin := strings.Replace(currentOrigin, "127.0.0.1", "localhost", 1)
+	credential := Credential{
+		ServerURL: currentOrigin, DeviceID: "device_private", TeamID: "team_private",
+		OwnerMemberID: "member_private", Token: "device-secret",
+		ScopedPrivateTrust: &ScopedPrivateTrust{
+			ScopedPrivateTrustDescriptor: ScopedPrivateTrustDescriptor{
+				Mode: "private_scoped_ca", Origin: currentOrigin,
+				InstallationID: "install_0123456789abcdefghijklmn",
+				TrustEpoch:     3, CACertificateSHA256: server.Digest,
+			},
+			CACertificatePEM: string(server.CAPEM),
+		},
+	}
+	migrated, err := MigrateScopedPrivateTrustOrigin(
+		context.Background(), credential, targetOrigin, time.Now(),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if credentialSeen.Load() {
+		t.Fatal("origin migration sent a credential before target trust was verified")
+	}
+	if migrated.ServerURL != targetOrigin || migrated.ScopedPrivateTrust.Origin != targetOrigin ||
+		migrated.DeviceID != credential.DeviceID || migrated.TeamID != credential.TeamID ||
+		migrated.OwnerMemberID != credential.OwnerMemberID || migrated.Token != credential.Token ||
+		migrated.ScopedPrivateTrust.InstallationID != credential.ScopedPrivateTrust.InstallationID ||
+		migrated.ScopedPrivateTrust.TrustEpoch != credential.ScopedPrivateTrust.TrustEpoch ||
+		migrated.ScopedPrivateTrust.CACertificateSHA256 != server.Digest {
+		t.Fatalf("origin migration changed credential authority: %#v", migrated)
+	}
+}
+
+func TestMigrateScopedPrivateTrustOriginRejectsDifferentCAAndActiveRotation(t *testing.T) {
+	now := time.Now().UTC().Truncate(time.Second)
+	current := newPrivateTLSServer(t, http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusOK)
+	}))
+	var targetPEM []byte
+	target := newPrivateTLSServer(t, http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		if request.URL.Path == privateCAPath {
+			response.Header().Set("content-type", "application/x-pem-file")
+			_, _ = response.Write(targetPEM)
+			return
+		}
+		response.WriteHeader(http.StatusOK)
+	}))
+	targetPEM = target.CAPEM
+	trust := ScopedPrivateTrust{
+		ScopedPrivateTrustDescriptor: ScopedPrivateTrustDescriptor{
+			Mode: "private_scoped_ca", Origin: current.Server.URL,
+			InstallationID: "install_0123456789abcdefghijklmn",
+			TrustEpoch:     1, CACertificateSHA256: current.Digest,
+		},
+		CACertificatePEM: string(current.CAPEM),
+	}
+	credential := Credential{ServerURL: current.Server.URL, Token: "device-secret", ScopedPrivateTrust: &trust}
+	if _, err := MigrateScopedPrivateTrustOrigin(
+		context.Background(), credential, target.Server.URL, now,
+	); err == nil || !strings.Contains(err.Error(), "digest mismatch") {
+		t.Fatalf("different CA was accepted: %v", err)
+	}
+
+	rotating := credential
+	rotatingTrust := trust
+	rotatingTrust.Rotation = &ScopedPrivateTrustRotation{}
+	rotating.ScopedPrivateTrust = &rotatingTrust
+	if _, err := MigrateScopedPrivateTrustOrigin(
+		context.Background(), rotating, target.Server.URL, now,
+	); err == nil || !strings.Contains(err.Error(), "active private CA rotation") {
+		t.Fatalf("active or malformed rotation was accepted: %v", err)
+	}
+	if _, err := MigrateScopedPrivateTrustOrigin(
+		context.Background(), credential, "http://localhost:40000", now,
+	); err == nil || !strings.Contains(err.Error(), "target scoped private origin is invalid") {
+		t.Fatalf("non-HTTPS target was accepted: %v", err)
 	}
 }

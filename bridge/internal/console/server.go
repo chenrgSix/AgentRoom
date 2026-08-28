@@ -170,6 +170,8 @@ type Dependencies struct {
 	SaveConfig                func(string, config.Config) error
 	ReplaceConfig             func(string, config.Config) error
 	SaveCredential            func(string, pairing.Credential) error
+	ReplaceCredential         func(string, pairing.Credential, pairing.Credential) error
+	MigrateScopedPrivateTrust func(context.Context, pairing.Credential, string) (pairing.Credential, error)
 	RunBridge                 func(context.Context, config.Config, pairing.Credential, operations.Observer) error
 	RunBridgeWithProvisioning func(
 		context.Context,
@@ -217,6 +219,20 @@ var environmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,79}$`)
 func New(options Options, dependencies Dependencies) (*Service, error) {
 	if dependencies.DiscoverRuntime == nil {
 		dependencies.DiscoverRuntime = discoverRuntime
+	}
+	if dependencies.ReplaceCredential == nil {
+		dependencies.ReplaceCredential = pairing.Replace
+	}
+	if dependencies.MigrateScopedPrivateTrust == nil {
+		dependencies.MigrateScopedPrivateTrust = func(
+			ctx context.Context,
+			credential pairing.Credential,
+			targetOrigin string,
+		) (pairing.Credential, error) {
+			return pairing.MigrateScopedPrivateTrustOrigin(
+				ctx, credential, targetOrigin, time.Now(),
+			)
+		}
 	}
 	if dependencies.Enroll == nil || dependencies.SaveConfig == nil || dependencies.ReplaceConfig == nil ||
 		dependencies.SaveCredential == nil || dependencies.RunBridge == nil {
@@ -1167,6 +1183,10 @@ func (s *Service) replaceConfigurationLocked(configuration config.Config) error 
 	if err := s.dependencies.ReplaceConfig(s.options.ConfigPath, configuration); err != nil {
 		return err
 	}
+	return s.applyReplacedConfigurationLocked(configuration)
+}
+
+func (s *Service) applyReplacedConfigurationLocked(configuration config.Config) error {
 	wasRunning := s.bridgeCancel != nil
 	if s.bridgeCancel != nil {
 		s.bridgeCancel()
@@ -1245,11 +1265,12 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
+	scopedOriginChange := s.credential.ScopedPrivateTrust != nil &&
+		candidate.ServerURL != s.credential.ScopedPrivateTrust.Origin
 	if s.credential.ScopedPrivateTrust != nil &&
-		(candidate.ServerURL != s.credential.ScopedPrivateTrust.Origin ||
-			candidate.ResolvedTrustMode() != config.TrustSystemCA ||
+		(candidate.ResolvedTrustMode() != config.TrustSystemCA ||
 			candidate.ServerCertificateSHA256 != "") {
-		writeError(response, http.StatusConflict, "Scoped private trust is bound to the paired Central origin; re-pair explicitly to change it")
+		writeError(response, http.StatusConflict, "Scoped private trust cannot be combined with another trust mode or legacy fingerprint")
 		return
 	}
 	if candidate.ServerURL == s.configuration.ServerURL &&
@@ -1257,6 +1278,36 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 		candidate.ServerTrustMode == s.configuration.ServerTrustMode &&
 		candidate.ServerCertificateSHA256 == s.configuration.ServerCertificateSHA256 &&
 		candidate.ShareReasoningSummaries == s.configuration.ShareReasoningSummaries {
+		writeJSON(response, http.StatusOK, s.state)
+		return
+	}
+	if scopedOriginChange {
+		previousCredential := *s.credential
+		migratedCredential, err := s.dependencies.MigrateScopedPrivateTrust(
+			request.Context(), previousCredential, candidate.ServerURL,
+		)
+		if err != nil {
+			writeError(response, http.StatusConflict, publicError(err))
+			return
+		}
+		if err := s.dependencies.ReplaceCredential(
+			candidate.DataDir, previousCredential, migratedCredential,
+		); err != nil {
+			writeError(response, http.StatusInternalServerError, publicError(err))
+			return
+		}
+		if err := s.dependencies.ReplaceConfig(s.options.ConfigPath, candidate); err != nil {
+			rollbackErr := s.dependencies.ReplaceCredential(
+				candidate.DataDir, migratedCredential, previousCredential,
+			)
+			writeError(response, http.StatusInternalServerError, publicError(errors.Join(err, rollbackErr)))
+			return
+		}
+		s.credential = &migratedCredential
+		if err := s.applyReplacedConfigurationLocked(candidate); err != nil {
+			writeError(response, http.StatusInternalServerError, publicError(err))
+			return
+		}
 		writeJSON(response, http.StatusOK, s.state)
 		return
 	}

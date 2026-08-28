@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -103,6 +104,7 @@ func TestConsoleServesEmbeddedUIAndRequiresBearerTokenForAPI(t *testing.T) {
 	if response.StatusCode != http.StatusOK ||
 		!bytes.Contains(source, []byte(`id="setup-intro"`)) ||
 		!bytes.Contains(source, []byte(`id="configured-view"`)) ||
+		!bytes.Contains(source, []byte("地址迁移只接受由当前 CA 签发")) ||
 		!bytes.Contains(source, []byte(`id="agent-provisioning-form"`)) {
 		t.Fatalf("unexpected Console page: %d %s", response.StatusCode, source)
 	}
@@ -1077,7 +1079,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	}
 }
 
-func TestScopedPrivateTrustProjectionIsRedactedAndOriginCannotChange(t *testing.T) {
+func TestScopedPrivateTrustProjectionIsRedactedAndOriginMigratesWithoutCredentialReplacement(t *testing.T) {
 	directory := t.TempDir()
 	executablePath, err := os.Executable()
 	if err != nil {
@@ -1106,9 +1108,33 @@ func TestScopedPrivateTrustProjectionIsRedactedAndOriginCannotChange(t *testing.
 	if err := pairing.Save(dataDir, credential); err != nil {
 		t.Fatal(err)
 	}
+	dependencies := inertDependencies()
+	migrationCalls := 0
+	replacementCalls := 0
+	dependencies.MigrateScopedPrivateTrust = func(
+		_ context.Context, current pairing.Credential, target string,
+	) (pairing.Credential, error) {
+		migrationCalls++
+		migrated := current
+		migrated.ServerURL = target
+		migratedTrust := *current.ScopedPrivateTrust
+		migratedTrust.Origin = target
+		migrated.ScopedPrivateTrust = &migratedTrust
+		return migrated, nil
+	}
+	dependencies.ReplaceCredential = func(
+		_ string, previous pairing.Credential, migrated pairing.Credential,
+	) error {
+		replacementCalls++
+		if previous.Token != migrated.Token || previous.DeviceID != migrated.DeviceID ||
+			previous.TeamID != migrated.TeamID || previous.OwnerMemberID != migrated.OwnerMemberID {
+			t.Fatal("hostname migration replaced Device credential authority")
+		}
+		return nil
+	}
 	service, err := New(Options{
 		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "console-token",
-	}, inertDependencies())
+	}, dependencies)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1142,8 +1168,100 @@ func TestScopedPrivateTrustProjectionIsRedactedAndOriginCannotChange(t *testing.
 		ServerURL: "https://other.example.com", ServerTrustMode: config.TrustSystemCA,
 	})
 	response.Body.Close()
-	if response.StatusCode != http.StatusConflict || service.State().ServerURL != configuration.ServerURL {
-		t.Fatalf("scoped trust origin change was not rejected: status=%d state=%#v", response.StatusCode, service.State())
+	state = service.State()
+	if response.StatusCode != http.StatusOK || state.ServerURL != "https://other.example.com" ||
+		migrationCalls != 1 || replacementCalls != 1 || state.DeviceID != credential.DeviceID ||
+		state.TeamID != credential.TeamID || state.ServerCADigestPrefix != fullDigest[:12] {
+		t.Fatalf("scoped trust origin did not migrate in place: status=%d state=%#v", response.StatusCode, state)
+	}
+	response = consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL: "https://other.example.com", ServerTrustMode: config.TrustPinnedSHA256,
+		ServerCertificateSHA256: strings.Repeat("a", 64),
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusConflict || migrationCalls != 1 || replacementCalls != 1 {
+		t.Fatal("scoped trust accepted an unrelated trust mode during hostname migration")
+	}
+}
+
+func TestScopedPrivateTrustOriginMigrationRollsCredentialBackWhenConfigWriteFails(t *testing.T) {
+	directory := t.TempDir()
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	configuration := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "https://old.example.com", ServerTrustMode: config.TrustSystemCA,
+		DeviceName: "Scoped Bridge", DataDir: dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "Local Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex",
+			PresetVersion: config.CurrentPresetVersion, Command: config.CodexPresetCommand(executablePath),
+			Sandbox: "workspace-write", Workspace: directory,
+		}},
+	}
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	credential := pairing.Credential{
+		ServerURL: configuration.ServerURL, DeviceID: "device_scoped123", TeamID: "team_scoped123",
+		OwnerMemberID: "member_scoped123", Token: "device-secret",
+		ScopedPrivateTrust: &pairing.ScopedPrivateTrust{
+			ScopedPrivateTrustDescriptor: pairing.ScopedPrivateTrustDescriptor{
+				Mode: "private_scoped_ca", Origin: configuration.ServerURL,
+				InstallationID: "install_1234567890abcdef", TrustEpoch: 2,
+				CACertificateSHA256: strings.Repeat("a", 64),
+			},
+			CACertificatePEM: "test-only",
+		},
+	}
+	if err := pairing.Save(dataDir, pairing.Credential{
+		ServerURL: configuration.ServerURL, DeviceID: credential.DeviceID, TeamID: credential.TeamID,
+		OwnerMemberID: credential.OwnerMemberID, Token: credential.Token,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	dependencies := inertDependencies()
+	dependencies.MigrateScopedPrivateTrust = func(
+		_ context.Context, current pairing.Credential, target string,
+	) (pairing.Credential, error) {
+		migrated := current
+		migrated.ServerURL = target
+		migratedTrust := *current.ScopedPrivateTrust
+		migratedTrust.Origin = target
+		migrated.ScopedPrivateTrust = &migratedTrust
+		return migrated, nil
+	}
+	replacements := 0
+	dependencies.ReplaceCredential = func(_ string, _, _ pairing.Credential) error {
+		replacements++
+		return nil
+	}
+	dependencies.ReplaceConfig = func(string, config.Config) error {
+		return fmt.Errorf("injected config failure")
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "console-token",
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	service.mu.Lock()
+	service.credential = &credential
+	service.applyCredentialTrustViewLocked(credential)
+	service.mu.Unlock()
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL: "https://new.example.com", ServerTrustMode: config.TrustSystemCA,
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusInternalServerError || replacements != 2 ||
+		service.State().ServerURL != configuration.ServerURL {
+		t.Fatalf("failed configuration write did not roll back credential: status=%d replacements=%d state=%#v", response.StatusCode, replacements, service.State())
 	}
 }
 
