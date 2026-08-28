@@ -101,5 +101,8 @@ against the hostname after the Central migration.
   rejection of a different digest, invalid target, active rotation, local write
   failure and active-work mutation.
 - A live private installation moves from its literal IP to a resolvable stable
-  hostname, passes `doctor`, retains the database and installation identity, and
-  reconnects a current packaged Bridge without a new Device credential.
+  hostname, passes `doctor`, and retains the database and installation identity.
+- Current Bridge code proves credential-preserving same-CA origin migration in
+  deterministic and Windows cross-compile gates. A packaged physical Windows
+  reconnect remains separate platform acceptance and is not implied by the
+  Central migration result.
