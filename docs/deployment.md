@@ -17,11 +17,11 @@ where that control is mandatory.
 
 [ADR-0023](adr/0023-default-public-ca-and-scope-private-bridge-trust.md)
 accepts public-CA HTTPS as the default external deployment and origin-scoped
-private CA trust as the no-manual-CA Bridge alternative. That target is not in
-the current `v0.4.0-qa028.1` Draft candidate: `CON-014`, `OPS-009`, `SEC-009`,
-`BRG-045`, and `WEB-048` must land before a private-LAN pairing can use it. The
-current candidate's manual CA import proves only reachability and must not be
-used to close the normal onboarding acceptance.
+private CA trust as the no-manual-CA Bridge alternative. The source path is
+complete under `CON-014`, `OPS-009`, `SEC-009`, `BRG-045`, and `WEB-048`, but
+the earlier `v0.4.0-qa028.1` Draft candidate predates those completed commits.
+Use a newer exact release for private-LAN pairing. The old candidate's manual
+CA import proves only reachability and cannot close normal onboarding.
 
 ## Host Requirements
 
@@ -32,7 +32,7 @@ The host needs:
 - OpenSSL to generate the Owner recovery secret;
 - curl for health verification;
 - a stable public DNS name for the default public-CA path, or an explicitly
-  selected private DNS name/LAN IP after scoped private trust is implemented;
+  selected private DNS name/LAN IP with `private_scoped_ca`;
 - inbound TCP 80/9443 and outbound ACME access for the default public-CA path.
 
 Node.js and Go are not required on a Compose host. Ensure no other service owns
@@ -159,12 +159,12 @@ not click through certificate warnings. A private deployment may keep the Owner
 browser on the Central host or another already managed browser and pair the
 remote Bridge through the scoped link.
 
-The controller and Caddy now publish the deployment-owned well-known CA and
+The controller and Caddy publish the deployment-owned well-known CA and
 descriptor in explicit `private_scoped_ca` mode. Server projection, Web link
-encoding, Bridge bootstrap/persistence and rotation remain owned by `SEC-009`,
-`WEB-048`, `BRG-045` and `QA-030`; until those tasks complete, stop before
-sending a private-scoped claim secret rather than treating the deployment
-artifact alone as the finished no-manual-CA flow.
+encoding, Bridge bootstrap/persistence and authenticated two-CA rotation are
+implemented under `SEC-009`, `WEB-048`, and `BRG-045`. `QA-030` still owns the
+clean packaged cross-host proof; deterministic local evidence alone must not be
+reported as physical no-manual-CA acceptance.
 
 ### Advanced current compatibility: manual CA
 
@@ -205,7 +205,7 @@ diagnostics because renewal changes that fingerprint.
 | `agentroom` is unhealthy | `docker compose logs agentroom` | database path, migration, secret, or public-origin validation |
 | Caddy cannot obtain a public certificate | `docker compose logs caddy` | DNS, ports 80/9443, firewall, or ACME egress; do not accept silent local-CA fallback |
 | Browser works but Bridge does not connect | Caddy and AgentRoom logs | public URL, system trust, WebSocket, or Device credential |
-| Private scoped pairing is unavailable | exact release and task status | current release predates `OPS-009`/`BRG-045`; manual CA is advanced compatibility, not an automatic fallback |
+| Private scoped pairing is unavailable | exact release tag and `agentroomctl status` | the installed release predates completed `OPS-009`/`BRG-045`, or the deployment did not select `private_scoped_ca`; manual CA is not a fallback |
 | `/api/metrics` returns `404` publicly | expected | metrics are intentionally hidden by Caddy |
 
 Do not publish Server port 3000 or switch a public deployment to local auth

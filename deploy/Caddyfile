@@ -1,6 +1,7 @@
 {
 	auto_https disable_redirects
 	default_sni {$AGENT_ROOM_DOMAIN}
+	import /etc/caddy/pki-profile.caddy
 }
 
 http://{$AGENT_ROOM_DOMAIN} {

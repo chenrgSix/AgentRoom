@@ -81,7 +81,7 @@ func (controller *Controller) Doctor(ctx context.Context, dataRoot string) error
 	}
 	readiness := ReadinessInput{
 		PublicOrigin:     installation.Manifest.PublicOrigin,
-		LocalCARoot:      filepath.Join(installation.Manifest.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
+		LocalCARoot:      privateCARootPath(installation.Manifest, activePrivateCAID(installation.Manifest)),
 		TLSProfile:       installation.Manifest.TLSProfile,
 		ExpectedCADigest: installation.Manifest.CACertificateSHA256,
 		Timeout:          30 * time.Second,
@@ -301,7 +301,7 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 	}
 	readiness := ReadinessInput{
 		PublicOrigin:     target.Manifest.PublicOrigin,
-		LocalCARoot:      filepath.Join(target.Manifest.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
+		LocalCARoot:      privateCARootPath(target.Manifest, activePrivateCAID(target.Manifest)),
 		TLSProfile:       target.Manifest.TLSProfile,
 		ExpectedCADigest: target.Manifest.CACertificateSHA256,
 		Timeout:          defaultReadyTimeout,

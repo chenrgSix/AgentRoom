@@ -45,6 +45,8 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `go build -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — build the native Wails Bridge GUI for the current platform.
 - `go test -tags desktop ./cmd/agentroom-bridge-desktop` from `bridge/` — verify desktop-only state mapping and compile its native shell.
 - `go test ./... && go vet ./... && go build ./cmd/agentroomctl` from `ops/agentroomctl/` — verify and build the central lifecycle controller.
+- `agentroomctl trust-rotation prepare --data-root /path --overlap 24h` followed by `agentroomctl trust-rotation activate --data-root /path` — stage an authenticated two-CA Bridge overlap, wait for every eligible Device acknowledgement, and switch the private Caddy authority with rollback-safe readiness.
+- `agentroomctl migrate-public-ca --data-root /path` — explicitly relabel only a legacy direct-HTTPS installation whose existing origin passes system-only public-CA readiness before and after migration.
 - `RELEASE_TAG=v0.4.0-rc.1 SOURCE_REF=HEAD GOOS=linux GOARCH=amd64 ./scripts/package-central-release.sh` from `ops/agentroomctl/` — package one exact-commit, checksum-pinned Central archive.
 - `RELEASE_TAG=v0.2.0-rc.3 GOOS=linux GOARCH=amd64 ./scripts/package-release.sh` from `bridge/` — build one portable Bridge archive.
 - `RELEASE_TAG=v0.2.0-rc.3 GOARCH=arm64 ./scripts/package-desktop-darwin.sh` from `bridge/` — build one unsigned native macOS GUI archive.

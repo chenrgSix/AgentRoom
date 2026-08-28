@@ -99,9 +99,11 @@ boundary:
 The CLI option is `--tls-profile`; omission under `direct_https` means
 `public_ca`, while any TLS profile supplied with `local` is invalid.
 
-`OPS-009` now records a stable non-secret installation ID, TLS profile,
-monotonic trust epoch and canonical public CA DER digest in manifest schema v2;
-reentry preserves them. The controller copies exactly one validated canonical
+`OPS-009` records a stable non-secret installation ID, TLS profile, monotonic
+trust epoch, named Caddy private-authority ID and canonical public CA DER digest
+in manifest schema v2; reentry preserves them. Schema-v2 manifests created
+before named authorities retain the exact built-in `local` ID rather than
+silently generating a different root. The controller copies exactly one validated canonical
 certificate into a bounded public-artifact directory. It is exposed only at
 `/.well-known/agentroom/bridge-ca.pem` with one-certificate, no-redirect, size,
 media-type and cache-policy constraints. The manifest and endpoint never
@@ -113,11 +115,23 @@ well-known artifact agrees with the manifest. Manual CA and legacy leaf-pin
 state is reported as advanced compatibility. A new public install cannot
 silently become any of those modes after DNS, ACME or chain failure.
 
+Private CA rotation uses `trust-rotation prepare` and `trust-rotation activate`.
+Prepare reloads a Caddy model containing exactly current plus next named
+authorities, verifies the next canonical root, and only then publishes one
+bounded next-epoch offer. Activate inspects acknowledgement counts through the
+running Server container, refuses a partial eligible-Device set, establishes a
+0600 recovery journal, selects only the next issuer, and requires exact
+CA-digest HTTPS/WebSocket readiness before advancing the manifest and public
+artifacts. A failed new-chain check restores the current-first two-authority
+model; a completed journal can finish cleanup without generating another CA.
+
 An old manifest without a TLS profile remains readable and reports
-`legacy_unclassified`; install reentry cannot relabel it. The remaining
-inspected upgrade migration will distinguish publicly trusted from legacy
-private/manual state. It does not rewrite
-Bridge state, install/remove OS roots, rotate the CA, or claim scoped migration.
+`legacy_unclassified`; install reentry cannot relabel it. The explicit
+`migrate-public-ca` operation requires a public-DNS origin and system-only
+readiness before and after selecting the packaged ACME profile. Failed,
+private, manual, IP, or ambiguous state retains the legacy manifest. The
+migration does not rewrite
+Bridge state, install/remove OS roots, rotate a CA, or claim scoped migration.
 Moving a private installation into scoped mode requires the complete
 Contract/Security/Web/Bridge path and a fresh pairing or authenticated overlap,
 not a manifest-only label change.
@@ -138,6 +152,11 @@ not a manifest-only label change.
   in isolation, and commits the new manifest only after readiness. A failure
   keeps the old manifest/backup and reports the currently inspected image while
   preserving the documented forward-only migration boundary.
+- `trust-rotation prepare` provisions and publishes one strictly newer private
+  CA while the old CA stays first; `activate` requires all eligible Device
+  acknowledgements and new-chain readiness, with current-first rollback.
+- `migrate-public-ca` performs the only schema-v1 TLS relabel and only after
+  system trust proves the existing and resulting public certificate path.
 - `uninstall` runs Compose `down --remove-orphans` without `-v`, removes only
   generated runtime configuration, records `uninstalled`, and preserves the
   data root, manifest, recovery material, backups, database, and Caddy state.
@@ -163,11 +182,12 @@ real Docker Compose and live TLS evidence is recorded in
 direct-HTTPS host installs without claiming public ACME or a physical second
 machine; those remain separate QA evidence.
 
-Current `OPS-009` evidence covers public-default selection, ineligible-host
-no-fallback errors, legacy no-relabel behavior, one bounded public-CA artifact,
+`OPS-009` evidence covers public-default selection, ineligible-host no-fallback
+errors, legacy no-relabel behavior, inspected public migration, one bounded
+public-CA artifact, named current/next PKI provisioning, strict acknowledgement
+admission, idempotent overlap staging, exact next-chain commit, rollback,
 private digest agreement, and negative multiple-certificate/private-key output
-checks. Overlap staging and inspected legacy migration remain before the task is
-DONE. Those deterministic checks do
+checks. Real Caddy validation includes the generated two-authority model. Those deterministic checks do
 not by themselves prove Web projection, Bridge bootstrap, browser trust or two
 physical machines; `SEC-009`, `BRG-045`, `WEB-048`, `QA-030`, and `QA-002` own
 those boundaries.

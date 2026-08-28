@@ -24,9 +24,10 @@ import (
 )
 
 type fakeRunner struct {
-	commands []Command
-	failOnce map[string]int
-	hook     func(Command)
+	commands                        []Command
+	failOnce                        map[string]int
+	hook                            func(Command)
+	rotationAcknowledgementResponse string
 }
 
 func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error) {
@@ -53,6 +54,12 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 	}
 	if strings.Contains(joined, " ps ") {
 		return `[{"Service":"agentroom","State":"running"}]` + "\n", nil
+	}
+	if strings.Contains(joined, "device_private_ca_rotation_acknowledgements") {
+		if runner.rotationAcknowledgementResponse != "" {
+			return runner.rotationAcknowledgementResponse, nil
+		}
+		return `{"eligible":0,"acknowledged":0}`, nil
 	}
 	if command.Name == "bash" && strings.Contains(joined, "compose-backup.sh") {
 		return strings.Repeat("a", 64) + "  /safe/agent-room.sqlite\n", nil
@@ -151,6 +158,7 @@ func createReleaseForTarget(t *testing.T, parent, version string, dataSchema int
 		"deploy/tls/private-scoped-ca.caddy": "tls internal\n",
 		"deploy/tls/internal-ca.caddy":       "tls internal\n",
 		"deploy/tls/legacy-auto.caddy":       "# legacy\n",
+		"deploy/tls/pki-none.caddy":          "# no named authorities\n",
 		"scripts/compose-backup.sh":          "#!/usr/bin/env bash\nexit 0\n",
 		"scripts/compose-restore.sh":         "#!/usr/bin/env bash\nexit 0\n",
 		"apps/server/source.ts":              "export {};\n",
@@ -630,13 +638,17 @@ func TestPrivateScopedInstallPublishesStableBoundedTrust(t *testing.T) {
 	root := t.TempDir()
 	releaseDir := createRelease(t, root, "v1.2.3", 1)
 	dataRoot := filepath.Join(root, "state")
-	caPath := filepath.Join(dataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt")
 	now := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
 	writtenDigest := ""
 	runner := &fakeRunner{failOnce: map[string]int{}}
 	runner.hook = func(command Command) {
 		joined := command.Name + " " + strings.Join(command.Args, " ")
 		if strings.Contains(joined, " up ") {
+			manifest, found, err := loadManifest(installationPaths(dataRoot).ManifestPath)
+			if err != nil || !found {
+				t.Fatalf("load private manifest from start hook: found=%v err=%v", found, err)
+			}
+			caPath := privateCARootPath(manifest, activePrivateCAID(manifest))
 			if _, err := os.Stat(caPath); errors.Is(err, os.ErrNotExist) {
 				writtenDigest = writeTestCA(t, caPath, now)
 			}
@@ -696,9 +708,221 @@ func TestPrivateScopedInstallPublishesStableBoundedTrust(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Contains(environment, []byte("private-scoped-ca.caddy")) ||
-		!bytes.Contains(environment, []byte("/run/agentroom/trust/deployment-trust.json")) {
+	if !bytes.Contains(environment, []byte(installation.CaddyTLSProfilePath)) ||
+		!bytes.Contains(environment, []byte(installation.CaddyPKIProfilePath)) ||
+		!bytes.Contains(environment, []byte("/run/agentroom/trust/deployment-trust.json")) ||
+		!bytes.Contains(environment, []byte("/run/agentroom/trust/deployment-trust-rotation.json")) {
 		t.Fatalf("private profile was not rendered: %s", environment)
+	}
+	profile, err := os.ReadFile(installation.CaddyTLSProfilePath)
+	if err != nil || !bytes.Contains(profile, []byte("ca "+manifest.PrivateCAID)) ||
+		bytes.Count(profile, []byte("issuer internal")) != 1 {
+		t.Fatalf("private authority profile was not exact: %s err=%v", profile, err)
+	}
+	pkiProfile, err := os.ReadFile(installation.CaddyPKIProfilePath)
+	if err != nil || !bytes.Contains(pkiProfile, []byte("ca "+manifest.PrivateCAID)) ||
+		bytes.Count(pkiProfile, []byte("ca ")) != 1 {
+		t.Fatalf("private PKI profile was not exact: %s err=%v", pkiProfile, err)
+	}
+}
+
+func privateScopedOptions(releaseDir, dataRoot string) InstallOptions {
+	options := installOptions(releaseDir, dataRoot)
+	options.Mode = "direct_https"
+	options.TLSProfile = "private_scoped_ca"
+	options.Domain = "192.0.2.25"
+	options.PublicOrigin = "https://192.0.2.25:19443"
+	return options
+}
+
+func provisionConfiguredPrivateCAs(
+	t *testing.T,
+	dataRoot string,
+	now time.Time,
+	digests map[string]string,
+) func(Command) {
+	t.Helper()
+	return func(command Command) {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if !strings.Contains(joined, " up ") && !strings.Contains(joined, " restart ") {
+			return
+		}
+		installation := installationPaths(dataRoot)
+		manifest, found, err := loadManifest(installation.ManifestPath)
+		if err != nil || !found {
+			t.Fatalf("load private manifest from Caddy hook: found=%v err=%v", found, err)
+		}
+		profile, err := os.ReadFile(installation.CaddyTLSProfilePath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(profile), "\n") {
+			line = strings.TrimSpace(line)
+			if !strings.HasPrefix(line, "ca ") {
+				continue
+			}
+			caID := strings.TrimSpace(strings.TrimPrefix(line, "ca "))
+			path := privateCARootPath(manifest, caID)
+			if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+				digests[caID] = writeTestCA(t, path, now)
+			}
+		}
+	}
+}
+
+func TestPrivateCARotationWaitsForAcknowledgementsAndCommitsNextAuthority(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	now := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
+	digests := map[string]string{}
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	runner.hook = provisionConfiguredPrivateCAs(t, dataRoot, now, digests)
+	var output bytes.Buffer
+	dependencies := testDependencies(runner, &output)
+	var readiness []ReadinessInput
+	dependencies.CheckReadiness = func(_ context.Context, input ReadinessInput) error {
+		readiness = append(readiness, input)
+		return nil
+	}
+	control := New(dependencies)
+	options := privateScopedOptions(releaseDir, dataRoot)
+	installed, err := control.Install(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	currentDigest := installed.Manifest.CACertificateSHA256
+	if err := control.PreparePrivateCARotation(context.Background(), PrivateCARotationOptions{
+		DataRoot: dataRoot,
+		Overlap:  2 * time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	offerBefore, err := os.ReadFile(installed.TrustRotationPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := control.PreparePrivateCARotation(context.Background(), PrivateCARotationOptions{
+		DataRoot: dataRoot,
+		Overlap:  2 * time.Hour,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	offerAfter, _ := os.ReadFile(installed.TrustRotationPath)
+	if !bytes.Equal(offerBefore, offerAfter) {
+		t.Fatal("idempotent prepare changed the staged CA or overlap")
+	}
+	var offer privateCARotationOffer
+	if err := decodeStrictJSON(offerBefore, &offer); err != nil {
+		t.Fatal(err)
+	}
+	if offer.CurrentTrustEpoch != 1 || offer.NextTrust.TrustEpoch != 2 ||
+		offer.NextTrust.CACertificateSHA256 == currentDigest ||
+		strings.Contains(string(offerBefore), "PRIVATE KEY") {
+		t.Fatalf("unexpected bounded rotation offer: %+v", offer)
+	}
+	profile, _ := os.ReadFile(installed.CaddyTLSProfilePath)
+	if bytes.Count(profile, []byte("issuer internal")) != 2 {
+		t.Fatalf("prepare did not stage exactly two authorities: %s", profile)
+	}
+	pkiProfile, _ := os.ReadFile(installed.CaddyPKIProfilePath)
+	if bytes.Count(pkiProfile, []byte("ca ")) != 2 {
+		t.Fatalf("prepare did not declare exactly two PKI authorities: %s", pkiProfile)
+	}
+	runner.rotationAcknowledgementResponse = `{"eligible":2,"acknowledged":1}`
+	requireActionCode(t, control.ActivatePrivateCARotation(context.Background(), dataRoot), "PRIVATE_ROTATION_ACK_PENDING")
+	manifest, _, _ := loadManifest(installed.ManifestPath)
+	if manifest.TrustEpoch != 1 || manifest.CACertificateSHA256 != currentDigest {
+		t.Fatal("pending acknowledgements changed active trust")
+	}
+	runner.rotationAcknowledgementResponse = `{"eligible":2,"acknowledged":2}`
+	if err := control.ActivatePrivateCARotation(context.Background(), dataRoot); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _, _ = loadManifest(installed.ManifestPath)
+	if manifest.TrustEpoch != 2 || manifest.CACertificateSHA256 != offer.NextTrust.CACertificateSHA256 ||
+		manifest.PrivateCAID != privateCAID(manifest.InstallationID, 2) {
+		t.Fatalf("rotation did not commit the exact next authority: %+v", manifest)
+	}
+	profile, _ = os.ReadFile(installed.CaddyTLSProfilePath)
+	if bytes.Count(profile, []byte("issuer internal")) != 1 ||
+		!bytes.Contains(profile, []byte("ca "+manifest.PrivateCAID)) {
+		t.Fatalf("activation did not retire the old served authority: %s", profile)
+	}
+	pkiProfile, _ = os.ReadFile(installed.CaddyPKIProfilePath)
+	if bytes.Count(pkiProfile, []byte("ca ")) != 1 ||
+		!bytes.Contains(pkiProfile, []byte("ca "+manifest.PrivateCAID)) {
+		t.Fatalf("activation did not retire the old PKI declaration: %s", pkiProfile)
+	}
+	for _, path := range []string{installed.TrustRotationPath, installed.RotationJournalPath} {
+		if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+			t.Fatalf("completed rotation retained %s: %v", path, err)
+		}
+	}
+	descriptorBytes, err := os.ReadFile(installed.TrustDescriptorPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var descriptor deploymentTrustDescriptor
+	if err := decodeStrictJSON(descriptorBytes, &descriptor); err != nil ||
+		descriptor.TrustEpoch != 2 || descriptor.CACertificateSHA256 != manifest.CACertificateSHA256 {
+		t.Fatalf("published descriptor did not advance: %+v err=%v", descriptor, err)
+	}
+	lastReadiness := readiness[len(readiness)-1]
+	if lastReadiness.ExpectedCADigest != manifest.CACertificateSHA256 ||
+		lastReadiness.LocalCARoot != privateCARootPath(manifest, manifest.PrivateCAID) {
+		t.Fatalf("activation readiness did not pin the next CA: %+v", lastReadiness)
+	}
+	if strings.Contains(output.String(), currentDigest) || strings.Contains(output.String(), manifest.CACertificateSHA256) {
+		t.Fatal("rotation output disclosed a full CA digest")
+	}
+	if _, err := control.Install(context.Background(), options); err != nil {
+		t.Fatalf("post-rotation install reentry did not preserve epoch 2: %v", err)
+	}
+}
+
+func TestPrivateCARotationRestoresCurrentFirstOverlapAfterReadinessFailure(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	now := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
+	runner := &fakeRunner{failOnce: map[string]int{}, rotationAcknowledgementResponse: `{"eligible":0,"acknowledged":0}`}
+	runner.hook = provisionConfiguredPrivateCAs(t, dataRoot, now, map[string]string{})
+	dependencies := testDependencies(runner, &bytes.Buffer{})
+	initialDigest := ""
+	dependencies.CheckReadiness = func(_ context.Context, input ReadinessInput) error {
+		if initialDigest != "" && input.ExpectedCADigest != initialDigest {
+			return fmt.Errorf("injected next-chain failure")
+		}
+		return nil
+	}
+	control := New(dependencies)
+	installed, err := control.Install(context.Background(), privateScopedOptions(releaseDir, dataRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	initialDigest = installed.Manifest.CACertificateSHA256
+	if err := control.PreparePrivateCARotation(context.Background(), PrivateCARotationOptions{DataRoot: dataRoot}); err != nil {
+		t.Fatal(err)
+	}
+	requireActionCode(t, control.ActivatePrivateCARotation(context.Background(), dataRoot), "PRIVATE_ROTATION_READINESS_FAILED")
+	manifest, _, _ := loadManifest(installed.ManifestPath)
+	if manifest.TrustEpoch != 1 || manifest.CACertificateSHA256 != initialDigest {
+		t.Fatal("failed activation changed the manifest trust authority")
+	}
+	profile, _ := os.ReadFile(installed.CaddyTLSProfilePath)
+	currentID := activePrivateCAID(manifest)
+	nextID := privateCAID(manifest.InstallationID, 2)
+	if !bytes.Contains(profile, []byte("ca "+currentID)) ||
+		!bytes.Contains(profile, []byte("ca "+nextID)) ||
+		bytes.Index(profile, []byte("ca "+currentID)) > bytes.Index(profile, []byte("ca "+nextID)) {
+		t.Fatalf("rollback did not restore current-first overlap: %s", profile)
+	}
+	if _, err := os.Stat(installed.TrustRotationPath); err != nil {
+		t.Fatal("failed activation removed the live offer")
+	}
+	if _, err := os.Stat(installed.RotationJournalPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("successful rollback retained an activation journal")
 	}
 }
 
@@ -724,6 +948,109 @@ func TestLegacyManifestIsReadableButCannotBeRelabeled(t *testing.T) {
 	preserved, err := resolveInstallTLSProfile(InstallOptions{Mode: "direct_https"}, loaded, true)
 	if err != nil || preserved.TLSProfile != "" {
 		t.Fatalf("legacy reentry was not preserved: %+v %v", preserved, err)
+	}
+}
+
+func convertInstalledManifestToLegacy(
+	t *testing.T,
+	installation Installation,
+) Manifest {
+	t.Helper()
+	legacy := installation.Manifest
+	legacy.SchemaVersion = legacyManifestSchemaVersion
+	legacy.TLSProfile = ""
+	legacy.InstallationID = ""
+	legacy.TrustEpoch = 0
+	legacy.CACertificateSHA256 = ""
+	legacy.PrivateCAID = ""
+	if err := saveManifest(installation.ManifestPath, legacy); err != nil {
+		t.Fatal(err)
+	}
+	legacyInstallation := installation
+	legacyInstallation.Manifest = legacy
+	if err := renderConfiguration(InstallOptions{
+		ReleaseDir: legacy.ReleaseDir, DataRoot: legacy.DataRoot,
+		Mode: legacy.Mode, TLSProfile: "", Domain: legacy.Domain,
+		PublicOrigin: legacy.PublicOrigin,
+		HTTPPort:     legacy.HTTPPort, HTTPSPort: legacy.HTTPSPort,
+		LegacyServerToken: legacy.LegacyServerToken,
+		ProjectName:       legacy.ProjectName,
+	}, legacy.ReleaseVersion, legacyInstallation); err != nil {
+		t.Fatal(err)
+	}
+	return legacy
+}
+
+func TestLegacyPublicCAMigrationRequiresSystemTrustAndCommitsSchemaV2(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	var output bytes.Buffer
+	dependencies := testDependencies(runner, &output)
+	readinessCalls := 0
+	dependencies.CheckReadiness = func(_ context.Context, input ReadinessInput) error {
+		readinessCalls++
+		if input.TLSProfile != "public_ca" {
+			t.Fatalf("legacy public inspection weakened system trust: %+v", input)
+		}
+		return nil
+	}
+	control := New(dependencies)
+	options := installOptions(releaseDir, dataRoot)
+	options.Mode = "direct_https"
+	options.Domain = "team.example.com"
+	options.PublicOrigin = "https://team.example.com:19443"
+	installation, err := control.Install(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	convertInstalledManifestToLegacy(t, installation)
+	readinessCalls = 0
+	if err := control.MigrateLegacyPublicCA(context.Background(), dataRoot); err != nil {
+		t.Fatal(err)
+	}
+	if readinessCalls != 2 {
+		t.Fatalf("migration did not inspect system trust before and after configuration: %d", readinessCalls)
+	}
+	manifest, _, _ := loadManifest(installation.ManifestPath)
+	if manifest.SchemaVersion != manifestSchemaVersion || manifest.TLSProfile != "public_ca" ||
+		!installIDPattern.MatchString(manifest.InstallationID) || manifest.TrustEpoch != 0 ||
+		manifest.CACertificateSHA256 != "" || manifest.PrivateCAID != "" {
+		t.Fatalf("legacy public migration did not commit a bounded schema-v2 identity: %+v", manifest)
+	}
+	environment, _ := os.ReadFile(installation.EnvironmentPath)
+	if !bytes.Contains(environment, []byte("public-ca.caddy")) ||
+		bytes.Contains(environment, []byte("legacy-auto.caddy")) {
+		t.Fatalf("migration did not select the explicit public profile: %s", environment)
+	}
+	if !strings.Contains(output.String(), "public_ca") {
+		t.Fatal("migration output omitted the inspected profile")
+	}
+
+	blockedRoot := filepath.Join(root, "blocked-state")
+	blockedRunner := &fakeRunner{failOnce: map[string]int{}}
+	blockedDependencies := testDependencies(blockedRunner, &bytes.Buffer{})
+	blockInspection := false
+	blockedDependencies.CheckReadiness = func(context.Context, ReadinessInput) error {
+		if blockInspection {
+			return fmt.Errorf("untrusted legacy chain")
+		}
+		return nil
+	}
+	blockedControl := New(blockedDependencies)
+	blockedOptions := options
+	blockedOptions.DataRoot = blockedRoot
+	blocked, err := blockedControl.Install(context.Background(), blockedOptions)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := convertInstalledManifestToLegacy(t, blocked)
+	blockInspection = true
+	requireActionCode(t, blockedControl.MigrateLegacyPublicCA(context.Background(), blockedRoot), "TLS_PROFILE_NOT_PUBLIC")
+	unchanged, _, _ := loadManifest(blocked.ManifestPath)
+	if unchanged.SchemaVersion != legacy.SchemaVersion || unchanged.TLSProfile != "" || unchanged.InstallationID != "" {
+		t.Fatal("failed public trust inspection relabeled the legacy manifest")
 	}
 }
 

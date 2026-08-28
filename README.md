@@ -234,12 +234,13 @@ the generated secrets out of its manifest and output.
 
 Public DNS and a publicly trusted Caddy certificate are the accepted default.
 [ADR-0023](docs/adr/0023-default-public-ca-and-scope-private-bridge-trust.md)
-defines the target private-LAN alternative: the pairing link pins the private
-CA to one exact Bridge origin without installing an OS root. That flow is not
-implemented by the current release and is tracked by `CON-014`, `OPS-009`,
-`SEC-009`, `BRG-045`, and `WEB-048`. Exporting and installing Caddy's local root
-or manually entering a leaf fingerprint remains advanced compatibility only;
-do not use it as normal onboarding or `QA-028` completion evidence.
+defines the private-LAN alternative: the pairing link pins the private CA to one
+exact Bridge origin without installing an OS root. The source implementation is
+complete under `CON-014`, `OPS-009`, `SEC-009`, `BRG-045`, and `WEB-048`; use an
+exact release containing those tasks, because the earlier `v0.4.0-qa028.1`
+Draft candidate predates the completed path. Exporting and installing Caddy's
+local root or manually entering a leaf fingerprint remains advanced
+compatibility only and cannot close `QA-030`.
 
 The source-checkout Compose path remains available to maintainers and older
 releases. Use a dedicated, clean checkout and record the exact source revision,

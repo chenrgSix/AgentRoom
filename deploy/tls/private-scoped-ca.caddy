@@ -1,4 +1,8 @@
-tls internal
+tls {
+	issuer internal {
+		ca {$AGENT_ROOM_PRIVATE_CA_ID:local}
+	}
+}
 
 handle /.well-known/agentroom/bridge-ca.pem {
 	rewrite * /bridge-ca.pem

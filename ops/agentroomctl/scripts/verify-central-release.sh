@@ -112,7 +112,7 @@ for target in "${targets[@]}"; do
   for required in \
     agentroom-central-release.json CENTRAL-INSTALL.md bin/agentroomctl \
     compose.yaml Dockerfile package.json package-lock.json deploy/Caddyfile \
-    deploy/tls/public-ca.caddy deploy/tls/private-scoped-ca.caddy deploy/tls/internal-ca.caddy deploy/tls/legacy-auto.caddy \
+    deploy/tls/public-ca.caddy deploy/tls/private-scoped-ca.caddy deploy/tls/internal-ca.caddy deploy/tls/legacy-auto.caddy deploy/tls/pki-none.caddy \
     scripts/compose-backup.sh scripts/compose-restore.sh \
     LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md; do
     if [[ ! -s "${root}/${required}" ]]; then

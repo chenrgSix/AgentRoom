@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"agentroom.dev/agentroomctl/internal/controller"
 )
@@ -35,7 +36,7 @@ func main() {
 
 func run(ctx context.Context, arguments []string) error {
 	if len(arguments) == 0 {
-		return fmt.Errorf("usage: agentroomctl <install|status|doctor|backup|restore|upgrade|uninstall|version>")
+		return fmt.Errorf("usage: agentroomctl <install|status|doctor|backup|restore|upgrade|trust-rotation|migrate-public-ca|uninstall|version>")
 	}
 	if arguments[0] == "version" {
 		fmt.Println(version)
@@ -122,6 +123,45 @@ func run(ctx context.Context, arguments []string) error {
 			DataRoot: *dataRoot, ReleaseDir: *releaseDir, ChecksumsPath: *checksums,
 			ChecksumsSHA256: *checksumPin,
 		})
+	case "trust-rotation":
+		if len(arguments) < 2 || (arguments[1] != "prepare" && arguments[1] != "activate") {
+			return fmt.Errorf("usage: agentroomctl trust-rotation <prepare|activate> [flags]")
+		}
+		flags := flag.NewFlagSet("trust-rotation "+arguments[1], flag.ContinueOnError)
+		flags.SetOutput(os.Stderr)
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
+		overlap := flags.String("overlap", "24h", "prepare-only current/next CA overlap from 1h through 720h")
+		if err := flags.Parse(arguments[2:]); err != nil {
+			return err
+		}
+		if flags.NArg() != 0 {
+			return fmt.Errorf("trust-rotation %s accepts flags only", arguments[1])
+		}
+		if arguments[1] == "activate" {
+			if *overlap != "24h" {
+				return fmt.Errorf("--overlap applies only to trust-rotation prepare")
+			}
+			return control.ActivatePrivateCARotation(ctx, *dataRoot)
+		}
+		duration, err := time.ParseDuration(*overlap)
+		if err != nil {
+			return fmt.Errorf("invalid --overlap: %w", err)
+		}
+		return control.PreparePrivateCARotation(ctx, controller.PrivateCARotationOptions{
+			DataRoot: *dataRoot,
+			Overlap:  duration,
+		})
+	case "migrate-public-ca":
+		flags := flag.NewFlagSet("migrate-public-ca", flag.ContinueOnError)
+		flags.SetOutput(os.Stderr)
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
+		if err := flags.Parse(arguments[1:]); err != nil {
+			return err
+		}
+		if flags.NArg() != 0 {
+			return fmt.Errorf("migrate-public-ca accepts flags only")
+		}
+		return control.MigrateLegacyPublicCA(ctx, *dataRoot)
 	default:
 		return fmt.Errorf("unknown command %q", arguments[0])
 	}

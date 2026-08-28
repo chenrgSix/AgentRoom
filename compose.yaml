@@ -142,6 +142,7 @@ services:
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ${AGENT_ROOM_CADDY_TLS_PROFILE_FILE:-./deploy/tls/public-ca.caddy}:/etc/caddy/tls-profile.caddy:ro
+      - ${AGENT_ROOM_CADDY_PKI_PROFILE_FILE:-./deploy/tls/pki-none.caddy}:/etc/caddy/pki-profile.caddy:ro
       - caddy_data:/data
       - caddy_config:/config
 

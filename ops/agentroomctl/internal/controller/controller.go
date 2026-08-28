@@ -40,11 +40,12 @@ const (
 )
 
 var (
-	releasePattern   = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
-	hashPattern      = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	installIDPattern = regexp.MustCompile(`^install_[A-Za-z0-9_-]{16,128}$`)
-	domainPattern    = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
-	commitPattern    = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+	releasePattern     = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
+	hashPattern        = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	installIDPattern   = regexp.MustCompile(`^install_[A-Za-z0-9_-]{16,128}$`)
+	privateCAIDPattern = regexp.MustCompile(`^(?:local|agentroom-[0-9]+-[0-9a-f]{16})$`)
+	domainPattern      = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+	commitPattern      = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 )
 
 type ActionError struct {
@@ -183,6 +184,7 @@ type Manifest struct {
 	InstallationID      string `json:"installationId,omitempty"`
 	TrustEpoch          int    `json:"trustEpoch,omitempty"`
 	CACertificateSHA256 string `json:"caCertificateSha256,omitempty"`
+	PrivateCAID         string `json:"privateCaId,omitempty"`
 	Domain              string `json:"domain"`
 	PublicOrigin        string `json:"publicOrigin"`
 	HTTPPort            int    `json:"httpPort"`
@@ -203,6 +205,10 @@ type Installation struct {
 	TrustDirectory      string
 	TrustDescriptorPath string
 	TrustCAPEMPath      string
+	TrustRotationPath   string
+	RotationJournalPath string
+	CaddyTLSProfilePath string
+	CaddyPKIProfilePath string
 	Manifest            Manifest
 }
 
@@ -354,6 +360,9 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 			ProjectName:        options.ProjectName,
 			LastSuccessfulStep: "release_verified", InstalledAt: now, UpdatedAt: now,
 		}
+		if options.TLSProfile == "private_scoped_ca" {
+			manifest.PrivateCAID = privateCAID(installationID, trustEpoch)
+		}
 		if err := saveManifest(installation.ManifestPath, manifest); err != nil {
 			return Installation{}, actionError("MANIFEST_WRITE_FAILED", "could not atomically establish the installation manifest", "Repair the selected data-root permissions and retry the exact command; an empty control directory is safe to reuse.", err)
 		}
@@ -419,7 +428,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	}
 	readiness := ReadinessInput{
 		PublicOrigin:     options.PublicOrigin,
-		LocalCARoot:      filepath.Join(options.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
+		LocalCARoot:      privateCARootPath(manifest, activePrivateCAID(manifest)),
 		TLSProfile:       options.TLSProfile,
 		ExpectedCADigest: manifest.CACertificateSHA256,
 		Timeout:          defaultReadyTimeout,
@@ -613,6 +622,10 @@ func installationPaths(dataRoot string) Installation {
 		TrustDirectory:      trustDirectory,
 		TrustDescriptorPath: filepath.Join(trustDirectory, "deployment-trust.json"),
 		TrustCAPEMPath:      filepath.Join(trustDirectory, "bridge-ca.pem"),
+		TrustRotationPath:   filepath.Join(trustDirectory, "deployment-trust-rotation.json"),
+		RotationJournalPath: filepath.Join(dataRoot, "control", "private-ca-rotation.json"),
+		CaddyTLSProfilePath: filepath.Join(trustDirectory, "caddy-tls-profile.caddy"),
+		CaddyPKIProfilePath: filepath.Join(trustDirectory, "caddy-pki-profile.caddy"),
 	}
 }
 
@@ -739,8 +752,14 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 		return err
 	}
 	deploymentTrustFile := ""
+	deploymentTrustRotationFile := ""
 	if options.TLSProfile == "private_scoped_ca" {
 		deploymentTrustFile = "/run/agentroom/trust/deployment-trust.json"
+		deploymentTrustRotationFile = "/run/agentroom/trust/deployment-trust-rotation.json"
+		if err := ensurePrivateCaddyProfiles(installation); err != nil {
+			return err
+		}
+		tlsProfilePath = installation.CaddyTLSProfilePath
 	}
 	environment := strings.Join([]string{
 		"AGENT_ROOM_DOMAIN=" + dotenvQuote(options.Domain),
@@ -751,7 +770,9 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 		"AGENT_ROOM_IMAGE_TAG=" + dotenvQuote(strings.TrimPrefix(releaseVersion, "v")),
 		"AGENT_ROOM_DATABASE_PATH=/data/agent-room.sqlite",
 		"AGENT_ROOM_CADDY_TLS_PROFILE_FILE=" + dotenvQuote(tlsProfilePath),
+		"AGENT_ROOM_CADDY_PKI_PROFILE_FILE=" + dotenvQuote(caddyPKIProfilePath(options, installation)),
 		"AGENT_ROOM_DEPLOYMENT_TRUST_FILE=" + dotenvQuote(deploymentTrustFile),
+		"AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE=" + dotenvQuote(deploymentTrustRotationFile),
 		"AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE=" + dotenvQuote(installation.OwnerSecretPath),
 		"AGENT_ROOM_LOG_MAX_SIZE=10m",
 		"AGENT_ROOM_LOG_MAX_FILES=5",
@@ -839,6 +860,13 @@ func caddyTLSProfilePath(releaseDir, profile string) (string, error) {
 	return filepath.Join(releaseDir, "deploy", "tls", name), nil
 }
 
+func caddyPKIProfilePath(options InstallOptions, installation Installation) string {
+	if options.TLSProfile == "private_scoped_ca" {
+		return installation.CaddyPKIProfilePath
+	}
+	return filepath.Join(options.ReleaseDir, "deploy", "tls", "pki-none.caddy")
+}
+
 func installationEnvironment(installation Installation) (map[string]string, error) {
 	environment := map[string]string{}
 	if installation.Manifest.LegacyServerToken {
@@ -896,7 +924,7 @@ func loadManifest(path string) (Manifest, bool, error) {
 
 func validateManifest(manifest Manifest) error {
 	if manifest.SchemaVersion == legacyManifestSchemaVersion {
-		if manifest.TLSProfile != "" || manifest.InstallationID != "" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" {
+		if manifest.TLSProfile != "" || manifest.InstallationID != "" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" || manifest.PrivateCAID != "" {
 			return fmt.Errorf("legacy manifest contains version 2 trust fields")
 		}
 		return nil
@@ -905,7 +933,7 @@ func validateManifest(manifest Manifest) error {
 		return fmt.Errorf("installationId is invalid")
 	}
 	if manifest.Mode == "local" {
-		if manifest.TLSProfile != "local" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" {
+		if manifest.TLSProfile != "local" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" || manifest.PrivateCAID != "" {
 			return fmt.Errorf("local manifest has an invalid trust profile")
 		}
 		return nil
@@ -915,7 +943,7 @@ func validateManifest(manifest Manifest) error {
 	}
 	switch manifest.TLSProfile {
 	case "public_ca", "manual_ca":
-		if manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" {
+		if manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" || manifest.PrivateCAID != "" {
 			return fmt.Errorf("non-scoped profile contains scoped trust state")
 		}
 	case "private_scoped_ca":
@@ -924,6 +952,9 @@ func validateManifest(manifest Manifest) error {
 		}
 		if manifest.CACertificateSHA256 != "" && !hashPattern.MatchString(manifest.CACertificateSHA256) {
 			return fmt.Errorf("private CA digest is invalid")
+		}
+		if manifest.PrivateCAID != "" && !privateCAIDPattern.MatchString(manifest.PrivateCAID) {
+			return fmt.Errorf("private CA ID is invalid")
 		}
 	default:
 		return fmt.Errorf("TLS profile is invalid")
@@ -1046,6 +1077,7 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 		"package.json", "package-lock.json", "deploy/Caddyfile",
 		"deploy/tls/public-ca.caddy", "deploy/tls/private-scoped-ca.caddy",
 		"deploy/tls/internal-ca.caddy", "deploy/tls/legacy-auto.caddy",
+		"deploy/tls/pki-none.caddy",
 		"scripts/compose-backup.sh", "scripts/compose-restore.sh",
 	} {
 		if _, found := actual[required]; !found {
@@ -1233,7 +1265,7 @@ func loadSingleCACertificate(path string, now time.Time) (*x509.Certificate, []b
 }
 
 func publishPrivateTrust(installation Installation, manifest Manifest, now time.Time) (string, error) {
-	rootPath := filepath.Join(manifest.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt")
+	rootPath := privateCARootPath(manifest, activePrivateCAID(manifest))
 	certificate, _, digest, err := loadSingleCACertificate(rootPath, now)
 	if err != nil {
 		return "", err
