@@ -71,8 +71,18 @@ func privateCARootPath(manifest Manifest, caID string) string {
 }
 
 func privateCaddyTLSProfile(caIDs ...string) ([]byte, error) {
+	return privateCaddyTLSProfileForPaths([]string{
+		"/.well-known/convenewire/bridge-ca.pem",
+		"/.well-known/agentroom/bridge-ca.pem",
+	}, caIDs...)
+}
+
+func privateCaddyTLSProfileForPaths(paths []string, caIDs ...string) ([]byte, error) {
 	if len(caIDs) < 1 || len(caIDs) > 2 {
 		return nil, fmt.Errorf("private Caddy TLS profile requires one or two authorities")
+	}
+	if len(paths) < 1 || len(paths) > 2 {
+		return nil, fmt.Errorf("private Caddy TLS profile requires one or two public paths")
 	}
 	seen := make(map[string]struct{}, len(caIDs))
 	var value strings.Builder
@@ -87,16 +97,22 @@ func privateCaddyTLSProfile(caIDs ...string) ([]byte, error) {
 		seen[caID] = struct{}{}
 		fmt.Fprintf(&value, "  issuer internal {\n    ca %s\n  }\n", caID)
 	}
-	value.WriteString(`}
-
-handle /.well-known/convenewire/bridge-ca.pem {
+	value.WriteString("}\n")
+	for _, path := range paths {
+		if path != "/.well-known/convenewire/bridge-ca.pem" &&
+			path != "/.well-known/agentroom/bridge-ca.pem" {
+			return nil, fmt.Errorf("private Caddy public path is invalid")
+		}
+		fmt.Fprintf(&value, `
+handle %s {
   rewrite * /bridge-ca.pem
   root * /run/agentroom/trust
   header Content-Type application/x-pem-file
   header Cache-Control "public, max-age=300"
   file_server
 }
-`)
+`, path)
+	}
 	return []byte(value.String()), nil
 }
 
@@ -145,12 +161,69 @@ func ensurePrivateCaddyProfiles(installation Installation) error {
 	); err != nil {
 		return fmt.Errorf("private Caddy PKI profile: %w", err)
 	}
-	if err := ensureExactCurrentOrOverlapFile(
-		installation.CaddyTLSProfilePath, currentOnly, overlap,
+	legacyCurrentOnly, err := privateCaddyTLSProfileForPaths(
+		[]string{"/.well-known/agentroom/bridge-ca.pem"}, current,
+	)
+	if err != nil {
+		return err
+	}
+	legacyOverlap, err := privateCaddyTLSProfileForPaths(
+		[]string{"/.well-known/agentroom/bridge-ca.pem"}, current, nextID,
+	)
+	if err != nil {
+		return err
+	}
+	currentOnlyPath, err := privateCaddyTLSProfileForPaths(
+		[]string{"/.well-known/convenewire/bridge-ca.pem"}, current,
+	)
+	if err != nil {
+		return err
+	}
+	currentOverlapPath, err := privateCaddyTLSProfileForPaths(
+		[]string{"/.well-known/convenewire/bridge-ca.pem"}, current, nextID,
+	)
+	if err != nil {
+		return err
+	}
+	if err := ensureCompatiblePrivateCaddyTLSProfile(
+		installation.CaddyTLSProfilePath,
+		currentOnly, overlap,
+		legacyCurrentOnly, legacyOverlap,
+		currentOnlyPath, currentOverlapPath,
 	); err != nil {
 		return fmt.Errorf("private Caddy TLS profile: %w", err)
 	}
 	return nil
+}
+
+func ensureCompatiblePrivateCaddyTLSProfile(
+	path string,
+	currentOnly, overlap, legacyCurrentOnly, legacyOverlap, currentPathOnly, currentPathOverlap []byte,
+) error {
+	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return writeAtomic(path, currentOnly, 0o644)
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Size() > 16<<10 {
+		return fmt.Errorf("profile is not a bounded regular file")
+	}
+	value, err := readBoundedFile(path, 16<<10)
+	if err != nil {
+		return err
+	}
+	switch {
+	case bytes.Equal(value, currentOnly), bytes.Equal(value, overlap):
+		return nil
+	case bytes.Equal(value, legacyCurrentOnly), bytes.Equal(value, currentPathOnly):
+		return writeAtomic(path, currentOnly, 0o644)
+	case bytes.Equal(value, legacyOverlap), bytes.Equal(value, currentPathOverlap):
+		return writeAtomic(path, overlap, 0o644)
+	default:
+		return fmt.Errorf("profile disagrees with the installation epoch")
+	}
 }
 
 func ensureExactCurrentOrOverlapFile(path string, currentOnly, overlap []byte) error {

@@ -841,13 +841,54 @@ func TestPrivateScopedInstallPublishesStableBoundedTrust(t *testing.T) {
 	}
 	profile, err := os.ReadFile(installation.CaddyTLSProfilePath)
 	if err != nil || !bytes.Contains(profile, []byte("ca "+manifest.PrivateCAID)) ||
-		bytes.Count(profile, []byte("issuer internal")) != 1 {
+		bytes.Count(profile, []byte("issuer internal")) != 1 ||
+		!bytes.Contains(profile, []byte("/.well-known/convenewire/bridge-ca.pem")) ||
+		!bytes.Contains(profile, []byte("/.well-known/agentroom/bridge-ca.pem")) {
 		t.Fatalf("private authority profile was not exact: %s err=%v", profile, err)
 	}
 	pkiProfile, err := os.ReadFile(installation.CaddyPKIProfilePath)
 	if err != nil || !bytes.Contains(pkiProfile, []byte("ca "+manifest.PrivateCAID)) ||
 		bytes.Count(pkiProfile, []byte("ca ")) != 1 {
 		t.Fatalf("private PKI profile was not exact: %s err=%v", pkiProfile, err)
+	}
+}
+
+func TestPrivateCaddyProfileMigratesLegacyPublicPathWithoutChangingAuthority(t *testing.T) {
+	root := t.TempDir()
+	installation := installationPaths(root)
+	installation.Manifest = Manifest{
+		SchemaVersion:  manifestSchemaVersion,
+		InstallationID: "install_0123456789abcdefghijklmn",
+		TrustEpoch:     1, PrivateCAID: "agentroom-1-77cb3afc1117cbe0",
+	}
+	if err := os.MkdirAll(installation.TrustDirectory, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacy, err := privateCaddyTLSProfileForPaths(
+		[]string{"/.well-known/agentroom/bridge-ca.pem"}, installation.Manifest.PrivateCAID,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAtomic(installation.CaddyTLSProfilePath, legacy, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	pki, err := privateCaddyPKIProfile(installation.Manifest.PrivateCAID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := writeAtomic(installation.CaddyPKIProfilePath, pki, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ensurePrivateCaddyProfiles(installation); err != nil {
+		t.Fatal(err)
+	}
+	migrated, err := os.ReadFile(installation.CaddyTLSProfilePath)
+	if err != nil || bytes.Count(migrated, []byte("issuer internal")) != 1 ||
+		bytes.Count(migrated, []byte("ca "+installation.Manifest.PrivateCAID)) != 1 ||
+		!bytes.Contains(migrated, []byte("/.well-known/convenewire/bridge-ca.pem")) ||
+		!bytes.Contains(migrated, []byte("/.well-known/agentroom/bridge-ca.pem")) {
+		t.Fatalf("legacy public path did not migrate to dual compatibility: %s err=%v", migrated, err)
 	}
 }
 
