@@ -173,5 +173,6 @@ The sanitized
 manual-CA diagnostic, but a later audit found that it was possible to move the
 declared evidence window away from the persisted activity without rejection.
 It is not completion evidence for `QA-002`, `QA-028`, or `QA-030`. A fresh
-schema-v4 record must prove current-build execution, live connection state,
-bounded metrics and explicit human review before these tasks return to `DONE`.
+schema-v4 record must prove current-build execution, live connection state, the
+installed canonical `convenewire://` launch, bounded metrics and explicit human
+review before these tasks return to `DONE`.

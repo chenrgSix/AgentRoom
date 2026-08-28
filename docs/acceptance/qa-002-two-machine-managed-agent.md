@@ -59,11 +59,13 @@ persist an explicit human review receipt. It therefore cannot close this gate.
    profiles under one Device. One profile must use the local Codex preset and
    the dedicated Workspace.
 4. In Web, create one Device pairing session. Open the canonical
-   `agentroom://` deep link through the installed desktop registration. QR and
-   manual code remain recovery paths for public/system-trusted origins but do
-   not replace this deep-link check. A private-scoped first pairing must carry
-   the exact origin/install/epoch/digest descriptor through the link; its short
-   code alone is intentionally insufficient.
+   `convenewire://` deep link through the installed desktop registration. The
+   retained `agentroom://` parser is upgrade compatibility only and does not
+   satisfy this current-build check. QR and manual code remain recovery paths
+   for public/system-trusted origins but do not replace this deep-link check. A
+   private-scoped first pairing must carry the exact origin/install/epoch/digest
+   descriptor through the link; its short code alone is intentionally
+   insufficient.
 5. Compare the non-copyable phrase on both machines, approve the exact Device,
    and wait for consumption. Confirm Web shows exactly one active Device and at
    least two managed Agents with only opaque Workspace references and aliases.
@@ -141,7 +143,7 @@ origin, installation identity, epoch, or CA digest.
   "attestations": {
     "twoPhysicalMachines": true,
     "bridgeArchiveVerified": true,
-    "desktopDeepLinkOpened": true,
+    "canonicalConveneWireDeepLinkOpened": true,
     "verificationPhraseMatched": true,
     "runtimeSelfTestCode": "RUNTIME_PROBE_OK",
     "runtimeLaunchHadNoUnexpectedConsoleWindow": true,
@@ -205,8 +207,9 @@ The verifier fails closed unless:
   completed Runs; and
 - every persisted and supplied timestamp falls within one window no longer than
   24 hours, metrics follow all machine evidence, and review follows metrics;
-- every physical/pairing/self-test/reconnect assertion is explicit and the
-  selected TLS profile is `public_ca` or `private_scoped_ca`;
+- every physical/pairing/self-test/reconnect assertion is explicit, the
+  installed canonical deep link used `convenewire://`, and the selected TLS
+  profile is `public_ca` or `private_scoped_ca`;
 - human-observed attestations confirm no OS CA import or verification-disabled
   application request, and the explicit review receipt confirms the physical
   hosts, current-build execution, evidence window and attestations; and

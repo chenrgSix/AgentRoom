@@ -186,7 +186,7 @@ physical boundary on the accepted `private_scoped_ca` profile. The
 physical Windows Device installed the exact published `v0.4.0-qa030.3`
 current-user installer in place; its digest matched the release and Central's
 authenticated hello observed the new version without another pairing. The
-canonical installed deep link and matching phrase were used, and the operator
+then-canonical installed deep link and matching phrase were used, and the operator
 confirmed there was no OS CA import, leaf pin, TLS-verification bypass, Server
 Token copy, Device credential copy, manual `.env`, or OpenSSL step.
 
@@ -195,5 +195,6 @@ and metrics capture to the current Bridge observation in one bounded UTC
 window. The record therefore does not close `QA-030`. The historical manual-CA
 diagnostic remains advanced compatibility evidence only. Deterministic and
 Caddy tests separately retain the `public_ca` default/no-silent-fallback
-boundary while fresh schema-v4 physical evidence remains required for the
-scoped-private alternative.
+boundary while fresh schema-v4 physical evidence, including the installed
+canonical `convenewire://` launch rather than legacy `agentroom://`
+compatibility, remains required for the scoped-private alternative.

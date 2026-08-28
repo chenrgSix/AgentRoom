@@ -34,7 +34,7 @@ const inputKeys = new Set([
 const attestationKeys = new Set([
   "twoPhysicalMachines",
   "bridgeArchiveVerified",
-  "desktopDeepLinkOpened",
+  "canonicalConveneWireDeepLinkOpened",
   "verificationPhraseMatched",
   "runtimeSelfTestCode",
   "runtimeLaunchHadNoUnexpectedConsoleWindow",
@@ -572,9 +572,9 @@ explicit human review receipt.
 - Runtime self-test: \`RUNTIME_PROBE_OK\`
 - Runtime launch UI: no unexpected console window
 - Pairing consumed at: ${pairing.pairingConsumedAt}
-- Pairing: installed desktop deep link; matching phrase; no copied Server Token
-  or Device credential; no CA installed into the client OS; no application TLS
-  verification bypass
+- Pairing: installed canonical \`convenewire://\` desktop deep link; matching
+  phrase; no copied Server Token or Device credential; no CA installed into the
+  client OS; no application TLS verification bypass
 - Database pairing proof: exactly one \`${pairing.state}\` session; Device,
   Team, initial Bridge version and \`${pairing.tlsProfile}\` profile matched
 - Authenticated hello proof: current Bridge version matched at

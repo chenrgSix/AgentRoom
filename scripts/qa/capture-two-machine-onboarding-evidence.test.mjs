@@ -184,7 +184,7 @@ function input(overrides = {}) {
     attestations: {
       twoPhysicalMachines: true,
       bridgeArchiveVerified: true,
-      desktopDeepLinkOpened: true,
+      canonicalConveneWireDeepLinkOpened: true,
       verificationPhraseMatched: true,
       runtimeSelfTestCode: "RUNTIME_PROBE_OK",
       runtimeLaunchHadNoUnexpectedConsoleWindow: true,
@@ -257,7 +257,8 @@ test("physical evidence capture cross-checks Runs and writes only sanitized fact
   assert.match(output, /connection epoch 8/u);
   assert.match(output, /## Human review receipt/u);
   assert.match(output, /Reviewer role: machine-b operator/u);
-  assert.match(output, /no CA installed into the client OS/u);
+  assert.match(output, /canonical `convenewire:\/\/` desktop deep link/u);
+  assert.match(output, /no CA installed into the\s+client OS/u);
   assert.match(output, /no application TLS\s+verification bypass/u);
   assert.match(output, /`queued` → `delivered` → `working` → `completed`/u);
   assert.doesNotMatch(output, new RegExp(files.directory, "u"));
@@ -363,6 +364,7 @@ test("physical evidence capture rejects stale or inconsistent TLS evidence", asy
   }), /missing=noManualCaInstalled/u);
 
   for (const attestation of [
+    "canonicalConveneWireDeepLinkOpened",
     "runtimeLaunchHadNoUnexpectedConsoleWindow",
     "noManualCaInstalled",
     "noApplicationTlsVerificationBypass"
