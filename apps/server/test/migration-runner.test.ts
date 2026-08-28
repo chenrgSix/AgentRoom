@@ -30,16 +30,16 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 45);
+  assert.equal(first.currentVersion, 46);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -114,6 +114,9 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
         "WHERE type = 'table' AND name = 'task_results'"
       )
       .get() as { count: number };
+    const pairingColumns = database
+      .prepare("PRAGMA table_info(device_pairing_sessions)")
+      .all() as Array<{ name: string }>;
     const runColumns = database
       .prepare("PRAGMA table_info(runs)")
       .all() as Array<{ name: string }>;
@@ -121,7 +124,7 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
       .prepare("PRAGMA table_info(agents)")
       .all() as Array<{ name: string }>;
 
-    assert.equal(migrationCount.count, 45);
+    assert.equal(migrationCount.count, 46);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
     assert.equal(clarificationTable.count, 1);
@@ -129,6 +132,12 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
     assert.equal(artifactPublicationTable.count, 1);
     assert.equal(artifactRelationTable.count, 1);
     assert.equal(devicePairingSessionTable.count, 1);
+    assert.equal(pairingColumns.some(({ name }) =>
+      name === "trust_installation_id"
+    ), true);
+    assert.equal(pairingColumns.some(({ name }) =>
+      name === "device_supports_scoped_private_trust"
+    ), true);
     assert.equal(taskCriteriaTable.count, 1);
     assert.equal(taskAssignmentTable.count, 1);
     assert.equal(ambiguityAcknowledgementTable.count, 1);
@@ -222,7 +231,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -380,7 +389,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45]
+    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46]
   );
   const database = openDatabase(databasePath);
   try {
@@ -495,7 +504,7 @@ test("Task work migration maps legacy state and replaces a terminal default", as
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [43, 44, 45]);
+  assert.deepEqual(migrated.appliedVersions, [43, 44, 45, 46]);
   const database = openDatabase(databasePath);
   try {
     const rows = database.prepare(`

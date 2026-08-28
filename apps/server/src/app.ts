@@ -80,6 +80,8 @@ import {
 import { BridgePairingService } from "./security/bridge-pairing-service.js";
 import { DevicePairingSessionService } from
   "./security/device-pairing-session-service.js";
+import { createDeploymentTrustProvider } from
+  "./security/deployment-trust.js";
 import {
   assertBridgeServerToken,
   bridgeServerTokenHeader,
@@ -128,6 +130,7 @@ export interface ServerAppOptions {
     windowMilliseconds: number;
   };
   databasePath: string;
+  deploymentTrustFile?: string;
   artifactBlobRoot?: string;
   bridgeServerToken?: string;
   clock?: () => string;
@@ -163,6 +166,10 @@ export async function createServerApp(
   const auth = new AuthService(database);
   const bridgeServerToken = normalizeBridgeServerToken(options.bridgeServerToken);
   const webAuth = options.webAuth ?? { mode: "local" as const };
+  const deploymentTrust = createDeploymentTrustProvider(
+    options.deploymentTrustFile,
+    webAuth.mode === "trusted-team" ? webAuth.publicOrigin : undefined
+  );
   const trustedWeb = webAuth.mode === "trusted-team"
     ? new TrustedWebAccessService(
         database,
@@ -193,7 +200,8 @@ export async function createServerApp(
   const devicePairingSessions = new DevicePairingSessionService(
     database,
     core,
-    auth
+    auth,
+    deploymentTrust
   );
   const clock = options.clock ?? (() => new Date().toISOString());
   const runRepository = new RunRepository(database);

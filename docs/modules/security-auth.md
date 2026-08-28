@@ -217,13 +217,21 @@ join/pair plus central-Token behavior. Bridge and Web presentation remain owned
 by `BRG-043` and `WEB-045`; this Server completion does not claim those product
 surfaces.
 
-`CON-014` and `SEC-009` extend that pairing boundary with public deployment
-trust metadata, descriptor-to-phrase binding and authenticated private-CA
-rotation. Negative tests must reject projection from a mismatched installation,
-origin or Team, epoch downgrade, descriptor mutation, private-key material,
-legacy-client private bootstrap and rotation offered outside an existing
-pin-valid Device channel. `OPS-009`, `BRG-045`, and `WEB-048` remain the owners
-of installation state, local TLS enforcement, and presentation respectively.
+`CON-014` and the active `SEC-009` extend that pairing boundary with public
+deployment trust metadata. Migration 0046 snapshots the exact descriptor and
+Bridge capability with the session. Server reads the bounded controller file
+lazily so Caddy can establish its CA first, requires its exact origin to equal
+the trusted-team Server origin, projects the snapshot only to the authenticated
+Owner, and binds it into the matching phrase. The direct claim must echo the
+exact descriptor and advertise scoped-trust support; public sessions reject an
+unsolicited override, while private short-code and legacy-client bootstrap fail
+closed. Strict parsing rejects extra fields, origin/install/epoch/digest
+mutation and private-key material without returning file contents or paths.
+
+Authenticated next-epoch offer/acknowledgement, downgrade and lost-overlap
+handling remain before `SEC-009` is DONE. `OPS-009`, `BRG-045`, and `WEB-048`
+remain the owners of installation state, local TLS enforcement, and
+presentation respectively.
 
 `CON-013`, `TASK-012`, and `TASK-013` implement the central ADR-0022 Task/Result
 authority. `BRG-044` implements the Device-bound managed Agent transport, and

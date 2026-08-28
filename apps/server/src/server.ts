@@ -45,11 +45,14 @@ if (
 const memoryReducer = memoryReducerKind === "extractive-v1"
   ? new ExtractiveMemoryReducerRunner()
   : undefined;
+const deploymentTrustFile =
+  process.env.AGENT_ROOM_DEPLOYMENT_TRUST_FILE?.trim() || undefined;
 
 const app = await createServerApp({
   databasePath: resolveDatabasePath(),
   logger: true,
   webAuth,
+  ...(deploymentTrustFile ? { deploymentTrustFile } : {}),
   ...(memoryReducer ? { memoryReducer } : {}),
   ...(bridgeServerToken === undefined ? {} : { bridgeServerToken }),
   ...(trustProxyHops === undefined ? {} : { trustProxyHops }),

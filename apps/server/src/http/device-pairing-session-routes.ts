@@ -1,8 +1,13 @@
-import type { Platform } from "@agent-room/contracts/pairing-session";
+import type {
+  DevicePairingPrivateTrustDescriptor,
+  Platform
+} from "@agent-room/contracts/pairing-session";
 
 import {
   bodyObject,
   noStore,
+  requiredBoolean,
+  requiredPositiveInteger,
   requiredString
 } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
@@ -25,9 +30,71 @@ function objectValue(value: unknown, label: string): Record<string, unknown> {
   return value as Record<string, unknown>;
 }
 
+function privateTrustDescriptor(
+  value: unknown
+): DevicePairingPrivateTrustDescriptor {
+  const trust = objectValue(value, "trust");
+  onlyKeys(trust, [
+    "mode",
+    "origin",
+    "installationId",
+    "trustEpoch",
+    "caCertificateSha256"
+  ], "trust");
+  if (trust.mode !== "private_scoped_ca") {
+    throw new Error("trust mode is invalid");
+  }
+  const origin = requiredString(trust.origin, "trust.origin", 2_048);
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    throw new Error("trust.origin is invalid");
+  }
+  if (
+    parsed.protocol !== "https:" || parsed.username !== "" ||
+    parsed.password !== "" || parsed.pathname !== "/" ||
+    parsed.search !== "" || parsed.hash !== "" || parsed.origin !== origin
+  ) {
+    throw new Error("trust.origin is invalid");
+  }
+  const installationId = requiredString(
+    trust.installationId,
+    "trust.installationId",
+    136
+  );
+  if (!/^install_[A-Za-z0-9_-]{16,128}$/u.test(installationId)) {
+    throw new Error("trust.installationId is invalid");
+  }
+  const trustEpoch = requiredPositiveInteger(
+    trust.trustEpoch,
+    "trust.trustEpoch"
+  );
+  const caCertificateSha256 = requiredString(
+    trust.caCertificateSha256,
+    "trust.caCertificateSha256",
+    64
+  );
+  if (trustEpoch > 2_147_483_647 || !/^[a-f0-9]{64}$/u.test(caCertificateSha256)) {
+    throw new Error("trust descriptor is invalid");
+  }
+  return {
+    mode: "private_scoped_ca",
+    origin,
+    installationId,
+    trustEpoch,
+    caCertificateSha256
+  };
+}
+
 function claimInput(body: Record<string, unknown>) {
   const device = objectValue(body.device, "device");
-  onlyKeys(device, ["displayName", "platform", "bridgeVersion"], "device");
+  onlyKeys(device, [
+    "displayName",
+    "platform",
+    "bridgeVersion",
+    "supportsScopedPrivateTrust"
+  ], "device");
   return {
     operationId: requiredString(body.operationId, "operationId", 140),
     pairingAttemptId: requiredString(
@@ -43,8 +110,19 @@ function claimInput(body: Record<string, unknown>) {
         device.bridgeVersion,
         "bridgeVersion",
         40
-      )
-    }
+      ),
+      ...(device.supportsScopedPrivateTrust === undefined
+        ? {}
+        : {
+            supportsScopedPrivateTrust: requiredBoolean(
+              device.supportsScopedPrivateTrust,
+              "supportsScopedPrivateTrust"
+            )
+          })
+    },
+    ...(body.trust === undefined
+      ? {}
+      : { trust: privateTrustDescriptor(body.trust) })
   };
 }
 
@@ -100,7 +178,8 @@ export function registerDevicePairingSessionRoutes({
         "claimSecret",
         "pairingAttemptId",
         "pollSecret",
-        "device"
+        "device",
+        "trust"
       ], "request");
       const bodySessionId = requiredString(
         body.pairingSessionId,

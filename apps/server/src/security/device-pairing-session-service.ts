@@ -12,6 +12,7 @@ import type {
   DevicePairingSessionCreated,
   DevicePairingSessionOwnerProjection,
   DevicePairingSessionPollProjection,
+  DevicePairingPrivateTrustDescriptor,
   DevicePairingSessionRejectRequest,
   Platform
 } from "@agent-room/contracts/pairing-session";
@@ -25,6 +26,7 @@ import {
   type MemberPrincipal,
   type WebPrincipal
 } from "./auth-service.js";
+import type { DeploymentTrustProvider } from "./deployment-trust.js";
 
 type PairingState =
   | "issued"
@@ -54,6 +56,12 @@ interface PairingSessionRow {
   device_display_name: string | null;
   device_platform: Platform | null;
   bridge_version: string | null;
+  device_supports_scoped_private_trust: 0 | 1 | null;
+  trust_mode: "private_scoped_ca" | null;
+  trust_origin: string | null;
+  trust_installation_id: string | null;
+  trust_epoch: number | null;
+  trust_ca_sha256: string | null;
   verification_phrase: string | null;
   claimed_at: string | null;
   decision_operation_id: string | null;
@@ -75,7 +83,9 @@ export interface PairingClaimInput {
     displayName: string;
     platform: Platform;
     bridgeVersion: string;
+    supportsScopedPrivateTrust?: boolean;
   };
+  trust?: DevicePairingPrivateTrustDescriptor;
 }
 
 const pairingSessionPattern = /^pairing_[A-Za-z0-9_-]{8,128}$/u;
@@ -156,6 +166,12 @@ function normalizeClaim(input: PairingClaimInput): PairingClaimInput {
   if (!bridgeVersionPattern.test(input.device.bridgeVersion)) {
     throw new Error("Bridge version is invalid");
   }
+  if (
+    input.device.supportsScopedPrivateTrust !== undefined &&
+    typeof input.device.supportsScopedPrivateTrust !== "boolean"
+  ) {
+    throw invalidSession("scoped private trust capability");
+  }
   return {
     operationId: requiredOpaqueId(
       input.operationId,
@@ -171,8 +187,15 @@ function normalizeClaim(input: PairingClaimInput): PairingClaimInput {
     device: {
       displayName,
       platform: input.device.platform,
-      bridgeVersion: input.device.bridgeVersion
-    }
+      bridgeVersion: input.device.bridgeVersion,
+      ...(input.device.supportsScopedPrivateTrust === undefined
+        ? {}
+        : {
+            supportsScopedPrivateTrust:
+              input.device.supportsScopedPrivateTrust
+          })
+    },
+    ...(input.trust === undefined ? {} : { trust: input.trust })
   };
 }
 
@@ -208,11 +231,51 @@ function verificationPhrase(
     pollSecretHash,
     input.device.displayName,
     input.device.platform,
-    input.device.bridgeVersion
+    input.device.bridgeVersion,
+    input.device.supportsScopedPrivateTrust ?? null,
+    rowTrust(row) ?? null
   ]));
   return `${phraseFirst[value[0]! % phraseFirst.length]}-${
     phraseSecond[value[1]! % phraseSecond.length]
   }-${String(((value[2]! << 8) + value[3]!) % 100).padStart(2, "0")}`;
+}
+
+function rowTrust(
+  row: PairingSessionRow
+): DevicePairingPrivateTrustDescriptor | undefined {
+  const fields = [
+    row.trust_mode,
+    row.trust_origin,
+    row.trust_installation_id,
+    row.trust_epoch,
+    row.trust_ca_sha256
+  ];
+  if (fields.every((value) => value === null)) return undefined;
+  if (
+    row.trust_mode !== "private_scoped_ca" || !row.trust_origin ||
+    !row.trust_installation_id || row.trust_epoch === null ||
+    !row.trust_ca_sha256
+  ) {
+    throw conflict("stored trust descriptor is incomplete");
+  }
+  return {
+    mode: row.trust_mode,
+    origin: row.trust_origin,
+    installationId: row.trust_installation_id,
+    trustEpoch: row.trust_epoch,
+    caCertificateSha256: row.trust_ca_sha256
+  };
+}
+
+function sameTrust(
+  left: DevicePairingPrivateTrustDescriptor | undefined,
+  right: DevicePairingPrivateTrustDescriptor | undefined
+): boolean {
+  if (!left || !right) return left === right;
+  return left.mode === right.mode && left.origin === right.origin &&
+    left.installationId === right.installationId &&
+    left.trustEpoch === right.trustEpoch &&
+    left.caCertificateSha256 === right.caCertificateSha256;
 }
 
 function isPreDecision(state: PairingState): state is "issued" | "claimed" {
@@ -223,7 +286,8 @@ export class DevicePairingSessionService {
   public constructor(
     private readonly database: Database.Database,
     private readonly core: CoreRepository,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly deploymentTrust: DeploymentTrustProvider = () => undefined
   ) {}
 
   public create(
@@ -240,13 +304,15 @@ export class DevicePairingSessionService {
     );
     const claimSecret = requiredSecret(input.claimSecret, "claim proof");
     const claimSecretHash = hash(claimSecret);
+    const trust = this.deploymentTrust();
 
     return this.database.transaction((): DevicePairingSessionCreated => {
       const existing = this.findByCreateOperation(owner.memberId, operationId);
       if (existing) {
         if (
           existing.team_id !== teamId ||
-          !safeHashMatch(claimSecret, existing.claim_secret_hash)
+          !safeHashMatch(claimSecret, existing.claim_secret_hash) ||
+          !sameTrust(rowTrust(existing), trust)
         ) {
           throw conflict("create operation was reused with different input");
         }
@@ -266,8 +332,9 @@ export class DevicePairingSessionService {
             INSERT INTO device_pairing_sessions (
               pairing_session_id, team_id, owner_member_id,
               create_operation_id, claim_secret_hash, short_code_hash, state,
-              created_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, 'issued', ?, ?)
+              created_at, expires_at, trust_mode, trust_origin,
+              trust_installation_id, trust_epoch, trust_ca_sha256
+            ) VALUES (?, ?, ?, ?, ?, ?, 'issued', ?, ?, ?, ?, ?, ?, ?)
           `).run(
             pairingSessionId,
             teamId,
@@ -276,7 +343,12 @@ export class DevicePairingSessionService {
             claimSecretHash,
             hash(shortCode),
             now,
-            expiresAt
+            expiresAt,
+            trust?.mode ?? null,
+            trust?.origin ?? null,
+            trust?.installationId ?? null,
+            trust?.trustEpoch ?? null,
+            trust?.caCertificateSha256 ?? null
           );
           return {
             pairingSessionId,
@@ -285,14 +357,16 @@ export class DevicePairingSessionService {
             state: "issued",
             shortCode,
             createdAt: now,
-            expiresAt
+            expiresAt,
+            ...(trust ? { trust } : {})
           };
         } catch (error) {
           const raced = this.findByCreateOperation(owner.memberId, operationId);
           if (raced) {
             if (
               raced.team_id !== teamId ||
-              !safeHashMatch(claimSecret, raced.claim_secret_hash)
+              !safeHashMatch(claimSecret, raced.claim_secret_hash) ||
+              !sameTrust(rowTrust(raced), trust)
             ) {
               throw conflict("create operation was reused with different input");
             }
@@ -345,7 +419,8 @@ export class DevicePairingSessionService {
           : undefined;
       },
       input,
-      now
+      now,
+      true
     );
   }
 
@@ -357,7 +432,7 @@ export class DevicePairingSessionService {
     const normalized = normalizeShortCode(shortCode);
     return this.claim(() => this.database.prepare(`
       SELECT * FROM device_pairing_sessions WHERE short_code_hash = ?
-    `).get(hash(normalized)) as PairingSessionRow | undefined, input, now);
+    `).get(hash(normalized)) as PairingSessionRow | undefined, input, now, false);
   }
 
   public poll(
@@ -479,7 +554,8 @@ export class DevicePairingSessionService {
   private claim(
     locate: () => PairingSessionRow | undefined,
     rawInput: PairingClaimInput,
-    now: string
+    now: string,
+    allowPrivateTrust: boolean
   ): DevicePairingSessionClaimed {
     const input = normalizeClaim(rawInput);
     const pollSecretHash = hash(input.pollSecret);
@@ -487,6 +563,15 @@ export class DevicePairingSessionService {
       const found = locate();
       if (!found) throw invalidSession();
       const row = this.expire(found, now);
+      const expectedTrust = rowTrust(row);
+      if (
+        !sameTrust(expectedTrust, input.trust) ||
+        (expectedTrust &&
+          (!allowPrivateTrust ||
+            input.device.supportsScopedPrivateTrust !== true))
+      ) {
+        throw invalidSession();
+      }
       if (this.isExactClaim(row, input, pollSecretHash)) {
         if (row.state === "expired") throw invalidSession();
         return this.claimedProjection(row);
@@ -498,6 +583,7 @@ export class DevicePairingSessionService {
         SET state = 'claimed', pairing_attempt_id = ?, claim_operation_id = ?,
             poll_secret_hash = ?, device_display_name = ?,
             device_platform = ?, bridge_version = ?,
+            device_supports_scoped_private_trust = ?,
             verification_phrase = ?, claimed_at = ?
         WHERE pairing_session_id = ? AND state = 'issued' AND expires_at > ?
       `).run(
@@ -507,6 +593,9 @@ export class DevicePairingSessionService {
         input.device.displayName,
         input.device.platform,
         input.device.bridgeVersion,
+        input.device.supportsScopedPrivateTrust === undefined
+          ? null
+          : Number(input.device.supportsScopedPrivateTrust),
         phrase,
         now,
         row.pairing_session_id,
@@ -682,7 +771,12 @@ export class DevicePairingSessionService {
       row.poll_secret_hash === pollSecretHash &&
       row.device_display_name === input.device.displayName &&
       row.device_platform === input.device.platform &&
-      row.bridge_version === input.device.bridgeVersion;
+      row.bridge_version === input.device.bridgeVersion &&
+      row.device_supports_scoped_private_trust === (
+        input.device.supportsScopedPrivateTrust === undefined
+          ? null
+          : Number(input.device.supportsScopedPrivateTrust)
+      );
   }
 
   private createdProjection(
@@ -696,7 +790,8 @@ export class DevicePairingSessionService {
       state: "issued",
       shortCode: derivedShortCode(row.pairing_session_id, claimSecret),
       createdAt: row.created_at,
-      expiresAt: row.expires_at
+      expiresAt: row.expires_at,
+      ...(rowTrust(row) ? { trust: rowTrust(row)! } : {})
     };
   }
 
@@ -749,13 +844,20 @@ export class DevicePairingSessionService {
             device: {
               displayName: row.device_display_name,
               platform: row.device_platform,
-              bridgeVersion: row.bridge_version
+              bridgeVersion: row.bridge_version,
+              ...(row.device_supports_scoped_private_trust === null
+                ? {}
+                : {
+                    supportsScopedPrivateTrust:
+                      row.device_supports_scoped_private_trust === 1
+                  })
             }
           }
         : {}),
       ...(row.verification_phrase
         ? { verificationPhrase: row.verification_phrase }
         : {}),
+      ...(rowTrust(row) ? { trust: rowTrust(row)! } : {}),
       ...(row.device_id ? { deviceId: row.device_id } : {}),
       ...(row.claimed_at ? { claimedAt: row.claimed_at } : {}),
       ...(row.decided_at ? { decidedAt: row.decided_at } : {}),
