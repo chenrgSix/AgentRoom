@@ -91,7 +91,7 @@ function seed(database) {
 
 function input(overrides = {}) {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     utcStart: "2026-08-28T10:00:00.000Z",
     utcEnd: "2026-08-28T10:10:00.000Z",
     serverCommit: "a".repeat(40),
@@ -100,7 +100,8 @@ function input(overrides = {}) {
     bridgeVersion: "v0.4.0-rc.1",
     bridgeArchiveSha256: "b".repeat(64),
     codexVersion: "codex 1.2.3",
-    httpsVerificationMethod: "public system CA and matching DNS name",
+    tlsProfile: "private_scoped_ca",
+    httpsVerificationMethod: "Bridge exact-origin private CA",
     ...ids,
     secondAgentId: undefined,
     attestations: {
@@ -113,6 +114,8 @@ function input(overrides = {}) {
       reconnectRunQueuedBeforeRestart: true,
       sameDeviceReconnected: true,
       installedWithoutManualEnvOrOpenSsl: true,
+      noManualCaInstalled: true,
+      noApplicationTlsVerificationBypass: true,
       noServerTokenCopied: true,
       noDeviceCredentialCopied: true,
       workspaceProjectionPathFree: true
@@ -159,6 +162,9 @@ test("physical evidence capture cross-checks Runs and writes only sanitized fact
 
   assert.equal(output, await readFile(files.outputPath, "utf8"));
   assert.match(output, /PASS/u);
+  assert.match(output, /`private_scoped_ca` \/ Bridge exact-origin private CA/u);
+  assert.match(output, /no CA installed into the client OS/u);
+  assert.match(output, /no application TLS\s+verification bypass/u);
   assert.match(output, /`queued` → `delivered` → `working` → `completed`/u);
   assert.doesNotMatch(output, new RegExp(files.directory, "u"));
   assert.doesNotMatch(output, /Bearer|private IP|instruction/u);
@@ -168,6 +174,105 @@ test("physical evidence capture cross-checks Runs and writes only sanitized fact
     metricsPath: files.metricsPath,
     outputPath: files.outputPath
   }), /EEXIST|exist/iu);
+});
+
+test("physical evidence capture accepts the public system-CA profile", async () => {
+  const files = await fixture();
+  const source = input({
+    tlsProfile: "public_ca",
+    httpsVerificationMethod: "public system CA"
+  });
+  delete source.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(source));
+
+  const output = await captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  });
+
+  assert.match(output, /`public_ca` \/ public system CA/u);
+});
+
+test("the runbook schema-v2 sample stays structurally aligned with the verifier", async () => {
+  const runbook = await readFile(new URL(
+    "../../docs/acceptance/qa-002-two-machine-managed-agent.md",
+    import.meta.url
+  ), "utf8");
+  const match = runbook.match(/## Machine-readable evidence capture[\s\S]*?```json\n([\s\S]*?)\n```/u);
+  assert.ok(match, "runbook must contain the machine-readable JSON sample");
+  const documented = JSON.parse(match[1]);
+  const expected = input();
+  delete expected.secondAgentId;
+
+  assert.equal(documented.schemaVersion, 2);
+  assert.deepEqual(Object.keys(documented).sort(), Object.keys(expected).sort());
+  assert.deepEqual(
+    Object.keys(documented.attestations).sort(),
+    Object.keys(expected.attestations).sort()
+  );
+});
+
+test("physical evidence capture rejects stale or inconsistent TLS evidence", async () => {
+  const files = await fixture();
+  const legacy = input({ schemaVersion: 1 });
+  delete legacy.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(legacy));
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /schemaVersion must be 2/u);
+
+  const manual = input({ tlsProfile: "manual_ca" });
+  delete manual.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(manual));
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /tlsProfile must be public_ca or private_scoped_ca/u);
+
+  const mismatched = input({ httpsVerificationMethod: "public system CA" });
+  delete mismatched.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(mismatched));
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /httpsVerificationMethod does not match tlsProfile/u);
+
+  const missing = input();
+  delete missing.secondAgentId;
+  delete missing.attestations.noManualCaInstalled;
+  await writeFile(files.inputPath, JSON.stringify(missing));
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /missing=noManualCaInstalled/u);
+
+  for (const attestation of [
+    "noManualCaInstalled",
+    "noApplicationTlsVerificationBypass"
+  ]) {
+    const unsafe = input({
+      attestations: {...input().attestations, [attestation]: false}
+    });
+    delete unsafe.secondAgentId;
+    await writeFile(files.inputPath, JSON.stringify(unsafe));
+    await assert.rejects(() => captureEvidence({
+      inputPath: files.inputPath,
+      databasePath: files.databasePath,
+      metricsPath: files.metricsPath,
+      outputPath: files.outputPath
+    }), new RegExp(`attestation ${attestation} must be true`, "u"));
+  }
 });
 
 test("physical evidence capture rejects private host details and false reconnect scope", async () => {

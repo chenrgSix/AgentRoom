@@ -14,6 +14,7 @@ const inputKeys = new Set([
   "bridgeVersion",
   "bridgeArchiveSha256",
   "codexVersion",
+  "tlsProfile",
   "httpsVerificationMethod",
   "teamId",
   "roomId",
@@ -37,6 +38,8 @@ const attestationKeys = new Set([
   "reconnectRunQueuedBeforeRestart",
   "sameDeviceReconnected",
   "installedWithoutManualEnvOrOpenSsl",
+  "noManualCaInstalled",
+  "noApplicationTlsVerificationBypass",
   "noServerTokenCopied",
   "noDeviceCredentialCopied",
   "workspaceProjectionPathFree"
@@ -100,7 +103,7 @@ function timestamp(value, label) {
 function validateInput(input) {
   exactKeys(input, inputKeys, "input");
   exactKeys(input.attestations, attestationKeys, "attestations");
-  if (input.schemaVersion !== 1) fail("schemaVersion must be 1");
+  if (input.schemaVersion !== 2) fail("schemaVersion must be 2");
   const utcStart = timestamp(input.utcStart, "utcStart");
   const utcEnd = timestamp(input.utcEnd, "utcEnd");
   if (Date.parse(utcStart) >= Date.parse(utcEnd)) fail("utcEnd must follow utcStart");
@@ -114,6 +117,16 @@ function validateInput(input) {
     "machineA", "machineB", "bridgeVersion", "codexVersion",
     "httpsVerificationMethod"
   ]) safeText(input[field], field);
+  const verificationMethods = {
+    public_ca: "public system CA",
+    private_scoped_ca: "Bridge exact-origin private CA"
+  };
+  if (!Object.hasOwn(verificationMethods, input.tlsProfile)) {
+    fail("tlsProfile must be public_ca or private_scoped_ca");
+  }
+  if (input.httpsVerificationMethod !== verificationMethods[input.tlsProfile]) {
+    fail("httpsVerificationMethod does not match tlsProfile");
+  }
   if (input.machineA === input.machineB) fail("machine descriptions must be distinct");
   opaqueId(input.teamId, "team", "teamId");
   opaqueId(input.roomId, "room", "roomId");
@@ -283,12 +296,13 @@ two sanitized host descriptions identify different physical machines.
 - Machine B: ${input.machineB}
 - Bridge version/archive SHA-256: ${input.bridgeVersion} / \`${input.bridgeArchiveSha256}\`
 - Codex version: ${input.codexVersion}
-- HTTPS verification: ${input.httpsVerificationMethod}
+- TLS profile/HTTPS verification: \`${input.tlsProfile}\` / ${input.httpsVerificationMethod}
 - Team/Room: \`${input.teamId}\` / \`${input.roomId}\`
 - Device/Agent: \`${input.deviceId}\` / \`${input.agentId}\`
 - Runtime self-test: \`RUNTIME_PROBE_OK\`
 - Pairing: installed desktop deep link; matching phrase; no copied Server Token
-  or Device credential
+  or Device credential; no CA installed into the client OS; no application TLS
+  verification bypass
 - Workspace projection: path-free
 - Online Run/trace: \`${online.runId}\` / \`${online.traceId}\`
 - Online persisted states: ${online.states.map((state) => `\`${state}\``).join(" → ")}

@@ -98,6 +98,11 @@ Create a temporary JSON input containing exactly the fields below. Values shown
 in angle brackets are placeholders; never commit the temporary input or metrics
 file.
 
+The verifier accepts schema version 2 only. It rejects the legacy v1 shape,
+`manual_ca`, a TLS profile/verification-method mismatch, either missing
+no-manual-CA assertion, and any false assertion before reading evidence into a
+PASS record.
+
 ```json
 {
   "schemaVersion": 2,
