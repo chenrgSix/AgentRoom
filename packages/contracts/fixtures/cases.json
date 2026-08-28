@@ -1280,6 +1280,247 @@
       "valid": false
     },
     {
+      "name": "valid origin-scoped private CA trust descriptor",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateTrustDescriptor",
+      "instance": {
+        "mode": "private_scoped_ca",
+        "origin": "https://192.0.2.10:9443",
+        "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "trustEpoch": 1,
+        "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": true
+    },
+    {
+      "name": "private CA trust descriptor rejects plain HTTP",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateTrustDescriptor",
+      "instance": {
+        "mode": "private_scoped_ca",
+        "origin": "http://192.0.2.10:9443",
+        "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "trustEpoch": 1,
+        "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": false
+    },
+    {
+      "name": "private CA trust descriptor rejects an origin path",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateTrustDescriptor",
+      "instance": {
+        "mode": "private_scoped_ca",
+        "origin": "https://team.example.com:9443/api",
+        "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "trustEpoch": 1,
+        "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": false
+    },
+    {
+      "name": "private CA trust descriptor rejects an uppercase digest",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateTrustDescriptor",
+      "instance": {
+        "mode": "private_scoped_ca",
+        "origin": "https://team.example.com:9443",
+        "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "trustEpoch": 1,
+        "caCertificateSha256": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      },
+      "valid": false
+    },
+    {
+      "name": "private CA trust descriptor rejects an unknown mode",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateTrustDescriptor",
+      "instance": {
+        "mode": "trust_on_first_use",
+        "origin": "https://team.example.com:9443",
+        "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "trustEpoch": 1,
+        "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": false
+    },
+    {
+      "name": "private CA trust descriptor rejects origin user info",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateTrustDescriptor",
+      "instance": {
+        "mode": "private_scoped_ca",
+        "origin": "https://owner@team.example.com:9443",
+        "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "trustEpoch": 1,
+        "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": false
+    },
+    {
+      "name": "private CA trust descriptor rejects redirect metadata",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateTrustDescriptor",
+      "instance": {
+        "mode": "private_scoped_ca",
+        "origin": "https://team.example.com:9443",
+        "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "trustEpoch": 1,
+        "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "redirectUrl": "https://other.example.com/bridge-ca.pem"
+      },
+      "valid": false
+    },
+    {
+      "name": "private CA trust descriptor rejects private key material",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateTrustDescriptor",
+      "instance": {
+        "mode": "private_scoped_ca",
+        "origin": "https://team.example.com:9443",
+        "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "trustEpoch": 1,
+        "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "caPrivateKey": "-----BEGIN PRIVATE KEY-----"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid private-scoped issued Device pairing session",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/created",
+      "instance": {
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "teamId": "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "state": "issued",
+        "shortCode": "WAVE-LAKE-73",
+        "createdAt": "2026-08-28T10:00:00Z",
+        "expiresAt": "2026-08-28T10:10:00Z",
+        "trust": {
+          "mode": "private_scoped_ca",
+          "origin": "https://192.0.2.10:9443",
+          "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "trustEpoch": 1,
+          "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "valid private-scoped Device pairing claim",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/claimRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V799",
+        "pairingSessionId": "pairing_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "claimSecret": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pollSecret": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+        "device": {
+          "displayName": "Bob Windows",
+          "platform": "windows-amd64",
+          "bridgeVersion": "0.4.0-rc.1",
+          "supportsScopedPrivateTrust": true
+        },
+        "trust": {
+          "mode": "private_scoped_ca",
+          "origin": "https://192.0.2.10:9443",
+          "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "trustEpoch": 1,
+          "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "private-scoped Device pairing claim rejects short-code-only bootstrap",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/claimRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V798",
+        "shortCode": "WAVE-LAKE-73",
+        "pairingAttemptId": "pairattempt_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "pollSecret": "0123456789abcdefghijklmnopqrstuvwxyzABCDEFG",
+        "device": {
+          "displayName": "Bob Windows",
+          "platform": "windows-amd64",
+          "bridgeVersion": "0.4.0-rc.1",
+          "supportsScopedPrivateTrust": true
+        },
+        "trust": {
+          "mode": "private_scoped_ca",
+          "origin": "https://192.0.2.10:9443",
+          "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "trustEpoch": 1,
+          "caCertificateSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "valid origin-scoped private CA rotation offer",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateCaRotationOffer",
+      "instance": {
+        "currentTrustEpoch": 1,
+        "nextTrust": {
+          "mode": "private_scoped_ca",
+          "origin": "https://192.0.2.10:9443",
+          "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "trustEpoch": 2,
+          "caCertificateSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "caCertificatePem": "-----BEGIN CERTIFICATE-----\nQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\nQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJC\n-----END CERTIFICATE-----\n",
+        "overlapEndsAt": "2026-09-28T10:00:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "private CA rotation offer rejects private key material",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateCaRotationOffer",
+      "instance": {
+        "currentTrustEpoch": 1,
+        "nextTrust": {
+          "mode": "private_scoped_ca",
+          "origin": "https://192.0.2.10:9443",
+          "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "trustEpoch": 2,
+          "caCertificateSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "caCertificatePem": "-----BEGIN PRIVATE KEY-----\nQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\nQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJC\n-----END PRIVATE KEY-----\n",
+        "overlapEndsAt": "2026-09-28T10:00:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "private CA rotation offer rejects multiple certificates",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateCaRotationOffer",
+      "instance": {
+        "currentTrustEpoch": 1,
+        "nextTrust": {
+          "mode": "private_scoped_ca",
+          "origin": "https://192.0.2.10:9443",
+          "installationId": "install_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "trustEpoch": 2,
+          "caCertificateSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "caCertificatePem": "-----BEGIN CERTIFICATE-----\nQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFB\nQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJCQkJC\n-----END CERTIFICATE-----\n-----BEGIN CERTIFICATE-----\nQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0NDQ0ND\nRERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERERE\n-----END CERTIFICATE-----\n",
+        "overlapEndsAt": "2026-09-28T10:00:00Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "valid origin-scoped private CA rotation acknowledgement",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateCaRotationAcknowledgeRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V797",
+        "expectedCurrentTrustEpoch": 1,
+        "acceptedNextTrustEpoch": 2,
+        "caCertificateSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "valid": true
+    },
+    {
+      "name": "private CA rotation acknowledgement rejects epoch one as next",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/privateCaRotationAcknowledgeRequest",
+      "instance": {
+        "operationId": "op_01K4Z6J7Y8N9P0Q1R2S3T4V796",
+        "expectedCurrentTrustEpoch": 1,
+        "acceptedNextTrustEpoch": 1,
+        "caCertificateSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "valid": false
+    },
+    {
       "name": "valid Device pairing session create request",
       "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/createRequest",
       "instance": {

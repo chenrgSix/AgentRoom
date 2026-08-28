@@ -21,10 +21,18 @@ test("contract generation is deterministic", async () => {
   assert.match(first.pairingGo, /package pairingcontracts/);
   assert.match(first.pairingGo, /type DevicePairingSessionClaimRequest struct/);
   assert.match(first.pairingGo, /type DevicePairingSessionPollProjection struct/);
+  assert.match(first.pairingGo, /type DevicePairingPrivateTrustDescriptor struct/);
+  assert.match(first.pairingGo, /type DevicePairingPrivateCARotationOffer struct/);
+  assert.match(first.pairingGo, /SupportsScopedPrivateTrust \*bool/);
   assert.match(
     first.pairingTypescript,
     /export interface DevicePairingSessionOwnerProjection/
   );
+  assert.match(
+    first.pairingTypescript,
+    /export interface DevicePairingPrivateTrustDescriptor/
+  );
+  assert.match(first.pairingTypescript, /trust\?: DevicePairingSessionCreatedTrust/);
   assert.match(first.go, /Timestamp time.Time/);
   assert.match(first.workGo, /package workcontracts/);
   assert.match(first.workGo, /type ResultProposal struct/);

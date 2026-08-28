@@ -92,6 +92,10 @@
     "operationId": {
       "type": "string",
       "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+    },
+    "installationId": {
+      "type": "string",
+      "pattern": "^install_[A-Za-z0-9_-]{8,128}$"
     }
   }
 }

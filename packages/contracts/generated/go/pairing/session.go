@@ -14,6 +14,19 @@ type DevicePairingSessionCreated struct {
 	ShortCode        string                           `json:"shortCode"`
 	State            DevicePairingSessionCreatedState `json:"state"`
 	TeamID           string                           `json:"teamId"`
+	// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+	// separately and accepted only when its canonical DER digest matches.
+	Trust *DevicePairingSessionCreatedTrust `json:"trust,omitempty"`
+}
+
+// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+// separately and accepted only when its canonical DER digest matches.
+type DevicePairingSessionCreatedTrust struct {
+	CACertificateSha256 string `json:"caCertificateSha256"`
+	InstallationID      string `json:"installationId"`
+	Mode                Mode   `json:"mode"`
+	Origin              string `json:"origin"`
+	TrustEpoch          int64  `json:"trustEpoch"`
 }
 
 // The authenticated Owner client generates claimSecret and resends the same secret with
@@ -35,19 +48,33 @@ type DevicePairingSessionOwnerProjection struct {
 	Device    *DevicePairingSessionOwnerProjectionDevice `json:"device,omitempty"`
 	DeviceID  *string                                    `json:"deviceId,omitempty"`
 	// RFC 3339 date-time normalized to the UTC Z suffix.
-	ExpiresAt          time.Time                                `json:"expiresAt"`
-	OwnerMemberID      string                                   `json:"ownerMemberId"`
-	PairingAttemptID   *string                                  `json:"pairingAttemptId,omitempty"`
-	PairingSessionID   string                                   `json:"pairingSessionId"`
-	State              DevicePairingSessionOwnerProjectionState `json:"state"`
-	TeamID             string                                   `json:"teamId"`
-	VerificationPhrase *string                                  `json:"verificationPhrase,omitempty"`
+	ExpiresAt        time.Time                                `json:"expiresAt"`
+	OwnerMemberID    string                                   `json:"ownerMemberId"`
+	PairingAttemptID *string                                  `json:"pairingAttemptId,omitempty"`
+	PairingSessionID string                                   `json:"pairingSessionId"`
+	State            DevicePairingSessionOwnerProjectionState `json:"state"`
+	TeamID           string                                   `json:"teamId"`
+	// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+	// separately and accepted only when its canonical DER digest matches.
+	Trust              *DevicePairingSessionOwnerProjectionTrust `json:"trust,omitempty"`
+	VerificationPhrase *string                                   `json:"verificationPhrase,omitempty"`
 }
 
 type DevicePairingSessionOwnerProjectionDevice struct {
-	BridgeVersion string   `json:"bridgeVersion"`
-	DisplayName   string   `json:"displayName"`
-	Platform      Platform `json:"platform"`
+	BridgeVersion              string   `json:"bridgeVersion"`
+	DisplayName                string   `json:"displayName"`
+	Platform                   Platform `json:"platform"`
+	SupportsScopedPrivateTrust *bool    `json:"supportsScopedPrivateTrust,omitempty"`
+}
+
+// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+// separately and accepted only when its canonical DER digest matches.
+type DevicePairingSessionOwnerProjectionTrust struct {
+	CACertificateSha256 string `json:"caCertificateSha256"`
+	InstallationID      string `json:"installationId"`
+	Mode                Mode   `json:"mode"`
+	Origin              string `json:"origin"`
+	TrustEpoch          int64  `json:"trustEpoch"`
 }
 
 type DevicePairingSessionClaimRequest struct {
@@ -58,12 +85,26 @@ type DevicePairingSessionClaimRequest struct {
 	PairingSessionID *string                                `json:"pairingSessionId,omitempty"`
 	PollSecret       string                                 `json:"pollSecret"`
 	ShortCode        *string                                `json:"shortCode,omitempty"`
+	// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+	// separately and accepted only when its canonical DER digest matches.
+	Trust *DevicePairingSessionClaimRequestTrust `json:"trust,omitempty"`
 }
 
 type DevicePairingSessionClaimRequestDevice struct {
-	BridgeVersion string   `json:"bridgeVersion"`
-	DisplayName   string   `json:"displayName"`
-	Platform      Platform `json:"platform"`
+	BridgeVersion              string   `json:"bridgeVersion"`
+	DisplayName                string   `json:"displayName"`
+	Platform                   Platform `json:"platform"`
+	SupportsScopedPrivateTrust *bool    `json:"supportsScopedPrivateTrust,omitempty"`
+}
+
+// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+// separately and accepted only when its canonical DER digest matches.
+type DevicePairingSessionClaimRequestTrust struct {
+	CACertificateSha256 string `json:"caCertificateSha256"`
+	InstallationID      string `json:"installationId"`
+	Mode                Mode   `json:"mode"`
+	Origin              string `json:"origin"`
+	TrustEpoch          int64  `json:"trustEpoch"`
 }
 
 type DevicePairingSessionClaimed struct {
@@ -115,10 +156,55 @@ type DevicePairingSessionCancelRequest struct {
 	Reason        *string       `json:"reason,omitempty"`
 }
 
+// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+// separately and accepted only when its canonical DER digest matches.
+type DevicePairingPrivateTrustDescriptor struct {
+	CACertificateSha256 string `json:"caCertificateSha256"`
+	InstallationID      string `json:"installationId"`
+	Mode                Mode   `json:"mode"`
+	Origin              string `json:"origin"`
+	TrustEpoch          int64  `json:"trustEpoch"`
+}
+
+// A next-epoch public CA offered only to an authenticated Device over its current pin-valid
+// channel.
+type DevicePairingPrivateCARotationOffer struct {
+	CACertificatePem  string `json:"caCertificatePem"`
+	CurrentTrustEpoch int64  `json:"currentTrustEpoch"`
+	// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+	// separately and accepted only when its canonical DER digest matches.
+	NextTrust NextTrustClass `json:"nextTrust"`
+	// RFC 3339 date-time normalized to the UTC Z suffix.
+	OverlapEndsAt time.Time `json:"overlapEndsAt"`
+}
+
+// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+// separately and accepted only when its canonical DER digest matches.
+type NextTrustClass struct {
+	CACertificateSha256 string `json:"caCertificateSha256"`
+	InstallationID      string `json:"installationId"`
+	Mode                Mode   `json:"mode"`
+	Origin              string `json:"origin"`
+	TrustEpoch          int64  `json:"trustEpoch"`
+}
+
+type DevicePairingPrivateCARotationAcknowledgeRequest struct {
+	AcceptedNextTrustEpoch    int64  `json:"acceptedNextTrustEpoch"`
+	CACertificateSha256       string `json:"caCertificateSha256"`
+	ExpectedCurrentTrustEpoch int64  `json:"expectedCurrentTrustEpoch"`
+	OperationID               string `json:"operationId"`
+}
+
 type DevicePairingSessionCreatedState string
 
 const (
 	PurpleIssued DevicePairingSessionCreatedState = "issued"
+)
+
+type Mode string
+
+const (
+	PrivateScopedCA Mode = "private_scoped_ca"
 )
 
 type Platform string

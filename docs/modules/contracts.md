@@ -105,8 +105,8 @@ negative projection tests and never in generated public state, logs, or
 diagnostics. Existing Bridge join and pair payloads remain valid during rolling
 compatibility.
 
-`CON-014` is the accepted but not yet implemented ADR-0023 extension. It adds a
-closed `DevicePairingTrustDescriptor` only when an installation explicitly uses
+`CON-014` implements the ADR-0023 wire extension. It adds a closed
+`DevicePairingTrustDescriptor` only when an installation explicitly uses
 `private_scoped_ca`:
 
 ```text
@@ -140,6 +140,13 @@ fragments, zero/downgraded epochs, malformed digests, extra certificates,
 credentials, CA private keys, redirect metadata and a private-scoped session
 projected to an unsupported legacy Bridge. Generated TypeScript and Go types
 remain additive within the pairing protocol compatibility window.
+
+The implementation validates 114 shared fixtures and deterministically
+generates TypeScript and Go definitions for the trust descriptor, Owner/session
+projection additions, claim echo, capability bit, next-CA offer and
+acknowledgement. Cross-record epoch ordering, certificate parsing and
+installation/Device authorization remain owning-service checks rather than
+claims JSON Schema can prove alone.
 
 `CON-013` implements the ADR-0022 Task work-model wire contracts in
 `schemas/work/task-result.schema.json`. Closed schemas define

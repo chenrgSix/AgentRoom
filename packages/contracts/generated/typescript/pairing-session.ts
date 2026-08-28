@@ -14,9 +14,28 @@ export interface DevicePairingSessionCreated {
   shortCode:        string;
   state:            DevicePairingSessionCreatedState;
   teamId:           string;
+  /**
+   * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+   * separately and accepted only when its canonical DER digest matches.
+   */
+  trust?: DevicePairingSessionCreatedTrust;
 }
 
 export type DevicePairingSessionCreatedState = "issued";
+
+/**
+ * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+ * separately and accepted only when its canonical DER digest matches.
+ */
+export interface DevicePairingSessionCreatedTrust {
+  caCertificateSha256: string;
+  installationId:      string;
+  mode:                Mode;
+  origin:              string;
+  trustEpoch:          number;
+}
+
+export type Mode = "private_scoped_ca";
 
 /**
  * The authenticated Owner client generates claimSecret and resends the same secret with
@@ -49,24 +68,42 @@ export interface DevicePairingSessionOwnerProjection {
   /**
    * RFC 3339 date-time normalized to the UTC Z suffix.
    */
-  expiresAt:           string;
-  ownerMemberId:       string;
-  pairingAttemptId?:   string;
-  pairingSessionId:    string;
-  state:               DevicePairingSessionOwnerProjectionState;
-  teamId:              string;
+  expiresAt:         string;
+  ownerMemberId:     string;
+  pairingAttemptId?: string;
+  pairingSessionId:  string;
+  state:             DevicePairingSessionOwnerProjectionState;
+  teamId:            string;
+  /**
+   * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+   * separately and accepted only when its canonical DER digest matches.
+   */
+  trust?:              DevicePairingSessionOwnerProjectionTrust;
   verificationPhrase?: string;
 }
 
 export interface DevicePairingSessionOwnerProjectionDevice {
-  bridgeVersion: string;
-  displayName:   string;
-  platform:      Platform;
+  bridgeVersion:               string;
+  displayName:                 string;
+  platform:                    Platform;
+  supportsScopedPrivateTrust?: boolean;
 }
 
 export type Platform = "darwin-amd64" | "darwin-arm64" | "linux-amd64" | "linux-arm64" | "windows-amd64" | "windows-arm64";
 
 export type DevicePairingSessionOwnerProjectionState = "issued" | "claimed" | "approved" | "consumed" | "rejected" | "canceled" | "expired";
+
+/**
+ * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+ * separately and accepted only when its canonical DER digest matches.
+ */
+export interface DevicePairingSessionOwnerProjectionTrust {
+  caCertificateSha256: string;
+  installationId:      string;
+  mode:                Mode;
+  origin:              string;
+  trustEpoch:          number;
+}
 
 export interface DevicePairingSessionClaimRequest {
   claimSecret?:      string;
@@ -76,12 +113,30 @@ export interface DevicePairingSessionClaimRequest {
   pairingSessionId?: string;
   pollSecret:        string;
   shortCode?:        string;
+  /**
+   * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+   * separately and accepted only when its canonical DER digest matches.
+   */
+  trust?: DevicePairingSessionClaimRequestTrust;
 }
 
 export interface DevicePairingSessionClaimRequestDevice {
-  bridgeVersion: string;
-  displayName:   string;
-  platform:      Platform;
+  bridgeVersion:               string;
+  displayName:                 string;
+  platform:                    Platform;
+  supportsScopedPrivateTrust?: boolean;
+}
+
+/**
+ * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+ * separately and accepted only when its canonical DER digest matches.
+ */
+export interface DevicePairingSessionClaimRequestTrust {
+  caCertificateSha256: string;
+  installationId:      string;
+  mode:                Mode;
+  origin:              string;
+  trustEpoch:          number;
 }
 
 export interface DevicePairingSessionClaimed {
@@ -146,3 +201,52 @@ export interface DevicePairingSessionCancelRequest {
 }
 
 export type ExpectedState = "issued" | "claimed";
+
+/**
+ * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+ * separately and accepted only when its canonical DER digest matches.
+ */
+export interface DevicePairingPrivateTrustDescriptor {
+  caCertificateSha256: string;
+  installationId:      string;
+  mode:                Mode;
+  origin:              string;
+  trustEpoch:          number;
+}
+
+/**
+ * A next-epoch public CA offered only to an authenticated Device over its current pin-valid
+ * channel.
+ */
+export interface DevicePairingPrivateCARotationOffer {
+  caCertificatePem:  string;
+  currentTrustEpoch: number;
+  /**
+   * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+   * separately and accepted only when its canonical DER digest matches.
+   */
+  nextTrust: NextTrustClass;
+  /**
+   * RFC 3339 date-time normalized to the UTC Z suffix.
+   */
+  overlapEndsAt: string;
+}
+
+/**
+ * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
+ * separately and accepted only when its canonical DER digest matches.
+ */
+export interface NextTrustClass {
+  caCertificateSha256: string;
+  installationId:      string;
+  mode:                Mode;
+  origin:              string;
+  trustEpoch:          number;
+}
+
+export interface DevicePairingPrivateCARotationAcknowledgeRequest {
+  acceptedNextTrustEpoch:    number;
+  caCertificateSha256:       string;
+  expectedCurrentTrustEpoch: number;
+  operationId:               string;
+}

@@ -261,7 +261,13 @@ export async function generateContractTypes(packageRoot) {
     ["DevicePairingSessionPollProjection", "pollProjection"],
     ["DevicePairingSessionApproveRequest", "approveRequest"],
     ["DevicePairingSessionRejectRequest", "rejectRequest"],
-    ["DevicePairingSessionCancelRequest", "cancelRequest"]
+    ["DevicePairingSessionCancelRequest", "cancelRequest"],
+    ["DevicePairingPrivateTrustDescriptor", "privateTrustDescriptor"],
+    ["DevicePairingPrivateCaRotationOffer", "privateCaRotationOffer"],
+    [
+      "DevicePairingPrivateCaRotationAcknowledgeRequest",
+      "privateCaRotationAcknowledgeRequest"
+    ]
   ]);
   const workCodegen = createDefinitionCodegenSchemas(workSchema, [
     ["TaskProjection", "taskProjection"],
