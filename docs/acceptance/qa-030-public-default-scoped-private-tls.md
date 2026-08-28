@@ -4,9 +4,10 @@ Date: 2026-08-28
 
 Source commit: `17ae30ee2331ac37fb2dafeb7ee0fa2bd7e9f661`
 
-Status: `ACTIVE` — deterministic, exact-tag, public package and partial
-two-physical-host gates pass; the same Device's exact-candidate upgrade and
-reviewed schema-v3 record remain.
+Status: `PASS` — deterministic, exact-tag, public package, lifecycle and
+two-physical-host gates pass. The reviewed
+[schema-v3 evidence](evidence/qa-002-20260828.md) proves the same Device's
+exact-candidate Bridge upgrade and the no-OS-CA/no-bypass scoped-private flow.
 
 ## Deterministic Matrix
 
@@ -174,32 +175,21 @@ required Bridge package upgrade. Two managed Agents were ready, and packaged
 metrics reported one authenticated Bridge, queue depth zero, pending Delivery
 count zero and four completed Runs.
 
-## Remaining Physical Gate
+## Completed Physical Gate
 
-`QA-030` is not `DONE`. The `qa030.3` exact-tag public package and Central
-upgrade gates pass,
-including native Windows Bridge Desktop and installer assets. The physical
-Windows Device from the partial record must now install that exact candidate in
-place, without re-pairing, and reconnect to the existing Central using its
-retained profile:
+The [reviewed schema-v3 PASS record](evidence/qa-002-20260828.md) closes the
+remaining physical boundary on the accepted `private_scoped_ca` profile. The
+physical Windows Device installed the exact published `v0.4.0-qa030.3`
+current-user installer in place; its digest matched the release and Central's
+authenticated hello observed the new version without another pairing. The
+canonical installed deep link and matching phrase were used, and the operator
+confirmed there was no OS CA import, leaf pin, TLS-verification bypass, Server
+Token copy, Device credential copy, manual `.env`, or OpenSSL step.
 
-- `public_ca`, verified only by the Bridge host system trust store; or
-- `private_scoped_ca`, bootstrapped from the exact pairing link and retained
-  only in Bridge owner state.
-
-The reviewed record must confirm no CA was installed into the Bridge host OS,
-no leaf fingerprint or Server Token was copied, no TLS verification was
-disabled, the installed deep link opened, the verification phrase matched, and
-the same Device completed online plus offline/reconnect work. Until that record
-exists, `QA-002` and `QA-028` remain blocked and the old manual-CA diagnostic
-cannot be promoted.
-
-A later [sanitized physical observation](evidence/qa-030-20260828-partial.md)
-confirms that `v0.4.0-qa030.1` consumed one Windows amd64 pairing session,
-published two managed Agents, passed the explicit Runtime self-test and local
-installer digest check, and completed an exact queued Run after the same Device
-reconnected with one reply. `v0.4.0-qa030.3` now runs on Central and carries the
-metric, current-version and lifecycle-preflight fixes, but its Bridge has not
-yet been installed on that Device. The safe Codex version, authenticated
-current build observation and final human no-OS-CA/no-bypass attestations must
-still coexist in one reviewed schema-v3 record.
+The same record binds those human facts to the one consumed pairing, retained
+private-scoped descriptor, two managed Agents, explicit Codex self-test,
+online Run, exact offline/reconnect Run, one reply per trace and drained
+packaged metrics. The historical manual-CA diagnostic remains advanced
+compatibility evidence only; it is not used to claim this PASS. Deterministic
+and Caddy tests separately retain the `public_ca` default/no-silent-fallback
+boundary, while this physical run proves the scoped-private alternative.

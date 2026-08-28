@@ -15,12 +15,13 @@ Server remains authority for Team, Device, Agent, Task and Run state. Machine B
 remains authority for Codex login, executable, Workspace, local permissions,
 Runtime self-test and its exact-origin Bridge trust store.
 
-Status: `BLOCKED` on the final physical remainder of `QA-030`. Published exact
-candidate `v0.4.0-qa030.2` contains the terminal-Delivery metric fence and
-independent current-Bridge build observation required by the partial physical
-record. The already paired Windows Device must upgrade in place without
-re-pairing, reconnect with drained metrics, and complete the reviewed schema-v3
-record before this runbook can be marked `PASS`.
+Status: `PASS`. The reviewed
+[schema-v3 physical evidence](evidence/qa-002-20260828.md) binds the exact
+`v0.4.0-qa030.3` packages to two distinct physical hosts, one consumed pairing,
+the same Device's in-place Bridge upgrade, a working local Codex Runtime, and
+online plus offline/reconnect Runs with drained metrics. No OS CA import,
+application TLS-verification bypass, Server Token copy, Device credential copy,
+manual `.env`, or OpenSSL step occurred.
 
 ## Preconditions
 
@@ -199,9 +200,9 @@ available. Confirm the host descriptions really identify distinct physical
 machines and the attested observations occurred; the database cannot prove
 physical separation by itself.
 
-Commit the reviewed PASS record under `docs/acceptance/evidence/`, update both
-`QA-002` and `QA-028` to `DONE` in the same commit, and rerun documentation and
-repository gates. A failed or partial run is useful diagnostic evidence but
-cannot close either task. A run that installs a Caddy root into machine B's OS
-trust store or manually enters a leaf fingerprint is always partial/advanced
-compatibility evidence, even if every application request succeeds.
+The reviewed [2026-08-28 PASS record](evidence/qa-002-20260828.md) is committed
+with the `QA-002`, `QA-028`, and `QA-030` task-state closure. Failed or partial
+runs remain diagnostic evidence only. A run that installs a Caddy root into
+machine B's OS trust store or manually enters a leaf fingerprint is always
+partial/advanced compatibility evidence, even if every application request
+succeeds.

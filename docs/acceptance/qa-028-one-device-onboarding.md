@@ -2,13 +2,13 @@
 
 Date: 2026-08-28.
 
-Status: `BLOCKED` — deterministic, current-host and matching-package evidence
-passes, and the identified Windows x64 machine B installed/opened the matching
-Bridge and reached Central only after a manual Caddy-root import. That is useful
-reachability evidence but is now explicitly an advanced compatibility
-diagnostic, not the accepted no-manual-CA flow. `QA-030` and then a fresh
-cross-host run remain required. This document is not a `PASS` record and does
-not mark `QA-028` or its `QA-002` dependency done.
+Status: `PASS` — deterministic, native package, public-download, lifecycle and
+two-physical-host gates pass. The reviewed
+[schema-v3 evidence](evidence/qa-002-20260828.md) proves one installed Windows
+Bridge used the canonical deep link and matching phrase to consume one Device
+pairing, publish two managed Agents, pass its explicit Codex self-test, and
+complete online plus offline/reconnect work without copied long-lived
+credentials, an OS CA import, or a TLS-verification bypass.
 
 ## Accepted deterministic behavior
 
@@ -147,47 +147,30 @@ therefore classifies this exact method as `manual_ca` advanced compatibility.
 It cannot be promoted to `QA-030`, `QA-002`, or `QA-028` evidence merely because
 the HTTPS output was normal.
 
-## Blocking physical gate
+## Final physical closure
 
-`QA-002` is now `BLOCKED` by `QA-030`, so the dependency of `QA-028` is
-unsatisfied. Completion now requires this order:
+The historical manual-CA diagnostic above remains non-qualifying. Closure uses
+the later exact `v0.4.0-qa030.3` candidate and the accepted
+`private_scoped_ca` path instead:
 
-1. `CON-014`, `OPS-009`, `SEC-009`, `BRG-045`, and `WEB-048` implementing the
-   accepted public-default/scoped-private contract and `QA-030` proving it;
-2. one new exact-commit matching Central/Windows candidate containing that work;
-3. machine A installing either default `public_ca` or explicit
-   `private_scoped_ca` without silent fallback;
-4. a different physical machine B running the matching packaged Bridge with a
-   working local Codex login and no manually installed CA or leaf pin;
-5. the canonical trust-validating deep link reaching the installed
-   desktop/Console flow and one exact Device being approved;
-6. an explicit local Codex Runtime self-test;
-7. one online nonce Run completing with one trace and one reply;
-8. one Run queued while machine B is offline and completing exactly once after
-   the same Device reconnects; and
-9. a sanitized version-2 evidence record containing the TLS profile, no-manual-
-   CA/no-application-bypass attestations, two host descriptions, exact
-   commit and archive digest, public identifiers, state sequences and metrics,
-   with no private address, token, path, prompt, certificate material, complete
-   CA digest, or provider credential.
+- the public release workflow and a separate anonymous download verified all
+  22 release assets, including the native Windows installer;
+- the physical macOS arm64 Central upgraded in place to the matching package
+  with its installation identity, private CA, trust epoch and Owner authority
+  retained;
+- the physical Windows amd64 Bridge installer digest matched the published
+  artifact, and the original Device reconnected reporting `0.4.0-qa030.3`
+  without another pairing;
+- the installed deep link opened, the phrase matched, and the operator
+  confirmed no OS CA import, TLS bypass, Server Token copy, Device credential
+  copy, manual `.env`, or OpenSSL step;
+- the saved Codex Runtime self-test returned `RUNTIME_PROBE_OK`; and
+- the database-bound verifier proved exactly one Device, two path-free managed
+  Agents, one completed online Run, the exact queued offline Run completing
+  after same-Device restart, one reply per trace, and zero queued or pending
+  acceptance work.
 
-The executable procedure and closed evidence input are maintained in
-`qa-002-two-machine-managed-agent.md`. The repository verifier cross-checks the
-live read-only Server database, internally captured metrics, exact trace chains,
-single replies, Device/Agent ownership and path-free Workspace projection; it
-also rejects common credential, home-path and private-address shapes before
-creating a mode-`0600` Markdown record. Human review must still confirm that the
-two sanitized host descriptions identify different physical machines and that
-machine B's OS trust store was not changed for the run. No code change or local
-simulation can produce those physical facts.
-
-The later [packaged physical observation](evidence/qa-030-20260828-partial.md)
-adds one consumed private-scoped Windows pairing, two ready Agents, explicit
-Runtime self-test and local installer digest observations, three online Runs,
-and one exact offline queued/same-Device reconnect Run with a single reply from
-the `v0.4.0-qa030.1` package. Published exact candidate `v0.4.0-qa030.2` now
-contains `RUN-013` and `CON-015`, but it has not yet been installed on that
-Device. This task remains `BLOCKED` until the same Device upgrades without
-re-pairing, reports the authenticated current version with drained metrics, and
-the safe Codex version plus human no-OS-CA/no-bypass facts enter one reviewed
-schema-v3 record.
+The complete sanitized record is
+[QA-002 Two-Machine Managed Agent PASS Evidence](evidence/qa-002-20260828.md).
+It supersedes the earlier partial observation as the completion evidence for
+`QA-002`, `QA-028`, and the physical remainder of `QA-030`.
