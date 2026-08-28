@@ -176,3 +176,13 @@ It is not completion evidence for `QA-002`, `QA-028`, or `QA-030`. A fresh
 schema-v4 record must prove current-build execution, live connection state, the
 installed canonical `convenewire://` launch, bounded metrics and explicit human
 review before these tasks return to `DONE`.
+
+## Replacement candidate
+
+The unpublished [`v0.4.0-qa031.1` Draft](../releases/v0.4.0-qa031.1.md) is the
+matching Central and Windows Bridge candidate for the new capture. Its
+exact-source CI, Windows installer upgrade lifecycle, complete 22-asset matrix,
+and independent authenticated Draft download passed. `QA-028` remains
+`BLOCKED`: package readiness does not replace the fresh schema-v4 proof of one
+install, one consumed Device pairing, current connection, local Runtime
+self-test, online Run, exact offline/reconnect Run, and human review.

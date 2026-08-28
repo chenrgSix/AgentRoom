@@ -198,3 +198,17 @@ Caddy tests separately retain the `public_ca` default/no-silent-fallback
 boundary while fresh schema-v4 physical evidence, including the installed
 canonical `convenewire://` launch rather than legacy `agentroom://`
 compatibility, remains required for the scoped-private alternative.
+
+## Schema-v4 replacement candidate
+
+The unpublished [`v0.4.0-qa031.1` Draft](../releases/v0.4.0-qa031.1.md) is the
+exact matching candidate for the replacement physical capture. Main CI and the
+protected Release workflow passed on commit
+`32de89e882938eb045e884ada71b018068ae4f9e`, including native Windows installer
+upgrade checks and the complete 22-asset verification before and after Draft
+upload. A separate authenticated clean download passed the tagged verifier.
+
+This closes package readiness only. `QA-030` remains `BLOCKED` until the fresh
+schema-v4 record binds current-build execution, the canonical
+`convenewire://` launch, live connection and Run evidence, bounded metrics and
+reviewed no-OS-CA/no-TLS-bypass attestations to one capture window.

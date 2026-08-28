@@ -33,24 +33,38 @@ On 2026-08-28, the implementation passed:
 - `go test -race ./...`
 - `go vet ./...`
 - `GOOS=windows GOARCH=amd64 go test -c ./internal/runtime`
-- `go test -tags desktop ./cmd/agentroom-bridge-desktop`
-- `go vet -tags desktop ./cmd/agentroom-bridge-desktop`
-- `go build -tags desktop ./cmd/agentroom-bridge-desktop`
+- `go test -tags desktop ./cmd/convenewire-bridge-desktop`
+- `go vet -tags desktop ./cmd/convenewire-bridge-desktop`
+- `go build -tags desktop ./cmd/convenewire-bridge-desktop`
 - `npm run lint:docs`
 
 The Go commands used task-scoped build and module caches because the execution
 sandbox cannot write the shared user caches. The macOS desktop link emitted the
 existing deployment-target warnings and completed successfully.
 
-## Remaining native acceptance
+## Exact-candidate native evidence
 
-`BRG-046` remains `ACTIVE` until both conditions are recorded:
+Annotated tag `v0.4.0-qa031.1` resolves to
+`32de89e882938eb045e884ada71b018068ae4f9e`. On that exact commit,
+[main CI run 33189418576](https://github.com/chenrgSix/ConveneWire/actions/runs/33189418576)
+passed its native Windows Desktop job, including the Windows-specific Runtime
+process regression selected by `go test ./... -run Windows`.
 
-1. Native Windows CI passes the Windows-specific process regression for the
-   exact commit.
-2. An installed Windows Desktop Bridge starts a credentialed Codex Run without
-   opening a console window, while the Run still streams and terminates
-   normally.
+[Release run 33190256156](https://github.com/chenrgSix/ConveneWire/actions/runs/33190256156)
+then passed tag-pinned Windows Desktop tests and vet, built the native portable
+archive and current-user installer, and passed install, in-place upgrade,
+uninstall, protocol-registration, and owner-state preservation checks. The
+closed 22-asset verifier passed before and after Draft upload, followed by a
+separate authenticated clean-download verification. Detailed hashes and the
+release boundary are recorded in
+[`v0.4.0-qa031.1`](../releases/v0.4.0-qa031.1.md).
 
-Cross-compilation proves the Windows source and test compile; it does not by
-itself prove physical Windows window-manager behavior.
+## Remaining physical acceptance
+
+The exact-commit native Windows condition is complete. `BRG-046` remains
+`ACTIVE` until an installed Windows Desktop Bridge starts a credentialed Codex
+Run without opening a console window, while the Run still streams and
+terminates normally.
+
+Native CI proves the Windows process flags and installer lifecycle; it does not
+by itself prove physical Windows window-manager behavior.

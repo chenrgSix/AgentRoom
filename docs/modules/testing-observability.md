@@ -445,14 +445,19 @@ onboarding, the Task/Run/Result work model, public-CA default deployment, and
 pairing-scoped private trust with acknowledged two-authority rotation.
 Follow-up `v0.4.0-qa030.2` adds terminal-Delivery metric fencing and an
 authenticated current-Bridge build observation for same-Device upgrades;
-`v0.4.0-qa030.3` adds the Windows no-console Runtime launcher repair and is the
-current physical candidate. Release evidence is recorded in
-`docs/acceptance/qa-030-public-default-scoped-private-tls.md`. The protected
-release workflows pass exact-tag CI, the empty-Draft workflow's closed 22-asset
-verification before and after upload, prerelease publication, and fresh
-unauthenticated downloads verified by the tags' committed scripts. Publication
-does not close `QA-030`, `QA-002`, or `QA-028`; a schema-v3 physical record was
-captured but failed the later temporal-binding audit. Those tasks require a
+`v0.4.0-qa030.3` adds the Windows no-console Runtime launcher repair. Their
+protected release workflows passed exact-tag CI, closed 22-asset verification
+before and after upload, prerelease publication, and fresh unauthenticated
+downloads verified by the tags' committed scripts.
+
+The unpublished `v0.4.0-qa031.1` Draft is the current physical candidate. Its
+[release record](../releases/v0.4.0-qa031.1.md) binds the canonical ConveneWire
+repository and asset names, exact-source CI, native Windows process regression
+and installer upgrade lifecycle, closed 22-asset Draft matrix, and independent
+authenticated download to one exact commit. This closes the release-matrix
+portion of `GOV-016`, but does not close `QA-030`, `QA-002`, `QA-028`, or the
+physical window-manager portion of `BRG-046`. A schema-v3 physical record was
+captured but failed the later temporal-binding audit; those tasks require a
 fresh reviewed schema-v4 record from the same physical Device.
 
 ## Dependencies

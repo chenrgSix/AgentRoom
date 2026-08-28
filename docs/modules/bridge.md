@@ -608,6 +608,9 @@ window while retaining its existing stdin/stdout/stderr pipes, bounded output,
 deadline cancellation, and wait delay. This prevents the unsigned Desktop GUI
 from opening an empty console for each Run; it does not wrap commands in a
 shell, change Runtime arguments or environment, or grant new process authority.
+Exact-commit native Windows CI and the `v0.4.0-qa031.1` tag-pinned installer
+lifecycle pass; one physical installed-Windows Codex Run remains the final
+window-manager acceptance boundary.
 
 Wails is pinned to `v3.0.0-beta.12` behind the `desktop` Go build tag. Ordinary
 CGO-free CLI tests and builds do not compile the desktop package. Desktop tests
