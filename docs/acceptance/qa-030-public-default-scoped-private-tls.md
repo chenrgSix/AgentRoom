@@ -132,12 +132,55 @@ healthy, but this failed rehearsal cannot be promoted to upgrade evidence.
 `v0.4.0-qa030.2` therefore remains valid package evidence only; a follow-up
 exact candidate containing `OPS-010` is required for the physical closure run.
 
+## Lifecycle-Safe Exact Candidate
+
+Main CI run
+[33156064179](https://github.com/chenrgSix/AgentRoom/actions/runs/33156064179)
+passed Repository, Go, native macOS Desktop and native Windows Desktop jobs on
+exact release-preparation commit
+`1b24b0c55c7f70236a66d60fe16362c6e3213b3e`. Annotated tag
+`v0.4.0-qa030.3` resolves to that commit.
+
+Release run
+[33156486627](https://github.com/chenrgSix/AgentRoom/actions/runs/33156486627)
+validated an empty Draft, tested the tagged Bridge, built the complete native
+matrix, passed the Windows current-user install/upgrade/uninstall and owner
+state smoke checks, verified exactly 22 assets before upload, and downloaded
+and verified the Draft assets again. The Windows Desktop portable ZIP has
+SHA-256
+`d7a4bcf8651ea8e45d0b915bd610b21319713b0d542743e64c8d75f0feb40ac6`;
+the Windows installer has SHA-256
+`19a1815660dc98f43b1ea61e55e5e5c966521f58b464b60d844db37b60d53222`.
+
+The Draft was published as the
+[v0.4.0-qa030.3 prerelease](https://github.com/chenrgSix/AgentRoom/releases/tag/v0.4.0-qa030.3)
+at `2026-08-28T08:50:07Z`; stable Latest remains `v0.2.0`. A fresh directory
+downloaded every asset with ordinary unauthenticated `curl` from the public
+Release URL. The tag's committed verifier reported:
+
+```text
+Verified 4 checksum-pinned Central release archives for v0.4.0-qa030.3
+Verified 22 release assets for v0.4.0-qa030.3
+```
+
+The physical macOS Central then consumed the independently published Darwin
+arm64 internal checksum pin, created a verified SQLite backup, and upgraded
+from `v0.4.0-qa030.1` to `v0.4.0-qa030.3`. The controller retained the same
+installation identity, private CA and trust epoch; the manifest reports schema
+48 and `ready`, while `doctor` passes HTTPS and WebSocket readiness. The same
+Windows Device reconnected without another pairing and still reported its old
+Bridge `0.4.0-qa030.1`, proving Central rolling compatibility but not the
+required Bridge package upgrade. Two managed Agents were ready, and packaged
+metrics reported one authenticated Bridge, queue depth zero, pending Delivery
+count zero and four completed Runs.
+
 ## Remaining Physical Gate
 
-`QA-030` is not `DONE`. The `qa030.2` exact-tag public package gate passes,
+`QA-030` is not `DONE`. The `qa030.3` exact-tag public package and Central
+upgrade gates pass,
 including native Windows Bridge Desktop and installer assets. The physical
-Windows Device from the partial record must install a follow-up exact candidate
-in place, without re-pairing, and reconnect to the existing Central using its
+Windows Device from the partial record must now install that exact candidate in
+place, without re-pairing, and reconnect to the existing Central using its
 retained profile:
 
 - `public_ca`, verified only by the Bridge host system trust store; or
@@ -155,8 +198,8 @@ A later [sanitized physical observation](evidence/qa-030-20260828-partial.md)
 confirms that `v0.4.0-qa030.1` consumed one Windows amd64 pairing session,
 published two managed Agents, passed the explicit Runtime self-test and local
 installer digest check, and completed an exact queued Run after the same Device
-reconnected with one reply. The `v0.4.0-qa030.2` package now carries the metric
-and current-version fixes exposed by that observation, but it has not yet been
-installed on that Device. The safe Codex version, drained packaged metrics,
-authenticated current build observation and final human no-OS-CA/no-bypass
-attestations must still coexist in one reviewed schema-v3 record.
+reconnected with one reply. `v0.4.0-qa030.3` now runs on Central and carries the
+metric, current-version and lifecycle-preflight fixes, but its Bridge has not
+yet been installed on that Device. The safe Codex version, authenticated
+current build observation and final human no-OS-CA/no-bypass attestations must
+still coexist in one reviewed schema-v3 record.
