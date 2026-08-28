@@ -1077,7 +1077,7 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 		}
 	}
 	for _, required := range []string{
-		"convenewire-central-release.json", "compose.yaml", "Dockerfile",
+		"compose.yaml", "Dockerfile",
 		"package.json", "package-lock.json", "deploy/Caddyfile",
 		"deploy/tls/public-ca.caddy", "deploy/tls/private-scoped-ca.caddy",
 		"deploy/tls/internal-ca.caddy", "deploy/tls/legacy-auto.caddy",
@@ -1088,7 +1088,31 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 			return ReleaseMetadata{}, "", actionError("RELEASE_INCOMPLETE", "central release omits a required owned path", "Use an ConveneWire central release archive, not a source fragment or Bridge-only archive.", fmt.Errorf("missing %s", required))
 		}
 	}
-	metadataBytes, err := readBoundedFile(filepath.Join(releaseDir, "convenewire-central-release.json"), 1<<20)
+	metadataNames := []string{"convenewire-central-release.json", "agentroom-central-release.json"}
+	metadataName := ""
+	for _, candidate := range metadataNames {
+		if _, found := actual[candidate]; !found {
+			continue
+		}
+		if metadataName != "" {
+			return ReleaseMetadata{}, "", actionError(
+				"RELEASE_METADATA_INVALID",
+				"central release contains ambiguous current and legacy metadata",
+				"Use one exact published archive; do not combine files from releases before and after the product rename.",
+				nil,
+			)
+		}
+		metadataName = candidate
+	}
+	if metadataName == "" {
+		return ReleaseMetadata{}, "", actionError(
+			"RELEASE_INCOMPLETE",
+			"central release omits its owned metadata",
+			"Use a complete ConveneWire release or an intact pre-rename AgentRoom central archive.",
+			nil,
+		)
+	}
+	metadataBytes, err := readBoundedFile(filepath.Join(releaseDir, metadataName), 1<<20)
 	if err != nil {
 		return ReleaseMetadata{}, "", err
 	}

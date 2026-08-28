@@ -188,6 +188,40 @@ func createReleaseForTarget(t *testing.T, parent, version string, dataSchema int
 	return releaseDir
 }
 
+func rewriteTestReleaseChecksums(t *testing.T, releaseDir string) {
+	t.Helper()
+	names := []string{}
+	err := filepath.WalkDir(releaseDir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() || filepath.Base(path) == "SHA256SUMS" {
+			return nil
+		}
+		relative, err := filepath.Rel(releaseDir, path)
+		if err != nil {
+			return err
+		}
+		names = append(names, relative)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(names)
+	var checksums strings.Builder
+	for _, name := range names {
+		digest, err := digestFile(filepath.Join(releaseDir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Fprintf(&checksums, "%s  %s\n", digest, name)
+	}
+	if err := os.WriteFile(filepath.Join(releaseDir, "SHA256SUMS"), []byte(checksums.String()), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func requireActionCode(t *testing.T, err error, code string) *ActionError {
 	t.Helper()
 	if err == nil {
@@ -201,6 +235,37 @@ func requireActionCode(t *testing.T, err error, code string) *ActionError {
 		t.Fatalf("expected %s, got %s: %v", code, action.Code, err)
 	}
 	return action
+}
+
+func TestReleaseVerificationAcceptsOneLegacyMetadataNameAndRejectsBoth(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	currentPath := filepath.Join(releaseDir, "convenewire-central-release.json")
+	legacyPath := filepath.Join(releaseDir, "agentroom-central-release.json")
+	if err := os.Rename(currentPath, legacyPath); err != nil {
+		t.Fatal(err)
+	}
+	rewriteTestReleaseChecksums(t, releaseDir)
+	metadata, _, err := verifyRelease(
+		releaseDir, filepath.Join(releaseDir, "SHA256SUMS"), checksumPin(releaseDir),
+	)
+	if err != nil || metadata.ReleaseVersion != "v1.2.3" {
+		t.Fatalf("intact pre-rename release metadata was rejected: %+v %v", metadata, err)
+	}
+	legacy, err := os.ReadFile(legacyPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(currentPath, legacy, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rewriteTestReleaseChecksums(t, releaseDir)
+	requireActionCode(t, func() error {
+		_, _, err := verifyRelease(
+			releaseDir, filepath.Join(releaseDir, "SHA256SUMS"), checksumPin(releaseDir),
+		)
+		return err
+	}(), "RELEASE_METADATA_INVALID")
 }
 
 func TestInstallIsReentrantAndKeepsSecretsOutOfConfiguration(t *testing.T) {
