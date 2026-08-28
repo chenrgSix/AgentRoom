@@ -42,6 +42,24 @@ trust. For a private IP or name, explicitly select Bridge-scoped trust:
   --origin https://192.168.1.132:9443
 ```
 
+For local self-hosting on DHCP, prefer a stable private DNS or mDNS hostname
+over a literal address. To move an existing ready scoped-private IP installation
+without changing its CA, installation ID, trust epoch, database or Device
+credentials:
+
+```sh
+./bin/convenewirectl migrate-private-hostname \
+  --data-root '/absolute/persistent/convenewire-central' \
+  --hostname central.local
+```
+
+The hostname must already resolve to the Central host. The controller verifies
+the new hostname and same CA before committing, and restores the old topology on
+failure. Update an existing current Bridge through Connection Settings after
+the Central move; it verifies the replacement hostname through the already
+pinned CA before retaining the Device credential. A new Bridge pairs directly
+against the hostname.
+
 `manual_ca` is advanced operator-managed compatibility; the controller never
 installs an OS root. It reports only the non-secret installation ID, TLS profile
 and a redacted CA-digest prefix, never the recovery value, full digest, CA

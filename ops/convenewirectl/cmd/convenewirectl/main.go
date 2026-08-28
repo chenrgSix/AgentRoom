@@ -36,7 +36,7 @@ func main() {
 
 func run(ctx context.Context, arguments []string) error {
 	if len(arguments) == 0 {
-		return fmt.Errorf("usage: convenewirectl <install|status|doctor|backup|restore|upgrade|trust-rotation|migrate-public-ca|uninstall|version>")
+		return fmt.Errorf("usage: convenewirectl <install|status|doctor|backup|restore|upgrade|trust-rotation|migrate-public-ca|migrate-private-hostname|uninstall|version>")
 	}
 	if arguments[0] == "version" {
 		fmt.Println(version)
@@ -162,6 +162,21 @@ func run(ctx context.Context, arguments []string) error {
 			return fmt.Errorf("migrate-public-ca accepts flags only")
 		}
 		return control.MigrateLegacyPublicCA(ctx, *dataRoot)
+	case "migrate-private-hostname":
+		flags := flag.NewFlagSet("migrate-private-hostname", flag.ContinueOnError)
+		flags.SetOutput(os.Stderr)
+		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent ConveneWire data root")
+		hostname := flags.String("hostname", "", "stable private DNS or mDNS hostname")
+		if err := flags.Parse(arguments[1:]); err != nil {
+			return err
+		}
+		if flags.NArg() != 0 || strings.TrimSpace(*hostname) == "" {
+			return fmt.Errorf("migrate-private-hostname requires --hostname and accepts flags only")
+		}
+		return control.MigratePrivateHostname(ctx, controller.PrivateHostnameMigrationOptions{
+			DataRoot: *dataRoot,
+			Hostname: *hostname,
+		})
 	default:
 		return fmt.Errorf("unknown command %q", arguments[0])
 	}

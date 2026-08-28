@@ -786,6 +786,143 @@ func TestPrivateScopedInstallPublishesStableBoundedTrust(t *testing.T) {
 	}
 }
 
+func TestPrivateHostnameMigrationPreservesIdentityAuthorityAndDataBoundary(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	now := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	runner.hook = provisionConfiguredPrivateCAs(t, dataRoot, now, map[string]string{})
+	var output bytes.Buffer
+	dependencies := testDependencies(runner, &output)
+	readiness := []ReadinessInput{}
+	dependencies.CheckReadiness = func(_ context.Context, input ReadinessInput) error {
+		readiness = append(readiness, input)
+		return nil
+	}
+	control := New(dependencies)
+	installed, err := control.Install(context.Background(), privateScopedOptions(releaseDir, dataRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	before := installed.Manifest
+	beforeCA, err := os.ReadFile(installed.TrustCAPEMPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := control.MigratePrivateHostname(context.Background(), PrivateHostnameMigrationOptions{
+		DataRoot: dataRoot,
+		Hostname: "Central.Local",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	after, found, err := loadManifest(installed.ManifestPath)
+	if err != nil || !found {
+		t.Fatalf("load migrated manifest: found=%v err=%v", found, err)
+	}
+	if after.Domain != "central.local" || after.PublicOrigin != "https://central.local:19443" {
+		t.Fatalf("hostname migration did not commit exact target origin: %+v", after)
+	}
+	expected := before
+	expected.Domain = after.Domain
+	expected.PublicOrigin = after.PublicOrigin
+	expected.UpdatedAt = after.UpdatedAt
+	if after != expected {
+		t.Fatalf("hostname migration changed identity or lifecycle fields:\nbefore=%+v\nafter=%+v", before, after)
+	}
+	afterCA, err := os.ReadFile(installed.TrustCAPEMPath)
+	if err != nil || !bytes.Equal(beforeCA, afterCA) {
+		t.Fatal("hostname migration replaced the private CA artifact")
+	}
+	descriptorBytes, err := os.ReadFile(installed.TrustDescriptorPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var descriptor deploymentTrustDescriptor
+	if err := decodeStrictJSON(descriptorBytes, &descriptor); err != nil ||
+		descriptor.Origin != after.PublicOrigin ||
+		descriptor.InstallationID != before.InstallationID ||
+		descriptor.TrustEpoch != before.TrustEpoch ||
+		descriptor.CACertificateSHA256 != before.CACertificateSHA256 {
+		t.Fatalf("hostname migration changed scoped trust authority: %+v err=%v", descriptor, err)
+	}
+	environment, err := os.ReadFile(installed.EnvironmentPath)
+	if err != nil || !bytes.Contains(environment, []byte(`CONVENE_WIRE_DOMAIN="central.local"`)) ||
+		!bytes.Contains(environment, []byte(`CONVENE_WIRE_PUBLIC_ORIGIN="https://central.local:19443"`)) {
+		t.Fatalf("canonical hostname environment was not committed: %s err=%v", environment, err)
+	}
+	if len(readiness) < 3 || readiness[len(readiness)-1].PublicOrigin != after.PublicOrigin ||
+		readiness[len(readiness)-1].ExpectedCADigest != before.CACertificateSHA256 {
+		t.Fatalf("target did not pass exact same-CA readiness: %+v", readiness)
+	}
+	if strings.Contains(output.String(), before.CACertificateSHA256) {
+		t.Fatal("hostname migration output disclosed the full CA digest")
+	}
+	for _, command := range runner.commands {
+		if command.Name == "bash" {
+			t.Fatal("hostname migration invoked a data migration or backup script")
+		}
+	}
+}
+
+func TestPrivateHostnameMigrationRejectsRotationAndRestoresOldTopologyOnFailure(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	now := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	runner.hook = provisionConfiguredPrivateCAs(t, dataRoot, now, map[string]string{})
+	dependencies := testDependencies(runner, &bytes.Buffer{})
+	dependencies.CheckReadiness = func(_ context.Context, input ReadinessInput) error {
+		if strings.Contains(input.PublicOrigin, "central.local") {
+			return fmt.Errorf("injected target hostname failure")
+		}
+		return nil
+	}
+	control := New(dependencies)
+	installed, err := control.Install(context.Background(), privateScopedOptions(releaseDir, dataRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installed.TrustRotationPath, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	requireActionCode(t, control.MigratePrivateHostname(context.Background(), PrivateHostnameMigrationOptions{
+		DataRoot: dataRoot, Hostname: "central.local",
+	}), "PRIVATE_HOSTNAME_ROTATION_ACTIVE")
+	if err := os.Remove(installed.TrustRotationPath); err != nil {
+		t.Fatal(err)
+	}
+	beforeManifest, err := os.ReadFile(installed.ManifestPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeEnvironment, _ := os.ReadFile(installed.EnvironmentPath)
+	beforeOverride, _ := os.ReadFile(installed.OverridePath)
+	beforeDescriptor, _ := os.ReadFile(installed.TrustDescriptorPath)
+	beforeCA, _ := os.ReadFile(installed.TrustCAPEMPath)
+	requireActionCode(t, control.MigratePrivateHostname(context.Background(), PrivateHostnameMigrationOptions{
+		DataRoot: dataRoot, Hostname: "central.local",
+	}), "PRIVATE_HOSTNAME_MIGRATION_FAILED")
+	for path, expected := range map[string][]byte{
+		installed.ManifestPath:        beforeManifest,
+		installed.EnvironmentPath:     beforeEnvironment,
+		installed.OverridePath:        beforeOverride,
+		installed.TrustDescriptorPath: beforeDescriptor,
+		installed.TrustCAPEMPath:      beforeCA,
+	} {
+		actual, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(actual, expected) {
+			t.Fatalf("rollback did not restore %s: %v", filepath.Base(path), err)
+		}
+	}
+	for _, hostname := range []string{"192.0.2.99", "localhost", "bad host"} {
+		requireActionCode(t, control.MigratePrivateHostname(context.Background(), PrivateHostnameMigrationOptions{
+			DataRoot: dataRoot, Hostname: hostname,
+		}), "PRIVATE_HOSTNAME_INVALID")
+	}
+}
+
 func privateScopedOptions(releaseDir, dataRoot string) InstallOptions {
 	options := installOptions(releaseDir, dataRoot)
 	options.Mode = "direct_https"
