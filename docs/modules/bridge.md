@@ -729,6 +729,16 @@ mode, epoch and a 12-character digest prefix; the full digest and certificate
 remain out of those projections. Connection settings cannot silently move a
 scoped credential to another origin.
 
+`BRG-048` adds the explicit exception for a stable-hostname migration. While
+the existing configuration-mutation fence is clear and no CA rotation is in
+progress, Bridge may update a scoped credential to another exact HTTPS origin
+only after a secret-free bounded bootstrap returns the already pinned CA and a
+second request passes normal target-hostname readiness through that CA. The
+local replacement keeps the Device credential, installation ID, epoch, Agents
+and policy unchanged and rolls the credential back if the configuration write
+fails. A different CA, legacy fingerprint, trust-mode change, redirect,
+unverified target or active work remains rejected.
+
 Rotation accepts at most one strictly newer CA over the existing pin-valid,
 Device-authenticated channel. Bridge persists current plus next before sending
 one stable idempotent acknowledgement, rebuilds every authenticated client after

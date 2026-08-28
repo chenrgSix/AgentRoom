@@ -84,6 +84,14 @@ not evidence that a second-machine Bridge has safe trust.
 An unauthenticated WebSocket upgrade must reach the Server authentication
 boundary and return 401/403; a generic HTTP success is not sufficient.
 
+For private local self-hosting, the exact origin should be a stable DNS or mDNS
+hostname rather than a literal DHCP address. The hostname remains the TLS and
+Origin-policy identity while its resolved interface address may change.
+[ADR-0024](../adr/0024-decouple-private-central-identity-from-dhcp-address.md)
+defines the bounded one-time migration for an existing literal-IP installation;
+it does not change the `0.0.0.0` listener, install a CA, manage DHCP/DNS or relax
+hostname validation.
+
 ### Accepted TLS-profile target
 
 [ADR-0023](../adr/0023-default-public-ca-and-scope-private-bridge-trust.md)
@@ -161,6 +169,10 @@ not a manifest-only label change.
   acknowledgements and new-chain readiness, with current-first rollback.
 - `migrate-public-ca` performs the only schema-v1 TLS relabel and only after
   system trust proves the existing and resulting public certificate path.
+- `migrate-private-hostname` moves only a ready scoped-private literal-IP
+  origin to one exact non-loopback hostname. It preserves the private CA,
+  trust epoch, installation identity and data, requires same-CA hostname
+  readiness, and restores the old topology if the candidate fails.
 - `uninstall` runs Compose `down --remove-orphans` without `-v`, removes only
   generated runtime configuration, records `uninstalled`, and preserves the
   data root, manifest, recovery material, backups, database, and Caddy state.
@@ -201,4 +213,5 @@ those boundaries.
 
 - `OPS-008`: reentrant central installation controller and release package.
 - `OPS-009`: public-default and scoped-private TLS deployment target.
+- `OPS-011`: private DHCP-IP to stable-hostname migration.
 - `QA-028`: deterministic plus physical one-install/one-Device acceptance.
