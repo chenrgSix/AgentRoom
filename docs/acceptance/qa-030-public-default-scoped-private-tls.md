@@ -2,10 +2,10 @@
 
 Date: 2026-08-28
 
-Source commit: `98fc9c4480759375cea8d4cce12f757f68a025b8`
+Source commit: `9af9edae36ed5fce2cf5b3b2ef06a7cfd91b8d4b`
 
-Status: `ACTIVE` — deterministic and local package gates pass; the required
-clean two-physical-host release rehearsal has not run.
+Status: `ACTIVE` — deterministic, exact-tag and public package gates pass; the
+required clean two-physical-host release rehearsal has not run.
 
 ## Deterministic Matrix
 
@@ -39,12 +39,59 @@ This synthetic version was not tagged, uploaded, or published. The archives
 were temporary local packaging evidence only; they do not authorize or replace
 a GitHub Release workflow.
 
+## Exact-Source Continuous Integration
+
+Main CI run
+[33137517161](https://github.com/chenrgSix/AgentRoom/actions/runs/33137517161)
+passed on exact commit `9af9edae36ed5fce2cf5b3b2ef06a7cfd91b8d4b`.
+Repository, Go, native macOS Desktop, and native Windows Desktop jobs passed
+locked dependency installation, contract generation and validation, production
+builds, workspace tests, deterministic cross-process E2E, documentation and
+patch checks, real Compose/Caddy configuration validation, full Go tests and
+vet, four-platform Central packaging, and native Desktop package smoke checks.
+
+## Protected Release Workflow
+
+Annotated tag `v0.4.0-qa030.1` resolves to the exact CI commit. Release run
+[33137746589](https://github.com/chenrgSix/AgentRoom/actions/runs/33137746589)
+validated the empty Draft, tested the tagged Bridge, and built five portable
+Bridge CLI archives, two native macOS Desktop archives, one Windows Desktop
+portable archive and current-user installer, four checksum-pinned Central
+archives, four independent Central checksum pins, the outer checksum file, and
+four license files.
+
+The native Windows job passed Desktop test and vet plus install, in-place
+upgrade, uninstall, protocol registration, and owner-state preservation smoke
+checks. The tagged verifier accepted exactly 22 assets before upload and again
+after downloading the Draft. The Windows Desktop portable ZIP has SHA-256
+`5b22e23ad076c00c3bb57edd0696714b006b6370b19fc0a2e483058139c1291f`;
+the Windows installer has SHA-256
+`f10d1e3f60d87750e91b6bf91e93fdbc0145db940ebe0b8f5979eaff5a5745f8`.
+
+The Draft was published as the
+[v0.4.0-qa030.1 prerelease](https://github.com/chenrgSix/AgentRoom/releases/tag/v0.4.0-qa030.1)
+at `2026-08-28T03:06:12Z`. Stable Latest remains `v0.2.0`.
+
+## Independent Public Asset Verification
+
+A fresh directory at
+`/private/tmp/agentroom-v040qa0301-public-assets.7PCwZY` downloaded every asset
+without an authorization header from its public GitHub Release URL. The tag's
+committed verifier rechecked checksums, archive closure, launchers,
+architectures, embedded versions, Desktop and installer metadata, exact Central
+source/schema metadata, separate internal checksum pins, and license contents.
+It reported:
+
+```text
+Verified 4 checksum-pinned Central release archives for v0.4.0-qa030.1
+Verified 22 release assets for v0.4.0-qa030.1
+```
+
 ## Remaining Physical Gate
 
-`QA-030` is not `DONE`. A new exact tag containing commit `98fc9c4` or a later
-reviewed descendant must pass the protected Release workflow, including native
-Windows Bridge desktop/installer assets. Then two distinct physical hosts must
-perform one clean run with either:
+`QA-030` is not `DONE`. The exact-tag public package gate now passes, including
+native Windows Bridge Desktop and installer assets. Two distinct physical hosts
+must still perform one clean run with either:
 
 - `public_ca`, verified only by the Bridge host system trust store; or
 - `private_scoped_ca`, bootstrapped from the exact pairing link and retained
