@@ -7,6 +7,7 @@ import (
 	"crypto/elliptic"
 	cryptorand "crypto/rand"
 	"crypto/sha256"
+	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
@@ -15,6 +16,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"sort"
@@ -98,6 +102,87 @@ func writeTestCA(t *testing.T, path string, now time.Time) string {
 	}
 	digest := sha256.Sum256(der)
 	return hex.EncodeToString(digest[:])
+}
+
+func startHostReadinessServer(
+	t *testing.T,
+	hostname string,
+	now time.Time,
+) (string, string, string) {
+	t.Helper()
+	caKey, err := ecdsa.GenerateKey(elliptic.P256(), cryptorand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(11), Subject: pkix.Name{CommonName: "ConveneWire readiness CA"},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour),
+		IsCA: true, BasicConstraintsValid: true,
+		KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	caDER, err := x509.CreateCertificate(
+		cryptorand.Reader, caTemplate, caTemplate, &caKey.PublicKey, caKey,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caCertificate, err := x509.ParseCertificate(caDER)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKey, err := ecdsa.GenerateKey(elliptic.P256(), cryptorand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafTemplate := &x509.Certificate{
+		SerialNumber: big.NewInt(12), Subject: pkix.Name{CommonName: hostname},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(12 * time.Hour),
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		DNSNames:    []string{hostname},
+	}
+	leafDER, err := x509.CreateCertificate(
+		cryptorand.Reader, leafTemplate, caCertificate, &leafKey.PublicKey, caKey,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	leafKeyDER, err := x509.MarshalPKCS8PrivateKey(leafKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pair, err := tls.X509KeyPair(
+		pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leafDER}),
+		pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: leafKeyDER}),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/api/health/ready":
+			response.WriteHeader(http.StatusOK)
+		case "/ws/bridge":
+			response.WriteHeader(http.StatusUnauthorized)
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	server.TLS = &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{pair}}
+	server.StartTLS()
+	t.Cleanup(server.Close)
+	_, port, err := net.SplitHostPort(strings.TrimPrefix(server.URL, "https://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	caPath := filepath.Join(t.TempDir(), "root.crt")
+	if err := os.WriteFile(
+		caPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: caDER}), 0o600,
+	); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(caDER)
+	return "https://" + net.JoinHostPort(hostname, port), caPath, hex.EncodeToString(digest[:])
 }
 
 func testDependencies(runner *fakeRunner, output *bytes.Buffer) Dependencies {
@@ -329,6 +414,20 @@ func TestInstallIsReentrantAndKeepsSecretsOutOfConfiguration(t *testing.T) {
 	}
 	if strings.Contains(output.String(), strings.TrimSpace(string(secretBefore))) {
 		t.Fatal("operator output disclosed the Owner recovery secret")
+	}
+}
+
+func TestReadinessDialsLocalIngressWhileVerifyingRecordedHostname(t *testing.T) {
+	now := time.Now().UTC()
+	origin, caPath, digest := startHostReadinessServer(
+		t, "central-unresolvable.invalid", now,
+	)
+	if err := checkReadiness(context.Background(), ReadinessInput{
+		PublicOrigin: origin, LocalCARoot: caPath,
+		TLSProfile: "private_scoped_ca", ExpectedCADigest: digest,
+		Timeout: 2 * time.Second,
+	}); err != nil {
+		t.Fatalf("host-local readiness depended on external DNS or DHCP routing: %v", err)
 	}
 }
 

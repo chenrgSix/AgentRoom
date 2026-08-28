@@ -122,6 +122,11 @@ readiness verifies the exact CA/digest/hostname path separately and proves the
 well-known artifact agrees with the manifest. Manual CA and legacy leaf-pin
 state is reported as advanced compatibility. A new public install cannot
 silently become any of those modes after DNS, ACME or chain failure.
+Controller readiness dials the host's Caddy ingress through loopback while the
+request URL still supplies and verifies the exact recorded hostname, TLS SNI,
+certificate chain and Origin. This avoids treating DHCP routing or router
+hairpin behavior as local process health; it does not claim another Device can
+resolve or reach the hostname, which remains a separate physical QA boundary.
 
 Private CA rotation uses `trust-rotation prepare` and `trust-rotation activate`.
 Prepare reloads a Caddy model containing exactly current plus next named

@@ -1214,7 +1214,20 @@ func checkReadiness(ctx context.Context, input ReadinessInput) error {
 			}
 		}
 	}
-	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}
+	dialer := &net.Dialer{Timeout: 10 * time.Second}
+	transport := &http.Transport{
+		TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12},
+		DialContext: func(ctx context.Context, network, address string) (net.Conn, error) {
+			_, port, err := net.SplitHostPort(address)
+			if err != nil {
+				return nil, fmt.Errorf("readiness target address is invalid: %w", err)
+			}
+			// Controller readiness is a host-local ingress check. Dialing Caddy
+			// through loopback avoids DNS, DHCP and router-hairpin dependence while
+			// the request URL still enforces the recorded Host and TLS ServerName.
+			return dialer.DialContext(ctx, network, net.JoinHostPort("127.0.0.1", port))
+		},
+	}
 	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
 	deadline := time.Now().Add(input.Timeout)
 	var lastError error
