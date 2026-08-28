@@ -332,6 +332,35 @@ func TestInstallIsReentrantAndKeepsSecretsOutOfConfiguration(t *testing.T) {
 	}
 }
 
+func TestBackupPassesCurrentAndLegacyReleaseEnvironmentAliases(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	options := installOptions(releaseDir, dataRoot)
+	options.LegacyServerToken = true
+	if _, err := control.Install(context.Background(), options); err != nil {
+		t.Fatal(err)
+	}
+	if err := control.Backup(context.Background(), dataRoot); err != nil {
+		t.Fatal(err)
+	}
+	var backup Command
+	for _, command := range runner.commands {
+		if command.Name == "bash" && strings.Contains(strings.Join(command.Args, " "), "compose-backup.sh") {
+			backup = command
+		}
+	}
+	expectedDirectory := filepath.Join(dataRoot, "exports")
+	if backup.Name == "" || backup.Env["CONVENE_WIRE_BACKUP_DIR"] != expectedDirectory ||
+		backup.Env["AGENT_ROOM_BACKUP_DIR"] != expectedDirectory ||
+		backup.Env["CONVENE_WIRE_BRIDGE_SERVER_TOKEN"] == "" ||
+		backup.Env["CONVENE_WIRE_BRIDGE_SERVER_TOKEN"] != backup.Env["AGENT_ROOM_BRIDGE_SERVER_TOKEN"] {
+		t.Fatalf("backup did not preserve current and legacy release aliases: %#v", backup.Env)
+	}
+}
+
 func TestInstallRecoversEveryRecordedExternalCrashCut(t *testing.T) {
 	tests := []struct {
 		name          string

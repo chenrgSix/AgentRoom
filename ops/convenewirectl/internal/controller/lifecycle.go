@@ -116,7 +116,9 @@ func (controller *Controller) Backup(ctx context.Context, dataRoot string) error
 	if err != nil {
 		return err
 	}
-	environment["CONVENE_WIRE_BACKUP_DIR"] = filepath.Join(installation.Manifest.DataRoot, "exports")
+	backupDirectory := filepath.Join(installation.Manifest.DataRoot, "exports")
+	environment["CONVENE_WIRE_BACKUP_DIR"] = backupDirectory
+	environment["AGENT_ROOM_BACKUP_DIR"] = backupDirectory
 	output, err := controller.dependencies.Runner.Run(ctx, Command{
 		Dir: installation.Manifest.ReleaseDir, Env: environment, Name: "bash",
 		Args: []string{filepath.Join(installation.Manifest.ReleaseDir, "scripts", "compose-backup.sh")},

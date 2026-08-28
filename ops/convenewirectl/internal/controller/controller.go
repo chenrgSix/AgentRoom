@@ -878,9 +878,12 @@ func installationEnvironment(installation Installation) (map[string]string, erro
 		if err != nil {
 			return nil, actionError("SECRET_READ_FAILED", "could not read the configured legacy Server Token", "Check the secret file ownership and permissions; do not copy it into the environment file.", err)
 		}
-		environment["CONVENE_WIRE_BRIDGE_SERVER_TOKEN"] = strings.TrimSpace(string(value))
+		token := strings.TrimSpace(string(value))
+		environment["CONVENE_WIRE_BRIDGE_SERVER_TOKEN"] = token
+		environment["AGENT_ROOM_BRIDGE_SERVER_TOKEN"] = token
 	} else {
 		environment["CONVENE_WIRE_BRIDGE_SERVER_TOKEN"] = ""
+		environment["AGENT_ROOM_BRIDGE_SERVER_TOKEN"] = ""
 	}
 	return environment, nil
 }
