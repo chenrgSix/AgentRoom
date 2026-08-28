@@ -418,6 +418,15 @@ published as a prerelease, and a fresh anonymous direct download passed the
 tagged verifier on macOS. Physical Windows provisioning, real macOS login
 restart, and two-machine gates remain separate.
 
+The `v0.4.0-qa030.1` candidate packages unified Central installation and Device
+onboarding, the Task/Run/Result work model, public-CA default deployment, and
+pairing-scoped private trust with acknowledged two-authority rotation. Release
+admission requires exact-tag CI, the empty-Draft workflow's closed 22-asset
+verification before and after upload, prerelease publication, and a fresh
+anonymous download verified by the tag's committed scripts. Publication does
+not close `QA-030`, `QA-002`, or `QA-028`; those tasks still require the
+separate clean two-physical-host rehearsal.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
