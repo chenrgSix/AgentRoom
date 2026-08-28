@@ -15,6 +15,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"agentroom.dev/bridge/internal/config"
 )
@@ -22,12 +23,13 @@ import (
 const credentialFilename = "device-credential.json"
 
 type Credential struct {
-	ServerURL     string  `json:"serverUrl"`
-	DeviceID      string  `json:"deviceId"`
-	TeamID        string  `json:"teamId"`
-	OwnerMemberID string  `json:"ownerMemberId"`
-	Token         string  `json:"token"`
-	ExpiresAt     *string `json:"expiresAt"`
+	ServerURL          string              `json:"serverUrl"`
+	DeviceID           string              `json:"deviceId"`
+	TeamID             string              `json:"teamId"`
+	OwnerMemberID      string              `json:"ownerMemberId"`
+	Token              string              `json:"token"`
+	ExpiresAt          *string             `json:"expiresAt"`
+	ScopedPrivateTrust *ScopedPrivateTrust `json:"scopedPrivateTrust,omitempty"`
 }
 
 type pairResponse struct {
@@ -92,6 +94,9 @@ func Exchange(ctx context.Context, cfg config.Config, code string) (Credential, 
 }
 
 func Save(dataDir string, credential Credential) error {
+	if err := validateCredentialTrust(credential); err != nil {
+		return err
+	}
 	path, err := EnsureAvailable(dataDir)
 	if err != nil {
 		return err
@@ -152,7 +157,24 @@ func Load(dataDir string) (Credential, error) {
 	if credential.DeviceID == "" || credential.Token == "" {
 		return Credential{}, fmt.Errorf("credential is incomplete")
 	}
+	if err := validateCredentialTrust(credential); err != nil {
+		return Credential{}, err
+	}
 	return credential, nil
+}
+
+func validateCredentialTrust(credential Credential) error {
+	if credential.ScopedPrivateTrust == nil {
+		return nil
+	}
+	origin, err := exactHTTPSOrigin(credential.ServerURL)
+	if err != nil {
+		return fmt.Errorf("scoped private trust requires an exact HTTPS credential Server URL")
+	}
+	if _, err := credential.ScopedPrivateTrust.validate(origin, time.Now()); err != nil {
+		return fmt.Errorf("credential scoped private trust is invalid: %w", err)
+	}
+	return nil
 }
 
 func HTTPClient(cfg config.Config) *http.Client {
@@ -176,4 +198,15 @@ func HTTPClient(cfg config.Config) *http.Client {
 		}
 	}
 	return &http.Client{Transport: transport}
+}
+
+func HTTPClientForCredential(cfg config.Config, credential Credential) *http.Client {
+	if credential.ScopedPrivateTrust == nil {
+		return HTTPClient(cfg)
+	}
+	client, err := newScopedHTTPClient(cfg.ServerURL, *credential.ScopedPrivateTrust, time.Now())
+	if err != nil {
+		return &http.Client{Transport: errorTransport{err: err}}
+	}
+	return client
 }

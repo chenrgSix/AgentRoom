@@ -681,25 +681,32 @@ normal certificate-chain, hostname, validity, and renewal verification. An old
 configuration with a fingerprint and no explicit mode remains pinned. A
 configuration may not silently provide both a system-CA mode and a fingerprint.
 
-`BRG-045` will add the separate `private_scoped_ca` target. It consumes the
-closed pairing-fragment descriptor only after checking the exact HTTPS origin,
-then uses a bootstrap-only no-secret client to retrieve one bounded public CA
-certificate from the fixed well-known path. It accepts no redirect, checks CA
-constraints and canonical DER SHA-256, and builds a private pool that still
-performs normal hostname, chain, validity and EKU verification. The permissive
-bootstrap transport cannot be reused for claim, poll, WebSocket or authenticated
-HTTP traffic.
+Active `BRG-045` adds the separate `private_scoped_ca` target. The implemented
+bootstrap consumes the closed pairing-fragment descriptor only after checking
+the exact HTTPS origin, then uses a bootstrap-only no-secret client to retrieve
+one bounded public CA certificate from the fixed well-known path. It accepts no
+redirect, enforces media type and size, checks certificate count, CA constraints,
+validity and canonical DER SHA-256, and builds a private pool that still performs
+normal hostname, chain, validity and EKU verification. A verified readiness
+request completes before any claim proof is generated. The permissive bootstrap
+transport cannot be reused for claim, poll, WebSocket or authenticated HTTP
+traffic.
 
-After successful pairing, Bridge stores origin, installation ID, trust epoch,
-public CA and digest under owner-only permissions and applies them only to the
-exact scheme, hostname and port. It never installs an OS root or treats an
-account, claim secret, Device credential, matching phrase or first-seen peer as
-TLS authority. Public links omit the descriptor and remain `system_ca`.
-The first private claim echoes the exact public descriptor after TLS validation
-so the Server can match it and bind the verification phrase; it never uploads
-the CA certificate or changes installation state.
+After successful consumption, Bridge stores origin, installation ID, trust
+epoch, public CA and digest with the Device credential under owner-only
+permissions and applies them only to the exact scheme, hostname and port for
+WebSocket, artifact and Result traffic. It never installs an OS root or treats
+an account, claim secret, Device credential, matching phrase or first-seen peer
+as TLS authority. Public links omit the descriptor and remain `system_ca`. The
+first private claim advertises the scoped-trust capability and echoes the exact
+public descriptor after TLS validation so the Server can match it and bind the
+verification phrase; it never uploads the CA certificate or changes
+installation state. Console state and diagnostic export include only active
+mode, epoch and a 12-character digest prefix; the full digest and certificate
+remain out of those projections. Connection settings cannot silently move a
+scoped credential to another origin.
 
-Private rotation accepts at most one strictly newer CA over the existing
+The remaining `BRG-045` rotation work accepts at most one strictly newer CA over the existing
 pin-valid authenticated Device channel, stages current plus next during the
 declared overlap, and removes old trust only after the new chain succeeds.
 Redirect, malformed/multiple/non-CA certificate, digest/origin/install mismatch,

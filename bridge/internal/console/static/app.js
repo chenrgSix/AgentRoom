@@ -20,7 +20,7 @@ const elements = Object.fromEntries([
   "pairing-status", "pairing-binding", "pairing-guidance", "pairing-blocked", "pairing-backup",
   "request-enrollment", "start-existing-pairing", "join-copy-result",
   "pairing-modal-backdrop", "close-pairing-modal", "cancel-pairing-modal", "confirm-reenrollment", "pairing-modal-error",
-  "current-server-token",
+  "current-server-token", "current-server-trust",
   "current-reasoning-sharing", "share-reasoning-summaries", "connection-share-reasoning-summaries",
   "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
   "overview-agent-list", "overview-agent-count", "connection-summary", "connection-summary-label",
@@ -515,6 +515,10 @@ function render(state) {
     elements["device-title"].textContent = state.deviceName;
     elements["current-server"].textContent = state.serverUrl;
     elements["current-server-token"].textContent = state.serverTokenConfigured ? "已配置" : "未配置";
+    const trustMode = state.activeServerTrustMode || state.serverTrustMode || "system_ca";
+    elements["current-server-trust"].textContent = trustMode === "private_scoped_ca"
+      ? `Bridge 定向私有 CA · epoch ${state.serverTrustEpoch} · SHA-256 ${state.serverCaDigestPrefix}…`
+      : (trustMode === "system_ca" ? "系统 CA（公开证书默认）" : "叶证书指纹（高级兼容）");
     elements["current-reasoning-sharing"].textContent = state.shareReasoningSummaries ? "已授权（仅公开摘要）" : "未授权（不共享摘要）";
     elements["current-team"].textContent = state.teamId || "等待配对";
     elements["current-device"].textContent = state.deviceId || "等待配对";

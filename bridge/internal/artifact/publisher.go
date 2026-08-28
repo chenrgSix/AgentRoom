@@ -92,7 +92,7 @@ func (e outcomeUnknownError) Error() string {
 
 func NewClient(cfg config.Config, credential pairing.Credential) *Client {
 	return &Client{
-		config: cfg, credential: credential, httpClient: pairing.HTTPClient(cfg),
+		config: cfg, credential: credential, httpClient: pairing.HTTPClientForCredential(cfg, credential),
 	}
 }
 

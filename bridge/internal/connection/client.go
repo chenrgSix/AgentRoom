@@ -158,7 +158,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		header.Set(config.ServerTokenHeader, c.Config.ServerToken)
 	}
 	socket, response, err := websocket.Dial(ctx, endpoint, &websocket.DialOptions{
-		HTTPClient: pairing.HTTPClient(c.Config),
+		HTTPClient: pairing.HTTPClientForCredential(c.Config, c.Credential),
 		HTTPHeader: header,
 	})
 	if err != nil {

@@ -1061,6 +1061,76 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	}
 }
 
+func TestScopedPrivateTrustProjectionIsRedactedAndOriginCannotChange(t *testing.T) {
+	directory := t.TempDir()
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	configuration := config.Config{
+		SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL:     "https://team.example.com", ServerTrustMode: config.TrustSystemCA,
+		DeviceName: "Scoped Bridge", DataDir: dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "Local Codex", Role: "Builder", Adapter: "codex", RuntimeKind: "codex",
+			PresetVersion: config.CurrentPresetVersion, Command: config.CodexPresetCommand(executablePath),
+			Sandbox: "workspace-write", Workspace: directory,
+			EnvAllowlist: []string{"HOME", "PATH", "CODEX_HOME"},
+		}},
+	}
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	credential := pairing.Credential{
+		ServerURL: configuration.ServerURL, DeviceID: "device_scoped123", TeamID: "team_scoped123",
+		OwnerMemberID: "member_scoped123", Token: "scoped-secret",
+	}
+	if err := pairing.Save(dataDir, credential); err != nil {
+		t.Fatal(err)
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "console-token",
+	}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	const fullDigest = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	service.mu.Lock()
+	service.credential.ScopedPrivateTrust = &pairing.ScopedPrivateTrust{
+		ScopedPrivateTrustDescriptor: pairing.ScopedPrivateTrustDescriptor{
+			Mode: "private_scoped_ca", Origin: configuration.ServerURL,
+			InstallationID: "install_1234567890abcdef", TrustEpoch: 4,
+			CACertificateSHA256: fullDigest,
+		},
+		CACertificatePEM: "certificate-must-not-project",
+	}
+	service.applyCredentialTrustViewLocked(*service.credential)
+	service.mu.Unlock()
+
+	state := service.State()
+	if state.ActiveServerTrustMode != "private_scoped_ca" || state.ServerTrustEpoch != 4 ||
+		state.ServerCADigestPrefix != fullDigest[:12] {
+		t.Fatalf("unexpected scoped trust projection: %#v", state)
+	}
+	stateJSON, _ := json.Marshal(state)
+	if bytes.Contains(stateJSON, []byte(fullDigest)) || bytes.Contains(stateJSON, []byte("certificate-must-not-project")) {
+		t.Fatalf("Console state exposed full scoped trust material: %s", stateJSON)
+	}
+
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL: "https://other.example.com", ServerTrustMode: config.TrustSystemCA,
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusConflict || service.State().ServerURL != configuration.ServerURL {
+		t.Fatalf("scoped trust origin change was not rejected: status=%d state=%#v", response.StatusCode, service.State())
+	}
+}
+
 func TestRuntimeSelfTestIsExplicitBoundedAndSafelyProjected(t *testing.T) {
 	directory := t.TempDir()
 	executablePath, err := os.Executable()

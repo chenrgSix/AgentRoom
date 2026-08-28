@@ -88,6 +88,18 @@ func TestRejectsUnsafeOrAmbiguousConfig(t *testing.T) {
 	if err := invalid.Validate(); err == nil {
 		t.Fatal("expected non-loopback HTTP URL to be rejected")
 	}
+	for _, serverURL := range []string{
+		"https://user@team.example.com",
+		"https://team.example.com/api",
+		"https://team.example.com?mode=private",
+		"https://team.example.com#fragment",
+	} {
+		invalid = systemCA
+		invalid.ServerURL = serverURL
+		if err := invalid.Validate(); err == nil {
+			t.Fatalf("expected non-origin Server URL to be rejected: %s", serverURL)
+		}
+	}
 	invalid = valid
 	invalid.Agents = append(invalid.Agents, invalid.Agents[0])
 	if err := invalid.Validate(); err == nil {

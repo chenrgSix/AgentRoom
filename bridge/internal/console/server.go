@@ -143,6 +143,9 @@ type State struct {
 	ServerTokenConfigured   bool                        `json:"serverTokenConfigured"`
 	ServerTrustMode         config.TrustMode            `json:"serverTrustMode,omitempty"`
 	ServerCertificateSHA256 string                      `json:"serverCertificateSha256,omitempty"`
+	ActiveServerTrustMode   string                      `json:"activeServerTrustMode,omitempty"`
+	ServerTrustEpoch        int64                       `json:"serverTrustEpoch,omitempty"`
+	ServerCADigestPrefix    string                      `json:"serverCaDigestPrefix,omitempty"`
 	DeviceName              string                      `json:"deviceName,omitempty"`
 	TeamID                  string                      `json:"teamId,omitempty"`
 	DeviceID                string                      `json:"deviceId,omitempty"`
@@ -283,6 +286,7 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 		}
 		if credential, credentialErr := pairing.Load(loaded.DataDir); credentialErr == nil {
 			service.credential = &credential
+			service.applyCredentialTrustViewLocked(credential)
 			service.state.Paired = true
 			service.state.TeamID = credential.TeamID
 			service.state.DeviceID = credential.DeviceID
@@ -840,6 +844,7 @@ func (s *Service) finishEnrollment(
 	}
 	s.configuration = &configuration
 	s.credential = &credential
+	s.applyCredentialTrustViewLocked(credential)
 	s.state.Configured = true
 	s.state.Paired = true
 	s.state.TeamID = credential.TeamID
@@ -1213,6 +1218,13 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
+	if s.credential.ScopedPrivateTrust != nil &&
+		(candidate.ServerURL != s.credential.ScopedPrivateTrust.Origin ||
+			candidate.ResolvedTrustMode() != config.TrustSystemCA ||
+			candidate.ServerCertificateSHA256 != "") {
+		writeError(response, http.StatusConflict, "Scoped private trust is bound to the paired Central origin; re-pair explicitly to change it")
+		return
+	}
 	if candidate.ServerURL == s.configuration.ServerURL &&
 		candidate.ServerToken == s.configuration.ServerToken &&
 		candidate.ServerTrustMode == s.configuration.ServerTrustMode &&
@@ -1394,6 +1406,12 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 	s.state.ShareReasoningSummaries = configuration.ShareReasoningSummaries
 	s.state.ServerTrustMode = configuration.ResolvedTrustMode()
 	s.state.ServerCertificateSHA256 = configuration.ServerCertificateSHA256
+	s.state.ActiveServerTrustMode = string(configuration.ResolvedTrustMode())
+	s.state.ServerTrustEpoch = 0
+	s.state.ServerCADigestPrefix = ""
+	if s.credential != nil {
+		s.applyCredentialTrustViewLocked(*s.credential)
+	}
 	s.state.DeviceName = configuration.DeviceName
 	s.state.AgentProvisioning = agentProvisioningView(
 		configuration.AgentProvisioning,
@@ -1439,6 +1457,19 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 		})
 	}
 	return nil
+}
+
+func (s *Service) applyCredentialTrustViewLocked(credential pairing.Credential) {
+	if credential.ScopedPrivateTrust == nil {
+		return
+	}
+	s.state.ActiveServerTrustMode = credential.ScopedPrivateTrust.Mode
+	s.state.ServerTrustEpoch = credential.ScopedPrivateTrust.TrustEpoch
+	digest := credential.ScopedPrivateTrust.CACertificateSHA256
+	if len(digest) > 12 {
+		digest = digest[:12]
+	}
+	s.state.ServerCADigestPrefix = digest
 }
 
 func agentProvisioningView(
@@ -1561,7 +1592,10 @@ func (s *Service) diagnosticInputLocked() diagnostics.Input {
 	}
 	return diagnostics.Input{
 		Version: s.state.Version, Configured: s.state.Configured, Paired: s.state.Paired,
-		BridgeRunning: s.state.BridgeRunning,
+		BridgeRunning:         s.state.BridgeRunning,
+		ActiveServerTrustMode: s.state.ActiveServerTrustMode,
+		ServerTrustEpoch:      s.state.ServerTrustEpoch,
+		ServerCADigestPrefix:  s.state.ServerCADigestPrefix,
 		Connection: diagnostics.Connection{
 			State: string(s.state.Connection.State), Attempt: s.state.Connection.Attempt,
 			LastConnectedAt:    s.state.Connection.LastConnectedAt,

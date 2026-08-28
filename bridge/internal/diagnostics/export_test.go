@@ -23,7 +23,9 @@ func TestExportIsBoundedExclusiveAndRemovesSensitiveData(t *testing.T) {
 	}
 	input := Input{
 		Version: "v0.2.0", Configured: true, Paired: true, BridgeRunning: true,
-		Connection: Connection{State: "retrying", LastError: events[0].Message},
+		ActiveServerTrustMode: "private_scoped_ca", ServerTrustEpoch: 7,
+		ServerCADigestPrefix: "0123456789ab",
+		Connection:           Connection{State: "retrying", LastError: events[0].Message},
 		Agents: []Agent{{
 			Kind: "codex", ExecutableReady: true, RuntimeState: "error",
 			LastRuntimeError: "agent_abcdef123456 " + secret,
@@ -71,6 +73,11 @@ func TestExportIsBoundedExclusiveAndRemovesSensitiveData(t *testing.T) {
 		if strings.Contains(text, forbidden) {
 			t.Fatalf("diagnostics contains %q: %s", forbidden, text)
 		}
+	}
+	if !strings.Contains(text, `"activeTrustMode": "private_scoped_ca"`) ||
+		!strings.Contains(text, `"trustEpoch": 7`) ||
+		!strings.Contains(text, `"caDigestPrefix": "0123456789ab"`) {
+		t.Fatalf("diagnostics omitted the bounded trust projection: %s", text)
 	}
 	if strings.Count(text, "connection.retrying") != maxEvents {
 		t.Fatalf("expected %d bounded events", maxEvents)

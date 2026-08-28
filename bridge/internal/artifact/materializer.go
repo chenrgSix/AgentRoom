@@ -81,7 +81,7 @@ func NewMaterializer(
 		}
 	}
 	return &Materializer{
-		config: cfg, credential: credential, httpClient: pairing.HTTPClient(cfg),
+		config: cfg, credential: credential, httpClient: pairing.HTTPClientForCredential(cfg, credential),
 		workspaceByAgentID: workspaces,
 		runLocks:           make(map[string]*materializationRunLock),
 	}

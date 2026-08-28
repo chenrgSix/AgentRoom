@@ -53,6 +53,9 @@ type Input struct {
 	Configured            bool
 	Paired                bool
 	BridgeRunning         bool
+	ActiveServerTrustMode string
+	ServerTrustEpoch      int64
+	ServerCADigestPrefix  string
 	Connection            Connection
 	Agents                []Agent
 	LoginStartupSupported bool
@@ -79,6 +82,9 @@ type status struct {
 	Configured          bool       `json:"configured"`
 	Paired              bool       `json:"paired"`
 	BridgeRunning       bool       `json:"bridgeRunning"`
+	ActiveTrustMode     string     `json:"activeTrustMode,omitempty"`
+	TrustEpoch          int64      `json:"trustEpoch,omitempty"`
+	CADigestPrefix      string     `json:"caDigestPrefix,omitempty"`
 	Connection          Connection `json:"connection"`
 	Agents              []Agent    `json:"agents"`
 	LoginStartupSupport bool       `json:"loginStartupSupported"`
@@ -165,7 +171,9 @@ func Export(directory string, input Input) (Result, error) {
 		}},
 		{"status.json", status{
 			Configured: input.Configured, Paired: input.Paired, BridgeRunning: input.BridgeRunning,
-			Connection: input.Connection, Agents: agents,
+			ActiveTrustMode: Sanitize(input.ActiveServerTrustMode), TrustEpoch: input.ServerTrustEpoch,
+			CADigestPrefix: Sanitize(input.ServerCADigestPrefix),
+			Connection:     input.Connection, Agents: agents,
 			LoginStartupSupport: input.LoginStartupSupported, LoginStartupEnabled: input.LoginStartupEnabled,
 		}},
 		{"events.json", events},

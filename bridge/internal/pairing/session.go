@@ -48,13 +48,15 @@ type SessionLink struct {
 	PairingSessionID string
 	ClaimSecret      string
 	ExpiresAt        time.Time
+	Trust            *ScopedPrivateTrustDescriptor
 }
 
 type SessionClient struct {
-	BridgeVersion string
-	HTTPClient    *http.Client
-	RetryDelay    time.Duration
-	Now           func() time.Time
+	BridgeVersion  string
+	HTTPClient     *http.Client
+	BootstrapTrust func(context.Context, ScopedPrivateTrustDescriptor, time.Time) (ScopedPrivateTrust, error)
+	RetryDelay     time.Duration
+	Now            func() time.Time
 }
 
 func ParseSessionLink(raw string) (SessionLink, error) {
@@ -81,7 +83,7 @@ func ParseSessionLink(raw string) (SessionLink, error) {
 		return SessionLink{}, fmt.Errorf("pairing link scheme is unsupported")
 	}
 	origin, err := url.Parse(serverURL)
-	if err != nil || origin.Host == "" || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" ||
+	if err != nil || origin.Host == "" || origin.User != nil || origin.Path != "" || origin.RawQuery != "" || origin.Fragment != "" ||
 		(origin.Scheme != "https" && !(origin.Scheme == "http" && isLoopbackHost(origin.Hostname()))) {
 		return SessionLink{}, fmt.Errorf("pairing link origin must use HTTPS except on loopback")
 	}
@@ -94,16 +96,48 @@ func ParseSessionLink(raw string) (SessionLink, error) {
 		return SessionLink{}, fmt.Errorf("pairing link expiry is invalid")
 	}
 	fragment, err := url.ParseQuery(parsed.Fragment)
-	if err != nil || len(fragment) != 1 {
+	if err != nil {
 		return SessionLink{}, fmt.Errorf("pairing link claim proof is invalid")
 	}
 	claimSecret := fragment.Get("claimSecret")
 	if !validPairingSecret(claimSecret) {
 		return SessionLink{}, fmt.Errorf("pairing link claim proof is invalid")
 	}
+	var trust *ScopedPrivateTrustDescriptor
+	if hasExactQueryKeys(fragment, "claimSecret") {
+		// Public/system trust carries no override.
+	} else if hasExactQueryKeys(
+		fragment,
+		"claimSecret",
+		"trustMode",
+		"trustOrigin",
+		"installationId",
+		"trustEpoch",
+		"caCertificateSha256",
+	) {
+		epoch, epochErr := canonicalTrustEpoch(fragment.Get("trustEpoch"))
+		descriptor := ScopedPrivateTrustDescriptor{
+			Mode:                fragment.Get("trustMode"),
+			Origin:              fragment.Get("trustOrigin"),
+			InstallationID:      fragment.Get("installationId"),
+			TrustEpoch:          epoch,
+			CACertificateSHA256: fragment.Get("caCertificateSha256"),
+		}
+		trustOrigin, trustErr := exactHTTPSOrigin(descriptor.Origin)
+		serverOrigin, serverErr := exactHTTPSOrigin(serverURL)
+		if epochErr != nil || trustErr != nil || serverErr != nil ||
+			descriptor.Mode != "private_scoped_ca" ||
+			!installationIDPattern.MatchString(descriptor.InstallationID) ||
+			!isLowerHexDigest(descriptor.CACertificateSHA256) || trustOrigin != serverOrigin {
+			return SessionLink{}, fmt.Errorf("pairing link private trust is invalid")
+		}
+		trust = &descriptor
+	} else {
+		return SessionLink{}, fmt.Errorf("pairing link claim proof is invalid")
+	}
 	return SessionLink{
 		ServerURL: serverURL, PairingSessionID: pairingSessionID,
-		ClaimSecret: claimSecret, ExpiresAt: expiresAt,
+		ClaimSecret: claimSecret, ExpiresAt: expiresAt, Trust: trust,
 	}, nil
 }
 
@@ -141,6 +175,25 @@ func (client SessionClient) Pair(
 	if !link.ExpiresAt.IsZero() && !now().Before(link.ExpiresAt) {
 		return Credential{}, fmt.Errorf("pairing link has expired")
 	}
+	activeClient := client
+	var stagedTrust *ScopedPrivateTrust
+	if link.Trust != nil {
+		bootstrap := client.BootstrapTrust
+		if bootstrap == nil {
+			bootstrap = BootstrapScopedPrivateTrust
+		}
+		staged, bootstrapErr := bootstrap(ctx, *link.Trust, now())
+		if bootstrapErr != nil {
+			return Credential{}, fmt.Errorf("bootstrap scoped private trust: %w", bootstrapErr)
+		}
+		verifiedClient, clientErr := newScopedHTTPClient(link.ServerURL, staged, now())
+		if clientErr != nil {
+			return Credential{}, fmt.Errorf("activate scoped private trust: %w", clientErr)
+		}
+		verifiedClient.Timeout = 30 * time.Second
+		activeClient.HTTPClient = verifiedClient
+		stagedTrust = &staged
+	}
 	pollSecret, err := randomPairingValue(32)
 	if err != nil {
 		return Credential{}, err
@@ -164,10 +217,20 @@ func (client SessionClient) Pair(
 			DisplayName: cfg.DeviceName, Platform: platform, BridgeVersion: version,
 		},
 	}
+	supportsScopedPrivateTrust := true
+	claim.Device.SupportsScopedPrivateTrust = &supportsScopedPrivateTrust
 	endpoint := strings.TrimRight(cfg.ServerURL, "/") + "/api/device-pairing-session-claims"
 	if linkValue != "" {
 		claim.PairingSessionID = &link.PairingSessionID
 		claim.ClaimSecret = &link.ClaimSecret
+		if link.Trust != nil {
+			claim.Trust = &pairingcontracts.DevicePairingSessionClaimRequestTrust{
+				Mode:   pairingcontracts.Mode(link.Trust.Mode),
+				Origin: link.Trust.Origin, InstallationID: link.Trust.InstallationID,
+				TrustEpoch:          link.Trust.TrustEpoch,
+				CACertificateSha256: link.Trust.CACertificateSHA256,
+			}
+		}
 		endpoint = strings.TrimRight(cfg.ServerURL, "/") + "/api/device-pairing-sessions/" +
 			url.PathEscape(link.PairingSessionID) + "/claim"
 	} else {
@@ -178,7 +241,7 @@ func (client SessionClient) Pair(
 	if claimDeadline.IsZero() {
 		claimDeadline = now().Add(10 * time.Minute)
 	}
-	if err := client.postRecoverable(ctx, cfg, endpoint, claim, &claimed, claimDeadline); err != nil {
+	if err := activeClient.postRecoverable(ctx, cfg, endpoint, claim, &claimed, claimDeadline); err != nil {
 		return Credential{}, fmt.Errorf("claim Device pairing session: %w", err)
 	}
 	if !pairingSessionIDPattern.MatchString(claimed.PairingSessionID) ||
@@ -211,7 +274,7 @@ func (client SessionClient) Pair(
 		var projection pairingcontracts.DevicePairingSessionPollProjection
 		pollEndpoint := strings.TrimRight(cfg.ServerURL, "/") + "/api/device-pairing-sessions/" +
 			url.PathEscape(claimed.PairingSessionID) + "/poll"
-		if err := client.postRecoverable(ctx, cfg, pollEndpoint, poll, &projection, claimed.ExpiresAt); err != nil {
+		if err := activeClient.postRecoverable(ctx, cfg, pollEndpoint, poll, &projection, claimed.ExpiresAt); err != nil {
 			return Credential{}, fmt.Errorf("poll Device pairing session: %w", err)
 		}
 		if projection.PairingSessionID != claimed.PairingSessionID || projection.PairingAttemptID != attemptID {
@@ -229,6 +292,7 @@ func (client SessionClient) Pair(
 			return Credential{
 				ServerURL: cfg.ServerURL, DeviceID: *projection.DeviceID, TeamID: *projection.TeamID,
 				OwnerMemberID: *projection.OwnerMemberID, Token: pollSecret,
+				ScopedPrivateTrust: stagedTrust,
 			}, nil
 		case pairingcontracts.TentacledClaimed:
 			if projection.VerificationPhrase == nil || *projection.VerificationPhrase != claimed.VerificationPhrase ||

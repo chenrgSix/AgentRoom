@@ -448,8 +448,9 @@ func (c Config) Validate() error {
 		return fmt.Errorf("schemaVersion must be %d", CurrentSchemaVersion)
 	}
 	parsed, err := url.Parse(c.ServerURL)
-	if err != nil || parsed.Host == "" {
-		return fmt.Errorf("serverUrl must be an absolute URL")
+	if err != nil || parsed.Host == "" || parsed.User != nil || parsed.Path != "" ||
+		parsed.RawQuery != "" || parsed.Fragment != "" {
+		return fmt.Errorf("serverUrl must be one exact origin")
 	}
 	if parsed.Scheme != "https" && !(parsed.Scheme == "http" && isLoopback(parsed.Hostname())) {
 		return fmt.Errorf("serverUrl must use HTTPS except on loopback")

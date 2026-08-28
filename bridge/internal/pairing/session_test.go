@@ -161,7 +161,9 @@ func TestSessionClientRecoversClaimAndPollResponseLossWithoutChangingProof(t *te
 		t.Fatalf("unexpected claim fields: %v", got)
 	}
 	device, ok := claimBodies[0]["device"].(map[string]any)
-	if !ok || !reflect.DeepEqual(sortedKeys(device), []string{"bridgeVersion", "displayName", "platform"}) {
+	if !ok || !reflect.DeepEqual(sortedKeys(device), []string{
+		"bridgeVersion", "displayName", "platform", "supportsScopedPrivateTrust",
+	}) || device["supportsScopedPrivateTrust"] != true {
 		t.Fatalf("claim Device metadata is not closed: %#v", claimBodies[0]["device"])
 	}
 }
@@ -211,6 +213,101 @@ func TestSessionClientClaimsWithManualShortCode(t *testing.T) {
 		"device", "operationId", "pairingAttemptId", "pollSecret", "shortCode",
 	}) {
 		t.Fatalf("manual claim leaked or omitted fields: %v", got)
+	}
+}
+
+func TestSessionClientBootstrapsPrivateTrustBeforeSendingClaimProof(t *testing.T) {
+	claimSecret := strings.Repeat("p", 43)
+	expiresAt := time.Now().UTC().Add(time.Minute).Truncate(time.Second)
+	var caPEM []byte
+	var claimCount int
+	var server privateTLSServer
+	server = newPrivateTLSServer(t, http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case privateCAPath:
+			if request.Header.Get("authorization") != "" || request.Header.Get(config.ServerTokenHeader) != "" {
+				t.Fatal("private bootstrap sent a credential")
+			}
+			response.Header().Set("content-type", "application/x-pem-file")
+			_, _ = response.Write(caPEM)
+		case "/api/health/ready":
+			response.WriteHeader(http.StatusOK)
+		case "/api/device-pairing-sessions/pairing_private123/claim":
+			claimCount++
+			var body map[string]any
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			if body["claimSecret"] != claimSecret {
+				t.Fatal("private claim did not carry the exact link proof after TLS verification")
+			}
+			trustBody, ok := body["trust"].(map[string]any)
+			if !ok || trustBody["origin"] != server.Server.URL ||
+				trustBody["installationId"] != "install_0123456789abcdefghijklmn" ||
+				trustBody["caCertificateSha256"] != server.Digest || trustBody["trustEpoch"] != float64(1) {
+				t.Fatalf("private trust echo is invalid: %#v", body["trust"])
+			}
+			device := body["device"].(map[string]any)
+			if device["supportsScopedPrivateTrust"] != true {
+				t.Fatal("private claim omitted Bridge scoped-trust capability")
+			}
+			writePairingJSON(t, response, map[string]any{
+				"pairingSessionId": "pairing_private123", "pairingAttemptId": body["pairingAttemptId"],
+				"state": "claimed", "verificationPhrase": "CEDAR-LAKE-21",
+				"expiresAt": expiresAt.Format(time.RFC3339), "pollIntervalMs": 500,
+			})
+		case "/api/device-pairing-sessions/pairing_private123/poll":
+			var body map[string]any
+			if err := json.NewDecoder(request.Body).Decode(&body); err != nil {
+				t.Fatal(err)
+			}
+			writePairingJSON(t, response, map[string]any{
+				"pairingSessionId": "pairing_private123", "pairingAttemptId": body["pairingAttemptId"],
+				"state": "consumed", "credentialSource": "poll_secret",
+				"deviceId": "device_private123", "teamId": "team_private123",
+				"ownerMemberId": "member_private123",
+			})
+		default:
+			http.NotFound(response, request)
+		}
+	}))
+	caPEM = server.CAPEM
+	fragment := url.Values{
+		"claimSecret":         {claimSecret},
+		"trustMode":           {"private_scoped_ca"},
+		"trustOrigin":         {server.Server.URL},
+		"installationId":      {"install_0123456789abcdefghijklmn"},
+		"trustEpoch":          {"1"},
+		"caCertificateSha256": {server.Digest},
+	}
+	link := "agentroom://pair-device?" + url.Values{
+		"origin": {server.Server.URL}, "pairingSessionId": {"pairing_private123"},
+		"expiresAt": {expiresAt.Format(time.RFC3339)},
+	}.Encode() + "#" + fragment.Encode()
+	credential, err := (SessionClient{
+		BridgeVersion: "v0.4.0-qa028.1", RetryDelay: time.Millisecond,
+	}).Pair(context.Background(), validPairingConfig(server.Server.URL), SessionInput{Link: link}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if claimCount != 1 || credential.ScopedPrivateTrust == nil ||
+		credential.ScopedPrivateTrust.CACertificateSHA256 != server.Digest {
+		t.Fatalf("private trust was not installed only after consumption: %#v", credential)
+	}
+
+	wrongFragment := fragment
+	wrongFragment.Set("caCertificateSha256", strings.Repeat("b", 64))
+	wrongLink := "agentroom://pair-device?" + url.Values{
+		"origin": {server.Server.URL}, "pairingSessionId": {"pairing_private124"},
+		"expiresAt": {expiresAt.Format(time.RFC3339)},
+	}.Encode() + "#" + wrongFragment.Encode()
+	if _, err := (SessionClient{BridgeVersion: "v0.4.0-qa028.1"}).Pair(
+		context.Background(), validPairingConfig(server.Server.URL), SessionInput{Link: wrongLink}, nil,
+	); err == nil || !strings.Contains(err.Error(), "digest mismatch") {
+		t.Fatalf("expected private digest failure before claim, got %v", err)
+	}
+	if claimCount != 1 {
+		t.Fatal("digest mismatch sent a claim proof")
 	}
 }
 
