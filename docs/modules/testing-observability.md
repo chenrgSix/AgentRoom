@@ -158,6 +158,12 @@ cancel-all, Reviewer same-Wave contribution and finalizer preference,
 deterministic `wave_result` retry, participant-ordered context, and the three
 durable recovery cut points.
 
+Transport-limit regressions service both sides of the WebSocket close handshake
+before asserting client termination. Waiting only for an upgraded HTTP request
+context makes cleanup depend on runner scheduling and can fail after the
+greater-than-32-KiB behavior has already passed; that timing is not protocol
+evidence.
+
 The Device-onboarding release gate additionally covers clean local and direct-
 HTTPS installation, public-CA default without silent fallback, explicit
 origin-scoped private trust without OS CA mutation, installer reentry,

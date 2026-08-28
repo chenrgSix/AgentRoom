@@ -460,7 +460,9 @@ func TestClientAcceptsContractValidRunAboveWebSocketLibraryDefault(t *testing.T)
 			return
 		}
 		accepted <- message
-		<-request.Context().Done()
+		// Service the client's close handshake so shutdown is synchronized with
+		// the WebSocket protocol instead of the HTTP request-context scheduler.
+		_, _, _ = socket.Read(request.Context())
 	}))
 	defer server.Close()
 
