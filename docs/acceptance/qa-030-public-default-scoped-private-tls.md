@@ -106,7 +106,10 @@ cannot be promoted.
 
 A later [sanitized physical observation](evidence/qa-030-20260828-partial.md)
 confirms that this exact private-scoped package has now consumed one Windows
-amd64 pairing session and completed three real cross-host Codex Runs. It remains
-partial because the Device currently publishes only one managed Agent and the
-offline queue/reconnect observation plus the human no-OS-CA/no-bypass
-attestations have not been captured.
+amd64 pairing session, published two managed Agents, passed the explicit Runtime
+self-test and local installer digest check, and completed an exact queued Run
+after the same Device reconnected with one reply. It remains partial because
+the packaged Server exposed a terminal historical Delivery as pending; the
+`RUN-013` fix is not yet in an exact physical candidate, and the safe Codex
+version plus final human no-OS-CA/no-bypass attestations are not yet in one
+schema-v2 record.

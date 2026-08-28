@@ -182,8 +182,10 @@ machine B's OS trust store was not changed for the run. No code change or local
 simulation can produce those physical facts.
 
 The later [packaged physical observation](evidence/qa-030-20260828-partial.md)
-adds a consumed private-scoped Windows pairing and three accepted, single-reply
-Codex Runs from the exact `v0.4.0-qa030.1` package. It does not change this
-`BLOCKED` state: a second managed Agent, explicit self-test evidence, one
-offline queued/reconnect Run, package-local verification, and the human
-no-OS-CA/no-bypass attestations are still missing.
+now adds one consumed private-scoped Windows pairing, two ready Agents, explicit
+Runtime self-test and local installer digest observations, three online Runs,
+and one exact offline queued/same-Device reconnect Run with a single reply from
+the `v0.4.0-qa030.1` package. It does not change this `BLOCKED` state: `RUN-013`
+must ship in an exact physical candidate whose final metrics drain, and the safe
+Codex version plus human no-OS-CA/no-bypass facts must enter one reviewed
+schema-v2 record.
