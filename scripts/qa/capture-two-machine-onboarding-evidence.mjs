@@ -100,6 +100,14 @@ function timestamp(value, label) {
   return normalized;
 }
 
+function normalizedBridgeVersion(value) {
+  const normalized = safeText(value, "bridgeVersion", 80).replace(/^v/u, "");
+  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/u.test(normalized)) {
+    fail("bridgeVersion must be a semantic version");
+  }
+  return normalized;
+}
+
 function validateInput(input) {
   exactKeys(input, inputKeys, "input");
   exactKeys(input.attestations, attestationKeys, "attestations");
@@ -114,9 +122,10 @@ function validateInput(input) {
     fail("bridgeArchiveSha256 must be one SHA-256 digest");
   }
   for (const field of [
-    "machineA", "machineB", "bridgeVersion", "codexVersion",
+    "machineA", "machineB", "codexVersion",
     "httpsVerificationMethod"
   ]) safeText(input[field], field);
+  normalizedBridgeVersion(input.bridgeVersion);
   const verificationMethods = {
     public_ca: "public system CA",
     private_scoped_ca: "Bridge exact-origin private CA"
@@ -202,6 +211,50 @@ function assertDatabaseScope(database, input) {
     SELECT count(*) AS count FROM devices WHERE team_id = ?
   `).get(input.teamId);
   if (devices.count !== 1) fail("acceptance Team must contain exactly one Device");
+  const pairings = database.prepare(`
+    SELECT bridge_version, device_platform, credential_id, consumed_at,
+           trust_mode, trust_origin, trust_installation_id, trust_epoch,
+           trust_ca_sha256, device_supports_scoped_private_trust
+    FROM device_pairing_sessions
+    WHERE team_id = ? AND device_id = ? AND state = 'consumed'
+  `).all(input.teamId, input.deviceId);
+  if (pairings.length !== 1) {
+    fail("Device must have exactly one consumed pairing session");
+  }
+  const pairing = pairings[0];
+  if (
+    normalizedBridgeVersion(pairing.bridge_version) !==
+      normalizedBridgeVersion(input.bridgeVersion) ||
+    typeof pairing.device_platform !== "string" || !pairing.device_platform ||
+    typeof pairing.credential_id !== "string" || !pairing.credential_id ||
+    typeof pairing.consumed_at !== "string" || !pairing.consumed_at
+  ) {
+    fail("consumed pairing identity or Bridge version does not match");
+  }
+  const trustFields = [
+    pairing.trust_mode,
+    pairing.trust_origin,
+    pairing.trust_installation_id,
+    pairing.trust_epoch,
+    pairing.trust_ca_sha256
+  ];
+  if (input.tlsProfile === "public_ca") {
+    if (!trustFields.every((value) => value === null)) {
+      fail("consumed pairing does not match public_ca");
+    }
+  } else if (
+    pairing.trust_mode !== "private_scoped_ca" ||
+    typeof pairing.trust_origin !== "string" ||
+    !pairing.trust_origin.startsWith("https://") ||
+    typeof pairing.trust_installation_id !== "string" ||
+    !/^install_[A-Za-z0-9_-]{8,128}$/u.test(pairing.trust_installation_id) ||
+    !Number.isInteger(pairing.trust_epoch) || pairing.trust_epoch < 1 ||
+    typeof pairing.trust_ca_sha256 !== "string" ||
+    !/^[0-9a-f]{64}$/u.test(pairing.trust_ca_sha256) ||
+    pairing.device_supports_scoped_private_trust !== 1
+  ) {
+    fail("consumed pairing does not prove private_scoped_ca capability");
+  }
   const agents = database.prepare(`
     SELECT count(*) AS count
     FROM agents
@@ -225,6 +278,10 @@ function assertDatabaseScope(database, input) {
       /[\\/]/u.test(target.workspace_alias)) {
     fail("target Agent does not have a path-free Workspace projection");
   }
+  return {
+    state: "consumed",
+    tlsProfile: input.tlsProfile
+  };
 }
 
 function inspectRun(database, input, kind) {
@@ -281,7 +338,7 @@ function inspectRun(database, input, kind) {
   };
 }
 
-function render(input, metrics, online, reconnect) {
+function render(input, metrics, pairing, online, reconnect) {
   const metricLines = Object.entries(metrics).map(([name, value]) =>
     `- \`${name}\`: ${value}`
   ).join("\n");
@@ -303,6 +360,8 @@ two sanitized host descriptions identify different physical machines.
 - Pairing: installed desktop deep link; matching phrase; no copied Server Token
   or Device credential; no CA installed into the client OS; no application TLS
   verification bypass
+- Database pairing proof: exactly one \`${pairing.state}\` session; Device,
+  Team, Bridge version and \`${pairing.tlsProfile}\` profile matched
 - Workspace projection: path-free
 - Online Run/trace: \`${online.runId}\` / \`${online.traceId}\`
 - Online persisted states: ${online.states.map((state) => `\`${state}\``).join(" → ")}
@@ -330,10 +389,10 @@ export async function captureEvidence({ inputPath, databasePath, metricsPath, ou
   const database = new Database(databasePath, { readonly: true, fileMustExist: true });
   let output;
   try {
-    assertDatabaseScope(database, input);
+    const pairing = assertDatabaseScope(database, input);
     const online = inspectRun(database, input, "online");
     const reconnect = inspectRun(database, input, "reconnect");
-    output = render(input, metrics, online, reconnect);
+    output = render(input, metrics, pairing, online, reconnect);
   } finally {
     database.close();
   }

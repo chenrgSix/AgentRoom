@@ -26,6 +26,14 @@ function seed(database) {
     CREATE TABLE devices (
       device_id TEXT PRIMARY KEY, team_id TEXT NOT NULL, status TEXT NOT NULL
     );
+    CREATE TABLE device_pairing_sessions (
+      pairing_session_id TEXT PRIMARY KEY, team_id TEXT NOT NULL,
+      state TEXT NOT NULL, device_id TEXT, device_platform TEXT,
+      bridge_version TEXT, credential_id TEXT, consumed_at TEXT,
+      trust_mode TEXT, trust_origin TEXT, trust_installation_id TEXT,
+      trust_epoch INTEGER, trust_ca_sha256 TEXT,
+      device_supports_scoped_private_trust INTEGER
+    );
     CREATE TABLE agents (
       agent_id TEXT PRIMARY KEY, team_id TEXT NOT NULL, device_id TEXT NOT NULL,
       integration_mode TEXT NOT NULL, enabled INTEGER NOT NULL, presence TEXT NOT NULL,
@@ -52,6 +60,14 @@ function seed(database) {
   database.prepare("INSERT INTO rooms VALUES (?, ?)").run(ids.roomId, ids.teamId);
   database.prepare("INSERT INTO devices VALUES (?, ?, 'active')")
     .run(ids.deviceId, ids.teamId);
+  database.prepare(`
+    INSERT INTO device_pairing_sessions VALUES (
+      'pairing_qa002test0001', ?, 'consumed', ?, 'windows-amd64',
+      '0.4.0-rc.1', 'credential_qa002test0001', '2026-08-28T10:00:30.000Z',
+      'private_scoped_ca', 'https://qa.example.test',
+      'install_qa002test0001', 1, ?, 1
+    )
+  `).run(ids.teamId, ids.deviceId, "e".repeat(64));
   const insertAgent = database.prepare(`
     INSERT INTO agents VALUES (?, ?, ?, 'managed', 1, 'ready', ?, ?)
   `);
@@ -183,6 +199,13 @@ test("physical evidence capture accepts the public system-CA profile", async () 
     httpsVerificationMethod: "public system CA"
   });
   delete source.secondAgentId;
+  const database = new Database(files.databasePath);
+  database.prepare(`
+    UPDATE device_pairing_sessions
+    SET trust_mode = NULL, trust_origin = NULL, trust_installation_id = NULL,
+        trust_epoch = NULL, trust_ca_sha256 = NULL
+  `).run();
+  database.close();
   await writeFile(files.inputPath, JSON.stringify(source));
 
   const output = await captureEvidence({
@@ -193,6 +216,7 @@ test("physical evidence capture accepts the public system-CA profile", async () 
   });
 
   assert.match(output, /`public_ca` \/ public system CA/u);
+  assert.match(output, /exactly one `consumed` session/u);
 });
 
 test("the runbook schema-v2 sample stays structurally aligned with the verifier", async () => {
@@ -273,6 +297,60 @@ test("physical evidence capture rejects stale or inconsistent TLS evidence", asy
       outputPath: files.outputPath
     }), new RegExp(`attestation ${attestation} must be true`, "u"));
   }
+});
+
+test("physical evidence capture binds TLS claims to one consumed pairing", async () => {
+  const files = await fixture();
+  const source = input();
+  delete source.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(source));
+  const capture = () => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  });
+
+  const database = new Database(files.databasePath);
+  database.prepare("UPDATE device_pairing_sessions SET bridge_version = '0.4.0-other'").run();
+  database.close();
+  await assert.rejects(capture, /pairing identity or Bridge version does not match/u);
+
+  const versionFixed = new Database(files.databasePath);
+  versionFixed.prepare(`
+    UPDATE device_pairing_sessions
+    SET bridge_version = '0.4.0-rc.1', device_supports_scoped_private_trust = 0
+  `).run();
+  versionFixed.close();
+  await assert.rejects(capture, /does not prove private_scoped_ca capability/u);
+
+  const capabilityFixed = new Database(files.databasePath);
+  capabilityFixed.prepare(`
+    UPDATE device_pairing_sessions SET device_supports_scoped_private_trust = 1
+  `).run();
+  capabilityFixed.prepare(`
+    INSERT INTO device_pairing_sessions
+    SELECT 'pairing_qa002test0002', team_id, state, device_id, device_platform,
+           bridge_version, credential_id, consumed_at, trust_mode, trust_origin,
+           trust_installation_id, trust_epoch, trust_ca_sha256,
+           device_supports_scoped_private_trust
+    FROM device_pairing_sessions WHERE pairing_session_id = 'pairing_qa002test0001'
+  `).run();
+  capabilityFixed.close();
+  await assert.rejects(capture, /exactly one consumed pairing session/u);
+
+  const publicClaim = input({
+    tlsProfile: "public_ca",
+    httpsVerificationMethod: "public system CA"
+  });
+  delete publicClaim.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(publicClaim));
+  const duplicateRemoved = new Database(files.databasePath);
+  duplicateRemoved.prepare(`
+    DELETE FROM device_pairing_sessions WHERE pairing_session_id = 'pairing_qa002test0002'
+  `).run();
+  duplicateRemoved.close();
+  await assert.rejects(capture, /consumed pairing does not match public_ca/u);
 });
 
 test("physical evidence capture rejects private host details and false reconnect scope", async () => {

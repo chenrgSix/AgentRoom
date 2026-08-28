@@ -101,7 +101,12 @@ file.
 The verifier accepts schema version 2 only. It rejects the legacy v1 shape,
 `manual_ca`, a TLS profile/verification-method mismatch, either missing
 no-manual-CA assertion, and any false assertion before reading evidence into a
-PASS record.
+PASS record. It also requires exactly one consumed pairing session for the
+supplied Team and Device, matches the Bridge self-reported version, and proves
+the selected public or private-scoped TLS profile from persisted pairing facts.
+Private-scoped evidence additionally requires the complete stored descriptor
+and the claiming Bridge's scoped-trust capability, without rendering the
+origin, installation identity, epoch, or CA digest.
 
 ```json
 {
@@ -159,6 +164,10 @@ The verifier fails closed unless:
 
 - the Team has exactly one active Device with at least two enabled managed
   Agents and the selected Agent belongs to that Device;
+- exactly one consumed pairing session binds that Team and Device to the
+  supplied Bridge version and TLS profile; private-scoped evidence also proves
+  the complete stored descriptor and Bridge capability while public evidence
+  proves no private descriptor was attached;
 - both Runs, their trigger Messages, Deliveries and contiguous events use the
   exact supplied Room, Agent, Device and trace identities;
 - each Delivery was accepted, each Run completed, and each trace produced
