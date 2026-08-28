@@ -669,7 +669,8 @@
         },
         "bridgeVersion": {
           "type": "string",
-          "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+          "description": "Semantic Bridge build version. New Bridges omit the v prefix; the optional prefix is accepted only for rolling compatibility with already released Bridges.",
+          "pattern": "^v?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$"
         },
         "supportsAgentProvisioning": {
           "type": "boolean",

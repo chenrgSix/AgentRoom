@@ -186,6 +186,6 @@ now adds one consumed private-scoped Windows pairing, two ready Agents, explicit
 Runtime self-test and local installer digest observations, three online Runs,
 and one exact offline queued/same-Device reconnect Run with a single reply from
 the `v0.4.0-qa030.1` package. It does not change this `BLOCKED` state: `RUN-013`
-must ship in an exact physical candidate whose final metrics drain, and the safe
-Codex version plus human no-OS-CA/no-bypass facts must enter one reviewed
-schema-v2 record.
+and `CON-015` must ship in an exact physical candidate whose current version is
+authenticated and whose final metrics drain, and the safe Codex version plus
+human no-OS-CA/no-bypass facts must enter one reviewed schema-v3 record.

@@ -192,7 +192,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		Timestamp:       time.Now().UTC(),
 		Type:            contracts.BridgeHello,
 		Payload: contracts.BridgeHelloPayload{
-			BridgeVersion:             c.BridgeVersion,
+			BridgeVersion:             pairing.NormalizedBridgeVersion(c.BridgeVersion),
 			ConnectionEpoch:           epoch,
 			DeviceID:                  c.Credential.DeviceID,
 			SupportsAgentProvisioning: &supportsAgentProvisioning,

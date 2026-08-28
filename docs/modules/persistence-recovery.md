@@ -270,6 +270,15 @@ backups atomically without overwrite, streams restore hashes, stages a new
 database filename, removes only a rejected new target, and never changes the
 selected live database in place.
 
+Migration 0048 adds one current `device_bridge_observations` row per Device.
+It records only the authenticated connection epoch, canonical semantic Bridge
+version, and observation time. The original pairing-session version remains
+immutable historical identity. Hello Presence and the version observation are
+written in one immediate transaction; stale epochs and a version change within
+one epoch fail closed, while a newer epoch supports an in-place package upgrade
+without replacing the Device credential. Ordinary heartbeats update Presence
+but never rewrite this build observation.
+
 ## Verification and Tasks
 
 Tests cover constraints, migration rollback behavior, Wave backfill,

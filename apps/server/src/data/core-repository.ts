@@ -120,6 +120,13 @@ export interface DevicePresenceRecord {
   lastHeartbeatAt: string;
 }
 
+export interface DeviceBridgeObservationRecord {
+  deviceId: string;
+  connectionEpoch: number;
+  bridgeVersion: string;
+  observedAt: string;
+}
+
 export class CoreRepository {
   private readonly messages: MessageRepository;
   private readonly agentsAndDevices: AgentDeviceRepository;
@@ -334,6 +341,19 @@ export class CoreRepository {
 
   public getDevicePresence(deviceId: string): DevicePresenceRecord | undefined {
     return this.agentsAndDevices.getPresence(deviceId);
+  }
+
+  public recordDeviceHello(
+    presence: DevicePresenceRecord,
+    observation: DeviceBridgeObservationRecord
+  ): void {
+    this.agentsAndDevices.recordHello(presence, observation);
+  }
+
+  public getDeviceBridgeObservation(
+    deviceId: string
+  ): DeviceBridgeObservationRecord | undefined {
+    return this.agentsAndDevices.getBridgeObservation(deviceId);
   }
 
   public updateAgentPresence(

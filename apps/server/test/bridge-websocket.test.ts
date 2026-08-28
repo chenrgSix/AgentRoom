@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
+import Database from "better-sqlite3";
 
 import { createServerApp } from "../src/app.js";
 import { isBridgeTraceId } from "../src/http/bridge-socket-routes.js";
@@ -23,7 +24,9 @@ interface BridgeFixture {
   app: Awaited<ReturnType<typeof createServerApp>>;
   socket: BridgeSocket;
   authorization: { authorization: string };
+  databasePath: string;
   deviceId: string;
+  deviceToken: string;
   ownerMemberId: string;
   teamId: string;
   roomId: string;
@@ -125,8 +128,9 @@ async function createFixture(
   supportsAgentProvisioning = true
 ): Promise<BridgeFixture> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "agent-room-bridge-ws-"));
+  const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({
-    databasePath: path.join(directory, "server.sqlite"),
+    databasePath,
     clock: () => now,
     ...(loggerInstance ? { loggerInstance } : {})
   });
@@ -178,7 +182,7 @@ async function createFixture(
     }
   });
   send(socket, envelope("bridge.hello", {
-    bridgeVersion: "test",
+    bridgeVersion: "v0.4.0-qa030.1",
     connectionEpoch: 1,
     deviceId: paired.device.deviceId,
     supportsAgentProvisioning,
@@ -236,7 +240,9 @@ async function createFixture(
     app,
     socket,
     authorization,
+    databasePath,
     deviceId: paired.device.deviceId,
+    deviceToken: paired.credential.token,
     ownerMemberId: paired.device.ownerMemberId,
     teamId: paired.device.teamId,
     roomId,
@@ -301,6 +307,66 @@ test("Bridge trace validation accepts every contract-valid base64url prefix", ()
   assert.equal(isBridgeTraceId("trace__1K4Z6J7Y8N9P0Q1R2S3T4V5W6"), true);
   assert.equal(isBridgeTraceId("trace_/1K4Z6J7Y8N9P0Q1R2S3T4V5W6"), false);
   assert.equal(isBridgeTraceId("trace_short"), false);
+});
+
+test("authenticated hello records the current Bridge version without replacing pairing identity", async () => {
+  const fixture = await createFixture();
+  try {
+    const readObservation = (): {
+      connection_epoch: number;
+      bridge_version: string;
+    } => {
+      const database = new Database(fixture.databasePath, { readonly: true });
+      try {
+        return database.prepare(`
+          SELECT connection_epoch, bridge_version
+          FROM device_bridge_observations WHERE device_id = ?
+        `).get(fixture.deviceId) as {
+          connection_epoch: number;
+          bridge_version: string;
+        };
+      } finally {
+        database.close();
+      }
+    };
+    assert.deepEqual(readObservation(), {
+      connection_epoch: 1,
+      bridge_version: "0.4.0-qa030.1"
+    });
+
+    await sendAndFlush(fixture.socket, envelope("bridge.heartbeat", {
+      connectionEpoch: 1,
+      deviceId: fixture.deviceId
+    }));
+    assert.deepEqual(readObservation(), {
+      connection_epoch: 1,
+      bridge_version: "0.4.0-qa030.1"
+    });
+
+    const invalidSocket = await fixture.app.injectWS("/ws/bridge", {
+      headers: {
+        authorization: `Bearer ${fixture.deviceToken}`,
+        host: "127.0.0.1"
+      }
+    });
+    const closed = nextClose(invalidSocket);
+    send(invalidSocket, envelope("bridge.hello", {
+      bridgeVersion: "not-a-version",
+      connectionEpoch: 2,
+      deviceId: fixture.deviceId,
+      supportedProtocolVersions: ["1.0"]
+    }));
+    assert.deepEqual(await closed, {
+      code: 4_008,
+      reason: "Bridge message rejected: invalid_hello"
+    });
+    assert.deepEqual(readObservation(), {
+      connection_epoch: 1,
+      bridge_version: "0.4.0-qa030.1"
+    });
+  } finally {
+    await closeFixture(fixture);
+  }
 });
 
 test("central provisioning keeps the code transient and converges after Bridge publication", async () => {

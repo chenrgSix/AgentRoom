@@ -11,6 +11,7 @@ const inputKeys = new Set([
   "serverCommit",
   "machineA",
   "machineB",
+  "pairingBridgeVersion",
   "bridgeVersion",
   "bridgeArchiveSha256",
   "codexVersion",
@@ -100,18 +101,24 @@ function timestamp(value, label) {
   return normalized;
 }
 
-function normalizedBridgeVersion(value) {
-  const normalized = safeText(value, "bridgeVersion", 80).replace(/^v/u, "");
-  if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/u.test(normalized)) {
-    fail("bridgeVersion must be a semantic version");
+function normalizedBridgeVersion(value, label) {
+  const normalized = safeText(value, label, 80).replace(/^v/u, "");
+  if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/u.test(normalized)) {
+    fail(`${label} must be a semantic version`);
   }
+  return normalized;
+}
+
+function canonicalPersistedBridgeVersion(value, label) {
+  const normalized = normalizedBridgeVersion(value, label);
+  if (value !== normalized) fail(`${label} must be canonical`);
   return normalized;
 }
 
 function validateInput(input) {
   exactKeys(input, inputKeys, "input");
   exactKeys(input.attestations, attestationKeys, "attestations");
-  if (input.schemaVersion !== 2) fail("schemaVersion must be 2");
+  if (input.schemaVersion !== 3) fail("schemaVersion must be 3");
   const utcStart = timestamp(input.utcStart, "utcStart");
   const utcEnd = timestamp(input.utcEnd, "utcEnd");
   if (Date.parse(utcStart) >= Date.parse(utcEnd)) fail("utcEnd must follow utcStart");
@@ -125,7 +132,8 @@ function validateInput(input) {
     "machineA", "machineB", "codexVersion",
     "httpsVerificationMethod"
   ]) safeText(input[field], field);
-  normalizedBridgeVersion(input.bridgeVersion);
+  normalizedBridgeVersion(input.pairingBridgeVersion, "pairingBridgeVersion");
+  normalizedBridgeVersion(input.bridgeVersion, "bridgeVersion");
   const verificationMethods = {
     public_ca: "public system CA",
     private_scoped_ca: "Bridge exact-origin private CA"
@@ -223,13 +231,16 @@ function assertDatabaseScope(database, input) {
   }
   const pairing = pairings[0];
   if (
-    normalizedBridgeVersion(pairing.bridge_version) !==
-      normalizedBridgeVersion(input.bridgeVersion) ||
+    canonicalPersistedBridgeVersion(
+      pairing.bridge_version,
+      "persisted pairing Bridge version"
+    ) !==
+      normalizedBridgeVersion(input.pairingBridgeVersion, "pairingBridgeVersion") ||
     typeof pairing.device_platform !== "string" || !pairing.device_platform ||
     typeof pairing.credential_id !== "string" || !pairing.credential_id ||
     typeof pairing.consumed_at !== "string" || !pairing.consumed_at
   ) {
-    fail("consumed pairing identity or Bridge version does not match");
+    fail("consumed pairing identity or initial Bridge version does not match");
   }
   const trustFields = [
     pairing.trust_mode,
@@ -254,6 +265,23 @@ function assertDatabaseScope(database, input) {
     pairing.device_supports_scoped_private_trust !== 1
   ) {
     fail("consumed pairing does not prove private_scoped_ca capability");
+  }
+  const observation = database.prepare(`
+    SELECT connection_epoch, bridge_version, observed_at
+    FROM device_bridge_observations WHERE device_id = ?
+  `).get(input.deviceId);
+  if (
+    !observation ||
+    !Number.isInteger(observation.connection_epoch) ||
+    observation.connection_epoch < 1 ||
+    canonicalPersistedBridgeVersion(
+      observation.bridge_version,
+      "persisted current Bridge version"
+    ) !== normalizedBridgeVersion(input.bridgeVersion, "bridgeVersion") ||
+    typeof observation.observed_at !== "string" ||
+    !observation.observed_at
+  ) {
+    fail("current authenticated Bridge version observation does not match");
   }
   const agents = database.prepare(`
     SELECT count(*) AS count
@@ -280,7 +308,15 @@ function assertDatabaseScope(database, input) {
   }
   return {
     state: "consumed",
-    tlsProfile: input.tlsProfile
+    tlsProfile: input.tlsProfile,
+    pairingBridgeVersion: normalizedBridgeVersion(
+      input.pairingBridgeVersion,
+      "pairingBridgeVersion"
+    ),
+    currentBridgeVersion: normalizedBridgeVersion(
+      input.bridgeVersion,
+      "bridgeVersion"
+    )
   };
 }
 
@@ -351,7 +387,8 @@ two sanitized host descriptions identify different physical machines.
 - Server commit: \`${input.serverCommit}\`
 - Machine A: ${input.machineA}
 - Machine B: ${input.machineB}
-- Bridge version/archive SHA-256: ${input.bridgeVersion} / \`${input.bridgeArchiveSha256}\`
+- Initial pairing Bridge version: ${pairing.pairingBridgeVersion}
+- Current Bridge version/archive SHA-256: ${pairing.currentBridgeVersion} / \`${input.bridgeArchiveSha256}\`
 - Codex version: ${input.codexVersion}
 - TLS profile/HTTPS verification: \`${input.tlsProfile}\` / ${input.httpsVerificationMethod}
 - Team/Room: \`${input.teamId}\` / \`${input.roomId}\`
@@ -361,7 +398,9 @@ two sanitized host descriptions identify different physical machines.
   or Device credential; no CA installed into the client OS; no application TLS
   verification bypass
 - Database pairing proof: exactly one \`${pairing.state}\` session; Device,
-  Team, Bridge version and \`${pairing.tlsProfile}\` profile matched
+  Team, initial Bridge version and \`${pairing.tlsProfile}\` profile matched
+- Authenticated hello proof: current Bridge version matched without replacing the
+  Device or its original pairing identity
 - Workspace projection: path-free
 - Online Run/trace: \`${online.runId}\` / \`${online.traceId}\`
 - Online persisted states: ${online.states.map((state) => `\`${state}\``).join(" → ")}

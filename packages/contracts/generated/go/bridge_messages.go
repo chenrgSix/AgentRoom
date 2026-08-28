@@ -60,6 +60,8 @@ type BridgeHelloMessage struct {
 }
 
 type BridgeHelloPayload struct {
+	// Semantic Bridge build version. New Bridges omit the v prefix; the optional prefix is
+	// accepted only for rolling compatibility with already released Bridges.
 	BridgeVersion             string   `json:"bridgeVersion"`
 	ConnectionEpoch           int64    `json:"connectionEpoch"`
 	DeviceID                  string   `json:"deviceId"`

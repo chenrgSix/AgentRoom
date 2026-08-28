@@ -98,25 +98,29 @@ Create a temporary JSON input containing exactly the fields below. Values shown
 in angle brackets are placeholders; never commit the temporary input or metrics
 file.
 
-The verifier accepts schema version 2 only. It rejects the legacy v1 shape,
+The verifier accepts schema version 3 only. It rejects older shapes,
 `manual_ca`, a TLS profile/verification-method mismatch, either missing
 no-manual-CA assertion, and any false assertion before reading evidence into a
 PASS record. It also requires exactly one consumed pairing session for the
-supplied Team and Device, matches the Bridge self-reported version, and proves
-the selected public or private-scoped TLS profile from persisted pairing facts.
+supplied Team and Device, matches its initial Bridge version, independently
+matches the current packaged version to the latest authenticated
+`bridge.hello`, and proves the selected public or private-scoped TLS profile
+from persisted pairing facts. An in-place Bridge upgrade therefore preserves
+the Device and pairing identity instead of forcing a second pairing.
 Private-scoped evidence additionally requires the complete stored descriptor
 and the claiming Bridge's scoped-trust capability, without rendering the
 origin, installation identity, epoch, or CA digest.
 
 ```json
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "utcStart": "<UTC RFC3339>",
   "utcEnd": "<UTC RFC3339>",
   "serverCommit": "<40 lowercase hex characters>",
   "machineA": "<sanitized OS and architecture>",
   "machineB": "<different sanitized OS and architecture>",
-  "bridgeVersion": "<packaged version>",
+  "pairingBridgeVersion": "<initial pairing version>",
+  "bridgeVersion": "<current packaged version>",
   "bridgeArchiveSha256": "<64 lowercase hex characters>",
   "codexVersion": "<safe version only>",
   "tlsProfile": "<public_ca or private_scoped_ca>",
@@ -165,9 +169,11 @@ The verifier fails closed unless:
 - the Team has exactly one active Device with at least two enabled managed
   Agents and the selected Agent belongs to that Device;
 - exactly one consumed pairing session binds that Team and Device to the
-  supplied Bridge version and TLS profile; private-scoped evidence also proves
-  the complete stored descriptor and Bridge capability while public evidence
-  proves no private descriptor was attached;
+  supplied initial Bridge version and TLS profile; private-scoped evidence also
+  proves the complete stored descriptor and Bridge capability while public
+  evidence proves no private descriptor was attached;
+- the latest authenticated Bridge hello for that same Device binds the current
+  packaged version independently of the immutable pairing version;
 - both Runs, their trigger Messages, Deliveries and contiguous events use the
   exact supplied Room, Agent, Device and trace identities;
 - each Delivery was accepted, each Run completed, and each trace produced

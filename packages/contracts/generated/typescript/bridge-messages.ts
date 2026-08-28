@@ -82,6 +82,10 @@ export interface BridgeHelloMessage {
 }
 
 export interface BridgeHelloPayload {
+  /**
+   * Semantic Bridge build version. New Bridges omit the v prefix; the optional prefix is
+   * accepted only for rolling compatibility with already released Bridges.
+   */
   bridgeVersion:             string;
   connectionEpoch:           number;
   deviceId:                  string;

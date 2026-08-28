@@ -25,7 +25,7 @@ var (
 	pairingSessionIDPattern          = regexp.MustCompile(`^pairing_[A-Za-z0-9_-]{8,128}$`)
 	pairingSessionOperationIDPattern = regexp.MustCompile(`^op_[A-Za-z0-9_-]{8,128}$`)
 	shortCodePattern                 = regexp.MustCompile(`^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{2}$`)
-	bridgeVersionPattern             = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
+	bridgeVersionPattern             = regexp.MustCompile(`^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z]+([.-][0-9A-Za-z]+)*)?$`)
 	verificationPattern              = regexp.MustCompile(`^[A-Z]{2,20}-[A-Z]{2,20}-[0-9]{2}$`)
 	deviceIDPattern                  = regexp.MustCompile(`^device_[A-Za-z0-9_-]{8,128}$`)
 	teamIDPattern                    = regexp.MustCompile(`^team_[A-Za-z0-9_-]{8,128}$`)
@@ -211,7 +211,7 @@ func (client SessionClient) Pair(
 	if !supportedPairingPlatform(platform) {
 		return Credential{}, fmt.Errorf("Device pairing is unsupported on %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
-	version := normalizedBridgeVersion(client.BridgeVersion)
+	version := NormalizedBridgeVersion(client.BridgeVersion)
 	claim := pairingcontracts.DevicePairingSessionClaimRequest{
 		OperationID: operationID, PairingAttemptID: attemptID, PollSecret: pollSecret,
 		Device: pairingcontracts.DevicePairingSessionClaimRequestDevice{
@@ -408,7 +408,7 @@ func (client SessionClient) postJSON(
 	return response.StatusCode, source, nil
 }
 
-func normalizedBridgeVersion(value string) string {
+func NormalizedBridgeVersion(value string) string {
 	trimmed := strings.TrimPrefix(strings.TrimSpace(value), "v")
 	if bridgeVersionPattern.MatchString(trimmed) {
 		return trimmed

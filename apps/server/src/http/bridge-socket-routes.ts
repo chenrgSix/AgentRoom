@@ -1,5 +1,6 @@
 import type { BridgeRunEventService } from "../run/bridge-run-event-service.js";
 import type { AgentRuntimePolicy } from "../data/core-repository.js";
+import { normalizeBridgeVersion } from "../domain/bridge-version.js";
 import { bearerToken } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
@@ -161,11 +162,15 @@ export function registerBridgeSocketRoutes({
         if (message.type === "bridge.hello") {
           const deviceId = message.payload.deviceId;
           const epoch = message.payload.connectionEpoch;
+          const bridgeVersion = normalizeBridgeVersion(
+            message.payload.bridgeVersion
+          );
           const supported = message.payload.supportedProtocolVersions;
           if (
             deviceId !== devicePrincipal.deviceId ||
             !Number.isSafeInteger(epoch) ||
             (epoch as number) < 1 ||
+            bridgeVersion === undefined ||
             !Array.isArray(supported) ||
             !supported.includes("1.0")
           ) {
@@ -190,9 +195,10 @@ export function registerBridgeSocketRoutes({
             deviceId: devicePrincipal.deviceId,
             connectionEpoch: registeredEpoch
           }, "Bridge connection registered");
-          presence.recordHeartbeat(devicePrincipal, {
+          presence.recordHello(devicePrincipal, {
             deviceId: devicePrincipal.deviceId,
             connectionEpoch: registeredEpoch,
+            bridgeVersion,
             adapterAvailable: true,
             now: clock()
           });

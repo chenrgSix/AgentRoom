@@ -65,7 +65,7 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 			DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
-		BridgeVersion:     "test",
+		BridgeVersion:     "v0.4.0-qa030.2",
 		HeartbeatInterval: 10 * time.Millisecond,
 		HandleProvision: func(_ context.Context, requested contracts.AgentProvisionRequestedMessage) contracts.AgentProvisionResultMessage {
 			return ProvisionResult(requested, contracts.Rejected, contracts.ProvisioningDisabled)
@@ -85,6 +85,9 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	helloPayload, ok := hello["payload"].(map[string]any)
 	if !ok || helloPayload["supportsAgentProvisioning"] != true {
 		t.Fatalf("Agent provisioning support was not advertised: %#v", hello)
+	}
+	if helloPayload["bridgeVersion"] != "0.4.0-qa030.2" {
+		t.Fatalf("Bridge version was not canonicalized: %#v", hello)
 	}
 	payload, ok := publication["payload"].(map[string]any)
 	if !ok {

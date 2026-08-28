@@ -247,9 +247,13 @@ under the new identity. Staging failures leave the old binding usable.
 ### Transport
 
 The initial transport is `/ws/bridge`. After TLS connection, the Bridge sends a
-versioned hello containing its device identity, connection epoch, Agents, and
-capabilities. The server either accepts the session or returns a structured
-incompatibility or revocation error.
+versioned hello containing its Device identity, connection epoch, canonical
+semantic Bridge build version, and capabilities before publishing Agents. New
+Bridges remove the release tag's leading `v`; the Server accepts that legacy
+prefix only during the documented rolling window and persists the normalized
+current version separately from the immutable initial pairing version. The
+server either accepts the session or returns a structured incompatibility or
+revocation error.
 
 `REG-005` adds an optional safe `runtimePolicy` projection to managed Agent
 publication. Its only field is `filesystemAccess`: Codex reports `read-only`
@@ -319,7 +323,8 @@ without starting a Runtime.
 `GET /ws/bridge` authenticates the Device bearer credential before upgrade.
 Every connection must start with protocol `1.0` `bridge.hello`; a newer epoch
 closes the old socket, while stale epochs and identity-mismatched heartbeats are
-closed without updating Presence.
+closed without updating Presence or the current Bridge-version observation.
+Heartbeats preserve the version accepted from that connection's hello.
 
 The Bridge explicitly accepts authenticated inbound WebSocket messages up to
 16 MiB. This is a transport trust-boundary limit, not a 32 KiB product message

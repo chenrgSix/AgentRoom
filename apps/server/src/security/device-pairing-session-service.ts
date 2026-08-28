@@ -93,7 +93,8 @@ const pairingAttemptPattern = /^pairattempt_[A-Za-z0-9_-]{8,128}$/u;
 const operationPattern = /^op_[A-Za-z0-9_-]{8,128}$/u;
 const secretPattern = /^[A-Za-z0-9_-]{43,128}$/u;
 const shortCodePattern = /^[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{4}-[A-HJ-NP-Z2-9]{2}$/u;
-const bridgeVersionPattern = /^[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$/u;
+const bridgeVersionPattern =
+  /^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/u;
 const platforms = new Set<Platform>([
   "darwin-amd64",
   "darwin-arm64",

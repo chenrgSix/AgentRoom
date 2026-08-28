@@ -34,6 +34,10 @@ function seed(database) {
       trust_epoch INTEGER, trust_ca_sha256 TEXT,
       device_supports_scoped_private_trust INTEGER
     );
+    CREATE TABLE device_bridge_observations (
+      device_id TEXT PRIMARY KEY, connection_epoch INTEGER NOT NULL,
+      bridge_version TEXT NOT NULL, observed_at TEXT NOT NULL
+    );
     CREATE TABLE agents (
       agent_id TEXT PRIMARY KEY, team_id TEXT NOT NULL, device_id TEXT NOT NULL,
       integration_mode TEXT NOT NULL, enabled INTEGER NOT NULL, presence TEXT NOT NULL,
@@ -68,6 +72,9 @@ function seed(database) {
       'install_qa002test0001', 1, ?, 1
     )
   `).run(ids.teamId, ids.deviceId, "e".repeat(64));
+  database.prepare(`
+    INSERT INTO device_bridge_observations VALUES (?, 8, '0.4.0-qa030.2', ?)
+  `).run(ids.deviceId, "2026-08-28T10:09:00.000Z");
   const insertAgent = database.prepare(`
     INSERT INTO agents VALUES (?, ?, ?, 'managed', 1, 'ready', ?, ?)
   `);
@@ -107,13 +114,14 @@ function seed(database) {
 
 function input(overrides = {}) {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     utcStart: "2026-08-28T10:00:00.000Z",
     utcEnd: "2026-08-28T10:10:00.000Z",
     serverCommit: "a".repeat(40),
     machineA: "macOS arm64 Central host",
     machineB: "Linux amd64 client host",
-    bridgeVersion: "v0.4.0-rc.1",
+    pairingBridgeVersion: "v0.4.0-rc.1",
+    bridgeVersion: "v0.4.0-qa030.2",
     bridgeArchiveSha256: "b".repeat(64),
     codexVersion: "codex 1.2.3",
     tlsProfile: "private_scoped_ca",
@@ -179,6 +187,8 @@ test("physical evidence capture cross-checks Runs and writes only sanitized fact
   assert.equal(output, await readFile(files.outputPath, "utf8"));
   assert.match(output, /PASS/u);
   assert.match(output, /`private_scoped_ca` \/ Bridge exact-origin private CA/u);
+  assert.match(output, /Initial pairing Bridge version: 0\.4\.0-rc\.1/u);
+  assert.match(output, /Current Bridge version\/archive SHA-256: 0\.4\.0-qa030\.2/u);
   assert.match(output, /no CA installed into the client OS/u);
   assert.match(output, /no application TLS\s+verification bypass/u);
   assert.match(output, /`queued` → `delivered` → `working` → `completed`/u);
@@ -219,7 +229,7 @@ test("physical evidence capture accepts the public system-CA profile", async () 
   assert.match(output, /exactly one `consumed` session/u);
 });
 
-test("the runbook schema-v2 sample stays structurally aligned with the verifier", async () => {
+test("the runbook schema-v3 sample stays structurally aligned with the verifier", async () => {
   const runbook = await readFile(new URL(
     "../../docs/acceptance/qa-002-two-machine-managed-agent.md",
     import.meta.url
@@ -230,7 +240,7 @@ test("the runbook schema-v2 sample stays structurally aligned with the verifier"
   const expected = input();
   delete expected.secondAgentId;
 
-  assert.equal(documented.schemaVersion, 2);
+  assert.equal(documented.schemaVersion, 3);
   assert.deepEqual(Object.keys(documented).sort(), Object.keys(expected).sort());
   assert.deepEqual(
     Object.keys(documented.attestations).sort(),
@@ -248,7 +258,7 @@ test("physical evidence capture rejects stale or inconsistent TLS evidence", asy
     databasePath: files.databasePath,
     metricsPath: files.metricsPath,
     outputPath: files.outputPath
-  }), /schemaVersion must be 2/u);
+  }), /schemaVersion must be 3/u);
 
   const manual = input({ tlsProfile: "manual_ca" });
   delete manual.secondAgentId;
@@ -314,7 +324,7 @@ test("physical evidence capture binds TLS claims to one consumed pairing", async
   const database = new Database(files.databasePath);
   database.prepare("UPDATE device_pairing_sessions SET bridge_version = '0.4.0-other'").run();
   database.close();
-  await assert.rejects(capture, /pairing identity or Bridge version does not match/u);
+  await assert.rejects(capture, /pairing identity or initial Bridge version does not match/u);
 
   const versionFixed = new Database(files.databasePath);
   versionFixed.prepare(`
@@ -351,6 +361,25 @@ test("physical evidence capture binds TLS claims to one consumed pairing", async
   `).run();
   duplicateRemoved.close();
   await assert.rejects(capture, /consumed pairing does not match public_ca/u);
+});
+
+test("physical evidence capture binds the package version to authenticated hello state", async () => {
+  const files = await fixture();
+  const source = input();
+  delete source.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(source));
+  const database = new Database(files.databasePath);
+  database.prepare(`
+    UPDATE device_bridge_observations SET bridge_version = '0.4.0-qa030.1'
+  `).run();
+  database.close();
+
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /current authenticated Bridge version observation does not match/u);
 });
 
 test("physical evidence capture rejects private host details and false reconnect scope", async () => {

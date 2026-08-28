@@ -110,6 +110,6 @@ amd64 pairing session, published two managed Agents, passed the explicit Runtime
 self-test and local installer digest check, and completed an exact queued Run
 after the same Device reconnected with one reply. It remains partial because
 the packaged Server exposed a terminal historical Delivery as pending; the
-`RUN-013` fix is not yet in an exact physical candidate, and the safe Codex
-version plus final human no-OS-CA/no-bypass attestations are not yet in one
-schema-v2 record.
+`RUN-013` fix and `CON-015` current-version observation are not yet in an exact
+physical candidate, and the safe Codex version plus final human
+no-OS-CA/no-bypass attestations are not yet in one schema-v3 record.

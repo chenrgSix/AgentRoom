@@ -58,6 +58,12 @@ that two descriptions are physical machines or that an OS trust store was
 unchanged, so human review remains mandatory. Local processes, containers and a
 manual-CA reachability check cannot close this task.
 
+Schema version 3 of that record distinguishes the Bridge version persisted by
+the one consumed pairing session from the current package version persisted by
+the latest authenticated hello. The positive upgrade fixture pairs on one
+version and reconnects on a newer one under the same Device; independent
+negative cases reject either initial-version drift or current-version drift.
+
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to
 Carol Agent. All three Agents claim and complete their Runs; the test verifies

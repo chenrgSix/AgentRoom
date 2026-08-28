@@ -94,6 +94,17 @@ alone, establishes the managed Agent as ready. `bridge.hello` optionally
 advertises `supportsAgentProvisioning`; omission means unsupported so a rolling
 upgrade never sends the new request to an older Bridge.
 
+`CON-015` closes the Bridge build-version identity gap. New Bridges normalize
+their build version to semantic form without a leading `v` before
+`bridge.hello`; the Server validates and persists that authenticated current
+version independently of the immutable version recorded by the original
+pairing session. The hello schema temporarily accepts the already released
+`v`-prefixed form for rolling compatibility, but the Server canonicalizes it
+before persistence. Heartbeats do not carry or overwrite build identity, and an
+in-place upgrade advances the observation only with a newer connection epoch.
+This separation lets physical evidence prove both the original pairing and the
+currently installed package without requiring a new Device or credential.
+
 `CON-012` defines the additive ADR-0021 Device pairing-session HTTP contract.
 It defines opaque pairing/session/attempt IDs, closed session states, bounded
 safe Device metadata, expiry, idempotency, verification-phrase projection, and
@@ -141,7 +152,7 @@ credentials, CA private keys, redirect metadata and a private-scoped session
 projected to an unsupported legacy Bridge. Generated TypeScript and Go types
 remain additive within the pairing protocol compatibility window.
 
-The implementation validates 114 shared fixtures and deterministically
+The implementation validates 116 shared fixtures and deterministically
 generates TypeScript and Go definitions for the trust descriptor, Owner/session
 projection additions, claim echo, capability bit, next-CA offer and
 acknowledgement. Cross-record epoch ordering, certificate parsing and

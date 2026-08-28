@@ -1,8 +1,10 @@
 import type {
   AgentRecord,
   CoreRepository,
+  DeviceBridgeObservationRecord,
   DevicePresenceRecord
 } from "../data/core-repository.js";
+import { isCanonicalBridgeVersion } from "../domain/bridge-version.js";
 import type {
   AuthService,
   DevicePrincipal,
@@ -25,6 +27,21 @@ export class PresenceService {
       now: string;
     }
   ): DevicePresenceRecord {
+    const record = this.presenceRecord(principal, input);
+    this.repository.recordDevicePresence(record);
+    this.projectAgentPresence(principal, input);
+    return record;
+  }
+
+  private presenceRecord(
+    principal: DevicePrincipal,
+    input: {
+      deviceId: string;
+      connectionEpoch: number;
+      adapterAvailable: boolean;
+      now: string;
+    }
+  ): DevicePresenceRecord {
     if (principal.deviceId !== input.deviceId) {
       throw new Error("Device heartbeat identity mismatch");
     }
@@ -37,7 +54,13 @@ export class PresenceService {
       adapterAvailable: input.adapterAvailable,
       lastHeartbeatAt: input.now
     };
-    this.repository.recordDevicePresence(record);
+    return record;
+  }
+
+  private projectAgentPresence(
+    principal: DevicePrincipal,
+    input: { deviceId: string; adapterAvailable: boolean; now: string }
+  ): void {
     for (const agent of this.repository.listAgents(principal.teamId)) {
       if (agent.deviceId === input.deviceId && agent.enabled) {
         this.repository.updateAgentPresence(
@@ -47,7 +70,34 @@ export class PresenceService {
         );
       }
     }
-    return record;
+  }
+
+  public recordHello(
+    principal: DevicePrincipal,
+    input: {
+      deviceId: string;
+      connectionEpoch: number;
+      bridgeVersion: string;
+      adapterAvailable: boolean;
+      now: string;
+    }
+  ): {
+    observation: DeviceBridgeObservationRecord;
+    presence: DevicePresenceRecord;
+  } {
+    if (!isCanonicalBridgeVersion(input.bridgeVersion)) {
+      throw new Error("Bridge version must be canonical");
+    }
+    const presence = this.presenceRecord(principal, input);
+    const observation: DeviceBridgeObservationRecord = {
+      deviceId: input.deviceId,
+      connectionEpoch: input.connectionEpoch,
+      bridgeVersion: input.bridgeVersion,
+      observedAt: input.now
+    };
+    this.repository.recordDeviceHello(presence, observation);
+    this.projectAgentPresence(principal, input);
+    return { observation, presence };
   }
 
   public listAgents(

@@ -78,11 +78,18 @@ test("heartbeat, adapter health, stale epochs, and TTL derive Presence", async (
     const credential = auth.issueDeviceCredential(device.deviceId, now);
     const devicePrincipal = auth.authenticateDevice(credential.secret, now);
 
-    presence.recordHeartbeat(devicePrincipal, {
+    presence.recordHello(devicePrincipal, {
       deviceId: device.deviceId,
       connectionEpoch: 2,
+      bridgeVersion: "0.4.0-qa030.1",
       adapterAvailable: true,
       now
+    });
+    assert.deepEqual(repository.getDeviceBridgeObservation(device.deviceId), {
+      deviceId: device.deviceId,
+      connectionEpoch: 2,
+      bridgeVersion: "0.4.0-qa030.1",
+      observedAt: now
     });
     assert.equal(
       presence.listAgents(webPrincipal, created.team.teamId, now)
@@ -101,16 +108,41 @@ test("heartbeat, adapter health, stale epochs, and TTL derive Presence", async (
       now
     });
     assert.equal(
+      repository.getDeviceBridgeObservation(device.deviceId)?.bridgeVersion,
+      "0.4.0-qa030.1"
+    );
+    assert.equal(
       presence.listAgents(webPrincipal, created.team.teamId, now)
         .find((item) => item.agentId === agent.agentId)?.presence,
       "degraded"
     );
-    presence.recordHeartbeat(devicePrincipal, {
+    presence.recordHello(devicePrincipal, {
       deviceId: device.deviceId,
-      connectionEpoch: 2,
+      connectionEpoch: 3,
+      bridgeVersion: "0.4.0-qa030.2",
       adapterAvailable: true,
       now
     });
+    assert.deepEqual(repository.getDeviceBridgeObservation(device.deviceId), {
+      deviceId: device.deviceId,
+      connectionEpoch: 3,
+      bridgeVersion: "0.4.0-qa030.2",
+      observedAt: now
+    });
+    assert.throws(() => presence.recordHello(devicePrincipal, {
+      deviceId: device.deviceId,
+      connectionEpoch: 3,
+      bridgeVersion: "0.4.0-qa030.3",
+      adapterAvailable: true,
+      now
+    }), /version changed within one connection epoch/);
+    assert.throws(() => presence.recordHello(devicePrincipal, {
+      deviceId: device.deviceId,
+      connectionEpoch: 4,
+      bridgeVersion: "v0.4.0-qa030.3",
+      adapterAvailable: true,
+      now
+    }), /Bridge version must be canonical/);
     repository.updateAgentPresence(agent.agentId, "busy", now);
     assert.equal(
       presence.listAgents(webPrincipal, created.team.teamId, now)

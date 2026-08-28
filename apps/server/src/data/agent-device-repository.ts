@@ -4,6 +4,7 @@ import type {
   AgentCapabilities,
   AgentRecord,
   AgentRuntimePolicy,
+  DeviceBridgeObservationRecord,
   DevicePresenceRecord,
   DeviceRecord
 } from "./core-repository.js";
@@ -287,6 +288,67 @@ export class AgentDeviceRepository {
       connectionEpoch: row.connection_epoch,
       adapterAvailable: row.adapter_available === 1,
       lastHeartbeatAt: row.last_heartbeat_at
+    };
+  }
+
+  private recordBridgeObservation(record: DeviceBridgeObservationRecord): void {
+    const existing = this.getBridgeObservation(record.deviceId);
+    if (existing && record.connectionEpoch < existing.connectionEpoch) {
+      throw new Error("Stale Device Bridge observation epoch");
+    }
+    if (
+      existing &&
+      record.connectionEpoch === existing.connectionEpoch &&
+      record.bridgeVersion !== existing.bridgeVersion
+    ) {
+      throw new Error("Device Bridge version changed within one connection epoch");
+    }
+    this.database.prepare(`
+      INSERT INTO device_bridge_observations (
+        device_id, connection_epoch, bridge_version, observed_at
+      ) VALUES (@deviceId, @connectionEpoch, @bridgeVersion, @observedAt)
+      ON CONFLICT (device_id) DO UPDATE SET
+        connection_epoch = excluded.connection_epoch,
+        bridge_version = excluded.bridge_version,
+        observed_at = excluded.observed_at
+    `).run(record);
+  }
+
+  public recordHello(
+    presence: DevicePresenceRecord,
+    observation: DeviceBridgeObservationRecord
+  ): void {
+    if (
+      presence.deviceId !== observation.deviceId ||
+      presence.connectionEpoch !== observation.connectionEpoch
+    ) {
+      throw new Error("Device hello presence and version observation differ");
+    }
+    this.transactions.immediate(() => {
+      this.recordPresence(presence);
+      this.recordBridgeObservation(observation);
+    });
+  }
+
+  public getBridgeObservation(
+    deviceId: string
+  ): DeviceBridgeObservationRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT device_id, connection_epoch, bridge_version, observed_at
+      FROM device_bridge_observations WHERE device_id = ?
+    `).get(deviceId) as
+      | {
+          device_id: string;
+          connection_epoch: number;
+          bridge_version: string;
+          observed_at: string;
+        }
+      | undefined;
+    return row && {
+      deviceId: row.device_id,
+      connectionEpoch: row.connection_epoch,
+      bridgeVersion: row.bridge_version,
+      observedAt: row.observed_at
     };
   }
 
