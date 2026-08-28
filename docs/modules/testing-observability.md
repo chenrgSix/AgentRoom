@@ -428,14 +428,17 @@ restart, and two-machine gates remain separate.
 
 The `v0.4.0-qa030.1` candidate packages unified Central installation and Device
 onboarding, the Task/Run/Result work model, public-CA default deployment, and
-pairing-scoped private trust with acknowledged two-authority rotation. Release
-evidence is recorded in
-`docs/acceptance/qa-030-public-default-scoped-private-tls.md`. The protected
-release portion passes because exact-tag CI, the empty-Draft workflow's closed
-22-asset verification before and after upload, prerelease publication, and a
-fresh anonymous download verified by the tag's committed scripts all passed.
-Publication does not close `QA-030`, `QA-002`, or `QA-028`; those tasks still
-require the separate clean two-physical-host rehearsal.
+pairing-scoped private trust with acknowledged two-authority rotation. Follow-up
+candidate `v0.4.0-qa030.2` adds terminal-Delivery metric fencing and an
+authenticated current-Bridge build observation for same-Device upgrades.
+Release evidence is recorded in
+`docs/acceptance/qa-030-public-default-scoped-private-tls.md`. Both protected
+release portions pass exact-tag CI, the empty-Draft workflow's closed 22-asset
+verification before and after upload, prerelease publication, and a fresh
+unauthenticated download verified by the tag's committed scripts. Publication
+does not close `QA-030`, `QA-002`, or `QA-028`; those tasks still require the
+same physical Device to upgrade in place and produce the reviewed schema-v3
+record.
 
 ## Dependencies
 

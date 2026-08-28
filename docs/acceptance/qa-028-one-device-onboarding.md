@@ -182,10 +182,12 @@ machine B's OS trust store was not changed for the run. No code change or local
 simulation can produce those physical facts.
 
 The later [packaged physical observation](evidence/qa-030-20260828-partial.md)
-now adds one consumed private-scoped Windows pairing, two ready Agents, explicit
+adds one consumed private-scoped Windows pairing, two ready Agents, explicit
 Runtime self-test and local installer digest observations, three online Runs,
 and one exact offline queued/same-Device reconnect Run with a single reply from
-the `v0.4.0-qa030.1` package. It does not change this `BLOCKED` state: `RUN-013`
-and `CON-015` must ship in an exact physical candidate whose current version is
-authenticated and whose final metrics drain, and the safe Codex version plus
-human no-OS-CA/no-bypass facts must enter one reviewed schema-v3 record.
+the `v0.4.0-qa030.1` package. Published exact candidate `v0.4.0-qa030.2` now
+contains `RUN-013` and `CON-015`, but it has not yet been installed on that
+Device. This task remains `BLOCKED` until the same Device upgrades without
+re-pairing, reports the authenticated current version with drained metrics, and
+the safe Codex version plus human no-OS-CA/no-bypass facts enter one reviewed
+schema-v3 record.

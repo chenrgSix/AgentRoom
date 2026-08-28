@@ -15,12 +15,12 @@ Server remains authority for Team, Device, Agent, Task and Run state. Machine B
 remains authority for Codex login, executable, Workspace, local permissions,
 Runtime self-test and its exact-origin Bridge trust store.
 
-Status: `BLOCKED` on the physical remainder of `QA-030`. Deterministic trust and
-local package evidence pass at commit `98fc9c4`, but the current
-`v0.4.0-qa028.1` candidate predates pairing-scoped private trust and its
-successful manual-CA reachability check is diagnostic only. Do not execute or
-mark this runbook `PASS` until a newer exact release passes the clean packaged
-cross-host trust rehearsal.
+Status: `BLOCKED` on the final physical remainder of `QA-030`. Published exact
+candidate `v0.4.0-qa030.2` contains the terminal-Delivery metric fence and
+independent current-Bridge build observation required by the partial physical
+record. The already paired Windows Device must upgrade in place without
+re-pairing, reconnect with drained metrics, and complete the reviewed schema-v3
+record before this runbook can be marked `PASS`.
 
 ## Preconditions
 
