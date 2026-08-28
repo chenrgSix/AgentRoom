@@ -59,12 +59,27 @@ separate authenticated clean-download verification. Detailed hashes and the
 release boundary are recorded in
 [`v0.4.0-qa031.1`](../releases/v0.4.0-qa031.1.md).
 
-## Remaining physical acceptance
+## Physical Windows acceptance
 
-The exact-commit native Windows condition is complete. `BRG-046` remains
-`ACTIVE` until an installed Windows Desktop Bridge starts a credentialed Codex
-Run without opening a console window, while the Run still streams and
-terminates normally.
+On 2026-08-29 (UTC+08:00), the operator upgraded the installed Windows Desktop
+Bridge to `v0.4.0-qa031.1` and started a credentialed managed Codex Run. The
+operator confirmed that no empty console window appeared.
 
-Native CI proves the Windows process flags and installer lifecycle; it does not
-by itself prove physical Windows window-manager behavior.
+A read-only Central cross-check bound that observation to the active package
+and completed execution without exposing a Device credential, local path,
+prompt, output, or reply:
+
+- the authenticated Bridge hello observed version `0.4.0-qa031.1` at
+  `2026-08-28T17:44:20.314Z` on the current connection epoch;
+- the Device reported an available adapter and a fresh heartbeat at
+  `2026-08-28T17:46:10.347Z`; and
+- the managed `Local Codex` Run started at `2026-08-28T17:45:06.981Z`, reached
+  `completed` at `2026-08-28T17:45:14.494Z`, and persisted one output event,
+  one reply event, and three status events.
+
+This completes the physical window-manager condition as well as the previously
+completed exact-commit native Windows condition. `BRG-046` is `DONE`.
+
+This bounded record proves the Windows Runtime console behavior only. It is not
+a schema-v4 two-machine acceptance record and does not close `QA-002`,
+`QA-028`, or `QA-030`.

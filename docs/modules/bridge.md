@@ -609,8 +609,10 @@ deadline cancellation, and wait delay. This prevents the unsigned Desktop GUI
 from opening an empty console for each Run; it does not wrap commands in a
 shell, change Runtime arguments or environment, or grant new process authority.
 Exact-commit native Windows CI and the `v0.4.0-qa031.1` tag-pinned installer
-lifecycle pass; one physical installed-Windows Codex Run remains the final
-window-manager acceptance boundary.
+lifecycle pass. A physical installed-Windows Codex Run on that Bridge version
+produced output and a reply, completed normally, and opened no empty console,
+closing the window-manager acceptance boundary without changing Runtime or
+protocol ownership.
 
 Wails is pinned to `v3.0.0-beta.12` behind the `desktop` Go build tag. Ordinary
 CGO-free CLI tests and builds do not compile the desktop package. Desktop tests

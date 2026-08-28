@@ -461,10 +461,12 @@ The unpublished `v0.4.0-qa031.1` Draft is the current physical candidate. Its
 repository and asset names, exact-source CI, native Windows process regression
 and installer upgrade lifecycle, closed 22-asset Draft matrix, and independent
 authenticated download to one exact commit. This closes the release-matrix
-portion of `GOV-016`, but does not close `QA-030`, `QA-002`, `QA-028`, or the
-physical window-manager portion of `BRG-046`. A schema-v3 physical record was
-captured but failed the later temporal-binding audit; those tasks require a
-fresh reviewed schema-v4 record from the same physical Device.
+portion of `GOV-016`. A later installed-Windows `v0.4.0-qa031.1` Codex Run
+produced output and a reply, completed normally, and opened no empty console,
+closing `BRG-046`. It does not close `QA-030`, `QA-002`, or `QA-028`: a
+schema-v3 physical record was captured but failed the later temporal-binding
+audit, so those tasks require a fresh reviewed schema-v4 record from the same
+physical Device.
 
 ## Dependencies
 
