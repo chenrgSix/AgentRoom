@@ -201,6 +201,7 @@ diagnostics because renewal changes that fingerprint.
 | Symptom | Inspect | Likely boundary |
 | --- | --- | --- |
 | `secret-init` is not `Exited (0)` | `docker compose logs secret-init` | missing, unreadable, or invalid-length recovery file |
+| `agentroomctl doctor` reports `SECRET_INVALID` or upgrade reports `UPGRADE_SECRET_INVALID` | mode and bounded format of the recorded recovery file | restore the exact original mode-`0600` credential from authorized recovery storage; never generate a new value for an existing Owner |
 | `data-init` is not `Exited (0)` | `docker compose logs data-init` | database/backup mount ownership or image account mismatch |
 | `agentroom` is unhealthy | `docker compose logs agentroom` | database path, migration, secret, or public-origin validation |
 | Caddy cannot obtain a public certificate | `docker compose logs caddy` | DNS, ports 80/9443, firewall, or ACME egress; do not accept silent local-CA fallback |

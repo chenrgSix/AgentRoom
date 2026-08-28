@@ -142,16 +142,20 @@ not a manifest-only label change.
   atomic state/configuration, Compose, startup migration through Server boot,
   bounded readiness and WebSocket ingress.
 - `status` projects the recorded release/origin/step and Compose state.
-- `doctor` re-verifies release drift, private-file modes, full Compose config,
-  HTTPS readiness and WebSocket ingress without changing Team data.
+- `doctor` re-verifies release drift, private-file type, mode and exact
+  controller-generated authority format, full Compose config, HTTPS readiness
+  and WebSocket ingress without changing Team data.
 - `backup` and `restore` call the existing scripts with the exact generated
   Compose model. Restore remains staged, no-overwrite, and requires the Server
   to be stopped.
-- `upgrade` verifies the target pin/schema, requires the existing verified
-  backup path before target Compose execution, validates target configuration
-  in isolation, and commits the new manifest only after readiness. A failure
-  keeps the old manifest/backup and reports the currently inspected image while
-  preserving the documented forward-only migration boundary.
+- `upgrade` verifies the target pin/schema and the existing Owner recovery plus
+  optional legacy-token authority before backup or target Compose execution.
+  Missing, malformed or unsafe authority fails closed without regeneration.
+  It then requires the existing verified backup path, validates target
+  configuration in isolation, and commits the new manifest only after
+  readiness. A later failure keeps the old manifest/backup and reports the
+  currently inspected image while preserving the documented forward-only
+  migration boundary.
 - `trust-rotation prepare` provisions and publishes one strictly newer private
   CA while the old CA stays first; `activate` requires all eligible Device
   acknowledgements and new-chain readiness, with current-first rollback.
@@ -175,8 +179,9 @@ rejection, local/direct network
 rendering, exact release pin and exhaustive content validation, permissions,
 no-secret output/configuration, successful reentry with an existing database,
 each recorded external crash cut, conflicting reentry, delegated
-backup/restore, backup-before-upgrade, failed-upgrade revision reporting, and
-non-purging uninstall. The release verifier separately owns packaging evidence;
+backup/restore, invalid-authority rejection before backup or Compose,
+backup-before-upgrade, failed-upgrade revision reporting, and non-purging
+uninstall. The release verifier separately owns packaging evidence;
 real Docker Compose and live TLS evidence is recorded in
 `docs/acceptance/ops-008-central-controller.md`. It covers isolated local and
 direct-HTTPS host installs without claiming public ACME or a physical second

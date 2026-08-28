@@ -123,12 +123,22 @@ This follow-up candidate contains `RUN-013` terminal-Delivery metric fencing and
 schema version 48. Package evidence does not assert that the physical Windows
 Device has installed or reported the new build.
 
+The first physical Central upgrade rehearsal exposed a lifecycle preflight
+gap recorded by [OPS-010](ops-010-lifecycle-secret-preflight.md): a corrupted
+zero-byte recovery source passed the released `doctor`, and the released
+`upgrade` reached container replacement before `secret-init` rejected it. The
+old revision was restored with the exact retained authority and remained
+healthy, but this failed rehearsal cannot be promoted to upgrade evidence.
+`v0.4.0-qa030.2` therefore remains valid package evidence only; a follow-up
+exact candidate containing `OPS-010` is required for the physical closure run.
+
 ## Remaining Physical Gate
 
-`QA-030` is not `DONE`. The follow-up exact-tag public package gate passes,
+`QA-030` is not `DONE`. The `qa030.2` exact-tag public package gate passes,
 including native Windows Bridge Desktop and installer assets. The physical
-Windows Device from the partial record must now upgrade in place, without
-re-pairing, and reconnect to the existing Central using its retained profile:
+Windows Device from the partial record must install a follow-up exact candidate
+in place, without re-pairing, and reconnect to the existing Central using its
+retained profile:
 
 - `public_ca`, verified only by the Bridge host system trust store; or
 - `private_scoped_ca`, bootstrapped from the exact pairing link and retained

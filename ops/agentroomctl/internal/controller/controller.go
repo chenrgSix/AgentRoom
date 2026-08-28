@@ -694,22 +694,8 @@ func ensureBootstrapDirectories(dataRoot string) error {
 }
 
 func ensureSecret(path string, random io.Reader) error {
-	if info, err := os.Lstat(path); err == nil {
-		if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 || info.Mode().Perm()&0o077 != 0 {
-			return fmt.Errorf("existing secret %s must be a regular 0600-style file", path)
-		}
-		value, err := readBoundedFile(path, 1_024)
-		if err != nil {
-			return err
-		}
-		trimmed := strings.TrimSpace(string(value))
-		if len(trimmed) != 64 {
-			return fmt.Errorf("existing secret %s has an invalid length", path)
-		}
-		if _, err := hex.DecodeString(trimmed); err != nil {
-			return fmt.Errorf("existing secret %s is not hexadecimal", path)
-		}
-		return nil
+	if _, err := os.Lstat(path); err == nil {
+		return validateSecret(path)
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
@@ -739,6 +725,24 @@ func ensureSecret(path string, random io.Reader) error {
 		return err
 	}
 	remove = false
+	return nil
+}
+
+func validateSecret(path string) error {
+	if err := inspectPrivateFile(path); err != nil {
+		return err
+	}
+	value, err := readBoundedFile(path, 1_024)
+	if err != nil {
+		return err
+	}
+	trimmed := strings.TrimSpace(string(value))
+	if len(trimmed) != 64 {
+		return fmt.Errorf("existing secret %s has an invalid length", path)
+	}
+	if _, err := hex.DecodeString(trimmed); err != nil {
+		return fmt.Errorf("existing secret %s is not hexadecimal", path)
+	}
 	return nil
 }
 

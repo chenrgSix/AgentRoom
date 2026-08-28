@@ -564,6 +564,66 @@ func TestFailedUpgradeReportsActiveImageAndPreservesOldManifest(t *testing.T) {
 	}
 }
 
+func TestUpgradeRejectsMalformedOwnerSecretBeforeBackupOrCompose(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createRelease(t, root, "v1.2.3", 1)
+	targetRelease := createRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	if _, err := control.Install(context.Background(), installOptions(currentRelease, dataRoot)); err != nil {
+		t.Fatal(err)
+	}
+	paths := installationPaths(dataRoot)
+	if err := os.WriteFile(paths.OwnerSecretPath, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	start := len(runner.commands)
+	requireActionCode(t, control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}), "UPGRADE_SECRET_INVALID")
+	for _, command := range runner.commands[start:] {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if command.Name == "bash" || strings.Contains(joined, " config --quiet") || strings.Contains(joined, " up -d") {
+			t.Fatalf("invalid recovery secret crossed the upgrade mutation boundary: %s", joined)
+		}
+	}
+	if info, err := os.Stat(paths.OwnerSecretPath); err != nil || info.Size() != 0 {
+		t.Fatalf("upgrade regenerated or replaced the invalid recovery secret: %v %v", info, err)
+	}
+	manifest, _, _ := loadManifest(paths.ManifestPath)
+	if manifest.ReleaseVersion != "v1.2.3" || manifest.LastSuccessfulStep != "ready" {
+		t.Fatalf("secret preflight failure changed the committed manifest: %+v", manifest)
+	}
+}
+
+func TestDoctorRejectsMalformedOwnerSecretBeforeReadiness(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	readinessChecks := 0
+	dependencies := testDependencies(runner, &bytes.Buffer{})
+	dependencies.CheckReadiness = func(context.Context, ReadinessInput) error {
+		readinessChecks++
+		return nil
+	}
+	control := New(dependencies)
+	if _, err := control.Install(context.Background(), installOptions(releaseDir, dataRoot)); err != nil {
+		t.Fatal(err)
+	}
+	readinessChecks = 0
+	paths := installationPaths(dataRoot)
+	if err := os.WriteFile(paths.OwnerSecretPath, []byte("not-a-valid-secret\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	requireActionCode(t, control.Doctor(context.Background(), dataRoot), "SECRET_INVALID")
+	if readinessChecks != 0 {
+		t.Fatal("doctor reached network readiness with a malformed recovery secret")
+	}
+}
+
 func TestUpgradeRejectsAnotherHostTargetBeforeBackup(t *testing.T) {
 	root := t.TempDir()
 	currentRelease := createRelease(t, root, "v1.2.3", 1)

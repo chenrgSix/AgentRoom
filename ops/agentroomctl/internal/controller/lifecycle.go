@@ -64,12 +64,12 @@ func (controller *Controller) Doctor(ctx context.Context, dataRoot string) error
 	if err := inspectPrivateFile(installation.ManifestPath); err != nil {
 		return actionError("MANIFEST_INVALID", "installation manifest permissions are unsafe", "Restore mode 0600 and ownership before continuing.", err)
 	}
-	if err := inspectPrivateFile(installation.OwnerSecretPath); err != nil {
-		return actionError("SECRET_INVALID", "Owner recovery secret permissions are unsafe", "Restore the original 0600 recovery file; never generate a replacement for an existing Owner.", err)
+	if err := validateSecret(installation.OwnerSecretPath); err != nil {
+		return actionError("SECRET_INVALID", "Owner recovery secret is missing, malformed, or unsafe", "Restore the exact original 0600 recovery file; never generate a replacement for an existing Owner.", err)
 	}
 	if installation.Manifest.LegacyServerToken {
-		if err := inspectPrivateFile(installation.ServerSecretPath); err != nil {
-			return actionError("SECRET_INVALID", "legacy Server Token permissions are unsafe", "Restore the original 0600 Token file or complete an explicit token-free migration.", err)
+		if err := validateSecret(installation.ServerSecretPath); err != nil {
+			return actionError("SECRET_INVALID", "legacy Server Token is missing, malformed, or unsafe", "Restore the exact original 0600 Token file or complete an explicit token-free migration.", err)
 		}
 	}
 	environment, err := installationEnvironment(installation)
@@ -248,6 +248,14 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 	}
 	if metadata.DataSchemaVersion < current.Manifest.DataSchemaVersion {
 		return actionError("UPGRADE_SCHEMA_INCOMPATIBLE", "target release owns an older data schema", "Select a forward-compatible release; automatic database downgrade is not supported.", nil)
+	}
+	if err := validateSecret(current.OwnerSecretPath); err != nil {
+		return actionError("UPGRADE_SECRET_INVALID", "upgrade stopped because the Owner recovery secret is missing, malformed, or unsafe", "Restore the exact original 0600 recovery file before retrying; never generate a replacement for an existing Owner.", err)
+	}
+	if current.Manifest.LegacyServerToken {
+		if err := validateSecret(current.ServerSecretPath); err != nil {
+			return actionError("UPGRADE_SECRET_INVALID", "upgrade stopped because the legacy Server Token is missing, malformed, or unsafe", "Restore the exact original 0600 Token file or complete an explicit token-free migration before retrying.", err)
+		}
 	}
 	if err := controller.Backup(ctx, current.Manifest.DataRoot); err != nil {
 		return actionError("UPGRADE_BACKUP_FAILED", "upgrade stopped because the required verified backup failed", "Correct the backup failure before changing any running revision.", err)
