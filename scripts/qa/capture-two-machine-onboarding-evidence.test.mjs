@@ -38,6 +38,10 @@ function seed(database) {
       device_id TEXT PRIMARY KEY, connection_epoch INTEGER NOT NULL,
       bridge_version TEXT NOT NULL, observed_at TEXT NOT NULL
     );
+    CREATE TABLE device_presence (
+      device_id TEXT PRIMARY KEY, connection_epoch INTEGER NOT NULL,
+      adapter_available INTEGER NOT NULL, last_heartbeat_at TEXT NOT NULL
+    );
     CREATE TABLE agents (
       agent_id TEXT PRIMARY KEY, team_id TEXT NOT NULL, device_id TEXT NOT NULL,
       integration_mode TEXT NOT NULL, enabled INTEGER NOT NULL, presence TEXT NOT NULL,
@@ -45,20 +49,21 @@ function seed(database) {
     );
     CREATE TABLE messages (
       message_id TEXT PRIMARY KEY, room_id TEXT NOT NULL, trace_id TEXT NOT NULL,
-      sender_type TEXT NOT NULL, sender_id TEXT NOT NULL
+      sender_type TEXT NOT NULL, sender_id TEXT NOT NULL, created_at TEXT NOT NULL
     );
     CREATE TABLE runs (
       run_id TEXT PRIMARY KEY, trace_id TEXT NOT NULL, room_id TEXT NOT NULL,
       target_agent_id TEXT NOT NULL, state TEXT NOT NULL, last_sequence INTEGER NOT NULL,
-      trigger_message_id TEXT NOT NULL
+      trigger_message_id TEXT NOT NULL, created_at TEXT NOT NULL
     );
     CREATE TABLE run_deliveries (
       run_id TEXT PRIMARY KEY, trace_id TEXT NOT NULL, device_id TEXT NOT NULL,
-      state TEXT NOT NULL, send_count INTEGER NOT NULL, accepted_at TEXT
+      state TEXT NOT NULL, send_count INTEGER NOT NULL, created_at TEXT NOT NULL,
+      last_sent_at TEXT, accepted_at TEXT
     );
     CREATE TABLE run_events (
       run_id TEXT NOT NULL, sequence INTEGER NOT NULL, event_type TEXT NOT NULL,
-      status TEXT, trace_id TEXT NOT NULL
+      status TEXT, trace_id TEXT NOT NULL, created_at TEXT NOT NULL
     );
   `);
   database.prepare("INSERT INTO rooms VALUES (?, ?)").run(ids.roomId, ids.teamId);
@@ -74,7 +79,10 @@ function seed(database) {
   `).run(ids.teamId, ids.deviceId, "e".repeat(64));
   database.prepare(`
     INSERT INTO device_bridge_observations VALUES (?, 8, '0.4.0-qa030.2', ?)
-  `).run(ids.deviceId, "2026-08-28T10:09:00.000Z");
+  `).run(ids.deviceId, "2026-08-28T10:05:00.000Z");
+  database.prepare(`
+    INSERT INTO device_presence VALUES (?, 8, 1, ?)
+  `).run(ids.deviceId, "2026-08-28T10:09:30.000Z");
   const insertAgent = database.prepare(`
     INSERT INTO agents VALUES (?, ?, ?, 'managed', 1, 'ready', ?, ?)
   `);
@@ -92,31 +100,76 @@ function seed(database) {
     `workspace_${"d".repeat(64)}`,
     "Review Workspace"
   );
+  const timelines = {
+    online: {
+      run: "2026-08-28T10:06:00.000Z",
+      sent: "2026-08-28T10:06:01.000Z",
+      accepted: "2026-08-28T10:06:02.000Z",
+      events: [
+        "2026-08-28T10:06:02.000Z",
+        "2026-08-28T10:06:03.000Z",
+        "2026-08-28T10:06:04.000Z",
+        "2026-08-28T10:06:05.000Z"
+      ]
+    },
+    reconnect: {
+      run: "2026-08-28T10:04:00.000Z",
+      sent: "2026-08-28T10:05:01.000Z",
+      accepted: "2026-08-28T10:05:02.000Z",
+      events: [
+        "2026-08-28T10:05:02.000Z",
+        "2026-08-28T10:05:03.000Z",
+        "2026-08-28T10:05:04.000Z",
+        "2026-08-28T10:05:05.000Z"
+      ]
+    }
+  };
   for (const [kind, sendCount] of [["online", 1], ["reconnect", 2]]) {
     const runId = ids[`${kind}RunId`];
     const traceId = ids[`${kind}TraceId`];
     const messageId = `msg_qa002${kind}0001`;
-    database.prepare("INSERT INTO messages VALUES (?, ?, ?, 'member', 'member_test0001')")
-      .run(messageId, ids.roomId, traceId);
-    database.prepare("INSERT INTO runs VALUES (?, ?, ?, ?, 'completed', 4, ?)")
-      .run(runId, traceId, ids.roomId, ids.agentId, messageId);
-    database.prepare("INSERT INTO run_deliveries VALUES (?, ?, ?, 'accepted', ?, ?)")
-      .run(runId, traceId, ids.deviceId, sendCount, "2026-08-28T10:01:00.000Z");
-    const insertEvent = database.prepare("INSERT INTO run_events VALUES (?, ?, ?, ?, ?)");
-    insertEvent.run(runId, 1, "status", "delivered", traceId);
-    insertEvent.run(runId, 2, "status", "working", traceId);
-    insertEvent.run(runId, 3, "reply", null, traceId);
-    insertEvent.run(runId, 4, "status", "completed", traceId);
-    database.prepare("INSERT INTO messages VALUES (?, ?, ?, 'agent', ?)")
-      .run(`msg_qa002${kind}reply01`, ids.roomId, traceId, ids.agentId);
+    const timeline = timelines[kind];
+    database.prepare(`
+      INSERT INTO messages VALUES (?, ?, ?, 'member', 'member_test0001', ?)
+    `).run(messageId, ids.roomId, traceId, timeline.run);
+    database.prepare(`
+      INSERT INTO runs VALUES (?, ?, ?, ?, 'completed', 4, ?, ?)
+    `).run(runId, traceId, ids.roomId, ids.agentId, messageId, timeline.run);
+    database.prepare(`
+      INSERT INTO run_deliveries VALUES (?, ?, ?, 'accepted', ?, ?, ?, ?)
+    `).run(
+      runId,
+      traceId,
+      ids.deviceId,
+      sendCount,
+      timeline.run,
+      timeline.sent,
+      timeline.accepted
+    );
+    const insertEvent = database.prepare(`
+      INSERT INTO run_events VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    insertEvent.run(runId, 1, "status", "delivered", traceId, timeline.events[0]);
+    insertEvent.run(runId, 2, "status", "working", traceId, timeline.events[1]);
+    insertEvent.run(runId, 3, "reply", null, traceId, timeline.events[2]);
+    insertEvent.run(runId, 4, "status", "completed", traceId, timeline.events[3]);
+    database.prepare("INSERT INTO messages VALUES (?, ?, ?, 'agent', ?, ?)")
+      .run(
+        `msg_qa002${kind}reply01`,
+        ids.roomId,
+        traceId,
+        ids.agentId,
+        timeline.events[2]
+      );
   }
 }
 
 function input(overrides = {}) {
   return {
-    schemaVersion: 3,
+    schemaVersion: 4,
     utcStart: "2026-08-28T10:00:00.000Z",
     utcEnd: "2026-08-28T10:10:00.000Z",
+    metricsCapturedAt: "2026-08-28T10:09:45.000Z",
     serverCommit: "a".repeat(40),
     machineA: "macOS arm64 Central host",
     machineB: "Linux amd64 client host",
@@ -134,6 +187,7 @@ function input(overrides = {}) {
       desktopDeepLinkOpened: true,
       verificationPhraseMatched: true,
       runtimeSelfTestCode: "RUNTIME_PROBE_OK",
+      runtimeLaunchHadNoUnexpectedConsoleWindow: true,
       bridgeStoppedBeforeReconnectRun: true,
       reconnectRunQueuedBeforeRestart: true,
       sameDeviceReconnected: true,
@@ -143,6 +197,15 @@ function input(overrides = {}) {
       noServerTokenCopied: true,
       noDeviceCredentialCopied: true,
       workspaceProjectionPathFree: true
+    },
+    review: {
+      reviewedAt: "2026-08-28T10:09:50.000Z",
+      reviewerRole: "machine-b operator",
+      physicalHostsConfirmed: true,
+      currentBuildExecutionConfirmed: true,
+      evidenceWindowConfirmed: true,
+      attestationsConfirmed: true,
+      result: "PASS"
     },
     result: "PASS",
     ...overrides
@@ -189,6 +252,9 @@ test("physical evidence capture cross-checks Runs and writes only sanitized fact
   assert.match(output, /`private_scoped_ca` \/ Bridge exact-origin private CA/u);
   assert.match(output, /Initial pairing Bridge version: 0\.4\.0-rc\.1/u);
   assert.match(output, /Current Bridge version\/archive SHA-256: 0\.4\.0-qa030\.2/u);
+  assert.match(output, /connection epoch 8/u);
+  assert.match(output, /## Human review receipt/u);
+  assert.match(output, /Reviewer role: machine-b operator/u);
   assert.match(output, /no CA installed into the client OS/u);
   assert.match(output, /no application TLS\s+verification bypass/u);
   assert.match(output, /`queued` → `delivered` → `working` → `completed`/u);
@@ -229,7 +295,7 @@ test("physical evidence capture accepts the public system-CA profile", async () 
   assert.match(output, /exactly one `consumed` session/u);
 });
 
-test("the runbook schema-v3 sample stays structurally aligned with the verifier", async () => {
+test("the runbook schema-v4 sample stays structurally aligned with the verifier", async () => {
   const runbook = await readFile(new URL(
     "../../docs/acceptance/qa-002-two-machine-managed-agent.md",
     import.meta.url
@@ -240,11 +306,14 @@ test("the runbook schema-v3 sample stays structurally aligned with the verifier"
   const expected = input();
   delete expected.secondAgentId;
 
-  assert.equal(documented.schemaVersion, 3);
+  assert.equal(documented.schemaVersion, 4);
   assert.deepEqual(Object.keys(documented).sort(), Object.keys(expected).sort());
   assert.deepEqual(
     Object.keys(documented.attestations).sort(),
     Object.keys(expected.attestations).sort()
+  );
+  assert.deepEqual(
+    Object.keys(documented.review).sort(), Object.keys(expected.review).sort()
   );
 });
 
@@ -258,7 +327,7 @@ test("physical evidence capture rejects stale or inconsistent TLS evidence", asy
     databasePath: files.databasePath,
     metricsPath: files.metricsPath,
     outputPath: files.outputPath
-  }), /schemaVersion must be 3/u);
+  }), /schemaVersion must be 4/u);
 
   const manual = input({ tlsProfile: "manual_ca" });
   delete manual.secondAgentId;
@@ -292,6 +361,7 @@ test("physical evidence capture rejects stale or inconsistent TLS evidence", asy
   }), /missing=noManualCaInstalled/u);
 
   for (const attestation of [
+    "runtimeLaunchHadNoUnexpectedConsoleWindow",
     "noManualCaInstalled",
     "noApplicationTlsVerificationBypass"
   ]) {
@@ -380,6 +450,178 @@ test("physical evidence capture binds the package version to authenticated hello
     metricsPath: files.metricsPath,
     outputPath: files.outputPath
   }), /current authenticated Bridge version observation does not match/u);
+});
+
+test("physical evidence capture binds every observation to one bounded time window", async () => {
+  const files = await fixture();
+  const future = input({
+    utcStart: "2026-08-29T10:00:00.000Z",
+    utcEnd: "2026-08-29T10:10:00.000Z",
+    metricsCapturedAt: "2026-08-29T10:09:45.000Z",
+    review: {
+      ...input().review,
+      reviewedAt: "2026-08-29T10:09:50.000Z"
+    }
+  });
+  delete future.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(future));
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /persisted pairing consumed_at falls outside the evidence window/u);
+
+  const unbounded = input({
+    utcStart: "2026-08-27T10:00:00.000Z"
+  });
+  delete unbounded.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(unbounded));
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /evidence window must not exceed 24 hours/u);
+
+  const earlyReview = input({
+    review: {
+      ...input().review,
+      reviewedAt: "2026-08-28T10:09:40.000Z"
+    }
+  });
+  delete earlyReview.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(earlyReview));
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /review\.reviewedAt must not precede metricsCapturedAt/u);
+
+  const unreviewed = input({
+    review: {
+      ...input().review,
+      currentBuildExecutionConfirmed: false
+    }
+  });
+  delete unreviewed.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(unreviewed));
+  await assert.rejects(() => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  }), /review currentBuildExecutionConfirmed must be true/u);
+});
+
+test("physical evidence capture binds metrics to the live observed connection", async () => {
+  const files = await fixture();
+  const source = input();
+  delete source.secondAgentId;
+  await writeFile(files.inputPath, JSON.stringify(source));
+  const capture = () => captureEvidence({
+    inputPath: files.inputPath,
+    databasePath: files.databasePath,
+    metricsPath: files.metricsPath,
+    outputPath: files.outputPath
+  });
+
+  const mismatched = new Database(files.databasePath);
+  mismatched.prepare("UPDATE device_presence SET connection_epoch = 7").run();
+  mismatched.close();
+  await assert.rejects(capture, /presence does not match the authenticated Bridge connection/u);
+
+  const stale = new Database(files.databasePath);
+  stale.prepare(`
+    UPDATE device_presence
+    SET connection_epoch = 8, last_heartbeat_at = '2026-08-28T10:08:00.000Z'
+  `).run();
+  stale.close();
+  await assert.rejects(capture, /current Bridge heartbeat was stale/u);
+});
+
+test("physical evidence capture proves current-build online and reconnect execution", async () => {
+  const onlineFiles = await fixture();
+  const source = input();
+  delete source.secondAgentId;
+  await writeFile(onlineFiles.inputPath, JSON.stringify(source));
+  const onlineDatabase = new Database(onlineFiles.databasePath);
+  onlineDatabase.prepare(`
+    UPDATE messages SET created_at = '2026-08-28T10:04:30.000Z'
+    WHERE trace_id = ? AND sender_type = 'member'
+  `).run(ids.onlineTraceId);
+  onlineDatabase.prepare(`
+    UPDATE runs SET created_at = '2026-08-28T10:04:30.000Z' WHERE run_id = ?
+  `).run(ids.onlineRunId);
+  onlineDatabase.prepare(`
+    UPDATE run_deliveries SET created_at = '2026-08-28T10:04:30.000Z'
+    WHERE run_id = ?
+  `).run(ids.onlineRunId);
+  onlineDatabase.close();
+  await assert.rejects(() => captureEvidence({
+    inputPath: onlineFiles.inputPath,
+    databasePath: onlineFiles.databasePath,
+    metricsPath: onlineFiles.metricsPath,
+    outputPath: onlineFiles.outputPath
+  }), /online Run was not created on the current Bridge connection/u);
+
+  const reconnectFiles = await fixture();
+  await writeFile(reconnectFiles.inputPath, JSON.stringify(source));
+  const reconnectDatabase = new Database(reconnectFiles.databasePath);
+  reconnectDatabase.prepare(`
+    UPDATE messages SET created_at = '2026-08-28T10:05:30.000Z'
+    WHERE trace_id = ? AND sender_type = 'member'
+  `).run(ids.reconnectTraceId);
+  reconnectDatabase.prepare(`
+    UPDATE runs SET created_at = '2026-08-28T10:05:30.000Z' WHERE run_id = ?
+  `).run(ids.reconnectRunId);
+  reconnectDatabase.prepare(`
+    UPDATE run_deliveries SET created_at = '2026-08-28T10:05:30.000Z',
+        last_sent_at = '2026-08-28T10:05:31.000Z',
+        accepted_at = '2026-08-28T10:05:32.000Z'
+    WHERE run_id = ?
+  `).run(ids.reconnectRunId);
+  reconnectDatabase.close();
+  await assert.rejects(() => captureEvidence({
+    inputPath: reconnectFiles.inputPath,
+    databasePath: reconnectFiles.databasePath,
+    metricsPath: reconnectFiles.metricsPath,
+    outputPath: reconnectFiles.outputPath
+  }), /reconnect Run was not queued before the current Bridge connection/u);
+
+  const acceptedFiles = await fixture();
+  await writeFile(acceptedFiles.inputPath, JSON.stringify(source));
+  const acceptedDatabase = new Database(acceptedFiles.databasePath);
+  acceptedDatabase.prepare(`
+    UPDATE run_deliveries
+    SET last_sent_at = '2026-08-28T10:04:58.000Z',
+        accepted_at = '2026-08-28T10:04:59.000Z'
+    WHERE run_id = ?
+  `).run(ids.reconnectRunId);
+  acceptedDatabase.close();
+  await assert.rejects(() => captureEvidence({
+    inputPath: acceptedFiles.inputPath,
+    databasePath: acceptedFiles.databasePath,
+    metricsPath: acceptedFiles.metricsPath,
+    outputPath: acceptedFiles.outputPath
+  }), /reconnect Delivery was not sent and accepted on the current Bridge connection/u);
+
+  const reorderedFiles = await fixture();
+  await writeFile(reorderedFiles.inputPath, JSON.stringify(source));
+  const reorderedDatabase = new Database(reorderedFiles.databasePath);
+  reorderedDatabase.prepare(`
+    UPDATE run_deliveries
+    SET last_sent_at = '2026-08-28T10:05:30.000Z'
+    WHERE run_id = ?
+  `).run(ids.onlineRunId);
+  reorderedDatabase.close();
+  await assert.rejects(() => captureEvidence({
+    inputPath: reorderedFiles.inputPath,
+    databasePath: reorderedFiles.databasePath,
+    metricsPath: reorderedFiles.metricsPath,
+    outputPath: reorderedFiles.outputPath
+  }), /online Message, Run and Delivery timestamps are not ordered/u);
 });
 
 test("physical evidence capture rejects private host details and false reconnect scope", async () => {

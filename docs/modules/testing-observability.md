@@ -63,12 +63,14 @@ consumed pairing session from the current package version persisted by the
 latest authenticated hello, but did not bind the selected Runs, heartbeat or
 metrics capture to that hello or the declared UTC window. A post-completion
 audit reproduced acceptance with a future window, so schema-v3 records are
-historical diagnostic evidence only. `QA-031` owns schema version 4: the
+historical diagnostic evidence only. `QA-031` implements schema version 4: the
 consumed pairing, latest current-build hello, matching live connection epoch,
 fresh heartbeat, reconnect Delivery, online Run, metrics capture and explicit
-human review receipt must all satisfy one ordered time boundary. Focused
-negative fixtures must reject every missing, stale, reordered or mismatched
-component.
+human review receipt all satisfy one ordered time boundary no longer than 24
+hours. Ten focused evidence cases reject missing, stale, reordered or
+mismatched components, unsafe TLS claims and unexpected Runtime console
+windows. This closes the verifier defect, not the physical gate: `QA-002`,
+`QA-028`, `QA-030` and `BRG-046` still require a fresh installed-Windows run.
 
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to

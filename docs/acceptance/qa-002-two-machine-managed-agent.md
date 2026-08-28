@@ -69,27 +69,31 @@ persist an explicit human review receipt. It therefore cannot close this gate.
    least two managed Agents with only opaque Workspace references and aliases.
 6. In Console, explicitly run the saved Codex Runtime self-test and record only
    `RUNTIME_PROBE_OK`. Pairing or Device connectivity must not trigger this
-   provider action automatically.
+   provider action automatically. Confirm the installed Runtime launch does not
+   show an unexpected terminal or console window.
 
-## Online and reconnect Runs
+## Reconnect and online Runs
 
-1. Select the Codex Agent in the dedicated Room and send a unique synthetic
-   nonce instruction containing no project content. Record the resulting Run
-   and trace IDs.
-2. Confirm the first Run reaches `completed`, persists exactly one Agent reply,
-   and one trace reconstructs its triggering Message, Run, accepted Delivery
-   and contiguous Run events.
-3. Stop the Bridge on machine B without revoking its Device. Send a second
-   unique synthetic nonce instruction to the same Agent and confirm its Run is
-   visibly `queued` before restarting Bridge.
-4. Restart the installed Bridge with the same local Device state. Confirm the
-   same Device reconnects, the queued Run reaches `completed`, and exactly one
-   Agent reply is persisted. Do not pair a second Device and do not retry with a
-   new Run ID.
-5. With Bridge reconnected and no acceptance work pending, capture the internal
-   Server `/api/metrics` response on machine A. The public Caddy route correctly
-   hides metrics, so capture it from the trusted host/container boundary rather
-   than weakening ingress policy.
+1. Stop the Bridge on machine B without revoking its Device. Send a unique
+   synthetic nonce instruction containing no project content to the Codex Agent
+   and confirm its Run is visibly `queued`. Record the reconnect Run and trace
+   IDs.
+2. Restart the installed Bridge with the same local Device state. Confirm the
+   same Device reconnects on the current packaged version, the queued Run
+   reaches `completed`, and exactly one Agent reply is persisted. Do not pair a
+   second Device and do not retry with a new Run ID.
+3. Without restarting Bridge again, send a second unique synthetic nonce
+   instruction to the same Codex Agent. Record the online Run and trace IDs.
+4. Confirm the online Run reaches `completed`, persists exactly one Agent
+   reply, and one trace reconstructs its triggering Message, Run, accepted
+   Delivery and contiguous Run events.
+5. Keep this Bridge connection running with no acceptance work pending. Capture
+   the internal Server `/api/metrics` response on machine A no more than 30
+   seconds after the persisted Device heartbeat, then perform and timestamp the
+   human review. The public Caddy route correctly hides metrics, so capture it
+   from the trusted host/container boundary rather than weakening ingress
+   policy. A later restart invalidates this capture and requires both Runs to be
+   repeated against the newer connection epoch.
 
 ## Machine-readable evidence capture
 
@@ -97,24 +101,26 @@ Create a temporary JSON input containing exactly the fields below. Values shown
 in angle brackets are placeholders; never commit the temporary input or metrics
 file.
 
-The verifier accepts schema version 3 only. It rejects older shapes,
+The verifier accepts schema version 4 only. It rejects older shapes,
 `manual_ca`, a TLS profile/verification-method mismatch, either missing
 no-manual-CA assertion, and any false assertion before reading evidence into a
-PASS record. It also requires exactly one consumed pairing session for the
-supplied Team and Device, matches its initial Bridge version, independently
-matches the current packaged version to the latest authenticated
-`bridge.hello`, and proves the selected public or private-scoped TLS profile
-from persisted pairing facts. An in-place Bridge upgrade therefore preserves
-the Device and pairing identity instead of forcing a second pairing.
+PASS record. The evidence window is at most 24 hours and contains the consumed
+pairing, current packaged `bridge.hello`, matching connection epoch, fresh
+heartbeat, selected Runs, metrics capture and later human review. The reconnect
+Run must be created while Bridge is offline and accepted only after the latest
+hello; the online Run must be created and completed on that same connection.
+An in-place Bridge upgrade therefore preserves the Device and pairing identity
+instead of forcing a second pairing while still proving current-build work.
 Private-scoped evidence additionally requires the complete stored descriptor
 and the claiming Bridge's scoped-trust capability, without rendering the
 origin, installation identity, epoch, or CA digest.
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "utcStart": "<UTC RFC3339>",
   "utcEnd": "<UTC RFC3339>",
+  "metricsCapturedAt": "<UTC RFC3339>",
   "serverCommit": "<40 lowercase hex characters>",
   "machineA": "<sanitized OS and architecture>",
   "machineB": "<different sanitized OS and architecture>",
@@ -138,6 +144,7 @@ origin, installation identity, epoch, or CA digest.
     "desktopDeepLinkOpened": true,
     "verificationPhraseMatched": true,
     "runtimeSelfTestCode": "RUNTIME_PROBE_OK",
+    "runtimeLaunchHadNoUnexpectedConsoleWindow": true,
     "bridgeStoppedBeforeReconnectRun": true,
     "reconnectRunQueuedBeforeRestart": true,
     "sameDeviceReconnected": true,
@@ -147,6 +154,15 @@ origin, installation identity, epoch, or CA digest.
     "noServerTokenCopied": true,
     "noDeviceCredentialCopied": true,
     "workspaceProjectionPathFree": true
+  },
+  "review": {
+    "reviewedAt": "<UTC RFC3339 at or after metrics capture>",
+    "reviewerRole": "machine-b operator",
+    "physicalHostsConfirmed": true,
+    "currentBuildExecutionConfirmed": true,
+    "evidenceWindowConfirmed": true,
+    "attestationsConfirmed": true,
+    "result": "PASS"
   },
   "result": "PASS"
 }
@@ -172,20 +188,28 @@ The verifier fails closed unless:
   proves the complete stored descriptor and Bridge capability while public
   evidence proves no private descriptor was attached;
 - the latest authenticated Bridge hello for that same Device binds the current
-  packaged version independently of the immutable pairing version;
+  packaged version independently of the immutable pairing version, and current
+  Device presence uses the same connection epoch with an available adapter;
+- the persisted heartbeat precedes metrics capture by no more than 30 seconds;
 - both Runs, their trigger Messages, Deliveries and contiguous events use the
   exact supplied Room, Agent, Device and trace identities;
+- the reconnect Run was created before the latest hello but sent, accepted and
+  completed after it, while the online Run was created, sent, accepted and
+  completed after that hello;
 - each Delivery was accepted, each Run completed, and each trace produced
   exactly one reply event and one Agent Message;
 - current metrics show a ready Server, authenticated Bridge, at least two
   managed Agents, no queued or pending acceptance work, and at least two
   completed Runs; and
+- every persisted and supplied timestamp falls within one window no longer than
+  24 hours, metrics follow all machine evidence, and review follows metrics;
 - every physical/pairing/self-test/reconnect assertion is explicit and the
-  selected TLS profile is `public_ca` or `private_scoped_ca`; and
+  selected TLS profile is `public_ca` or `private_scoped_ca`;
 - human-observed attestations confirm no OS CA import or verification-disabled
-  application request, while the output contains no credential-shaped text,
-  private address, complete CA digest, certificate material or common home
-  path.
+  application request, and the explicit review receipt confirms the physical
+  hosts, current-build execution, evidence window and attestations; and
+- the output contains no credential-shaped text, private address, complete CA
+  digest, certificate material or common home path.
 
 The output file is created once with mode `0600`; the verifier never overwrites
 an earlier record. Delete the temporary JSON and metrics files through the
@@ -193,10 +217,12 @@ host's approved secure-cleanup process after review.
 
 ## Review and completion
 
-Review the generated Markdown against the two machines while they are still
+Review the proposed input against the two machines while they are still
 available. Confirm the host descriptions really identify distinct physical
 machines and the attested observations occurred; the database cannot prove
-physical separation by itself.
+physical separation by itself. Add the review timestamp, reviewer role and all
+four explicit confirmations before running the verifier. The generated
+Markdown embeds that review receipt and is then committed without modification.
 
 The [2026-08-28 schema-v3 record](evidence/qa-002-20260828.md) is retained as
 historical diagnostic evidence. A post-completion audit demonstrated that its

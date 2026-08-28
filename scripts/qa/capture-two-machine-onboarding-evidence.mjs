@@ -8,6 +8,7 @@ const inputKeys = new Set([
   "schemaVersion",
   "utcStart",
   "utcEnd",
+  "metricsCapturedAt",
   "serverCommit",
   "machineA",
   "machineB",
@@ -26,6 +27,7 @@ const inputKeys = new Set([
   "reconnectRunId",
   "reconnectTraceId",
   "attestations",
+  "review",
   "result"
 ]);
 
@@ -35,6 +37,7 @@ const attestationKeys = new Set([
   "desktopDeepLinkOpened",
   "verificationPhraseMatched",
   "runtimeSelfTestCode",
+  "runtimeLaunchHadNoUnexpectedConsoleWindow",
   "bridgeStoppedBeforeReconnectRun",
   "reconnectRunQueuedBeforeRestart",
   "sameDeviceReconnected",
@@ -44,6 +47,16 @@ const attestationKeys = new Set([
   "noServerTokenCopied",
   "noDeviceCredentialCopied",
   "workspaceProjectionPathFree"
+]);
+
+const reviewKeys = new Set([
+  "reviewedAt",
+  "reviewerRole",
+  "physicalHostsConfirmed",
+  "currentBuildExecutionConfirmed",
+  "evidenceWindowConfirmed",
+  "attestationsConfirmed",
+  "result"
 ]);
 
 const forbiddenEvidence = [
@@ -101,6 +114,18 @@ function timestamp(value, label) {
   return normalized;
 }
 
+function timestampMillis(value, label) {
+  return Date.parse(timestamp(value, label));
+}
+
+function assertTimestampRange(value, label, start, end) {
+  const instant = timestampMillis(value, label);
+  if (instant < start || instant > end) {
+    fail(`${label} falls outside the evidence window`);
+  }
+  return instant;
+}
+
 function normalizedBridgeVersion(value, label) {
   const normalized = safeText(value, label, 80).replace(/^v/u, "");
   if (!/^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$/u.test(normalized)) {
@@ -118,10 +143,31 @@ function canonicalPersistedBridgeVersion(value, label) {
 function validateInput(input) {
   exactKeys(input, inputKeys, "input");
   exactKeys(input.attestations, attestationKeys, "attestations");
-  if (input.schemaVersion !== 3) fail("schemaVersion must be 3");
+  exactKeys(input.review, reviewKeys, "review");
+  if (input.schemaVersion !== 4) fail("schemaVersion must be 4");
   const utcStart = timestamp(input.utcStart, "utcStart");
   const utcEnd = timestamp(input.utcEnd, "utcEnd");
-  if (Date.parse(utcStart) >= Date.parse(utcEnd)) fail("utcEnd must follow utcStart");
+  const utcStartMillis = Date.parse(utcStart);
+  const utcEndMillis = Date.parse(utcEnd);
+  if (utcStartMillis >= utcEndMillis) fail("utcEnd must follow utcStart");
+  if (utcEndMillis - utcStartMillis > 24 * 60 * 60 * 1000) {
+    fail("evidence window must not exceed 24 hours");
+  }
+  const metricsCapturedAt = assertTimestampRange(
+    input.metricsCapturedAt,
+    "metricsCapturedAt",
+    utcStartMillis,
+    utcEndMillis
+  );
+  const reviewedAt = assertTimestampRange(
+    input.review.reviewedAt,
+    "review.reviewedAt",
+    utcStartMillis,
+    utcEndMillis
+  );
+  if (reviewedAt < metricsCapturedAt) {
+    fail("review.reviewedAt must not precede metricsCapturedAt");
+  }
   if (!/^[0-9a-f]{40}$/u.test(input.serverCommit)) {
     fail("serverCommit must be one exact 40-character commit");
   }
@@ -164,6 +210,21 @@ function validateInput(input) {
       fail(`attestation ${key} must be true`);
     }
   }
+  safeText(input.review.reviewerRole, "review.reviewerRole", 80);
+  if (!["machine-a operator", "machine-b operator", "joint machine operators"].includes(
+    input.review.reviewerRole
+  )) {
+    fail("review.reviewerRole is not an accepted human operator role");
+  }
+  for (const key of [
+    "physicalHostsConfirmed",
+    "currentBuildExecutionConfirmed",
+    "evidenceWindowConfirmed",
+    "attestationsConfirmed"
+  ]) {
+    if (input.review[key] !== true) fail(`review ${key} must be true`);
+  }
+  if (input.review.result !== "PASS") fail("review result must be PASS");
   if (input.result !== "PASS") fail("result must be PASS");
   return input;
 }
@@ -205,6 +266,8 @@ function parseMetrics(source) {
 }
 
 function assertDatabaseScope(database, input) {
+  const evidenceStart = Date.parse(input.utcStart);
+  const metricsCapturedAt = Date.parse(input.metricsCapturedAt);
   const room = database.prepare(`
     SELECT team_id FROM rooms WHERE room_id = ?
   `).get(input.roomId);
@@ -242,6 +305,12 @@ function assertDatabaseScope(database, input) {
   ) {
     fail("consumed pairing identity or initial Bridge version does not match");
   }
+  const pairingConsumedAt = assertTimestampRange(
+    pairing.consumed_at,
+    "persisted pairing consumed_at",
+    evidenceStart,
+    metricsCapturedAt
+  );
   const trustFields = [
     pairing.trust_mode,
     pairing.trust_origin,
@@ -283,6 +352,29 @@ function assertDatabaseScope(database, input) {
   ) {
     fail("current authenticated Bridge version observation does not match");
   }
+  const observedAt = assertTimestampRange(
+    observation.observed_at,
+    "persisted current Bridge observed_at",
+    evidenceStart,
+    metricsCapturedAt
+  );
+  const presence = database.prepare(`
+    SELECT connection_epoch, adapter_available, last_heartbeat_at
+    FROM device_presence WHERE device_id = ?
+  `).get(input.deviceId);
+  if (!presence || presence.connection_epoch !== observation.connection_epoch ||
+      presence.adapter_available !== 1) {
+    fail("current Device presence does not match the authenticated Bridge connection");
+  }
+  const heartbeatAt = assertTimestampRange(
+    presence.last_heartbeat_at,
+    "persisted current Bridge last_heartbeat_at",
+    observedAt,
+    metricsCapturedAt
+  );
+  if (metricsCapturedAt - heartbeatAt > 30_000) {
+    fail("current Bridge heartbeat was stale at metrics capture time");
+  }
   const agents = database.prepare(`
     SELECT count(*) AS count
     FROM agents
@@ -316,19 +408,24 @@ function assertDatabaseScope(database, input) {
     currentBridgeVersion: normalizedBridgeVersion(
       input.bridgeVersion,
       "bridgeVersion"
-    )
+    ),
+    pairingConsumedAt: new Date(pairingConsumedAt).toISOString(),
+    connectionEpoch: observation.connection_epoch,
+    observedAt: new Date(observedAt).toISOString(),
+    heartbeatAt: new Date(heartbeatAt).toISOString()
   };
 }
 
-function inspectRun(database, input, kind) {
+function inspectRun(database, input, kind, scope) {
   const runId = input[`${kind}RunId`];
   const traceId = input[`${kind}TraceId`];
   const row = database.prepare(`
     SELECT r.run_id, r.trace_id, r.room_id, r.target_agent_id, r.state,
-           r.last_sequence, r.trigger_message_id,
-           m.trace_id AS message_trace_id,
+           r.last_sequence, r.trigger_message_id, r.created_at AS run_created_at,
+           m.trace_id AS message_trace_id, m.created_at AS trigger_created_at,
            d.trace_id AS delivery_trace_id, d.device_id, d.state AS delivery_state,
-           d.send_count, d.accepted_at
+           d.send_count, d.created_at AS delivery_created_at, d.last_sent_at,
+           d.accepted_at
     FROM runs r
     JOIN messages m ON m.message_id = r.trigger_message_id
     JOIN run_deliveries d ON d.run_id = r.run_id
@@ -340,16 +437,86 @@ function inspectRun(database, input, kind) {
     fail(`${kind} Run trace or ownership chain does not match`);
   }
   if (row.state !== "completed" || row.delivery_state !== "accepted" ||
-      row.send_count < 1 || !row.accepted_at) {
+      row.send_count < 1 || !row.last_sent_at || !row.accepted_at) {
     fail(`${kind} Run did not reach accepted completed state`);
   }
+  const evidenceStart = Date.parse(input.utcStart);
+  const metricsCapturedAt = Date.parse(input.metricsCapturedAt);
+  const observedAt = Date.parse(scope.observedAt);
+  const runCreatedAt = assertTimestampRange(
+    row.run_created_at,
+    `${kind} Run created_at`,
+    evidenceStart,
+    metricsCapturedAt
+  );
+  const triggerCreatedAt = assertTimestampRange(
+    row.trigger_created_at,
+    `${kind} trigger Message created_at`,
+    evidenceStart,
+    metricsCapturedAt
+  );
+  const deliveryCreatedAt = assertTimestampRange(
+    row.delivery_created_at,
+    `${kind} Delivery created_at`,
+    evidenceStart,
+    metricsCapturedAt
+  );
+  const lastSentAt = assertTimestampRange(
+    row.last_sent_at,
+    `${kind} Delivery last_sent_at`,
+    evidenceStart,
+    metricsCapturedAt
+  );
+  const acceptedAt = assertTimestampRange(
+    row.accepted_at,
+    `${kind} Delivery accepted_at`,
+    evidenceStart,
+    metricsCapturedAt
+  );
+  const deliveryTimeline = [
+    triggerCreatedAt,
+    runCreatedAt,
+    deliveryCreatedAt,
+    lastSentAt,
+    acceptedAt
+  ];
+  if (deliveryTimeline.some((instant, index) =>
+    index > 0 && instant < deliveryTimeline[index - 1]
+  )) {
+    fail(`${kind} Message, Run and Delivery timestamps are not ordered`);
+  }
+  if (lastSentAt < observedAt || acceptedAt < observedAt) {
+    fail(`${kind} Delivery was not sent and accepted on the current Bridge connection`);
+  }
+  if (kind === "online") {
+    if ([runCreatedAt, triggerCreatedAt, deliveryCreatedAt].some(
+      (instant) => instant < observedAt
+    )) {
+      fail("online Run was not created on the current Bridge connection");
+    }
+  } else if ([runCreatedAt, triggerCreatedAt, deliveryCreatedAt].some(
+    (instant) => instant >= observedAt
+  )) {
+    fail("reconnect Run was not queued before the current Bridge connection");
+  }
   const events = database.prepare(`
-    SELECT sequence, event_type, status, trace_id
+    SELECT sequence, event_type, status, trace_id, created_at
     FROM run_events WHERE run_id = ? ORDER BY sequence
   `).all(runId);
   if (events.length !== row.last_sequence || events.some(
     (event, index) => event.sequence !== index + 1 || event.trace_id !== traceId
   )) fail(`${kind} Run event sequence is not contiguous under one trace`);
+  const eventInstants = events.map((event, index) => assertTimestampRange(
+    event.created_at,
+    `${kind} Run event ${index + 1} created_at`,
+    acceptedAt,
+    metricsCapturedAt
+  ));
+  if (eventInstants.some((instant, index) =>
+    index > 0 && instant < eventInstants[index - 1]
+  )) {
+    fail(`${kind} Run event timestamps are not ordered`);
+  }
   const statuses = events.filter((event) => event.event_type === "status")
     .map((event) => event.status);
   for (const required of ["delivered", "working", "completed"]) {
@@ -360,17 +527,26 @@ function inspectRun(database, input, kind) {
     fail(`${kind} Run did not persist exactly one reply event`);
   }
   const replies = database.prepare(`
-    SELECT count(*) AS count FROM messages
+    SELECT created_at FROM messages
     WHERE room_id = ? AND trace_id = ? AND sender_type = 'agent'
       AND sender_id = ?
-  `).get(input.roomId, traceId, input.agentId);
-  if (replies.count !== 1) fail(`${kind} Run did not project exactly one Agent reply`);
+  `).all(input.roomId, traceId, input.agentId);
+  if (replies.length !== 1) fail(`${kind} Run did not project exactly one Agent reply`);
+  assertTimestampRange(
+    replies[0].created_at,
+    `${kind} Agent reply created_at`,
+    acceptedAt,
+    metricsCapturedAt
+  );
   return {
     runId,
     traceId,
     states: ["queued", ...statuses],
     deliverySendCount: row.send_count,
-    replyCount: replies.count
+    replyCount: replies.length,
+    createdAt: new Date(runCreatedAt).toISOString(),
+    acceptedAt: new Date(acceptedAt).toISOString(),
+    completedAt: new Date(eventInstants.at(-1)).toISOString()
   };
 }
 
@@ -380,8 +556,8 @@ function render(input, metrics, pairing, online, reconnect) {
   ).join("\n");
   return `# QA-002 Two-Machine Managed Agent PASS Evidence
 
-Generated by the repository verifier. Human review must still confirm that the
-two sanitized host descriptions identify different physical machines.
+Generated by the repository verifier from one schema-v4 capture window and an
+explicit human review receipt.
 
 - UTC start/end: ${input.utcStart} / ${input.utcEnd}
 - Server commit: \`${input.serverCommit}\`
@@ -394,19 +570,28 @@ two sanitized host descriptions identify different physical machines.
 - Team/Room: \`${input.teamId}\` / \`${input.roomId}\`
 - Device/Agent: \`${input.deviceId}\` / \`${input.agentId}\`
 - Runtime self-test: \`RUNTIME_PROBE_OK\`
+- Runtime launch UI: no unexpected console window
+- Pairing consumed at: ${pairing.pairingConsumedAt}
 - Pairing: installed desktop deep link; matching phrase; no copied Server Token
   or Device credential; no CA installed into the client OS; no application TLS
   verification bypass
 - Database pairing proof: exactly one \`${pairing.state}\` session; Device,
   Team, initial Bridge version and \`${pairing.tlsProfile}\` profile matched
-- Authenticated hello proof: current Bridge version matched without replacing the
-  Device or its original pairing identity
+- Authenticated hello proof: current Bridge version matched at
+  ${pairing.observedAt} on connection epoch ${pairing.connectionEpoch} without
+  replacing the Device or its original pairing identity
+- Current heartbeat/metrics capture: ${pairing.heartbeatAt} /
+  ${input.metricsCapturedAt}
 - Workspace projection: path-free
 - Online Run/trace: \`${online.runId}\` / \`${online.traceId}\`
 - Online persisted states: ${online.states.map((state) => `\`${state}\``).join(" → ")}
+- Online created/accepted/completed: ${online.createdAt} / ${online.acceptedAt} /
+  ${online.completedAt}
 - Online reply count: ${online.replyCount}
 - Reconnect Run/trace: \`${reconnect.runId}\` / \`${reconnect.traceId}\`
 - Reconnect persisted states: ${reconnect.states.map((state) => `\`${state}\``).join(" → ")}
+- Reconnect created/accepted/completed: ${reconnect.createdAt} /
+  ${reconnect.acceptedAt} / ${reconnect.completedAt}
 - Reconnect observation: queued while Bridge stopped, then completed on the
   same Device after restart
 - Reconnect delivery send count: ${reconnect.deliverySendCount}
@@ -415,6 +600,14 @@ two sanitized host descriptions identify different physical machines.
 ## Sanitized metrics snapshot
 
 ${metricLines}
+
+## Human review receipt
+
+- Reviewed at: ${input.review.reviewedAt}
+- Reviewer role: ${input.review.reviewerRole}
+- Physical hosts, current-build execution, evidence window and attestations:
+  confirmed
+- Review result: PASS
 
 ## Result
 
@@ -429,8 +622,8 @@ export async function captureEvidence({ inputPath, databasePath, metricsPath, ou
   let output;
   try {
     const pairing = assertDatabaseScope(database, input);
-    const online = inspectRun(database, input, "online");
-    const reconnect = inspectRun(database, input, "reconnect");
+    const online = inspectRun(database, input, "online", pairing);
+    const reconnect = inspectRun(database, input, "reconnect", pairing);
     output = render(input, metrics, pairing, online, reconnect);
   } finally {
     database.close();
