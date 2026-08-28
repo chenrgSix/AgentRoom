@@ -180,3 +180,10 @@ creating a mode-`0600` Markdown record. Human review must still confirm that the
 two sanitized host descriptions identify different physical machines and that
 machine B's OS trust store was not changed for the run. No code change or local
 simulation can produce those physical facts.
+
+The later [packaged physical observation](evidence/qa-030-20260828-partial.md)
+adds a consumed private-scoped Windows pairing and three accepted, single-reply
+Codex Runs from the exact `v0.4.0-qa030.1` package. It does not change this
+`BLOCKED` state: a second managed Agent, explicit self-test evidence, one
+offline queued/reconnect Run, package-local verification, and the human
+no-OS-CA/no-bypass attestations are still missing.

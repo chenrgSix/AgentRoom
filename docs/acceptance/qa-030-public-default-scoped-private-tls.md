@@ -103,3 +103,10 @@ disabled, the installed deep link opened, the verification phrase matched, and
 the same Device completed online plus offline/reconnect work. Until that record
 exists, `QA-002` and `QA-028` remain blocked and the old manual-CA diagnostic
 cannot be promoted.
+
+A later [sanitized physical observation](evidence/qa-030-20260828-partial.md)
+confirms that this exact private-scoped package has now consumed one Windows
+amd64 pairing session and completed three real cross-host Codex Runs. It remains
+partial because the Device currently publishes only one managed Agent and the
+offline queue/reconnect observation plus the human no-OS-CA/no-bypass
+attestations have not been captured.
