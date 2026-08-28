@@ -9,7 +9,8 @@ const baseEnvironment = {
   AGENT_ROOM_DOMAIN: "team.example.com",
   AGENT_ROOM_HTTP_PORT: "80",
   AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE: "./deploy/secrets/owner_recovery_token",
-  AGENT_ROOM_PUBLIC_ORIGIN: "https://team.example.com:9443"
+  AGENT_ROOM_PUBLIC_ORIGIN: "https://team.example.com:9443",
+  AGENT_ROOM_CADDY_TLS_PROFILE_FILE: "./deploy/tls/public-ca.caddy"
 };
 delete baseEnvironment.AGENT_ROOM_HTTPS_PORT;
 
@@ -35,6 +36,12 @@ assert.equal(publishedPort(defaultConfiguration, 443), "9443");
 assert.equal(
   defaultConfiguration.services.caddy.environment.AGENT_ROOM_PUBLIC_ORIGIN,
   "https://team.example.com:9443"
+);
+assert.match(
+  defaultConfiguration.services.caddy.volumes.find(
+    ({ target }) => target === "/etc/caddy/tls-profile.caddy"
+  ).source,
+  /deploy\/tls\/public-ca\.caddy$/u
 );
 assert.equal(defaultConfiguration.services.agentroom.user, undefined);
 assert.deepEqual(defaultConfiguration.services.agentroom.cap_drop, ["ALL"]);
@@ -79,23 +86,55 @@ assert.match(
   caddyfile,
   /redir \{\$AGENT_ROOM_PUBLIC_ORIGIN\}\{uri\} permanent/u
 );
+assert.match(caddyfile, /import \/etc\/caddy\/tls-profile\.caddy/u);
 
-execFileSync(
-  "docker",
-  [
-    "compose",
-    "run",
-    "--rm",
-    "--no-deps",
-    "caddy",
-    "caddy",
-    "validate",
-    "--config",
-    "/etc/caddy/Caddyfile",
-    "--adapter",
-    "caddyfile"
-  ],
-  { cwd: repositoryRoot, env: baseEnvironment, stdio: "inherit" }
+const publicProfile = readFileSync(
+  new URL("../deploy/tls/public-ca.caddy", import.meta.url),
+  "utf8"
 );
+assert.match(publicProfile, /issuer acme/u);
+assert.doesNotMatch(publicProfile, /tls internal/u);
+
+const privateProfile = readFileSync(
+  new URL("../deploy/tls/private-scoped-ca.caddy", import.meta.url),
+  "utf8"
+);
+assert.match(privateProfile, /tls internal/u);
+assert.match(privateProfile, /\.well-known\/agentroom\/bridge-ca\.pem/u);
+assert.match(privateProfile, /bridge-ca\.pem/u);
+assert.match(privateProfile, /\/run\/agentroom\/trust/u);
+
+const legacyProfile = readFileSync(
+  new URL("../deploy/tls/legacy-auto.caddy", import.meta.url),
+  "utf8"
+);
+assert.doesNotMatch(legacyProfile, /issuer acme|tls internal/u);
+
+for (const profile of ["public-ca", "private-scoped-ca", "internal-ca", "legacy-auto"]) {
+  execFileSync(
+    "docker",
+    [
+      "compose",
+      "run",
+      "--rm",
+      "--no-deps",
+      "caddy",
+      "caddy",
+      "validate",
+      "--config",
+      "/etc/caddy/Caddyfile",
+      "--adapter",
+      "caddyfile"
+    ],
+    {
+      cwd: repositoryRoot,
+      env: {
+        ...baseEnvironment,
+        AGENT_ROOM_CADDY_TLS_PROFILE_FILE: `./deploy/tls/${profile}.caddy`
+      },
+      stdio: "inherit"
+    }
+  );
+}
 
 console.log("Central Compose defaults and Caddy configuration are valid.");

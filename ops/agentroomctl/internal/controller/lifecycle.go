@@ -42,8 +42,9 @@ func (controller *Controller) Status(ctx context.Context, dataRoot string) error
 		return actionError("STATUS_FAILED", "could not read the AgentRoom Compose state", "Check Docker access and run agentroomctl doctor with the same data root.", err)
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"Release: %s\nOrigin: %s\nLast successful step: %s\nCompose state:\n%s",
+		"Release: %s\nOrigin: %s\nTLS profile: %s\nInstallation ID: %s\nLast successful step: %s\nCompose state:\n%s",
 		installation.Manifest.ReleaseVersion, installation.Manifest.PublicOrigin,
+		manifestTLSProfile(installation.Manifest), printableInstallationID(installation.Manifest),
 		installation.Manifest.LastSuccessfulStep, ensureTrailingNewline(output),
 	)
 	return nil
@@ -79,9 +80,16 @@ func (controller *Controller) Doctor(ctx context.Context, dataRoot string) error
 		return actionError("COMPOSE_INVALID", "the installed Compose model is invalid", "Restore generated control files by retrying the exact install command.", err)
 	}
 	readiness := ReadinessInput{
-		PublicOrigin: installation.Manifest.PublicOrigin,
-		LocalCARoot:  filepath.Join(installation.Manifest.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
-		Timeout:      30 * time.Second,
+		PublicOrigin:     installation.Manifest.PublicOrigin,
+		LocalCARoot:      filepath.Join(installation.Manifest.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
+		TLSProfile:       installation.Manifest.TLSProfile,
+		ExpectedCADigest: installation.Manifest.CACertificateSHA256,
+		Timeout:          30 * time.Second,
+	}
+	if installation.Manifest.TLSProfile == "private_scoped_ca" {
+		if _, err := publishPrivateTrust(installation, installation.Manifest, controller.dependencies.Now()); err != nil {
+			return actionError("PRIVATE_TRUST_INVALID", "the scoped private trust descriptor disagrees with Caddy or the manifest", "Restore the recorded Caddy state or complete an authenticated overlap rotation; do not overwrite the digest.", err)
+		}
 	}
 	if err := controller.dependencies.CheckReadiness(ctx, readiness); err != nil {
 		return actionError("READINESS_FAILED", "HTTPS readiness or WebSocket ingress is unavailable", "Inspect docker compose logs for caddy and agentroom; check DNS, ports, certificate trust, and public-origin agreement.", err)
@@ -265,7 +273,8 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 		ChecksumsSHA256: pinnedDigest,
 		DataRoot:        targetManifest.DataRoot, Mode: targetManifest.Mode,
 		Domain: targetManifest.Domain, PublicOrigin: targetManifest.PublicOrigin,
-		HTTPPort: targetManifest.HTTPPort, HTTPSPort: targetManifest.HTTPSPort,
+		TLSProfile: targetManifest.TLSProfile,
+		HTTPPort:   targetManifest.HTTPPort, HTTPSPort: targetManifest.HTTPSPort,
 		LegacyServerToken: targetManifest.LegacyServerToken,
 		ProjectName:       targetManifest.ProjectName,
 	}
@@ -284,10 +293,18 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 		state := controller.activeRevisionState(ctx, target, environment)
 		return actionError("UPGRADE_START_FAILED", "target release did not reach the Compose running boundary; active image state: "+state, "The verified backup and old manifest were preserved. Run doctor before deciding whether a forward repair or documented database/image rollback is safe.", err)
 	}
+	if target.Manifest.TLSProfile == "private_scoped_ca" {
+		if _, err := publishPrivateTrust(target, target.Manifest, controller.dependencies.Now()); err != nil {
+			state := controller.activeRevisionState(ctx, target, environment)
+			return actionError("UPGRADE_PRIVATE_TRUST_FAILED", "target release changed or invalidated scoped private trust; active image state: "+state, "Preserve the old manifest and Caddy state; do not replace the recorded CA outside authenticated rotation.", err)
+		}
+	}
 	readiness := ReadinessInput{
-		PublicOrigin: target.Manifest.PublicOrigin,
-		LocalCARoot:  filepath.Join(target.Manifest.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
-		Timeout:      defaultReadyTimeout,
+		PublicOrigin:     target.Manifest.PublicOrigin,
+		LocalCARoot:      filepath.Join(target.Manifest.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
+		TLSProfile:       target.Manifest.TLSProfile,
+		ExpectedCADigest: target.Manifest.CACertificateSHA256,
+		Timeout:          defaultReadyTimeout,
 	}
 	if err := controller.dependencies.CheckReadiness(ctx, readiness); err != nil {
 		state := controller.activeRevisionState(ctx, target, environment)
@@ -306,6 +323,20 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 		targetManifest.PublicOrigin,
 	)
 	return nil
+}
+
+func manifestTLSProfile(manifest Manifest) string {
+	if manifest.SchemaVersion == legacyManifestSchemaVersion || manifest.TLSProfile == "" {
+		return "legacy_unclassified"
+	}
+	return manifest.TLSProfile
+}
+
+func printableInstallationID(manifest Manifest) string {
+	if manifest.InstallationID == "" {
+		return "legacy-unavailable"
+	}
+	return manifest.InstallationID
 }
 
 func (controller *Controller) activeRevisionState(ctx context.Context, installation Installation, environment map[string]string) string {

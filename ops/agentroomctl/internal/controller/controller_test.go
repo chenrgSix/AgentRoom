@@ -3,11 +3,18 @@ package controller
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	cryptorand "crypto/rand"
 	"crypto/sha256"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,10 +26,14 @@ import (
 type fakeRunner struct {
 	commands []Command
 	failOnce map[string]int
+	hook     func(Command)
 }
 
 func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error) {
 	runner.commands = append(runner.commands, command)
+	if runner.hook != nil {
+		runner.hook(command)
+	}
 	joined := command.Name + " " + strings.Join(command.Args, " ")
 	for token, remaining := range runner.failOnce {
 		if remaining > 0 && strings.Contains(joined, token) {
@@ -50,6 +61,36 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 		return "Set AGENT_ROOM_DATABASE_PATH=/data/restored.sqlite, then run docker compose up -d.\n", nil
 	}
 	return "", nil
+}
+
+func writeTestCA(t *testing.T, path string, now time.Time) string {
+	t.Helper()
+	privateKey, err := ecdsa.GenerateKey(elliptic.P256(), cryptorand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "AgentRoom test CA"},
+		NotBefore:             now.Add(-time.Hour),
+		NotAfter:              now.Add(24 * time.Hour),
+		IsCA:                  true,
+		BasicConstraintsValid: true,
+		KeyUsage:              x509.KeyUsageCertSign | x509.KeyUsageCRLSign,
+	}
+	der, err := x509.CreateCertificate(cryptorand.Reader, template, template, &privateKey.PublicKey, privateKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	value := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
+	if err := os.WriteFile(path, value, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest := sha256.Sum256(der)
+	return hex.EncodeToString(digest[:])
 }
 
 func testDependencies(runner *fakeRunner, output *bytes.Buffer) Dependencies {
@@ -101,14 +142,18 @@ func createReleaseForTarget(t *testing.T, parent, version string, dataSchema int
 			"{\"schemaVersion\":1,\"releaseVersion\":%q,\"dataSchemaVersion\":%d,\"sourceCommit\":%q,\"targetOS\":%q,\"targetArch\":%q}\n",
 			version, dataSchema, strings.Repeat("a", 40), targetOS, targetArch,
 		),
-		"compose.yaml":               "services: {}\n",
-		"Dockerfile":                 "FROM scratch\n",
-		"package.json":               "{}\n",
-		"package-lock.json":          "{}\n",
-		"deploy/Caddyfile":           "https://example.invalid {}\n",
-		"scripts/compose-backup.sh":  "#!/usr/bin/env bash\nexit 0\n",
-		"scripts/compose-restore.sh": "#!/usr/bin/env bash\nexit 0\n",
-		"apps/server/source.ts":      "export {};\n",
+		"compose.yaml":                       "services: {}\n",
+		"Dockerfile":                         "FROM scratch\n",
+		"package.json":                       "{}\n",
+		"package-lock.json":                  "{}\n",
+		"deploy/Caddyfile":                   "https://example.invalid {}\n",
+		"deploy/tls/public-ca.caddy":         "tls {\n  issuer acme\n}\n",
+		"deploy/tls/private-scoped-ca.caddy": "tls internal\n",
+		"deploy/tls/internal-ca.caddy":       "tls internal\n",
+		"deploy/tls/legacy-auto.caddy":       "# legacy\n",
+		"scripts/compose-backup.sh":          "#!/usr/bin/env bash\nexit 0\n",
+		"scripts/compose-restore.sh":         "#!/usr/bin/env bash\nexit 0\n",
+		"apps/server/source.ts":              "export {};\n",
 	}
 	for name, value := range files {
 		path := filepath.Join(releaseDir, filepath.FromSlash(name))
@@ -530,6 +575,172 @@ func TestUpgradeRejectsAnotherHostTargetBeforeBackup(t *testing.T) {
 		if command.Name == "bash" {
 			t.Fatal("target mismatch triggered an upgrade backup or release script")
 		}
+	}
+}
+
+func TestDirectHTTPSDefaultsToPublicCAAndRejectsIneligibleHosts(t *testing.T) {
+	control := New(testDependencies(&fakeRunner{failOnce: map[string]int{}}, &bytes.Buffer{}))
+	base := InstallOptions{
+		ReleaseDir: "/tmp/release", ChecksumsSHA256: strings.Repeat("a", 64),
+		DataRoot: "/tmp/state", Mode: "direct_https", Domain: "team.example.com",
+		PublicOrigin: "https://team.example.com:9443", HTTPPort: 9080, HTTPSPort: 9443,
+	}
+	normalized, err := control.normalizeInstallOptions(base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := resolveInstallTLSProfile(normalized, Manifest{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolved.TLSProfile != "public_ca" {
+		t.Fatalf("expected public_ca default, got %q", resolved.TLSProfile)
+	}
+
+	ipOrigin := base
+	ipOrigin.Domain = "192.0.2.25"
+	ipOrigin.PublicOrigin = "https://192.0.2.25:9443"
+	normalized, err = control.normalizeInstallOptions(ipOrigin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = resolveInstallTLSProfile(normalized, Manifest{}, false)
+	requireActionCode(t, err, "PUBLIC_CA_HOST_INVALID")
+
+	ipOrigin.TLSProfile = "private_scoped_ca"
+	normalized, err = control.normalizeInstallOptions(ipOrigin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err = resolveInstallTLSProfile(normalized, Manifest{}, false)
+	if err != nil || resolved.TLSProfile != "private_scoped_ca" {
+		t.Fatalf("private IP scoped profile: %+v %v", resolved, err)
+	}
+
+	local := base
+	local.Mode = "local"
+	local.Domain = "localhost"
+	local.PublicOrigin = "https://localhost:9443"
+	local.TLSProfile = "manual_ca"
+	_, err = control.normalizeInstallOptions(local)
+	requireActionCode(t, err, "TLS_PROFILE_INVALID")
+}
+
+func TestPrivateScopedInstallPublishesStableBoundedTrust(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	caPath := filepath.Join(dataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt")
+	now := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
+	writtenDigest := ""
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	runner.hook = func(command Command) {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, " up ") {
+			if _, err := os.Stat(caPath); errors.Is(err, os.ErrNotExist) {
+				writtenDigest = writeTestCA(t, caPath, now)
+			}
+		}
+	}
+	var output bytes.Buffer
+	dependencies := testDependencies(runner, &output)
+	var readiness ReadinessInput
+	dependencies.CheckReadiness = func(_ context.Context, input ReadinessInput) error {
+		readiness = input
+		return nil
+	}
+	control := New(dependencies)
+	options := installOptions(releaseDir, dataRoot)
+	options.Mode = "direct_https"
+	options.TLSProfile = "private_scoped_ca"
+	options.Domain = "192.0.2.25"
+	options.PublicOrigin = "https://192.0.2.25:19443"
+	installation, err := control.Install(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := installation.Manifest
+	if manifest.SchemaVersion != 2 || !installIDPattern.MatchString(manifest.InstallationID) || manifest.TrustEpoch != 1 {
+		t.Fatalf("unexpected trust identity: %+v", manifest)
+	}
+	if manifest.CACertificateSHA256 != writtenDigest || readiness.ExpectedCADigest != writtenDigest || readiness.TLSProfile != "private_scoped_ca" {
+		t.Fatalf("private digest/readiness mismatch: manifest=%+v readiness=%+v", manifest, readiness)
+	}
+	descriptorBytes, err := os.ReadFile(installation.TrustDescriptorPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var descriptor deploymentTrustDescriptor
+	if err := decodeStrictJSON(descriptorBytes, &descriptor); err != nil {
+		t.Fatal(err)
+	}
+	if descriptor.Origin != options.PublicOrigin || descriptor.InstallationID != manifest.InstallationID ||
+		descriptor.TrustEpoch != 1 || descriptor.CACertificateSHA256 != writtenDigest {
+		t.Fatalf("unexpected descriptor: %+v", descriptor)
+	}
+	if _, _, digest, err := loadSingleCACertificate(installation.TrustCAPEMPath, now); err != nil || digest != writtenDigest {
+		t.Fatalf("canonical public CA artifact: digest=%s err=%v", digest, err)
+	}
+	if bytes.Contains(descriptorBytes, []byte("PRIVATE KEY")) || strings.Contains(output.String(), writtenDigest) {
+		t.Fatal("private material or full CA digest escaped the bounded deployment projection")
+	}
+	firstID := manifest.InstallationID
+	second, err := control.Install(context.Background(), options)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second.Manifest.InstallationID != firstID || second.Manifest.TrustEpoch != 1 {
+		t.Fatal("reentry changed the stable private trust identity")
+	}
+	environment, err := os.ReadFile(installation.EnvironmentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(environment, []byte("private-scoped-ca.caddy")) ||
+		!bytes.Contains(environment, []byte("/run/agentroom/trust/deployment-trust.json")) {
+		t.Fatalf("private profile was not rendered: %s", environment)
+	}
+}
+
+func TestLegacyManifestIsReadableButCannotBeRelabeled(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "installation.json")
+	legacy := Manifest{
+		SchemaVersion:  legacyManifestSchemaVersion,
+		ReleaseVersion: "v1.2.3", ReleaseDir: "/release", ReleaseDigest: strings.Repeat("a", 64),
+		DataSchemaVersion: 1, DataRoot: "/state", Mode: "direct_https", Domain: "192.0.2.25",
+		PublicOrigin: "https://192.0.2.25:9443", HTTPPort: 9080, HTTPSPort: 9443,
+		ProjectName: "agentroom", LastSuccessfulStep: "ready",
+	}
+	if err := saveManifest(path, legacy); err != nil {
+		t.Fatal(err)
+	}
+	loaded, found, err := loadManifest(path)
+	if err != nil || !found || manifestTLSProfile(loaded) != "legacy_unclassified" {
+		t.Fatalf("legacy manifest classification: %+v %t %v", loaded, found, err)
+	}
+	_, err = resolveInstallTLSProfile(InstallOptions{Mode: "direct_https", TLSProfile: "private_scoped_ca"}, loaded, true)
+	requireActionCode(t, err, "TLS_PROFILE_MIGRATION_REQUIRED")
+	preserved, err := resolveInstallTLSProfile(InstallOptions{Mode: "direct_https"}, loaded, true)
+	if err != nil || preserved.TLSProfile != "" {
+		t.Fatalf("legacy reentry was not preserved: %+v %v", preserved, err)
+	}
+}
+
+func TestPrivateCAParserRejectsMultipleCertificates(t *testing.T) {
+	root := t.TempDir()
+	path := filepath.Join(root, "root.crt")
+	now := time.Date(2026, 8, 28, 1, 2, 3, 0, time.UTC)
+	writeTestCA(t, path, now)
+	value, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(value, value...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := loadSingleCACertificate(path, now); err == nil {
+		t.Fatal("multiple CA certificates were accepted")
 	}
 }
 

@@ -11,6 +11,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -31,17 +32,19 @@ import (
 )
 
 const (
-	manifestSchemaVersion = 1
-	releaseSchemaVersion  = 1
-	minimumFreeBytes      = 1 << 30
-	defaultReadyTimeout   = 3 * time.Minute
+	legacyManifestSchemaVersion = 1
+	manifestSchemaVersion       = 2
+	releaseSchemaVersion        = 1
+	minimumFreeBytes            = 1 << 30
+	defaultReadyTimeout         = 3 * time.Minute
 )
 
 var (
-	releasePattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
-	hashPattern    = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	domainPattern  = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
-	commitPattern  = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+	releasePattern   = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
+	hashPattern      = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	installIDPattern = regexp.MustCompile(`^install_[A-Za-z0-9_-]{16,128}$`)
+	domainPattern    = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+	commitPattern    = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 )
 
 type ActionError struct {
@@ -150,6 +153,7 @@ type InstallOptions struct {
 	ChecksumsSHA256   string
 	DataRoot          string
 	Mode              string
+	TLSProfile        string
 	Domain            string
 	PublicOrigin      string
 	HTTPPort          int
@@ -168,37 +172,55 @@ type ReleaseMetadata struct {
 }
 
 type Manifest struct {
-	SchemaVersion      int    `json:"schemaVersion"`
-	ReleaseVersion     string `json:"releaseVersion"`
-	ReleaseDir         string `json:"releaseDir"`
-	ReleaseDigest      string `json:"releaseDigest"`
-	DataSchemaVersion  int    `json:"dataSchemaVersion"`
-	DataRoot           string `json:"dataRoot"`
-	Mode               string `json:"mode"`
-	Domain             string `json:"domain"`
-	PublicOrigin       string `json:"publicOrigin"`
-	HTTPPort           int    `json:"httpPort"`
-	HTTPSPort          int    `json:"httpsPort"`
-	LegacyServerToken  bool   `json:"legacyServerToken"`
-	ProjectName        string `json:"projectName"`
-	LastSuccessfulStep string `json:"lastSuccessfulStep"`
-	InstalledAt        string `json:"installedAt"`
-	UpdatedAt          string `json:"updatedAt"`
+	SchemaVersion       int    `json:"schemaVersion"`
+	ReleaseVersion      string `json:"releaseVersion"`
+	ReleaseDir          string `json:"releaseDir"`
+	ReleaseDigest       string `json:"releaseDigest"`
+	DataSchemaVersion   int    `json:"dataSchemaVersion"`
+	DataRoot            string `json:"dataRoot"`
+	Mode                string `json:"mode"`
+	TLSProfile          string `json:"tlsProfile,omitempty"`
+	InstallationID      string `json:"installationId,omitempty"`
+	TrustEpoch          int    `json:"trustEpoch,omitempty"`
+	CACertificateSHA256 string `json:"caCertificateSha256,omitempty"`
+	Domain              string `json:"domain"`
+	PublicOrigin        string `json:"publicOrigin"`
+	HTTPPort            int    `json:"httpPort"`
+	HTTPSPort           int    `json:"httpsPort"`
+	LegacyServerToken   bool   `json:"legacyServerToken"`
+	ProjectName         string `json:"projectName"`
+	LastSuccessfulStep  string `json:"lastSuccessfulStep"`
+	InstalledAt         string `json:"installedAt"`
+	UpdatedAt           string `json:"updatedAt"`
 }
 
 type Installation struct {
-	ManifestPath     string
-	EnvironmentPath  string
-	OverridePath     string
-	OwnerSecretPath  string
-	ServerSecretPath string
-	Manifest         Manifest
+	ManifestPath        string
+	EnvironmentPath     string
+	OverridePath        string
+	OwnerSecretPath     string
+	ServerSecretPath    string
+	TrustDirectory      string
+	TrustDescriptorPath string
+	TrustCAPEMPath      string
+	Manifest            Manifest
 }
 
 type ReadinessInput struct {
-	PublicOrigin string
-	LocalCARoot  string
-	Timeout      time.Duration
+	PublicOrigin     string
+	LocalCARoot      string
+	TLSProfile       string
+	ExpectedCADigest string
+	Timeout          time.Duration
+}
+
+type deploymentTrustDescriptor struct {
+	SchemaVersion       int    `json:"schemaVersion"`
+	Mode                string `json:"mode"`
+	Origin              string `json:"origin"`
+	InstallationID      string `json:"installationId"`
+	TrustEpoch          int    `json:"trustEpoch"`
+	CACertificateSHA256 string `json:"caCertificateSha256"`
 }
 
 type Controller struct {
@@ -259,6 +281,10 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	if err != nil {
 		return Installation{}, err
 	}
+	options, err = resolveInstallTLSProfile(options, existing, exists)
+	if err != nil {
+		return Installation{}, err
+	}
 	if exists {
 		if err := matchInstall(existing, options, metadata, digest); err != nil {
 			return Installation{}, err
@@ -308,11 +334,21 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	now := controller.dependencies.Now().UTC().Format(time.RFC3339Nano)
 	manifest := existing
 	if !exists {
+		installationID, err := newInstallationID(controller.dependencies.Random)
+		if err != nil {
+			return Installation{}, actionError("INSTALLATION_ID_FAILED", "could not generate the stable installation identity", "Check the host random source and retry before starting services.", err)
+		}
+		trustEpoch := 0
+		if options.TLSProfile == "private_scoped_ca" {
+			trustEpoch = 1
+		}
 		manifest = Manifest{
 			SchemaVersion: manifestSchemaVersion, ReleaseVersion: metadata.ReleaseVersion,
 			ReleaseDir: options.ReleaseDir, ReleaseDigest: digest,
 			DataSchemaVersion: metadata.DataSchemaVersion, DataRoot: options.DataRoot,
-			Mode: options.Mode, Domain: options.Domain, PublicOrigin: options.PublicOrigin,
+			Mode: options.Mode, TLSProfile: options.TLSProfile,
+			InstallationID: installationID, TrustEpoch: trustEpoch,
+			Domain: options.Domain, PublicOrigin: options.PublicOrigin,
 			HTTPPort: options.HTTPPort, HTTPSPort: options.HTTPSPort,
 			LegacyServerToken:  options.LegacyServerToken,
 			ProjectName:        options.ProjectName,
@@ -368,10 +404,25 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	if err := controller.recordStep(&manifest, installation.ManifestPath, "services_started"); err != nil {
 		return Installation{}, err
 	}
+	if options.TLSProfile == "private_scoped_ca" {
+		digest, err := publishPrivateTrust(installation, manifest, controller.dependencies.Now())
+		if err != nil {
+			return Installation{}, actionError("PRIVATE_TRUST_INVALID", "the scoped private CA could not be verified and published", "Inspect Caddy startup and local PKI state; do not copy or install a root manually. Retry the exact install command after correcting Caddy.", err)
+		}
+		if manifest.CACertificateSHA256 != "" && manifest.CACertificateSHA256 != digest {
+			return Installation{}, actionError("PRIVATE_CA_CHANGED", "the active private CA differs from the installation manifest", "Do not overwrite the pin or fall back. Restore the recorded Caddy state or perform an authenticated overlap rotation.", nil)
+		}
+		manifest.CACertificateSHA256 = digest
+		if err := controller.recordStep(&manifest, installation.ManifestPath, "private_trust_ready"); err != nil {
+			return Installation{}, err
+		}
+	}
 	readiness := ReadinessInput{
-		PublicOrigin: options.PublicOrigin,
-		LocalCARoot:  filepath.Join(options.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
-		Timeout:      defaultReadyTimeout,
+		PublicOrigin:     options.PublicOrigin,
+		LocalCARoot:      filepath.Join(options.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt"),
+		TLSProfile:       options.TLSProfile,
+		ExpectedCADigest: manifest.CACertificateSHA256,
+		Timeout:          defaultReadyTimeout,
 	}
 	if err := controller.dependencies.CheckReadiness(ctx, readiness); err != nil {
 		return Installation{}, actionError("READINESS_FAILED", "the public HTTPS origin did not pass readiness and WebSocket checks", "Check DNS, certificate trust, port forwarding, public origin agreement, and Caddy/AgentRoom logs; the same install command is safe to retry.", err)
@@ -380,14 +431,14 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		return Installation{}, err
 	}
 	installation.Manifest = manifest
-	fingerprint := "system CA"
-	if value, err := certificateFingerprint(readiness.LocalCARoot); err == nil {
-		fingerprint = value
+	trustSummary := options.TLSProfile
+	if manifest.CACertificateSHA256 != "" {
+		trustSummary += " (CA " + redactedDigest(manifest.CACertificateSHA256) + ")"
 	}
 	fmt.Fprintf(controller.dependencies.Output,
-		"AgentRoom %s is ready at %s\nData root: %s\nOwner recovery file: %s\nTLS root fingerprint: %s\nNext: open the origin and claim the Owner using the recovery file.\n",
+		"AgentRoom %s is ready at %s\nData root: %s\nOwner recovery file: %s\nTLS profile: %s\nInstallation ID: %s\nNext: open the origin and claim the Owner using the recovery file.\n",
 		manifest.ReleaseVersion, manifest.PublicOrigin, manifest.DataRoot,
-		installation.OwnerSecretPath, fingerprint,
+		installation.OwnerSecretPath, trustSummary, manifest.InstallationID,
 	)
 	return installation, nil
 }
@@ -420,6 +471,14 @@ func (controller *Controller) normalizeInstallOptions(raw InstallOptions) (Insta
 	}
 	if options.Mode != "local" && options.Mode != "direct_https" {
 		return InstallOptions{}, actionError("NETWORK_MODE_INVALID", "network mode must be local or direct_https", "Use local for loopback-only access or direct_https for a stable LAN/domain origin.", nil)
+	}
+	options.TLSProfile = strings.TrimSpace(options.TLSProfile)
+	if options.TLSProfile != "" && options.TLSProfile != "public_ca" &&
+		options.TLSProfile != "private_scoped_ca" && options.TLSProfile != "manual_ca" {
+		return InstallOptions{}, actionError("TLS_PROFILE_INVALID", "TLS profile must be public_ca, private_scoped_ca, or manual_ca", "Omit --tls-profile for the public default, or select the explicit private or advanced manual profile.", nil)
+	}
+	if options.Mode == "local" && options.TLSProfile != "" {
+		return InstallOptions{}, actionError("TLS_PROFILE_INVALID", "local mode does not accept a TLS profile", "Omit --tls-profile for loopback-only local mode.", nil)
 	}
 	options.ProjectName = strings.TrimSpace(options.ProjectName)
 	if options.ProjectName == "" {
@@ -460,6 +519,35 @@ func (controller *Controller) normalizeInstallOptions(raw InstallOptions) (Insta
 		return InstallOptions{}, actionError("DIRECT_ORIGIN_INVALID", "direct_https requires a non-loopback stable origin", "Use the LAN IP or owned DNS name clients will verify.", nil)
 	}
 	options.PublicOrigin = origin.String()
+	return options, nil
+}
+
+func resolveInstallTLSProfile(options InstallOptions, existing Manifest, exists bool) (InstallOptions, error) {
+	if exists && existing.SchemaVersion == legacyManifestSchemaVersion {
+		if options.TLSProfile != "" {
+			return InstallOptions{}, actionError("TLS_PROFILE_MIGRATION_REQUIRED", "a legacy installation cannot be relabeled by install reentry", "Retry without --tls-profile. Use an explicit inspected migration after the complete scoped-trust path is available.", nil)
+		}
+		return options, nil
+	}
+	if exists && options.TLSProfile == "" {
+		options.TLSProfile = existing.TLSProfile
+	}
+	if !exists && options.TLSProfile == "" {
+		if options.Mode == "local" {
+			options.TLSProfile = "local"
+		} else {
+			options.TLSProfile = "public_ca"
+		}
+	}
+	if options.Mode == "local" {
+		if options.TLSProfile != "local" {
+			return InstallOptions{}, actionError("TLS_PROFILE_INVALID", "local installations must retain loopback-local TLS", "Omit --tls-profile for local mode.", nil)
+		}
+		return options, nil
+	}
+	if options.TLSProfile == "public_ca" && !publicCAHostname(options.Domain) {
+		return InstallOptions{}, actionError("PUBLIC_CA_HOST_INVALID", "public_ca requires a DNS hostname eligible for public certificate issuance", "Use an owned public DNS hostname, or explicitly select private_scoped_ca for a private IP or name.", nil)
+	}
 	return options, nil
 }
 
@@ -515,12 +603,16 @@ func (controller *Controller) runCompose(ctx context.Context, installation Insta
 
 func installationPaths(dataRoot string) Installation {
 	control := filepath.Join(dataRoot, "control")
+	trustDirectory := filepath.Join(dataRoot, "trust")
 	return Installation{
-		ManifestPath:     filepath.Join(control, "installation.json"),
-		EnvironmentPath:  filepath.Join(control, "agentroom.env"),
-		OverridePath:     filepath.Join(control, "compose.override.yaml"),
-		OwnerSecretPath:  filepath.Join(dataRoot, "secrets", "owner_recovery_token"),
-		ServerSecretPath: filepath.Join(dataRoot, "secrets", "legacy_server_token"),
+		ManifestPath:        filepath.Join(control, "installation.json"),
+		EnvironmentPath:     filepath.Join(control, "agentroom.env"),
+		OverridePath:        filepath.Join(control, "compose.override.yaml"),
+		OwnerSecretPath:     filepath.Join(dataRoot, "secrets", "owner_recovery_token"),
+		ServerSecretPath:    filepath.Join(dataRoot, "secrets", "legacy_server_token"),
+		TrustDirectory:      trustDirectory,
+		TrustDescriptorPath: filepath.Join(trustDirectory, "deployment-trust.json"),
+		TrustCAPEMPath:      filepath.Join(trustDirectory, "bridge-ca.pem"),
 	}
 }
 
@@ -533,6 +625,7 @@ func ensureDirectories(dataRoot string) error {
 		filepath.Join(dataRoot, "exports"),
 		filepath.Join(dataRoot, "secrets"),
 		filepath.Join(dataRoot, "prepared-secrets"),
+		filepath.Join(dataRoot, "trust"),
 		filepath.Join(dataRoot, "caddy", "data"),
 		filepath.Join(dataRoot, "caddy", "config"),
 	}
@@ -556,6 +649,9 @@ func ensureDirectories(dataRoot string) error {
 		}
 	}
 	if err := os.Chmod(filepath.Join(dataRoot, "prepared-secrets"), 0o755); err != nil {
+		return err
+	}
+	if err := os.Chmod(filepath.Join(dataRoot, "trust"), 0o755); err != nil {
 		return err
 	}
 	return nil
@@ -638,6 +734,14 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 	if options.Mode == "local" {
 		bindAddress = "127.0.0.1"
 	}
+	tlsProfilePath, err := caddyTLSProfilePath(options.ReleaseDir, options.TLSProfile)
+	if err != nil {
+		return err
+	}
+	deploymentTrustFile := ""
+	if options.TLSProfile == "private_scoped_ca" {
+		deploymentTrustFile = "/run/agentroom/trust/deployment-trust.json"
+	}
 	environment := strings.Join([]string{
 		"AGENT_ROOM_DOMAIN=" + dotenvQuote(options.Domain),
 		"AGENT_ROOM_PUBLIC_ORIGIN=" + dotenvQuote(options.PublicOrigin),
@@ -646,6 +750,8 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 		"AGENT_ROOM_HTTPS_PORT=" + strconv.Itoa(options.HTTPSPort),
 		"AGENT_ROOM_IMAGE_TAG=" + dotenvQuote(strings.TrimPrefix(releaseVersion, "v")),
 		"AGENT_ROOM_DATABASE_PATH=/data/agent-room.sqlite",
+		"AGENT_ROOM_CADDY_TLS_PROFILE_FILE=" + dotenvQuote(tlsProfilePath),
+		"AGENT_ROOM_DEPLOYMENT_TRUST_FILE=" + dotenvQuote(deploymentTrustFile),
 		"AGENT_ROOM_OWNER_RECOVERY_TOKEN_FILE=" + dotenvQuote(installation.OwnerSecretPath),
 		"AGENT_ROOM_LOG_MAX_SIZE=10m",
 		"AGENT_ROOM_LOG_MAX_FILES=5",
@@ -685,6 +791,10 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
         source: %s
         target: /run/secrets
         read_only: true
+      - type: bind
+        source: %s
+        target: /run/agentroom/trust
+        read_only: true
   caddy:
     volumes:
       - type: bind
@@ -693,6 +803,10 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
       - type: bind
         source: %s
         target: /config
+      - type: bind
+        source: %s
+        target: /run/agentroom/trust
+        read_only: true
 `, quote(installation.OwnerSecretPath),
 		quote(filepath.Join(options.DataRoot, "prepared-secrets")),
 		quote(filepath.Join(options.DataRoot, "data")),
@@ -700,10 +814,29 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 		quote(filepath.Join(options.DataRoot, "data")),
 		quote(filepath.Join(options.DataRoot, "backups")),
 		quote(filepath.Join(options.DataRoot, "prepared-secrets")),
+		quote(installation.TrustDirectory),
 		quote(filepath.Join(options.DataRoot, "caddy", "data")),
 		quote(filepath.Join(options.DataRoot, "caddy", "config")),
+		quote(installation.TrustDirectory),
 	)
 	return writeAtomic(installation.OverridePath, []byte(override), 0o600)
+}
+
+func caddyTLSProfilePath(releaseDir, profile string) (string, error) {
+	name := ""
+	switch profile {
+	case "public_ca":
+		name = "public-ca.caddy"
+	case "private_scoped_ca":
+		name = "private-scoped-ca.caddy"
+	case "manual_ca", "local":
+		name = "internal-ca.caddy"
+	case "":
+		name = "legacy-auto.caddy"
+	default:
+		return "", fmt.Errorf("unsupported TLS profile %q", profile)
+	}
+	return filepath.Join(releaseDir, "deploy", "tls", name), nil
 }
 
 func installationEnvironment(installation Installation) (map[string]string, error) {
@@ -752,10 +885,50 @@ func loadManifest(path string) (Manifest, bool, error) {
 	if err := decodeStrictJSON(value, &manifest); err != nil {
 		return Manifest{}, false, actionError("MANIFEST_INVALID", "installation manifest is malformed", "Restore the exact manifest from backup or use a different empty data root.", err)
 	}
-	if manifest.SchemaVersion != manifestSchemaVersion {
+	if manifest.SchemaVersion != legacyManifestSchemaVersion && manifest.SchemaVersion != manifestSchemaVersion {
 		return Manifest{}, false, actionError("MANIFEST_VERSION_UNSUPPORTED", "installation manifest schema is unsupported", "Use the agentroomctl version that owns this manifest before upgrading.", nil)
 	}
+	if err := validateManifest(manifest); err != nil {
+		return Manifest{}, false, actionError("MANIFEST_INVALID", "installation manifest TLS identity is invalid", "Restore the exact manifest from backup; do not infer or replace trust identity fields.", err)
+	}
 	return manifest, true, nil
+}
+
+func validateManifest(manifest Manifest) error {
+	if manifest.SchemaVersion == legacyManifestSchemaVersion {
+		if manifest.TLSProfile != "" || manifest.InstallationID != "" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" {
+			return fmt.Errorf("legacy manifest contains version 2 trust fields")
+		}
+		return nil
+	}
+	if !installIDPattern.MatchString(manifest.InstallationID) {
+		return fmt.Errorf("installationId is invalid")
+	}
+	if manifest.Mode == "local" {
+		if manifest.TLSProfile != "local" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" {
+			return fmt.Errorf("local manifest has an invalid trust profile")
+		}
+		return nil
+	}
+	if manifest.Mode != "direct_https" {
+		return fmt.Errorf("network mode is invalid")
+	}
+	switch manifest.TLSProfile {
+	case "public_ca", "manual_ca":
+		if manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" {
+			return fmt.Errorf("non-scoped profile contains scoped trust state")
+		}
+	case "private_scoped_ca":
+		if manifest.TrustEpoch < 1 {
+			return fmt.Errorf("private trust epoch must be positive")
+		}
+		if manifest.CACertificateSHA256 != "" && !hashPattern.MatchString(manifest.CACertificateSHA256) {
+			return fmt.Errorf("private CA digest is invalid")
+		}
+	default:
+		return fmt.Errorf("TLS profile is invalid")
+	}
+	return nil
 }
 
 func writeAtomic(path string, value []byte, mode fs.FileMode) error {
@@ -871,6 +1044,8 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 	for _, required := range []string{
 		"agentroom-central-release.json", "compose.yaml", "Dockerfile",
 		"package.json", "package-lock.json", "deploy/Caddyfile",
+		"deploy/tls/public-ca.caddy", "deploy/tls/private-scoped-ca.caddy",
+		"deploy/tls/internal-ca.caddy", "deploy/tls/legacy-auto.caddy",
 		"scripts/compose-backup.sh", "scripts/compose-restore.sh",
 	} {
 		if _, found := actual[required]; !found {
@@ -896,7 +1071,7 @@ func supportedTarget(targetOS, targetArch string) bool {
 }
 
 func matchInstall(existing Manifest, options InstallOptions, metadata ReleaseMetadata, digest string) error {
-	if existing.SchemaVersion != manifestSchemaVersion || existing.ReleaseVersion != metadata.ReleaseVersion ||
+	if existing.ReleaseVersion != metadata.ReleaseVersion ||
 		existing.ReleaseDir != options.ReleaseDir || existing.ReleaseDigest != digest ||
 		existing.DataSchemaVersion != metadata.DataSchemaVersion || existing.DataRoot != options.DataRoot ||
 		existing.Mode != options.Mode || existing.Domain != options.Domain ||
@@ -904,6 +1079,9 @@ func matchInstall(existing Manifest, options InstallOptions, metadata ReleaseMet
 		existing.HTTPSPort != options.HTTPSPort || existing.LegacyServerToken != options.LegacyServerToken ||
 		existing.ProjectName != options.ProjectName {
 		return actionError("INSTALL_CONFLICT", "install arguments differ from the existing installation manifest", "Retry with the original arguments. Use agentroomctl upgrade for a new release; do not edit the manifest or replace secrets.", nil)
+	}
+	if existing.SchemaVersion == manifestSchemaVersion && existing.TLSProfile != options.TLSProfile {
+		return actionError("INSTALL_CONFLICT", "TLS profile differs from the existing installation manifest", "Retry without changing --tls-profile. Trust-mode migration is an explicit lifecycle operation, not install reentry.", nil)
 	}
 	return nil
 }
@@ -957,9 +1135,20 @@ func checkReadiness(ctx context.Context, input ReadinessInput) error {
 	if err != nil || roots == nil {
 		roots = x509.NewCertPool()
 	}
-	if value, readErr := os.ReadFile(input.LocalCARoot); readErr == nil {
-		if !roots.AppendCertsFromPEM(value) {
-			return fmt.Errorf("local CA root is invalid")
+	if input.TLSProfile == "private_scoped_ca" {
+		certificate, _, digest, readErr := loadSingleCACertificate(input.LocalCARoot, time.Now())
+		if readErr != nil {
+			return fmt.Errorf("private CA root is invalid: %w", readErr)
+		}
+		if input.ExpectedCADigest == "" || digest != input.ExpectedCADigest {
+			return fmt.Errorf("private CA digest does not match the installation manifest")
+		}
+		roots.AddCert(certificate)
+	} else if input.TLSProfile != "public_ca" {
+		if value, readErr := os.ReadFile(input.LocalCARoot); readErr == nil {
+			if !roots.AppendCertsFromPEM(value) {
+				return fmt.Errorf("local CA root is invalid")
+			}
 		}
 	}
 	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}
@@ -1013,43 +1202,94 @@ func checkReadiness(ctx context.Context, input ReadinessInput) error {
 	return nil
 }
 
-func certificateFingerprint(path string) (string, error) {
-	value, err := os.ReadFile(path)
+func loadSingleCACertificate(path string, now time.Time) (*x509.Certificate, []byte, string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, nil, "", fmt.Errorf("CA path must be a regular non-symlink file")
+	}
+	value, err := readBoundedFile(path, 64<<10)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	block, remainder := pem.Decode(value)
+	if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 || len(bytes.TrimSpace(remainder)) != 0 {
+		return nil, nil, "", fmt.Errorf("expected exactly one unadorned PEM certificate")
+	}
+	certificate, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, nil, "", err
+	}
+	if !certificate.BasicConstraintsValid || !certificate.IsCA || certificate.KeyUsage&x509.KeyUsageCertSign == 0 {
+		return nil, nil, "", fmt.Errorf("certificate is not a constrained signing CA")
+	}
+	if now.Before(certificate.NotBefore) || !now.Before(certificate.NotAfter) {
+		return nil, nil, "", fmt.Errorf("CA certificate is outside its validity window")
+	}
+	digest := sha256.Sum256(certificate.Raw)
+	return certificate, value, hex.EncodeToString(digest[:]), nil
+}
+
+func publishPrivateTrust(installation Installation, manifest Manifest, now time.Time) (string, error) {
+	rootPath := filepath.Join(manifest.DataRoot, "caddy", "data", "caddy", "pki", "authorities", "local", "root.crt")
+	certificate, _, digest, err := loadSingleCACertificate(rootPath, now)
 	if err != nil {
 		return "", err
 	}
-	block, _ := pemDecode(value)
-	if block == nil {
-		return "", fmt.Errorf("certificate PEM is invalid")
+	if manifest.CACertificateSHA256 != "" && manifest.CACertificateSHA256 != digest {
+		return "", fmt.Errorf("active CA digest differs from the recorded digest")
 	}
-	digest := sha256.Sum256(block)
-	parts := make([]string, len(digest))
-	for index, value := range digest {
-		parts[index] = fmt.Sprintf("%02X", value)
+	descriptor := deploymentTrustDescriptor{
+		SchemaVersion:       1,
+		Mode:                "private_scoped_ca",
+		Origin:              manifest.PublicOrigin,
+		InstallationID:      manifest.InstallationID,
+		TrustEpoch:          manifest.TrustEpoch,
+		CACertificateSHA256: digest,
 	}
-	return "SHA256:" + strings.Join(parts, ":"), nil
+	value, err := json.MarshalIndent(descriptor, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	value = append(value, '\n')
+	canonicalPEM := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: certificate.Raw})
+	if err := writeAtomic(installation.TrustCAPEMPath, canonicalPEM, 0o644); err != nil {
+		return "", err
+	}
+	if err := writeAtomic(installation.TrustDescriptorPath, value, 0o644); err != nil {
+		return "", err
+	}
+	return digest, nil
 }
 
-func pemDecode(value []byte) ([]byte, []byte) {
-	const begin = "-----BEGIN CERTIFICATE-----"
-	const end = "-----END CERTIFICATE-----"
-	text := string(value)
-	start := strings.Index(text, begin)
-	finish := strings.Index(text, end)
-	if start < 0 || finish <= start {
-		return nil, value
+func newInstallationID(random io.Reader) (string, error) {
+	value := make([]byte, 18)
+	if _, err := io.ReadFull(random, value); err != nil {
+		return "", err
 	}
-	encoded := strings.Map(func(character rune) rune {
-		if character == '\r' || character == '\n' || character == ' ' || character == '\t' {
-			return -1
+	return "install_" + base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+func redactedDigest(value string) string {
+	if len(value) <= 12 {
+		return value
+	}
+	return value[:12] + "..."
+}
+
+func publicCAHostname(value string) bool {
+	if net.ParseIP(value) != nil || !strings.Contains(value, ".") {
+		return false
+	}
+	lower := strings.ToLower(value)
+	for _, suffix := range []string{".local", ".localhost", ".internal", ".lan", ".home", ".test", ".invalid", ".example"} {
+		if strings.HasSuffix(lower, suffix) {
+			return false
 		}
-		return character
-	}, text[start+len(begin):finish])
-	decoded, err := base64.StdEncoding.DecodeString(encoded)
-	if err != nil {
-		return nil, value
 	}
-	return decoded, []byte(text[finish+len(end):])
+	return true
 }
 
 func isLoopbackHost(host string) bool {

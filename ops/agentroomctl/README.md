@@ -23,8 +23,24 @@ For a loopback-only first installation:
 
 For a LAN or DNS origin, use `--mode direct_https`, make `--domain` and
 `--origin` name the same stable host, and explicitly expose the selected ports.
-The controller reports the Owner recovery file and local TLS root fingerprint;
-it never prints the recovery value or optional legacy Server Token.
+Omitting `--tls-profile` selects fail-closed public ACME and normal system
+trust. For a private IP or name, explicitly select Bridge-scoped trust:
+
+```sh
+./bin/agentroomctl install \
+  --release-dir "$PWD" \
+  --checksums-sha256 '<published internal checksum digest>' \
+  --data-root '/absolute/persistent/agentroom-central' \
+  --mode direct_https \
+  --tls-profile private_scoped_ca \
+  --domain 192.168.1.132 \
+  --origin https://192.168.1.132:9443
+```
+
+`manual_ca` is advanced operator-managed compatibility; the controller never
+installs an OS root. It reports only the non-secret installation ID, TLS profile
+and a redacted CA-digest prefix, never the recovery value, full digest, CA
+private key, or optional legacy Server Token.
 
 Run `status` for the recorded installation/Compose projection and `doctor` for
 release, permission, Compose, HTTPS and WebSocket checks. `backup`, staged

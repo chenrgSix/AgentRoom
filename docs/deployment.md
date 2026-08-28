@@ -159,11 +159,12 @@ not click through certificate warnings. A private deployment may keep the Owner
 browser on the Central host or another already managed browser and pair the
 remote Bridge through the scoped link.
 
-The current release supports only `system_ca` and the manual legacy
-`pinned_sha256` leaf fingerprint. It does not yet publish the well-known CA or
-pairing trust descriptor. Until the implementation tasks above are complete,
-stop the private no-manual-CA flow rather than treating current manual import as
-the finished product.
+The controller and Caddy now publish the deployment-owned well-known CA and
+descriptor in explicit `private_scoped_ca` mode. Server projection, Web link
+encoding, Bridge bootstrap/persistence and rotation remain owned by `SEC-009`,
+`WEB-048`, `BRG-045` and `QA-030`; until those tasks complete, stop before
+sending a private-scoped claim secret rather than treating the deployment
+artifact alone as the finished no-manual-CA flow.
 
 ### Advanced current compatibility: manual CA
 

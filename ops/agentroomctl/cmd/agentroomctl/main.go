@@ -51,6 +51,7 @@ func run(ctx context.Context, arguments []string) error {
 		checksumPin := flags.String("checksums-sha256", "", "published SHA-256 of SHA256SUMS")
 		dataRoot := flags.String("data-root", defaultDataRoot(), "persistent AgentRoom data root")
 		mode := flags.String("mode", "local", "local or direct_https")
+		tlsProfile := flags.String("tls-profile", "", "direct_https TLS profile: public_ca (default), private_scoped_ca, or manual_ca")
 		domain := flags.String("domain", "localhost", "exact HTTPS host name or IP")
 		origin := flags.String("origin", "https://localhost:9443", "exact public HTTPS origin")
 		httpPort := flags.Int("http-port", 9080, "published HTTP redirect/ACME port")
@@ -66,7 +67,7 @@ func run(ctx context.Context, arguments []string) error {
 		_, err := control.Install(ctx, controller.InstallOptions{
 			ReleaseDir: *releaseDir, ChecksumsPath: *checksums,
 			ChecksumsSHA256: *checksumPin,
-			DataRoot:        *dataRoot, Mode: *mode, Domain: *domain,
+			DataRoot:        *dataRoot, Mode: *mode, TLSProfile: *tlsProfile, Domain: *domain,
 			PublicOrigin: *origin, HTTPPort: *httpPort, HTTPSPort: *httpsPort,
 			LegacyServerToken: *legacyToken,
 			ProjectName:       *projectName,

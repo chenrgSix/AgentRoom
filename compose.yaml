@@ -83,6 +83,7 @@ services:
     environment:
       AGENT_ROOM_BRIDGE_SERVER_TOKEN: ${AGENT_ROOM_BRIDGE_SERVER_TOKEN:-}
       AGENT_ROOM_DATABASE_PATH: ${AGENT_ROOM_DATABASE_PATH:-/data/agent-room.sqlite}
+      AGENT_ROOM_DEPLOYMENT_TRUST_FILE: ${AGENT_ROOM_DEPLOYMENT_TRUST_FILE:-}
       AGENT_ROOM_PUBLIC_ORIGIN: ${AGENT_ROOM_PUBLIC_ORIGIN:?Set AGENT_ROOM_PUBLIC_ORIGIN to the public HTTPS origin}
     image: agentroom/server:${AGENT_ROOM_IMAGE_TAG:-source-build}
     expose:
@@ -139,6 +140,7 @@ services:
       - /tmp
     volumes:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ${AGENT_ROOM_CADDY_TLS_PROFILE_FILE:-./deploy/tls/public-ca.caddy}:/etc/caddy/tls-profile.caddy:ro
       - caddy_data:/data
       - caddy_config:/config
 

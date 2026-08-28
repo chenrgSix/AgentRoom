@@ -71,6 +71,7 @@ source_paths=(
   apps/web
   packages/contracts
   deploy/Caddyfile
+  deploy/tls
   scripts/compose-backup.sh
   scripts/compose-restore.sh
   ops/agentroomctl

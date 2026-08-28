@@ -8,6 +8,8 @@ http://{$AGENT_ROOM_DOMAIN} {
 }
 
 https://{$AGENT_ROOM_DOMAIN} {
+	import /etc/caddy/tls-profile.caddy
+
 	encode zstd gzip
 
 	@metrics path /api/metrics
