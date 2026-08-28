@@ -132,6 +132,7 @@ type ConnectionView struct {
 
 type State struct {
 	ShareReasoningSummaries bool                        `json:"shareReasoningSummaries"`
+	ReasoningEditable       bool                        `json:"reasoningConsentEditable"`
 	Phase                   Phase                       `json:"phase"`
 	Configured              bool                        `json:"configured"`
 	Paired                  bool                        `json:"paired"`
@@ -324,6 +325,7 @@ func (s *Service) State() State {
 	snapshot.Enrollment.Active = s.joinCancel != nil
 	snapshot.Enrollment.BlockedReason = s.enrollmentBlockedReasonLocked()
 	snapshot.Enrollment.CanRequest = snapshot.Enrollment.BlockedReason == ""
+	snapshot.ReasoningEditable = s.reasoningConsentEditableLocked()
 	if deadline, err := time.Parse(time.RFC3339Nano, snapshot.JoinExpiresAt); snapshot.Enrollment.Active && err == nil && !time.Now().Before(deadline) {
 		snapshot.JoinCode = ""
 		snapshot.Enrollment.CodeExpired = true
@@ -363,6 +365,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("POST /api/runtime-preflight", s.authorize(s.preflightRuntime))
 	mux.HandleFunc("POST /api/bridge/start", s.authorize(s.startBridge))
 	mux.HandleFunc("POST /api/bridge/stop", s.authorize(s.stopBridge))
+	mux.HandleFunc("POST /api/reasoning-consent/prepare", s.authorize(s.prepareReasoningConsent))
 	mux.HandleFunc("PUT /api/login-startup", s.authorize(s.updateLoginStartup))
 	mux.HandleFunc("POST /api/diagnostics/export", s.authorize(s.exportDiagnostics))
 	mux.HandleFunc("POST /api/update/check", s.authorize(s.checkUpdate))
@@ -582,6 +585,10 @@ func (s *Service) StartBridge() (State, error) {
 func (s *Service) StopBridge() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	return s.stopBridgeLocked()
+}
+
+func (s *Service) stopBridgeLocked() State {
 	if s.joinCancel != nil {
 		return cloneState(s.state)
 	}
@@ -1018,6 +1025,16 @@ func (s *Service) handleAgentProvision(
 
 func (s *Service) stopBridge(response http.ResponseWriter, _ *http.Request) {
 	writeJSON(response, http.StatusOK, s.StopBridge())
+}
+
+func (s *Service) prepareReasoningConsent(response http.ResponseWriter, _ *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.requireConfigurationMutationLocked(); err != nil {
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
+	writeJSON(response, http.StatusOK, s.stopBridgeLocked())
 }
 
 func (s *Service) addAgent(response http.ResponseWriter, request *http.Request) {

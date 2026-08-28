@@ -8,6 +8,7 @@ import {
 } from "./runtime-policy.mjs";
 import { createSessionGuideController } from "./session-guide.mjs";
 import { agentPresentation, connectionPresentation } from "./bridge-presentation.mjs";
+import { reasoningConsentView } from "./reasoning-consent-view.mjs";
 
 const elements = Object.fromEntries([
   "app-sidebar", "setup-intro", "page-context", "page-title", "phase", "phase-label",
@@ -22,6 +23,7 @@ const elements = Object.fromEntries([
   "pairing-modal-backdrop", "close-pairing-modal", "cancel-pairing-modal", "confirm-reenrollment", "pairing-modal-error",
   "current-server-token", "current-server-trust",
   "current-reasoning-sharing", "share-reasoning-summaries", "connection-share-reasoning-summaries",
+  "stop-for-reasoning-consent", "edit-reasoning-consent", "reasoning-consent-guidance",
   "current-team", "current-device", "config-path", "connection-detail", "last-connected", "connection-error", "agent-list",
   "overview-agent-list", "overview-agent-count", "connection-summary", "connection-summary-label",
   "connection-server-label", "connection-summary-title", "connection-summary-copy",
@@ -425,7 +427,7 @@ function closeAgentModal() {
   elements["agent-modal-backdrop"].classList.add("hidden");
 }
 
-function openConnectionModal() {
+function openConnectionModal(focusReasoningConsent = false) {
   showError(null);
   elements["connection-server-url"].value = currentState.serverUrl || "";
   elements["connection-server-token"].value = "";
@@ -439,7 +441,7 @@ function openConnectionModal() {
   syncConnectionTrustFields();
   syncConnectionTokenFields();
   elements["connection-modal-backdrop"].classList.remove("hidden");
-  elements["connection-server-url"].focus();
+  elements[focusReasoningConsent ? "connection-share-reasoning-summaries" : "connection-server-url"].focus();
 }
 
 function closeConnectionModal() {
@@ -533,12 +535,18 @@ function render(state) {
     elements["connection-error"].classList.toggle("hidden", !connection.lastError);
     elements["start-bridge"].disabled = !pairing.canStartExisting;
     elements["stop-bridge"].disabled = !state.bridgeRunning;
-    const mutationBlocked = waiting || state.agents.some((agent) => agent.activeRuns > 0) ||
-      [...runtimeTestResults.values()].includes("running") || draftPreflightRunning;
+    const interactionBusy = waiting || [...runtimeTestResults.values()].includes("running") || draftPreflightRunning;
+    const mutationBlocked = interactionBusy || state.agents.some((agent) => agent.activeRuns > 0);
     elements["add-agent"].classList.toggle("hidden", !state.paired);
     elements["add-agent"].disabled = mutationBlocked;
     elements["edit-connection"].classList.toggle("hidden", !state.paired);
     elements["edit-connection"].disabled = mutationBlocked;
+    const consentView = reasoningConsentView(state, interactionBusy);
+    elements["stop-for-reasoning-consent"].classList.toggle("hidden", consentView.action !== "stop");
+    elements["edit-reasoning-consent"].classList.toggle("hidden", consentView.action !== "edit");
+    elements["stop-for-reasoning-consent"].disabled = consentView.disabled;
+    elements["edit-reasoning-consent"].disabled = consentView.disabled;
+    elements["reasoning-consent-guidance"].textContent = consentView.guidance;
     if (!agentProvisioningDirty) {
       const provisioning = state.agentProvisioning || {mode: "disabled"};
       elements["agent-provisioning-mode"].value = provisioning.mode || "disabled";
@@ -686,7 +694,19 @@ for (const id of ["close-pairing-modal", "cancel-pairing-modal"]) {
   elements[id].addEventListener("click", closePairingModal);
 }
 elements["add-agent"].addEventListener("click", () => openAgentModal());
-elements["edit-connection"].addEventListener("click", openConnectionModal);
+elements["edit-connection"].addEventListener("click", () => openConnectionModal());
+elements["edit-reasoning-consent"].addEventListener("click", () => openConnectionModal(true));
+elements["stop-for-reasoning-consent"].addEventListener("click", async () => {
+  elements["stop-for-reasoning-consent"].disabled = true;
+  showError(null);
+  try {
+    await request("/api/reasoning-consent/prepare", {method: "POST"});
+    await refresh();
+  } catch (error) {
+    showError(error);
+    elements["stop-for-reasoning-consent"].disabled = false;
+  }
+});
 elements["agent-kind"].addEventListener("change", () => {
   const kind = elements["agent-kind"].value;
   if (!editingAgentId) {

@@ -518,7 +518,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="connection-server-token"`, `id="clear-server-token"`,
 		`id="connection-trust-mode"`, `id="connection-fingerprint"`,
 		`id="share-reasoning-summaries"`, `id="connection-share-reasoning-summaries"`,
-		`id="current-reasoning-sharing"`,
+		`id="current-reasoning-sharing"`, `id="stop-for-reasoning-consent"`,
+		`id="edit-reasoning-consent"`, `id="reasoning-consent-guidance"`,
 		`id="agent-discovery-status"`, `id="agent-discovery-help"`, `id="agent-install-link"`,
 		`id="device-pairing-link"`, `id="device-pairing-short-code"`,
 		`id="submit-device-pairing"`, `id="approval-title"`,
@@ -535,6 +536,9 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	}
 	if bytes.Count(javascript, []byte(`request("/api/update/check"`)) != 1 {
 		t.Fatal("update check must exist only in the explicit click handler")
+	}
+	if bytes.Count(javascript, []byte(`request("/api/reasoning-consent/prepare"`)) != 1 {
+		t.Fatal("Privacy stop must use only the dedicated atomically fenced endpoint")
 	}
 	if !bytes.Contains(html, []byte("当前系统暂不支持登录后自动启动")) ||
 		!bytes.Contains(javascript, []byte(`elements["login-startup-unsupported"].classList.toggle("hidden", startup.supported)`)) {

@@ -321,6 +321,7 @@ body.configured-mode .app-shell { grid-template-columns: var(--sidebar-width) mi
 }
 .setting-heading { align-items: center; }
 .setting-heading p { margin: 0; color: var(--muted); font-size: 11px; }
+.setting-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }
 .setting-summary { display: grid; grid-template-columns: 2fr 1fr 1fr; gap: 1px; margin: 15px 0 0; overflow: hidden; border: 1px solid var(--line); border-radius: 10px; }
 .setting-summary.single { grid-template-columns: 1fr; }
 .setting-summary div { min-width: 0; padding: 11px 12px; background: var(--surface-subtle); }
@@ -378,6 +379,7 @@ input, select {
 .runtime-toggle small { color: var(--muted); text-align: right; }
 .runtime-fields { display: grid; gap: 12px; margin: 14px 0 6px 28px; padding-left: 15px; border-left: 2px solid var(--line); }
 .runtime-policy { margin: 0; color: var(--muted); overflow-wrap: anywhere; font-size: 10px; line-height: 1.55; }
+.privacy-guidance { margin-top: 10px; }
 .runtime-policy-warning { padding: 10px 11px; border: 1px solid var(--warning-border); border-radius: 9px; background: var(--warning-soft); color: var(--warning); }
 .runtime-discovery-status { margin: 0; color: var(--muted); overflow-wrap: anywhere; font-size: 10px; }
 .runtime-install-link, .release-link { display: inline-block; color: var(--accent); font-size: 10px; }

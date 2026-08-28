@@ -149,10 +149,17 @@
             </section>
 
             <section class="settings-card">
-              <div class="setting-heading"><div><h3>隐私</h3><p>中央策略不能扩大本机 Runtime 权限。</p></div></div>
+              <div class="setting-heading">
+                <div><h3>隐私</h3><p>中央策略不能扩大本机 Runtime 权限。</p></div>
+                <div class="setting-actions">
+                  <button class="secondary hidden" id="stop-for-reasoning-consent" type="button">停止 Bridge</button>
+                  <button class="secondary" id="edit-reasoning-consent" type="button">更改授权</button>
+                </div>
+              </div>
               <dl class="setting-summary single">
                 <div><dt>思考摘要共享</dt><dd id="current-reasoning-sharing">未授权（不共享摘要）</dd></div>
               </dl>
+              <p class="runtime-policy privacy-guidance" id="reasoning-consent-guidance">正在读取可更改状态。</p>
             </section>
 
             <details class="settings-card disclosure-card">

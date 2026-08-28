@@ -370,6 +370,16 @@ the Bridge and all workers to be stopped, with probes and work idle. Changing
 the server URL clears consent unless the local owner explicitly grants it
 again; unrelated config edits preserve it.
 
+`BRG-047` makes that stopped-and-drained boundary actionable from the Privacy
+card after setup. A running idle Bridge offers an explicit stop action without
+changing consent. Its dedicated local endpoint checks pairing, probes, and
+active Runs under the lifecycle lock before stopping, so a Run arriving at the
+UI boundary cannot be interrupted by this privacy action. While the connection
+worker drains, editing remains disabled. Once the local backend reports the
+boundary ready, **Change consent** opens and focuses the existing
+connection-scoped checkbox, preserving one authenticated consent-mutation owner
+and the server-origin reset rule.
+
 ### Existing safety boundaries
 
 Device credentials use OS-protected storage when available. The Bridge starts

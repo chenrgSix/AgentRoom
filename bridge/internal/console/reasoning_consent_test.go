@@ -55,6 +55,9 @@ func TestReasoningConsentRequiresAuthenticatedStoppedDrainedBridge(t *testing.T)
 	defer server.Close()
 	yes := true
 	input := ConnectionSettingsInput{ServerURL: previous.ServerURL, ShareReasoningSummaries: &yes}
+	if !service.State().ReasoningEditable {
+		t.Fatal("stopped and drained paired Bridge must expose editable reasoning consent")
+	}
 	update := func(token string, expected int) {
 		t.Helper()
 		response := consoleRequest(t, server.URL, token, http.MethodPut, "/api/connection-settings", input)
@@ -63,15 +66,39 @@ func TestReasoningConsentRequiresAuthenticatedStoppedDrainedBridge(t *testing.T)
 			t.Fatalf("status=%d want=%d", response.StatusCode, expected)
 		}
 	}
+	prepare := func(expected int) {
+		t.Helper()
+		response := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/reasoning-consent/prepare", nil)
+		response.Body.Close()
+		if response.StatusCode != expected {
+			t.Fatalf("prepare status=%d want=%d", response.StatusCode, expected)
+		}
+	}
 	update("not-authorized", http.StatusUnauthorized)
 	if _, err := service.StartBridge(); err != nil {
 		t.Fatal(err)
 	}
+	if service.State().ReasoningEditable {
+		t.Fatal("running Bridge exposed editable reasoning consent")
+	}
 	update(service.Token(), http.StatusConflict)
-	service.StopBridge()
+	service.mu.Lock()
+	service.state.Agents[0].ActiveRuns = 1
+	service.mu.Unlock()
+	prepare(http.StatusConflict)
+	if !service.State().BridgeRunning {
+		t.Fatal("privacy preparation interrupted an active Run")
+	}
+	service.mu.Lock()
+	service.state.Agents[0].ActiveRuns = 0
+	service.mu.Unlock()
+	prepare(http.StatusOK)
+	if service.State().ReasoningEditable {
+		t.Fatal("stopping Bridge exposed consent before its worker drained")
+	}
 	update(service.Token(), http.StatusConflict)
 	close(exit)
-	waitState(t, service, func(state State) bool { return state.Enrollment.CanRequest })
+	waitState(t, service, func(state State) bool { return state.ReasoningEditable })
 	update(service.Token(), http.StatusOK)
 	loaded, err := config.Load(service.options.ConfigPath)
 	if err != nil || !loaded.ShareReasoningSummaries || !service.State().ShareReasoningSummaries || !reflect.DeepEqual(loaded.Agents, previous.Agents) {
