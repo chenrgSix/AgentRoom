@@ -688,6 +688,12 @@ verification. Login startup remains opt-in on macOS and unsupported on Windows;
 update checks remain manual-only. Neither capability downloads or executes
 update code.
 
+The canonical release host is `github.com/chenrgSix/ConveneWire`. The manual
+checker calls only that repository's GitHub Releases API and accepts only an
+exact HTTPS release URL under the same owner/repository/tag path. The former
+`chenrgSix/AgentRoom` path may redirect historical browser links, but it is not
+accepted as current update metadata after the hosting migration.
+
 `v0.2.0-rc.1` predates `BRG-016` and cannot repair an incompatible inbox by
 itself. For a strict central-service deployment, replace the Bridge first and
 let it inspect local recovery records before deploying the matching Server;

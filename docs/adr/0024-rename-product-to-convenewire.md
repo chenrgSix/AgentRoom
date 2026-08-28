@@ -21,9 +21,9 @@ acceptance evidence. Treating every occurrence as replaceable branding would
 break upgrades, orphan state, or rewrite the evidence for an already published
 artifact.
 
-The GitHub repository is still hosted at `chenrgSix/AgentRoom`. Renaming that
-external repository is a separate hosting action and is not implied by a source
-commit.
+The GitHub repository was originally hosted at `chenrgSix/AgentRoom`. The
+Project Owner separately authorized moving that external hosting identity to
+`chenrgSix/ConveneWire`; the source rename alone did not imply that authority.
 
 ## Decision
 
@@ -67,8 +67,8 @@ released protocol or installation state rather than current branding:
   new `convenewire_*` series are authoritative and legacy series are emitted as
   aliases;
 - published tag, asset, acceptance, and release-note records; and
-- the current GitHub remote and links that must resolve before a separate
-  repository-host rename occurs.
+- historical GitHub URLs, which GitHub redirects after the separately
+  authorized repository-host rename.
 
 New `CONVENE_WIRE_*` environment variables are authoritative. Released
 `AGENT_ROOM_*` names remain accepted aliases. If both forms are present with
@@ -79,6 +79,12 @@ Compose model accepts both during the compatibility window.
 The desktop registers and accepts `convenewire://` for new links while
 continuing to accept `agentroom://`. Stable OS application identifiers are not
 changed merely to make their hidden strings match the new display name.
+
+The canonical GitHub repository is `chenrgSix/ConveneWire`. Current clone,
+release, issue, installer and update-check URLs use that identity. GitHub's
+redirect from `chenrgSix/AgentRoom` keeps committed historical links usable;
+historical files are not rewritten solely to remove the old path. Existing
+local checkout directory names are operator-owned and are not renamed.
 
 ### Historical records
 
@@ -109,8 +115,8 @@ of rewriting them.
   presence is not an incomplete rename when listed by this ADR.
 - A later major-version migration may retire aliases only with explicit
   operator guidance, migration tooling, and acceptance evidence.
-- The GitHub repository name, local checkout directory, release publication,
-  domain ownership, and trademark clearance remain separate external gates.
+- Release publication, local checkout directory changes, domain ownership, and
+  trademark clearance remain separate external gates.
 
 ## Compatibility and Security
 

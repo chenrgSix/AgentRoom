@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	LatestReleaseAPI = "https://api.github.com/repos/chenrgSix/AgentRoom/releases/latest"
+	LatestReleaseAPI = "https://api.github.com/repos/chenrgSix/ConveneWire/releases/latest"
 	maxResponseBytes = 64 * 1024
 )
 
@@ -160,7 +160,7 @@ func validateReleaseURL(value, releaseTag string) error {
 	if err != nil || parsed.Scheme != "https" || parsed.Host != "github.com" || parsed.User != nil {
 		return fmt.Errorf("GitHub release URL is not trusted")
 	}
-	if parsed.EscapedPath() != "/chenrgSix/AgentRoom/releases/tag/"+url.PathEscape(releaseTag) || parsed.RawQuery != "" || parsed.Fragment != "" {
+	if parsed.EscapedPath() != "/chenrgSix/ConveneWire/releases/tag/"+url.PathEscape(releaseTag) || parsed.RawQuery != "" || parsed.Fragment != "" {
 		return fmt.Errorf("GitHub release URL is outside the ConveneWire repository")
 	}
 	return nil

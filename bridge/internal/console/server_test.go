@@ -52,7 +52,7 @@ func (c *countingUpdateChecker) Check(_ context.Context, current string) (update
 	c.calls++
 	return updatecheck.Result{
 		CurrentVersion: current, LatestVersion: "v0.3.0", CurrentComparable: true,
-		UpdateAvailable: true, ReleaseURL: "https://github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0",
+		UpdateAvailable: true, ReleaseURL: "https://github.com/chenrgSix/ConveneWire/releases/tag/v0.3.0",
 	}, nil
 }
 

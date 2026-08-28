@@ -21,7 +21,7 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 - Current baseline:
   [convenewire_network_design_v0.2.md](convenewire_network_design_v0.2.md)
 - Stable release:
-  [AgentRoom v0.2.0](https://github.com/chenrgSix/AgentRoom/releases/tag/v0.2.0)
+  [AgentRoom v0.2.0](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.2.0)
   (the latest stable release predates the ConveneWire rename)
 - Historical baseline:
   [agent_room_network_design_v0.1.md](agent_room_network_design_v0.1.md)
@@ -77,8 +77,8 @@ because the image builds them inside Docker. Clone and start a local development
 instance:
 
 ```bash
-git clone https://github.com/chenrgSix/AgentRoom.git
-cd AgentRoom                       # Repository hosting rename is still pending.
+git clone https://github.com/chenrgSix/ConveneWire.git
+cd ConveneWire
 nvm use 22                       # optional when Node 22 is already active
 npm ci
 npm run db:migrate
@@ -109,7 +109,7 @@ The managed Bridge lets the central service wake a local runtime. Client
 machines do not need Go or Node.js:
 
 1. Download the archive for the client's OS and CPU from
-   [GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases). On macOS,
+   [GitHub Releases](https://github.com/chenrgSix/ConveneWire/releases). On macOS,
    choose the `convenewire-bridge-desktop` ZIP for Apple Silicon (`arm64`) or
    Intel (`amd64`), then move **ConveneWire Bridge.app** to `/Applications`. On
    64-bit Windows, use the `convenewire-bridge-desktop` executable ending in
@@ -248,8 +248,8 @@ releases. Use a dedicated, clean checkout and record the exact source revision,
 then prepare the ignored settings and file-backed Owner recovery secret:
 
 ```bash
-git clone https://github.com/chenrgSix/AgentRoom.git
-cd AgentRoom                       # Repository hosting rename is still pending.
+git clone https://github.com/chenrgSix/ConveneWire.git
+cd ConveneWire
 git rev-parse HEAD                 # Record the exact deployed source revision.
 cp deploy/.env.example .env
 mkdir -p deploy/secrets

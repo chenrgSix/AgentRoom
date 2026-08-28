@@ -8,7 +8,7 @@ for headless environments and diagnostics.
 ## Install
 
 End users download the archive matching their operating system and CPU from
-[GitHub Releases](https://github.com/chenrgSix/AgentRoom/releases). macOS users
+[GitHub Releases](https://github.com/chenrgSix/ConveneWire/releases). macOS users
 should choose `convenewire-bridge-desktop_*_darwin_arm64.zip` on Apple Silicon or
 `convenewire-bridge-desktop_*_darwin_amd64.zip` on an Intel Mac. Extract it, move
 **ConveneWire Bridge.app** to `/Applications`, and open it. Go, Node.js, and a

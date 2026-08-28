@@ -33,5 +33,5 @@ modified from ConveneWire. Fair, nominative, and other uses allowed by applicabl
 law remain unaffected.
 
 Request trademark or white-label permission through
-<https://github.com/chenrgSix/AgentRoom/issues>. Do not post confidential
+<https://github.com/chenrgSix/ConveneWire/issues>. Do not post confidential
 business information in a public issue.

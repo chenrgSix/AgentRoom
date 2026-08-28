@@ -325,6 +325,11 @@ checksums before upload, then downloads the candidate and repeats the same
 verifier. Native Windows CI also executes install, upgrade, and uninstall smoke
 tests. Existing assets are never silently replaced.
 
+New release candidates are owned by the canonical
+`github.com/chenrgSix/ConveneWire` repository. GitHub redirects retained
+historical `chenrgSix/AgentRoom` links, but current workflows, downloads and
+independent verification use the canonical repository identity.
+
 For `v0.2.0`, stable release admission means the version-aligned Server, Web,
 contracts, and Bridge are the supported baseline for trusted small Teams, the
 P0-P17 exit tasks are complete, and exact-source automated correctness,

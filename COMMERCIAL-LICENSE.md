@@ -40,7 +40,7 @@ disaster-recovery, and production environments as a dedicated deployment.
 ## Requesting Permission
 
 Request commercial or white-label terms through
-<https://github.com/chenrgSix/AgentRoom/issues>. Do not include confidential
+<https://github.com/chenrgSix/ConveneWire/issues>. Do not include confidential
 business information in a public issue. Opening an issue or discussion does
 not grant permission. Commercial rights exist only in a separate written
 agreement signed by the Licensor.

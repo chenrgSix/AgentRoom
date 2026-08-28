@@ -46,8 +46,8 @@ The current preview can be cloned from the repository, but record the exact
 revision before deployment:
 
 ```bash
-git clone https://github.com/chenrgSix/AgentRoom.git
-cd AgentRoom                       # Repository hosting rename is still pending.
+git clone https://github.com/chenrgSix/ConveneWire.git
+cd ConveneWire
 git rev-parse HEAD
 cp deploy/.env.example .env
 mkdir -p deploy/secrets

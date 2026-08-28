@@ -18,7 +18,7 @@ func TestManualCheckComparesVersionsWithoutDownloading(t *testing.T) {
 			t.Errorf("unexpected request: %s %#v", request.Method, request.Header)
 		}
 		response.Header().Set("content-type", "application/json")
-		fmt.Fprint(response, "{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0\",\"published_at\":\"2026-08-23T00:00:00Z\"}")
+		fmt.Fprint(response, "{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/ConveneWire/releases/tag/v0.3.0\",\"published_at\":\"2026-08-23T00:00:00Z\"}")
 	}))
 	defer server.Close()
 	checker := &Checker{
@@ -51,16 +51,17 @@ func TestManualCheckComparesVersionsWithoutDownloading(t *testing.T) {
 func TestCheckRejectsOversizeMalformedAndUntrustedResponses(t *testing.T) {
 	tests := []string{
 		strings.Repeat("x", maxResponseBytes+1),
-		"{\"tag_name\":\"latest\",\"html_url\":\"https://github.com/chenrgSix/AgentRoom/releases/tag/latest\"}",
-		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://evil.example/chenrgSix/AgentRoom/releases/tag/v0.3.0\"}",
+		"{\"tag_name\":\"latest\",\"html_url\":\"https://github.com/chenrgSix/ConveneWire/releases/tag/latest\"}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://evil.example/chenrgSix/ConveneWire/releases/tag/v0.3.0\"}",
 		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/other/repo/releases/tag/v0.3.0\"}",
-		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0/extra\"}",
-		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://user@github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0\"}",
-		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com:443/chenrgSix/AgentRoom/releases/tag/v0.3.0\"}",
-		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0?download=1\"}",
-		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0#asset\"}",
-		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/AgentRoom/releases/tag/v0.2.0\"}",
-		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0\"}{}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/AgentRoom/releases/tag/v0.3.0\"}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/ConveneWire/releases/tag/v0.3.0/extra\"}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://user@github.com/chenrgSix/ConveneWire/releases/tag/v0.3.0\"}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com:443/chenrgSix/ConveneWire/releases/tag/v0.3.0\"}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/ConveneWire/releases/tag/v0.3.0?download=1\"}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/ConveneWire/releases/tag/v0.3.0#asset\"}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/ConveneWire/releases/tag/v0.2.0\"}",
+		"{\"tag_name\":\"v0.3.0\",\"html_url\":\"https://github.com/chenrgSix/ConveneWire/releases/tag/v0.3.0\"}{}",
 	}
 	for index, body := range tests {
 		server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, _ *http.Request) {
