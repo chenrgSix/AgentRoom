@@ -68,10 +68,15 @@ export class OperationalMetrics {
     `).all() as CountRow[]);
     const delivery = this.database.prepare(`
       SELECT
-        count(*) FILTER (WHERE state = 'pending') AS pending,
-        coalesce(sum(max(send_count - 1, 0)), 0) AS retries,
-        min(created_at) FILTER (WHERE state = 'pending') AS oldest
-      FROM run_deliveries
+        count(*) FILTER (
+          WHERE d.state = 'pending' AND r.state = 'queued'
+        ) AS pending,
+        coalesce(sum(max(d.send_count - 1, 0)), 0) AS retries,
+        min(d.created_at) FILTER (
+          WHERE d.state = 'pending' AND r.state = 'queued'
+        ) AS oldest
+      FROM run_deliveries d
+      JOIN runs r ON r.run_id = d.run_id
     `).get() as { pending: number; retries: number; oldest: string | null };
     const latestActiveEvent = this.database.prepare(`
       SELECT max(e.created_at) AS latest
@@ -113,7 +118,7 @@ export class OperationalMetrics {
       "# HELP agentroom_run_queue_depth Runs waiting for a Runtime delivery.",
       "# TYPE agentroom_run_queue_depth gauge",
       `agentroom_run_queue_depth ${snapshot.queueDepth}`,
-      "# HELP agentroom_delivery_pending Pending durable deliveries.",
+      "# HELP agentroom_delivery_pending Pending durable deliveries for queued Runs.",
       "# TYPE agentroom_delivery_pending gauge",
       `agentroom_delivery_pending ${snapshot.pendingDeliveries}`,
       "# HELP agentroom_delivery_oldest_age_seconds Age of the oldest pending delivery.",

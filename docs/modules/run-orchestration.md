@@ -121,6 +121,11 @@ mutation.
 6. Stop retrying after acceptance, cancellation, expiry, or Agent revocation.
 
 Delivery is at least once; execution is idempotent through the Bridge inbox.
+An unaccepted Delivery row remains an immutable transport fact after its Run
+becomes terminal, but it is no longer actionable backlog. Queue and oldest
+pending-delivery metrics therefore count only `pending` Deliveries whose Run is
+still `queued`; reconnect dispatch uses the same fence and never sends a
+canceled or expired attempt.
 
 When result evidence contains bound snapshot content, the Delivery payload also
 contains its canonical Artifact revision, content identity, size, media type,

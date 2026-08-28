@@ -247,8 +247,10 @@ content, credentials, headers, request bodies, or local paths:
   managed Agent with no active Bridge is degraded, while no managed Agent is
   `not_configured` rather than unhealthy.
 - `GET /api/metrics` emits Prometheus text for HTTP status classes, active
-  Bridges, enabled managed Agents, queued Runs, pending delivery age, retries,
-  Run outcomes, Agent Presence, and active Run event lag.
+  Bridges, enabled managed Agents, queued Runs, actionable pending delivery
+  age, retries, Run outcomes, Agent Presence, and active Run event lag. A
+  historical unaccepted Delivery attached to a terminal Run remains traceable
+  but does not inflate pending count or age.
 
 HTTP completion/rejection, Bridge connect/disconnect, Delivery ACK, Run state,
 and Run reply processing emit structured JSON fields. Runtime output and error
