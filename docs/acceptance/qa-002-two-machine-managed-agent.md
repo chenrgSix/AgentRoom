@@ -15,13 +15,11 @@ Server remains authority for Team, Device, Agent, Task and Run state. Machine B
 remains authority for Codex login, executable, Workspace, local permissions,
 Runtime self-test and its exact-origin Bridge trust store.
 
-Status: `PASS`. The reviewed
-[schema-v3 physical evidence](evidence/qa-002-20260828.md) binds the exact
-`v0.4.0-qa030.3` packages to two distinct physical hosts, one consumed pairing,
-the same Device's in-place Bridge upgrade, a working local Codex Runtime, and
-online plus offline/reconnect Runs with drained metrics. No OS CA import,
-application TLS-verification bypass, Server Token copy, Device credential copy,
-manual `.env`, or OpenSSL step occurred.
+Status: `BLOCKED` on `QA-031` and a fresh schema-v4 physical record. The
+[schema-v3 physical evidence](evidence/qa-002-20260828.md) remains a sanitized
+historical record, but its verifier did not prove that the selected Runs,
+heartbeat and metrics belonged to the current packaged Bridge connection or
+persist an explicit human review receipt. It therefore cannot close this gate.
 
 ## Preconditions
 
@@ -200,9 +198,12 @@ available. Confirm the host descriptions really identify distinct physical
 machines and the attested observations occurred; the database cannot prove
 physical separation by itself.
 
-The reviewed [2026-08-28 PASS record](evidence/qa-002-20260828.md) is committed
-with the `QA-002`, `QA-028`, and `QA-030` task-state closure. Failed or partial
-runs remain diagnostic evidence only. A run that installs a Caddy root into
-machine B's OS trust store or manually enters a leaf fingerprint is always
-partial/advanced compatibility evidence, even if every application request
-succeeds.
+The [2026-08-28 schema-v3 record](evidence/qa-002-20260828.md) is retained as
+historical diagnostic evidence. A post-completion audit demonstrated that its
+accepted UTC window could be moved away from the persisted pairing and Run
+activity without causing the verifier to fail. `QA-002`, `QA-028`, and
+`QA-030` therefore remain blocked until a schema-v4 record binds every selected
+observation to one bounded window and carries an explicit human review receipt.
+A run that installs a Caddy root into machine B's OS trust store or manually
+enters a leaf fingerprint is always partial/advanced compatibility evidence,
+even if every application request succeeds.

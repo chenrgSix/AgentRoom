@@ -2,13 +2,11 @@
 
 Date: 2026-08-28.
 
-Status: `PASS` — deterministic, native package, public-download, lifecycle and
-two-physical-host gates pass. The reviewed
-[schema-v3 evidence](evidence/qa-002-20260828.md) proves one installed Windows
-Bridge used the canonical deep link and matching phrase to consume one Device
-pairing, publish two managed Agents, pass its explicit Codex self-test, and
-complete online plus offline/reconnect work without copied long-lived
-credentials, an OS CA import, or a TLS-verification bypass.
+Status: `BLOCKED` on fresh schema-v4 physical evidence. Deterministic, native
+package, public-download and lifecycle gates remain complete. The
+[schema-v3 evidence](evidence/qa-002-20260828.md) is retained as historical
+diagnostic evidence, but it did not bind its Runs, current connection heartbeat
+and metrics capture to the current packaged Bridge observation.
 
 ## Accepted deterministic behavior
 
@@ -147,7 +145,7 @@ therefore classifies this exact method as `manual_ca` advanced compatibility.
 It cannot be promoted to `QA-030`, `QA-002`, or `QA-028` evidence merely because
 the HTTPS output was normal.
 
-## Final physical closure
+## Provisional physical record and audit correction
 
 The historical manual-CA diagnostic above remains non-qualifying. Closure uses
 the later exact `v0.4.0-qa030.3` candidate and the accepted
@@ -170,7 +168,10 @@ the later exact `v0.4.0-qa030.3` candidate and the accepted
   after same-Device restart, one reply per trace, and zero queued or pending
   acceptance work.
 
-The complete sanitized record is
-[QA-002 Two-Machine Managed Agent PASS Evidence](evidence/qa-002-20260828.md).
-It supersedes the earlier partial observation as the completion evidence for
-`QA-002`, `QA-028`, and the physical remainder of `QA-030`.
+The sanitized
+[schema-v3 QA-002 record](evidence/qa-002-20260828.md) supersedes the earlier
+manual-CA diagnostic, but a later audit found that it was possible to move the
+declared evidence window away from the persisted activity without rejection.
+It is not completion evidence for `QA-002`, `QA-028`, or `QA-030`. A fresh
+schema-v4 record must prove current-build execution, live connection state,
+bounded metrics and explicit human review before these tasks return to `DONE`.

@@ -2,12 +2,16 @@
 
 Date: 2026-08-28
 
-Source commit: `17ae30ee2331ac37fb2dafeb7ee0fa2bd7e9f661`
+Initial source commit: `17ae30ee2331ac37fb2dafeb7ee0fa2bd7e9f661`
 
-Status: `PASS` — deterministic, exact-tag, public package, lifecycle and
-two-physical-host gates pass. The reviewed
-[schema-v3 evidence](evidence/qa-002-20260828.md) proves the same Device's
-exact-candidate Bridge upgrade and the no-OS-CA/no-bypass scoped-private flow.
+Current physical candidate commit:
+`1b24b0c55c7f70236a66d60fe16362c6e3213b3e`
+
+Status: `BLOCKED` on fresh schema-v4 physical evidence. Deterministic,
+exact-tag, public package and lifecycle gates remain complete. The
+[schema-v3 evidence](evidence/qa-002-20260828.md) is historical diagnostic
+evidence because it did not bind current-package execution and live connection
+state to the declared capture window or persist an explicit review receipt.
 
 ## Deterministic Matrix
 
@@ -175,10 +179,10 @@ required Bridge package upgrade. Two managed Agents were ready, and packaged
 metrics reported one authenticated Bridge, queue depth zero, pending Delivery
 count zero and four completed Runs.
 
-## Completed Physical Gate
+## Provisional Physical Record and Audit Correction
 
-The [reviewed schema-v3 PASS record](evidence/qa-002-20260828.md) closes the
-remaining physical boundary on the accepted `private_scoped_ca` profile. The
+The [schema-v3 record](evidence/qa-002-20260828.md) captured the intended
+physical boundary on the accepted `private_scoped_ca` profile. The
 physical Windows Device installed the exact published `v0.4.0-qa030.3`
 current-user installer in place; its digest matched the release and Central's
 authenticated hello observed the new version without another pairing. The
@@ -186,10 +190,10 @@ canonical installed deep link and matching phrase were used, and the operator
 confirmed there was no OS CA import, leaf pin, TLS-verification bypass, Server
 Token copy, Device credential copy, manual `.env`, or OpenSSL step.
 
-The same record binds those human facts to the one consumed pairing, retained
-private-scoped descriptor, two managed Agents, explicit Codex self-test,
-online Run, exact offline/reconnect Run, one reply per trace and drained
-packaged metrics. The historical manual-CA diagnostic remains advanced
-compatibility evidence only; it is not used to claim this PASS. Deterministic
-and Caddy tests separately retain the `public_ca` default/no-silent-fallback
-boundary, while this physical run proves the scoped-private alternative.
+The verifier did not, however, bind those human facts, selected Runs, heartbeat
+and metrics capture to the current Bridge observation in one bounded UTC
+window. The record therefore does not close `QA-030`. The historical manual-CA
+diagnostic remains advanced compatibility evidence only. Deterministic and
+Caddy tests separately retain the `public_ca` default/no-silent-fallback
+boundary while fresh schema-v4 physical evidence remains required for the
+scoped-private alternative.

@@ -58,11 +58,17 @@ that two descriptions are physical machines or that an OS trust store was
 unchanged, so human review remains mandatory. Local processes, containers and a
 manual-CA reachability check cannot close this task.
 
-Schema version 3 of that record distinguishes the Bridge version persisted by
-the one consumed pairing session from the current package version persisted by
-the latest authenticated hello. The positive upgrade fixture pairs on one
-version and reconnects on a newer one under the same Device; independent
-negative cases reject either initial-version drift or current-version drift.
+Schema version 3 distinguished the Bridge version persisted by the one
+consumed pairing session from the current package version persisted by the
+latest authenticated hello, but did not bind the selected Runs, heartbeat or
+metrics capture to that hello or the declared UTC window. A post-completion
+audit reproduced acceptance with a future window, so schema-v3 records are
+historical diagnostic evidence only. `QA-031` owns schema version 4: the
+consumed pairing, latest current-build hello, matching live connection epoch,
+fresh heartbeat, reconnect Delivery, online Run, metrics capture and explicit
+human review receipt must all satisfy one ordered time boundary. Focused
+negative fixtures must reject every missing, stale, reordered or mismatched
+component.
 
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to
@@ -428,17 +434,18 @@ restart, and two-machine gates remain separate.
 
 The `v0.4.0-qa030.1` candidate packages unified Central installation and Device
 onboarding, the Task/Run/Result work model, public-CA default deployment, and
-pairing-scoped private trust with acknowledged two-authority rotation. Follow-up
-candidate `v0.4.0-qa030.2` adds terminal-Delivery metric fencing and an
-authenticated current-Bridge build observation for same-Device upgrades.
-Release evidence is recorded in
-`docs/acceptance/qa-030-public-default-scoped-private-tls.md`. Both protected
-release portions pass exact-tag CI, the empty-Draft workflow's closed 22-asset
-verification before and after upload, prerelease publication, and a fresh
-unauthenticated download verified by the tag's committed scripts. Publication
-does not close `QA-030`, `QA-002`, or `QA-028`; those tasks still require the
-same physical Device to upgrade in place and produce the reviewed schema-v3
-record.
+pairing-scoped private trust with acknowledged two-authority rotation.
+Follow-up `v0.4.0-qa030.2` adds terminal-Delivery metric fencing and an
+authenticated current-Bridge build observation for same-Device upgrades;
+`v0.4.0-qa030.3` adds the Windows no-console Runtime launcher repair and is the
+current physical candidate. Release evidence is recorded in
+`docs/acceptance/qa-030-public-default-scoped-private-tls.md`. The protected
+release workflows pass exact-tag CI, the empty-Draft workflow's closed 22-asset
+verification before and after upload, prerelease publication, and fresh
+unauthenticated downloads verified by the tags' committed scripts. Publication
+does not close `QA-030`, `QA-002`, or `QA-028`; a schema-v3 physical record was
+captured but failed the later temporal-binding audit. Those tasks require a
+fresh reviewed schema-v4 record from the same physical Device.
 
 ## Dependencies
 
