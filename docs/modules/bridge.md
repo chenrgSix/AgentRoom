@@ -586,6 +586,14 @@ claim, automatic updater, or Windows login-startup integration; unsupported
 login startup remains visible in local Settings instead of appearing as a
 working toggle.
 
+`BRG-046` keeps every managed Windows Runtime process non-interactive at the
+operating-system window boundary. The Bridge starts Codex, Pi, Generic Runtime
+executables, and command shims with `CREATE_NO_WINDOW` plus a hidden startup
+window while retaining its existing stdin/stdout/stderr pipes, bounded output,
+deadline cancellation, and wait delay. This prevents the unsigned Desktop GUI
+from opening an empty console for each Run; it does not wrap commands in a
+shell, change Runtime arguments or environment, or grant new process authority.
+
 Wails is pinned to `v3.0.0-beta.12` behind the `desktop` Go build tag. Ordinary
 CGO-free CLI tests and builds do not compile the desktop package. Desktop tests
 compile the native shell explicitly on macOS and Windows, while platform
