@@ -927,7 +927,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	dataDir := filepath.Join(directory, "data")
 	initial := config.Config{
 		SchemaVersion:   config.CurrentSchemaVersion,
-		ServerURL:       "http://127.0.0.1:3000",
+		ServerURL:       "https://team.example.com:3443",
 		ServerToken:     strings.Repeat("i", 32),
 		ServerTrustMode: config.TrustSystemCA,
 		DeviceName:      "Movable Bridge",
@@ -988,7 +988,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 		t.Fatalf("Bridge started with unexpected URL: %s", running.ServerURL)
 	}
 	response := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
-		ServerURL:       "http://127.0.0.1:3443",
+		ServerURL:       initial.ServerURL,
 		ServerToken:     strings.Repeat("r", 32),
 		ServerTrustMode: config.TrustSystemCA,
 	})
@@ -997,7 +997,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 		t.Fatalf("expected connection settings update, got %d", response.StatusCode)
 	}
 	waitSignal(t, stopped, "Bridge stop after connection settings update")
-	if restarted := waitConfigSignal(t, started, "Bridge restart after connection update"); restarted.ServerURL != "http://127.0.0.1:3443" || restarted.ServerToken != strings.Repeat("r", 32) {
+	if restarted := waitConfigSignal(t, started, "Bridge restart after connection update"); restarted.ServerURL != initial.ServerURL || restarted.ServerToken != strings.Repeat("r", 32) {
 		t.Fatalf("Bridge restarted with stale connection settings: %#v", restarted)
 	}
 	persisted, err := config.Load(configPath)
@@ -1012,7 +1012,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	if err != nil || !reflect.DeepEqual(persistedCredential, credential) {
 		t.Fatalf("connection settings update changed Device credential: %#v, %v", persistedCredential, err)
 	}
-	if state := service.State(); state.ServerURL != "http://127.0.0.1:3443" ||
+	if state := service.State(); state.ServerURL != initial.ServerURL ||
 		!state.ServerTokenConfigured || !state.BridgeRunning {
 		t.Fatalf("unexpected updated Console state: %#v", state)
 	}
@@ -1025,7 +1025,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	epoch := service.bridgeEpoch
 	service.mu.Unlock()
 	unchanged := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
-		ServerURL:       "http://127.0.0.1:3443",
+		ServerURL:       initial.ServerURL,
 		ServerTrustMode: config.TrustSystemCA,
 	})
 	unchanged.Body.Close()
@@ -1038,8 +1038,16 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 
 	service.StopBridge()
 	waitSignal(t, stopped, "Bridge stop before offline connection update")
+	crossOrigin := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL:       "https://other.example.com:3443",
+		ServerTrustMode: config.TrustSystemCA,
+	})
+	crossOrigin.Body.Close()
+	if crossOrigin.StatusCode != http.StatusConflict || service.State().ServerURL != initial.ServerURL {
+		t.Fatal("paired public-CA credential crossed Central origins")
+	}
 	offline := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
-		ServerURL:               "https://team.example.com:9443",
+		ServerURL:               initial.ServerURL,
 		ClearServerToken:        true,
 		ServerTrustMode:         config.TrustPinnedSHA256,
 		ServerCertificateSHA256: strings.Repeat("a", 64),
@@ -1052,9 +1060,17 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 	if err != nil || persisted.ServerToken != "" {
 		t.Fatalf("clearing the central Server Token was not persisted: %#v, %v", persisted, err)
 	}
+	legacyPinnedCrossOrigin := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL:               "https://other.example.com:9443",
+		ServerCertificateSHA256: strings.Repeat("a", 64),
+	})
+	legacyPinnedCrossOrigin.Body.Close()
+	if legacyPinnedCrossOrigin.StatusCode != http.StatusConflict || service.State().ServerURL != initial.ServerURL {
+		t.Fatal("paired legacy-pinned credential crossed Central origins")
+	}
 
 	invalidToken := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
-		ServerURL:               "https://team.example.com:9443",
+		ServerURL:               initial.ServerURL,
 		ServerToken:             "too-short",
 		ServerTrustMode:         config.TrustPinnedSHA256,
 		ServerCertificateSHA256: strings.Repeat("a", 64),
@@ -1069,7 +1085,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 		ServerTrustMode: config.TrustSystemCA,
 	})
 	invalid.Body.Close()
-	if invalid.StatusCode != http.StatusBadRequest || service.State().ServerURL != "https://team.example.com:9443" {
+	if invalid.StatusCode != http.StatusBadRequest || service.State().ServerURL != initial.ServerURL {
 		t.Fatal("invalid central service URL changed persisted state")
 	}
 
@@ -1081,7 +1097,7 @@ func TestConnectionSettingsPreserveAgentsAndCredentialAcrossLifecycle(t *testing
 		ServerTrustMode: config.TrustSystemCA,
 	})
 	blocked.Body.Close()
-	if blocked.StatusCode != http.StatusConflict || service.State().ServerURL != "https://team.example.com:9443" {
+	if blocked.StatusCode != http.StatusConflict || service.State().ServerURL != initial.ServerURL {
 		t.Fatal("active Team work did not fence connection settings editing")
 	}
 }
@@ -1608,17 +1624,6 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 		persisted.Agents[1].WorkspaceAlias != "Review Workspace" {
 		t.Fatalf("unexpected persisted Agents: %#v, %v", persisted.Agents, err)
 	}
-	reloaded, err := New(Options{
-		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "reload-token",
-	}, inertDependencies())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reloaded.Close()
-	if reloaded.State().Agents[0].AgentID != firstID {
-		t.Fatal("Agent rename changed identity after Console reload")
-	}
-
 	service.mu.Lock()
 	service.state.Agents[0].ActiveRuns = 1
 	service.mu.Unlock()
@@ -1641,6 +1646,17 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	selfTestConflict.Body.Close()
 	if selfTestConflict.StatusCode != http.StatusConflict {
 		t.Fatalf("Runtime self-test did not fence Agent editing: %d", selfTestConflict.StatusCode)
+	}
+	service.Close()
+	reloaded, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "reload-token",
+	}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reloaded.Close()
+	if reloaded.State().Agents[0].AgentID != firstID {
+		t.Fatal("Agent rename changed identity after Console reload")
 	}
 }
 
@@ -1815,6 +1831,204 @@ func TestLifecycleMethodsShareStartStopStateWithDesktopShell(t *testing.T) {
 	case <-stopped:
 	case <-time.After(time.Second):
 		t.Fatal("desktop lifecycle did not cancel Bridge")
+	}
+}
+
+func TestConsoleOwnsItsDataDirectoryUntilClose(t *testing.T) {
+	directory := t.TempDir()
+	options := Options{
+		ConfigPath: filepath.Join(directory, "bridge.json"),
+		DataDir:    filepath.Join(directory, "data"),
+		Workspace:  directory,
+		Token:      "owner-token",
+	}
+	first, err := New(options, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second, err := New(options, inertDependencies()); err == nil {
+		second.Close()
+		t.Fatal("second Console owned the same Bridge data directory")
+	}
+	first.Close()
+	third, err := New(options, inertDependencies())
+	if err != nil {
+		t.Fatalf("closed Console did not release Bridge ownership: %v", err)
+	}
+	third.Close()
+}
+
+func TestLifecycleWaitsForOldWorkerBeforeStartHotRestartAndClose(t *testing.T) {
+	type controlledWorker struct {
+		configuration config.Config
+		canceled      chan struct{}
+		release       chan struct{}
+	}
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	executablePath, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded := config.Config{
+		ServerURL: "https://team.example.com", DeviceName: "Draining Bridge", DataDir: dataDir,
+		Agents: []config.AgentConfig{{
+			Name: "Draining Agent", Role: "Test", Adapter: "generic",
+			Command: []string{executablePath}, Workspace: directory,
+		}},
+	}
+	if err := config.Save(configPath, loaded); err != nil {
+		t.Fatal(err)
+	}
+	if err := pairing.Save(dataDir, pairing.Credential{
+		ServerURL: loaded.ServerURL, DeviceID: "device_draining", TeamID: "team_draining",
+		OwnerMemberID: "member_draining", Token: "secret",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	workers := make(chan controlledWorker, 4)
+	forceRelease := make(chan struct{})
+	defer close(forceRelease)
+	var active atomic.Int32
+	var overlapped atomic.Bool
+	dependencies := inertDependencies()
+	dependencies.RunBridge = func(ctx context.Context, configuration config.Config, _ pairing.Credential, _ operations.Observer) error {
+		if active.Add(1) != 1 {
+			overlapped.Store(true)
+		}
+		worker := controlledWorker{
+			configuration: configuration,
+			canceled:      make(chan struct{}),
+			release:       make(chan struct{}),
+		}
+		workers <- worker
+		<-ctx.Done()
+		close(worker.canceled)
+		select {
+		case <-worker.release:
+		case <-forceRelease:
+		}
+		active.Add(-1)
+		return ctx.Err()
+	}
+	service, err := New(Options{
+		ConfigPath: configPath, DataDir: dataDir, Workspace: directory, Token: "draining-token",
+	}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(service.Close)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	if _, err := service.StartBridge(); err != nil {
+		t.Fatal(err)
+	}
+	first := <-workers
+	stopReturned := make(chan State, 1)
+	go func() { stopReturned <- service.StopBridge() }()
+	select {
+	case <-first.canceled:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not cancel the first worker")
+	}
+	startReturned := make(chan error, 1)
+	go func() {
+		_, startErr := service.StartBridge()
+		startReturned <- startErr
+	}()
+	select {
+	case <-workers:
+		t.Fatal("Start overlapped a draining worker")
+	case <-stopReturned:
+		t.Fatal("Stop returned before the worker drained")
+	case <-startReturned:
+		t.Fatal("Start returned before the worker drained")
+	case <-time.After(40 * time.Millisecond):
+	}
+	close(first.release)
+	select {
+	case <-stopReturned:
+	case <-time.After(time.Second):
+		t.Fatal("Stop did not return after the worker drained")
+	}
+	select {
+	case err := <-startReturned:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Start did not return after the worker drained")
+	}
+	var second controlledWorker
+	select {
+	case second = <-workers:
+	case <-time.After(time.Second):
+		t.Fatal("Start did not launch a replacement worker after drain")
+	}
+
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL: loaded.ServerURL, ServerToken: strings.Repeat("n", 32), ServerTrustMode: config.TrustSystemCA,
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("hot configuration update failed: %d", response.StatusCode)
+	}
+	select {
+	case <-second.canceled:
+	case <-time.After(time.Second):
+		t.Fatal("hot restart did not cancel the old worker")
+	}
+	response = consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/connection-settings", ConnectionSettingsInput{
+		ServerURL: loaded.ServerURL, ServerToken: strings.Repeat("m", 32), ServerTrustMode: config.TrustSystemCA,
+	})
+	response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("second hot configuration update failed while draining: %d", response.StatusCode)
+	}
+	select {
+	case <-workers:
+		t.Fatal("hot restart overlapped a draining worker")
+	case <-time.After(40 * time.Millisecond):
+	}
+	close(second.release)
+	var third controlledWorker
+	select {
+	case third = <-workers:
+	case <-time.After(time.Second):
+		t.Fatal("hot restart did not start after the old worker drained")
+	}
+	if third.configuration.ServerToken != strings.Repeat("m", 32) {
+		t.Fatal("hot restart used stale configuration")
+	}
+
+	closed := make(chan struct{})
+	go func() {
+		service.Close()
+		close(closed)
+	}()
+	select {
+	case <-third.canceled:
+	case <-time.After(time.Second):
+		t.Fatal("Close did not cancel the worker")
+	}
+	if _, err := service.StartBridge(); err == nil {
+		t.Fatal("closed Bridge service accepted a concurrent restart")
+	}
+	select {
+	case <-closed:
+		t.Fatal("Close returned before the worker drained")
+	case <-time.After(40 * time.Millisecond):
+	}
+	close(third.release)
+	select {
+	case <-closed:
+	case <-time.After(time.Second):
+		t.Fatal("Close did not return after the worker drained")
+	}
+	if overlapped.Load() || active.Load() != 0 {
+		t.Fatalf("Bridge workers overlapped or leaked: active=%d overlap=%t", active.Load(), overlapped.Load())
 	}
 }
 

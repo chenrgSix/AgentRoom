@@ -158,6 +158,16 @@ state; Bridge inbox writes are fsynced before acceptance or event send.
 The local Bridge inbox is owned by the Bridge module, although its recovery
 contract is tested jointly with server delivery records.
 
+`BRG-052` extends that local boundary from file-content flush to namespace
+durability. Configuration, Device credentials, Agent identities, inbox records
+and quarantine moves, connection epochs, Runtime session bindings, and macOS
+login-item changes sync the containing directory after their atomic create,
+rename, move, or delete on Unix-like systems. A process-level data-root owner
+also prevents a CLI, desktop shell, or second Bridge from acknowledging work
+against overlapping local state. Windows uses the strongest portable boundary
+available to this implementation—flushed files and atomic replacement—while
+native directory fsync remains unavailable through Go.
+
 `BRG-029` adds a durable local `preparing` state before any content-bearing Run
 is acknowledged. Bounded range downloads fsync an owner-only partial file;
 verified bytes are protected and atomically renamed before a path-free receipt
@@ -288,7 +298,8 @@ reopens SQLite at planned-member, partially settled barrier, and
 committed-next-Wave cut points, and verifies deterministic-anchor retry.
 Persistence work is tracked by `DATA-001` through `DATA-006`, `TASK-007`
 through `TASK-009`, target Task/Result persistence by `TASK-012`/`TASK-013`, and
-Artifact storage by `ART-001`; parallel recovery
+Artifact storage by `ART-001`; local Bridge state ownership/durability by
+`BRG-052`; parallel recovery
 is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
 
 ## Dependencies

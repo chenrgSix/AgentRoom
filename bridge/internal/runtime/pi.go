@@ -120,7 +120,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 		)
 	}
 	command := exec.CommandContext(processContext, p.Config.Command[0], commandArguments...)
-	configureRuntimeCommand(command)
+	managedCommand := configureRuntimeCommand(command)
 	command.Dir = p.Config.Workspace
 	command.Env = allowedEnvironment(p.Config.EnvAllowlist)
 	command.Stdin = strings.NewReader(runtimePromptWithArtifacts(
@@ -133,7 +133,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 	}
 	stderr := &limitedBuffer{remaining: 4_096}
 	command.Stderr = stderr
-	if err := command.Start(); err != nil {
+	if err := managedCommand.Start(); err != nil {
 		return emitPiStartFailure(ctx, emit)
 	}
 
@@ -239,7 +239,7 @@ func (p PiAdapter) Execute(ctx context.Context, request Request, emit EmitFunc) 
 			cancelProcess()
 		}
 	}
-	waitError := command.Wait()
+	waitError := managedCommand.Wait()
 	if executionError != nil {
 		return executionError
 	}

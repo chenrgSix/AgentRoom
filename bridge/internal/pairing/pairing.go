@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/durablefs"
 )
 
 const credentialFilename = "device-credential.json"
@@ -133,7 +134,7 @@ func Save(dataDir string, credential Credential) error {
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return fmt.Errorf("install credential: %w", err)
 	}
-	return nil
+	return durablefs.SyncParent(path)
 }
 
 func Replace(dataDir string, previous Credential, credential Credential) error {
@@ -176,7 +177,7 @@ func Replace(dataDir string, previous Credential, credential Credential) error {
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return fmt.Errorf("install credential rotation: %w", err)
 	}
-	return nil
+	return durablefs.SyncParent(path)
 }
 
 func EnsureAvailable(dataDir string) (string, error) {
@@ -205,6 +206,18 @@ func Load(dataDir string) (Credential, error) {
 		return Credential{}, err
 	}
 	return credential, nil
+}
+
+// ValidateCredentialOrigin prevents a Device credential from crossing the
+// exact origin at which it was issued. Trusting a public CA or a legacy leaf
+// pin authenticates a TLS endpoint; it does not prove that a different origin
+// belongs to the same Central installation.
+func ValidateCredentialOrigin(serverURL string, credential Credential) error {
+	if strings.TrimSpace(credential.ServerURL) == "" ||
+		!sameServerOrigin(serverURL, credential.ServerURL) {
+		return fmt.Errorf("Device credential is bound to a different Central origin; use explicit safe migration or re-pair the Device")
+	}
+	return nil
 }
 
 func validateCredentialTrust(credential Credential) error {

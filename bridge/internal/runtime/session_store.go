@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"convenewire.dev/bridge/internal/durablefs"
 )
 
 const runtimeSessionSchemaVersion = 2
@@ -150,7 +152,7 @@ func (s *FileRuntimeSessionStore) Save(binding RuntimeSessionBinding) error {
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return fmt.Errorf("replace Runtime session binding: %w", err)
 	}
-	return nil
+	return durablefs.SyncParent(path)
 }
 
 func (s *FileRuntimeSessionStore) Delete(key RuntimeSessionKey) error {
@@ -158,10 +160,13 @@ func (s *FileRuntimeSessionStore) Delete(key RuntimeSessionKey) error {
 	if err != nil {
 		return err
 	}
-	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return fmt.Errorf("delete Runtime session binding: %w", err)
 	}
-	return nil
+	return durablefs.SyncParent(path)
 }
 
 func (s *FileRuntimeSessionStore) bindingPath(key RuntimeSessionKey) (string, error) {

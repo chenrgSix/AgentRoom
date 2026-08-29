@@ -385,6 +385,27 @@ mismatched values are rejected rather than inferred or migrated.
 
 ## Local Safety
 
+### Single state owner and drained lifecycle
+
+`BRG-052` gives one process exclusive ownership of each resolved Bridge data
+directory. The desktop/Console shell keeps that owner from construction until
+`Close`; direct CLI/core execution acquires the same lock, while a core called
+by the shell borrows only that exact owner. A second process, a symlinked lock,
+or a configuration change racing lock acquisition fails before inbox, identity,
+session, trust-epoch, or credential state opens. Re-enrollment first owns its
+staged data root and transfers ownership only after activation succeeds.
+
+Stop, explicit start, hot configuration replacement, and close cancel the old
+worker and wait for its completion channel before a successor can start or the
+lock can be released. Repeated updates while a worker drains collapse to one
+restart using the newest accepted configuration; a closed service cannot be
+restarted. Durable local mutations flush replacement content and sync the
+parent directory after create, rename, move, or delete on Unix-like systems,
+including the inbox, configuration, credentials, identities, Runtime sessions,
+connection epoch, quarantine and macOS login item. Windows retains file flush
+plus atomic replacement because Go exposes no portable directory-fsync
+primitive there.
+
 ### Reasoning-summary consent
 
 Following [ADR-0018](../adr/0018-local-reasoning-summary-consent.md), the local
@@ -448,8 +469,14 @@ Agents, per-Agent modal/API ownership, rename-stable identity, active-work
 fencing, draft Runtime preflight, connection-only mutation and lifecycle
 preservation, status rendering, and acceptance of a Run envelope above the
 WebSocket library's hidden 32 KiB default without reconnect. Work is tracked by
-`BRG-001` through `BRG-027`
+`BRG-001` through `BRG-027` plus `BRG-051` and `BRG-052`
 in `docs/TASKS.md`.
+
+The `BRG-051`/`BRG-052` local evidence is recorded in
+[Bridge runtime hardening acceptance](../acceptance/brg-051-052-bridge-runtime-hardening.md).
+Native Windows execution of the Job Object process-tree regression and fresh
+two-machine acceptance remain `QA-036` evidence; cross-compilation alone is not
+reported as that platform result.
 
 `BRG-027` adds durable `run.activity` envelopes without making local execution
 internals public. The Runtime executor persists each redacted activity before
@@ -766,6 +793,16 @@ installation state. Console state and diagnostic export include only active
 mode, epoch and a 12-character digest prefix; the full digest and certificate
 remain out of those projections. Connection settings cannot silently move a
 scoped credential to another origin.
+
+`BRG-051` applies the same exact-origin fence to every trust mode. Before any
+WebSocket or authenticated HTTP request is constructed, the active Server URL
+must match the origin recorded with the Device credential. Public-CA and
+legacy-pinned credentials therefore stop locally when a user edits the host or
+port; public PKI for the new endpoint does not establish continuity with the
+Central that issued the bearer. The authenticated same-CA scoped-private
+migration below is the sole in-place exception. All other moves require a new
+pairing and never attach either the Device token or optional Server Token to a
+probe of the replacement origin.
 
 `BRG-048` adds the explicit exception for a stable-hostname migration. While
 the existing configuration-mutation fence is clear and no CA rotation is in

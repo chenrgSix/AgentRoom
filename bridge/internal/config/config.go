@@ -11,6 +11,8 @@ import (
 	"strings"
 	"unicode"
 	"unicode/utf8"
+
+	"convenewire.dev/bridge/internal/durablefs"
 )
 
 type Config struct {
@@ -429,7 +431,7 @@ func writeAtomic(resolved string, value Config) error {
 	if err := os.Rename(temporaryPath, resolved); err != nil {
 		return fmt.Errorf("install config: %w", err)
 	}
-	return nil
+	return durablefs.SyncParent(resolved)
 }
 
 func EnsureAvailable(path string) (string, error) {

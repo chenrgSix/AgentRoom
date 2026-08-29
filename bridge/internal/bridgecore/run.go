@@ -11,6 +11,7 @@ import (
 	"convenewire.dev/bridge/internal/delivery"
 	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
 	contracts "convenewire.dev/contracts/generated/go"
@@ -53,6 +54,11 @@ func RunObservedWithProvisioning(
 	observer operations.Observer,
 	handleProvision connection.ProvisionHandler,
 ) error {
+	releaseOwner, err := ownership.AcquireForContext(ctx, loaded.DataDir)
+	if err != nil {
+		return err
+	}
+	defer releaseOwner()
 	inbox, err := delivery.Open(filepath.Join(loaded.DataDir, "inbox"))
 	if err != nil {
 		return err

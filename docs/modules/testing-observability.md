@@ -100,6 +100,16 @@ event sequence; Bridge durable inbox restart to `outcome_unknown`; duplicate
 ACK and event idempotency; offline reconnect delivery; expiry; and a real
 cross-process cancellation. Each case has a deterministic regression test.
 
+`BRG-051` adds negative direct-client and Console cases in which a public-CA or
+legacy-pinned credential is paired to one origin and configuration points at
+another; the replacement endpoint must observe zero credential-bearing
+requests. `BRG-052` adds same-process and child-process data-root contention,
+borrowed-owner, symlink, drained stop/start/hot-restart/close, durable-write and
+Windows Job Object parent/child/grandchild cases. Full Go race/vet and desktop
+compilation are local gates. The Windows Job Object regression must also run on
+native Windows before `QA-036`; a successful cross-compile is only build
+evidence.
+
 ADR-0021 onboarding verification treats installation, Owner claim, Device
 pairing, local Agent setup, and Runtime readiness as separate gates. Installer
 tests cut execution after every durable step and prove exact reentry without a

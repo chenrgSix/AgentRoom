@@ -81,3 +81,17 @@ func TestExchangeStoresCredentialWithOwnerOnlyPermissions(t *testing.T) {
 		t.Fatal("expected existing credential to prevent overwrite")
 	}
 }
+
+func TestValidateCredentialOriginRejectsCrossOriginAndMissingBinding(t *testing.T) {
+	credential := Credential{ServerURL: "https://team.example:443", DeviceID: "device_test", Token: "secret"}
+	if err := ValidateCredentialOrigin("https://TEAM.example:443", credential); err != nil {
+		t.Fatalf("same origin was rejected: %v", err)
+	}
+	if err := ValidateCredentialOrigin("https://other.example:443", credential); err == nil {
+		t.Fatal("cross-origin Device credential was accepted")
+	}
+	credential.ServerURL = ""
+	if err := ValidateCredentialOrigin("https://team.example:443", credential); err == nil {
+		t.Fatal("unbound Device credential was accepted")
+	}
+}

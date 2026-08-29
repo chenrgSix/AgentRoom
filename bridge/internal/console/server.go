@@ -30,6 +30,7 @@ import (
 	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/launchable"
 	"convenewire.dev/bridge/internal/operations"
+	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/provisioning"
 	"convenewire.dev/bridge/internal/updatecheck"
@@ -206,8 +207,12 @@ type Service struct {
 	joinCancel             context.CancelFunc
 	joinEpoch              uint64
 	bridgeCancel           context.CancelFunc
+	bridgeDone             chan struct{}
+	bridgeRestartPending   bool
 	bridgeEpoch            uint64
 	bridgeWorkers          int
+	closed                 bool
+	owner                  *ownership.Lock
 	events                 []diagnostics.Event
 	runtimeTests           map[string]struct{}
 	runtimePreflight       bool
@@ -270,6 +275,36 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 			return nil, err
 		}
 	}
+	loaded, loadErr := config.Load(resolvedConfig)
+	if loadErr != nil && !errors.Is(rootError(loadErr), os.ErrNotExist) {
+		return nil, loadErr
+	}
+	ownerDataDir := resolvedData
+	if loadErr == nil {
+		ownerDataDir = loaded.DataDir
+	}
+	owner, err := ownership.Acquire(ownerDataDir)
+	if err != nil {
+		return nil, err
+	}
+	keepOwner := false
+	defer func() {
+		if !keepOwner {
+			_ = owner.Release()
+		}
+	}()
+	reloaded, reloadErr := config.Load(resolvedConfig)
+	if reloadErr != nil && !errors.Is(rootError(reloadErr), os.ErrNotExist) {
+		return nil, reloadErr
+	}
+	if (loadErr == nil) != (reloadErr == nil) ||
+		(loadErr == nil && reloaded.DataDir != loaded.DataDir) {
+		return nil, fmt.Errorf("Bridge configuration changed while acquiring data directory ownership")
+	}
+	if reloadErr == nil {
+		loaded = reloaded
+		resolvedData = reloaded.DataDir
+	}
 	service := &Service{
 		options: Options{
 			ConfigPath:     resolvedConfig,
@@ -292,9 +327,10 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 			AgentProvisioning: AgentProvisioningView{Mode: config.AgentProvisioningDisabled},
 		},
 		runtimeTests: make(map[string]struct{}),
+		owner:        owner,
 	}
 	service.applyDiscoveryLocked(service.discoverRuntimes())
-	if loaded, loadErr := config.Load(resolvedConfig); loadErr == nil {
+	if loadErr == nil {
 		service.configuration = &loaded
 		service.state.Configured = true
 		service.state.Phase = PhaseReady
@@ -312,8 +348,6 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 				service.state.Enrollment.BackupConfigPath = backupPath
 			}
 		}
-	} else if !errors.Is(rootError(loadErr), os.ErrNotExist) {
-		return nil, loadErr
 	}
 	if dependencies.LoginStartup != nil {
 		startupState, startupErr := dependencies.LoginStartup.State()
@@ -323,6 +357,7 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 			service.state.LoginStartup = startupState
 		}
 	}
+	keepOwner = true
 	return service, nil
 }
 
@@ -579,61 +614,98 @@ func (s *Service) checkUpdate(response http.ResponseWriter, request *http.Reques
 
 func (s *Service) StartConfiguredBridge() error {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if s.configuration == nil || s.credential == nil {
+		s.mu.Unlock()
 		return nil
 	}
-	return s.startBridgeLocked()
+	s.mu.Unlock()
+	_, err := s.StartBridge()
+	return err
 }
 
 // StartBridge starts an enrolled Bridge and returns a snapshot of its new
 // state. It is shared by the HTTP Console and native desktop controls.
 func (s *Service) StartBridge() (State, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if err := s.startBridgeLocked(); err != nil {
-		return cloneState(s.state), err
+	for {
+		s.mu.Lock()
+		if s.closed {
+			state := cloneState(s.state)
+			s.mu.Unlock()
+			return state, fmt.Errorf("Bridge service is closed")
+		}
+		if s.bridgeCancel != nil {
+			state := cloneState(s.state)
+			s.mu.Unlock()
+			return state, nil
+		}
+		done := s.bridgeDone
+		if done == nil {
+			s.bridgeRestartPending = false
+			err := s.startBridgeLocked()
+			state := cloneState(s.state)
+			s.mu.Unlock()
+			return state, err
+		}
+		s.mu.Unlock()
+		s.waitForBridgeWorker(done)
 	}
-	return cloneState(s.state), nil
 }
 
 // StopBridge stops the current managed connection without closing the local
 // configuration surface. Starting it again reuses the stored identity.
 func (s *Service) StopBridge() State {
 	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.stopBridgeLocked()
+	_, done := s.stopBridgeLocked()
+	s.mu.Unlock()
+	s.waitForBridgeWorker(done)
+	return s.State()
 }
 
-func (s *Service) stopBridgeLocked() State {
+func (s *Service) stopBridgeLocked() (State, <-chan struct{}) {
 	if s.joinCancel != nil {
-		return cloneState(s.state)
+		return cloneState(s.state), nil
 	}
 	if s.bridgeCancel != nil {
 		s.bridgeCancel()
 	}
 	s.bridgeEpoch++
 	s.bridgeCancel = nil
+	s.bridgeRestartPending = false
 	s.state.BridgeRunning = false
 	s.state.Connection = ConnectionView{State: operations.ConnectionStopped}
 	s.recordEventLocked("bridge.stopped", "", string(operations.ConnectionStopped))
 	s.state.Phase = phaseFor(s.state.Configured, false)
-	return cloneState(s.state)
+	return cloneState(s.state), s.bridgeDone
 }
 
 func (s *Service) Close() {
 	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.closed = true
+	owner := s.owner
+	s.owner = nil
 	if s.joinCancel != nil {
 		s.joinCancel()
 		s.joinCancel = nil
 	}
 	s.joinEpoch++
-	if s.bridgeCancel != nil {
-		s.bridgeCancel()
-		s.bridgeCancel = nil
-		s.bridgeEpoch++
+	_, done := s.stopBridgeLocked()
+	s.mu.Unlock()
+	s.waitForBridgeWorker(done)
+	if owner != nil {
+		_ = owner.Release()
 	}
+}
+
+func (s *Service) waitForBridgeWorker(done <-chan struct{}) {
+	if done == nil {
+		return
+	}
+	<-done
+	s.mu.Lock()
+	if s.bridgeDone == done {
+		s.bridgeDone = nil
+	}
+	s.mu.Unlock()
 }
 
 func ListenLoopback(address string) (net.Listener, error) {
@@ -930,6 +1002,9 @@ func (s *Service) startBridge(response http.ResponseWriter, _ *http.Request) {
 }
 
 func (s *Service) startBridgeLocked() error {
+	if s.closed {
+		return fmt.Errorf("Bridge service is closed")
+	}
 	if s.joinCancel != nil {
 		return fmt.Errorf("Finish or cancel Team enrollment before starting the Bridge")
 	}
@@ -939,10 +1014,13 @@ func (s *Service) startBridgeLocked() error {
 	if s.configuration == nil || s.credential == nil {
 		return fmt.Errorf("Bridge must be configured and paired before start")
 	}
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ownership.WithOwner(context.Background(), s.owner))
+	done := make(chan struct{})
 	s.bridgeEpoch++
 	epoch := s.bridgeEpoch
 	s.bridgeCancel = cancel
+	s.bridgeDone = done
+	s.bridgeRestartPending = false
 	s.bridgeWorkers++
 	s.state.BridgeRunning = true
 	s.state.Phase = PhaseRunning
@@ -958,6 +1036,7 @@ func (s *Service) startBridgeLocked() error {
 		return s.handleAgentProvision(handlerContext, epoch, requested)
 	})
 	go func() {
+		defer close(done)
 		var err error
 		if s.dependencies.RunBridgeWithProvisioning != nil {
 			err = s.dependencies.RunBridgeWithProvisioning(
@@ -973,6 +1052,9 @@ func (s *Service) startBridgeLocked() error {
 		s.mu.Lock()
 		defer s.mu.Unlock()
 		s.bridgeWorkers--
+		if s.bridgeDone == done {
+			s.bridgeDone = nil
+		}
 		if s.bridgeWorkers == 0 {
 			for index := range s.state.Agents {
 				s.state.Agents[index].ActiveRuns = 0
@@ -1062,12 +1144,13 @@ func (s *Service) stopBridge(response http.ResponseWriter, _ *http.Request) {
 
 func (s *Service) prepareReasoningConsent(response http.ResponseWriter, _ *http.Request) {
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.requireConfigurationMutationLocked(); err != nil {
+		s.mu.Unlock()
 		writeError(response, http.StatusConflict, err.Error())
 		return
 	}
-	writeJSON(response, http.StatusOK, s.stopBridgeLocked())
+	s.mu.Unlock()
+	writeJSON(response, http.StatusOK, s.StopBridge())
 }
 
 func (s *Service) addAgent(response http.ResponseWriter, request *http.Request) {
@@ -1173,6 +1256,9 @@ func (s *Service) updateAgent(response http.ResponseWriter, request *http.Reques
 }
 
 func (s *Service) requireConfigurationMutationLocked() error {
+	if s.closed {
+		return fmt.Errorf("Bridge service is closed")
+	}
 	if s.configuration == nil || s.credential == nil {
 		return fmt.Errorf("Complete Team enrollment before editing configuration")
 	}
@@ -1204,7 +1290,8 @@ func (s *Service) replaceConfigurationLocked(configuration config.Config) error 
 }
 
 func (s *Service) applyReplacedConfigurationLocked(configuration config.Config) error {
-	wasRunning := s.bridgeCancel != nil
+	wasRunning := s.bridgeCancel != nil || s.bridgeRestartPending
+	var stopped <-chan struct{} = s.bridgeDone
 	if s.bridgeCancel != nil {
 		s.bridgeCancel()
 	}
@@ -1220,9 +1307,31 @@ func (s *Service) applyReplacedConfigurationLocked(configuration config.Config) 
 	}
 	s.state.Phase = PhaseReady
 	if wasRunning {
-		return s.startBridgeLocked()
+		s.bridgeRestartPending = true
+		restartEpoch := s.bridgeEpoch
+		go s.restartBridgeAfterWorker(stopped, restartEpoch)
 	}
 	return nil
+}
+
+func (s *Service) restartBridgeAfterWorker(stopped <-chan struct{}, restartEpoch uint64) {
+	if stopped != nil {
+		<-stopped
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.bridgeEpoch != restartEpoch || !s.bridgeRestartPending || s.bridgeCancel != nil || s.joinCancel != nil || s.closed ||
+		s.configuration == nil || s.credential == nil {
+		return
+	}
+	s.bridgeRestartPending = false
+	if s.bridgeDone == stopped {
+		s.bridgeDone = nil
+	}
+	if err := s.startBridgeLocked(); err != nil {
+		s.state.Phase = PhaseError
+		s.state.LastError = publicError(err)
+	}
 }
 
 func (s *Service) agentViewLocked(agentID string) AgentView {
@@ -1297,6 +1406,12 @@ func (s *Service) updateConnectionSettings(response http.ResponseWriter, request
 		candidate.ShareReasoningSummaries == s.configuration.ShareReasoningSummaries {
 		writeJSON(response, http.StatusOK, s.state)
 		return
+	}
+	if !scopedOriginChange {
+		if err := pairing.ValidateCredentialOrigin(candidate.ServerURL, *s.credential); err != nil {
+			writeError(response, http.StatusConflict, publicError(err))
+			return
+		}
 	}
 	if scopedOriginChange {
 		previousCredential := *s.credential

@@ -52,7 +52,7 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 	}
 	defer cancel()
 	command := exec.CommandContext(runContext, g.Config.Command[0], g.Config.Command[1:]...)
-	configureRuntimeCommand(command)
+	managedCommand := configureRuntimeCommand(command)
 	command.Dir = g.Config.Workspace
 	command.Env = allowedEnvironment(g.Config.EnvAllowlist)
 	command.Stdin = strings.NewReader(runtimePromptWithArtifacts(
@@ -67,7 +67,7 @@ func (g GenericAdapter) Execute(ctx context.Context, request Request, emit EmitF
 	stderr := &limitedBuffer{remaining: 4_096}
 	command.Stdout = stdout
 	command.Stderr = stderr
-	err := command.Run()
+	err := managedCommand.Run()
 	if runContext.Err() != nil {
 		status := contracts.Canceled
 		code := "RUNTIME_CANCELED"

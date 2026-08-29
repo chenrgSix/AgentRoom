@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"convenewire.dev/bridge/internal/durablefs"
 	contracts "convenewire.dev/contracts/generated/go"
 )
 
@@ -220,6 +221,12 @@ func (i *Inbox) QuarantineIncompatibleTrace(runID string) (string, error) {
 		if err := os.Rename(source, destination); err != nil {
 			return "", fmt.Errorf("quarantine incompatible trace inbox record: %w", err)
 		}
+		if err := durablefs.SyncDirectory(quarantineDirectory); err != nil {
+			return "", fmt.Errorf("sync incompatible trace quarantine: %w", err)
+		}
+		if err := durablefs.SyncDirectory(i.directory); err != nil {
+			return "", fmt.Errorf("sync active inbox after quarantine: %w", err)
+		}
 		return destination, nil
 	}
 }
@@ -311,7 +318,10 @@ func writeNew(path string, record Record) error {
 		file.Close()
 		return err
 	}
-	return file.Close()
+	if err := file.Close(); err != nil {
+		return err
+	}
+	return durablefs.SyncParent(path)
 }
 
 func replace(path string, record Record) error {
@@ -340,5 +350,8 @@ func replace(path string, record Record) error {
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	return os.Rename(temporaryPath, path)
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	return durablefs.SyncParent(path)
 }

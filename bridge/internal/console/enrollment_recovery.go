@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 )
 
@@ -40,6 +41,8 @@ type ReDevicePairingInput struct {
 
 func (s *Service) enrollmentBlockedReasonLocked() string {
 	switch {
+	case s.closed:
+		return "Bridge service is closed."
 	case s.joinCancel != nil:
 		return "已有审批请求，请先取消或等待完成。"
 	case s.bridgeCancel != nil:
@@ -179,6 +182,16 @@ func (s *Service) installReEnrollmentLocked(previous config.Config, credential p
 	if err != nil {
 		return previous, fmt.Errorf("Unable to stage new pairing; previous pairing is unchanged")
 	}
+	candidateOwner, err := ownership.Acquire(directory)
+	if err != nil {
+		return previous, fmt.Errorf("Unable to own staged pairing data; previous pairing is unchanged")
+	}
+	activated := false
+	defer func() {
+		if !activated {
+			_ = candidateOwner.Release()
+		}
+	}()
 	// Keep the old data in place. A staged but unbound credential is retained
 	// for inspection, never mixed into the active identity or silently retried.
 	backupPath := filepath.Join(directory, "previous-bridge.json")
@@ -203,6 +216,13 @@ func (s *Service) installReEnrollmentLocked(previous config.Config, credential p
 	if err := s.dependencies.ReplaceConfig(s.options.ConfigPath, candidate); err != nil {
 		s.state = priorState
 		return previous, fmt.Errorf("Unable to activate new pairing; previous pairing is unchanged")
+	}
+	previousOwner := s.owner
+	s.owner = candidateOwner
+	s.options.DataDir = directory
+	activated = true
+	if previousOwner != nil {
+		_ = previousOwner.Release()
 	}
 	return candidate, nil
 }

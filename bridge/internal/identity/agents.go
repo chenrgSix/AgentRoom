@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/durablefs"
 )
 
 const filename = "agent-identities.json"
@@ -86,10 +87,17 @@ func save(path string, identities map[string]string) error {
 		temporary.Close()
 		return err
 	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return err
+	}
 	if err := temporary.Close(); err != nil {
 		return err
 	}
-	return os.Rename(temporaryPath, path)
+	if err := os.Rename(temporaryPath, path); err != nil {
+		return err
+	}
+	return durablefs.SyncParent(path)
 }
 
 func newID(prefix string) string {

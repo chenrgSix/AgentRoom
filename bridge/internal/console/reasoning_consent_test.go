@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/operations"
@@ -92,12 +93,26 @@ func TestReasoningConsentRequiresAuthenticatedStoppedDrainedBridge(t *testing.T)
 	service.mu.Lock()
 	service.state.Agents[0].ActiveRuns = 0
 	service.mu.Unlock()
-	prepare(http.StatusOK)
+	prepared := make(chan int, 1)
+	go func() {
+		response := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/reasoning-consent/prepare", nil)
+		response.Body.Close()
+		prepared <- response.StatusCode
+	}()
+	waitState(t, service, func(state State) bool { return !state.BridgeRunning })
 	if service.State().ReasoningEditable {
 		t.Fatal("stopping Bridge exposed consent before its worker drained")
 	}
 	update(service.Token(), http.StatusConflict)
 	close(exit)
+	select {
+	case status := <-prepared:
+		if status != http.StatusOK {
+			t.Fatalf("prepare status=%d want=%d", status, http.StatusOK)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("privacy preparation did not return after the Bridge drained")
+	}
 	waitState(t, service, func(state State) bool { return state.ReasoningEditable })
 	update(service.Token(), http.StatusOK)
 	loaded, err := config.Load(service.options.ConfigPath)
@@ -107,14 +122,6 @@ func TestReasoningConsentRequiresAuthenticatedStoppedDrainedBridge(t *testing.T)
 	if service.State().BridgeRunning {
 		t.Fatal("changing consent started a stopped Bridge")
 	}
-	reopened, err := New(Options{ConfigPath: service.options.ConfigPath}, inertDependencies())
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reopened.Close()
-	if !reopened.State().ShareReasoningSummaries {
-		t.Fatal("consent did not survive restart")
-	}
 	input.ShareReasoningSummaries = nil
 	input.ServerToken = "new-central-token-12345678901234567890"
 	update(service.Token(), http.StatusOK)
@@ -122,9 +129,18 @@ func TestReasoningConsentRequiresAuthenticatedStoppedDrainedBridge(t *testing.T)
 		t.Fatal("unrelated edit revoked consent")
 	}
 	input.ServerURL = "http://127.0.0.1:3001"
-	update(service.Token(), http.StatusOK)
-	if service.State().ShareReasoningSummaries {
-		t.Fatal("changed endpoint inherited consent")
+	update(service.Token(), http.StatusConflict)
+	if !service.State().ShareReasoningSummaries || service.State().ServerURL != previous.ServerURL {
+		t.Fatal("rejected cross-origin edit changed privacy consent or Central origin")
+	}
+	service.Close()
+	reopened, err := New(Options{ConfigPath: service.options.ConfigPath}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if !reopened.State().ShareReasoningSummaries {
+		t.Fatal("consent did not survive restart")
 	}
 }
 

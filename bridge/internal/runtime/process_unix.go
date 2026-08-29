@@ -15,7 +15,7 @@ const runtimeProcessWaitDelay = 250 * time.Millisecond
 // configureRuntimeCommand puts each Runtime in its own process group. Killing
 // only a shell process can leave its children alive with inherited output
 // pipes, which makes exec.Cmd wait past the Run deadline.
-func configureRuntimeCommand(command *exec.Cmd) {
+func configureRuntimeCommand(command *exec.Cmd) runtimeCommand {
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	command.WaitDelay = runtimeProcessWaitDelay
 	command.Cancel = func() error {
@@ -28,4 +28,5 @@ func configureRuntimeCommand(command *exec.Cmd) {
 		}
 		return err
 	}
+	return command
 }

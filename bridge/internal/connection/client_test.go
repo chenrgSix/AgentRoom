@@ -18,6 +18,26 @@ import (
 	"github.com/coder/websocket"
 )
 
+func TestClientRejectsCrossOriginCredentialBeforeAnyRequest(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requests.Add(1)
+	}))
+	defer server.Close()
+	client := Client{
+		Config: config.Config{ServerURL: server.URL, DataDir: t.TempDir()},
+		Credential: pairing.Credential{
+			ServerURL: "http://127.0.0.1:1", DeviceID: "device_test", Token: "device-secret",
+		},
+	}
+	if _, err := client.connectOnce(context.Background()); err == nil {
+		t.Fatal("cross-origin Device credential was accepted")
+	}
+	if requests.Load() != 0 {
+		t.Fatal("Device credential reached a different Central origin")
+	}
+}
+
 func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	serverToken := "central-server-token-12345678901234567890"
 	messages := make(chan map[string]any, 3)
@@ -62,7 +82,7 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 			}},
 		},
 		Credential: pairing.Credential{
-			DeviceID: "device_test", TeamID: "team_test",
+			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
 		BridgeVersion:     "v0.4.0-qa030.2",
@@ -212,7 +232,7 @@ func TestAcceptedProvisioningResultStopsOldConfigurationForReload(t *testing.T) 
 			Command: []string{"agent"}, Workspace: directory,
 		}}},
 		Credential: pairing.Credential{
-			DeviceID: "device_test", TeamID: "team_test",
+			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
 		HandleProvision: func(_ context.Context, requested contracts.AgentProvisionRequestedMessage) contracts.AgentProvisionResultMessage {
@@ -304,7 +324,7 @@ func TestProvisioningIsRejectedAsBusyWhileARunIsActive(t *testing.T) {
 			Name: "Builder", Role: "Implementation", Adapter: "generic",
 			Command: []string{"agent"}, Workspace: directory,
 		}}},
-		Credential: pairing.Credential{DeviceID: "device_test", Token: "device-secret"},
+		Credential: pairing.Credential{ServerURL: server.URL, DeviceID: "device_test", Token: "device-secret"},
 		HandleRun: func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error {
 			close(runStarted)
 			<-releaseRun
@@ -365,7 +385,7 @@ func TestClientStopWaitsForCanceledRunWorkers(t *testing.T) {
 		Config: config.Config{ServerURL: server.URL, DataDir: directory, Agents: []config.AgentConfig{{
 			Name: "Builder", Role: "Implementation", Adapter: "generic", Command: []string{"agent"}, Workspace: directory,
 		}}},
-		Credential: pairing.Credential{DeviceID: "device_draining", TeamID: "team_draining", OwnerMemberID: "member_draining", Token: "fake-secret"},
+		Credential: pairing.Credential{ServerURL: server.URL, DeviceID: "device_draining", TeamID: "team_draining", OwnerMemberID: "member_draining", Token: "fake-secret"},
 		HandleRun: func(ctx context.Context, _ contracts.RunRequestedMessage, _ func(context.Context, any) error) error {
 			close(started)
 			<-ctx.Done()
@@ -476,7 +496,7 @@ func TestClientAcceptsContractValidRunAboveWebSocketLibraryDefault(t *testing.T)
 			}},
 		},
 		Credential: pairing.Credential{
-			DeviceID: "device_test", TeamID: "team_test",
+			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
 		HeartbeatInterval: time.Second,
@@ -553,7 +573,7 @@ func TestClientRejectsMessageAboveExplicitTransportLimit(t *testing.T) {
 			}},
 		},
 		Credential: pairing.Credential{
-			DeviceID: "device_test", TeamID: "team_test",
+			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
 		RetryInitial: time.Millisecond,
@@ -656,7 +676,7 @@ func TestRunCancelRequestUsesAnExplicitCancellationCause(t *testing.T) {
 			}},
 		},
 		Credential: pairing.Credential{
-			DeviceID: "device_test", TeamID: "team_test",
+			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
 		HeartbeatInterval: time.Second,
@@ -734,7 +754,7 @@ func TestDuplicateRunRequestDoesNotStartAConcurrentHandler(t *testing.T) {
 			}},
 		},
 		Credential: pairing.Credential{
-			DeviceID: "device_test", TeamID: "team_test",
+			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
 		HeartbeatInterval: time.Second,
@@ -812,7 +832,7 @@ func TestReconnectObserverReportsRealityAndResetsBackoffAfterOnline(t *testing.T
 			}},
 		},
 		Credential: pairing.Credential{
-			DeviceID: "device_test", TeamID: "team_test",
+			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
 		RetryInitial: time.Millisecond,

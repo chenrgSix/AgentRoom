@@ -145,16 +145,18 @@ func TestReEnrollmentPreservesOldDataAndAtomicallySelectsFreshIdentity(t *testin
 			t.Fatalf("pairing state is not owner-only: %s, %v", path, err)
 		}
 	}
-	for _, item := range []struct{ path, device string }{{service.options.ConfigPath, "device_replacement"}, {state.Enrollment.BackupConfigPath, "device_original"}} {
-		reopened, err := New(Options{ConfigPath: item.path}, inertDependencies())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if reopened.State().DeviceID != item.device {
-			t.Fatal("reopening selected the wrong identity")
-		}
-		reopened.Close()
+	if reopenedActive, err := New(Options{ConfigPath: service.options.ConfigPath}, inertDependencies()); err == nil {
+		reopenedActive.Close()
+		t.Fatal("re-enrollment did not transfer ownership to the active data directory")
 	}
+	reopenedBackup, err := New(Options{ConfigPath: state.Enrollment.BackupConfigPath}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if reopenedBackup.State().DeviceID != "device_original" {
+		t.Fatal("reopening the backup selected the wrong identity")
+	}
+	reopenedBackup.Close()
 	serialized, _ := json.Marshal(state)
 	for _, forbidden := range []string{previous.ServerToken, "original-device-secret", "replacement-device-secret", service.Token()} {
 		if bytes.Contains(serialized, []byte(forbidden)) {
@@ -174,6 +176,15 @@ func TestReEnrollmentPreservesOldDataAndAtomicallySelectsFreshIdentity(t *testin
 	edited, err := config.Load(service.options.ConfigPath)
 	if err != nil || edited.DataDir != current.DataDir {
 		t.Fatal("legacy configuration update restored the wrong pairing generation")
+	}
+	service.Close()
+	reopened, err := New(Options{ConfigPath: service.options.ConfigPath}, inertDependencies())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer reopened.Close()
+	if reopened.State().DeviceID != "device_replacement" {
+		t.Fatal("reopening selected the wrong active identity")
 	}
 }
 
@@ -366,12 +377,19 @@ func TestReEnrollmentRequiresConfirmationAndIdleDrainedBridge(t *testing.T) {
 		t.Fatal(err)
 	}
 	recoveryRequest(t, server.URL, service, http.StatusConflict)
-	service.StopBridge()
+	stopReturned := make(chan State, 1)
+	go func() { stopReturned <- service.StopBridge() }()
+	waitState(t, service, func(state State) bool { return !state.BridgeRunning })
 	recoveryRequest(t, server.URL, service, http.StatusConflict)
 	if service.State().Enrollment.CanRequest {
 		t.Fatal("undrained connection was advertised as safe for re-enrollment")
 	}
 	close(exit)
+	select {
+	case <-stopReturned:
+	case <-time.After(time.Second):
+		t.Fatal("Bridge stop did not return after its worker drained")
+	}
 	waitState(t, service, func(state State) bool { return state.Enrollment.CanRequest })
 	for _, fence := range []string{"preflight", "test", "run"} {
 		service.mu.Lock()
@@ -502,6 +520,7 @@ func TestReEnrollmentStagingFailuresKeepPreviousPairing(t *testing.T) {
 			if !bytes.Equal(credentialBefore, credentialAfter) {
 				t.Fatal("failed enrollment changed the old credential")
 			}
+			service.Close()
 			reopened, err := New(Options{ConfigPath: service.options.ConfigPath}, inertDependencies())
 			if err != nil {
 				t.Fatal(err)

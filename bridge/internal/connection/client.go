@@ -19,6 +19,7 @@ import (
 	"unicode/utf8"
 
 	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/durablefs"
 	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/operations"
 	"convenewire.dev/bridge/internal/pairing"
@@ -144,6 +145,9 @@ func (c Client) retryBounds() (time.Duration, time.Duration) {
 }
 
 func (c Client) connectOnce(ctx context.Context) (bool, error) {
+	if err := pairing.ValidateCredentialOrigin(c.Config.ServerURL, c.Credential); err != nil {
+		return false, err
+	}
 	credential, trustChanged, trustErr := pairing.SyncScopedPrivateTrustRotation(
 		ctx, c.Config, c.Credential, time.Now(),
 	)
@@ -564,10 +568,17 @@ func nextEpoch(dataDir string) (int64, error) {
 		temporary.Close()
 		return 0, err
 	}
+	if err := temporary.Sync(); err != nil {
+		temporary.Close()
+		return 0, err
+	}
 	if err := temporary.Close(); err != nil {
 		return 0, err
 	}
 	if err := os.Rename(temporaryPath, path); err != nil {
+		return 0, err
+	}
+	if err := durablefs.SyncParent(path); err != nil {
 		return 0, err
 	}
 	return next, nil

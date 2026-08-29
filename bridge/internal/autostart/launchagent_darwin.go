@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"convenewire.dev/bridge/internal/durablefs"
 )
 
 // Keep the released label so enabling startup repairs the existing job instead
@@ -81,8 +83,14 @@ func (c *launchAgentController) State() (State, error) {
 
 func (c *launchAgentController) SetEnabled(ctx context.Context, enabled bool) (State, error) {
 	if !enabled {
-		if err := os.Remove(c.plistPath); err != nil && !errors.Is(err, os.ErrNotExist) {
-			return State{Supported: true, PlistPath: c.plistPath}, fmt.Errorf("remove login startup: %w", err)
+		removeErr := os.Remove(c.plistPath)
+		if removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			return State{Supported: true, PlistPath: c.plistPath}, fmt.Errorf("remove login startup: %w", removeErr)
+		}
+		if removeErr == nil {
+			if err := durablefs.SyncParent(c.plistPath); err != nil {
+				return State{Supported: true, PlistPath: c.plistPath}, fmt.Errorf("persist login startup removal: %w", err)
+			}
 		}
 		return c.State()
 	}
@@ -105,7 +113,9 @@ func (c *launchAgentController) SetEnabled(ctx context.Context, enabled bool) (S
 	}
 	output, err := c.run(ctx, "launchctl", "bootstrap", c.domain, c.plistPath)
 	if err != nil && !strings.Contains(strings.ToLower(string(output)), "already loaded") {
-		_ = os.Remove(c.plistPath)
+		if removeErr := os.Remove(c.plistPath); removeErr == nil {
+			_ = durablefs.SyncParent(c.plistPath)
+		}
 		return State{Supported: true, PlistPath: c.plistPath}, fmt.Errorf("register login startup: %s", strings.TrimSpace(string(output)))
 	}
 	return c.State()
@@ -162,6 +172,9 @@ func writeAtomic(path string, source []byte) error {
 	}
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return fmt.Errorf("install login startup: %w", err)
+	}
+	if err := durablefs.SyncParent(path); err != nil {
+		return fmt.Errorf("persist login startup: %w", err)
 	}
 	return nil
 }

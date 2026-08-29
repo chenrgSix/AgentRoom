@@ -93,7 +93,7 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	defer cancelProcess()
 
 	command := exec.CommandContext(processContext, c.Config.Command[0], c.Config.Command[1:]...)
-	configureRuntimeCommand(command)
+	managedCommand := configureRuntimeCommand(command)
 	command.Dir = c.Config.Workspace
 	command.Env = allowedEnvironment(c.Config.EnvAllowlist)
 	stdin, err := command.StdinPipe()
@@ -106,7 +106,7 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	}
 	stderr := &limitedBuffer{remaining: 8_192}
 	command.Stderr = stderr
-	if err := command.Start(); err != nil {
+	if err := managedCommand.Start(); err != nil {
 		return emitCodexFailure(ctx, emit, "CODEX_START_FAILED", "Codex process could not be started.")
 	}
 
@@ -124,7 +124,7 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 		}},
 	}); err != nil {
 		cancelProcess()
-		_ = command.Wait()
+		_ = managedCommand.Wait()
 		return emitCodexFailure(ctx, emit, "CODEX_START_FAILED", "Codex initialization could not be sent.")
 	}
 
@@ -206,7 +206,7 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 		protocolError = scanner.Err()
 	}
 	cancelProcess()
-	waitError := command.Wait()
+	waitError := managedCommand.Wait()
 	if executionError != nil {
 		return executionError
 	}

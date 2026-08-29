@@ -140,6 +140,15 @@ server-provided shell string. They must isolate process groups, bound output,
 propagate cancellation, and clean up children. Existing Runtime command, file,
 network, and approval policies remain authoritative.
 
+On Unix-like systems each managed Runtime remains in its own process group. On
+Windows, `BRG-052` starts every Generic, structured Generic, Codex App Server,
+and Pi command suspended, assigns it to a per-Run Job Object configured with
+`KILL_ON_JOB_CLOSE`, and resumes it only after assignment. Cancellation,
+timeout, Bridge stop, and normal adapter teardown therefore own the same process
+tree instead of killing only a `.cmd` shim or parent shell. `CREATE_NO_WINDOW`
+remains set, so the stronger ownership boundary does not reintroduce the blank
+console window fixed by `BRG-046`.
+
 Immediately before a managed Runtime starts, the Bridge rechecks every pinned
 content descriptor against the owner-only materialization receipt, immutable
 size and SHA-256, regular-file type, and read-only mode. The resulting local
@@ -255,9 +264,10 @@ process permissions remain owner-controlled.
 ## Verification and Tasks
 
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
-startup, native session resume, streaming, activity, named context, cancellation, crash, recovery,
-and local permission inheritance. Work is tracked by `ADP-001` through
-`ADP-014` (completed), `BRG-023`/`BRG-027`, and `RUN-009` in
+startup, native session resume, streaming, activity, named context,
+cancellation, crash, recovery, process-tree teardown, and local permission
+inheritance. Work is tracked by `ADP-001` through `ADP-014` (completed),
+`BRG-023`/`BRG-027`/`BRG-052`, and `RUN-009` in
 `docs/TASKS.md`.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one

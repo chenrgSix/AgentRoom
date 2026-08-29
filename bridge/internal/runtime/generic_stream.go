@@ -29,7 +29,7 @@ func (g GenericAdapter) executeStructured(ctx context.Context, request Request, 
 	defer cancelProcess()
 
 	command := exec.CommandContext(processContext, g.Config.Command[0], g.Config.Command[1:]...)
-	configureRuntimeCommand(command)
+	managedCommand := configureRuntimeCommand(command)
 	command.Dir = g.Config.Workspace
 	command.Env = allowedEnvironment(g.Config.EnvAllowlist)
 	command.Stdin = strings.NewReader(runtimePromptWithArtifacts(
@@ -42,7 +42,7 @@ func (g GenericAdapter) executeStructured(ctx context.Context, request Request, 
 	}
 	stderr := &limitedBuffer{remaining: 4_096}
 	command.Stderr = stderr
-	if err := command.Start(); err != nil {
+	if err := managedCommand.Start(); err != nil {
 		return emitGenericStartFailure(ctx, emit)
 	}
 
@@ -89,7 +89,7 @@ func (g GenericAdapter) executeStructured(ctx context.Context, request Request, 
 	if protocolError != nil || executionError != nil {
 		cancelProcess()
 	}
-	waitError := command.Wait()
+	waitError := managedCommand.Wait()
 	if executionError != nil {
 		return executionError
 	}
