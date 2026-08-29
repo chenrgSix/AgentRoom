@@ -1,0 +1,11 @@
+# syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
+
+ARG CONVENE_WIRE_RELEASE_VERSION=development
+ARG CONVENE_WIRE_SOURCE_COMMIT=unknown
+
+FROM caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+
+ARG CONVENE_WIRE_RELEASE_VERSION
+ARG CONVENE_WIRE_SOURCE_COMMIT
+LABEL org.opencontainers.image.revision="${CONVENE_WIRE_SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${CONVENE_WIRE_RELEASE_VERSION}"

@@ -6,6 +6,8 @@ repository_root=$(CDPATH= cd -- "${controller_root}/../.." && pwd)
 output_dir=${OUTPUT_DIR:-"${controller_root}/dist"}
 release_tag=${RELEASE_TAG:?RELEASE_TAG is required}
 source_ref=${SOURCE_REF:-"${release_tag}"}
+release_schema=${CENTRAL_RELEASE_SCHEMA:-2}
+image_bundle_dir=${CENTRAL_IMAGE_BUNDLE_DIR:-}
 target_os=${GOOS:?GOOS is required}
 target_arch=${GOARCH:?GOARCH is required}
 version=${release_tag#v}
@@ -21,6 +23,10 @@ case "${target_os}/${target_arch}" in
     exit 1
     ;;
 esac
+if [[ "${release_schema}" != 1 && "${release_schema}" != 2 ]]; then
+  echo "CENTRAL_RELEASE_SCHEMA must be 1 or 2" >&2
+  exit 1
+fi
 
 source_commit=$(git -C "${repository_root}" rev-parse --verify "${source_ref}^{commit}")
 if [[ ! "${source_commit}" =~ ^[0-9a-f]{40,64}$ ]]; then
@@ -88,11 +94,34 @@ cp "${staging}/ops/convenewirectl/README.md" "${staging}/CENTRAL-INSTALL.md"
     -o "${staging}/bin/convenewirectl" \
     ./cmd/convenewirectl
 )
-rm -rf -- "${staging}/ops"
 
-printf '{"schemaVersion":1,"releaseVersion":"%s","dataSchemaVersion":%s,"sourceCommit":"%s","targetOS":"%s","targetArch":"%s"}\n' \
-  "${release_tag}" "${data_schema_version}" "${source_commit}" "${target_os}" "${target_arch}" \
-  > "${staging}/convenewire-central-release.json"
+if [[ "${release_schema}" == 2 ]]; then
+  image_archive_name="convenewire-central-image_${version}_linux_${target_arch}.oci.tar"
+  image_metadata_name="convenewire-central-image_${version}_linux_${target_arch}.metadata.json"
+  image_archive="${image_bundle_dir}/${image_archive_name}"
+  image_metadata="${image_bundle_dir}/${image_metadata_name}"
+  if [[ -z "${image_bundle_dir}" || ! -f "${image_archive}" || -L "${image_archive}" || ! -f "${image_metadata}" || -L "${image_metadata}" ]]; then
+    echo "Schema-v2 Central packaging requires the exact regular OCI bundle files for linux/${target_arch}" >&2
+    exit 1
+  fi
+  mkdir -p "${staging}/image"
+  cp "${image_archive}" "${staging}/image/${image_archive_name}"
+  cp "${image_metadata}" "${staging}/image/${image_metadata_name}"
+  go -C "${controller_root}" run ./cmd/convenewire-release-image verify \
+    --bundle-root "${staging}" \
+    --metadata "image/${image_metadata_name}" \
+    --release-version "${release_tag}" \
+    --source-commit "${source_commit}" \
+    --target-arch "${target_arch}"
+  printf '{"schemaVersion":2,"releaseVersion":"%s","dataSchemaVersion":%s,"sourceCommit":"%s","targetOS":"%s","targetArch":"%s","imageMetadata":"image/%s"}\n' \
+    "${release_tag}" "${data_schema_version}" "${source_commit}" "${target_os}" "${target_arch}" "${image_metadata_name}" \
+    > "${staging}/convenewire-central-release.json"
+else
+  printf '{"schemaVersion":1,"releaseVersion":"%s","dataSchemaVersion":%s,"sourceCommit":"%s","targetOS":"%s","targetArch":"%s"}\n' \
+    "${release_tag}" "${data_schema_version}" "${source_commit}" "${target_os}" "${target_arch}" \
+    > "${staging}/convenewire-central-release.json"
+fi
+rm -rf -- "${staging}/ops"
 
 host_os=$(go env GOHOSTOS)
 host_arch=$(go env GOHOSTARCH)

@@ -31,15 +31,24 @@ to appear exactly once in `SHA256SUMS`, rejects symlinks and unchecked extras,
 and validates closed release metadata. Compose files are not executed before
 this verification passes.
 
-The release workflow builds separate Linux and macOS archives for amd64 and
-arm64 from the exact tagged commit. Each archive contains the controller,
-Compose/Docker build context, deployment scripts, license assets, closed
+The release workflow builds one Linux OCI bundle per amd64/arm64 architecture
+from the exact resolved Release commit, then embeds that same architecture's
+bundle unchanged in both its Linux and macOS controller archives. Each bundle
+contains the Server and pinned Caddy images selected only by manifest digest,
+per-image SPDX statements, one exact-source provenance statement and closed
+metadata binding Release, source, platform, archive hash, image digests,
+builder and pinned SBOM generator. The images are never published under a
+mutable registry tag as an installation dependency.
+
+Each Central archive also contains the controller, Compose source context for
+explicit schema-v1 compatibility, deployment scripts, license assets, closed
 release/target/schema metadata, and an exhaustive internal `SHA256SUMS`.
 Its companion `*.SHA256SUMS.sha256` asset pins that internal manifest; the
 outer Release checksum file covers both the archive and pin asset. The verifier
 checks safe members, exact source commit, migration/schema agreement, file
-closure, binary version/architecture, license identity, and forbidden runtime
-state before upload and after a clean download.
+closure, binary version/architecture, license identity, forbidden runtime
+state, OCI descriptor/blob closure, image labels, attestations and identical
+per-architecture embedding before upload and after a clean download.
 
 The schema-v2 manifest under `<data-root>/control/installation.json` records
 the stable non-secret installation ID, selected TLS profile, private trust epoch

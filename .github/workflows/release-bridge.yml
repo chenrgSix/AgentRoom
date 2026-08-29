@@ -143,6 +143,8 @@ jobs:
           go test ./...
           go vet ./...
           go build ./cmd/convenewirectl
+          bash -n scripts/build-central-image.sh
+          bash -n scripts/verify-central-image-docker.sh
           bash -n scripts/package-central-release.sh
           bash -n scripts/verify-central-release.sh
 
@@ -151,6 +153,7 @@ jobs:
           RELEASE_TAG: v0.0.0-release-gate
           SOURCE_REF: HEAD
           OUTPUT_DIR: ${{ runner.temp }}/central-dist
+          CENTRAL_RELEASE_SCHEMA: 1
         run: |
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             GOOS=${target%/*} GOARCH=${target#*/} \

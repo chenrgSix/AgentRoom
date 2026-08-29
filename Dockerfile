@@ -1,5 +1,8 @@
 # syntax=docker/dockerfile:1.7@sha256:a57df69d0ea827fb7266491f2813635de6f17269be881f696fbfdf2d83dda33e
 
+ARG CONVENE_WIRE_RELEASE_VERSION=development
+ARG CONVENE_WIRE_SOURCE_COMMIT=unknown
+
 FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS build
 
 WORKDIR /app
@@ -21,6 +24,11 @@ RUN npm run validate \
 RUN npm prune --omit=dev
 
 FROM node:22-bookworm-slim@sha256:d649c27dae7ba0137b3cef5dd75baa422c08dc3d9e3fc0c23dfb172dc3cc6436 AS runtime
+
+ARG CONVENE_WIRE_RELEASE_VERSION
+ARG CONVENE_WIRE_SOURCE_COMMIT
+LABEL org.opencontainers.image.revision="${CONVENE_WIRE_SOURCE_COMMIT}" \
+      org.opencontainers.image.version="${CONVENE_WIRE_RELEASE_VERSION}"
 
 # Runtime configuration belongs to Compose or the explicit container caller.
 # Baking renamed defaults here would conflict with a supplied legacy alias.

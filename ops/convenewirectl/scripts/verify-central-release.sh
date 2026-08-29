@@ -6,6 +6,7 @@ repository_root=$(CDPATH= cd -- "${controller_root}/../.." && pwd)
 asset_dir=${ASSET_DIR:?ASSET_DIR is required}
 release_tag=${RELEASE_TAG:?RELEASE_TAG is required}
 source_ref=${SOURCE_REF:-"${release_tag}"}
+release_schema=${CENTRAL_RELEASE_SCHEMA:-2}
 version=${release_tag#v}
 
 if [[ ! "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -16,6 +17,10 @@ if [[ ! -d "${asset_dir}" ]]; then
   echo "Central release asset directory does not exist: ${asset_dir}" >&2
   exit 1
 fi
+if [[ "${release_schema}" != 1 && "${release_schema}" != 2 ]]; then
+  echo "CENTRAL_RELEASE_SCHEMA must be 1 or 2" >&2
+  exit 1
+fi
 source_commit=$(git -C "${repository_root}" rev-parse --verify "${source_ref}^{commit}")
 
 targets=(darwin/amd64 darwin/arm64 linux/amd64 linux/arm64)
@@ -24,6 +29,10 @@ cleanup() {
   rm -rf -- "${temporary_root}"
 }
 trap cleanup EXIT
+amd64_image_sha=""
+amd64_metadata_sha=""
+arm64_image_sha=""
+arm64_metadata_sha=""
 
 sha256_file() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -109,12 +118,19 @@ for target in "${targets[@]}"; do
     (cd "${root}" && shasum -a 256 -c SHA256SUMS >/dev/null)
   fi
 
-  for required in \
+  required_paths=(
     convenewire-central-release.json CENTRAL-INSTALL.md bin/convenewirectl \
     compose.yaml Dockerfile package.json package-lock.json deploy/Caddyfile \
     deploy/tls/public-ca.caddy deploy/tls/private-scoped-ca.caddy deploy/tls/internal-ca.caddy deploy/tls/legacy-auto.caddy deploy/tls/pki-none.caddy \
     scripts/compose-backup.sh scripts/compose-restore.sh \
-    LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md; do
+    LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md
+  )
+  if [[ "${release_schema}" == 2 ]]; then
+    image_archive_name="convenewire-central-image_${version}_linux_${target_arch}.oci.tar"
+    image_metadata_name="convenewire-central-image_${version}_linux_${target_arch}.metadata.json"
+    required_paths+=("image/${image_archive_name}" "image/${image_metadata_name}")
+  fi
+  for required in "${required_paths[@]}"; do
     if [[ ! -s "${root}/${required}" ]]; then
       echo "Central archive is missing ${required}: ${package}" >&2
       exit 1
@@ -135,27 +151,58 @@ for target in "${targets[@]}"; do
     exit 1
   fi
 
-  node - "${root}" "${release_tag}" "${target_os}" "${target_arch}" "${source_commit}" <<'NODE'
+  node - "${root}" "${release_tag}" "${target_os}" "${target_arch}" "${source_commit}" "${release_schema}" <<'NODE'
 const fs = require("node:fs");
 const path = require("node:path");
-const [root, releaseTag, targetOS, targetArch, sourceCommit] = process.argv.slice(2);
+const [root, releaseTag, targetOS, targetArch, sourceCommit, releaseSchemaText] = process.argv.slice(2);
+const releaseSchema = Number(releaseSchemaText);
 const filename = path.join(root, "convenewire-central-release.json");
 const value = JSON.parse(fs.readFileSync(filename, "utf8"));
 const keys = Object.keys(value).sort();
-const expected = ["dataSchemaVersion", "releaseVersion", "schemaVersion", "sourceCommit", "targetArch", "targetOS"];
+const expected = releaseSchema === 2
+  ? ["dataSchemaVersion", "imageMetadata", "releaseVersion", "schemaVersion", "sourceCommit", "targetArch", "targetOS"]
+  : ["dataSchemaVersion", "releaseVersion", "schemaVersion", "sourceCommit", "targetArch", "targetOS"];
 const migrations = fs.readdirSync(path.join(root, "apps/server/migrations"))
   .map((name) => /^([0-9]{4})_.*\.sql$/.exec(name))
   .filter(Boolean)
   .map((match) => Number(match[1]));
 const latestMigration = Math.max(...migrations);
 if (JSON.stringify(keys) !== JSON.stringify(expected) ||
-    value.schemaVersion !== 1 || value.releaseVersion !== releaseTag ||
+    value.schemaVersion !== releaseSchema || value.releaseVersion !== releaseTag ||
     !Number.isSafeInteger(value.dataSchemaVersion) || value.dataSchemaVersion !== latestMigration ||
     value.sourceCommit !== sourceCommit ||
-    value.targetOS !== targetOS || value.targetArch !== targetArch) {
+    value.targetOS !== targetOS || value.targetArch !== targetArch ||
+    (releaseSchema === 2 && value.imageMetadata !==
+      `image/convenewire-central-image_${releaseTag.slice(1)}_linux_${targetArch}.metadata.json`)) {
   throw new Error(`Invalid closed Central release metadata: ${filename}`);
 }
 NODE
+
+  if [[ "${release_schema}" == 2 ]]; then
+    go -C "${controller_root}" run ./cmd/convenewire-release-image verify \
+      --bundle-root "${root}" \
+      --metadata "image/${image_metadata_name}" \
+      --release-version "${release_tag}" \
+      --source-commit "${source_commit}" \
+      --target-arch "${target_arch}"
+    image_sha=$(sha256_file "${root}/image/${image_archive_name}")
+    metadata_sha=$(sha256_file "${root}/image/${image_metadata_name}")
+    if [[ "${target_arch}" == amd64 ]]; then
+      if [[ -n "${amd64_image_sha}" && ( "${amd64_image_sha}" != "${image_sha}" || "${amd64_metadata_sha}" != "${metadata_sha}" ) ]]; then
+        echo "darwin/amd64 and linux/amd64 do not embed the same once-built OCI bundle" >&2
+        exit 1
+      fi
+      amd64_image_sha=${image_sha}
+      amd64_metadata_sha=${metadata_sha}
+    else
+      if [[ -n "${arm64_image_sha}" && ( "${arm64_image_sha}" != "${image_sha}" || "${arm64_metadata_sha}" != "${metadata_sha}" ) ]]; then
+        echo "darwin/arm64 and linux/arm64 do not embed the same once-built OCI bundle" >&2
+        exit 1
+      fi
+      arm64_image_sha=${image_sha}
+      arm64_metadata_sha=${metadata_sha}
+    fi
+  fi
 
   assert_binary_architecture "${root}/bin/convenewirectl" "${target}"
   escaped_release_tag=${release_tag//./\\.}
