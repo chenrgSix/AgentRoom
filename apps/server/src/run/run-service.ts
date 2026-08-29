@@ -1,7 +1,10 @@
 import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { AuthService, WebPrincipal } from "../security/auth-service.js";
-import type { AgentTaskRepository } from "../task/task-repository.js";
+import type {
+  AgentTaskRecord,
+  AgentTaskRepository
+} from "../task/task-repository.js";
 import type {
   RunAmbiguityAcknowledgement,
   RunContextManifest,
@@ -9,7 +12,21 @@ import type {
   RunRepository
 } from "./run-repository.js";
 
-const defaultRunDurationMilliseconds = 20 * 60 * 1000;
+export const defaultRunDurationMilliseconds = 20 * 60 * 1000;
+
+export function isRunTaskRunnable(task: AgentTaskRecord): boolean {
+  return ["ready", "active", "review"].includes(task.lifecycleState) &&
+    task.schedulingState === "enabled" &&
+    task.budgetUsage.runAttempts < task.budgetPolicy.maxRunAttempts &&
+    task.budgetUsage.executionDurationSeconds <
+      task.budgetPolicy.maxExecutionDurationSeconds;
+}
+
+export function runDeadlineAt(createdAt: string): string {
+  return new Date(
+    Date.parse(createdAt) + defaultRunDurationMilliseconds
+  ).toISOString();
+}
 
 export class RunService {
   public constructor(
@@ -24,6 +41,14 @@ export class RunService {
     messageId: string,
     now: string
   ): RunRecord[] {
+    return this.createRunsForMessageResult(principal, messageId, now).runs;
+  }
+
+  public createRunsForMessageResult(
+    principal: WebPrincipal,
+    messageId: string,
+    now: string
+  ): { created: boolean; runs: RunRecord[] } {
     const message = this.core.getMessage(messageId);
     if (!message) {
       throw new Error(`Message not found: ${messageId}`);
@@ -34,23 +59,17 @@ export class RunService {
     }
     const existing = this.runs.findByTrigger(messageId);
     if (existing.length > 0 || message.mentions.length === 0) {
-      return existing;
+      return { created: false, runs: existing };
     }
     const task = this.tasks.get(message.taskId);
     if (
       !task || task.roomId !== message.roomId ||
-      !["ready", "active", "review"].includes(task.lifecycleState) ||
-      task.schedulingState !== "enabled" ||
-      task.budgetUsage.runAttempts >= task.budgetPolicy.maxRunAttempts ||
-      task.budgetUsage.executionDurationSeconds >=
-        task.budgetPolicy.maxExecutionDurationSeconds
+      !isRunTaskRunnable(task)
     ) {
       throw new Error("Run Task must be runnable in the Message Room");
     }
-    const deadlineAt = new Date(
-      Date.parse(now) + defaultRunDurationMilliseconds
-    ).toISOString();
-    return this.runs.createRuns(message.mentions.map((mention) => ({
+    const deadlineAt = runDeadlineAt(now);
+    this.runs.createRuns(message.mentions.map((mention) => ({
       runId: createOpaqueId("run"),
       traceId: message.traceId,
       roomId: message.roomId,
@@ -67,6 +86,7 @@ export class RunService {
       updatedAt: now,
       terminalAt: null
     })));
+    return { created: true, runs: this.runs.findByTrigger(messageId) };
   }
 
   public listRoomRuns(
@@ -181,9 +201,7 @@ export class RunService {
       expectedTaskRevision: input.expectedTaskRevision,
       memberId: member.memberId,
       now,
-      deadlineAt: new Date(
-        Date.parse(now) + defaultRunDurationMilliseconds
-      ).toISOString()
+      deadlineAt: runDeadlineAt(now)
     });
   }
 }

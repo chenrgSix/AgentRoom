@@ -1,5 +1,4 @@
 import type { CoreRepository } from "../data/core-repository.js";
-import { createOpaqueId } from "../domain/identifiers.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import type {
   RunRecord,
@@ -84,9 +83,16 @@ export class InProcessRunExecutor {
         ) {
           throw new Error("Runtime output delta must contain 1 to 20000 characters");
         }
-        const applied = this.runs.applyEvent(runId, safeEvent, this.clock());
-        if (applied.applied && safeEvent.type === "reply") {
-          this.appendReply(applied.run, safeEvent);
+        if (
+          safeEvent.type === "reply" &&
+          (safeEvent.content.trim().length === 0 || safeEvent.content.length > 20_000)
+        ) {
+          throw new Error("Runtime reply must contain 1 to 20000 characters");
+        }
+        if (safeEvent.type === "reply") {
+          this.runs.applyReply(runId, safeEvent, this.clock());
+        } else {
+          this.runs.applyEvent(runId, safeEvent, this.clock());
         }
       }
       const completed = this.runs.getRun(runId);
@@ -106,24 +112,6 @@ export class InProcessRunExecutor {
         : "RUNTIME_EXECUTION_FAILED";
       return this.finishUnknown(latest, code);
     }
-  }
-
-  private appendReply(run: RunRecord, event: Extract<RuntimeEvent, { type: "reply" }>): void {
-    if (event.content.trim().length === 0 || event.content.length > 20_000) {
-      throw new Error("Runtime reply must contain 1 to 20000 characters");
-    }
-    this.core.appendMessage({
-      messageId: createOpaqueId("msg"),
-      roomId: run.roomId,
-      taskId: run.taskId,
-      senderType: "agent",
-      senderId: run.targetAgentId,
-      content: event.content,
-      mentions: [],
-      parentMessageId: run.triggerMessageId,
-      traceId: run.traceId,
-      createdAt: this.clock()
-    });
   }
 
   private finishUnknown(run: RunRecord, code: string): RunRecord {

@@ -12,11 +12,11 @@ export function registerMessageRoutes({
   delivery,
   executor,
   fakeAdapters,
+  memberMessageRuns,
   messages,
   principal,
   routeAgentReplyMentions,
-  runRepository,
-  runs
+  runRepository
 }: ServerRouteContext): void {
   app.get<{
     Params: { roomId: string };
@@ -59,7 +59,8 @@ export function registerMessageRoutes({
       ) {
         throw new Error("mentionAgentIds must contain up to 5 unique Agent IDs");
       }
-      const persisted = messages.createMemberMessageResult(actor, {
+      const now = clock();
+      const persisted = memberMessageRuns.create(actor, {
         roomId: request.params.roomId,
         ...(body.taskId === undefined
           ? {}
@@ -88,18 +89,17 @@ export function registerMessageRoutes({
               })
             }
           : {}),
-        now: clock()
+        now
       });
       const message = persisted.message;
-      if (!persisted.created) {
+      if (!persisted.runsCreated) {
         return {
           message,
-          runs: runRepository.findByTrigger(message.messageId)
+          runs: persisted.runs
         };
       }
-      const createdRuns = runs.createRunsForMessage(actor, message.messageId, clock());
       const executedRuns = [];
-      for (const run of createdRuns) {
+      for (const run of persisted.runs) {
         const adapter = fakeAdapters.get(run.targetAgentId);
         if (!adapter) {
           const dispatched = delivery.dispatch(run.runId);

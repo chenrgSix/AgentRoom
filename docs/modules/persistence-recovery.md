@@ -148,6 +148,14 @@ are created. Closing its all-settled barrier atomically fences the Wave state,
 one budget event, one ProgressSnapshot, the authoritative decision, and any
 next Wave by aggregate version.
 
+`RUN-014` narrows two former multi-transaction paths. A browser Member Message,
+its structured Mentions and every mentioned Run commit in one immediate
+transaction before dispatch. An applied reply event, handoff-routing intent,
+Agent Room Message and immutable `(run_id, reply_sequence, message_id)` mapping
+also commit together for managed, manual and in-process execution. Injected
+failure at either the Message or mapping insert rolls the Run sequence and all
+related rows back.
+
 The separately idempotent `wave_result` Message is not part of that aggregate
 transaction. Its deterministic identity closes the crash window between Message
 append and barrier commit without claiming a cross-aggregate transaction.
@@ -183,6 +191,22 @@ terminal event without re-downloading bytes or changing the established
 outcome.
 
 ## Recovery Policy
+
+Migration 0049 supplies compatibility recovery for rows written before the
+`RUN-014` transaction boundary. Startup scans Member Messages with Mentions and
+no Runs, preserves the original creation time and 20-minute deadline, and
+creates the complete batch only while current scope remains authorized. A row
+already past its original deadline is restored directly as `expired`, never
+executed. Invalid scope, Task or target state fails closed and remains visible
+in structured startup diagnostics.
+
+Historical reply events are matched only by exact Run trace, Room, nullable
+Task, Agent sender, trigger parent, content and timestamp. One exact legacy
+Message receives the immutable mapping; no exact candidate creates one Message
+at the event timestamp. Multiple exact candidates, a mapping already owned by a
+different event, timestamp drift or an invalid reply event writes an immutable
+unreconciled-failure row. Repeated startup reconciliation is idempotent and
+never guesses which history row was intended.
 
 On startup, the server validates migrations and preserves queued deliveries and
 terminal outcomes. Bridge reconnect dispatches queued work, while Bridge

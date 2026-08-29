@@ -186,10 +186,14 @@ value. Duplicate and stale events are acknowledged but do not alter state.
 The server accepts contiguous `run.status`, `run.output_delta`, `run.activity`,
 and `run.reply` events only from the Device that owns the target Agent. Events
 persist in `run_events`; output and activity advance the Run sequence without
-changing its state or appending a Room Message. An applied reply appends one Agent-authored
-Room Message linked to its trigger. Duplicate events do not create duplicate
-output or replies, and the first terminal state remains authoritative. A
-terminal Run rejects later output exactly as it rejects any other late event.
+changing its state or appending a Room Message. `RUN-014` applies a reply through
+one immediate transaction that advances the Run, inserts the event and existing
+handoff-routing intent, allocates the Room sequence, appends one Agent-authored
+Message linked to its trigger, and records the immutable reply-to-Message
+mapping. Managed Bridge, manual MCP and in-process Fake Runtime paths all use
+that repository boundary. Duplicate events do not create duplicate output or
+replies, and the first terminal state remains authoritative. A terminal Run
+rejects later output exactly as it rejects any other late event.
 
 Authorized Room members may read persisted Run events after a sequence cursor
 to reconstruct provisional output and activity after refresh or reconnect.

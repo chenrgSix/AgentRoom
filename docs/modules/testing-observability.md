@@ -110,6 +110,15 @@ compilation are local gates. The Windows Job Object regression must also run on
 native Windows before `QA-036`; a successful cross-compile is only build
 evidence.
 
+`RUN-014` fault injection rejects a mentioned Run insert after Message
+allocation and rejects both reply Message and reply-mapping inserts after event
+application; each failure must roll back the entire immediate transaction.
+Reopened-SQLite tests restore fresh and stale orphan Messages from their
+original timestamps, preserve a non-runnable Task without execution, map or
+create exact historical replies, and persist ambiguity/timestamp mismatch
+instead of choosing a candidate. A second reconciliation produces no Runs,
+Messages, mappings or failures.
+
 ADR-0021 onboarding verification treats installation, Owner claim, Device
 pairing, local Agent setup, and Runtime readiness as separate gates. Installer
 tests cut execution after every durable step and prove exact reentry without a

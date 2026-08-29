@@ -1,7 +1,8 @@
 import type { CoreRepository } from "../data/core-repository.js";
+import type { SqliteTransactionBoundary } from
+  "../data/sqlite-transaction-boundary.js";
 import type { McpPrincipal } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
-import type { MessageService } from "../team-room/message-service.js";
 import type { RunRecord, RunRepository } from "./run-repository.js";
 
 const terminalStates = new Set([
@@ -12,7 +13,7 @@ export class ManualRunService {
   public constructor(
     private readonly core: CoreRepository,
     private readonly runs: RunRepository,
-    private readonly messages: MessageService,
+    private readonly transactions: SqliteTransactionBoundary,
     private readonly onTerminal?: (run: RunRecord) => void
   ) {}
 
@@ -57,26 +58,19 @@ export class ManualRunService {
       throw new Error("Run reply must contain 1 to 20000 characters");
     }
     const safeContent = redactSensitiveText(content);
-    let run = this.claim(principal, runId, now);
-    if (terminalStates.has(run.state)) {
-      return run;
-    }
-    const reply = this.runs.applyEvent(run.runId, {
-      type: "reply", sequence: run.lastSequence + 1, content: safeContent
-    }, now);
-    if (reply.applied) {
-      this.messages.createAgentMessage(principal, {
-        roomId: run.roomId,
-        parentMessageId: run.triggerMessageId,
-        content: safeContent,
-        now
-      });
-    }
-    run = reply.run;
-    const completed = this.runs.applyEvent(run.runId, {
-      type: "status", sequence: run.lastSequence + 1, status: "completed"
-    }, now).run;
-    this.onTerminal?.(completed);
+    let transitioned = false;
+    const completed = this.transactions.immediate(() => {
+      let run = this.claim(principal, runId, now);
+      if (terminalStates.has(run.state)) return run;
+      run = this.runs.applyReply(run.runId, {
+        type: "reply", sequence: run.lastSequence + 1, content: safeContent
+      }, now).run;
+      transitioned = true;
+      return this.runs.applyEvent(run.runId, {
+        type: "status", sequence: run.lastSequence + 1, status: "completed"
+      }, now).run;
+    });
+    if (transitioned) this.onTerminal?.(completed);
     return completed;
   }
 

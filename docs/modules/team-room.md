@@ -93,9 +93,11 @@ capability restores the chosen bound.
 3. Resolve an explicit Task or the Room's default Task and reject cross-Room or
    terminal Task routing.
 4. Verify every Agent Mention is visible to the actor in the Room.
-5. Persist Message, Task identity, and Mentions in one transaction.
-6. Commit before emitting `message.created`.
-7. Let Run Orchestration consume the committed event.
+5. For a browser Member write, persist the Message, Task identity, Mentions and
+   complete mentioned-Run batch in one immediate transaction.
+6. Commit before dispatching managed Delivery or emitting `message.created`.
+7. A retry returns the same Message and Runs; it may also finish the missing Run
+   batch for a historical pre-`RUN-014` Message inside the same transaction.
 
 Browser member writes include a stable `clientMessageId`. Migration 0018
 enforces uniqueness per Room and sender, so an ambiguous retry returns the
@@ -113,12 +115,14 @@ the persisted Message write contract. Exact-name parsing chooses the longest
 known Agent name at each `@` position before applying Room eligibility, so a
 spaced name cannot also trigger its shorter prefix.
 
-Each accepted reply creates a routing intent in the same transaction as the
-redacted `run_events` content. Handoff resolution reads only that persisted safe
-content. Child Run creation and managed Delivery establishment are idempotent;
-the intent is completed afterward and pending intents are replayed at startup.
-This closes the crash cuts before routing and between sibling child Runs without
-reintroducing unredacted Bridge content.
+Each accepted reply creates the redacted `run_events` row, one Agent-authored
+Room Message, an exact `(runId, replySequence) → messageId` projection and the
+existing routing intent in one transaction. Handoff resolution reads only that
+persisted safe content. Child Run creation and managed Delivery establishment
+are idempotent; the intent is completed afterward and pending intents are
+replayed at startup. This closes the reply-before-Message cut as well as the
+cuts before routing and between sibling child Runs without reintroducing
+unredacted Bridge content.
 
 ## History and Ordering
 
@@ -131,6 +135,11 @@ reintroducing unredacted Bridge content.
 ## Failure and Security
 
 - A message either commits with all Mention references or not at all.
+- A mentioned browser Message either commits with its complete Run batch or not
+  at all; no managed execution begins before commit.
+- A reply event either commits with its exact Room Message projection or not at
+  all. Historical ambiguity is persisted as an unreconciled failure and never
+  resolved by timestamp/content guesswork.
 - Unauthorized Room existence is not disclosed through distinct errors.
 - Content is size-limited and treated as untrusted before rendering or prompt
   construction.

@@ -116,6 +116,50 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       content: "Gap"
     }, now), /sequence gap/u);
     assert.equal(core.listMessagesAfter(room.roomId, 0, 20).length, 1);
+    database.exec(`
+      CREATE TEMP TRIGGER fail_reply_message_projection
+      BEFORE INSERT ON messages
+      WHEN NEW.sender_type = 'agent'
+      BEGIN
+        SELECT RAISE(ABORT, 'injected reply projection failure');
+      END;
+    `);
+    assert.throws(() => service.applyReply(devicePrincipal, {
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 6,
+      content: "Implemented. token=very-sensitive-value"
+    }, now), /injected reply projection failure/u);
+    assert.equal(runRepository.getRun(run.runId)?.lastSequence, 5);
+    assert.equal(
+      runRepository.listEvents(run.runId).some(({ event }) =>
+        event.type === "reply"
+      ),
+      false
+    );
+    assert.equal(core.listMessagesAfter(room.roomId, 0, 20).length, 1);
+    database.exec("DROP TRIGGER fail_reply_message_projection");
+    database.exec(`
+      CREATE TEMP TRIGGER fail_reply_projection_mapping
+      BEFORE INSERT ON run_reply_message_projections
+      BEGIN
+        SELECT RAISE(ABORT, 'injected reply mapping failure');
+      END;
+    `);
+    assert.throws(() => service.applyReply(devicePrincipal, {
+      runId: run.runId, traceId: run.traceId,
+      agentId: agent.agentId, sequence: 6,
+      content: "Implemented. token=very-sensitive-value"
+    }, now), /injected reply mapping failure/u);
+    assert.equal(runRepository.getRun(run.runId)?.lastSequence, 5);
+    assert.equal(runRepository.getReplyMessageProjection(run.runId, 6), undefined);
+    assert.equal(
+      runRepository.listEvents(run.runId).some(({ event }) =>
+        event.type === "reply"
+      ),
+      false
+    );
+    assert.equal(core.listMessagesAfter(room.roomId, 0, 20).length, 1);
+    database.exec("DROP TRIGGER fail_reply_projection_mapping");
     assert.equal(service.applyReply(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
       agentId: agent.agentId, sequence: 6,
@@ -127,11 +171,23 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
         recommendation: "finish"
       }
     }, now).applied, true);
+    const replyProjection = runRepository.getReplyMessageProjection(run.runId, 6);
+    assert.equal(
+      replyProjection?.messageId,
+      core.listMessagesAfter(room.roomId, 0, 20).at(-1)?.messageId
+    );
+    assert.throws(() => database.prepare(`
+      UPDATE messages SET content = 'tampered' WHERE message_id = ?
+    `).run(replyProjection?.messageId), /reply Message identity is immutable/u);
     assert.equal(service.applyReply(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
       agentId: agent.agentId, sequence: 6,
       content: "Implemented. token=very-sensitive-value"
     }, now).applied, false);
+    assert.deepEqual(
+      runRepository.getReplyMessageProjection(run.runId, 6),
+      replyProjection
+    );
     assert.equal(service.applyStatus(devicePrincipal, {
       runId: run.runId, traceId: run.traceId,
       agentId: agent.agentId, sequence: 7, status: "completed",

@@ -183,7 +183,7 @@ test("server restart completes a partially routed Agent reply exactly once", asy
   });
   const root = runs.createRunsForMessage(principal, trigger.messageId, now)[0];
   assert.ok(root);
-  runRepository.applyEvent(root.runId, {
+  runRepository.applyReply(root.runId, {
     type: "reply",
     sequence: 1,
     content: "请 @Reviewer 和 @Writer 继续"

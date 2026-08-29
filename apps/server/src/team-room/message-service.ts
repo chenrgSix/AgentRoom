@@ -23,6 +23,16 @@ export interface MessagePage {
   syncCursor: string;
 }
 
+export interface CreateMemberMessageInput {
+  roomId: string;
+  taskId?: string;
+  content: string;
+  mentions?: MentionRecord[];
+  parentMessageId?: string | null;
+  clientMessageId?: string;
+  now: string;
+}
+
 function encodeCursor(cursor: MessageCursor): string {
   return Buffer.from(JSON.stringify(cursor), "utf8").toString("base64url");
 }
@@ -53,30 +63,14 @@ export class MessageService {
 
   public createMemberMessage(
     principal: WebPrincipal,
-    input: {
-      roomId: string;
-      taskId?: string;
-      content: string;
-      mentions?: MentionRecord[];
-      parentMessageId?: string | null;
-      clientMessageId?: string;
-      now: string;
-    }
+    input: CreateMemberMessageInput
   ): MessageRecord {
     return this.createMemberMessageResult(principal, input).message;
   }
 
   public createMemberMessageResult(
     principal: WebPrincipal,
-    input: {
-      roomId: string;
-      taskId?: string;
-      content: string;
-      mentions?: MentionRecord[];
-      parentMessageId?: string | null;
-      clientMessageId?: string;
-      now: string;
-    }
+    input: CreateMemberMessageInput
   ): { created: boolean; message: MessageRecord } {
     const member = this.auth.requireRoomMember(principal, input.roomId);
     const room = this.repository.getRoom(input.roomId);

@@ -126,7 +126,7 @@ async function createCompletedRun(
   try {
     const runs = new RunRepository(database);
     runs.applyEvent(runId, { type: "status", sequence: 1, status: "working" }, now);
-    runs.applyEvent(runId, {
+    runs.applyReply(runId, {
       type: "reply",
       sequence: 2,
       content: "Verified delivery."

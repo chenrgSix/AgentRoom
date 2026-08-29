@@ -139,6 +139,38 @@ export interface RunReplyRoutingIntent {
   completedAt: string | null;
 }
 
+export interface RunReplyMessageProjection {
+  runId: string;
+  replySequence: number;
+  messageId: string;
+  projectedAt: string;
+}
+
+export type RunReplyProjectionFailureCode =
+  | "INVALID_REPLY_EVENT"
+  | "MULTIPLE_EXACT_MESSAGES"
+  | "MESSAGE_ALREADY_PROJECTED"
+  | "TIMESTAMP_MISMATCH";
+
+export interface RunReplyProjectionFailure {
+  runId: string;
+  replySequence: number;
+  errorCode: RunReplyProjectionFailureCode;
+  candidateCount: number;
+  recordedAt: string;
+}
+
+export type RunReplyProjectionReconciliation =
+  | {
+      state: "projected";
+      messageCreated: boolean;
+      projection: RunReplyMessageProjection;
+    }
+  | {
+      state: "unreconciled";
+      failure: RunReplyProjectionFailure;
+    };
+
 interface RunRow {
   run_id: string;
   trace_id: string;
@@ -200,6 +232,34 @@ interface RunReplyRoutingIntentRow {
   state: RunReplyRoutingIntent["state"];
   created_at: string;
   completed_at: string | null;
+}
+
+interface RunReplyMessageProjectionRow {
+  run_id: string;
+  reply_sequence: number;
+  message_id: string;
+  projected_at: string;
+}
+
+interface RunReplyProjectionFailureRow {
+  run_id: string;
+  reply_sequence: number;
+  error_code: RunReplyProjectionFailureCode;
+  candidate_count: number;
+  recorded_at: string;
+}
+
+interface ReplyProjectionSourceRow {
+  run_id: string;
+  reply_sequence: number;
+  event_trace_id: string | null;
+  content: string | null;
+  event_created_at: string;
+  run_trace_id: string;
+  room_id: string;
+  task_id: string;
+  trigger_message_id: string;
+  target_agent_id: string;
 }
 
 const terminalStates = new Set<RunState>([
@@ -334,6 +394,29 @@ function mapReplyRoutingIntent(
     state: row.state,
     createdAt: row.created_at,
     completedAt: row.completed_at
+  };
+}
+
+function mapReplyMessageProjection(
+  row: RunReplyMessageProjectionRow
+): RunReplyMessageProjection {
+  return {
+    runId: row.run_id,
+    replySequence: row.reply_sequence,
+    messageId: row.message_id,
+    projectedAt: row.projected_at
+  };
+}
+
+function mapReplyProjectionFailure(
+  row: RunReplyProjectionFailureRow
+): RunReplyProjectionFailure {
+  return {
+    runId: row.run_id,
+    replySequence: row.reply_sequence,
+    errorCode: row.error_code,
+    candidateCount: row.candidate_count,
+    recordedAt: row.recorded_at
   };
 }
 
@@ -687,6 +770,14 @@ export class RunRepository {
 
   public applyEvent(
     runId: string,
+    event: Exclude<RuntimeEvent, { type: "reply" }>,
+    now: string
+  ): AppliedRunEvent {
+    return this.applyRuntimeEvent(runId, event, now);
+  }
+
+  private applyRuntimeEvent(
+    runId: string,
     event: RuntimeEvent,
     now: string
   ): AppliedRunEvent {
@@ -824,6 +915,215 @@ export class RunRepository {
     }).immediate();
   }
 
+  public applyReply(
+    runId: string,
+    event: Extract<RuntimeEvent, { type: "reply" }>,
+    now: string
+  ): AppliedRunEvent {
+    return this.database.transaction(() => {
+      const applied = this.applyRuntimeEvent(runId, event, now);
+      if (!applied.applied) return applied;
+      const messageId = this.insertReplyMessage(applied.run, event.content, now);
+      this.insertReplyMessageProjection(
+        runId,
+        event.sequence,
+        messageId,
+        now
+      );
+      return applied;
+    }).immediate();
+  }
+
+  public listUnprojectedReplyEvents(): Array<{
+    runId: string;
+    replySequence: number;
+  }> {
+    const rows = this.database.prepare(`
+      SELECT event.run_id, event.sequence AS reply_sequence
+      FROM run_events event
+      LEFT JOIN run_reply_message_projections projection
+        ON projection.run_id = event.run_id
+        AND projection.reply_sequence = event.sequence
+      LEFT JOIN run_reply_projection_failures failure
+        ON failure.run_id = event.run_id
+        AND failure.reply_sequence = event.sequence
+      WHERE event.event_type = 'reply'
+        AND projection.run_id IS NULL
+        AND failure.run_id IS NULL
+      ORDER BY event.created_at, event.run_id, event.sequence
+    `).all() as Array<{ run_id: string; reply_sequence: number }>;
+    return rows.map((row) => ({
+      runId: row.run_id,
+      replySequence: row.reply_sequence
+    }));
+  }
+
+  public getReplyMessageProjection(
+    runId: string,
+    replySequence: number
+  ): RunReplyMessageProjection | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM run_reply_message_projections
+      WHERE run_id = ? AND reply_sequence = ?
+    `).get(runId, replySequence) as
+      | RunReplyMessageProjectionRow
+      | undefined;
+    return row && mapReplyMessageProjection(row);
+  }
+
+  public getReplyProjectionFailure(
+    runId: string,
+    replySequence: number
+  ): RunReplyProjectionFailure | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM run_reply_projection_failures
+      WHERE run_id = ? AND reply_sequence = ?
+    `).get(runId, replySequence) as
+      | RunReplyProjectionFailureRow
+      | undefined;
+    return row && mapReplyProjectionFailure(row);
+  }
+
+  public reconcileReplyMessageProjection(
+    runId: string,
+    replySequence: number,
+    now: string
+  ): RunReplyProjectionReconciliation {
+    return this.database.transaction(() => {
+      const existing = this.getReplyMessageProjection(runId, replySequence);
+      if (existing) {
+        return {
+          state: "projected" as const,
+          messageCreated: false,
+          projection: existing
+        };
+      }
+      const existingFailure = this.getReplyProjectionFailure(
+        runId,
+        replySequence
+      );
+      if (existingFailure) {
+        return {
+          state: "unreconciled" as const,
+          failure: existingFailure
+        };
+      }
+
+      const source = this.database.prepare(`
+        SELECT
+          event.run_id,
+          event.sequence AS reply_sequence,
+          event.trace_id AS event_trace_id,
+          event.content,
+          event.created_at AS event_created_at,
+          run.trace_id AS run_trace_id,
+          run.room_id,
+          run.task_id,
+          run.trigger_message_id,
+          run.target_agent_id
+        FROM run_events event
+        JOIN runs run ON run.run_id = event.run_id
+        WHERE event.run_id = ?
+          AND event.sequence = ?
+          AND event.event_type = 'reply'
+      `).get(runId, replySequence) as ReplyProjectionSourceRow | undefined;
+      if (!source) {
+        throw new Error(
+          `Run reply event not found: ${runId}/${replySequence}`
+        );
+      }
+      if (
+        source.event_trace_id !== source.run_trace_id ||
+        source.content === null ||
+        source.content.length < 1 ||
+        source.content.length > 20_000 ||
+        Number.isNaN(Date.parse(source.event_created_at))
+      ) {
+        return {
+          state: "unreconciled" as const,
+          failure: this.insertReplyProjectionFailure(
+            runId,
+            replySequence,
+            "INVALID_REPLY_EVENT",
+            0,
+            now
+          )
+        };
+      }
+
+      const exactMatches = this.findReplyMessageCandidates(source, true);
+      if (exactMatches.length > 1) {
+        return {
+          state: "unreconciled" as const,
+          failure: this.insertReplyProjectionFailure(
+            runId,
+            replySequence,
+            "MULTIPLE_EXACT_MESSAGES",
+            exactMatches.length,
+            now
+          )
+        };
+      }
+      const exactMatch = exactMatches[0];
+      if (exactMatch?.projected_run_id) {
+        return {
+          state: "unreconciled" as const,
+          failure: this.insertReplyProjectionFailure(
+            runId,
+            replySequence,
+            "MESSAGE_ALREADY_PROJECTED",
+            1,
+            now
+          )
+        };
+      }
+      if (exactMatch) {
+        return {
+          state: "projected" as const,
+          messageCreated: false,
+          projection: this.insertReplyMessageProjection(
+            runId,
+            replySequence,
+            exactMatch.message_id,
+            now
+          )
+        };
+      }
+
+      const timestampMismatches = this.findReplyMessageCandidates(source, false);
+      if (timestampMismatches.length > 0) {
+        return {
+          state: "unreconciled" as const,
+          failure: this.insertReplyProjectionFailure(
+            runId,
+            replySequence,
+            "TIMESTAMP_MISMATCH",
+            timestampMismatches.length,
+            now
+          )
+        };
+      }
+
+      const run = this.getRun(runId);
+      if (!run) throw new Error(`Run not found: ${runId}`);
+      const messageId = this.insertReplyMessage(
+        run,
+        source.content,
+        source.event_created_at
+      );
+      return {
+        state: "projected" as const,
+        messageCreated: true,
+        projection: this.insertReplyMessageProjection(
+          runId,
+          replySequence,
+          messageId,
+          now
+        )
+      };
+    }).immediate();
+  }
+
   public listEvents(runId: string, afterSequence = 0): RunEventRecord[] {
     const rows = this.database.prepare(`
       SELECT * FROM run_events
@@ -860,6 +1160,118 @@ export class RunRepository {
       SET state = 'completed', completed_at = ?
       WHERE parent_run_id = ? AND reply_sequence = ? AND state = 'pending'
     `).run(now, parentRunId, replySequence);
+  }
+
+  private insertReplyMessage(
+    run: RunRecord,
+    content: string,
+    createdAt: string
+  ): string {
+    const messageId = createOpaqueId("msg");
+    const messageSequence = this.database.prepare(`
+      UPDATE rooms
+      SET next_message_sequence = next_message_sequence + 1
+      WHERE room_id = ?
+      RETURNING next_message_sequence AS sequence
+    `).get(run.roomId) as { sequence: number } | undefined;
+    if (!messageSequence) {
+      throw new Error(`Run Room not found: ${run.roomId}`);
+    }
+    this.database.prepare(`
+      INSERT INTO messages (
+        message_id, trace_id, room_id, task_id, sequence, sender_type,
+        sender_id, content, parent_message_id, client_message_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, 'agent', ?, ?, ?, NULL, ?)
+    `).run(
+      messageId,
+      run.traceId,
+      run.roomId,
+      run.taskId,
+      messageSequence.sequence,
+      run.targetAgentId,
+      content,
+      run.triggerMessageId,
+      createdAt
+    );
+    return messageId;
+  }
+
+  private insertReplyMessageProjection(
+    runId: string,
+    replySequence: number,
+    messageId: string,
+    projectedAt: string
+  ): RunReplyMessageProjection {
+    this.database.prepare(`
+      INSERT INTO run_reply_message_projections (
+        run_id, reply_sequence, message_id, projected_at
+      ) VALUES (?, ?, ?, ?)
+    `).run(runId, replySequence, messageId, projectedAt);
+    return this.getReplyMessageProjection(runId, replySequence)!;
+  }
+
+  private insertReplyProjectionFailure(
+    runId: string,
+    replySequence: number,
+    errorCode: RunReplyProjectionFailureCode,
+    candidateCount: number,
+    recordedAt: string
+  ): RunReplyProjectionFailure {
+    this.database.prepare(`
+      INSERT INTO run_reply_projection_failures (
+        run_id, reply_sequence, error_code, candidate_count, recorded_at
+      ) VALUES (?, ?, ?, ?, ?)
+    `).run(
+      runId,
+      replySequence,
+      errorCode,
+      candidateCount,
+      recordedAt
+    );
+    return this.getReplyProjectionFailure(runId, replySequence)!;
+  }
+
+  private findReplyMessageCandidates(
+    source: ReplyProjectionSourceRow,
+    requireExactTimestamp: boolean
+  ): Array<{
+    message_id: string;
+    projected_run_id: string | null;
+    projected_reply_sequence: number | null;
+  }> {
+    const timestampClause = requireExactTimestamp
+      ? "AND message.created_at = @eventCreatedAt"
+      : "AND message.created_at <> @eventCreatedAt";
+    return this.database.prepare(`
+      SELECT
+        message.message_id,
+        projection.run_id AS projected_run_id,
+        projection.reply_sequence AS projected_reply_sequence
+      FROM messages message
+      LEFT JOIN run_reply_message_projections projection
+        ON projection.message_id = message.message_id
+      WHERE message.trace_id = @traceId
+        AND message.room_id = @roomId
+        AND message.task_id IS @taskId
+        AND message.sender_type = 'agent'
+        AND message.sender_id = @senderId
+        AND message.parent_message_id = @parentMessageId
+        AND message.content = @content
+        ${timestampClause}
+      ORDER BY message.sequence, message.message_id
+    `).all({
+      traceId: source.run_trace_id,
+      roomId: source.room_id,
+      taskId: source.task_id,
+      senderId: source.target_agent_id,
+      parentMessageId: source.trigger_message_id,
+      content: source.content,
+      eventCreatedAt: source.event_created_at
+    }) as Array<{
+      message_id: string;
+      projected_run_id: string | null;
+      projected_reply_sequence: number | null;
+    }>;
   }
 
   private nextAttemptNumber(taskId: string): number {

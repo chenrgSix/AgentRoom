@@ -14,7 +14,6 @@ import {
   type DiscussionMutationResult
 } from "../src/discussion/discussion-orchestrator.js";
 import { DiscussionRepository } from "../src/discussion/discussion-repository.js";
-import { createOpaqueId } from "../src/domain/identifiers.js";
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { RunRepository, type RunRecord } from "../src/run/run-repository.js";
@@ -136,22 +135,12 @@ function completeRun(input: {
   input.runs.applyEvent(input.run.runId, {
     type: "status", sequence: 1, status: "working"
   }, now);
-  input.runs.applyEvent(input.run.runId, {
+  input.runs.applyReply(input.run.runId, {
     type: "reply",
     sequence: 2,
     content: input.content,
     ...(input.assessment ? { assessment: input.assessment } : {})
   }, now);
-  input.core.appendMessage({
-    messageId: createOpaqueId("msg"),
-    roomId: input.run.roomId,
-    senderType: "agent",
-    senderId: input.run.targetAgentId,
-    content: input.content,
-    mentions: [],
-    parentMessageId: input.run.triggerMessageId,
-    createdAt: now
-  });
   input.runs.applyEvent(input.run.runId, {
     type: "status", sequence: 3, status: "completed"
   }, now);
@@ -167,22 +156,12 @@ function stageRunReply(input: {
   input.runs.applyEvent(input.run.runId, {
     type: "status", sequence: 1, status: "working"
   }, now);
-  input.runs.applyEvent(input.run.runId, {
+  input.runs.applyReply(input.run.runId, {
     type: "reply",
     sequence: 2,
     content: input.content,
     ...(input.assessment ? { assessment: input.assessment } : {})
   }, now);
-  input.core.appendMessage({
-    messageId: createOpaqueId("msg"),
-    roomId: input.run.roomId,
-    senderType: "agent",
-    senderId: input.run.targetAgentId,
-    content: input.content,
-    mentions: [],
-    parentMessageId: input.run.triggerMessageId,
-    createdAt: now
-  });
 }
 
 function finishStagedRun(runs: RunRepository, run: RunRecord): void {

@@ -34,11 +34,18 @@ and evidence contracts at their actual failure cuts.
 
 ### 1. Persist intent before asynchronous projection
 
-Message routing, reply projection, and managed cancellation use durable,
-idempotent intents. A single SQLite transaction records the authoritative
-domain mutation and its intent whenever both live in Central. Projection and
-delivery may occur after commit, but startup and bounded retry reconciliation
-must make progress from the durable intent.
+When an authoritative mutation and its required projection both live in the
+same Central SQLite database, they commit in one immediate transaction. Member
+Message routing therefore writes the Message, Mentions and complete Run batch
+together; a Run reply writes its event, Room Message, exact projection mapping
+and existing handoff-routing intent together. Migration 0049 reconciles only
+historical partial rows by exact durable identity and records ambiguity instead
+of guessing.
+
+An explicit durable intent is reserved for work that necessarily crosses an
+asynchronous boundary, including managed cancellation delivery. Projection or
+delivery may then occur after commit, but startup and bounded retry
+reconciliation must make progress from that intent.
 
 Each intent has a stable operation identity and a database uniqueness fence.
 Replaying an intent may observe existing output and mark it complete; it may

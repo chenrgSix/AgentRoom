@@ -1,5 +1,4 @@
 import type { CoreRepository } from "../data/core-repository.js";
-import { createOpaqueId } from "../domain/identifiers.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import type {
@@ -285,27 +284,12 @@ export class BridgeRunEventService {
             : {})
         }
       : null;
-    const applied = this.runs.applyEvent(run.runId, {
+    return this.runs.applyReply(run.runId, {
       type: "reply",
       sequence: input.sequence,
       content: safeContent,
       ...(assessment ? { assessment: { ...assessment } } : {})
     }, now);
-    if (applied.applied) {
-      this.core.appendMessage({
-        messageId: createOpaqueId("msg"),
-        roomId: run.roomId,
-        taskId: run.taskId,
-        senderType: "agent",
-        senderId: run.targetAgentId,
-        content: safeContent,
-        mentions: [],
-        parentMessageId: run.triggerMessageId,
-        traceId: run.traceId,
-        createdAt: now
-      });
-    }
-    return applied;
   }
 
   public applyActivity(

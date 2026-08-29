@@ -27,6 +27,8 @@ import type { CancellationService } from "../run/cancellation-service.js";
 import type { DeliveryService } from "../run/delivery-service.js";
 import type { HandoffService } from "../run/handoff-service.js";
 import type { ManualRunService } from "../run/manual-run-service.js";
+import type { MemberMessageRunService } from
+  "../run/member-message-run-service.js";
 import type { RunRepository } from "../run/run-repository.js";
 import type { RunService } from "../run/run-service.js";
 import type { FakeRuntimeAdapter } from "../runtime/fake-runtime-adapter.js";
@@ -86,6 +88,7 @@ export interface ServerRouteContext {
   limitAnonymous: (request: FastifyRequest, bucket: string) => void;
   manualRuns: ManualRunService;
   manualTaskWork: ManualTaskWorkService;
+  memberMessageRuns: MemberMessageRunService;
   longTermMemory: LongTermMemoryService;
   memoryCandidates: MemoryCandidateService;
   messages: MessageService;

@@ -114,12 +114,12 @@ test("one idempotent queued Run is created per structured Agent Mention", async 
       sequence: 1,
       status: "working"
     }, now).run.state, "working");
-    assert.equal(runRepository.applyEvent(runId, {
+    assert.equal(runRepository.applyReply(runId, {
       type: "reply",
       sequence: 1,
       content: "stale"
     }, now).applied, false);
-    assert.equal(runRepository.applyEvent(runId, {
+    assert.equal(runRepository.applyReply(runId, {
       type: "reply",
       sequence: 2,
       content: "done"

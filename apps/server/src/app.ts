@@ -70,6 +70,9 @@ import { BridgeRunEventService } from "./run/bridge-run-event-service.js";
 import { CancellationService } from "./run/cancellation-service.js";
 import { HandoffService } from "./run/handoff-service.js";
 import { ManualRunService } from "./run/manual-run-service.js";
+import { MemberMessageRunService } from "./run/member-message-run-service.js";
+import { RunProjectionReconciler } from
+  "./run/run-projection-reconciler.js";
 import { RunRepository } from "./run/run-repository.js";
 import { RunService } from "./run/run-service.js";
 import { FakeRuntimeAdapter } from "./runtime/fake-runtime-adapter.js";
@@ -303,6 +306,18 @@ export async function createServerApp(
   const resultEvidenceConsumption = new ResultEvidenceConsumptionRepository(database);
   const traces = new TraceRepository(database);
   const runs = new RunService(core, runRepository, auth, taskRepository);
+  const memberMessageRuns = new MemberMessageRunService(
+    transactions,
+    messages,
+    runs
+  );
+  const runProjections = new RunProjectionReconciler(
+    database,
+    transactions,
+    core,
+    taskRepository,
+    runRepository
+  );
   const resultRepository = new ResultRepository(database);
   const results = new ResultService(
     database,
@@ -506,7 +521,7 @@ export async function createServerApp(
   const manualRuns = new ManualRunService(
     core,
     runRepository,
-    messages,
+    transactions,
     (run) => {
       if (discussionRepository.findTurnByRun(run.runId)) {
         void routeAgentReplyMentions(run.runId).then(() =>
@@ -723,6 +738,7 @@ export async function createServerApp(
     memoryCandidates,
     manualRuns,
     manualTaskWork,
+    memberMessageRuns,
     messages,
     operationalMetrics,
     optionalPrincipal,
@@ -771,6 +787,42 @@ export async function createServerApp(
   registerMcpRoutes(routeContext);
 
   taskClarifications.reconcile(clock());
+  const projectionRecovery = runProjections.reconcile(clock());
+  if (projectionRecovery.memberMessageFailures.length > 0) {
+    app.log.error({
+      event: "run.member_message_projection.reconciliation_failed",
+      failures: projectionRecovery.memberMessageFailures
+    }, "Member Message Run projection reconciliation failed closed");
+  }
+  if (projectionRecovery.replyProjectionFailures.length > 0) {
+    app.log.error({
+      event: "run.reply_message_projection.reconciliation_failed",
+      failures: projectionRecovery.replyProjectionFailures.map((failure) => ({
+        runId: failure.runId,
+        replySequence: failure.replySequence,
+        errorCode: failure.errorCode,
+        candidateCount: failure.candidateCount
+      }))
+    }, "Run reply Message projection reconciliation failed closed");
+  }
+  if (projectionRecovery.expiredRuns.length > 0) {
+    app.log.info({
+      event: "run.member_message_projection.expired",
+      runIds: projectionRecovery.expiredRuns.map(({ runId }) => runId)
+    }, "Stale Member Message Run projections were restored as expired");
+  }
+  for (const run of projectionRecovery.queuedRuns) {
+    const dispatched = delivery.dispatch(run.runId);
+    app.log.info({
+      event: "run.delivery.recovered",
+      traceId: run.traceId,
+      runId: run.runId,
+      agentId: run.targetAgentId,
+      deviceId: dispatched?.deviceId ?? null,
+      sendCount: dispatched?.sendCount ?? 0,
+      sent: (dispatched?.sendCount ?? 0) > 0
+    }, "Recovered Run delivery processed");
+  }
   await dispatchDiscussionRuns(discussions.recover());
   for (const runId of new Set(
     runRepository.listPendingReplyRoutingIntents().map(({ parentRunId }) =>
