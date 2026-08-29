@@ -157,12 +157,38 @@ test("heartbeat, adapter health, stale epochs, and TTL derive Presence", async (
       adapterAvailable: true,
       now
     }), /Bridge version must be canonical/);
-    repository.updateAgentPresence(agent.agentId, "busy", now);
+    assert.equal(presence.recordAgentStatus(devicePrincipal, {
+      agentId: agent.agentId,
+      deviceId: device.deviceId,
+      connectionEpoch: 3,
+      status: "busy",
+      now
+    }).presence, "busy");
+    presence.recordHeartbeat(devicePrincipal, {
+      deviceId: device.deviceId,
+      connectionEpoch: 3,
+      adapterAvailable: true,
+      now
+    });
     assert.equal(
       presence.listAgents(webPrincipal, created.team.teamId, now)
         .find((item) => item.agentId === agent.agentId)?.presence,
       "busy"
     );
+    assert.throws(() => presence.recordAgentStatus(devicePrincipal, {
+      agentId: agent.agentId,
+      deviceId: device.deviceId,
+      connectionEpoch: 2,
+      status: "ready",
+      now
+    }), /identity mismatch/u);
+    assert.throws(() => presence.recordAgentStatus(devicePrincipal, {
+      agentId: manual.agentId,
+      deviceId: device.deviceId,
+      connectionEpoch: 3,
+      status: "ready",
+      now
+    }), /identity mismatch/u);
     assert.throws(() => presence.recordHeartbeat(devicePrincipal, {
       deviceId: device.deviceId,
       connectionEpoch: 1,
