@@ -10,10 +10,32 @@ const output = await generateContractTypes(packageRoot);
 
 await Promise.all([
   mkdir(path.join(generatedRoot, "typescript"), { recursive: true }),
+  mkdir(path.join(generatedRoot, "runtime"), { recursive: true }),
   mkdir(path.join(generatedRoot, "go", "pairing"), { recursive: true }),
+  mkdir(path.join(generatedRoot, "go", "runtime"), { recursive: true }),
   mkdir(path.join(generatedRoot, "go", "work"), { recursive: true })
 ]);
 await Promise.all([
+  writeFile(
+    path.join(generatedRoot, "runtime", "bridge-validator.cjs"),
+    output.bridgeStandaloneValidator
+  ),
+  writeFile(
+    path.join(generatedRoot, "runtime", "bridge-validator.mjs"),
+    output.bridgeRuntimeModule
+  ),
+  writeFile(
+    path.join(generatedRoot, "runtime", "bridge-validator.d.ts"),
+    output.bridgeRuntimeDeclaration
+  ),
+  writeFile(
+    path.join(generatedRoot, "go", "runtime", "bridge-schema.json"),
+    output.bridgeSchema
+  ),
+  writeFile(
+    path.join(generatedRoot, "go", "runtime", "validator.go"),
+    output.goBridgeRuntimeValidator
+  ),
   writeFile(
     path.join(generatedRoot, "typescript", "bridge-messages.ts"),
     output.typescript

@@ -7,6 +7,10 @@
   "type": "module",
   "exports": {
     "./bridge-messages": "./generated/typescript/bridge-messages.ts",
+    "./bridge-validator": {
+      "types": "./generated/runtime/bridge-validator.d.ts",
+      "default": "./generated/runtime/bridge-validator.mjs"
+    },
     "./pairing-session": "./generated/typescript/pairing-session.ts",
     "./task-result": "./generated/typescript/task-result.ts"
   },
@@ -16,7 +20,7 @@
   "scripts": {
     "build": "npm run check:generated && node scripts/build.mjs",
     "check:generated": "node scripts/check-generated.mjs",
-    "check:types": "tsc --noEmit --strict --skipLibCheck --target ES2022 generated/typescript/bridge-messages.ts generated/typescript/pairing-session.ts generated/typescript/task-result.ts",
+    "check:types": "tsc --noEmit --strict --skipLibCheck --target ES2022 generated/runtime/bridge-validator.d.ts generated/typescript/bridge-messages.ts generated/typescript/pairing-session.ts generated/typescript/task-result.ts",
     "generate": "node scripts/generate.mjs",
     "test": "node --test && npm run check:generated && npm run check:types && go test ./generated/go/... ./test/go",
     "validate": "node scripts/validate.mjs"

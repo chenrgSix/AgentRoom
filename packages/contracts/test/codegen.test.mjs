@@ -12,6 +12,25 @@ test("contract generation is deterministic", async () => {
 
   assert.deepEqual(second, first);
   assert.match(first.typescript, /export type BridgeMessage =/);
+  assert.match(
+    first.bridgeRuntimeModule,
+    /export function validateBridgeMessage/
+  );
+  assert.match(
+    first.bridgeRuntimeModule,
+    /export function decodeBridgeMessage/
+  );
+  assert.match(first.bridgeRuntimeModule, /context\.source/);
+  assert.match(first.bridgeStandaloneValidator, /module\.exports = validate/);
+  assert.match(first.goBridgeRuntimeValidator, /func ValidateBridgeMessage/);
+  assert.match(
+    first.goBridgeRuntimeValidator,
+    /func ValidateAndNormalizeBridgeMessage/
+  );
+  assert.match(
+    first.goBridgeRuntimeValidator,
+    /func DecodeBridgeMessage/
+  );
   assert.match(first.typescript, /timestamp: string;/);
   assert.doesNotMatch(first.typescript, /timestamp: Date;/);
   assert.match(first.go, /type BridgeHelloMessage struct/);

@@ -1,0 +1,327 @@
+{
+  "version": "1.0",
+  "cases": [
+    {
+      "name": "declared integer accepts exponent notation",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000001\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000001\",\"traceId\":\"trace_runtime_raw_00000001\",\"agentId\":\"agent_runtime_raw_00000001\",\"sequence\":1e0,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "declared integer accepts decimal notation",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000002\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000002\",\"traceId\":\"trace_runtime_raw_00000002\",\"agentId\":\"agent_runtime_raw_00000002\",\"sequence\":1.0,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "declared integer accepts maximum safe value",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000003\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000003\",\"traceId\":\"trace_runtime_raw_00000003\",\"agentId\":\"agent_runtime_raw_00000003\",\"sequence\":9007199254740991,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "declared integer rejects maximum safe plus one",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000004\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000004\",\"traceId\":\"trace_runtime_raw_00000004\",\"agentId\":\"agent_runtime_raw_00000004\",\"sequence\":9007199254740992,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "declared integer rejects huge exponent",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000005\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000005\",\"traceId\":\"trace_runtime_raw_00000005\",\"agentId\":\"agent_runtime_raw_00000005\",\"sequence\":1e100,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "declared integer rejects rounded high precision fraction",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000006\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000006\",\"traceId\":\"trace_runtime_raw_00000006\",\"agentId\":\"agent_runtime_raw_00000006\",\"sequence\":1.0000000000000000000001,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "declared integer rejects near maximum fraction",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000007\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000007\",\"traceId\":\"trace_runtime_raw_00000007\",\"agentId\":\"agent_runtime_raw_00000007\",\"sequence\":9007199254740991.1,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "declared integer rejects underflow fraction",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000008\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000008\",\"traceId\":\"trace_runtime_raw_00000008\",\"agentId\":\"agent_runtime_raw_00000008\",\"sequence\":1e-1000,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "declared negative zero normalizes to positive zero",
+      "messageType": "run.requested",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000008z\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000008z\",\"traceId\":\"trace_runtime_raw_00000008z\",\"roomId\":\"room_runtime_raw_00000008z\",\"triggerMessageId\":\"msg_runtime_trigger_00000008z\",\"requesterMemberId\":\"member_runtime_raw_00000008z\",\"targetAgentId\":\"agent_runtime_raw_00000008z\",\"deliveryAttemptId\":\"delivery_runtime_raw_00000008z\",\"idempotencyKey\":\"runtime_raw_key_00000008z\",\"instruction\":\"work\",\"contextMessages\":[],\"session\":{\"scope\":\"task\",\"resumePolicy\":\"start_new\",\"contextCursor\":-0},\"deadline\":\"2026-08-29T01:00:00Z\"}}"
+    },
+    {
+      "name": "escaped Unicode surrogate pair decodes without drift",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_surrogate_pair\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_surrogate_pair\",\"traceId\":\"trace_runtime_raw_surrogate_pair\",\"agentId\":\"agent_runtime_raw_surrogate_pair\",\"sequence\":1,\"content\":\"\\ud83d\\ude00\"}}"
+    },
+    {
+      "name": "escaped lone high surrogate is rejected before materialization",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_surrogate_high\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_surrogate_high\",\"traceId\":\"trace_runtime_raw_surrogate_high\",\"agentId\":\"agent_runtime_raw_surrogate_high\",\"sequence\":1,\"content\":\"\\ud800\"}}"
+    },
+    {
+      "name": "escaped lone low surrogate is rejected before materialization",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_surrogate_low\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_surrogate_low\",\"traceId\":\"trace_runtime_raw_surrogate_low\",\"agentId\":\"agent_runtime_raw_surrogate_low\",\"sequence\":1,\"content\":\"\\udc00\"}}"
+    },
+    {
+      "name": "escaped mismatched surrogate pair is rejected before materialization",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_surrogate_mismatch\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_surrogate_mismatch\",\"traceId\":\"trace_runtime_raw_surrogate_mismatch\",\"agentId\":\"agent_runtime_raw_surrogate_mismatch\",\"sequence\":1,\"content\":\"\\ud800\\u0041\"}}"
+    },
+    {
+      "name": "UTF-8 BOM is rejected before JSON materialization",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "\ufeff{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_bom\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_bom\",\"traceId\":\"trace_runtime_raw_bom\",\"agentId\":\"agent_runtime_raw_bom\",\"sequence\":1,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "numeric exponent at the runtime resource limit is accepted",
+      "messageType": "run.reply",
+      "valid": true,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_limit_exp\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_limit_exp\",\"traceId\":\"trace_runtime_raw_limit_exp\",\"agentId\":\"agent_runtime_raw_limit_exp\",\"sequence\":1e",
+      "repeat": "0",
+      "repeatCount": 254,
+      "rawSuffix": ",\"content\":\"ok\"}}"
+    },
+    {
+      "name": "numeric exponent over the runtime resource limit is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_over_exp\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_over_exp\",\"traceId\":\"trace_runtime_raw_over_exp\",\"agentId\":\"agent_runtime_raw_over_exp\",\"sequence\":1e",
+      "repeat": "0",
+      "repeatCount": 255,
+      "rawSuffix": ",\"content\":\"ok\"}}"
+    },
+    {
+      "name": "open numeric mantissa at the runtime resource limit is accepted",
+      "messageType": "run.reply",
+      "valid": true,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_limit_mantissa\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_limit_mantissa\",\"traceId\":\"trace_runtime_raw_limit_mantissa\",\"agentId\":\"agent_runtime_raw_limit_mantissa\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":1",
+      "repeat": "0",
+      "repeatCount": 255,
+      "rawSuffix": "}}"
+    },
+    {
+      "name": "open numeric mantissa over the runtime resource limit is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_over_mantissa\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_over_mantissa\",\"traceId\":\"trace_runtime_raw_over_mantissa\",\"agentId\":\"agent_runtime_raw_over_mantissa\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":1",
+      "repeat": "0",
+      "repeatCount": 256,
+      "rawSuffix": "}}"
+    },
+    {
+      "name": "open numeric exponent at the runtime magnitude limit is accepted",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_exp_boundary\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_exp_boundary\",\"traceId\":\"trace_runtime_raw_exp_boundary\",\"agentId\":\"agent_runtime_raw_exp_boundary\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":1e512}}"
+    },
+    {
+      "name": "short positive exponent over the runtime magnitude limit is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_exp_positive\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_exp_positive\",\"traceId\":\"trace_runtime_raw_exp_positive\",\"agentId\":\"agent_runtime_raw_exp_positive\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":1e513}}"
+    },
+    {
+      "name": "short negative exponent over the runtime magnitude limit is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_exp_negative\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_exp_negative\",\"traceId\":\"trace_runtime_raw_exp_negative\",\"agentId\":\"agent_runtime_raw_exp_negative\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":1e-513}}"
+    },
+    {
+      "name": "repeated short huge exponents are rejected before schema evaluation",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_exp_repeated\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_exp_repeated\",\"traceId\":\"trace_runtime_raw_exp_repeated\",\"agentId\":\"agent_runtime_raw_exp_repeated\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":[1e999999,1e-999999,1e999999,1e-999999]}}"
+    },
+    {
+      "name": "open JSON depth at the runtime limit is accepted",
+      "messageType": "run.reply",
+      "valid": true,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_depth_limit\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_depth_limit\",\"traceId\":\"trace_runtime_raw_depth_limit\",\"agentId\":\"agent_runtime_raw_depth_limit\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":",
+      "nestCount": 61,
+      "rawSuffix": "}}"
+    },
+    {
+      "name": "open JSON depth over the runtime limit is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_depth_over\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_depth_over\",\"traceId\":\"trace_runtime_raw_depth_over\",\"agentId\":\"agent_runtime_raw_depth_over\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":",
+      "nestCount": 62,
+      "rawSuffix": "}}"
+    },
+    {
+      "name": "open JSON node count below the runtime limit is accepted",
+      "messageType": "run.reply",
+      "valid": true,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_nodes_below\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_nodes_below\",\"traceId\":\"trace_runtime_raw_nodes_below\",\"agentId\":\"agent_runtime_raw_nodes_below\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":[",
+      "arrayItem": "null",
+      "arrayCount": 8000,
+      "rawSuffix": "]}}"
+    },
+    {
+      "name": "open JSON node count over the runtime limit is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_nodes_over\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_nodes_over\",\"traceId\":\"trace_runtime_raw_nodes_over\",\"agentId\":\"agent_runtime_raw_nodes_over\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":[",
+      "arrayItem": "null",
+      "arrayCount": 8200,
+      "rawSuffix": "]}}"
+    },
+    {
+      "name": "open JSON number count at the runtime limit is accepted",
+      "messageType": "run.reply",
+      "valid": true,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_numbers_limit\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_numbers_limit\",\"traceId\":\"trace_runtime_raw_numbers_limit\",\"agentId\":\"agent_runtime_raw_numbers_limit\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":[",
+      "arrayItem": "1e400",
+      "arrayCount": 4095,
+      "rawSuffix": "]}}"
+    },
+    {
+      "name": "open JSON number count over the runtime limit is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "rawPrefix": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_numbers_over\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_numbers_over\",\"traceId\":\"trace_runtime_raw_numbers_over\",\"agentId\":\"agent_runtime_raw_numbers_over\",\"sequence\":8,\"content\":\"ok\",\"futureExtension\":[",
+      "arrayItem": "1e400",
+      "arrayCount": 4096,
+      "rawSuffix": "]}}"
+    },
+    {
+      "name": "open extensions retain arbitrary raw numbers and JSON values",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000009\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000009\",\"traceId\":\"trace_runtime_raw_00000009\",\"agentId\":\"agent_runtime_raw_00000009\",\"sequence\":9,\"content\":\"ok\",\"futureExtension\":{\"huge\":1e400,\"finiteHuge\":1e100,\"unsafeInteger\":9007199254740993,\"fraction\":0.25,\"text\":\"kept\",\"flag\":true,\"nothing\":null,\"items\":[1e400,\"x\",false,null]}}}"
+    },
+    {
+      "name": "error details retain deep raw numbers",
+      "messageType": "run.status",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000010\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.status\",\"payload\":{\"runId\":\"run_runtime_raw_00000010\",\"traceId\":\"trace_runtime_raw_00000010\",\"agentId\":\"agent_runtime_raw_00000010\",\"sequence\":10,\"status\":\"failed\",\"error\":{\"code\":\"RUNTIME_FAILED\",\"message\":\"failed\",\"retryable\":false,\"details\":{\"category\":\"future_runtime_category\",\"exitCode\":2.0,\"stderrCaptured\":true,\"huge\":1e400,\"unsafeInteger\":9007199254740993,\"nested\":[-9007199254740991,9007199254740991]}}}}"
+    },
+    {
+      "name": "declared error exit code rejects rounded fraction",
+      "messageType": "run.status",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000010b\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.status\",\"payload\":{\"runId\":\"run_runtime_raw_00000010b\",\"traceId\":\"trace_runtime_raw_00000010b\",\"agentId\":\"agent_runtime_raw_00000010b\",\"sequence\":10,\"status\":\"failed\",\"error\":{\"code\":\"RUNTIME_FAILED\",\"message\":\"failed\",\"retryable\":false,\"details\":{\"exitCode\":2.0000000000000000000001}}}}"
+    },
+    {
+      "name": "deep session cursors and revisions normalize",
+      "messageType": "run.status",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000011\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.status\",\"payload\":{\"runId\":\"run_runtime_raw_00000011\",\"traceId\":\"trace_runtime_raw_00000011\",\"agentId\":\"agent_runtime_raw_00000011\",\"sequence\":11.0,\"status\":\"working\",\"session\":{\"disposition\":\"resumed\",\"contextCursor\":1e0,\"resultEvidenceRevision\":9007199254740991}}}"
+    },
+    {
+      "name": "declared noninteger number remains a number",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000012\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000012\",\"traceId\":\"trace_runtime_raw_00000012\",\"agentId\":\"agent_runtime_raw_00000012\",\"sequence\":12,\"content\":\"ok\",\"assessment\":{\"confidence\":0.5}}}"
+    },
+    {
+      "name": "declared number rejects nonzero underflow",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000012u\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000012u\",\"traceId\":\"trace_runtime_raw_00000012u\",\"agentId\":\"agent_runtime_raw_00000012u\",\"sequence\":12,\"content\":\"ok\",\"assessment\":{\"confidence\":1e-1000}}}"
+    },
+    {
+      "name": "declared number accepts minimum subnormal rounding boundary",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000012m\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000012m\",\"traceId\":\"trace_runtime_raw_00000012m\",\"agentId\":\"agent_runtime_raw_00000012m\",\"sequence\":12,\"content\":\"ok\",\"assessment\":{\"confidence\":5e-324}}}"
+    },
+    {
+      "name": "run payload canonical and alias collision is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000013\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_runtime_raw_00000013\",\"RUNID\":\"run_runtime_raw_bad_000013\",\"traceId\":\"trace_runtime_raw_00000013\",\"agentId\":\"agent_runtime_raw_00000013\",\"sequence\":13,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "cancel payload canonical and alias collision is rejected",
+      "messageType": "run.cancel_requested",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000014\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.cancel_requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000014\",\"RUNID\":\"run_runtime_raw_bad_000014\",\"traceId\":\"trace_runtime_raw_00000014\",\"agentId\":\"agent_runtime_raw_00000014\",\"reason\":\"stop\"}}"
+    },
+    {
+      "name": "lone optional session alias is rejected",
+      "messageType": "run.requested",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000015\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000015\",\"traceId\":\"trace_runtime_raw_00000015\",\"roomId\":\"room_runtime_raw_00000015\",\"triggerMessageId\":\"msg_runtime_trigger_00000015\",\"requesterMemberId\":\"member_runtime_raw_00000015\",\"targetAgentId\":\"agent_runtime_raw_00000015\",\"deliveryAttemptId\":\"delivery_runtime_raw_00000015\",\"idempotencyKey\":\"runtime_raw_key_00000015\",\"instruction\":\"work\",\"contextMessages\":[],\"deadline\":\"2026-08-29T01:00:00Z\",\"SESSION\":{\"scope\":\"task\",\"resumePolicy\":\"start_new\",\"contextCursor\":0}}}"
+    },
+    {
+      "name": "lone optional context plan alias is rejected",
+      "messageType": "run.requested",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000016\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000016\",\"traceId\":\"trace_runtime_raw_00000016\",\"roomId\":\"room_runtime_raw_00000016\",\"triggerMessageId\":\"msg_runtime_trigger_00000016\",\"requesterMemberId\":\"member_runtime_raw_00000016\",\"targetAgentId\":\"agent_runtime_raw_00000016\",\"deliveryAttemptId\":\"delivery_runtime_raw_00000016\",\"idempotencyKey\":\"runtime_raw_key_00000016\",\"instruction\":\"work\",\"contextMessages\":[],\"deadline\":\"2026-08-29T01:00:00Z\",\"CONTEXTPLAN\":{\"roomMemory\":{\"revision\":1,\"entries\":[]}}}}"
+    },
+    {
+      "name": "context message sender name alias is rejected",
+      "messageType": "run.requested",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000017\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000017\",\"traceId\":\"trace_runtime_raw_00000017\",\"roomId\":\"room_runtime_raw_00000017\",\"triggerMessageId\":\"msg_runtime_trigger_00000017\",\"requesterMemberId\":\"member_runtime_raw_00000017\",\"targetAgentId\":\"agent_runtime_raw_00000017\",\"deliveryAttemptId\":\"delivery_runtime_raw_00000017\",\"idempotencyKey\":\"runtime_raw_key_00000017\",\"instruction\":\"work\",\"contextMessages\":[{\"messageId\":\"msg_runtime_context_00000017\",\"senderId\":\"member_runtime_raw_00000017\",\"content\":\"context\",\"SENDERNAME\":\"forged\"}],\"deadline\":\"2026-08-29T01:00:00Z\"}}"
+    },
+    {
+      "name": "context message sequence alias is rejected before coercion",
+      "messageType": "run.requested",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000018\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000018\",\"traceId\":\"trace_runtime_raw_00000018\",\"roomId\":\"room_runtime_raw_00000018\",\"triggerMessageId\":\"msg_runtime_trigger_00000018\",\"requesterMemberId\":\"member_runtime_raw_00000018\",\"targetAgentId\":\"agent_runtime_raw_00000018\",\"deliveryAttemptId\":\"delivery_runtime_raw_00000018\",\"idempotencyKey\":\"runtime_raw_key_00000018\",\"instruction\":\"work\",\"contextMessages\":[{\"messageId\":\"msg_runtime_context_00000018\",\"senderId\":\"member_runtime_raw_00000018\",\"content\":\"context\",\"sequence\":1,\"SEQUENCE\":9007199254740992}],\"deadline\":\"2026-08-29T01:00:00Z\"}}"
+    },
+    {
+      "name": "unicode long s session alias is rejected",
+      "messageType": "run.requested",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000019\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000019\",\"traceId\":\"trace_runtime_raw_00000019\",\"roomId\":\"room_runtime_raw_00000019\",\"triggerMessageId\":\"msg_runtime_trigger_00000019\",\"requesterMemberId\":\"member_runtime_raw_00000019\",\"targetAgentId\":\"agent_runtime_raw_00000019\",\"deliveryAttemptId\":\"delivery_runtime_raw_00000019\",\"idempotencyKey\":\"runtime_raw_key_00000019\",\"instruction\":\"work\",\"contextMessages\":[],\"deadline\":\"2026-08-29T01:00:00Z\",\"ſeſſion\":{\"scope\":\"task\",\"resumePolicy\":\"start_new\",\"contextCursor\":0}}}"
+    },
+    {
+      "name": "unicode Kelvin workspace ref alias is rejected",
+      "messageType": "agent.publish",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000020\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"agent.publish\",\"payload\":{\"teamId\":\"team_runtime_raw_00000020\",\"agentId\":\"agent_runtime_raw_00000020\",\"ownerMemberId\":\"member_runtime_raw_00000020\",\"deviceId\":\"device_runtime_raw_00000020\",\"name\":\"Builder\",\"role\":\"Runtime\",\"capabilities\":{\"invocationMode\":\"managed\",\"supportsStart\":true,\"supportsResume\":true,\"supportsStreaming\":true,\"supportsInterrupt\":true,\"supportsHandoff\":false},\"worKspaceRef\":\"workspace_ref_00000020\"}}"
+    },
+    {
+      "name": "capability canonical and alias collision is rejected",
+      "messageType": "agent.publish",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000021\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"agent.publish\",\"payload\":{\"teamId\":\"team_runtime_raw_00000021\",\"agentId\":\"agent_runtime_raw_00000021\",\"ownerMemberId\":\"member_runtime_raw_00000021\",\"deviceId\":\"device_runtime_raw_00000021\",\"name\":\"Builder\",\"role\":\"Runtime\",\"capabilities\":{\"invocationMode\":\"managed\",\"supportsStart\":true,\"supportsResume\":true,\"supportsStreaming\":true,\"supportsInterrupt\":true,\"SUPPORTSINTERRUPT\":false,\"supportsHandoff\":false}}}"
+    },
+    {
+      "name": "bridge hello declared epoch normalizes",
+      "messageType": "bridge.hello",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000022\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"bridge.hello\",\"payload\":{\"deviceId\":\"device_runtime_raw_00000022\",\"connectionEpoch\":1.0,\"bridgeVersion\":\"0.4.0\",\"supportedProtocolVersions\":[\"1.0\"]}}"
+    },
+    {
+      "name": "run request declared nested integers normalize",
+      "messageType": "run.requested",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000024\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000024\",\"traceId\":\"trace_runtime_raw_00000024\",\"roomId\":\"room_runtime_raw_00000024\",\"triggerMessageId\":\"msg_runtime_trigger_00000024\",\"requesterMemberId\":\"member_runtime_raw_00000024\",\"targetAgentId\":\"agent_runtime_raw_00000024\",\"deliveryAttemptId\":\"delivery_runtime_raw_00000024\",\"idempotencyKey\":\"runtime_raw_key_00000024\",\"instruction\":\"work\",\"contextMessages\":[{\"messageId\":\"msg_runtime_context_00000024\",\"senderId\":\"member_runtime_raw_00000024\",\"content\":\"context\",\"sequence\":1.0}],\"session\":{\"scope\":\"task\",\"resumePolicy\":\"resume_or_start\",\"contextCursor\":1e0},\"deadline\":\"2026-08-29T01:00:00Z\"}}"
+    },
+    {
+      "name": "cancel request decodes to its exact message type",
+      "messageType": "run.cancel_requested",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000025\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"run.cancel_requested\",\"payload\":{\"runId\":\"run_runtime_raw_00000025\",\"traceId\":\"trace_runtime_raw_00000025\",\"agentId\":\"agent_runtime_raw_00000025\",\"reason\":\"stop\"}}"
+    },
+    {
+      "name": "agent provision request decodes to its exact message type",
+      "messageType": "agent.provision.requested",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000026\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"agent.provision.requested\",\"payload\":{\"requestId\":\"agentprov_runtime_raw_00000026\",\"deviceId\":\"device_runtime_raw_00000026\",\"templateAgentId\":\"agent_runtime_template_000026\",\"agentId\":\"agent_runtime_raw_00000026\",\"name\":\"Builder\",\"role\":\"Runtime\",\"managementCode\":\"123456\"}}"
+    },
+    {
+      "name": "root canonical and alias collision is rejected",
+      "messageType": "bridge.hello",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_runtime_raw_00000023\",\"timestamp\":\"2026-08-29T00:00:00Z\",\"type\":\"bridge.hello\",\"TYPE\":\"bridge.heartbeat\",\"payload\":{\"deviceId\":\"device_runtime_raw_00000023\",\"connectionEpoch\":1,\"bridgeVersion\":\"0.4.0\",\"supportedProtocolVersions\":[\"1.0\"]}}"
+    }
+  ]
+}

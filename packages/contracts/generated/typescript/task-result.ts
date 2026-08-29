@@ -8,7 +8,8 @@ export interface TaskProjection {
   completionPolicy:   CompletionPolicy;
   completionResultId: null | string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   createdAt:          string;
   createdByMemberId:  string;
@@ -31,7 +32,8 @@ export interface TaskProjection {
   teamId:             string;
   title:              string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   updatedAt: string;
 }
@@ -39,7 +41,8 @@ export interface TaskProjection {
 export interface TaskProjectionAssignment {
   agentId: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   assignedAt:         string;
   assignedByMemberId: string;
@@ -53,7 +56,8 @@ export interface TaskProjectionAttentionReason {
   expectedAgentId?:  null | string;
   expectedMemberId?: null | string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   occurredAt: string;
   reason:     AttentionElement;
@@ -137,7 +141,8 @@ export interface RunAttemptProjection {
   agentId:       string;
   attemptNumber: number;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   createdAt:    string;
   phase:        Phase;
@@ -146,7 +151,8 @@ export interface RunAttemptProjection {
   state:        RunAttemptProjectionState;
   taskId:       string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   updatedAt: string;
 }
@@ -165,7 +171,8 @@ export interface RunContextManifest {
   omittedCategories:  [OmittedCategory, ...OmittedCategory[]];
   permissions:        Permissions;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   recordedAt:   string;
   runId:        string;
@@ -332,7 +339,8 @@ export type Decision = "accepted" | "rejected";
 export interface ResultProjection {
   proposal: ResultProjectionProposal;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   proposedAt:    string;
   proposedBy:    ProposedBy;
@@ -397,7 +405,8 @@ export interface Review {
   decision: Decision;
   reason:   string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   reviewedAt:         string;
   reviewedByMemberId: string;
@@ -446,7 +455,8 @@ export interface Item {
   taskId:                    string;
   title:                     string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   updatedAt: string;
 }
@@ -456,7 +466,8 @@ export interface ItemAttentionReason {
   expectedAgentId?:  null | string;
   expectedMemberId?: null | string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   occurredAt: string;
   reason:     AttentionElement;
@@ -475,7 +486,8 @@ export interface LatestRun {
   agentId:       string;
   attemptNumber: number;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   createdAt:    string;
   phase:        Phase;
@@ -484,7 +496,8 @@ export interface LatestRun {
   state:        RunAttemptProjectionState;
   taskId:       string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   updatedAt: string;
 }

@@ -2,11 +2,13 @@
 
 export interface DevicePairingSessionCreated {
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   createdAt: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   expiresAt:        string;
   ownerMemberId:    string;
@@ -48,25 +50,30 @@ export interface DevicePairingSessionCreateRequest {
 
 export interface DevicePairingSessionOwnerProjection {
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   claimedAt?: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   consumedAt?: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   createdAt: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   decidedAt?: string;
   device?:    DevicePairingSessionOwnerProjectionDevice;
   deviceId?:  string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   expiresAt:         string;
   ownerMemberId:     string;
@@ -141,7 +148,8 @@ export interface DevicePairingSessionClaimRequestTrust {
 
 export interface DevicePairingSessionClaimed {
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   expiresAt:          string;
   pairingAttemptId:   string;
@@ -165,7 +173,8 @@ export interface DevicePairingSessionPollRequest {
 
 export interface DevicePairingSessionPollProjection {
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   expiresAt?:          string;
   pairingAttemptId:    string;
@@ -227,7 +236,8 @@ export interface DevicePairingPrivateCARotationOffer {
    */
   nextTrust: NextTrustClass;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   overlapEndsAt: string;
 }

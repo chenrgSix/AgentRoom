@@ -20,11 +20,28 @@
       "maxLength": 512
     },
     "details": {
-      "type": "object"
+      "description": "Explicit extension point for bounded, client-safe structured diagnostics. Owning services apply the field allowlist.",
+      "type": "object",
+      "properties": {
+        "category": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "exitCode": {
+          "type": "integer",
+          "minimum": -9007199254740991,
+          "maximum": 9007199254740991
+        },
+        "stderrCaptured": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": true
     },
     "retryable": {
       "type": "boolean"
     }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

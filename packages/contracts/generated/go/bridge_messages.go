@@ -10,7 +10,8 @@ type RunActivityMessage struct {
 	Payload   RunActivityPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time              `json:"timestamp"`
 	Type      RunActivityMessageType `json:"type"`
 }
@@ -34,7 +35,8 @@ type RunOutputDeltaMessage struct {
 	Payload   RunOutputDeltaPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time                 `json:"timestamp"`
 	Type      RunOutputDeltaMessageType `json:"type"`
 }
@@ -54,7 +56,8 @@ type BridgeHelloMessage struct {
 	Payload   BridgeHelloPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time              `json:"timestamp"`
 	Type      BridgeHelloMessageType `json:"type"`
 }
@@ -62,9 +65,15 @@ type BridgeHelloMessage struct {
 type BridgeHelloPayload struct {
 	// Semantic Bridge build version. New Bridges omit the v prefix; the optional prefix is
 	// accepted only for rolling compatibility with already released Bridges.
-	BridgeVersion             string   `json:"bridgeVersion"`
-	ConnectionEpoch           int64    `json:"connectionEpoch"`
-	DeviceID                  string   `json:"deviceId"`
+	BridgeVersion   string `json:"bridgeVersion"`
+	ConnectionEpoch int64  `json:"connectionEpoch"`
+	DeviceID        string `json:"deviceId"`
+	// SHA-256 of the running Bridge executable computed at process startup. Omitted together
+	// with sourceCommit by legacy and development Bridges.
+	ExecutableSha256 *string `json:"executableSha256,omitempty"`
+	// Exact lowercase source commit injected into a packaged Bridge. Omitted together with
+	// executableSha256 by legacy and development Bridges.
+	SourceCommit              *string  `json:"sourceCommit,omitempty"`
 	SupportedProtocolVersions []string `json:"supportedProtocolVersions"`
 	// Whether this connection can authorize and apply central Agent provisioning requests.
 	// Omission means unsupported.
@@ -77,7 +86,8 @@ type BridgeHeartbeatMessage struct {
 	Payload   BridgeHeartbeatPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time                  `json:"timestamp"`
 	Type      BridgeHeartbeatMessageType `json:"type"`
 }
@@ -93,7 +103,8 @@ type AgentPublishMessage struct {
 	Payload   AgentPublishPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time               `json:"timestamp"`
 	Type      AgentPublishMessageType `json:"type"`
 }
@@ -138,7 +149,8 @@ type AgentStatusMessage struct {
 	Payload   AgentStatusPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time              `json:"timestamp"`
 	Type      AgentStatusMessageType `json:"type"`
 }
@@ -157,7 +169,8 @@ type AgentProvisionRequestedMessage struct {
 	Payload   AgentProvisionRequestedPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time                          `json:"timestamp"`
 	Type      AgentProvisionRequestedMessageType `json:"type"`
 }
@@ -178,7 +191,8 @@ type AgentProvisionResultMessage struct {
 	Payload   AgentProvisionResultPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time                       `json:"timestamp"`
 	Type      AgentProvisionResultMessageType `json:"type"`
 }
@@ -198,7 +212,8 @@ type RunRequestedMessage struct {
 	Payload   RunRequestedPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time               `json:"timestamp"`
 	Type      RunRequestedMessageType `json:"type"`
 }
@@ -207,7 +222,8 @@ type RunRequestedPayload struct {
 	ContextManifest *ContextManifest    `json:"contextManifest,omitempty"`
 	ContextMessages []ContextMessage    `json:"contextMessages"`
 	ContextPlan     *RuntimeContextPlan `json:"contextPlan,omitempty"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Deadline          time.Time `json:"deadline"`
 	DeliveryAttemptID string    `json:"deliveryAttemptId"`
 	IdempotencyKey    string    `json:"idempotencyKey"`
@@ -237,7 +253,8 @@ type ContextManifest struct {
 	ManifestVersion    ManifestVersion   `json:"manifestVersion"`
 	OmittedCategories  []OmittedCategory `json:"omittedCategories"`
 	Permissions        Permissions       `json:"permissions"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	RecordedAt   time.Time `json:"recordedAt"`
 	RunID        string    `json:"runId"`
 	Target       Target    `json:"target"`
@@ -352,7 +369,8 @@ type ArtifactReference struct {
 	CommitSHA        *string `json:"commitSha,omitempty"`
 	// Immutable content metadata and a path-free logical alias pinned into one Run delivery.
 	Content *PinnedArtifactContent `json:"content,omitempty"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	CreatedAt         time.Time                   `json:"createdAt"`
 	CreatedByAgentID  *string                     `json:"createdByAgentId,omitempty"`
 	CreatedByMemberID *string                     `json:"createdByMemberId,omitempty"`
@@ -456,7 +474,8 @@ type RunAcceptedMessage struct {
 	Payload   RunAcceptedPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time              `json:"timestamp"`
 	Type      RunAcceptedMessageType `json:"type"`
 }
@@ -497,7 +516,8 @@ type RunStatusMessage struct {
 	Payload   RunStatusPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time            `json:"timestamp"`
 	Type      RunStatusMessageType `json:"type"`
 }
@@ -522,10 +542,20 @@ type TaskClarificationRequest struct {
 
 // Stable, client-safe error returned at a protocol boundary.
 type ConveneWireError struct {
-	Code      string                 `json:"code"`
+	Code string `json:"code"`
+	// Explicit extension point for bounded, client-safe structured diagnostics. Owning services
+	// apply the field allowlist.
 	Details   map[string]interface{} `json:"details,omitempty"`
 	Message   string                 `json:"message"`
 	Retryable bool                   `json:"retryable"`
+}
+
+// Explicit extension point for bounded, client-safe structured diagnostics. Owning services
+// apply the field allowlist.
+type Details struct {
+	Category       *string `json:"category,omitempty"`
+	ExitCode       *int64  `json:"exitCode,omitempty"`
+	StderrCaptured *bool   `json:"stderrCaptured,omitempty"`
 }
 
 type LogicalSessionStatus struct {
@@ -555,7 +585,8 @@ type RunReplyMessage struct {
 	Payload   RunReplyPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time           `json:"timestamp"`
 	Type      RunReplyMessageType `json:"type"`
 }
@@ -593,7 +624,8 @@ type RunCancelRequestedMessage struct {
 	Payload   RunCancelRequestedPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time                     `json:"timestamp"`
 	Type      RunCancelRequestedMessageType `json:"type"`
 }
@@ -611,7 +643,8 @@ type RunHandoffRequestedMessage struct {
 	Payload   RunHandoffRequestedPayload `json:"payload"`
 	// Major and minor protocol version negotiated by peers.
 	ProtocolVersion string `json:"protocolVersion"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	Timestamp time.Time                      `json:"timestamp"`
 	Type      RunHandoffRequestedMessageType `json:"type"`
 }
@@ -633,7 +666,8 @@ type BridgeJoinRequest struct {
 }
 
 type BridgeJoinChallenge struct {
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ExpiresAt time.Time `json:"expiresAt"`
 	// Opaque identifier with a lowercase type prefix and non-semantic suffix.
 	JoinRequestID  string `json:"joinRequestId"`
@@ -650,7 +684,8 @@ type BridgeJoinApproval struct {
 	AgentName  string `json:"agentName"`
 	AgentRole  string `json:"agentRole"`
 	DeviceName string `json:"deviceName"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ExpiresAt time.Time `json:"expiresAt"`
 	// Opaque identifier with a lowercase type prefix and non-semantic suffix.
 	JoinRequestID string                   `json:"joinRequestId"`
@@ -662,7 +697,8 @@ type BridgeJoinClaimRequest struct {
 }
 
 type BridgeJoinPending struct {
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ExpiresAt time.Time               `json:"expiresAt"`
 	Status    BridgeJoinPendingStatus `json:"status"`
 }

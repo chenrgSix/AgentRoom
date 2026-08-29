@@ -31,14 +31,52 @@ test("the product rename preserves published JSON Schema identities", async () =
   }
 });
 
+test("every wire integer is bounded to the interoperable safe range", async () => {
+  const maximumSafeInteger = 9_007_199_254_740_991;
+  const schemaPaths = [
+    "../schemas/bridge/messages.schema.json",
+    "../schemas/bridge/pairing-session.schema.json",
+    "../schemas/work/task-result.schema.json"
+  ];
+  const integerLocations = [];
+  const inspect = (value, location) => {
+    if (Array.isArray(value)) {
+      value.forEach((child, index) => inspect(child, `${location}/${index}`));
+      return;
+    }
+    if (value === null || typeof value !== "object") return;
+    const types = Array.isArray(value.type) ? value.type : [value.type];
+    if (types.includes("integer")) {
+      integerLocations.push(location);
+      assert.equal(Number.isSafeInteger(value.minimum), true, `${location} minimum`);
+      assert.equal(Number.isSafeInteger(value.maximum), true, `${location} maximum`);
+      assert.ok(value.minimum >= -maximumSafeInteger, `${location} minimum range`);
+      assert.ok(value.maximum <= maximumSafeInteger, `${location} maximum range`);
+      assert.ok(value.minimum <= value.maximum, `${location} ordered bounds`);
+    }
+    for (const [key, child] of Object.entries(value)) {
+      inspect(child, `${location}/${key.replaceAll("~", "~0").replaceAll("/", "~1")}`);
+    }
+  };
+
+  for (const schemaPath of schemaPaths) {
+    const schema = JSON.parse(await readFile(
+      new URL(schemaPath, import.meta.url),
+      "utf8"
+    ));
+    inspect(schema, schema.$id);
+  }
+  assert.ok(integerLocations.length > 0);
+});
+
 test("positive and negative golden fixtures match their schemas", async () => {
   const result = await validateContractFixtures(packageRoot);
 
   assert.deepEqual(result, {
-    fixtureCount: 116,
+    fixtureCount: 125,
     fixtureVersion: "1.0",
-    invalidCount: 65,
-    validCount: 51
+    invalidCount: 73,
+    validCount: 52
   });
 });
 

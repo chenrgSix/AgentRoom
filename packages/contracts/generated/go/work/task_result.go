@@ -11,7 +11,8 @@ type TaskProjection struct {
 	BudgetUsage        TaskProjectionBudgetUsage       `json:"budgetUsage"`
 	CompletionPolicy   CompletionPolicy                `json:"completionPolicy"`
 	CompletionResultID *string                         `json:"completionResultId"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	CreatedAt          time.Time                 `json:"createdAt"`
 	CreatedByMemberID  string                    `json:"createdByMemberId"`
 	Criteria           []TaskProjectionCriterion `json:"criteria"`
@@ -32,13 +33,15 @@ type TaskProjection struct {
 	TaskRevision       int64                     `json:"taskRevision"`
 	TeamID             string                    `json:"teamId"`
 	Title              string                    `json:"title"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 type TaskProjectionAssignment struct {
 	AgentID string `json:"agentId"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	AssignedAt         time.Time `json:"assignedAt"`
 	AssignedByMemberID string    `json:"assignedByMemberId"`
 	Role               Role      `json:"role"`
@@ -48,7 +51,8 @@ type TaskProjectionAttentionReason struct {
 	ActorKind        AttentionReasonActorKind `json:"actorKind"`
 	ExpectedAgentID  *string                  `json:"expectedAgentId"`
 	ExpectedMemberID *string                  `json:"expectedMemberId"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	OccurredAt time.Time        `json:"occurredAt"`
 	Reason     AttentionElement `json:"reason"`
 	SourceID   string           `json:"sourceId"`
@@ -116,14 +120,16 @@ type TaskDefinitionCommandCriterion struct {
 type RunAttemptProjection struct {
 	AgentID       string `json:"agentId"`
 	AttemptNumber int64  `json:"attemptNumber"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	CreatedAt    time.Time                 `json:"createdAt"`
 	Phase        Phase                     `json:"phase"`
 	RetryOfRunID *string                   `json:"retryOfRunId"`
 	RunID        string                    `json:"runId"`
 	State        RunAttemptProjectionState `json:"state"`
 	TaskID       string                    `json:"taskId"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
@@ -136,7 +142,8 @@ type RunContextManifest struct {
 	ManifestVersion    ManifestVersion               `json:"manifestVersion"`
 	OmittedCategories  []OmittedCategory             `json:"omittedCategories"`
 	Permissions        Permissions                   `json:"permissions"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	RecordedAt   time.Time `json:"recordedAt"`
 	RunID        string    `json:"runId"`
 	Target       Target    `json:"target"`
@@ -279,7 +286,8 @@ type ResultReviewCommand struct {
 
 type ResultProjection struct {
 	Proposal ResultProjectionProposal `json:"proposal"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ProposedAt    time.Time             `json:"proposedAt"`
 	ProposedBy    ProposedBy            `json:"proposedBy"`
 	ResultID      string                `json:"resultId"`
@@ -340,7 +348,8 @@ type ProposedBy struct {
 type Review struct {
 	Decision Decision `json:"decision"`
 	Reason   string   `json:"reason"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ReviewedAt         time.Time `json:"reviewedAt"`
 	ReviewedByMemberID string    `json:"reviewedByMemberId"`
 	ReviewRevision     int64     `json:"reviewRevision"`
@@ -383,7 +392,8 @@ type Item struct {
 	TaskDisplayNumber         int64                 `json:"taskDisplayNumber"`
 	TaskID                    string                `json:"taskId"`
 	Title                     string                `json:"title"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
@@ -391,7 +401,8 @@ type ItemAttentionReason struct {
 	ActorKind        AttentionReasonActorKind `json:"actorKind"`
 	ExpectedAgentID  *string                  `json:"expectedAgentId"`
 	ExpectedMemberID *string                  `json:"expectedMemberId"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	OccurredAt time.Time        `json:"occurredAt"`
 	Reason     AttentionElement `json:"reason"`
 	SourceID   string           `json:"sourceId"`
@@ -408,14 +419,16 @@ type ItemBudgetUsage struct {
 type LatestRun struct {
 	AgentID       string `json:"agentId"`
 	AttemptNumber int64  `json:"attemptNumber"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	CreatedAt    time.Time                 `json:"createdAt"`
 	Phase        Phase                     `json:"phase"`
 	RetryOfRunID *string                   `json:"retryOfRunId"`
 	RunID        string                    `json:"runId"`
 	State        RunAttemptProjectionState `json:"state"`
 	TaskID       string                    `json:"taskId"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 

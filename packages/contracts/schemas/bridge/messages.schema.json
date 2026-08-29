@@ -346,11 +346,13 @@
     },
     "connectionEpoch": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 9007199254740991
     },
     "sequence": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 9007199254740991
     },
     "bridgeJoinRequest": {
       "title": "Bridge Join Request",
@@ -654,6 +656,14 @@
     "bridgeHelloPayload": {
       "type": "object",
       "additionalProperties": true,
+      "dependentRequired": {
+        "sourceCommit": [
+          "executableSha256"
+        ],
+        "executableSha256": [
+          "sourceCommit"
+        ]
+      },
       "required": [
         "deviceId",
         "connectionEpoch",
@@ -671,6 +681,16 @@
           "type": "string",
           "description": "Semantic Bridge build version. New Bridges omit the v prefix; the optional prefix is accepted only for rolling compatibility with already released Bridges.",
           "pattern": "^v?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*)?$"
+        },
+        "sourceCommit": {
+          "type": "string",
+          "description": "Exact lowercase source commit injected into a packaged Bridge. Omitted together with executableSha256 by legacy and development Bridges.",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "executableSha256": {
+          "type": "string",
+          "description": "SHA-256 of the running Bridge executable computed at process startup. Omitted together with sourceCommit by legacy and development Bridges.",
+          "pattern": "^[0-9a-f]{64}$"
         },
         "supportsAgentProvisioning": {
           "type": "boolean",
@@ -750,7 +770,7 @@
         "role": {
           "type": "string",
           "minLength": 1,
-          "maxLength": 120
+          "maxLength": 80
         },
         "capabilities": {
           "$ref": "#/$defs/runtimeCapabilities"
@@ -972,11 +992,13 @@
         },
         "fromSequenceExclusive": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "throughSequence": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "summary": {
           "type": "string",
@@ -985,7 +1007,8 @@
         },
         "sourceMessageCount": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "sourceDigest": {
           "type": "string",
@@ -1029,11 +1052,13 @@
       "properties": {
         "fromSequenceExclusive": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "throughSequenceInclusive": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "messageCount": {
           "type": "integer",
@@ -1068,11 +1093,13 @@
       "properties": {
         "targetThroughSequence": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "priorContextThroughSequence": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "requestMessageId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/messageId"
@@ -1100,7 +1127,8 @@
       "properties": {
         "baseContextCursor": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "checkpointId": {
           "type": "string",
@@ -1108,11 +1136,13 @@
         },
         "rawFromSequenceExclusive": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "rawThroughSequenceInclusive": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "rawMessageCount": {
           "type": "integer",
@@ -1121,7 +1151,8 @@
         },
         "coverageThroughSequence": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         }
       }
     },
@@ -1146,7 +1177,8 @@
         },
         "contextCursor": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "runtimeScopeId": {
           "$ref": "#/$defs/runtimeScopeId"
@@ -1171,14 +1203,16 @@
         },
         "contextCursor": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "runtimeScopeId": {
           "$ref": "#/$defs/runtimeScopeId"
         },
         "resultEvidenceRevision": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "roomContextConsumption": {
           "$ref": "#/$defs/roomContextConsumption"
@@ -1203,11 +1237,13 @@
         },
         "sourceCursor": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "projectionKind": {
           "enum": [
@@ -1326,7 +1362,8 @@
         },
         "artifactRevision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "relations": {
           "type": "array",
@@ -1492,7 +1529,8 @@
       "properties": {
         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "deliveryKind": {
           "enum": [
@@ -1502,11 +1540,13 @@
         },
         "fromRevision": {
           "type": "integer",
-          "minimum": 0
+          "minimum": 0,
+          "maximum": 9007199254740991
         },
         "throughRevision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "hasMore": {
           "type": "boolean"
@@ -1571,7 +1611,8 @@
         },
         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "supersedesMemoryId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/opaqueId"
@@ -1666,7 +1707,8 @@
       "properties": {
         "revision": {
           "type": "integer",
-          "minimum": 1
+          "minimum": 1,
+          "maximum": 9007199254740991
         },
         "activeComplete": {
           "type": "boolean"
@@ -2164,7 +2206,7 @@
             "content": {
               "type": "string",
               "minLength": 1,
-              "maxLength": 65536
+              "maxLength": 20000
             },
             "assessment": {
               "$ref": "#/$defs/agentAssessment"

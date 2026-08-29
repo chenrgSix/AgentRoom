@@ -68,6 +68,24 @@
       "valid": false
     },
     {
+      "name": "timestamp requires uppercase date time separator",
+      "schemaId": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json",
+      "instance": "2026-08-22t10:00:00Z",
+      "valid": false
+    },
+    {
+      "name": "timestamp rejects leap seconds unsupported by typed runtimes",
+      "schemaId": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json",
+      "instance": "2026-12-31T23:59:60Z",
+      "valid": false
+    },
+    {
+      "name": "timestamp rejects precision beyond Go time",
+      "schemaId": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json",
+      "instance": "2026-08-22T10:00:00.1234567890Z",
+      "valid": false
+    },
+    {
       "name": "valid message envelope",
       "schemaId": "https://agentroom.dev/schemas/common/message-envelope.schema.json",
       "instance": {
@@ -90,6 +108,50 @@
         "timestamp": "2026-08-22T10:00:00Z",
         "type": "Message.Created",
         "payload": {}
+      },
+      "valid": false
+    },
+    {
+      "name": "Bridge envelope rejects a missing message ID",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "timestamp": "2026-08-22T10:00:00Z",
+        "type": "bridge.heartbeat",
+        "payload": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "connectionEpoch": 1
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Bridge envelope rejects a missing timestamp",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "type": "bridge.heartbeat",
+        "payload": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "connectionEpoch": 1
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Bridge envelope rejects an unknown top-level field",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "timestamp": "2026-08-22T10:00:00Z",
+        "type": "bridge.heartbeat",
+        "payload": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "connectionEpoch": 1
+        },
+        "unexpected": true
       },
       "valid": false
     },
@@ -128,6 +190,8 @@
           "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "connectionEpoch": 1,
           "bridgeVersion": "0.4.0-qa030.2",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "executableSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "supportsAgentProvisioning": true,
           "supportedProtocolVersions": [
             "1.0"
@@ -156,6 +220,26 @@
       "valid": true
     },
     {
+      "name": "protocol 1.0 Bridge hello preserves additive payload compatibility",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "timestamp": "2026-08-22T10:00:00Z",
+        "type": "bridge.hello",
+        "payload": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "connectionEpoch": 1,
+          "bridgeVersion": "0.4.0",
+          "supportedProtocolVersions": [
+            "1.0"
+          ],
+          "futureOptionalCapability": true
+        }
+      },
+      "valid": true
+    },
+    {
       "name": "Bridge hello rejects a non-semantic build version",
       "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
       "instance": {
@@ -167,6 +251,46 @@
           "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
           "connectionEpoch": 1,
           "bridgeVersion": "development",
+          "supportedProtocolVersions": [
+            "1.0"
+          ]
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Bridge hello rejects source identity without executable digest",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "timestamp": "2026-08-22T10:00:00Z",
+        "type": "bridge.hello",
+        "payload": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "connectionEpoch": 1,
+          "bridgeVersion": "0.4.0-qa035.1",
+          "sourceCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "supportedProtocolVersions": [
+            "1.0"
+          ]
+        }
+      },
+      "valid": false
+    },
+    {
+      "name": "Bridge hello rejects executable digest without source identity",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json",
+      "instance": {
+        "protocolVersion": "1.0",
+        "messageId": "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "timestamp": "2026-08-22T10:00:00Z",
+        "type": "bridge.hello",
+        "payload": {
+          "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "connectionEpoch": 1,
+          "bridgeVersion": "0.4.0-qa035.1",
+          "executableSha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
           "supportedProtocolVersions": [
             "1.0"
           ]

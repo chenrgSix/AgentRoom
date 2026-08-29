@@ -11,11 +11,11 @@ export interface RunActivityMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      RunActivityMessageType;
-  [property: string]: unknown;
 }
 
 export interface RunActivityPayload {
@@ -44,11 +44,11 @@ export interface RunOutputDeltaMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      RunOutputDeltaMessageType;
-  [property: string]: unknown;
 }
 
 export interface RunOutputDeltaPayload {
@@ -74,11 +74,11 @@ export interface BridgeHelloMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      BridgeHelloMessageType;
-  [property: string]: unknown;
 }
 
 export interface BridgeHelloPayload {
@@ -86,9 +86,19 @@ export interface BridgeHelloPayload {
    * Semantic Bridge build version. New Bridges omit the v prefix; the optional prefix is
    * accepted only for rolling compatibility with already released Bridges.
    */
-  bridgeVersion:             string;
-  connectionEpoch:           number;
-  deviceId:                  string;
+  bridgeVersion:   string;
+  connectionEpoch: number;
+  deviceId:        string;
+  /**
+   * SHA-256 of the running Bridge executable computed at process startup. Omitted together
+   * with sourceCommit by legacy and development Bridges.
+   */
+  executableSha256?: string;
+  /**
+   * Exact lowercase source commit injected into a packaged Bridge. Omitted together with
+   * executableSha256 by legacy and development Bridges.
+   */
+  sourceCommit?:             string;
   supportedProtocolVersions: [string, ...string[]];
   /**
    * Whether this connection can authorize and apply central Agent provisioning requests.
@@ -111,11 +121,11 @@ export interface BridgeHeartbeatMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      BridgeHeartbeatMessageType;
-  [property: string]: unknown;
 }
 
 export interface BridgeHeartbeatPayload {
@@ -137,11 +147,11 @@ export interface AgentPublishMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      AgentPublishMessageType;
-  [property: string]: unknown;
 }
 
 export interface AgentPublishPayload {
@@ -199,11 +209,11 @@ export interface AgentStatusMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      AgentStatusMessageType;
-  [property: string]: unknown;
 }
 
 export interface AgentStatusPayload {
@@ -230,11 +240,11 @@ export interface AgentProvisionRequestedMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      AgentProvisionRequestedMessageType;
-  [property: string]: unknown;
 }
 
 export interface AgentProvisionRequestedPayload {
@@ -260,11 +270,11 @@ export interface AgentProvisionResultMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      AgentProvisionResultMessageType;
-  [property: string]: unknown;
 }
 
 export interface AgentProvisionResultPayload {
@@ -293,11 +303,11 @@ export interface RunRequestedMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      RunRequestedMessageType;
-  [property: string]: unknown;
 }
 
 export interface RunRequestedPayload {
@@ -305,7 +315,8 @@ export interface RunRequestedPayload {
   contextMessages:  ContextMessage[];
   contextPlan?:     RuntimeContextPlan;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   deadline:          string;
   deliveryAttemptId: string;
@@ -340,7 +351,8 @@ export interface ContextManifest {
   omittedCategories:  [OmittedCategory, ...OmittedCategory[]];
   permissions:        Permissions;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   recordedAt:   string;
   runId:        string;
@@ -478,7 +490,8 @@ export interface ArtifactReference {
    */
   content?: PinnedArtifactContent;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   createdAt:          string;
   createdByAgentId?:  string;
@@ -615,11 +628,11 @@ export interface RunAcceptedMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      RunAcceptedMessageType;
-  [property: string]: unknown;
 }
 
 export interface RunAcceptedPayload {
@@ -674,11 +687,11 @@ export interface RunStatusMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      RunStatusMessageType;
-  [property: string]: unknown;
 }
 
 export interface RunStatusPayload {
@@ -706,10 +719,24 @@ export interface TaskClarificationRequest {
  * Stable, client-safe error returned at a protocol boundary.
  */
 export interface ConveneWireError {
-  code:      string;
-  details?:  { [key: string]: unknown };
+  code: string;
+  /**
+   * Explicit extension point for bounded, client-safe structured diagnostics. Owning services
+   * apply the field allowlist.
+   */
+  details?:  Details;
   message:   string;
   retryable: boolean;
+}
+
+/**
+ * Explicit extension point for bounded, client-safe structured diagnostics. Owning services
+ * apply the field allowlist.
+ */
+export interface Details {
+  category?:       string;
+  exitCode?:       number;
+  stderrCaptured?: boolean;
   [property: string]: unknown;
 }
 
@@ -755,11 +782,11 @@ export interface RunReplyMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      RunReplyMessageType;
-  [property: string]: unknown;
 }
 
 export interface RunReplyPayload {
@@ -809,11 +836,11 @@ export interface RunCancelRequestedMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      RunCancelRequestedMessageType;
-  [property: string]: unknown;
 }
 
 export interface RunCancelRequestedPayload {
@@ -837,11 +864,11 @@ export interface RunHandoffRequestedMessage {
    */
   protocolVersion: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   timestamp: string;
   type:      RunHandoffRequestedMessageType;
-  [property: string]: unknown;
 }
 
 export interface RunHandoffRequestedPayload {
@@ -865,7 +892,8 @@ export interface BridgeJoinRequest {
 
 export interface BridgeJoinChallenge {
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   expiresAt: string;
   /**
@@ -886,7 +914,8 @@ export interface BridgeJoinApproval {
   agentRole:  string;
   deviceName: string;
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   expiresAt: string;
   /**
@@ -904,7 +933,8 @@ export interface BridgeJoinClaimRequest {
 
 export interface BridgeJoinPending {
   /**
-   * RFC 3339 date-time normalized to the UTC Z suffix.
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
    */
   expiresAt: string;
   status:    BridgeJoinPendingStatus;

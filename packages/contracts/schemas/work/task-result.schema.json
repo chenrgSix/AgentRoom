@@ -7,11 +7,13 @@
   "$defs": {
     "revision": {
       "type": "integer",
-      "minimum": 1
+      "minimum": 1,
+      "maximum": 9007199254740991
     },
     "nonNegativeRevision": {
       "type": "integer",
-      "minimum": 0
+      "minimum": 0,
+      "maximum": 9007199254740991
     },
     "criterionKey": {
       "type": "string",
@@ -96,9 +98,9 @@
       "required": ["usageRevision", "runAttempts", "executionDurationSeconds", "providerTokens", "providerCostUsd"],
       "properties": {
         "usageRevision": { "$ref": "#/$defs/nonNegativeRevision" },
-        "runAttempts": { "type": "integer", "minimum": 0 },
-        "executionDurationSeconds": { "type": "integer", "minimum": 0 },
-        "providerTokens": { "type": ["integer", "null"], "minimum": 0 },
+        "runAttempts": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "executionDurationSeconds": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "providerTokens": { "type": ["integer", "null"], "minimum": 0, "maximum": 9007199254740991 },
         "providerCostUsd": { "type": ["number", "null"], "minimum": 0 }
       }
     },
@@ -169,7 +171,7 @@
       ],
       "properties": {
         "taskId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId" },
-        "taskDisplayNumber": { "type": "integer", "minimum": 1 },
+        "taskDisplayNumber": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "teamId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/teamId" },
         "roomId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId" },
         "parentTaskId": {
@@ -248,7 +250,7 @@
         "runId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId" },
         "taskId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId" },
         "agentId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId" },
-        "attemptNumber": { "type": "integer", "minimum": 1 },
+        "attemptNumber": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "retryOfRunId": {
           "oneOf": [
             { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId" },
@@ -354,7 +356,7 @@
         "evidenceRefId": { "$ref": "#/$defs/evidenceRefId" },
         "kind": { "const": "run_event" },
         "runId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId" },
-        "sequence": { "type": "integer", "minimum": 1 }
+        "sequence": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 }
       }
     },
     "messageEvidence": {
@@ -535,7 +537,7 @@
       "required": ["taskId", "taskDisplayNumber", "roomId", "title", "ownerMemberId", "lifecycleState", "schedulingState", "priority", "attentionReasons", "primaryAttention", "latestRun", "latestResultId", "latestResultCurrent", "requiredCriteriaSatisfied", "requiredCriteriaTotal", "budgetUsage", "nextAction", "updatedAt"],
       "properties": {
         "taskId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId" },
-        "taskDisplayNumber": { "type": "integer", "minimum": 1 },
+        "taskDisplayNumber": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
         "roomId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId" },
         "title": { "type": "string", "minLength": 1, "maxLength": 160 },
         "ownerMemberId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId" },
@@ -557,8 +559,8 @@
           ]
         },
         "latestResultCurrent": { "type": ["boolean", "null"] },
-        "requiredCriteriaSatisfied": { "type": "integer", "minimum": 0 },
-        "requiredCriteriaTotal": { "type": "integer", "minimum": 0 },
+        "requiredCriteriaSatisfied": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+        "requiredCriteriaTotal": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
         "budgetUsage": { "$ref": "#/$defs/budgetUsage" },
         "nextAction": { "$ref": "#/$defs/nextAction" },
         "updatedAt": { "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json" }

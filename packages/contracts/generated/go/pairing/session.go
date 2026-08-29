@@ -5,9 +5,11 @@ package pairingcontracts
 import "time"
 
 type DevicePairingSessionCreated struct {
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	CreatedAt time.Time `json:"createdAt"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ExpiresAt        time.Time                        `json:"expiresAt"`
 	OwnerMemberID    string                           `json:"ownerMemberId"`
 	PairingSessionID string                           `json:"pairingSessionId"`
@@ -37,17 +39,22 @@ type DevicePairingSessionCreateRequest struct {
 }
 
 type DevicePairingSessionOwnerProjection struct {
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ClaimedAt *time.Time `json:"claimedAt,omitempty"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ConsumedAt *time.Time `json:"consumedAt,omitempty"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	CreatedAt time.Time `json:"createdAt"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	DecidedAt *time.Time                                 `json:"decidedAt,omitempty"`
 	Device    *DevicePairingSessionOwnerProjectionDevice `json:"device,omitempty"`
 	DeviceID  *string                                    `json:"deviceId,omitempty"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ExpiresAt        time.Time                                `json:"expiresAt"`
 	OwnerMemberID    string                                   `json:"ownerMemberId"`
 	PairingAttemptID *string                                  `json:"pairingAttemptId,omitempty"`
@@ -108,7 +115,8 @@ type DevicePairingSessionClaimRequestTrust struct {
 }
 
 type DevicePairingSessionClaimed struct {
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ExpiresAt          time.Time         `json:"expiresAt"`
 	PairingAttemptID   string            `json:"pairingAttemptId"`
 	PairingSessionID   string            `json:"pairingSessionId"`
@@ -126,7 +134,8 @@ type DevicePairingSessionPollRequest struct {
 }
 
 type DevicePairingSessionPollProjection struct {
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	ExpiresAt          *time.Time                              `json:"expiresAt,omitempty"`
 	PairingAttemptID   string                                  `json:"pairingAttemptId"`
 	PairingSessionID   string                                  `json:"pairingSessionId"`
@@ -174,7 +183,8 @@ type DevicePairingPrivateCARotationOffer struct {
 	// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
 	// separately and accepted only when its canonical DER digest matches.
 	NextTrust NextTrustClass `json:"nextTrust"`
-	// RFC 3339 date-time normalized to the UTC Z suffix.
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
 	OverlapEndsAt time.Time `json:"overlapEndsAt"`
 }
 
