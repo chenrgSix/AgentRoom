@@ -72,6 +72,8 @@ interface McpCredentialRow {
   enabled: number;
 }
 
+const activityWriteIntervalMilliseconds = 5 * 60 * 1000;
+
 function hashSecret(secret: string): string {
   return createHash("sha256").update(secret).digest("hex");
 }
@@ -82,6 +84,12 @@ function newSecret(): string {
 
 function isExpired(expiresAt: string | null, now: string): boolean {
   return expiresAt !== null && Date.parse(expiresAt) <= Date.parse(now);
+}
+
+function activityWriteCutoff(now: string): string {
+  return new Date(
+    Date.parse(now) - activityWriteIntervalMilliseconds
+  ).toISOString();
 }
 
 export class AuthService {
@@ -115,8 +123,9 @@ export class AuthService {
       throw new AuthorizationError("UNAUTHENTICATED", "Invalid web session");
     }
     this.database.prepare(`
-      UPDATE web_sessions SET last_seen_at = ? WHERE session_id = ?
-    `).run(now, row.session_id);
+      UPDATE web_sessions SET last_seen_at = ?
+      WHERE session_id = ? AND last_seen_at < ?
+    `).run(now, row.session_id, activityWriteCutoff(now));
     return { userId: row.user_id, sessionId: row.session_id };
   }
 
@@ -243,8 +252,10 @@ export class AuthService {
       throw new AuthorizationError("UNAUTHENTICATED", "Invalid device credential");
     }
     this.database.prepare(`
-      UPDATE device_credentials SET last_used_at = ? WHERE credential_id = ?
-    `).run(now, row.credential_id);
+      UPDATE device_credentials SET last_used_at = ?
+      WHERE credential_id = ?
+        AND (last_used_at IS NULL OR last_used_at < ?)
+    `).run(now, row.credential_id, activityWriteCutoff(now));
     return {
       credentialId: row.credential_id,
       deviceId: row.device_id,
@@ -320,8 +331,10 @@ export class AuthService {
       throw new AuthorizationError("UNAUTHENTICATED", "Invalid MCP credential");
     }
     this.database.prepare(`
-      UPDATE mcp_credentials SET last_used_at = ? WHERE credential_id = ?
-    `).run(now, row.credential_id);
+      UPDATE mcp_credentials SET last_used_at = ?
+      WHERE credential_id = ?
+        AND (last_used_at IS NULL OR last_used_at < ?)
+    `).run(now, row.credential_id, activityWriteCutoff(now));
     return {
       credentialId: row.credential_id,
       sessionId: row.credential_id,

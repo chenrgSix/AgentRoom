@@ -29,8 +29,11 @@ Discovery, link parsing and join creation alone never grant trust.
 Web sessions and device credentials use random bearer secrets whose SHA-256
 hashes are persisted; plaintext secrets are returned only when issued. Session
 expiry, credential rotation, and revocation are checked before resolving the
-principal. The initial local Web bootstrap may issue a session directly, but
-all domain services still authorize through stable User and Member IDs.
+principal. Successful Web, Device, and MCP authentication coalesces its
+non-authoritative activity timestamp to at most one write per credential every
+five minutes; expiry and revocation are still read and enforced on every
+request. The initial local Web bootstrap may issue a session directly, but all
+domain services still authorize through stable User and Member IDs.
 
 The local bootstrap exists only in `local` auth mode, whose process must bind
 to loopback. `trusted-team` mode disables `/api/bootstrap` and requires an

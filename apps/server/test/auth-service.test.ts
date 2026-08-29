@@ -124,3 +124,78 @@ test("device credentials rotate and revoke without persisting the secret", async
     database.close();
   }
 });
+
+test("successful authentication coalesces activity timestamp writes", async () => {
+  const { auth, database } = await createFixture();
+  try {
+    const oneMinuteLater = "2026-08-22T10:01:00.000Z";
+    const sixMinutesLater = "2026-08-22T10:06:00.000Z";
+    const readTimestamp = (
+      table: "web_sessions" | "device_credentials" | "mcp_credentials",
+      column: "last_seen_at" | "last_used_at",
+      idColumn: "session_id" | "credential_id",
+      id: string
+    ) => (database.prepare(`
+      SELECT ${column} AS activity_at FROM ${table} WHERE ${idColumn} = ?
+    `).get(id) as { activity_at: string | null }).activity_at;
+
+    const web = auth.issueWebSession(userId, now, future);
+    auth.authenticateWebSession(web.secret, oneMinuteLater);
+    assert.equal(readTimestamp(
+      "web_sessions", "last_seen_at", "session_id", web.id
+    ), now);
+    auth.authenticateWebSession(web.secret, sixMinutesLater);
+    assert.equal(readTimestamp(
+      "web_sessions", "last_seen_at", "session_id", web.id
+    ), sixMinutesLater);
+
+    const device = auth.issueDeviceCredential(deviceId, now);
+    auth.authenticateDevice(device.secret, now);
+    auth.authenticateDevice(device.secret, oneMinuteLater);
+    assert.equal(readTimestamp(
+      "device_credentials", "last_used_at", "credential_id", device.id
+    ), now);
+    auth.authenticateDevice(device.secret, sixMinutesLater);
+    assert.equal(readTimestamp(
+      "device_credentials", "last_used_at", "credential_id", device.id
+    ), sixMinutesLater);
+
+    const agentId = "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6";
+    new CoreRepository(database).createAgent({
+      agentId,
+      teamId,
+      ownerMemberId: memberId,
+      deviceId: null,
+      name: "Reviewer",
+      role: "Reviewer",
+      integrationMode: "manual",
+      capabilities: {
+        supportsHandoff: true,
+        supportsInterrupt: false,
+        supportsResume: false,
+        supportsStart: false,
+        supportsStreaming: false
+      },
+      enabled: true,
+      presence: "manual",
+      createdAt: now,
+      updatedAt: now
+    });
+    const mcp = auth.issueMcpCredential(
+      auth.authenticateWebSession(web.secret, now),
+      agentId,
+      now
+    );
+    auth.authenticateMcp(mcp.secret, now);
+    auth.authenticateMcp(mcp.secret, oneMinuteLater);
+    assert.equal(readTimestamp(
+      "mcp_credentials", "last_used_at", "credential_id", mcp.id
+    ), now);
+    auth.authenticateMcp(mcp.secret, sixMinutesLater);
+    assert.equal(readTimestamp(
+      "mcp_credentials", "last_used_at", "credential_id", mcp.id
+    ), sixMinutesLater);
+  } finally {
+    database.close();
+  }
+});
