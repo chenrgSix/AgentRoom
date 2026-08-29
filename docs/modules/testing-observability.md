@@ -468,6 +468,17 @@ schema-v3 physical record was captured but failed the later temporal-binding
 audit, so those tasks require a fresh reviewed schema-v4 record from the same
 physical Device.
 
+`QA-033` records the Owner-authorized stable `v0.4.0` admission boundary. The
+[pre-publication record](../acceptance/qa-033-v0.4.0.md) uses the released
+`v0.4.0-qa031.1` macOS arm64 Desktop and CLI packages against a version-aligned
+physical Central, a fresh dedicated Team/Room/Device, canonical Device pairing,
+exact-origin scoped private trust, a real Codex app-server probe, one Run queued
+while offline and completed after same-Device reconnect, and one further Run
+completed on the same online connection. This owner-selected same-host smoke is
+sufficient to begin the stable release workflow, but it is deliberately not a
+schema-v4 physical record: `QA-002`, `QA-028`, and `QA-030` remain blocked and
+visible after stable publication.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
