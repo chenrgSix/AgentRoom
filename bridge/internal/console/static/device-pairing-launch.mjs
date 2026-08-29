@@ -49,3 +49,24 @@ export function pairingOriginFromLink(link) {
   ) return "";
   return origin.origin;
 }
+
+export function configuredPairingLaunchView(link, state) {
+  const origin = pairingOriginFromLink(link);
+  if (!origin || !state?.configured || state.enrollment?.active) {
+    return {show: false, mode: "", canConfirm: false, showStop: false, blockedReason: ""};
+  }
+  const sameOrigin = origin === state.serverUrl;
+  const activeRuns = state.agents?.some((agent) => agent.activeRuns > 0) || false;
+  const blockedReason = !sameOrigin
+    ? "该配对链接不属于当前 Central；不会覆盖现有连接。"
+    : activeRuns
+      ? "请等待当前 Team 任务结束；重新配对不会中断正在运行的任务。"
+      : state.enrollment?.blockedReason || "";
+  return {
+    show: true,
+    mode: state.paired ? "replace" : "complete",
+    canConfirm: sameOrigin && Boolean(state.enrollment?.canRequest),
+    showStop: sameOrigin && Boolean(state.bridgeRunning) && !activeRuns,
+    blockedReason
+  };
+}

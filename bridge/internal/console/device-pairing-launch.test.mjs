@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  configuredPairingLaunchView,
   pairingLinkFromHash,
   pairingOriginFromLink
 } from "./static/device-pairing-launch.mjs";
@@ -43,4 +44,61 @@ test("pairing origin prefill rejects ambiguous or unsafe link origins", () => {
     link.replace("&pairingSessionId=", "&origin=https%3A%2F%2Fother.example&pairingSessionId="),
     link.replace("&expiresAt=", "&unexpected=value&expiresAt=")
   ]) assert.equal(pairingOriginFromLink(candidate), "");
+});
+
+test("configured pairing launch requires an explicit idle same-Central confirmation", () => {
+  const base = {
+    configured: true,
+    paired: true,
+    bridgeRunning: false,
+    serverUrl: "https://team.example",
+    enrollment: {active: false, canRequest: true, blockedReason: ""}
+  };
+  assert.deepEqual(configuredPairingLaunchView(link, base), {
+    show: true,
+    mode: "replace",
+    canConfirm: true,
+    showStop: false,
+    blockedReason: ""
+  });
+  assert.deepEqual(configuredPairingLaunchView(link, {
+    ...base,
+    bridgeRunning: true,
+    enrollment: {active: false, canRequest: false, blockedReason: "请先停止 Bridge。"}
+  }), {
+    show: true,
+    mode: "replace",
+    canConfirm: false,
+    showStop: true,
+    blockedReason: "请先停止 Bridge。"
+  });
+  const active = configuredPairingLaunchView(link, {
+    ...base,
+    bridgeRunning: true,
+    agents: [{activeRuns: 1}],
+    enrollment: {active: false, canRequest: false, blockedReason: "请先停止 Bridge。"}
+  });
+  assert.equal(active.showStop, false);
+  assert.match(active.blockedReason, /不会中断/);
+  assert.equal(configuredPairingLaunchView(link, {...base, paired: false}).mode, "complete");
+});
+
+test("configured pairing launch never replaces a different Central or an active attempt", () => {
+  const base = {
+    configured: true,
+    paired: true,
+    bridgeRunning: false,
+    serverUrl: "https://other.example",
+    enrollment: {active: false, canRequest: true, blockedReason: ""}
+  };
+  const different = configuredPairingLaunchView(link, base);
+  assert.equal(different.show, true);
+  assert.equal(different.canConfirm, false);
+  assert.match(different.blockedReason, /不属于当前 Central/);
+  assert.equal(configuredPairingLaunchView(link, {
+    ...base,
+    serverUrl: "https://team.example",
+    enrollment: {active: true, canRequest: false, blockedReason: ""}
+  }).show, false);
+  assert.equal(configuredPairingLaunchView(link, {...base, configured: false}).show, false);
 });

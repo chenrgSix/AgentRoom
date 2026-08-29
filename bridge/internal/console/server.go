@@ -370,6 +370,7 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("GET /api/runtime-discovery", s.authorize(s.refreshRuntimeDiscovery))
 	mux.HandleFunc("POST /api/enrollment/start", s.authorize(s.startEnrollment))
 	mux.HandleFunc("POST /api/device-pairing/start", s.authorize(s.startDevicePairing))
+	mux.HandleFunc("POST /api/device-pairing/restart", s.authorize(s.restartDevicePairing))
 	mux.HandleFunc("POST /api/enrollment/restart", s.authorize(s.restartEnrollment))
 	mux.HandleFunc("POST /api/enrollment/cancel", s.authorize(s.cancelEnrollment))
 	mux.HandleFunc("PUT /api/config", s.authorize(s.updateConfig))
@@ -731,6 +732,7 @@ func (s *Service) startDevicePairing(response http.ResponseWriter, request *http
 		writeError(response, http.StatusBadRequest, "Provide exactly one Device pairing link or short code")
 		return
 	}
+	linkServerURL := ""
 	if link != "" {
 		parsed, err := pairing.ParseSessionLink(link)
 		if err != nil {
@@ -738,6 +740,7 @@ func (s *Service) startDevicePairing(response http.ResponseWriter, request *http
 			return
 		}
 		input.ServerURL = parsed.ServerURL
+		linkServerURL = parsed.ServerURL
 	}
 	s.mu.Lock()
 	if reason := s.enrollmentBlockedReasonLocked(); reason != "" {
@@ -752,6 +755,11 @@ func (s *Service) startDevicePairing(response http.ResponseWriter, request *http
 	}
 	configuredBefore := s.configuration != nil
 	configuration := s.configuration
+	if configuration != nil && linkServerURL != "" && configuration.ServerURL != linkServerURL {
+		s.mu.Unlock()
+		writeError(response, http.StatusConflict, "Device pairing link origin does not match the configured Central")
+		return
+	}
 	if configuration == nil {
 		built, err := buildConfig(input.EnrollmentInput, s.options.DataDir)
 		if err != nil {
@@ -785,7 +793,7 @@ func (s *Service) startDevicePairing(response http.ResponseWriter, request *http
 	s.state.Enrollment.PairingState = "claiming"
 	s.mu.Unlock()
 
-	go s.pairDevice(ctx, *configuration, configuredBefore, epoch, pairing.SessionInput{
+	go s.pairDevice(ctx, *configuration, configuredBefore, false, epoch, pairing.SessionInput{
 		Link: link, ShortCode: shortCode,
 	})
 	writeJSON(response, http.StatusAccepted, map[string]string{"status": "pairing"})
@@ -809,6 +817,7 @@ func (s *Service) pairDevice(
 	ctx context.Context,
 	configuration config.Config,
 	configuredBefore bool,
+	recovery bool,
 	epoch uint64,
 	input pairing.SessionInput,
 ) {
@@ -824,7 +833,7 @@ func (s *Service) pairDevice(
 		s.state.Enrollment.VerificationPhrase = status.VerificationPhrase
 		s.state.Enrollment.PairingExpiresAt = status.ExpiresAt.Format(time.RFC3339Nano)
 	})
-	s.finishEnrollment(ctx, configuration, credential, err, configuredBefore, false, epoch)
+	s.finishEnrollment(ctx, configuration, credential, err, configuredBefore, recovery, epoch)
 }
 
 func (s *Service) finishEnrollment(

@@ -117,6 +117,21 @@ bootstrap. Manual short-code recovery still requires an already supplied and
 trusted Central address because the short code intentionally contains no
 origin.
 
+`BRG-050` keeps installed Device-pairing links usable after local
+initialization. A configured but not yet paired Bridge presents an explicit
+continuation confirmation and reuses its saved local Runtime, Workspace and
+privacy settings. A Bridge that already owns a Device presents a replacement
+confirmation bound to the displayed `expectedDeviceId`; it must be stopped and
+fully drained, and the link must name the exact currently configured Central.
+The authenticated `POST /api/device-pairing/restart` route then reuses the
+existing isolated re-enrollment transaction: the old identity and data remain
+active until Owner approval returns a complete new identity and the owner-only
+sibling data directory is atomically selected. Failure and cancellation keep
+the old pairing usable. A different-Central link cannot overwrite connection
+settings or carry the old Server Token elsewhere; changing Central remains a
+separate explicit connection/migration decision. Closing the confirmation
+discards the pending fragment proof from the WebView state.
+
 ## Local Configuration Console
 
 `convenewire-bridge console` starts the recommended client setup surface on

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/pairing"
@@ -30,6 +31,11 @@ type EnrollmentView struct {
 type ReEnrollmentInput struct {
 	ConfirmNewDevice bool   `json:"confirmNewDevice"`
 	ExpectedDeviceID string `json:"expectedDeviceId"`
+}
+
+type ReDevicePairingInput struct {
+	ReEnrollmentInput
+	PairingLink string `json:"pairingLink"`
 }
 
 func (s *Service) enrollmentBlockedReasonLocked() string {
@@ -100,6 +106,53 @@ func (s *Service) restartEnrollment(response http.ResponseWriter, request *http.
 	ctx, epoch := s.beginEnrollmentLocked(true)
 	go s.enroll(ctx, configuration, true, true, epoch)
 	writeJSON(response, http.StatusAccepted, map[string]string{"status": "joining"})
+}
+
+func (s *Service) restartDevicePairing(response http.ResponseWriter, request *http.Request) {
+	if s.dependencies.PairDevice == nil {
+		writeError(response, http.StatusNotImplemented, "Device pairing is not available in this client")
+		return
+	}
+	var input ReDevicePairingInput
+	if err := decodeJSON(request, &input); err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+	if !input.ConfirmNewDevice || input.ExpectedDeviceID == "" {
+		writeError(response, http.StatusBadRequest, "Explicit new-Device confirmation and expectedDeviceId are required")
+		return
+	}
+	link := strings.TrimSpace(input.PairingLink)
+	parsed, err := pairing.ParseSessionLink(link)
+	if err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.configuration == nil || s.credential == nil || s.credential.DeviceID != input.ExpectedDeviceID {
+		writeError(response, http.StatusConflict, "The paired Device changed; reload before requesting a new pairing")
+		return
+	}
+	if parsed.ServerURL != s.configuration.ServerURL {
+		writeError(response, http.StatusConflict, "Device pairing link origin does not match the configured Central")
+		return
+	}
+	if reason := s.enrollmentBlockedReasonLocked(); reason != "" {
+		writeError(response, http.StatusConflict, reason)
+		return
+	}
+	configuration := cloneConfiguration(*s.configuration)
+	if err := s.verifyPairingUnchangedLocked(configuration); err != nil {
+		writeError(response, http.StatusConflict, err.Error())
+		return
+	}
+	ctx, epoch := s.beginEnrollmentLocked(true)
+	s.state.Enrollment.PairingMethod = "link"
+	s.state.Enrollment.PairingState = "claiming"
+	go s.pairDevice(ctx, configuration, true, true, epoch, pairing.SessionInput{Link: link})
+	writeJSON(response, http.StatusAccepted, map[string]string{"status": "pairing"})
 }
 
 func (s *Service) verifyPairingUnchangedLocked(expected config.Config) error {

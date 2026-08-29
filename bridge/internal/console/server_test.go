@@ -524,7 +524,7 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="edit-reasoning-consent"`, `id="reasoning-consent-guidance"`,
 		`id="agent-discovery-status"`, `id="agent-discovery-help"`, `id="agent-install-link"`,
 		`id="device-pairing-link"`, `id="device-pairing-short-code"`,
-		`id="submit-device-pairing"`, `id="approval-title"`,
+		`id="submit-device-pairing"`, `id="approval-title"`, `id="stop-for-pairing"`,
 		`id="codex-session-guide"`, `id="codex-session-guide-title"`,
 		`id="close-codex-session-guide"`, `id="acknowledge-codex-session-guide"`,
 	} {
@@ -554,11 +554,13 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		!bytes.Contains(javascript, []byte(`elements["agent-use-detected"]`)) {
 		t.Fatal("draft Runtime preflight and detected-value action must remain explicit")
 	}
-	if bytes.Count(javascript, []byte(`request("/api/device-pairing/start"`)) != 1 ||
+	if bytes.Count(javascript, []byte(`request("/api/device-pairing/start"`)) != 2 ||
+		bytes.Count(javascript, []byte(`request("/api/device-pairing/restart"`)) != 1 ||
 		!bytes.Contains(html, []byte("配对只发送设备名称、平台和 Bridge 版本")) ||
 		!bytes.Contains(javascript, []byte(`pairingLinkFromHash(window.location.hash)`)) ||
-		!bytes.Contains(javascript, []byte(`elements["server-url"].value = pairingOriginFromLink(suggestedPairingLink)`)) ||
-		!bytes.Contains(javascript, []byte(`elements["device-pairing-link"].addEventListener("input"`)) {
+		!bytes.Contains(javascript, []byte(`elements["server-url"].value = pairingOriginFromLink(pendingPairingLink)`)) ||
+		!bytes.Contains(javascript, []byte(`elements["device-pairing-link"].addEventListener("input"`)) ||
+		!bytes.Contains(javascript, []byte(`renderConfiguredPairingLaunch(state)`)) {
 		t.Fatal("Device pairing must remain one explicit local action with a closed metadata disclosure")
 	}
 	presentation, err := staticFiles.ReadFile("static/bridge-presentation.mjs")

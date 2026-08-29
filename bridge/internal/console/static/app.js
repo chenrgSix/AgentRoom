@@ -1,5 +1,6 @@
 import { pairingView } from "./pairing-view.mjs";
 import {
+  configuredPairingLaunchView,
   pairingLinkFromHash,
   pairingOriginFromLink
 } from "./device-pairing-launch.mjs";
@@ -23,7 +24,9 @@ const elements = Object.fromEntries([
   "rotating-management-code-expiry", "save-agent-provisioning", "agent-provisioning-result",
   "pairing-status", "pairing-binding", "pairing-guidance", "pairing-blocked", "pairing-backup",
   "request-enrollment", "start-existing-pairing", "join-copy-result",
-  "pairing-modal-backdrop", "close-pairing-modal", "cancel-pairing-modal", "confirm-reenrollment", "pairing-modal-error",
+  "pairing-modal-backdrop", "pairing-modal-title", "pairing-modal-guidance", "pairing-modal-retention",
+  "pairing-modal-blocked", "close-pairing-modal", "cancel-pairing-modal", "stop-for-pairing",
+  "confirm-reenrollment", "pairing-modal-error",
   "current-server-token", "current-server-trust",
   "current-reasoning-sharing", "share-reasoning-summaries", "connection-share-reasoning-summaries",
   "stop-for-reasoning-consent", "edit-reasoning-consent", "reasoning-consent-guidance",
@@ -68,16 +71,16 @@ const sessionGuide = createSessionGuideController(
 );
 
 const query = new URLSearchParams(window.location.search);
-const suggestedPairingLink = pairingLinkFromHash(window.location.hash);
+let pendingPairingLink = pairingLinkFromHash(window.location.hash);
 if (query.get("token")) {
   sessionStorage.setItem("agent-room-console-token", query.get("token"));
   history.replaceState(null, "", window.location.pathname);
 } else if (window.location.hash) {
   history.replaceState(null, "", window.location.pathname);
 }
-if (suggestedPairingLink) {
-  elements["device-pairing-link"].value = suggestedPairingLink;
-  elements["server-url"].value = pairingOriginFromLink(suggestedPairingLink);
+if (pendingPairingLink) {
+  elements["device-pairing-link"].value = pendingPairingLink;
+  elements["server-url"].value = pairingOriginFromLink(pendingPairingLink);
 }
 const token = sessionStorage.getItem("agent-room-console-token") || "";
 if (!token) elements["auth-warning"].classList.remove("hidden");
@@ -593,6 +596,27 @@ function render(state) {
   elements["submit-enrollment"].textContent = "使用旧版加入码";
   elements["submit-enrollment"].disabled = waiting || enrollmentActionRunning || draftPreflightRunning;
   elements["submit-device-pairing"].disabled = waiting || enrollmentActionRunning || draftPreflightRunning;
+  renderConfiguredPairingLaunch(state);
+}
+
+function renderConfiguredPairingLaunch(state) {
+  const view = configuredPairingLaunchView(pendingPairingLink, state);
+  if (!view.show) return;
+  expectedPairingDeviceId = state.paired ? state.deviceId : null;
+  elements["pairing-modal-title"].textContent = view.mode === "replace"
+    ? "使用链接重新配对"
+    : "继续未完成的 Device 配对";
+  elements["pairing-modal-guidance"].textContent = view.mode === "replace"
+    ? "该链接会向当前 Central 申请新的 Device 身份。只有确认短语一致并由 Owner 批准后，Bridge 才会切换身份。"
+    : "这台 Bridge 已保存本机配置但还没有 Device 凭据。确认后将使用该链接继续配对。";
+  elements["pairing-modal-retention"].textContent = view.mode === "replace"
+    ? "旧身份、旧数据与全部本机 Agent 配置在新身份安全保存前保持不变；失败或取消仍可使用旧配对。"
+    : "本机 Runtime、Workspace 与隐私设置保持不变；配对链接不会覆盖它们。";
+  elements["pairing-modal-blocked"].textContent = view.blockedReason;
+  elements["pairing-modal-blocked"].classList.toggle("hidden", !view.blockedReason);
+  elements["stop-for-pairing"].classList.toggle("hidden", !view.showStop);
+  elements["confirm-reenrollment"].disabled = enrollmentActionRunning || !view.canConfirm;
+  elements["pairing-modal-backdrop"].classList.remove("hidden");
 }
 
 async function refresh() {
@@ -659,6 +683,44 @@ function closePairingModal() {
   if (enrollmentActionRunning) return;
   elements["pairing-modal-backdrop"].classList.add("hidden");
   expectedPairingDeviceId = null;
+  if (pendingPairingLink) {
+    pendingPairingLink = "";
+    elements["device-pairing-link"].value = "";
+  }
+}
+
+async function requestConfiguredDevicePairing() {
+  if (enrollmentActionRunning || !pendingPairingLink || !currentState?.configured) return;
+  enrollmentActionRunning = true;
+  elements["confirm-reenrollment"].disabled = true;
+  showError(null);
+  try {
+    if (currentState.paired) {
+      await request("/api/device-pairing/restart", {
+        method: "POST",
+        body: JSON.stringify({
+          pairingLink: pendingPairingLink,
+          confirmNewDevice: true,
+          expectedDeviceId: currentState.deviceId
+        })
+      });
+    } else {
+      await request("/api/device-pairing/start", {
+        method: "POST",
+        body: JSON.stringify({pairingLink: pendingPairingLink})
+      });
+    }
+    pendingPairingLink = "";
+    elements["device-pairing-link"].value = "";
+    elements["pairing-modal-backdrop"].classList.add("hidden");
+    expectedPairingDeviceId = null;
+    await refresh();
+  } catch (error) {
+    showError(error);
+  } finally {
+    enrollmentActionRunning = false;
+    if (currentState) renderConfiguredPairingLaunch(currentState);
+  }
 }
 async function requestEnrollment(expectedDeviceId = null) {
   if (enrollmentActionRunning) return;
@@ -685,8 +747,15 @@ async function requestEnrollment(expectedDeviceId = null) {
 }
 elements["request-enrollment"].addEventListener("click", () => {
   if (currentState.paired) {
+    pendingPairingLink = "";
     expectedPairingDeviceId = currentState.deviceId;
     showError(null);
+    elements["pairing-modal-title"].textContent = "申请新审批码";
+    elements["pairing-modal-guidance"].textContent = "这不是普通重连。审批成功后，将在审批所选 Team 中创建新的 Device 和 Agent 身份；旧 Agent 不会自动迁移或撤销，也不会恢复旧 Team 的访问权限。";
+    elements["pairing-modal-retention"].textContent = "保留所有本机智能体配置。新凭据保存成功前不替换旧配对；成功后旧数据仍保留，并生成 previous-bridge.json 备份。";
+    elements["pairing-modal-blocked"].classList.add("hidden");
+    elements["stop-for-pairing"].classList.add("hidden");
+    elements["confirm-reenrollment"].disabled = false;
     elements["pairing-modal-backdrop"].classList.remove("hidden");
     elements["cancel-pairing-modal"].focus();
   } else {
@@ -694,7 +763,20 @@ elements["request-enrollment"].addEventListener("click", () => {
   }
 });
 elements["confirm-reenrollment"].addEventListener("click", () => {
-  if (expectedPairingDeviceId) void requestEnrollment(expectedPairingDeviceId);
+  if (pendingPairingLink) void requestConfiguredDevicePairing();
+  else if (expectedPairingDeviceId) void requestEnrollment(expectedPairingDeviceId);
+});
+elements["stop-for-pairing"].addEventListener("click", async () => {
+  elements["stop-for-pairing"].disabled = true;
+  showError(null);
+  try {
+    await request("/api/bridge/stop", {method: "POST"});
+    await refresh();
+  } catch (error) {
+    showError(error);
+  } finally {
+    elements["stop-for-pairing"].disabled = false;
+  }
 });
 for (const id of ["close-pairing-modal", "cancel-pairing-modal"]) {
   elements[id].addEventListener("click", closePairingModal);

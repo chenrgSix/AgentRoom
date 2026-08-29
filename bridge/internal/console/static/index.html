@@ -320,11 +320,13 @@
           <div><p class="eyebrow">NEW DEVICE IDENTITY</p><h2 id="pairing-modal-title">申请新审批码</h2></div>
           <button class="icon-button" id="close-pairing-modal" type="button" aria-label="关闭">×</button>
         </div>
-        <p class="pairing-guidance">这不是普通重连。审批成功后，将在审批所选 Team 中创建新的 Device 和 Agent 身份；旧 Agent 不会自动迁移或撤销，也不会恢复旧 Team 的访问权限。</p>
-        <p class="pairing-guidance">保留所有本机智能体配置。新凭据保存成功前不替换旧配对；成功后旧数据仍保留，并生成 previous-bridge.json 备份。</p>
+        <p class="pairing-guidance" id="pairing-modal-guidance">这不是普通重连。审批成功后，将在审批所选 Team 中创建新的 Device 和 Agent 身份；旧 Agent 不会自动迁移或撤销，也不会恢复旧 Team 的访问权限。</p>
+        <p class="pairing-guidance" id="pairing-modal-retention">保留所有本机智能体配置。新凭据保存成功前不替换旧配对；成功后旧数据仍保留，并生成 previous-bridge.json 备份。</p>
+        <p class="pairing-guidance hidden" id="pairing-modal-blocked"></p>
         <p class="inline-error hidden" id="pairing-modal-error" role="alert"></p>
         <div class="actions modal-actions">
           <button class="secondary" id="cancel-pairing-modal" type="button">保留现有配对</button>
+          <button class="secondary hidden" id="stop-for-pairing" type="button">停止 Bridge 后继续</button>
           <button class="primary" id="confirm-reenrollment" type="button">确认申请新身份</button>
         </div>
       </section>

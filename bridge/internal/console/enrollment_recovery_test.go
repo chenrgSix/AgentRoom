@@ -69,6 +69,8 @@ func approvedRecoveryCredential(configuration config.Config) pairing.Credential 
 	}
 }
 
+var recoveryPairingLink = "convenewire://pair-device?origin=http%3A%2F%2F127.0.0.1%3A3000&pairingSessionId=pairing_recovery123&expiresAt=2099-08-29T12%3A00%3A00Z#claimSecret=" + strings.Repeat("s", 43)
+
 func recoveryRequest(t *testing.T, serverURL string, service *Service, expectedStatus int) {
 	t.Helper()
 	response := consoleRequest(t, serverURL, service.Token(), http.MethodPost, "/api/enrollment/restart", ReEnrollmentInput{
@@ -172,6 +174,160 @@ func TestReEnrollmentPreservesOldDataAndAtomicallySelectsFreshIdentity(t *testin
 	edited, err := config.Load(service.options.ConfigPath)
 	if err != nil || edited.DataDir != current.DataDir {
 		t.Fatal("legacy configuration update restored the wrong pairing generation")
+	}
+}
+
+func TestDevicePairingReEnrollmentPreservesOldDataAndRequiresOwnerApproval(t *testing.T) {
+	approved := make(chan struct{})
+	dependencies := inertDependencies()
+	dependencies.PairDevice = func(
+		ctx context.Context,
+		configuration config.Config,
+		input pairing.SessionInput,
+		show func(pairing.SessionStatus),
+	) (pairing.Credential, error) {
+		if input.Link != recoveryPairingLink || input.ShortCode != "" ||
+			configuration.ServerURL != "http://127.0.0.1:3000" {
+			t.Fatalf("unexpected recovery pairing input: %#v %#v", configuration, input)
+		}
+		show(pairing.SessionStatus{
+			PairingSessionID: "pairing_recovery123", State: "claimed",
+			VerificationPhrase: "VIOLET-RIVER-42", ExpiresAt: time.Now().Add(time.Minute),
+		})
+		select {
+		case <-approved:
+			return approvedRecoveryCredential(configuration), nil
+		case <-ctx.Done():
+			return pairing.Credential{}, ctx.Err()
+		}
+	}
+	service, previous := pairedRecoveryService(t, dependencies)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	response := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/device-pairing/restart", ReDevicePairingInput{
+		ReEnrollmentInput: ReEnrollmentInput{ConfirmNewDevice: true, ExpectedDeviceID: "device_original"},
+		PairingLink:       recoveryPairingLink,
+	})
+	body, _ := io.ReadAll(response.Body)
+	response.Body.Close()
+	if response.StatusCode != http.StatusAccepted {
+		t.Fatalf("expected Device pairing recovery to start: %d %s", response.StatusCode, body)
+	}
+	waitState(t, service, func(state State) bool {
+		return state.Enrollment.Recovery && state.Enrollment.PairingState == "claimed" &&
+			state.Enrollment.VerificationPhrase == "VIOLET-RIVER-42"
+	})
+	beforeApproval, err := config.Load(service.options.ConfigPath)
+	if err != nil || beforeApproval.DataDir != previous.DataDir || service.State().DeviceID != "device_original" {
+		t.Fatalf("pending Device pairing replaced the old identity: %#v %v", beforeApproval, err)
+	}
+
+	close(approved)
+	state := waitState(t, service, func(state State) bool {
+		return state.BridgeRunning && state.DeviceID == "device_replacement" &&
+			state.Enrollment.PairingState == "consumed"
+	})
+	current, err := config.Load(service.options.ConfigPath)
+	if err != nil || current.DataDir == previous.DataDir ||
+		!reflect.DeepEqual(current.Agents, previous.Agents) || current.ServerURL != previous.ServerURL {
+		t.Fatalf("Device pairing recovery did not preserve local configuration: %#v %v", current, err)
+	}
+	serialized, _ := json.Marshal(state)
+	if bytes.Contains(serialized, []byte(strings.Repeat("s", 43))) {
+		t.Fatal("Device pairing recovery projected the deep-link proof")
+	}
+}
+
+func TestDevicePairingReEnrollmentRejectsBusyImplicitOrDifferentCentralReplacement(t *testing.T) {
+	dependencies := inertDependencies()
+	dependencies.PairDevice = func(
+		context.Context,
+		config.Config,
+		pairing.SessionInput,
+		func(pairing.SessionStatus),
+	) (pairing.Credential, error) {
+		t.Fatal("rejected recovery reached Device pairing")
+		return pairing.Credential{}, nil
+	}
+	service, previous := pairedRecoveryService(t, dependencies)
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	requests := []struct {
+		input ReDevicePairingInput
+		code  int
+	}{
+		{ReDevicePairingInput{PairingLink: recoveryPairingLink}, http.StatusBadRequest},
+		{ReDevicePairingInput{
+			ReEnrollmentInput: ReEnrollmentInput{ConfirmNewDevice: true, ExpectedDeviceID: "device_other"},
+			PairingLink:       recoveryPairingLink,
+		}, http.StatusConflict},
+		{ReDevicePairingInput{
+			ReEnrollmentInput: ReEnrollmentInput{ConfirmNewDevice: true, ExpectedDeviceID: "device_original"},
+			PairingLink: strings.Replace(
+				recoveryPairingLink,
+				"http%3A%2F%2F127.0.0.1%3A3000",
+				"https%3A%2F%2Fother.example",
+				1,
+			),
+		}, http.StatusConflict},
+	}
+	for _, item := range requests {
+		response := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/device-pairing/restart", item.input)
+		response.Body.Close()
+		if response.StatusCode != item.code {
+			t.Fatalf("unsafe Device pairing recovery returned %d, want %d", response.StatusCode, item.code)
+		}
+	}
+	ordinary := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/device-pairing/start", DevicePairingInput{
+		PairingLink: recoveryPairingLink,
+	})
+	ordinary.Body.Close()
+	if ordinary.StatusCode != http.StatusConflict {
+		t.Fatalf("ordinary Device pairing replaced an existing identity: %d", ordinary.StatusCode)
+	}
+
+	if _, err := service.StartBridge(); err != nil {
+		t.Fatal(err)
+	}
+	busy := consoleRequest(t, server.URL, service.Token(), http.MethodPost, "/api/device-pairing/restart", ReDevicePairingInput{
+		ReEnrollmentInput: ReEnrollmentInput{ConfirmNewDevice: true, ExpectedDeviceID: "device_original"},
+		PairingLink:       recoveryPairingLink,
+	})
+	busy.Body.Close()
+	if busy.StatusCode != http.StatusConflict {
+		t.Fatalf("running Bridge accepted Device pairing replacement: %d", busy.StatusCode)
+	}
+	service.StopBridge()
+	waitState(t, service, func(state State) bool { return state.Enrollment.CanRequest })
+
+	unpairedDirectory := t.TempDir()
+	unpairedConfig := cloneConfiguration(previous)
+	unpairedConfig.DataDir = filepath.Join(unpairedDirectory, "data")
+	unpairedConfigPath := filepath.Join(unpairedDirectory, "bridge.json")
+	if err := config.Save(unpairedConfigPath, unpairedConfig); err != nil {
+		t.Fatal(err)
+	}
+	unpairedService, err := New(Options{ConfigPath: unpairedConfigPath, Token: "unpaired-console-token"}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unpairedService.Close()
+	unpairedServer := httptest.NewServer(unpairedService.Handler())
+	defer unpairedServer.Close()
+	differentOriginLink := strings.Replace(
+		recoveryPairingLink,
+		"http%3A%2F%2F127.0.0.1%3A3000",
+		"https%3A%2F%2Fother.example",
+		1,
+	)
+	unpaired := consoleRequest(t, unpairedServer.URL, unpairedService.Token(), http.MethodPost, "/api/device-pairing/start", DevicePairingInput{
+		PairingLink: differentOriginLink,
+	})
+	unpaired.Body.Close()
+	if unpaired.StatusCode != http.StatusConflict {
+		t.Fatalf("configured unpaired Bridge accepted a different Central: %d", unpaired.StatusCode)
 	}
 }
 
