@@ -13,6 +13,41 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-25T09:00:00.000Z";
 
+test("shared repository boundary publishes only after commit and drops rollback work", () => {
+  const database = openDatabase(":memory:");
+  const transactions = new SqliteTransactionBoundary(database);
+  database.exec("CREATE TABLE boundary_events (value TEXT NOT NULL)");
+  const published: string[] = [];
+
+  transactions.immediate(() => {
+    database.prepare("INSERT INTO boundary_events (value) VALUES (?)").run("ok");
+    transactions.afterCommit(() => published.push("run"), {
+      key: "room_test",
+      priority: 1
+    });
+    transactions.immediate(() => {
+      transactions.afterCommit(() => {
+        assert.equal(database.inTransaction, false);
+        published.push("room");
+      }, { key: "room_test", priority: 2 });
+    });
+    assert.deepEqual(published, []);
+  });
+  assert.deepEqual(published, ["room"]);
+
+  assert.throws(() => transactions.immediate(() => {
+    database.prepare("INSERT INTO boundary_events (value) VALUES (?)").run("no");
+    transactions.afterCommit(() => published.push("rolled-back"));
+    throw new Error("rollback afterCommit");
+  }), /rollback afterCommit/u);
+  assert.deepEqual(published, ["room"]);
+  assert.deepEqual(
+    database.prepare("SELECT value FROM boundary_events ORDER BY rowid").all(),
+    [{ value: "ok" }]
+  );
+  database.close();
+});
+
 test("shared repository boundary rolls back cross-aggregate writes", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-uow-"));
   const databasePath = path.join(directory, "server.sqlite");

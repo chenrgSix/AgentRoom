@@ -26,10 +26,16 @@ export type AppendMessageInput = Omit<
   taskId?: string;
 };
 
+export interface CommittedMessageChange {
+  roomId: string;
+  teamId: string;
+}
+
 export class MessageRepository {
   public constructor(
     private readonly database: Database.Database,
-    private readonly transactions = new SqliteTransactionBoundary(database)
+    private readonly transactions = new SqliteTransactionBoundary(database),
+    private readonly onCommitted?: (change: CommittedMessageChange) => void
   ) {}
 
   public append(message: AppendMessageInput): MessageRecord {
@@ -174,6 +180,19 @@ export class MessageRepository {
           ordinal,
           mention.targetAgentId,
           mention.displayLabel
+        );
+      }
+
+      if (this.onCommitted) {
+        this.transactions.afterCommit(
+          () => this.onCommitted?.({
+            roomId: taskMessage.roomId,
+            teamId: room.team_id
+          }),
+          {
+            key: `team-room-change:${room.team_id}:${taskMessage.roomId}`,
+            priority: 2
+          }
         );
       }
 

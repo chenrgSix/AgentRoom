@@ -172,7 +172,14 @@ export async function createServerApp(
   await migrateDatabase(options.databasePath);
   const database = openDatabase(options.databasePath);
   const transactions = new SqliteTransactionBoundary(database);
-  const core = new CoreRepository(database, transactions);
+  const teamChanges = new TeamChangeService();
+  const core = new CoreRepository(
+    database,
+    transactions,
+    ({ teamId, roomId }) => {
+      teamChanges.notify(teamId, { kind: "room", roomId });
+    }
+  );
   const auth = new AuthService(database);
   const bridgeServerToken = normalizeBridgeServerToken(options.bridgeServerToken);
   const webAuth = options.webAuth ?? { mode: "local" as const };
@@ -203,7 +210,6 @@ export async function createServerApp(
     options.anonymousRateLimit?.windowMilliseconds
   );
   const teamRooms = new TeamRoomService(core, auth);
-  const teamChanges = new TeamChangeService();
   const registry = new MemberDeviceService(core, auth);
   const agents = new AgentService(core, auth);
   const agentProvisioning = new AgentProvisioningService(
@@ -214,7 +220,7 @@ export async function createServerApp(
   );
   const presence = new PresenceService(core, auth);
   const messages = new MessageService(core, auth);
-  const teamWait = new TeamWaitService(core, auth);
+  const teamWait = new TeamWaitService(core, auth, teamChanges);
   const pairing = new BridgePairingService(database, core, auth);
   const devicePairingSessions = new DevicePairingSessionService(
     database,
@@ -223,7 +229,13 @@ export async function createServerApp(
     deploymentTrust
   );
   const clock = options.clock ?? (() => new Date().toISOString());
-  const runRepository = new RunRepository(database);
+  const runRepository = new RunRepository(
+    database,
+    transactions,
+    ({ kind, roomId, teamId }) => {
+      teamChanges.notify(teamId, { kind, roomId });
+    }
+  );
   const taskRepository = new AgentTaskRepository(database);
   const tasks = new AgentTaskService(taskRepository, core, auth);
   const artifactRepository = new ArtifactRepository(database, transactions);
@@ -635,16 +647,11 @@ export async function createServerApp(
         const task = taskRepository.get(params.taskId);
         changedTeamId = task ? core.getRoom(task.roomId)?.teamId : undefined;
       }
-      if (changedTeamId) {
-        const roomId = params.roomId;
-        const roomTimelineMutation =
-          request.routeOptions.url === "/api/rooms/:roomId/messages";
-        teamChanges.notify(
-          changedTeamId,
-          roomTimelineMutation && roomId
-            ? { kind: "room", roomId }
-            : { kind: "team" }
-        );
+      const repositoryPublishesTimeline =
+        request.routeOptions.url === "/api/rooms/:roomId/messages" ||
+        request.routeOptions.url?.startsWith("/api/runs/:runId/") === true;
+      if (changedTeamId && !repositoryPublishesTimeline) {
+        teamChanges.notify(changedTeamId);
       }
     }
   });

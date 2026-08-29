@@ -1,5 +1,7 @@
 import type Database from "better-sqlite3";
 
+import { SqliteTransactionBoundary } from
+  "../data/sqlite-transaction-boundary.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { RuntimeEvent } from "../runtime/runtime-adapter.js";
 
@@ -123,6 +125,12 @@ export interface RunEventRecord {
 export interface AppliedRunEvent {
   applied: boolean;
   run: RunRecord;
+}
+
+export interface CommittedRunChange {
+  kind: "room" | "run";
+  roomId: string;
+  teamId: string;
 }
 
 export interface DeviceRevocationRun {
@@ -421,7 +429,13 @@ function mapReplyProjectionFailure(
 }
 
 export class RunRepository {
-  public constructor(private readonly database: Database.Database) {}
+  private readonly roomTeams = new Map<string, string>();
+
+  public constructor(
+    private readonly database: Database.Database,
+    private readonly transactions = new SqliteTransactionBoundary(database),
+    private readonly onCommitted?: (change: CommittedRunChange) => void
+  ) {}
 
   public createRuns(runs: RunRecord[]): RunRecord[] {
     const insert = this.database.prepare(`
@@ -437,7 +451,7 @@ export class RunRepository {
         @terminalAt, @orchestrationKey, @attemptNumber, @retryOfRunId, NULL
       )
     `);
-    this.database.transaction(() => {
+    this.transactions.immediate(() => {
       for (const run of runs) {
         const attemptNumber = run.attemptNumber ?? this.nextAttemptNumber(run.taskId);
         insert.run({
@@ -451,7 +465,10 @@ export class RunRepository {
           UPDATE runs SET context_manifest_json = ? WHERE run_id = ?
         `).run(JSON.stringify(manifest), run.runId);
       }
-    }).immediate();
+      for (const roomId of new Set(runs.map((run) => run.roomId))) {
+        this.scheduleCommittedChange(roomId, "run");
+      }
+    });
     return runs.map(({ runId }) => this.getRun(runId)!);
   }
 
@@ -499,7 +516,7 @@ export class RunRepository {
     reason: string;
     now: string;
   }): RunAmbiguityAcknowledgement {
-    this.database.transaction(() => {
+    this.transactions.immediate(() => {
       const operation = this.database.prepare(`
         SELECT run_id FROM run_ambiguity_acknowledgements
         WHERE operation_id = ?
@@ -538,7 +555,7 @@ export class RunRepository {
         input.expectedTaskRevision + 1,
         input.now
       );
-    }).immediate();
+    });
     return this.getAmbiguityAcknowledgement(input.runId)!;
   }
 
@@ -551,7 +568,7 @@ export class RunRepository {
     deadlineAt: string;
   }): RunRecord {
     let retryRunId: string | undefined;
-    this.database.transaction(() => {
+    this.transactions.immediate(() => {
       const replay = this.database.prepare(`
         SELECT parent_run_id, retry_run_id FROM run_retry_operations
         WHERE operation_id = ?
@@ -658,7 +675,8 @@ export class RunRepository {
         input.memberId,
         input.now
       );
-    }).immediate();
+      this.scheduleCommittedChange(parent.roomId, "room");
+    });
     return this.getRun(retryRunId!)!;
   }
 
@@ -781,7 +799,7 @@ export class RunRepository {
     event: RuntimeEvent,
     now: string
   ): AppliedRunEvent {
-    return this.database.transaction(() => {
+    return this.transactions.immediate(() => {
       const current = this.getRun(runId);
       if (!current) {
         throw new Error(`Run not found: ${runId}`);
@@ -911,8 +929,12 @@ export class RunRepository {
       if (!updated) {
         throw new Error(`Run disappeared after event: ${runId}`);
       }
+      this.scheduleCommittedChange(
+        current.roomId,
+        event.type === "status" && event.clarification ? "room" : "run"
+      );
       return { applied: true, run: updated };
-    }).immediate();
+    });
   }
 
   public applyReply(
@@ -920,7 +942,7 @@ export class RunRepository {
     event: Extract<RuntimeEvent, { type: "reply" }>,
     now: string
   ): AppliedRunEvent {
-    return this.database.transaction(() => {
+    return this.transactions.immediate(() => {
       const applied = this.applyRuntimeEvent(runId, event, now);
       if (!applied.applied) return applied;
       const messageId = this.insertReplyMessage(applied.run, event.content, now);
@@ -930,8 +952,9 @@ export class RunRepository {
         messageId,
         now
       );
+      this.scheduleCommittedChange(applied.run.roomId, "room");
       return applied;
-    }).immediate();
+    });
   }
 
   public listUnprojectedReplyEvents(): Array<{
@@ -989,7 +1012,7 @@ export class RunRepository {
     replySequence: number,
     now: string
   ): RunReplyProjectionReconciliation {
-    return this.database.transaction(() => {
+    return this.transactions.immediate(() => {
       const existing = this.getReplyMessageProjection(runId, replySequence);
       if (existing) {
         return {
@@ -1111,6 +1134,7 @@ export class RunRepository {
         source.content,
         source.event_created_at
       );
+      this.scheduleCommittedChange(run.roomId, "room");
       return {
         state: "projected" as const,
         messageCreated: true,
@@ -1121,7 +1145,7 @@ export class RunRepository {
           now
         )
       };
-    }).immediate();
+    });
   }
 
   public listEvents(runId: string, afterSequence = 0): RunEventRecord[] {
@@ -1273,6 +1297,31 @@ export class RunRepository {
       projected_reply_sequence: number | null;
     }>;
   }
+
+  private scheduleCommittedChange(
+    roomId: string,
+    kind: CommittedRunChange["kind"]
+  ): void {
+    if (!this.onCommitted) return;
+    let teamId = this.roomTeams.get(roomId);
+    if (!teamId) {
+      const room = this.database.prepare(`
+        SELECT team_id FROM rooms WHERE room_id = ?
+      `).get(roomId) as { team_id: string } | undefined;
+      if (!room) throw new Error(`Run Room not found: ${roomId}`);
+      teamId = room.team_id;
+      this.roomTeams.set(roomId, teamId);
+    }
+    const change = { kind, roomId, teamId };
+    this.transactions.afterCommit(
+      () => this.onCommitted?.(change),
+      {
+        key: `team-room-change:${teamId}:${roomId}`,
+        priority: kind === "room" ? 2 : 1
+      }
+    );
+  }
+
 
   private nextAttemptNumber(taskId: string): number {
     return (this.database.prepare(`

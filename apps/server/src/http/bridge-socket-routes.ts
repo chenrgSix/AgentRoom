@@ -401,9 +401,6 @@ export function registerBridgeSocketRoutes({
             deviceId: devicePrincipal.deviceId,
             state: accepted.state
           }, "Run delivery accepted");
-          teamChanges.notify(devicePrincipal.teamId, {
-            kind: "room", roomId: accepted.roomId
-          });
           return;
         }
         if (message.type === "run.status" && registeredEpoch !== undefined) {
@@ -545,9 +542,6 @@ export function registerBridgeSocketRoutes({
             sequence: message.payload.sequence,
             applied: applied.applied
           }, "Run state event processed");
-          teamChanges.notify(devicePrincipal.teamId, {
-            kind: "room", roomId: applied.run.roomId
-          });
           if (
             applied.applied &&
             new Set(["completed", "failed", "canceled", "outcome_unknown"])
@@ -603,9 +597,6 @@ export function registerBridgeSocketRoutes({
             sequence: message.payload.sequence,
             applied: applied.applied
           }, "Run reply event processed");
-          teamChanges.notify(devicePrincipal.teamId, {
-            kind: "room", roomId: applied.run.roomId
-          });
           if (applied.applied) {
             void routeAgentReplyMentions(applied.run.runId)
               .then(() => teamChanges.notify(devicePrincipal.teamId, {
@@ -664,9 +655,6 @@ export function registerBridgeSocketRoutes({
             sequence: message.payload.sequence,
             applied: applied.applied
           }, "Run activity event processed");
-          if (applied.applied) teamChanges.notify(devicePrincipal.teamId, {
-            kind: "run", roomId: applied.run.roomId
-          });
           return;
         }
         if (message.type === "run.output_delta" && registeredEpoch !== undefined) {
@@ -701,11 +689,6 @@ export function registerBridgeSocketRoutes({
             sequence: message.payload.sequence,
             applied: applied.applied
           }, "Run output event processed");
-          if (applied.applied) {
-            teamChanges.notify(devicePrincipal.teamId, {
-              kind: "run", roomId: applied.run.roomId
-            });
-          }
           return;
         }
         rejectMessage("hello_required");

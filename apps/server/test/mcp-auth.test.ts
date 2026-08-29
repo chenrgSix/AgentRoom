@@ -130,6 +130,16 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
     const sentMessageId = sent.json().result.structuredContent.message.messageId as string;
     assert.equal(sent.json().result.structuredContent.message.senderType, "agent");
 
+    const beforeMcpReply = await app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/changes?after=0`,
+      headers: { authorization: `Bearer ${webToken}` }
+    });
+    const waitingForMcpReply = app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/changes?after=${beforeMcpReply.json().cursor as number}`,
+      headers: { authorization: `Bearer ${webToken}` }
+    });
     const replied = await app.inject({
       method: "POST",
       url: "/mcp",
@@ -156,6 +166,8 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       replied.json().result.structuredContent.message.parentMessageId,
       sentMessageId
     );
+    const mcpReplyChange = await waitingForMcpReply;
+    assert.equal(mcpReplyChange.json().roomIds.includes(roomId), true);
 
     const context = await app.inject({
       method: "POST",
@@ -276,6 +288,47 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
     assert.equal(assignedRun.targetAgentId, manualAgentId);
     assert.equal(assignedRun.state, "queued");
 
+    const beforeMcpClaim = await app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/changes?after=0`,
+      headers: { authorization: `Bearer ${webToken}` }
+    });
+    const waitingForMcpClaim = app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/changes?after=${beforeMcpClaim.json().cursor as number}`,
+      headers: { authorization: `Bearer ${webToken}` }
+    });
+    const claimed = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: `Bearer ${mcpToken}`
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 91,
+        method: "tools/call",
+        params: {
+          name: "team.claim_run",
+          arguments: { runId: assignedRun.runId }
+        }
+      }
+    });
+    assert.equal(claimed.json().result.structuredContent.run.state, "working");
+    const mcpClaimChange = await waitingForMcpClaim;
+    assert.equal(mcpClaimChange.json().runRoomIds.includes(roomId), true);
+
+    const beforeMcpComplete = await app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/changes?after=0`,
+      headers: { authorization: `Bearer ${webToken}` }
+    });
+    const waitingForMcpComplete = app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/changes?after=${beforeMcpComplete.json().cursor as number}`,
+      headers: { authorization: `Bearer ${webToken}` }
+    });
     const completed = await app.inject({
       method: "POST",
       url: "/mcp",
@@ -294,6 +347,8 @@ test("Remote MCP authenticates a manual Agent bearer token", async () => {
       }
     });
     assert.equal(completed.json().result.structuredContent.run.state, "completed");
+    const mcpCompleteChange = await waitingForMcpComplete;
+    assert.equal(mcpCompleteChange.json().roomIds.includes(roomId), true);
     const reportedArtifact = await app.inject({
       method: "POST",
       url: "/mcp",

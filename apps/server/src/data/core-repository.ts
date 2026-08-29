@@ -3,7 +3,8 @@ import type Database from "better-sqlite3";
 import type { RoomCollaborationPolicy } from "../team-room/room-collaboration-policy.js";
 import {
   MessageRepository,
-  type AppendMessageInput
+  type AppendMessageInput,
+  type CommittedMessageChange
 } from "./message-repository.js";
 import { AgentDeviceRepository } from "./agent-device-repository.js";
 import { SqliteTransactionBoundary } from "./sqlite-transaction-boundary.js";
@@ -134,9 +135,14 @@ export class CoreRepository {
 
   public constructor(
     database: Database.Database,
-    transactions = new SqliteTransactionBoundary(database)
+    transactions = new SqliteTransactionBoundary(database),
+    onMessageCommitted?: (change: CommittedMessageChange) => void
   ) {
-    this.messages = new MessageRepository(database, transactions);
+    this.messages = new MessageRepository(
+      database,
+      transactions,
+      onMessageCommitted
+    );
     this.agentsAndDevices = new AgentDeviceRepository(database, transactions);
     this.teamsAndRooms = new TeamRoomRepository(database, transactions);
   }

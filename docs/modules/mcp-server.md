@@ -86,8 +86,17 @@ mode, the server routes accepted work to an online Bridge. An MCP connection
 alone does not provide remote wake-up and must never be advertised as doing so.
 
 The implemented wait is bounded to 100 milliseconds through 30 seconds. A call
-without a cursor establishes the current Room position; later calls return up
-to 100 newer messages or a timeout carrying the unchanged cursor.
+without a cursor captures the Team change cursor before establishing the
+current Room message position. Later calls perform one bounded reconciliation,
+then sleep on the in-memory committed-change channel instead of querying
+SQLite every 100 milliseconds. Message changes return up to 100 newer records;
+Run-only changes return an empty non-timeout wake so the client can reconcile
+Run state. The returned cursor carries both positions plus an opaque Server
+process epoch; old message-only or prior-process cursors conservatively
+resynchronize once. If a backup restore moves the durable Room sequence
+backward, only an obsolete-epoch cursor is clamped to current state; a forged
+ahead cursor from the current process still fails closed. History reset returns
+a non-timeout wake, and disconnect aborts the pending wait.
 
 ## Failure and Security Rules
 

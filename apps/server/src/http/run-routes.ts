@@ -103,11 +103,6 @@ export function registerRunRoutes({
         },
         clock()
       );
-      const room = core.getRoom(retry.roomId);
-      if (room) teamChanges.notify(room.teamId, {
-        kind: "run",
-        roomId: retry.roomId
-      });
       return retry;
     }
   );
@@ -133,11 +128,6 @@ export function registerRunRoutes({
         request.params.runId,
         typeof body.reason === "string" ? body.reason : "Canceled from Web"
       );
-      const room = core.getRoom(canceled.roomId);
-      if (room) teamChanges.notify(room.teamId, {
-        kind: "run",
-        roomId: canceled.roomId
-      });
       return canceled;
     }
   );

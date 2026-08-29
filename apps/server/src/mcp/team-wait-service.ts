@@ -6,8 +6,13 @@ import type {
   AuthService,
   McpPrincipal
 } from "../security/auth-service.js";
+import { createOpaqueId } from "../domain/identifiers.js";
+import type { TeamChangeService } from
+  "../team-room/team-change-service.js";
 
 interface WaitCursor {
+  changeEpoch?: string;
+  changeCursor?: number;
   roomId: string;
   sequence: number;
 }
@@ -30,24 +35,48 @@ function decodeCursor(value: string, roomId: string): WaitCursor {
     if (
       parsed.roomId !== roomId ||
       !Number.isSafeInteger(parsed.sequence) ||
-      (parsed.sequence ?? -1) < 0
+      (parsed.sequence ?? -1) < 0 ||
+      (parsed.changeCursor !== undefined && (
+        !Number.isSafeInteger(parsed.changeCursor) || parsed.changeCursor < 0
+      )) ||
+      (parsed.changeEpoch !== undefined && (
+        typeof parsed.changeEpoch !== "string" ||
+        !/^wait_[A-Za-z0-9_-]{8,128}$/u.test(parsed.changeEpoch)
+      ))
     ) {
       throw new Error("cursor does not match Room");
     }
-    return { roomId, sequence: parsed.sequence ?? 0 };
+    return {
+      ...(parsed.changeCursor === undefined
+        ? {}
+        : { changeCursor: parsed.changeCursor }),
+      ...(parsed.changeEpoch === undefined
+        ? {}
+        : { changeEpoch: parsed.changeEpoch }),
+      roomId,
+      sequence: parsed.sequence ?? 0
+    };
   } catch (error) {
     throw new Error("Invalid team.wait cursor", { cause: error });
   }
 }
 
-function pause(milliseconds: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, milliseconds));
-}
+type TeamWaitCore = Pick<
+  CoreRepository,
+  "latestMessageSequence" | "listMessagesAfter"
+>;
+
+type TeamWaitAuth = Pick<AuthService, "requireRoomMember">;
+
+type TeamWaitChanges = Pick<TeamChangeService, "current" | "wait">;
 
 export class TeamWaitService {
+  private readonly changeEpoch = createOpaqueId("wait");
+
   public constructor(
-    private readonly core: CoreRepository,
-    private readonly auth: AuthService
+    private readonly core: TeamWaitCore,
+    private readonly auth: TeamWaitAuth,
+    private readonly changes: TeamWaitChanges
   ) {}
 
   public async wait(
@@ -56,9 +85,10 @@ export class TeamWaitService {
       roomId: string;
       cursor?: string;
       timeoutMs: number;
+      signal?: AbortSignal;
     }
   ): Promise<TeamWaitResult> {
-    this.auth.requireRoomMember(principal, input.roomId);
+    const member = this.auth.requireRoomMember(principal, input.roomId);
     if (
       !Number.isSafeInteger(input.timeoutMs) ||
       input.timeoutMs < 100 ||
@@ -66,43 +96,115 @@ export class TeamWaitService {
     ) {
       throw new Error("team.wait timeoutMs must be between 100 and 30000");
     }
-    const latest = this.core.latestMessageSequence(input.roomId);
     if (!input.cursor) {
+      const changeCursor = this.changes.current(member.teamId);
+      const latest = this.core.latestMessageSequence(input.roomId);
       return {
-        cursor: encodeCursor({ roomId: input.roomId, sequence: latest }),
+        cursor: encodeCursor({
+          changeEpoch: this.changeEpoch,
+          changeCursor,
+          roomId: input.roomId,
+          sequence: latest
+        }),
         events: [],
         timedOut: false
       };
     }
     const cursor = decodeCursor(input.cursor, input.roomId);
+    const observedChangeCursor = this.changes.current(member.teamId);
+    const latest = this.core.latestMessageSequence(input.roomId);
+    if (cursor.changeEpoch !== this.changeEpoch) {
+      // Message-only cursors and cursors from an earlier Server process cannot
+      // order in-memory Run notifications. A restored backup may also have a
+      // lower Room sequence, so clamp the obsolete cursor to current durable
+      // state and return immediately for one conservative reconciliation.
+      return this.readAfter(
+        input.roomId,
+        Math.min(cursor.sequence, latest),
+        observedChangeCursor
+      );
+    }
     if (cursor.sequence > latest) {
       throw new Error("team.wait cursor is ahead of Room state");
     }
-    const immediate = this.readAfter(input.roomId, cursor.sequence);
+    let changeCursor = cursor.changeCursor ?? 0;
+    const immediate = this.readAfter(
+      input.roomId,
+      cursor.sequence,
+      observedChangeCursor
+    );
     if (immediate.events.length > 0) {
       return immediate;
     }
 
     const deadline = Date.now() + input.timeoutMs;
-    while (Date.now() < deadline) {
-      await pause(Math.min(100, Math.max(1, deadline - Date.now())));
-      const result = this.readAfter(input.roomId, cursor.sequence);
-      if (result.events.length > 0) {
-        return result;
+    while (true) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        return {
+          cursor: encodeCursor({
+            ...cursor,
+            changeEpoch: this.changeEpoch,
+            changeCursor
+          }),
+          events: [],
+          timedOut: true
+        };
+      }
+      const change = await this.changes.wait(member.teamId, changeCursor, {
+        ...(input.signal ? { signal: input.signal } : {}),
+        timeoutMilliseconds: remaining
+      });
+      changeCursor = change.cursor;
+      if (!change.changed && !change.reset) {
+        return {
+          cursor: encodeCursor({
+            ...cursor,
+            changeEpoch: this.changeEpoch,
+            changeCursor
+          }),
+          events: [],
+          timedOut: true
+        };
+      }
+      const roomChanged = change.roomIds.includes(input.roomId);
+      const runChanged = change.runRoomIds.includes(input.roomId);
+      if (!change.team && !change.reset && !roomChanged && !runChanged) continue;
+      this.auth.requireRoomMember(principal, input.roomId);
+      const result = this.readAfter(
+        input.roomId,
+        cursor.sequence,
+        changeCursor
+      );
+      if (result.events.length > 0) return result;
+      if (change.reset || runChanged) {
+        return {
+          cursor: encodeCursor({
+            ...cursor,
+            changeEpoch: this.changeEpoch,
+            changeCursor
+          }),
+          events: [],
+          timedOut: false
+        };
       }
     }
-    return {
-      cursor: encodeCursor(cursor),
-      events: [],
-      timedOut: true
-    };
   }
 
-  private readAfter(roomId: string, sequence: number): TeamWaitResult {
+  private readAfter(
+    roomId: string,
+    sequence: number,
+    changeCursor: number
+  ): TeamWaitResult {
     const events = this.core.listMessagesAfter(roomId, sequence, 100);
     const lastSequence = events.at(-1)?.sequence ?? sequence;
     return {
-      cursor: encodeCursor({ roomId, sequence: lastSequence }),
+      cursor: encodeCursor({
+        changeEpoch: this.changeEpoch,
+        changeCursor,
+        roomId,
+        sequence: lastSequence
+      }),
       events,
       timedOut: false
     };

@@ -23,6 +23,10 @@ export function registerMcpRoutes({
 }: ServerRouteContext): void {
   app.post("/mcp", async (request, reply) => {
     const mcpPrincipal = auth.authenticateMcp(bearerToken(request), clock());
+    const controller = new AbortController();
+    const abort = () => controller.abort(new Error("MCP client disconnected"));
+    request.raw.once("aborted", abort);
+    reply.raw.once("close", abort);
     const server = createTeamMcpServer(mcpPrincipal, {
       clock,
       core,
@@ -32,18 +36,25 @@ export function registerMcpRoutes({
       manualTaskWork,
       messages,
       taskArtifacts,
-      wait: teamWait
+      wait: {
+        wait: (principal, input) => teamWait.wait(principal, {
+          ...input,
+          signal: controller.signal
+        })
+      }
     });
     const transportOptions = {
       sessionIdGenerator: undefined,
       enableJsonResponse: true
     } as unknown as StreamableHTTPServerTransportOptions;
     const transport = new StreamableHTTPServerTransport(transportOptions);
-    await server.connect(transport as unknown as Transport);
-    reply.hijack();
     try {
+      await server.connect(transport as unknown as Transport);
+      reply.hijack();
       await transport.handleRequest(request.raw, reply.raw, request.body);
     } finally {
+      request.raw.off("aborted", abort);
+      reply.raw.off("close", abort);
       await transport.close();
       await server.close();
     }

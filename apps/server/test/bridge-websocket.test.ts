@@ -309,6 +309,32 @@ test("Bridge trace validation accepts every contract-valid base64url prefix", ()
   assert.equal(isBridgeTraceId("trace_short"), false);
 });
 
+test("one committed Bridge Run event advances the Team cursor once", async () => {
+  const fixture = await createFixture();
+  try {
+    const before = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/changes?after=0`,
+      headers: fixture.authorization
+    });
+    assert.equal(before.statusCode, 200);
+    const cursor = before.json().cursor as number;
+
+    await acceptRun(fixture);
+
+    const changed = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/changes?after=${cursor}`,
+      headers: fixture.authorization
+    });
+    assert.equal(changed.statusCode, 200);
+    assert.equal(changed.json().cursor, cursor + 1);
+    assert.deepEqual(changed.json().runRoomIds, [fixture.roomId]);
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
 test("authenticated hello records the current Bridge version without replacing pairing identity", async () => {
   const fixture = await createFixture();
   try {

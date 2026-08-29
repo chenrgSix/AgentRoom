@@ -21,7 +21,7 @@ interface TeamMcpDependencies {
   manualTaskWork: ManualTaskWorkService;
   messages: MessageService;
   taskArtifacts: TaskArtifactService;
-  wait: TeamWaitService;
+  wait: Pick<TeamWaitService, "wait">;
 }
 
 const opaqueId = (prefix: string) => z.string()
