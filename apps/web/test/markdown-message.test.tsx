@@ -58,3 +58,32 @@ test("Streaming Markdown exposes busy state through the same renderer", () => {
   assert.match(html, /aria-busy="true"/u);
   assert.match(html, /<strong>Partial<\/strong>/u);
 });
+
+test("Message Markdown never fetches cross-origin images implicitly", () => {
+  const dom = new JSDOM("<!doctype html><html><body></body></html>", {
+    url: "https://team.example/rooms/general"
+  });
+  Object.defineProperty(globalThis, "window", {
+    configurable: true,
+    value: dom.window
+  });
+  try {
+    const html = renderToStaticMarkup(
+      <MarkdownMessage content={[
+        "![same origin](https://team.example/media/result.png)",
+        "![relative](/media/local.png)",
+        "![tracker](https://tracker.example/pixel.png)"
+      ].join("\n\n")} />
+    );
+
+    assert.match(html, /<img[^>]*src="https:\/\/team\.example\/media\/result\.png"/u);
+    assert.match(html, /<img[^>]*src="\/media\/local\.png"/u);
+    assert.doesNotMatch(html, /<img[^>]*tracker\.example/u);
+    assert.match(
+      html,
+      /<a class="markdown-external-image" href="https:\/\/tracker\.example\/pixel\.png" rel="noreferrer noopener" target="_blank">External image: tracker<\/a>/u
+    );
+  } finally {
+    dom.window.close();
+  }
+});

@@ -323,8 +323,11 @@ the current Team roster. Registered Agent and member names are shown directly;
 the generic localized Agent label is reserved for missing historical identities.
 Durable and provisional content use the same React-native Markdown renderer.
 Raw HTML is ignored, protocol URLs retain the renderer's safe URL transform,
-cross-origin HTTP(S) links open with `noopener noreferrer`, and remote images
-load lazily without a referrer. The Web does not import Agentdown directly:
+cross-origin HTTP(S) links open with `noopener noreferrer`, and cross-origin
+images render as an explicit external link instead of issuing an implicit
+request. Same-origin and relative images may load lazily without a referrer.
+Central's Content Security Policy independently restricts image requests to
+same-origin and `data:` resources. The Web does not import Agentdown directly:
 Agentdown is currently a Vue 3 Runtime, while this application is React 19;
 shipping both UI runtimes would duplicate message and Run ownership. The Web
 instead follows the same block-safety principles at its existing projection

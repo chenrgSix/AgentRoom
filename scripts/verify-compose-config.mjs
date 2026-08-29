@@ -105,6 +105,11 @@ assert.match(
 );
 assert.match(caddyfile, /import \/etc\/caddy\/tls-profile\.caddy/u);
 assert.match(caddyfile, /import \/etc\/caddy\/pki-profile\.caddy/u);
+assert.match(
+  caddyfile,
+  /Content-Security-Policy "[^"]*img-src 'self' data:;[^"]*object-src 'none'[^"]*"/u
+);
+assert.doesNotMatch(caddyfile, /img-src[^;]*(?:https?:|\*)/u);
 
 const publicProfile = readFileSync(
   new URL("../deploy/tls/public-ca.caddy", import.meta.url),

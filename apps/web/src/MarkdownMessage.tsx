@@ -21,6 +21,16 @@ function opensInNewContext(href: string | undefined): boolean {
   }
 }
 
+function isCrossOriginHttpResource(src: string): boolean {
+  if (!/^https?:\/\//iu.test(src)) return false;
+  if (typeof window === "undefined") return true;
+  try {
+    return new URL(src, window.location.href).origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+}
+
 const markdownComponents: Components = {
   a({ children, href, node: _node, ...properties }) {
     const external = opensInNewContext(href);
@@ -36,6 +46,18 @@ const markdownComponents: Components = {
   },
   img({ alt, node: _node, src, ...properties }) {
     if (!src) return null;
+    if (isCrossOriginHttpResource(src)) {
+      return (
+        <a
+          className="markdown-external-image"
+          href={src}
+          rel="noreferrer noopener"
+          target="_blank"
+        >
+          {alt ? `External image: ${alt}` : "Open external image"}
+        </a>
+      );
+    }
     return (
       <img
         {...properties as ComponentPropsWithoutRef<"img">}

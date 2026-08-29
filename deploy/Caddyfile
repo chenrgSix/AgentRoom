@@ -18,6 +18,7 @@ https://{$CONVENE_WIRE_DOMAIN} {
 
 	header {
 		-Server
+		Content-Security-Policy "default-src 'self'; base-uri 'self'; connect-src 'self'; form-action 'self'; frame-ancestors 'none'; img-src 'self' data:; object-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'"
 		Referrer-Policy "same-origin"
 		X-Content-Type-Options "nosniff"
 		X-Frame-Options "DENY"
