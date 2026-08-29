@@ -138,6 +138,39 @@ export interface DeviceRevocationRun {
   acceptedByBridge: boolean;
 }
 
+export type RunCancellationTerminalStatus = Extract<RunState,
+  "completed" | "failed" | "canceled" | "expired" | "outcome_unknown"
+>;
+
+export interface RunCancellationIntent {
+  runId: string;
+  messageId: string;
+  agentId: string;
+  deviceId: string;
+  requestedByMemberId: string;
+  reason: string;
+  state: "pending" | "resolved";
+  createdAt: string;
+  lastSentAt: string | null;
+  sendCount: number;
+  ackDeadlineAt: string;
+  resolvedAt: string | null;
+  terminalStatus: RunCancellationTerminalStatus | null;
+}
+
+export interface RunCancellationRequest {
+  run: RunRecord;
+  intent?: RunCancellationIntent;
+  created: boolean;
+}
+
+export interface RunCancellationDelivery {
+  deviceId: string;
+  state: "pending" | "accepted";
+  sendCount: number;
+  lastSentAt: string | null;
+}
+
 export interface RunReplyRoutingIntent {
   parentRunId: string;
   replySequence: number;
@@ -240,6 +273,29 @@ interface RunReplyRoutingIntentRow {
   state: RunReplyRoutingIntent["state"];
   created_at: string;
   completed_at: string | null;
+}
+
+interface RunCancellationIntentRow {
+  run_id: string;
+  message_id: string;
+  agent_id: string;
+  device_id: string;
+  requested_by_member_id: string;
+  reason: string;
+  state: RunCancellationIntent["state"];
+  created_at: string;
+  last_sent_at: string | null;
+  send_count: number;
+  ack_deadline_at: string;
+  resolved_at: string | null;
+  terminal_status: RunCancellationTerminalStatus | null;
+}
+
+interface RunCancellationDeliveryRow {
+  device_id: string;
+  state: RunCancellationDelivery["state"];
+  send_count: number;
+  last_sent_at: string | null;
 }
 
 interface RunReplyMessageProjectionRow {
@@ -402,6 +458,26 @@ function mapReplyRoutingIntent(
     state: row.state,
     createdAt: row.created_at,
     completedAt: row.completed_at
+  };
+}
+
+function mapCancellationIntent(
+  row: RunCancellationIntentRow
+): RunCancellationIntent {
+  return {
+    runId: row.run_id,
+    messageId: row.message_id,
+    agentId: row.agent_id,
+    deviceId: row.device_id,
+    requestedByMemberId: row.requested_by_member_id,
+    reason: row.reason,
+    state: row.state,
+    createdAt: row.created_at,
+    lastSentAt: row.last_sent_at,
+    sendCount: row.send_count,
+    ackDeadlineAt: row.ack_deadline_at,
+    resolvedAt: row.resolved_at,
+    terminalStatus: row.terminal_status
   };
 }
 
@@ -687,6 +763,193 @@ export class RunRepository {
     return row && mapRun(row);
   }
 
+  public getCancellationIntent(
+    runId: string
+  ): RunCancellationIntent | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM run_cancellation_intents WHERE run_id = ?
+    `).get(runId) as RunCancellationIntentRow | undefined;
+    return row && mapCancellationIntent(row);
+  }
+
+  public getCancellationDelivery(
+    runId: string
+  ): RunCancellationDelivery | undefined {
+    const row = this.database.prepare(`
+      SELECT device_id, state, send_count, last_sent_at
+      FROM run_deliveries WHERE run_id = ?
+    `).get(runId) as RunCancellationDeliveryRow | undefined;
+    return row && {
+      deviceId: row.device_id,
+      state: row.state,
+      sendCount: row.send_count,
+      lastSentAt: row.last_sent_at
+    };
+  }
+
+  public requestCancellation(input: {
+    runId: string;
+    messageId: string;
+    requestedByMemberId: string;
+    reason: string;
+    now: string;
+    ackDeadlineAt: string;
+  }): RunCancellationRequest {
+    return this.transactions.immediate(() => {
+      const run = this.getRun(input.runId);
+      if (!run) throw new Error(`Run not found: ${input.runId}`);
+      const existing = this.getCancellationIntent(run.runId);
+      if (terminalStates.has(run.state)) {
+        if (existing?.state === "pending") {
+          this.resolveCancellationIntent(
+            run.runId,
+            run.state as RunCancellationTerminalStatus,
+            input.now
+          );
+        }
+        const resolved = this.getCancellationIntent(run.runId);
+        return resolved
+          ? { run, intent: resolved, created: false }
+          : { run, created: false };
+      }
+      if (run.state === "input_required") {
+        const canceled = this.applyRuntimeEvent(run.runId, {
+          type: "status",
+          sequence: run.lastSequence + 1,
+          status: "canceled"
+        }, input.now).run;
+        return { run: canceled, created: false };
+      }
+      if (existing) {
+        return { run, intent: existing, created: false };
+      }
+      const delivery = this.getCancellationDelivery(run.runId);
+      // Delivery send markers are written after the socket write, so a durable
+      // row with send_count=0 is still ambiguous across a process crash.
+      const queuedMayHaveReachedBridge = run.state === "queued" &&
+        delivery !== undefined;
+      if (run.state === "queued" && !queuedMayHaveReachedBridge) {
+        const canceled = this.applyRuntimeEvent(run.runId, {
+          type: "status",
+          sequence: run.lastSequence + 1,
+          status: "canceled"
+        }, input.now).run;
+        return { run: canceled, created: false };
+      }
+      if (
+        run.state !== "queued" &&
+        run.state !== "delivered" &&
+        run.state !== "working"
+      ) {
+        throw new Error(`Run cannot be canceled from state: ${run.state}`);
+      }
+      if (!delivery) {
+        throw new Error("Remote Run cancellation requires its frozen delivery Device");
+      }
+      this.database.prepare(`
+        INSERT INTO run_cancellation_intents (
+          run_id, message_id, agent_id, device_id, requested_by_member_id,
+          reason, state, created_at, last_sent_at, send_count,
+          ack_deadline_at, resolved_at, terminal_status
+        ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, NULL, 0, ?, NULL, NULL)
+      `).run(
+        run.runId,
+        input.messageId,
+        run.targetAgentId,
+        delivery.deviceId,
+        input.requestedByMemberId,
+        input.reason,
+        input.now,
+        input.ackDeadlineAt
+      );
+      this.scheduleCommittedChange(run.roomId, "run");
+      return {
+        run,
+        intent: this.getCancellationIntent(run.runId)!,
+        created: true
+      };
+    });
+  }
+
+  public listDispatchableCancellationIntents(input: {
+    now: string;
+    sentBefore: string;
+    limit: number;
+    deviceId?: string;
+  }): RunCancellationIntent[] {
+    const limit = Math.max(1, Math.min(500, Math.trunc(input.limit)));
+    const rows = this.database.prepare(`
+      SELECT * FROM run_cancellation_intents
+      WHERE state = 'pending'
+        AND ack_deadline_at > @now
+        AND (last_sent_at IS NULL OR last_sent_at <= @sentBefore)
+        AND (@deviceId IS NULL OR device_id = @deviceId)
+      ORDER BY created_at, run_id
+      LIMIT @limit
+    `).all({
+      now: input.now,
+      sentBefore: input.sentBefore,
+      deviceId: input.deviceId ?? null,
+      limit
+    }) as RunCancellationIntentRow[];
+    return rows.map(mapCancellationIntent);
+  }
+
+  public markCancellationIntentSent(
+    runId: string,
+    messageId: string,
+    sentAt: string
+  ): RunCancellationIntent | undefined {
+    this.database.prepare(`
+      UPDATE run_cancellation_intents
+      SET send_count = send_count + 1, last_sent_at = ?
+      WHERE run_id = ? AND message_id = ? AND state = 'pending'
+    `).run(sentAt, runId, messageId);
+    return this.getCancellationIntent(runId);
+  }
+
+  public expireCancellationIntents(
+    now: string,
+    limit: number
+  ): RunRecord[] {
+    const boundedLimit = Math.max(1, Math.min(500, Math.trunc(limit)));
+    const rows = this.database.prepare(`
+      SELECT run_id FROM run_cancellation_intents
+      WHERE state = 'pending' AND ack_deadline_at <= ?
+      ORDER BY ack_deadline_at, created_at, run_id
+      LIMIT ?
+    `).all(now, boundedLimit) as Array<{ run_id: string }>;
+    const expired: RunRecord[] = [];
+    for (const { run_id: runId } of rows) {
+      expired.push(this.transactions.immediate(() => {
+        const intent = this.getCancellationIntent(runId);
+        const run = this.getRun(runId);
+        if (!intent || !run) throw new Error(`Run not found: ${runId}`);
+        if (intent.state !== "pending") return run;
+        if (terminalStates.has(run.state)) {
+          this.resolveCancellationIntent(
+            run.runId,
+            run.state as RunCancellationTerminalStatus,
+            now
+          );
+          return run;
+        }
+        return this.applyRuntimeEvent(run.runId, {
+          type: "status",
+          sequence: run.lastSequence + 1,
+          status: "outcome_unknown",
+          error: {
+            code: "RUN_CANCEL_ACK_TIMEOUT",
+            message:
+              "The managed Runtime did not confirm a terminal outcome before the cancellation deadline.",
+            retryable: false
+          }
+        }, now).run;
+      }));
+    }
+    return expired;
+  }
+
   public getContextFence(runId: string): RunContextFence | undefined {
     const row = this.database.prepare(`
       SELECT * FROM run_context_fences WHERE run_id = ?
@@ -925,6 +1188,13 @@ export class RunRepository {
         SET state = ?, last_sequence = ?, updated_at = ?, terminal_at = ?
         WHERE run_id = ?
       `).run(nextState, event.sequence, now, terminalAt, runId);
+      if (terminalStates.has(nextState)) {
+        this.resolveCancellationIntent(
+          runId,
+          nextState as RunCancellationTerminalStatus,
+          now
+        );
+      }
       const updated = this.getRun(runId);
       if (!updated) {
         throw new Error(`Run disappeared after event: ${runId}`);
@@ -1322,6 +1592,17 @@ export class RunRepository {
     );
   }
 
+  private resolveCancellationIntent(
+    runId: string,
+    terminalStatus: RunCancellationTerminalStatus,
+    resolvedAt: string
+  ): void {
+    this.database.prepare(`
+      UPDATE run_cancellation_intents
+      SET state = 'resolved', resolved_at = ?, terminal_status = ?
+      WHERE run_id = ? AND state = 'pending'
+    `).run(resolvedAt, terminalStatus, runId);
+  }
 
   private nextAttemptNumber(taskId: string): number {
     return (this.database.prepare(`

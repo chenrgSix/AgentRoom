@@ -14,6 +14,7 @@ const now = "2026-08-23T12:00:00.000Z";
 const agentId = "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6";
 
 interface BridgeWireMessage {
+  messageId?: string;
   type: string;
   payload: Record<string, unknown>;
 }
@@ -335,6 +336,76 @@ test("one committed Bridge Run event advances the Team cursor once", async () =>
   }
 });
 
+test("an unaccepted Run resolves only from the frozen Bridge cancellation ACK", async () => {
+  const fixture = await createFixture();
+  try {
+    const cancellationMessage = nextMessage(fixture.socket);
+    const canceled = await fixture.app.inject({
+      method: "POST",
+      url: `/api/runs/${fixture.runId}/cancel`,
+      headers: fixture.authorization,
+      payload: { reason: "Cancel while Bridge is preparing" }
+    });
+    assert.equal(canceled.statusCode, 200);
+    assert.equal(canceled.json().state, "queued");
+
+    const cancellation = await cancellationMessage;
+    assert.equal(cancellation.type, "run.cancel_requested");
+    assert.deepEqual(cancellation.payload, {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      reason: "Cancel while Bridge is preparing"
+    });
+
+    const pendingDatabase = new Database(fixture.databasePath, {
+      readonly: true
+    });
+    try {
+      assert.deepEqual(pendingDatabase.prepare(`
+        SELECT d.state AS delivery_state, d.send_count,
+          c.state AS cancellation_state, c.device_id
+        FROM run_deliveries d
+        JOIN run_cancellation_intents c ON c.run_id = d.run_id
+        WHERE d.run_id = ?
+      `).get(fixture.runId), {
+        delivery_state: "pending",
+        send_count: 1,
+        cancellation_state: "pending",
+        device_id: fixture.deviceId
+      });
+    } finally {
+      pendingDatabase.close();
+    }
+
+    await sendAndFlush(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 1,
+      status: "canceled"
+    }));
+    await waitFor(() => runState(fixture, "canceled"));
+
+    const resolvedDatabase = new Database(fixture.databasePath, {
+      readonly: true
+    });
+    try {
+      assert.deepEqual(resolvedDatabase.prepare(`
+        SELECT state, terminal_status FROM run_cancellation_intents
+        WHERE run_id = ?
+      `).get(fixture.runId), {
+        state: "resolved",
+        terminal_status: "canceled"
+      });
+    } finally {
+      resolvedDatabase.close();
+    }
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
 test("authenticated hello records the current Bridge version without replacing pairing identity", async () => {
   const fixture = await createFixture();
   try {
@@ -392,6 +463,145 @@ test("authenticated hello records the current Bridge version without replacing p
     });
   } finally {
     await closeFixture(fixture);
+  }
+});
+
+test("a restarted Central replays a durable cancellation on the frozen Device hello", async () => {
+  const fixture = await createFixture();
+  let restarted: Awaited<ReturnType<typeof createServerApp>> | undefined;
+  let restartedSocket: BridgeSocket | undefined;
+  try {
+    await acceptRun(fixture);
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 2,
+      status: "working"
+    }));
+    await waitFor(() => runState(fixture, "working"));
+    const closed = nextClose(fixture.socket);
+    fixture.socket.terminate();
+    await closed;
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const canceled = await fixture.app.inject({
+      method: "POST",
+      url: `/api/runs/${fixture.runId}/cancel`,
+      headers: fixture.authorization,
+      payload: { reason: "Restart recovery" }
+    });
+    assert.equal(canceled.statusCode, 200);
+    assert.equal(canceled.json().state, "working");
+    const database = new Database(fixture.databasePath, { readonly: true });
+    const frozen = database.prepare(`
+      SELECT message_id, device_id, state, send_count
+      FROM run_cancellation_intents WHERE run_id = ?
+    `).get(fixture.runId) as {
+      message_id: string;
+      device_id: string;
+      state: string;
+      send_count: number;
+    };
+    database.close();
+    assert.deepEqual(
+      {
+        deviceId: frozen.device_id,
+        state: frozen.state,
+        sendCount: frozen.send_count
+      },
+      { deviceId: fixture.deviceId, state: "pending", sendCount: 0 }
+    );
+
+    await fixture.app.close();
+    restarted = await createServerApp({
+      databasePath: fixture.databasePath,
+      clock: () => now
+    });
+    await restarted.ready();
+    restartedSocket = await restarted.injectWS("/ws/bridge", {
+      headers: {
+        authorization: `Bearer ${fixture.deviceToken}`,
+        host: "127.0.0.1"
+      }
+    });
+    const replayed = nextMessage(restartedSocket);
+    send(restartedSocket, envelope("bridge.hello", {
+      bridgeVersion: "v0.4.0-qa030.1",
+      connectionEpoch: 2,
+      deviceId: fixture.deviceId,
+      supportsAgentProvisioning: true,
+      supportedProtocolVersions: ["1.0"]
+    }));
+    const replay = await replayed;
+    assert.equal(replay.messageId, frozen.message_id);
+    assert.equal(replay.type, "run.cancel_requested");
+    assert.deepEqual(replay.payload, {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      reason: "Restart recovery"
+    });
+    const replayDatabase = new Database(fixture.databasePath, { readonly: true });
+    try {
+      const intent = replayDatabase.prepare(`
+        SELECT message_id, state, send_count
+        FROM run_cancellation_intents WHERE run_id = ?
+      `).get(fixture.runId) as {
+        message_id: string;
+        state: string;
+        send_count: number;
+      };
+      assert.deepEqual(intent, {
+        message_id: frozen.message_id,
+        state: "pending",
+        send_count: 1
+      });
+    } finally {
+      replayDatabase.close();
+    }
+    send(restartedSocket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 3,
+      status: "canceled"
+    }));
+    await waitFor(async () => {
+      const response = await restarted?.inject({
+        method: "GET",
+        url: `/api/rooms/${fixture.roomId}/runs`,
+        headers: fixture.authorization
+      });
+      return response?.json().some((run: { runId: string; state: string }) =>
+        run.runId === fixture.runId && run.state === "canceled"
+      ) === true;
+    });
+    const resolvedDatabase = new Database(
+      fixture.databasePath,
+      { readonly: true }
+    );
+    try {
+      assert.deepEqual(resolvedDatabase.prepare(`
+        SELECT state, terminal_status FROM run_cancellation_intents
+        WHERE run_id = ?
+      `).get(fixture.runId), {
+        state: "resolved",
+        terminal_status: "canceled"
+      });
+    } finally {
+      resolvedDatabase.close();
+    }
+  } finally {
+    if (restartedSocket && restartedSocket.readyState < 2) {
+      restartedSocket.terminate();
+    }
+    if (restarted) {
+      await new Promise((resolve) => setImmediate(resolve));
+      await restarted.close();
+    } else if (fixture.app.server.listening) {
+      await closeFixture(fixture);
+    }
   }
 });
 

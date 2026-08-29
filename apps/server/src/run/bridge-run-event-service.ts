@@ -97,9 +97,23 @@ export class BridgeRunEventService {
     now: string
   ): AppliedRunEvent {
     const run = this.requireOwnedRun(
-      principal, input.runId, input.traceId, input.agentId
+      principal,
+      input.runId,
+      input.traceId,
+      input.agentId,
+      terminalStatuses.has(input.status)
     );
-    this.validateSequence(input.sequence);
+    const cancellation = this.runs.getCancellationIntent(run.runId);
+    const preAdmissionCancellationAck =
+      input.status === "canceled" &&
+      input.sequence === 1 &&
+      (
+        (run.state === "queued" && cancellation?.state === "pending") ||
+        (run.state === "canceled" &&
+          cancellation?.state === "resolved" &&
+          cancellation.terminalStatus === "canceled")
+      );
+    if (!preAdmissionCancellationAck) this.validateSequence(input.sequence);
     if (!bridgeStatuses.has(input.status)) {
       throw new Error(`Bridge cannot emit Run status: ${input.status}`);
     }
@@ -397,16 +411,27 @@ export class BridgeRunEventService {
     principal: DevicePrincipal,
     runId: string,
     traceId: string,
-    agentId: string
+    agentId: string,
+    terminalStatus = false
   ): RunRecord {
     const run = this.runs.getRun(runId);
     const agent = this.core.getAgent(agentId);
+    const cancellation = terminalStatus
+      ? this.runs.getCancellationIntent(runId)
+      : undefined;
+    const frozenCancellationOwner = cancellation !== undefined &&
+      cancellation.agentId === agentId &&
+      cancellation.deviceId === principal.deviceId;
+    const currentAgentOwner = agent?.deviceId === principal.deviceId;
+    const correctDevice = cancellation !== undefined
+      ? frozenCancellationOwner
+      : currentAgentOwner;
     if (
       !run ||
       !agent ||
       run.traceId !== traceId ||
       run.targetAgentId !== agentId ||
-      agent.deviceId !== principal.deviceId ||
+      !correctDevice ||
       agent.ownerMemberId !== principal.ownerMemberId ||
       agent.teamId !== principal.teamId
     ) {

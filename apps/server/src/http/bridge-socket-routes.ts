@@ -75,6 +75,7 @@ export function registerBridgeSocketRoutes({
   auth,
   bridgeConnections,
   bridgeRunEvents,
+  cancellations,
   clock,
   delivery,
   pauseDiscussionForInput,
@@ -202,6 +203,7 @@ export function registerBridgeSocketRoutes({
             adapterAvailable: true,
             now: clock()
           });
+          cancellations.resendForDevice(devicePrincipal.deviceId);
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
           teamChanges.notify(devicePrincipal.teamId);
           return;
@@ -220,6 +222,7 @@ export function registerBridgeSocketRoutes({
             adapterAvailable: true,
             now: clock()
           });
+          cancellations.resendForDevice(devicePrincipal.deviceId);
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
           teamChanges.notify(devicePrincipal.teamId);
           return;
@@ -313,6 +316,7 @@ export function registerBridgeSocketRoutes({
               now: clock()
             })
           );
+          cancellations.resendForDevice(devicePrincipal.deviceId);
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
           teamChanges.notify(devicePrincipal.teamId);
           return;

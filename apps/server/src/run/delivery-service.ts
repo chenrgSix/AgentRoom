@@ -148,6 +148,9 @@ export class DeliveryService {
   ) {}
 
   public dispatch(runId: string): DeliveryRecord | undefined {
+    if (this.runs.getCancellationIntent(runId)?.state === "pending") {
+      return this.getByRun(runId);
+    }
     const run = this.runs.getRun(runId);
     if (run?.state === "queued" && Date.parse(run.deadlineAt) <= Date.parse(this.clock())) {
       this.runs.expireQueued(run.roomId, this.clock());
@@ -180,7 +183,10 @@ export class DeliveryService {
       SELECT r.run_id
       FROM runs r
       JOIN agents a ON a.agent_id = r.target_agent_id
+      LEFT JOIN run_cancellation_intents c
+        ON c.run_id = r.run_id AND c.state = 'pending'
       WHERE a.device_id = ? AND r.state = 'queued'
+        AND c.run_id IS NULL
       ORDER BY r.created_at, r.run_id
     `).all(deviceId) as Array<{ run_id: string }>;
     for (const row of rows) {

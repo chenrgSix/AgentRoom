@@ -414,6 +414,7 @@ export async function createServerApp(
   );
   let discussionSweepTimer: ReturnType<typeof setInterval> | undefined;
   let discussionSweepInFlight = false;
+  let cancellationSweepTimer: ReturnType<typeof setInterval> | undefined;
   let memoryReducerSweepTimer: ReturnType<typeof setInterval> | undefined;
   let memoryReducerSweepInFlight = false;
   const dispatchDiscussionRun = async (run: ReturnType<RunRepository["getRun"]>) => {
@@ -658,6 +659,7 @@ export async function createServerApp(
 
   app.addHook("onClose", (_instance, done) => {
     if (discussionSweepTimer) clearInterval(discussionSweepTimer);
+    if (cancellationSweepTimer) clearInterval(cancellationSweepTimer);
     if (memoryReducerSweepTimer) clearInterval(memoryReducerSweepTimer);
     database.close();
     done();
@@ -818,6 +820,17 @@ export async function createServerApp(
       runIds: projectionRecovery.expiredRuns.map(({ runId }) => runId)
     }, "Stale Member Message Run projections were restored as expired");
   }
+  const cancellationRecovery = cancellations.recover();
+  if (
+    cancellationRecovery.expiredRunIds.length > 0 ||
+    cancellationRecovery.sentRunIds.length > 0
+  ) {
+    app.log.info({
+      event: "run.cancellation.recovered",
+      expiredRunIds: cancellationRecovery.expiredRunIds,
+      sentRunIds: cancellationRecovery.sentRunIds
+    }, "Pending Run cancellation intents were recovered");
+  }
   for (const run of projectionRecovery.queuedRuns) {
     const dispatched = delivery.dispatch(run.runId);
     app.log.info({
@@ -847,6 +860,25 @@ export async function createServerApp(
     });
   }, 1_000);
   discussionSweepTimer.unref();
+
+  cancellationSweepTimer = setInterval(() => {
+    try {
+      const sweep = cancellations.sweep();
+      if (sweep.expiredRunIds.length > 0 || sweep.sentRunIds.length > 0) {
+        app.log.info({
+          event: "run.cancellation.swept",
+          expiredRunIds: sweep.expiredRunIds,
+          sentRunIds: sweep.sentRunIds
+        }, "Pending Run cancellation intents were swept");
+      }
+    } catch (error) {
+      app.log.error({
+        event: "run.cancellation.sweep_failed",
+        error: error instanceof Error ? error.message : "Unexpected error"
+      }, "Run cancellation intent sweep failed");
+    }
+  }, 1_000);
+  cancellationSweepTimer.unref();
 
   if (memoryReducer) {
     memoryReducer.enableAllRooms();

@@ -4,6 +4,7 @@ import {
   requiredString
 } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
+import { truncateUnicodeCodePoints } from "../domain/unicode-length.js";
 
 export function registerRunRoutes({
   app,
@@ -123,10 +124,16 @@ export function registerRunRoutes({
     "/api/runs/:runId/cancel",
     async (request) => {
       const body = bodyObject(request);
+      const reason = truncateUnicodeCodePoints(
+        typeof body.reason === "string"
+          ? body.reason.trim()
+          : "Canceled from Web",
+        512
+      ) || "Canceled from Web";
       const canceled = cancellations.cancel(
         principal(request),
         request.params.runId,
-        typeof body.reason === "string" ? body.reason : "Canceled from Web"
+        reason
       );
       return canceled;
     }

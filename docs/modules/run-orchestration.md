@@ -110,6 +110,32 @@ the Device socket. Startup recovery repeats the idempotent Run reconciliation
 for any revoked Device left behind by a crash after the durable security
 mutation.
 
+### Durable managed cancellation
+
+Canceling a queued or `input_required` Run remains one direct Central terminal
+transition. For an accepted managed Run, Central first commits one immutable
+cancellation intent containing the stable command message ID, exact Run/Agent,
+the accepted Delivery's frozen Device, requester, bounded reason and
+acknowledgement deadline. Socket delivery is only a replayable side effect.
+Startup, a one-second bounded sweep, and authenticated hello/publish/heartbeat
+all resend the same command identity until a terminal Run event resolves the
+intent.
+
+The existing sequenced terminal status is the acknowledgement; protocol 1.0
+does not gain a second competing ACK authority. While an intent is pending,
+only its frozen Device may provide the terminal event even if the Agent is
+later published elsewhere. The Bridge validates Run, trace and Agent identity,
+cancels an active Runtime, and durably records the resulting event before send.
+If the network loses that terminal write after local completion, a repeated
+cancel command replays only the matching terminal inbox record and never starts
+the Runtime again. Active, missing, non-terminal or mismatched records fail
+closed rather than fabricate an outcome.
+
+If no terminal event arrives by the durable deadline, Central resolves the Run
+as `outcome_unknown` with `RUN_CANCEL_ACK_TIMEOUT`; it never reports a remote
+cancellation merely because a socket write succeeded. Duplicate user requests,
+restarts and reconnects retain one intent and one terminal Run history.
+
 ## Delivery Contract
 
 1. Persist Run and delivery record.

@@ -16,6 +16,8 @@ import { OperationalMetrics } from
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { CancellationService } from "../src/run/cancellation-service.js";
+import { BridgeRunEventService } from
+  "../src/run/bridge-run-event-service.js";
 import { DeliveryService } from "../src/run/delivery-service.js";
 import { RunRepository } from "../src/run/run-repository.js";
 import { RunService } from "../src/run/run-service.js";
@@ -38,7 +40,7 @@ class CapturingSocket implements BridgeSocket {
   }
 }
 
-test("an offline canceled Run is not an actionable pending delivery", async () => {
+test("an ambiguous offline Delivery is canceled without replaying its Run", async () => {
   const directory = await mkdtemp(
     path.join(os.tmpdir(), "convene-wire-cancel-metrics-")
   );
@@ -82,6 +84,11 @@ test("an offline canceled Run is not an actionable pending delivery", async () =
       principal,
       created.team.teamId,
       "Offline Device",
+      createdAt
+    );
+    const credential = auth.issueDeviceCredential(device.deviceId, createdAt);
+    const devicePrincipal = auth.authenticateDevice(
+      credential.secret,
       createdAt
     );
     const agent = agents.publishAgent(principal, {
@@ -131,38 +138,91 @@ test("an offline canceled Run is not an actionable pending delivery", async () =
       { state: "pending", sendCount: 0 }
     );
 
+    let currentTime = canceledAt;
     const metrics = new OperationalMetrics(
       database,
       connections,
-      () => canceledAt
+      () => currentTime
     );
     assert.equal(metrics.snapshot().pendingDeliveries, 1);
     assert.equal(metrics.snapshot().oldestPendingDeliveryAgeSeconds, 10);
 
-    const canceled = new CancellationService(
+    const cancellations = new CancellationService(
       core,
       runRepository,
       auth,
       connections,
-      () => canceledAt
-    ).cancel(principal, run.runId, "Wrong target Agent");
-    assert.equal(canceled.state, "canceled");
+      () => currentTime,
+      { ackTimeoutMilliseconds: 5_000, retryIntervalMilliseconds: 1_000 }
+    );
+    const canceled = cancellations.cancel(
+      principal,
+      run.runId,
+      "Wrong target Agent"
+    );
+    assert.equal(canceled.state, "queued");
     const unaccepted = delivery.getByRun(run.runId);
     assert.deepEqual(
       { state: unaccepted?.state, sendCount: unaccepted?.sendCount },
       { state: "pending", sendCount: 0 }
     );
 
+    assert.deepEqual(
+      {
+        state: runRepository.getCancellationIntent(run.runId)?.state,
+        deviceId: runRepository.getCancellationIntent(run.runId)?.deviceId
+      },
+      { state: "pending", deviceId: device.deviceId }
+    );
     const afterCancel = metrics.snapshot();
-    assert.equal(afterCancel.queueDepth, 0);
-    assert.equal(afterCancel.pendingDeliveries, 0);
-    assert.equal(afterCancel.oldestPendingDeliveryAgeSeconds, 0);
-    assert.equal(afterCancel.deliveryRetries, 0);
+    assert.equal(afterCancel.queueDepth, 1);
+    assert.equal(afterCancel.pendingDeliveries, 1);
 
     const socket = new CapturingSocket();
     connections.register(device.deviceId, 1, socket);
+    assert.deepEqual(cancellations.resendForDevice(device.deviceId), [run.runId]);
+    assert.equal(delivery.dispatch(run.runId)?.sendCount, 0);
     delivery.dispatchQueuedForDevice(device.deviceId);
-    assert.equal(socket.messages.length, 0);
+    assert.deepEqual(socket.messages.map((source) =>
+      (JSON.parse(source) as { type: string }).type
+    ), ["run.cancel_requested"]);
+
+    currentTime = "2026-08-28T10:00:11.000Z";
+    const acknowledged = new BridgeRunEventService(
+      core,
+      runRepository
+    ).applyStatus(devicePrincipal, {
+      runId: run.runId,
+      traceId: run.traceId,
+      agentId: agent.agentId,
+      sequence: 1,
+      status: "canceled"
+    }, currentTime);
+    assert.equal(acknowledged.run.state, "canceled");
+    const duplicateAck = new BridgeRunEventService(
+      core,
+      runRepository
+    ).applyStatus(devicePrincipal, {
+      runId: run.runId,
+      traceId: run.traceId,
+      agentId: agent.agentId,
+      sequence: 1,
+      status: "canceled"
+    }, currentTime);
+    assert.equal(duplicateAck.applied, false);
+    assert.equal(duplicateAck.run.state, "canceled");
+    assert.deepEqual(
+      {
+        state: runRepository.getCancellationIntent(run.runId)?.state,
+        terminalStatus:
+          runRepository.getCancellationIntent(run.runId)?.terminalStatus
+      },
+      { state: "resolved", terminalStatus: "canceled" }
+    );
+    const afterAck = metrics.snapshot();
+    assert.equal(afterAck.queueDepth, 0);
+    assert.equal(afterAck.pendingDeliveries, 0);
+    assert.equal(afterAck.oldestPendingDeliveryAgeSeconds, 0);
   } finally {
     database.close();
   }
