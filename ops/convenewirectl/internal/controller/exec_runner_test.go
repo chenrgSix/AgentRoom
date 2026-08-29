@@ -12,6 +12,9 @@ func TestClosedCommandEnvironmentRejectsAmbientProductOverrides(t *testing.T) {
 		"DOCKER_HOST=unix:///safe/docker.sock",
 		"CONVENE_WIRE_DATABASE_PATH=/data/ambient.sqlite",
 		"CONVENE_WIRE_PUBLIC_ORIGIN=https://ambient.example",
+		"CONVENE_WIRE_RELEASE_VERSION=v999.0.0",
+		"CONVENE_WIRE_SOURCE_COMMIT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"CONVENE_WIRE_SERVER_IMAGE=convenewire/server:ambient",
 		"AGENT_ROOM_DOMAIN=ambient.example",
 	}, map[string]string{
 		"CONVENE_WIRE_BRIDGE_SERVER_TOKEN": "explicit-secret",
@@ -30,6 +33,9 @@ func TestClosedCommandEnvironmentRejectsAmbientProductOverrides(t *testing.T) {
 	for _, rejected := range []string{
 		"CONVENE_WIRE_DATABASE_PATH=/data/ambient.sqlite",
 		"CONVENE_WIRE_PUBLIC_ORIGIN=https://ambient.example",
+		"CONVENE_WIRE_RELEASE_VERSION=v999.0.0",
+		"CONVENE_WIRE_SOURCE_COMMIT=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		"CONVENE_WIRE_SERVER_IMAGE=convenewire/server:ambient",
 		"AGENT_ROOM_DOMAIN=ambient.example",
 	} {
 		if slices.Contains(result, rejected) {

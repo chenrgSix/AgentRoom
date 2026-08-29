@@ -143,7 +143,7 @@ func (controller *Controller) MigratePrivateHostname(
 			} else {
 				_, restartErr = controller.runCompose(
 					ctx, installation, oldEnvironment,
-					"up", "-d", "--wait", "--wait-timeout", "180",
+					composeUpArguments(installation.Manifest, false)...,
 				)
 			}
 			if restartErr == nil {
@@ -177,7 +177,7 @@ func (controller *Controller) MigratePrivateHostname(
 	}
 	if _, err := controller.runCompose(
 		ctx, candidate, environment,
-		"up", "-d", "--build", "--wait", "--wait-timeout", "180",
+		composeUpArguments(candidate.Manifest, true)...,
 	); err != nil {
 		return rollback(err)
 	}
@@ -200,7 +200,7 @@ func (controller *Controller) MigratePrivateHostname(
 	}
 	if _, err := controller.runCompose(
 		ctx, installation, canonicalEnvironment,
-		"up", "-d", "--wait", "--wait-timeout", "180",
+		composeUpArguments(candidateManifest, false)...,
 	); err != nil {
 		return rollback(err)
 	}

@@ -2,7 +2,7 @@ name: agentroom
 
 services:
   secret-init:
-    image: convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}
+    image: ${CONVENE_WIRE_SERVER_IMAGE:-convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}}
     pull_policy: never
     command:
       - node
@@ -79,7 +79,7 @@ services:
       - agentroom_secrets:/prepared
 
   data-init:
-    image: convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}
+    image: ${CONVENE_WIRE_SERVER_IMAGE:-convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}}
     pull_policy: never
     command:
       - node
@@ -138,6 +138,8 @@ services:
       AGENT_ROOM_WEB_ROOT: ${AGENT_ROOM_WEB_ROOT:-}
       CONVENE_WIRE_BRIDGE_SERVER_TOKEN: ${CONVENE_WIRE_BRIDGE_SERVER_TOKEN:-${AGENT_ROOM_BRIDGE_SERVER_TOKEN:-}}
       CONVENE_WIRE_DATABASE_PATH: ${CONVENE_WIRE_DATABASE_PATH:-${AGENT_ROOM_DATABASE_PATH:-/data/agent-room.sqlite}}
+      CONVENE_WIRE_RELEASE_VERSION: ${CONVENE_WIRE_RELEASE_VERSION:-development}
+      CONVENE_WIRE_SOURCE_COMMIT: ${CONVENE_WIRE_SOURCE_COMMIT:-unknown}
       CONVENE_WIRE_DEPLOYMENT_TRUST_FILE: ${CONVENE_WIRE_DEPLOYMENT_TRUST_FILE:-${AGENT_ROOM_DEPLOYMENT_TRUST_FILE:-}}
       CONVENE_WIRE_DEPLOYMENT_TRUST_ROTATION_FILE: ${CONVENE_WIRE_DEPLOYMENT_TRUST_ROTATION_FILE:-${AGENT_ROOM_DEPLOYMENT_TRUST_ROTATION_FILE:-}}
       CONVENE_WIRE_HOST: ${CONVENE_WIRE_HOST:-${AGENT_ROOM_HOST:-0.0.0.0}}
@@ -148,7 +150,7 @@ services:
       CONVENE_WIRE_TRUST_PROXY_HOPS: ${CONVENE_WIRE_TRUST_PROXY_HOPS:-${AGENT_ROOM_TRUST_PROXY_HOPS:-1}}
       CONVENE_WIRE_WEB_AUTH_MODE: ${CONVENE_WIRE_WEB_AUTH_MODE:-${AGENT_ROOM_WEB_AUTH_MODE:-trusted-team}}
       CONVENE_WIRE_WEB_ROOT: ${CONVENE_WIRE_WEB_ROOT:-${AGENT_ROOM_WEB_ROOT:-/app/apps/web/dist}}
-    image: convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}
+    image: ${CONVENE_WIRE_SERVER_IMAGE:-convenewire/server:${CONVENE_WIRE_IMAGE_TAG:-${AGENT_ROOM_IMAGE_TAG:-source-build}}}
     expose:
       - "3000"
     healthcheck:
@@ -180,7 +182,7 @@ services:
       - NET_BIND_SERVICE
     cap_drop:
       - ALL
-    image: caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648
+    image: ${CONVENE_WIRE_CADDY_IMAGE:-caddy:2.11.4-alpine@sha256:5f5c8640aae01df9654968d946d8f1a56c497f1dd5c5cda4cf95ab7c14d58648}
     depends_on:
       agentroom:
         condition: service_healthy

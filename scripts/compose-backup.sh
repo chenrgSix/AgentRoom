@@ -30,12 +30,19 @@ chmod 0700 "${backup_root}"
 temporary_backup=$(mktemp "${backup_root}/.convene-wire-backup.XXXXXX")
 
 cd "${repository_root}"
-docker compose exec -T agentroom \
-  node apps/server/dist/data/backup-cli.js "/backups/${backup_name}"
+if ! backup_output=$(docker compose exec -T agentroom \
+  node apps/server/dist/data/backup-cli.js "/backups/${backup_name}" 2>&1); then
+  printf '%s\n' "${backup_output}" >&2
+  exit 1
+fi
 container_hash=$(docker compose exec -T agentroom \
   node -e 'const fs=require("node:fs");const crypto=require("node:crypto");const h=crypto.createHash("sha256");fs.createReadStream(process.argv[1]).on("data",d=>h.update(d)).on("end",()=>console.log(h.digest("hex")));' \
   "/backups/${backup_name}" | tr -d '\r\n')
-docker compose cp "agentroom:/backups/${backup_name}" "${temporary_backup}"
+if ! copy_output=$(docker compose cp \
+  "agentroom:/backups/${backup_name}" "${temporary_backup}" 2>&1); then
+  printf '%s\n' "${copy_output}" >&2
+  exit 1
+fi
 chmod 0600 "${temporary_backup}"
 
 if command -v sha256sum >/dev/null 2>&1; then
@@ -55,5 +62,14 @@ if ! ln "${temporary_backup}" "${host_backup}"; then
 fi
 rm -f -- "${temporary_backup}"
 temporary_backup=""
+
+# OPS-013_STANDALONE_BACKUP_SYNC: the Controller performs exact file and
+# exports-directory fsync before accepting this receipt. Direct script users
+# retain a conservative POSIX host sync without adding a host Node dependency.
+if ! command -v sync >/dev/null 2>&1; then
+  echo "The host sync utility is required to complete a durable backup" >&2
+  exit 1
+fi
+sync
 
 printf '%s  %s\n' "${host_hash}" "${host_backup}"

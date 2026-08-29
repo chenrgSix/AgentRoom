@@ -1,6 +1,7 @@
 package controller
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"crypto/ecdsa"
@@ -25,6 +26,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"convenewire.dev/convenewirectl/internal/releaseimage"
 )
 
 type fakeRunner struct {
@@ -32,6 +35,16 @@ type fakeRunner struct {
 	failOnce                        map[string]int
 	hook                            func(Command)
 	rotationAcknowledgementResponse string
+	activeServerImageID             string
+	activeCaddyImageID              string
+	runtimeBuildIdentity            string
+	activeRuntimeReleaseVersion     string
+	activeRuntimeSourceCommit       string
+	serverStopped                   bool
+	caddyStopped                    bool
+	stopServerAfterUp               bool
+	stopCaddyAfterUp                bool
+	backupSequence                  int
 }
 
 func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error) {
@@ -53,8 +66,80 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 		command.Args[0] == "compose" && command.Args[1] == "version" {
 		return "2.33.1\n", nil
 	}
+	if command.Name == "docker" && len(command.Args) >= 3 &&
+		command.Args[0] == "image" && command.Args[1] == "inspect" {
+		if strings.Contains(joined, "{{.Id}}") {
+			if strings.Contains(joined, releaseimage.ServerRepository+"@") {
+				return "sha256:" + strings.Repeat("c", 64) + "\n", nil
+			}
+			return "sha256:" + strings.Repeat("d", 64) + "\n", nil
+		}
+		return "linux/amd64\n", nil
+	}
+	if command.Name == "docker" && strings.Contains(joined, " up -d ") {
+		for index, argument := range command.Args {
+			if argument != "--env-file" || index+1 >= len(command.Args) {
+				continue
+			}
+			value, err := os.ReadFile(command.Args[index+1])
+			if err != nil {
+				break
+			}
+			for _, line := range strings.Split(string(value), "\n") {
+				key, rawValue, found := strings.Cut(line, "=")
+				if !found {
+					continue
+				}
+				switch key {
+				case "CONVENE_WIRE_RELEASE_VERSION":
+					runner.activeRuntimeReleaseVersion = strings.Trim(rawValue, `"`)
+				case "CONVENE_WIRE_SOURCE_COMMIT":
+					runner.activeRuntimeSourceCommit = strings.Trim(rawValue, `"`)
+				}
+			}
+			break
+		}
+		runner.serverStopped = runner.stopServerAfterUp
+		runner.caddyStopped = runner.stopCaddyAfterUp
+	}
+	if command.Name == "docker" && len(command.Args) >= 5 &&
+		command.Args[0] == "container" && command.Args[1] == "inspect" {
+		if strings.Contains(joined, strings.Repeat("a", 64)) {
+			if runner.activeServerImageID != "" {
+				return runner.activeServerImageID + "\n", nil
+			}
+			return "sha256:" + strings.Repeat("c", 64) + "\n", nil
+		}
+		if runner.activeCaddyImageID != "" {
+			return runner.activeCaddyImageID + "\n", nil
+		}
+		return "sha256:" + strings.Repeat("d", 64) + "\n", nil
+	}
+	if command.Name == "docker" && len(command.Args) >= 2 &&
+		command.Args[0] == "exec" {
+		if runner.runtimeBuildIdentity != "" {
+			return runner.runtimeBuildIdentity, nil
+		}
+		return fmt.Sprintf(
+			"convenewire_build_info{release_version=%q,source_commit=%q} 1\n",
+			runner.activeRuntimeReleaseVersion,
+			runner.activeRuntimeSourceCommit,
+		), nil
+	}
 	if strings.Contains(joined, " images ") {
 		return `{"Repository":"convenewire/server","Tag":"target"}` + "\n", nil
+	}
+	if strings.Contains(joined, " ps --quiet agentroom") {
+		if runner.serverStopped {
+			return "", nil
+		}
+		return strings.Repeat("a", 64) + "\n", nil
+	}
+	if strings.Contains(joined, " ps --quiet caddy") {
+		if runner.caddyStopped {
+			return "", nil
+		}
+		return strings.Repeat("b", 64) + "\n", nil
 	}
 	if strings.Contains(joined, " ps ") {
 		return `[{"Service":"agentroom","State":"running"}]` + "\n", nil
@@ -66,7 +151,25 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 		return `{"eligible":0,"acknowledged":0}`, nil
 	}
 	if command.Name == "bash" && strings.Contains(joined, "compose-backup.sh") {
-		return strings.Repeat("a", 64) + "  /safe/agent-room.sqlite\n", nil
+		runner.backupSequence++
+		backupDirectory := command.Env["CONVENE_WIRE_BACKUP_DIR"]
+		if err := os.MkdirAll(backupDirectory, 0o700); err != nil {
+			return "", err
+		}
+		backupPath := filepath.Join(
+			backupDirectory,
+			fmt.Sprintf("convene-wire-test-%03d.sqlite", runner.backupSequence),
+		)
+		contents := []byte(fmt.Sprintf("verified-backup-%03d\n", runner.backupSequence))
+		if err := os.WriteFile(backupPath, contents, 0o600); err != nil {
+			return "", err
+		}
+		digest := sha256.Sum256(contents)
+		return fmt.Sprintf(
+			"%s  %s\n",
+			hex.EncodeToString(digest[:]),
+			backupPath,
+		), nil
 	}
 	if command.Name == "bash" && strings.Contains(joined, "compose-restore.sh") {
 		return "Set CONVENE_WIRE_DATABASE_PATH=/data/restored.sqlite, then run docker compose up -d.\n", nil
@@ -273,6 +376,209 @@ func createReleaseForTarget(t *testing.T, parent, version string, dataSchema int
 	return releaseDir
 }
 
+func createOCIRelease(t *testing.T, parent, version string, dataSchema int) string {
+	t.Helper()
+	releaseDir := createRelease(t, parent, version, dataSchema)
+	const sourceCommit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	type testDescriptor struct {
+		MediaType   string            `json:"mediaType"`
+		Digest      string            `json:"digest"`
+		Size        int64             `json:"size"`
+		Annotations map[string]string `json:"annotations,omitempty"`
+		Platform    map[string]string `json:"platform,omitempty"`
+	}
+	blobs := map[string][]byte{}
+	images := make([]releaseimage.ImageMetadata, 0, 2)
+	descriptors := make([]testDescriptor, 0, 2)
+	addBlob := func(value []byte) testDescriptor {
+		digest := sha256.Sum256(value)
+		hexDigest := hex.EncodeToString(digest[:])
+		blobs[hexDigest] = value
+		return testDescriptor{Digest: "sha256:" + hexDigest, Size: int64(len(value))}
+	}
+	attestations := map[string][]byte{}
+	for _, identity := range []struct {
+		role       string
+		repository string
+	}{
+		{role: releaseimage.ServerRole, repository: releaseimage.ServerRepository},
+		{role: releaseimage.CaddyRole, repository: releaseimage.CaddyRepository},
+	} {
+		configBytes, err := json.Marshal(map[string]any{
+			"architecture": "amd64", "os": "linux",
+			"config": map[string]any{"Labels": map[string]string{
+				"org.opencontainers.image.revision": sourceCommit,
+				"org.opencontainers.image.version":  version,
+				"org.opencontainers.image.title":    identity.repository,
+			}},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		config := addBlob(configBytes)
+		config.MediaType = releaseimage.OCIConfigMediaType
+		manifestBytes, err := json.Marshal(map[string]any{
+			"schemaVersion": 2,
+			"mediaType":     releaseimage.OCIManifestMediaType,
+			"config":        config,
+			"layers":        []any{},
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		manifest := addBlob(manifestBytes)
+		manifest.MediaType = releaseimage.OCIManifestMediaType
+		manifest.Annotations = map[string]string{
+			"io.containerd.image.name":          "docker.io/" + identity.repository + ":" + version,
+			"org.opencontainers.image.ref.name": version,
+		}
+		manifest.Platform = map[string]string{"os": "linux", "architecture": "amd64"}
+		descriptors = append(descriptors, manifest)
+		sbomBytes, err := json.MarshalIndent(map[string]any{
+			"_type": "https://in-toto.io/Statement/v1",
+			"subject": []any{map[string]any{
+				"name":   identity.repository,
+				"digest": map[string]string{"sha256": strings.TrimPrefix(manifest.Digest, "sha256:")},
+			}},
+			"predicateType": releaseimage.SPDXPredicateType,
+			"predicate": map[string]any{
+				"spdxVersion": "SPDX-2.3", "SPDXID": "SPDXRef-DOCUMENT", "packages": []any{},
+			},
+		}, "", "  ")
+		if err != nil {
+			t.Fatal(err)
+		}
+		sbomBytes = append(sbomBytes, '\n')
+		sbomPath := "attestations/" + identity.role + ".sbom.spdx.json"
+		attestations[sbomPath] = sbomBytes
+		sbomDigest := sha256.Sum256(sbomBytes)
+		images = append(images, releaseimage.ImageMetadata{
+			Role: identity.role, Repository: identity.repository,
+			Digest: manifest.Digest, Reference: identity.repository + "@" + manifest.Digest,
+			SBOM: releaseimage.Attestation{
+				Path: sbomPath, SHA256: hex.EncodeToString(sbomDigest[:]),
+				PredicateType: releaseimage.SPDXPredicateType,
+			},
+		})
+	}
+	provenanceSubjects := make([]any, 0, len(images))
+	for _, image := range images {
+		provenanceSubjects = append(provenanceSubjects, map[string]any{
+			"name":   image.Repository,
+			"digest": map[string]string{"sha256": strings.TrimPrefix(image.Digest, "sha256:")},
+		})
+	}
+	provenanceBytes, err := json.MarshalIndent(map[string]any{
+		"_type": "https://in-toto.io/Statement/v1", "subject": provenanceSubjects,
+		"predicateType": releaseimage.SLSAPredicateType,
+		"predicate": map[string]any{
+			"buildDefinition": map[string]any{
+				"buildType": "https://convenewire.dev/buildtypes/central-oci-bundle/v1",
+				"externalParameters": map[string]string{
+					"releaseVersion": version, "sourceCommit": sourceCommit, "platform": "linux/amd64",
+				},
+				"resolvedDependencies": []any{map[string]any{
+					"uri":    releaseimage.SourceRepositoryURI,
+					"digest": map[string]string{"gitCommit": sourceCommit},
+				}, map[string]any{
+					"uri": "oci://" + releaseimage.SBOMGenerator,
+					"digest": map[string]string{
+						"sha256": strings.TrimPrefix(strings.SplitN(releaseimage.SBOMGenerator, "@", 2)[1], "sha256:"),
+					},
+				}},
+			},
+			"runDetails": map[string]any{"builder": map[string]string{"id": "test://controller"}},
+		},
+	}, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	provenanceBytes = append(provenanceBytes, '\n')
+	const provenancePath = "attestations/provenance.slsa.json"
+	attestations[provenancePath] = provenanceBytes
+	provenanceDigest := sha256.Sum256(provenanceBytes)
+
+	indexBytes, err := json.Marshal(map[string]any{
+		"schemaVersion": 2, "mediaType": releaseimage.OCIIndexMediaType, "manifests": descriptors,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	versionWithoutPrefix := strings.TrimPrefix(version, "v")
+	archiveName := "convenewire-central-image_" + versionWithoutPrefix + "_linux_amd64.oci.tar"
+	metadataName := "convenewire-central-image_" + versionWithoutPrefix + "_linux_amd64.metadata.json"
+	imageDir := filepath.Join(releaseDir, "image")
+	if err := os.MkdirAll(imageDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	archivePath := filepath.Join(imageDir, archiveName)
+	archiveFile, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tarWriter := tar.NewWriter(archiveFile)
+	entries := map[string][]byte{
+		"oci-layout": []byte("{\"imageLayoutVersion\":\"1.0.0\"}\n"),
+		"index.json": append(indexBytes, '\n'),
+	}
+	for digest, value := range blobs {
+		entries["blobs/sha256/"+digest] = value
+	}
+	for name, value := range attestations {
+		entries[name] = value
+	}
+	names := make([]string, 0, len(entries))
+	for name := range entries {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		value := entries[name]
+		if err := tarWriter.WriteHeader(&tar.Header{Name: name, Mode: 0o644, Size: int64(len(value)), Typeflag: tar.TypeReg}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tarWriter.Write(value); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := archiveFile.Close(); err != nil {
+		t.Fatal(err)
+	}
+	archiveSHA, err := digestFile(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata := releaseimage.Metadata{
+		SchemaVersion:  releaseimage.MetadataSchemaVersion,
+		ReleaseVersion: version, SourceCommit: sourceCommit, Platform: "linux/amd64",
+		Archive: "image/" + archiveName, ArchiveSHA256: archiveSHA,
+		Images: images, BuilderID: "test://controller", SBOMGenerator: releaseimage.SBOMGenerator,
+		Provenance: releaseimage.Attestation{
+			Path: provenancePath, SHA256: hex.EncodeToString(provenanceDigest[:]),
+			PredicateType: releaseimage.SLSAPredicateType,
+		},
+	}
+	metadataBytes, err := json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(imageDir, metadataName), append(metadataBytes, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	releaseMetadata := fmt.Sprintf(
+		"{\"schemaVersion\":2,\"releaseVersion\":%q,\"dataSchemaVersion\":%d,\"sourceCommit\":%q,\"targetOS\":\"linux\",\"targetArch\":\"amd64\",\"imageMetadata\":%q}\n",
+		version, dataSchema, sourceCommit, "image/"+metadataName,
+	)
+	if err := os.WriteFile(filepath.Join(releaseDir, "convenewire-central-release.json"), []byte(releaseMetadata), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rewriteTestReleaseChecksums(t, releaseDir)
+	return releaseDir
+}
+
 func rewriteTestReleaseChecksums(t *testing.T, releaseDir string) {
 	t.Helper()
 	names := []string{}
@@ -415,6 +721,214 @@ func TestInstallIsReentrantAndKeepsSecretsOutOfConfiguration(t *testing.T) {
 	if strings.Contains(output.String(), strings.TrimSpace(string(secretBefore))) {
 		t.Fatal("operator output disclosed the Owner recovery secret")
 	}
+}
+
+func TestOCIInstallLoadsExactImagesAndDisablesBuildAndPull(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installation, err := control.Install(context.Background(), installOptions(releaseDir, dataRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasPinnedRuntimeImages(installation.Manifest) || installation.Manifest.SourceCommit != strings.Repeat("a", 40) {
+		t.Fatalf("OCI identity was not committed: %+v", installation.Manifest)
+	}
+	environment, err := os.ReadFile(installation.EnvironmentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`CONVENE_WIRE_RELEASE_VERSION="v1.2.3"`,
+		`CONVENE_WIRE_SOURCE_COMMIT="` + strings.Repeat("a", 40) + `"`,
+		`CONVENE_WIRE_SERVER_IMAGE="convenewire/server@sha256:`,
+		`CONVENE_WIRE_CADDY_IMAGE="convenewire/caddy@sha256:`,
+	} {
+		if !bytes.Contains(environment, []byte(expected)) {
+			t.Fatalf("closed environment omits %q:\n%s", expected, environment)
+		}
+	}
+	loadIndex, configIndex, upIndex, runtimeIdentityIndex, inspectCount := -1, -1, -1, -1, 0
+	for index, command := range runner.commands {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, "docker image load --input ") {
+			loadIndex = index
+		}
+		if strings.Contains(joined, " config --quiet") {
+			configIndex = index
+		}
+		if strings.Contains(joined, "docker image inspect --format") {
+			inspectCount++
+		}
+		if strings.Contains(joined, " up -d ") {
+			upIndex = index
+			if !strings.Contains(joined, "--no-build --pull never") || strings.Contains(joined, " --build") {
+				t.Fatalf("OCI install weakened offline startup: %s", joined)
+			}
+		}
+		if strings.Contains(joined, " ps --quiet agentroom") {
+			runtimeIdentityIndex = index
+		}
+		if command.Name == "docker" && len(command.Args) >= 2 && command.Args[0] == "pull" {
+			t.Fatalf("OCI install requested a network pull: %s", joined)
+		}
+	}
+	if loadIndex < 0 || inspectCount != 4 || configIndex <= loadIndex ||
+		upIndex <= configIndex || runtimeIdentityIndex <= upIndex {
+		t.Fatalf("unexpected load/verify/config/start/identity order: load=%d inspect=%d config=%d up=%d identity=%d", loadIndex, inspectCount, configIndex, upIndex, runtimeIdentityIndex)
+	}
+}
+
+func TestOCIInstallRequiresExactActiveRuntimeBeforeReady(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(*fakeRunner)
+	}{
+		{
+			name: "both services stopped",
+			configure: func(runner *fakeRunner) {
+				runner.stopServerAfterUp = true
+				runner.stopCaddyAfterUp = true
+			},
+		},
+		{
+			name: "only Caddy stopped",
+			configure: func(runner *fakeRunner) {
+				runner.stopCaddyAfterUp = true
+			},
+		},
+		{
+			name: "Server image drift",
+			configure: func(runner *fakeRunner) {
+				runner.activeServerImageID = "sha256:" + strings.Repeat("e", 64)
+			},
+		},
+		{
+			name: "Server build identity drift",
+			configure: func(runner *fakeRunner) {
+				runner.runtimeBuildIdentity = "convenewire_build_info{release_version=\"v9.9.9\",source_commit=\"" + strings.Repeat("f", 40) + "\"} 1\n"
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+			dataRoot := filepath.Join(root, "state")
+			runner := &fakeRunner{failOnce: map[string]int{}}
+			test.configure(runner)
+			_, err := New(testDependencies(runner, &bytes.Buffer{})).Install(
+				context.Background(),
+				installOptions(releaseDir, dataRoot),
+			)
+			requireActionCode(t, err, "INSTALL_RUNTIME_MISMATCH")
+			manifest, found, loadErr := loadManifest(installationPaths(dataRoot).ManifestPath)
+			if loadErr != nil || !found || manifest.LastSuccessfulStep == "ready" {
+				t.Fatalf("runtime drift reached ready manifest: %+v found=%t err=%v", manifest, found, loadErr)
+			}
+		})
+	}
+}
+
+func TestLegacyReleaseKeepsExplicitSourceBuildBoundary(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	installation, err := New(testDependencies(runner, &bytes.Buffer{})).Install(
+		context.Background(), installOptions(releaseDir, filepath.Join(root, "state")),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hasPinnedRuntimeImages(installation.Manifest) || installation.Manifest.SourceCommit != strings.Repeat("a", 40) {
+		t.Fatalf("legacy release crossed the compatibility boundary: %+v", installation.Manifest)
+	}
+	environment, err := os.ReadFile(installation.EnvironmentPath)
+	if err != nil || !bytes.Contains(environment, []byte(`CONVENE_WIRE_RELEASE_VERSION="v1.2.3"`)) ||
+		!bytes.Contains(environment, []byte(`CONVENE_WIRE_SOURCE_COMMIT="`+strings.Repeat("a", 40)+`"`)) {
+		t.Fatalf("legacy release omitted verified build identity: %s err=%v", environment, err)
+	}
+	foundBuild := false
+	for _, command := range runner.commands {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, "docker image load") {
+			t.Fatalf("schema-v1 release unexpectedly loaded an OCI bundle: %s", joined)
+		}
+		if strings.Contains(joined, " up -d --build") {
+			foundBuild = true
+		}
+	}
+	if !foundBuild {
+		t.Fatal("schema-v1 release did not preserve the source-build compatibility path")
+	}
+}
+
+func TestOCIInstallLoadFailureStopsBeforeCompose(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{"image load": 1}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	_, err := control.Install(context.Background(), installOptions(releaseDir, dataRoot))
+	requireActionCode(t, err, "RUNTIME_IMAGE_LOAD_FAILED")
+	for _, command := range runner.commands {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, " config --quiet") || strings.Contains(joined, " up -d") {
+			t.Fatalf("failed image load crossed the Compose boundary: %s", joined)
+		}
+	}
+	manifest, found, loadErr := loadManifest(installationPaths(dataRoot).ManifestPath)
+	if loadErr != nil || !found || manifest.LastSuccessfulStep != "configuration_ready" {
+		t.Fatalf("load failure was not retry-safe: %+v found=%v err=%v", manifest, found, loadErr)
+	}
+}
+
+func TestOCIReleasePlatformMismatchFailsBeforeDockerLoad(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	metadataPath := filepath.Join(releaseDir, "image", "convenewire-central-image_1.2.3_linux_amd64.metadata.json")
+	value, err := os.ReadFile(metadataPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var metadata releaseimage.Metadata
+	if err := json.Unmarshal(value, &metadata); err != nil {
+		t.Fatal(err)
+	}
+	metadata.Platform = "linux/arm64"
+	value, err = json.MarshalIndent(metadata, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(metadataPath, append(value, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rewriteTestReleaseChecksums(t, releaseDir)
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	_, err = New(testDependencies(runner, &bytes.Buffer{})).Install(
+		context.Background(), installOptions(releaseDir, filepath.Join(root, "state")),
+	)
+	requireActionCode(t, err, "RELEASE_IMAGE_INVALID")
+	for _, command := range runner.commands {
+		if command.Name == "docker" && len(command.Args) >= 2 && command.Args[0] == "image" && command.Args[1] == "load" {
+			t.Fatal("invalid platform reached docker image load")
+		}
+	}
+}
+
+func TestOCIDoctorFailsClosedWhenPinnedImageIsMissing(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	if _, err := control.Install(context.Background(), installOptions(releaseDir, dataRoot)); err != nil {
+		t.Fatal(err)
+	}
+	runner.failOnce["image inspect"] = 1
+	requireActionCode(t, control.Doctor(context.Background(), dataRoot), "RUNTIME_IMAGE_MISSING")
 }
 
 func TestConcurrentLifecycleMutationFailsBusyBeforeSecondCommand(t *testing.T) {
@@ -767,6 +1281,581 @@ func TestUpgradeRequiresBackupAndCommitsOnlyAfterReadiness(t *testing.T) {
 	}
 	if backupIndex < 0 || upIndex < 0 || backupIndex >= upIndex {
 		t.Fatalf("verified backup did not precede target start: backup=%d up=%d", backupIndex, upIndex)
+	}
+}
+
+func seedUpgradeJournal(
+	t *testing.T,
+	installation Installation,
+	targetRelease string,
+	phase string,
+) upgradeJournal {
+	t.Helper()
+	metadata, digest, err := verifyRelease(
+		targetRelease,
+		filepath.Join(targetRelease, "SHA256SUMS"),
+		checksumPin(targetRelease),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	target := installation.Manifest
+	target.ReleaseVersion = metadata.ReleaseVersion
+	target.SourceCommit = metadata.SourceCommit
+	target.ReleaseDir = targetRelease
+	target.ReleaseDigest = digest
+	target.DataSchemaVersion = metadata.DataSchemaVersion
+	applyRuntimeImages(&target, metadata)
+	target.LastSuccessfulStep = "upgrade_validating"
+	target.UpdatedAt = time.Date(2026, 8, 28, 1, 3, 0, 0, time.UTC).
+		Format(time.RFC3339Nano)
+	backupDirectory := filepath.Join(installation.Manifest.DataRoot, "exports")
+	if err := os.MkdirAll(backupDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(backupDirectory, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	backupPath := filepath.Join(backupDirectory, "convene-wire-seeded.sqlite")
+	backupContents := []byte("seeded-upgrade-backup\n")
+	if err := os.WriteFile(backupPath, backupContents, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	backupDigest := sha256.Sum256(backupContents)
+	journal := newUpgradeJournal(
+		installation.Manifest,
+		target,
+		backupReceipt{
+			Path: backupPath, SHA256: hex.EncodeToString(backupDigest[:]),
+			Size: int64(len(backupContents)),
+		},
+		time.Date(2026, 8, 28, 1, 3, 0, 0, time.UTC),
+	)
+	journal.Phase = phase
+	if err := saveUpgradeJournal(installation.UpgradeJournalPath, journal); err != nil {
+		t.Fatal(err)
+	}
+	return journal
+}
+
+func TestUpgradeResumesOnlyExactTargetAfterReadyBeforeCanonicalCrash(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+	targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+	otherRelease := createOCIRelease(t, root, "v1.4.0", 3)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installation, err := control.Install(
+		context.Background(),
+		installOptions(currentRelease, dataRoot),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedUpgradeJournal(t, installation, targetRelease, upgradePhaseTargetReady)
+
+	requireActionCode(
+		t,
+		control.Status(context.Background(), dataRoot),
+		"UPGRADE_RECOVERY_REQUIRED",
+	)
+	requireActionCode(t, func() error {
+		_, err := control.Install(
+			context.Background(),
+			installOptions(currentRelease, dataRoot),
+		)
+		return err
+	}(), "UPGRADE_RECOVERY_REQUIRED")
+	requireActionCode(t, control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: otherRelease,
+		ChecksumsSHA256: checksumPin(otherRelease),
+	}), "UPGRADE_RECOVERY_TARGET_MISMATCH")
+
+	restarted := New(testDependencies(runner, &bytes.Buffer{}))
+	if err := restarted.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _, err := loadManifest(installation.ManifestPath)
+	if err != nil || manifest.ReleaseVersion != "v1.3.0" ||
+		manifest.LastSuccessfulStep != "ready" {
+		t.Fatalf("recovered target was not committed: %+v err=%v", manifest, err)
+	}
+	if _, found, err := loadUpgradeJournal(installation.UpgradeJournalPath); err != nil || found {
+		t.Fatalf("completed recovery retained its journal: found=%t err=%v", found, err)
+	}
+	for _, command := range runner.commands {
+		if command.Name == "bash" && strings.Contains(
+			strings.Join(command.Args, " "),
+			"compose-backup.sh",
+		) {
+			t.Fatal("same-target recovery repeated the already-recorded backup phase")
+		}
+	}
+}
+
+func TestUpgradeRecoversAfterCanonicalConfigurationWriteFailure(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+	targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installation, err := control.Install(
+		context.Background(),
+		installOptions(currentRelease, dataRoot),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	previousEnvironment, err := os.ReadFile(installation.EnvironmentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sabotageCanonicalWrite := true
+	runner.hook = func(command Command) {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if !sabotageCanonicalWrite || !strings.Contains(joined, " up -d --no-build") {
+			return
+		}
+		sabotageCanonicalWrite = false
+		if err := os.Remove(installation.EnvironmentPath); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(installation.EnvironmentPath, 0o700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	requireActionCode(t, control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}), "UPGRADE_COMMIT_FAILED")
+	manifest, _, err := loadManifest(installation.ManifestPath)
+	if err != nil || manifest.ReleaseVersion != "v1.2.3" {
+		t.Fatalf("failed canonical write changed the old manifest: %+v err=%v", manifest, err)
+	}
+	journal, found, err := loadUpgradeJournal(installation.UpgradeJournalPath)
+	if err != nil || !found || journal.Phase != upgradePhaseTargetReady {
+		t.Fatalf("failed canonical write lost its ready journal: %+v %t %v", journal, found, err)
+	}
+	if err := os.RemoveAll(installation.EnvironmentPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(installation.EnvironmentPath, previousEnvironment, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	restarted := New(testDependencies(runner, &bytes.Buffer{}))
+	if err := restarted.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _, _ = loadManifest(installation.ManifestPath)
+	if manifest.ReleaseVersion != "v1.3.0" || manifest.LastSuccessfulStep != "ready" {
+		t.Fatalf("canonical write recovery did not commit target: %+v", manifest)
+	}
+	backupCount := 0
+	for _, command := range runner.commands {
+		if command.Name == "bash" && strings.Contains(
+			strings.Join(command.Args, " "),
+			"compose-backup.sh",
+		) {
+			backupCount++
+		}
+	}
+	if backupCount != 1 {
+		t.Fatalf("upgrade recovery repeated or skipped the verified backup: %d", backupCount)
+	}
+}
+
+func TestUpgradeCleansCommittedTargetJournalWithoutReplayingMutation(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+	targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installation, err := control.Install(
+		context.Background(),
+		installOptions(currentRelease, dataRoot),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	journal := seedUpgradeJournal(
+		t,
+		installation,
+		targetRelease,
+		upgradePhaseTargetReady,
+	)
+	committed := journal.Target
+	committed.Generation++
+	committed.LastSuccessfulStep = "ready"
+	if err := saveManifest(installation.ManifestPath, committed); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(journal.Backup.Path); err != nil {
+		t.Fatal(err)
+	}
+	runner.activeRuntimeReleaseVersion = committed.ReleaseVersion
+	runner.activeRuntimeSourceCommit = committed.SourceCommit
+	start := len(runner.commands)
+	if err := control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	assertNoBackupOrUpgradeMutation(t, runner.commands[start:])
+	if _, found, err := loadUpgradeJournal(installation.UpgradeJournalPath); err != nil || found {
+		t.Fatalf("committed target cleanup retained journal: found=%t err=%v", found, err)
+	}
+}
+
+func TestStatusAndDoctorRejectActiveRuntimeIdentityDrift(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	dependencies := testDependencies(runner, &bytes.Buffer{})
+	readinessChecks := 0
+	dependencies.CheckReadiness = func(context.Context, ReadinessInput) error {
+		readinessChecks++
+		return nil
+	}
+	control := New(dependencies)
+	if _, err := control.Install(
+		context.Background(),
+		installOptions(releaseDir, dataRoot),
+	); err != nil {
+		t.Fatal(err)
+	}
+	runner.serverStopped = true
+	runner.caddyStopped = true
+	beforeStoppedStatus := len(runner.commands)
+	if err := control.Status(context.Background(), dataRoot); err != nil {
+		t.Fatalf("status rejected a fully stopped installation: %v", err)
+	}
+	for _, command := range runner.commands[beforeStoppedStatus:] {
+		if command.Name == "docker" && len(command.Args) > 0 && command.Args[0] == "exec" {
+			t.Fatal("status queried Server build identity while both services were stopped")
+		}
+	}
+	runner.serverStopped = false
+	requireActionCode(
+		t,
+		control.Status(context.Background(), dataRoot),
+		"ACTIVE_RUNTIME_MISMATCH",
+	)
+	runner.caddyStopped = false
+	runner.activeServerImageID = "sha256:" + strings.Repeat("e", 64)
+	requireActionCode(
+		t,
+		control.Status(context.Background(), dataRoot),
+		"ACTIVE_RUNTIME_MISMATCH",
+	)
+	runner.activeServerImageID = ""
+	runner.runtimeBuildIdentity = fmt.Sprintf(
+		"convenewire_build_info{release_version=%q,source_commit=%q} 1\n",
+		"v9.9.9",
+		strings.Repeat("f", 40),
+	)
+	readinessChecks = 0
+	requireActionCode(
+		t,
+		control.Doctor(context.Background(), dataRoot),
+		"ACTIVE_RUNTIME_MISMATCH",
+	)
+	if readinessChecks != 0 {
+		t.Fatal("doctor accepted HTTPS readiness before active build identity")
+	}
+}
+
+func TestPinnedBackupAndUpgradeRejectCurrentRuntimeDriftBeforeMutation(t *testing.T) {
+	tests := []struct {
+		name      string
+		configure func(*fakeRunner)
+	}{
+		{
+			name: "both services stopped",
+			configure: func(runner *fakeRunner) {
+				runner.serverStopped = true
+				runner.caddyStopped = true
+			},
+		},
+		{
+			name: "partial runtime",
+			configure: func(runner *fakeRunner) {
+				runner.caddyStopped = true
+			},
+		},
+		{
+			name: "active image drift",
+			configure: func(runner *fakeRunner) {
+				runner.activeServerImageID = "sha256:" + strings.Repeat("e", 64)
+			},
+		},
+		{
+			name: "active build identity drift",
+			configure: func(runner *fakeRunner) {
+				runner.runtimeBuildIdentity = "convenewire_build_info{release_version=\"v9.9.9\",source_commit=\"" + strings.Repeat("f", 40) + "\"} 1\n"
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+			targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+			dataRoot := filepath.Join(root, "state")
+			runner := &fakeRunner{failOnce: map[string]int{}}
+			control := New(testDependencies(runner, &bytes.Buffer{}))
+			if _, err := control.Install(
+				context.Background(),
+				installOptions(currentRelease, dataRoot),
+			); err != nil {
+				t.Fatal(err)
+			}
+			test.configure(runner)
+
+			backupStart := len(runner.commands)
+			requireActionCode(
+				t,
+				control.Backup(context.Background(), dataRoot),
+				"BACKUP_RUNTIME_MISMATCH",
+			)
+			assertNoBackupOrUpgradeMutation(t, runner.commands[backupStart:])
+
+			upgradeStart := len(runner.commands)
+			requireActionCode(t, control.Upgrade(context.Background(), UpgradeOptions{
+				DataRoot: dataRoot, ReleaseDir: targetRelease,
+				ChecksumsSHA256: checksumPin(targetRelease),
+			}), "UPGRADE_BACKUP_FAILED")
+			assertNoBackupOrUpgradeMutation(t, runner.commands[upgradeStart:])
+			if _, found, err := loadUpgradeJournal(
+				installationPaths(dataRoot).UpgradeJournalPath,
+			); err != nil || found {
+				t.Fatalf("failed current runtime preflight created a journal: found=%t err=%v", found, err)
+			}
+		})
+	}
+}
+
+func TestUpgradeRecoveryRejectsMissingOrChangedReceiptBackupBeforeMutation(t *testing.T) {
+	tests := []struct {
+		name   string
+		mutate func(string) error
+	}{
+		{name: "deleted", mutate: os.Remove},
+		{
+			name: "changed",
+			mutate: func(path string) error {
+				return os.WriteFile(path, []byte("changed-upgrade-backup\n"), 0o600)
+			},
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+			targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+			dataRoot := filepath.Join(root, "state")
+			runner := &fakeRunner{failOnce: map[string]int{}}
+			control := New(testDependencies(runner, &bytes.Buffer{}))
+			installation, err := control.Install(
+				context.Background(),
+				installOptions(currentRelease, dataRoot),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			journal := seedUpgradeJournal(
+				t,
+				installation,
+				targetRelease,
+				upgradePhaseTargetReady,
+			)
+			if err := test.mutate(journal.Backup.Path); err != nil {
+				t.Fatal(err)
+			}
+			start := len(runner.commands)
+			requireActionCode(t, control.Upgrade(context.Background(), UpgradeOptions{
+				DataRoot: dataRoot, ReleaseDir: targetRelease,
+				ChecksumsSHA256: checksumPin(targetRelease),
+			}), "UPGRADE_BACKUP_INVALID")
+			assertNoBackupOrUpgradeMutation(t, runner.commands[start:])
+			manifest, _, err := loadManifest(installation.ManifestPath)
+			if err != nil || manifest.ReleaseVersion != "v1.2.3" {
+				t.Fatalf("invalid backup recovery changed the previous manifest: %+v err=%v", manifest, err)
+			}
+		})
+	}
+}
+
+func assertNoBackupOrUpgradeMutation(t *testing.T, commands []Command) {
+	t.Helper()
+	for _, command := range commands {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, "compose-backup.sh") ||
+			strings.Contains(joined, "docker image load --input") ||
+			strings.Contains(joined, " up -d ") {
+			t.Fatalf("failed preflight reached backup or target mutation: %s", joined)
+		}
+	}
+}
+
+func TestUpgradeFromLegacyReleaseLoadsOCIOnlyAfterVerifiedBackup(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createRelease(t, root, "v1.2.3", 1)
+	targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	if _, err := control.Install(context.Background(), installOptions(currentRelease, dataRoot)); err != nil {
+		t.Fatal(err)
+	}
+	journalPresentAtMutation := false
+	runner.hook = func(command Command) {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if !strings.Contains(joined, "docker image load --input") {
+			return
+		}
+		if _, err := os.Stat(installationPaths(dataRoot).UpgradeJournalPath); err != nil {
+			t.Fatalf("upgrade mutated Docker before durable journal: %v", err)
+		}
+		journalPresentAtMutation = true
+	}
+	start := len(runner.commands)
+	if err := control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	manifest, _, err := loadManifest(installationPaths(dataRoot).ManifestPath)
+	if err != nil || manifest.ReleaseVersion != "v1.3.0" || !hasPinnedRuntimeImages(manifest) ||
+		manifest.SourceCommit != strings.Repeat("a", 40) {
+		t.Fatalf("OCI upgrade identity was not committed: %+v err=%v", manifest, err)
+	}
+	backupIndex, loadIndex, upIndex := -1, -1, -1
+	for index, command := range runner.commands[start:] {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		switch {
+		case strings.Contains(joined, "compose-backup.sh"):
+			backupIndex = index
+		case strings.Contains(joined, "docker image load --input"):
+			loadIndex = index
+		case strings.Contains(joined, " up -d "):
+			upIndex = index
+			if !strings.Contains(joined, "--no-build --pull never") || strings.Contains(joined, " --build") {
+				t.Fatalf("OCI upgrade weakened offline startup: %s", joined)
+			}
+		}
+	}
+	if backupIndex < 0 || loadIndex <= backupIndex || upIndex <= loadIndex {
+		t.Fatalf("upgrade order is unsafe: backup=%d load=%d up=%d", backupIndex, loadIndex, upIndex)
+	}
+	if !journalPresentAtMutation {
+		t.Fatal("OCI upgrade never proved its pre-mutation journal boundary")
+	}
+}
+
+func TestUpgradeRejectsSchemaV2ImagesUntilLegacyManifestIsExplicitlyMigrated(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createRelease(t, root, "v1.2.3", 1)
+	targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installation, err := control.Install(context.Background(), installOptions(currentRelease, dataRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := convertInstalledManifestToLegacy(t, installation)
+	start := len(runner.commands)
+	requireActionCode(t, control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}), "UPGRADE_MANIFEST_MIGRATION_REQUIRED")
+
+	manifest, _, err := loadManifest(installation.ManifestPath)
+	if err != nil || manifest.SchemaVersion != legacyManifestSchemaVersion ||
+		manifest.ReleaseVersion != legacy.ReleaseVersion || hasPinnedRuntimeImages(manifest) {
+		t.Fatalf("rejected legacy upgrade changed the manifest: %+v err=%v", manifest, err)
+	}
+	for _, command := range runner.commands[start:] {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, "compose-backup.sh") ||
+			strings.Contains(joined, "docker image load") || strings.Contains(joined, " up -d") {
+			t.Fatalf("legacy manifest rejection crossed the mutation boundary: %s", joined)
+		}
+	}
+}
+
+func TestUpgradePreservesLegacyManifestForSchemaV1Release(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createRelease(t, root, "v1.2.3", 1)
+	targetRelease := createRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installation, err := control.Install(context.Background(), installOptions(currentRelease, dataRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	convertInstalledManifestToLegacy(t, installation)
+	if err := control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	manifest, _, err := loadManifest(installation.ManifestPath)
+	if err != nil || manifest.SchemaVersion != legacyManifestSchemaVersion ||
+		manifest.ReleaseVersion != "v1.3.0" || hasPinnedRuntimeImages(manifest) {
+		t.Fatalf("schema-v1 compatibility upgrade was not preserved: %+v err=%v", manifest, err)
+	}
+}
+
+func TestUpgradeRejectsPinnedOCIInstallationDowngradeToLegacySourceBuild(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+	targetRelease := createRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installation, err := control.Install(context.Background(), installOptions(currentRelease, dataRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasPinnedRuntimeImages(installation.Manifest) {
+		t.Fatal("test precondition omitted pinned runtime images")
+	}
+	start := len(runner.commands)
+	requireActionCode(t, control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}), "UPGRADE_IMAGE_AUTHORITY_DOWNGRADE")
+
+	manifest, _, err := loadManifest(installation.ManifestPath)
+	if err != nil || manifest.ReleaseVersion != installation.Manifest.ReleaseVersion ||
+		manifest.ServerImage != installation.Manifest.ServerImage ||
+		manifest.CaddyImage != installation.Manifest.CaddyImage ||
+		manifest.RuntimeImagePlatform != installation.Manifest.RuntimeImagePlatform {
+		t.Fatalf("rejected authority downgrade changed the manifest: %+v err=%v", manifest, err)
+	}
+	for _, command := range runner.commands[start:] {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, "compose-backup.sh") ||
+			strings.Contains(joined, "docker image load") || strings.Contains(joined, " up -d") {
+			t.Fatalf("authority downgrade rejection crossed the mutation boundary: %s", joined)
+		}
 	}
 }
 

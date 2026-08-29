@@ -87,7 +87,7 @@ func (controller *Controller) MigrateLegacyPublicCA(ctx context.Context, dataRoo
 				restartErr = environmentLoadErr
 			} else {
 				_, restartErr = controller.runCompose(ctx, installation, environment,
-					"up", "-d", "--wait", "--wait-timeout", "180", "caddy")
+					composeUpArguments(installation.Manifest, false, "caddy")...)
 			}
 		}
 		return actionError(
@@ -108,7 +108,7 @@ func (controller *Controller) MigrateLegacyPublicCA(ctx context.Context, dataRoo
 		return rollback(err)
 	}
 	if _, err := controller.runCompose(ctx, candidateInstallation, environment,
-		"up", "-d", "--wait", "--wait-timeout", "180", "caddy"); err != nil {
+		composeUpArguments(candidateInstallation.Manifest, false, "caddy")...); err != nil {
 		return rollback(err)
 	}
 	if err := controller.dependencies.CheckReadiness(ctx, ReadinessInput{

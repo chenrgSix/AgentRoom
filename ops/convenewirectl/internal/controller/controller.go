@@ -29,23 +29,28 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"convenewire.dev/convenewirectl/internal/releaseimage"
 )
 
 const (
 	legacyManifestSchemaVersion = 1
 	manifestSchemaVersion       = 2
-	releaseSchemaVersion        = 1
+	legacyReleaseSchemaVersion  = 1
+	releaseSchemaVersion        = 2
 	minimumFreeBytes            = 1 << 30
 	defaultReadyTimeout         = 3 * time.Minute
 )
 
 var (
-	releasePattern     = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
-	hashPattern        = regexp.MustCompile(`^[0-9a-f]{64}$`)
-	installIDPattern   = regexp.MustCompile(`^install_[A-Za-z0-9_-]{16,128}$`)
-	privateCAIDPattern = regexp.MustCompile(`^(?:local|(?:agentroom|convenewire)-[0-9]+-[0-9a-f]{16})$`)
-	domainPattern      = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
-	commitPattern      = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+	releasePattern         = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z.-]+)?$`)
+	hashPattern            = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	installIDPattern       = regexp.MustCompile(`^install_[A-Za-z0-9_-]{16,128}$`)
+	privateCAIDPattern     = regexp.MustCompile(`^(?:local|(?:agentroom|convenewire)-[0-9]+-[0-9a-f]{16})$`)
+	domainPattern          = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
+	commitPattern          = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
+	runtimeImagePattern    = regexp.MustCompile(`^convenewire/(server|caddy)@sha256:[0-9a-f]{64}$`)
+	runtimePlatformPattern = regexp.MustCompile(`^linux/(amd64|arm64)$`)
 )
 
 type ActionError struct {
@@ -178,37 +183,43 @@ type InstallOptions struct {
 }
 
 type ReleaseMetadata struct {
-	SchemaVersion     int    `json:"schemaVersion"`
-	ReleaseVersion    string `json:"releaseVersion"`
-	DataSchemaVersion int    `json:"dataSchemaVersion"`
-	SourceCommit      string `json:"sourceCommit"`
-	TargetOS          string `json:"targetOS"`
-	TargetArch        string `json:"targetArch"`
+	SchemaVersion     int                   `json:"schemaVersion"`
+	ReleaseVersion    string                `json:"releaseVersion"`
+	DataSchemaVersion int                   `json:"dataSchemaVersion"`
+	SourceCommit      string                `json:"sourceCommit"`
+	TargetOS          string                `json:"targetOS"`
+	TargetArch        string                `json:"targetArch"`
+	ImageMetadata     string                `json:"imageMetadata,omitempty"`
+	RuntimeImages     releaseimage.Metadata `json:"-"`
 }
 
 type Manifest struct {
-	SchemaVersion       int    `json:"schemaVersion"`
-	Generation          uint64 `json:"generation,omitempty"`
-	ReleaseVersion      string `json:"releaseVersion"`
-	ReleaseDir          string `json:"releaseDir"`
-	ReleaseDigest       string `json:"releaseDigest"`
-	DataSchemaVersion   int    `json:"dataSchemaVersion"`
-	DataRoot            string `json:"dataRoot"`
-	Mode                string `json:"mode"`
-	TLSProfile          string `json:"tlsProfile,omitempty"`
-	InstallationID      string `json:"installationId,omitempty"`
-	TrustEpoch          int    `json:"trustEpoch,omitempty"`
-	CACertificateSHA256 string `json:"caCertificateSha256,omitempty"`
-	PrivateCAID         string `json:"privateCaId,omitempty"`
-	Domain              string `json:"domain"`
-	PublicOrigin        string `json:"publicOrigin"`
-	HTTPPort            int    `json:"httpPort"`
-	HTTPSPort           int    `json:"httpsPort"`
-	LegacyServerToken   bool   `json:"legacyServerToken"`
-	ProjectName         string `json:"projectName"`
-	LastSuccessfulStep  string `json:"lastSuccessfulStep"`
-	InstalledAt         string `json:"installedAt"`
-	UpdatedAt           string `json:"updatedAt"`
+	SchemaVersion        int    `json:"schemaVersion"`
+	Generation           uint64 `json:"generation,omitempty"`
+	ReleaseVersion       string `json:"releaseVersion"`
+	SourceCommit         string `json:"sourceCommit,omitempty"`
+	ReleaseDir           string `json:"releaseDir"`
+	ReleaseDigest        string `json:"releaseDigest"`
+	DataSchemaVersion    int    `json:"dataSchemaVersion"`
+	DataRoot             string `json:"dataRoot"`
+	Mode                 string `json:"mode"`
+	TLSProfile           string `json:"tlsProfile,omitempty"`
+	InstallationID       string `json:"installationId,omitempty"`
+	TrustEpoch           int    `json:"trustEpoch,omitempty"`
+	CACertificateSHA256  string `json:"caCertificateSha256,omitempty"`
+	PrivateCAID          string `json:"privateCaId,omitempty"`
+	Domain               string `json:"domain"`
+	PublicOrigin         string `json:"publicOrigin"`
+	HTTPPort             int    `json:"httpPort"`
+	HTTPSPort            int    `json:"httpsPort"`
+	LegacyServerToken    bool   `json:"legacyServerToken"`
+	ProjectName          string `json:"projectName"`
+	ServerImage          string `json:"serverImage,omitempty"`
+	CaddyImage           string `json:"caddyImage,omitempty"`
+	RuntimeImagePlatform string `json:"runtimeImagePlatform,omitempty"`
+	LastSuccessfulStep   string `json:"lastSuccessfulStep"`
+	InstalledAt          string `json:"installedAt"`
+	UpdatedAt            string `json:"updatedAt"`
 }
 
 type Installation struct {
@@ -222,6 +233,7 @@ type Installation struct {
 	TrustCAPEMPath      string
 	TrustRotationPath   string
 	RotationJournalPath string
+	UpgradeJournalPath  string
 	CaddyTLSProfilePath string
 	CaddyPKIProfilePath string
 	Manifest            Manifest
@@ -307,6 +319,9 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	if err != nil {
 		return Installation{}, err
 	}
+	if err := rejectPendingUpgrade(installation); err != nil {
+		return Installation{}, err
+	}
 	options, err = resolveInstallTLSProfile(options, existing, exists)
 	if err != nil {
 		return Installation{}, err
@@ -371,6 +386,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		manifest = Manifest{
 			SchemaVersion: manifestSchemaVersion, Generation: 1,
 			ReleaseVersion: metadata.ReleaseVersion,
+			SourceCommit:   metadata.SourceCommit,
 			ReleaseDir:     options.ReleaseDir, ReleaseDigest: digest,
 			DataSchemaVersion: metadata.DataSchemaVersion, DataRoot: options.DataRoot,
 			Mode: options.Mode, TLSProfile: options.TLSProfile,
@@ -381,12 +397,16 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 			ProjectName:        options.ProjectName,
 			LastSuccessfulStep: "release_verified", InstalledAt: now, UpdatedAt: now,
 		}
+		applyRuntimeImages(&manifest, metadata)
 		if options.TLSProfile == "private_scoped_ca" {
 			manifest.PrivateCAID = privateCAID(installationID, trustEpoch)
 		}
 		if err := saveManifest(installation.ManifestPath, manifest); err != nil {
 			return Installation{}, actionError("MANIFEST_WRITE_FAILED", "could not atomically establish the installation manifest", "Repair the selected data-root permissions and retry the exact command; an empty control directory is safe to reuse.", err)
 		}
+	}
+	if exists && manifest.SourceCommit == "" {
+		manifest.SourceCommit = metadata.SourceCommit
 	}
 	installation.Manifest = manifest
 	if err := ensureDirectories(options.DataRoot); err != nil {
@@ -417,6 +437,14 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	if err := controller.recordStep(&manifest, installation.ManifestPath, "configuration_ready"); err != nil {
 		return Installation{}, err
 	}
+	if err := controller.ensureReleaseImagesLoaded(ctx, installation, metadata); err != nil {
+		return Installation{}, err
+	}
+	if metadata.SchemaVersion == releaseSchemaVersion {
+		if err := controller.recordStep(&manifest, installation.ManifestPath, "images_loaded"); err != nil {
+			return Installation{}, err
+		}
+	}
 	commandEnvironment, err := installationEnvironment(installation)
 	if err != nil {
 		return Installation{}, err
@@ -428,7 +456,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 		return Installation{}, err
 	}
 	if _, err := controller.runCompose(ctx, installation, commandEnvironment,
-		"up", "-d", "--build", "--wait", "--wait-timeout", "180"); err != nil {
+		composeUpArguments(manifest, true)...); err != nil {
 		return Installation{}, actionError("SERVICES_START_FAILED", "ConveneWire services did not reach the Compose running boundary", "Run convenewirectl doctor for bounded service and log guidance, then retry install with the same arguments.", err)
 	}
 	if err := controller.recordStep(&manifest, installation.ManifestPath, "services_started"); err != nil {
@@ -456,6 +484,20 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	}
 	if err := controller.dependencies.CheckReadiness(ctx, readiness); err != nil {
 		return Installation{}, actionError("READINESS_FAILED", "the public HTTPS origin did not pass readiness and WebSocket checks", "Check DNS, certificate trust, port forwarding, public origin agreement, and Caddy/ConveneWire logs; the same install command is safe to retry.", err)
+	}
+	installation.Manifest = manifest
+	if err := controller.verifyActiveRuntimeIdentity(
+		ctx,
+		installation,
+		commandEnvironment,
+		true,
+	); err != nil {
+		return Installation{}, actionError(
+			"INSTALL_RUNTIME_MISMATCH",
+			"HTTPS became ready but the active Central image or build identity does not match the verified release",
+			"Do not accept readiness alone, rebuild, or pull tags. Restore the exact release images and retry the same install.",
+			err,
+		)
 	}
 	if err := controller.recordStep(&manifest, installation.ManifestPath, "ready"); err != nil {
 		return Installation{}, err
@@ -631,6 +673,94 @@ func (controller *Controller) runCompose(ctx context.Context, installation Insta
 	})
 }
 
+func applyRuntimeImages(manifest *Manifest, metadata ReleaseMetadata) {
+	manifest.ServerImage = ""
+	manifest.CaddyImage = ""
+	manifest.RuntimeImagePlatform = ""
+	if metadata.SchemaVersion != releaseSchemaVersion {
+		return
+	}
+	server, _ := metadata.RuntimeImages.Image(releaseimage.ServerRole)
+	caddy, _ := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
+	manifest.ServerImage = server.Reference
+	manifest.CaddyImage = caddy.Reference
+	manifest.RuntimeImagePlatform = metadata.RuntimeImages.Platform
+}
+
+func runtimeImagesMatch(manifest Manifest, metadata ReleaseMetadata) bool {
+	expected := Manifest{}
+	applyRuntimeImages(&expected, metadata)
+	return manifest.ServerImage == expected.ServerImage &&
+		manifest.CaddyImage == expected.CaddyImage &&
+		manifest.RuntimeImagePlatform == expected.RuntimeImagePlatform
+}
+
+func hasPinnedRuntimeImages(manifest Manifest) bool {
+	return manifest.ServerImage != "" && manifest.CaddyImage != "" && manifest.RuntimeImagePlatform != ""
+}
+
+func composeUpArguments(manifest Manifest, buildLegacy bool, services ...string) []string {
+	arguments := []string{"up", "-d"}
+	if hasPinnedRuntimeImages(manifest) {
+		arguments = append(arguments, "--no-build", "--pull", "never")
+	} else if buildLegacy {
+		arguments = append(arguments, "--build")
+	}
+	arguments = append(arguments, "--wait", "--wait-timeout", "180")
+	return append(arguments, services...)
+}
+
+func (controller *Controller) ensureReleaseImagesLoaded(
+	ctx context.Context,
+	installation Installation,
+	metadata ReleaseMetadata,
+) error {
+	if metadata.SchemaVersion == legacyReleaseSchemaVersion {
+		return nil
+	}
+	archive := filepath.Join(installation.Manifest.ReleaseDir, filepath.FromSlash(metadata.RuntimeImages.Archive))
+	if _, err := controller.dependencies.Runner.Run(ctx, Command{
+		Dir:  installation.Manifest.ReleaseDir,
+		Name: "docker",
+		Args: []string{"image", "load", "--input", archive},
+	}); err != nil {
+		return actionError(
+			"RUNTIME_IMAGE_LOAD_FAILED",
+			"the verified offline Central image bundle could not be loaded",
+			"Keep the release archive unchanged, repair Docker storage or access, and retry the exact lifecycle command; network pulls and source rebuilds are disabled.",
+			err,
+		)
+	}
+	if err := controller.inspectRuntimeImages(ctx, installation.Manifest); err != nil {
+		return actionError(
+			"RUNTIME_IMAGE_VERIFY_FAILED",
+			"Docker did not expose the exact digest-pinned Central images after loading",
+			"Do not substitute tags or enable pulls. Repair Docker's local image store and retry from the checksum-verified release archive.",
+			err,
+		)
+	}
+	return nil
+}
+
+func (controller *Controller) inspectRuntimeImages(ctx context.Context, manifest Manifest) error {
+	if !hasPinnedRuntimeImages(manifest) {
+		return nil
+	}
+	for _, reference := range []string{manifest.ServerImage, manifest.CaddyImage} {
+		output, err := controller.dependencies.Runner.Run(ctx, Command{
+			Name: "docker",
+			Args: []string{"image", "inspect", "--format", "{{.Os}}/{{.Architecture}}", reference},
+		})
+		if err != nil {
+			return fmt.Errorf("inspect %s: %w", reference, err)
+		}
+		if strings.TrimSpace(output) != manifest.RuntimeImagePlatform {
+			return fmt.Errorf("image %s reports platform %q, expected %q", reference, strings.TrimSpace(output), manifest.RuntimeImagePlatform)
+		}
+	}
+	return nil
+}
+
 func installationPaths(dataRoot string) Installation {
 	control := filepath.Join(dataRoot, "control")
 	trustDirectory := filepath.Join(dataRoot, "trust")
@@ -645,6 +775,7 @@ func installationPaths(dataRoot string) Installation {
 		TrustCAPEMPath:      filepath.Join(trustDirectory, "bridge-ca.pem"),
 		TrustRotationPath:   filepath.Join(trustDirectory, "deployment-trust-rotation.json"),
 		RotationJournalPath: filepath.Join(dataRoot, "control", "private-ca-rotation.json"),
+		UpgradeJournalPath:  filepath.Join(dataRoot, "control", "upgrade.json"),
 		CaddyTLSProfilePath: filepath.Join(trustDirectory, "caddy-tls-profile.caddy"),
 		CaddyPKIProfilePath: filepath.Join(trustDirectory, "caddy-pki-profile.caddy"),
 	}
@@ -793,6 +924,10 @@ func renderConfiguration(options InstallOptions, releaseVersion string, installa
 		"CONVENE_WIRE_HTTP_PORT=" + strconv.Itoa(options.HTTPPort),
 		"CONVENE_WIRE_HTTPS_PORT=" + strconv.Itoa(options.HTTPSPort),
 		"CONVENE_WIRE_IMAGE_TAG=" + dotenvQuote(strings.TrimPrefix(releaseVersion, "v")),
+		"CONVENE_WIRE_RELEASE_VERSION=" + dotenvQuote(releaseVersion),
+		"CONVENE_WIRE_SOURCE_COMMIT=" + dotenvQuote(installation.Manifest.SourceCommit),
+		"CONVENE_WIRE_SERVER_IMAGE=" + dotenvQuote(installation.Manifest.ServerImage),
+		"CONVENE_WIRE_CADDY_IMAGE=" + dotenvQuote(installation.Manifest.CaddyImage),
 		"CONVENE_WIRE_DATABASE_PATH=/data/agent-room.sqlite",
 		"CONVENE_WIRE_CADDY_TLS_PROFILE_FILE=" + dotenvQuote(tlsProfilePath),
 		"CONVENE_WIRE_CADDY_PKI_PROFILE_FILE=" + dotenvQuote(caddyPKIProfilePath(options, installation)),
@@ -976,11 +1111,30 @@ func loadManifest(path string) (Manifest, bool, error) {
 }
 
 func validateManifest(manifest Manifest) error {
+	if manifest.SourceCommit != "" && !commitPattern.MatchString(manifest.SourceCommit) {
+		return fmt.Errorf("sourceCommit is invalid")
+	}
 	if manifest.SchemaVersion == legacyManifestSchemaVersion {
-		if manifest.TLSProfile != "" || manifest.InstallationID != "" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" || manifest.PrivateCAID != "" {
-			return fmt.Errorf("legacy manifest contains version 2 trust fields")
+		if manifest.TLSProfile != "" || manifest.InstallationID != "" || manifest.TrustEpoch != 0 || manifest.CACertificateSHA256 != "" || manifest.PrivateCAID != "" ||
+			manifest.ServerImage != "" || manifest.CaddyImage != "" || manifest.RuntimeImagePlatform != "" {
+			return fmt.Errorf("legacy manifest contains newer trust or runtime image fields")
 		}
 		return nil
+	}
+	imageFieldCount := 0
+	for _, value := range []string{manifest.ServerImage, manifest.CaddyImage, manifest.RuntimeImagePlatform} {
+		if value != "" {
+			imageFieldCount++
+		}
+	}
+	if imageFieldCount != 0 {
+		if imageFieldCount != 3 || !runtimeImagePattern.MatchString(manifest.ServerImage) ||
+			!strings.HasPrefix(manifest.ServerImage, releaseimage.ServerRepository+"@") ||
+			!runtimeImagePattern.MatchString(manifest.CaddyImage) ||
+			!strings.HasPrefix(manifest.CaddyImage, releaseimage.CaddyRepository+"@") ||
+			!runtimePlatformPattern.MatchString(manifest.RuntimeImagePlatform) {
+			return fmt.Errorf("runtime image identity is incomplete or invalid")
+		}
 	}
 	if !installIDPattern.MatchString(manifest.InstallationID) {
 		return fmt.Errorf("installationId is invalid")
@@ -1177,11 +1331,40 @@ func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (Re
 		return ReleaseMetadata{}, "", err
 	}
 	var metadata ReleaseMetadata
-	if err := decodeStrictJSON(metadataBytes, &metadata); err != nil || metadata.SchemaVersion != releaseSchemaVersion ||
+	if err := decodeStrictJSON(metadataBytes, &metadata); err != nil ||
+		(metadata.SchemaVersion != legacyReleaseSchemaVersion && metadata.SchemaVersion != releaseSchemaVersion) ||
 		!releasePattern.MatchString(metadata.ReleaseVersion) || metadata.DataSchemaVersion < 1 ||
 		!commitPattern.MatchString(metadata.SourceCommit) || !supportedTarget(metadata.TargetOS, metadata.TargetArch) {
 		return ReleaseMetadata{}, "", actionError("RELEASE_METADATA_INVALID", "central release metadata is invalid", "Use the metadata and checksums from one exact published release.", err)
 	}
+	if metadata.SchemaVersion == legacyReleaseSchemaVersion {
+		if metadata.ImageMetadata != "" {
+			return ReleaseMetadata{}, "", actionError("RELEASE_METADATA_INVALID", "legacy central release metadata declares unsupported runtime images", "Use one intact published release archive without mixing schema versions.", nil)
+		}
+		return metadata, actualChecksumDigest, nil
+	}
+	if metadataName != "convenewire-central-release.json" {
+		return ReleaseMetadata{}, "", actionError("RELEASE_METADATA_INVALID", "schema-v2 central release uses the legacy metadata filename", "Use one intact current ConveneWire release archive without renaming or combining metadata.", nil)
+	}
+	if metadata.ImageMetadata == "" {
+		return ReleaseMetadata{}, "", actionError("RELEASE_METADATA_INVALID", "central release metadata omits its runtime image metadata", "Use the complete published release archive; source rebuild fallback is disabled for schema-v2 releases.", nil)
+	}
+	runtimeImages, err := releaseimage.VerifyBundle(
+		releaseDir,
+		metadata.ImageMetadata,
+		metadata.ReleaseVersion,
+		metadata.SourceCommit,
+		metadata.TargetArch,
+	)
+	if err != nil {
+		return ReleaseMetadata{}, "", actionError(
+			"RELEASE_IMAGE_INVALID",
+			"central release OCI images or attestations are invalid",
+			"Remove the extracted release and download the exact archive again; do not rebuild, retag, pull, or substitute image content.",
+			err,
+		)
+	}
+	metadata.RuntimeImages = runtimeImages
 	return metadata, actualChecksumDigest, nil
 }
 
@@ -1202,6 +1385,12 @@ func matchInstall(existing Manifest, options InstallOptions, metadata ReleaseMet
 	}
 	if existing.SchemaVersion == manifestSchemaVersion && existing.TLSProfile != options.TLSProfile {
 		return actionError("INSTALL_CONFLICT", "TLS profile differs from the existing installation manifest", "Retry without changing --tls-profile. Trust-mode migration is an explicit lifecycle operation, not install reentry.", nil)
+	}
+	if existing.SourceCommit != "" && existing.SourceCommit != metadata.SourceCommit {
+		return actionError("INSTALL_CONFLICT", "source commit differs from the existing installation manifest", "Retry with the exact original release archive. Use convenewirectl upgrade to change a checksum-pinned release.", nil)
+	}
+	if !runtimeImagesMatch(existing, metadata) {
+		return actionError("INSTALL_CONFLICT", "runtime image digests differ from the existing installation manifest", "Retry with the exact original release archive. Use convenewirectl upgrade to change a checksum-pinned runtime image set.", nil)
 	}
 	return nil
 }

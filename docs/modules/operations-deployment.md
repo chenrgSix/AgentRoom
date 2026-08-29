@@ -50,12 +50,15 @@ closure, binary version/architecture, license identity, forbidden runtime
 state, OCI descriptor/blob closure, image labels, attestations and identical
 per-architecture embedding before upload and after a clean download.
 
-The schema-v2 manifest under `<data-root>/control/installation.json` records
+The schema-v2 installation manifest under
+`<data-root>/control/installation.json` records
 the stable non-secret installation ID, selected TLS profile, private trust epoch
 and canonical CA DER digest in addition to the exact release/checksum,
 release/data locations, data-schema version, isolated Compose project name,
 network mode, domain/origin/ports, legacy Server Token selection, timestamps,
-and last successful step. It contains no secret value,
+and last successful step. New image-backed Releases additionally record the
+source commit, exact Server/Caddy digest references and Linux platform. It
+contains no secret value,
 credential, local Runtime configuration, Workspace path, or Team state.
 Atomic stage recording makes exact `install` reentry converge after checksum,
 storage, secret, render, Compose-validation, service-start, or readiness cuts.
@@ -233,6 +236,16 @@ separately pinned `SHA256SUMS` digest before it executes Compose configuration
 or a release-owned script. A directory whose content or checksum manifest has
 drifted is diagnostic input only, not trusted executable installation state.
 
+Release-metadata schema 2 disables target-host application builds. Before
+Compose validation or start, the controller verifies the embedded OCI archive
+and attestations against the already pinned release, imports it with
+`docker image load`, inspects both exact digest references and platform, and
+runs Compose with `--no-build --pull never`. Status, doctor, reinstall and
+upgrade revalidate those identities. Release-metadata schema 1 remains an
+explicit compatibility path and alone may use the historical source build;
+schema 2 cannot silently fall back to it after missing image content, Docker
+failure or registry reachability.
+
 ## Verification
 
 Focused tests use real temporary files and a fake process/readiness boundary.
@@ -267,6 +280,14 @@ rejection. The controller suite passes under the Go race detector; Go vet,
 controller build and the real Docker Compose/Caddy configuration validation
 also pass. [Acceptance evidence](../acceptance/ops-012-lifecycle-authority.md)
 records the exact boundary without claiming multi-host or release publication.
+
+`OPS-013` adds structural mutation tests for OCI descriptors, blobs, labels,
+SBOMs, provenance, metadata and controller commands. Its real Docker gate starts
+with both digest references absent, loads only the finalized archive, inspects
+the expected platform/Release/source labels, and executes Server and Caddy with
+`--pull=never`, no network and a read-only root. Hosted Release publication and
+target-host lifecycle acceptance remain separate from this implementation
+evidence.
 
 ## Tasks
 

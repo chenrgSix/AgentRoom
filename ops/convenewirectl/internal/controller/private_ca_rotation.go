@@ -383,7 +383,7 @@ func (controller *Controller) reloadCaddy(
 		return err
 	}
 	_, err := controller.runCompose(ctx, installation, environment,
-		"up", "-d", "--wait", "--wait-timeout", "180", "caddy")
+		composeUpArguments(installation.Manifest, false, "caddy")...)
 	return err
 }
 
