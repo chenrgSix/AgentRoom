@@ -132,6 +132,16 @@ func RunObservedWithProvisioning(
 		RecoverRuns: func(ctx context.Context, send func(context.Context, any) error) error {
 			return executor.Recover(ctx, delivery.Sender(send))
 		},
+		ReplayCanceledRun: func(
+			ctx context.Context,
+			message contracts.RunCancelRequestedMessage,
+			send func(context.Context, any) error,
+		) error {
+			return executor.ReplayCanceledRun(ctx, message, delivery.Sender(send))
+		},
+		FenceCanceledRun: func(message contracts.RunCancelRequestedMessage) error {
+			return executor.StageCancellation(message)
+		},
 		HandleRun: func(ctx context.Context, message contracts.RunRequestedMessage, send func(context.Context, any) error) error {
 			return runHandler.Handle(ctx, message, delivery.Sender(send))
 		},

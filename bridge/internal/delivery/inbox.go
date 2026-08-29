@@ -30,10 +30,12 @@ const (
 )
 
 const incompatibleTraceQuarantineDirectory = "quarantine-incompatible-trace"
+const cancellationTombstoneDirectory = "cancellation-tombstones"
 
 var (
 	runIDPattern   = regexp.MustCompile(`^run_[A-Za-z0-9_-]{8,128}$`)
 	traceIDPattern = regexp.MustCompile(`^trace_[A-Za-z0-9_-]{8,128}$`)
+	agentIDPattern = regexp.MustCompile(`^agent_[A-Za-z0-9_-]{8,128}$`)
 )
 
 func isContractRunID(value string) bool {
@@ -54,6 +56,16 @@ type Record struct {
 	AcceptedAt     time.Time                     `json:"acceptedAt"`
 	UpdatedAt      time.Time                     `json:"updatedAt"`
 	Events         []json.RawMessage             `json:"events,omitempty"`
+}
+
+type CancellationTombstone struct {
+	RunID                   string    `json:"runId"`
+	TraceID                 string    `json:"traceId"`
+	AgentID                 string    `json:"agentId"`
+	MessageID               string    `json:"messageId"`
+	Reason                  string    `json:"reason"`
+	TerminalStatusMessageID string    `json:"terminalStatusMessageId"`
+	CreatedAt               time.Time `json:"createdAt"`
 }
 
 func (i *Inbox) AppendEvent(
@@ -285,6 +297,126 @@ func (i *Inbox) Get(runID string) (Record, error) {
 	return i.load(i.path(runID))
 }
 
+// RecordCancellation durably fences Runtime admission before a matching
+// run.requested frame is handled. Repeated delivery must preserve the exact
+// first cancellation identity.
+func (i *Inbox) RecordCancellation(
+	requested contracts.RunCancelRequestedMessage,
+	now time.Time,
+) (CancellationTombstone, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	payload := requested.Payload
+	if requested.ProtocolVersion != "1.0" ||
+		requested.Type != contracts.RunCancelRequested ||
+		!isContractRunID(payload.RunID) ||
+		!isContractTraceID(payload.TraceID) ||
+		!agentIDPattern.MatchString(payload.AgentID) {
+		return CancellationTombstone{}, fmt.Errorf("invalid Run cancellation identity")
+	}
+	if record, err := i.load(i.path(payload.RunID)); err == nil {
+		if record.Request.TraceID != payload.TraceID ||
+			record.Request.TargetAgentID != payload.AgentID {
+			return CancellationTombstone{}, fmt.Errorf("Run cancellation identity mismatch")
+		}
+	} else if !os.IsNotExist(err) {
+		return CancellationTombstone{}, err
+	}
+	directory, err := i.ensureCancellationTombstoneDirectory()
+	if err != nil {
+		return CancellationTombstone{}, err
+	}
+	path := filepath.Join(directory, payload.RunID+".json")
+	if existing, err := loadCancellationTombstone(path); err == nil {
+		if existing.RunID != payload.RunID ||
+			existing.TraceID != payload.TraceID ||
+			existing.AgentID != payload.AgentID ||
+			existing.MessageID != requested.MessageID ||
+			existing.Reason != payload.Reason {
+			return CancellationTombstone{}, fmt.Errorf("Run cancellation tombstone mismatch")
+		}
+		return existing, nil
+	} else if !os.IsNotExist(err) {
+		return CancellationTombstone{}, err
+	}
+	tombstone := CancellationTombstone{
+		RunID: payload.RunID, TraceID: payload.TraceID,
+		AgentID: payload.AgentID, MessageID: requested.MessageID,
+		Reason: payload.Reason, TerminalStatusMessageID: runtimeMessageID(),
+		CreatedAt: now.UTC(),
+	}
+	if err := writeNew(path, tombstone); err != nil {
+		return CancellationTombstone{}, err
+	}
+	return tombstone, nil
+}
+
+func (i *Inbox) HasCancellation(
+	request contracts.RunRequestedPayload,
+) (bool, error) {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if !isContractRunID(request.RunID) {
+		return false, fmt.Errorf("invalid Run ID")
+	}
+	tombstone, err := loadCancellationTombstone(i.cancellationTombstonePath(request.RunID))
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	if tombstone.RunID != request.RunID ||
+		tombstone.TraceID != request.TraceID ||
+		tombstone.AgentID != request.TargetAgentID {
+		return false, fmt.Errorf("Run cancellation tombstone identity mismatch")
+	}
+	return true, nil
+}
+
+func (i *Inbox) ClearCancellation(runID string) error {
+	i.mu.Lock()
+	defer i.mu.Unlock()
+	if !isContractRunID(runID) {
+		return fmt.Errorf("invalid Run ID")
+	}
+	path := i.cancellationTombstonePath(runID)
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	return durablefs.SyncParent(path)
+}
+
+func (i *Inbox) cancellationTombstonePath(runID string) string {
+	return filepath.Join(i.directory, cancellationTombstoneDirectory, runID+".json")
+}
+
+func (i *Inbox) ensureCancellationTombstoneDirectory() (string, error) {
+	directory := filepath.Join(i.directory, cancellationTombstoneDirectory)
+	if err := os.MkdirAll(directory, 0o700); err != nil {
+		return "", fmt.Errorf("create cancellation tombstone directory: %w", err)
+	}
+	if err := os.Chmod(directory, 0o700); err != nil {
+		return "", fmt.Errorf("protect cancellation tombstone directory: %w", err)
+	}
+	return directory, nil
+}
+
+func loadCancellationTombstone(path string) (CancellationTombstone, error) {
+	source, err := os.ReadFile(path)
+	if err != nil {
+		return CancellationTombstone{}, err
+	}
+	var tombstone CancellationTombstone
+	if err := json.Unmarshal(source, &tombstone); err != nil {
+		return CancellationTombstone{}, fmt.Errorf("decode cancellation tombstone: %w", err)
+	}
+	return tombstone, nil
+}
+
 func (i *Inbox) path(runID string) string {
 	return filepath.Join(i.directory, runID+".json")
 }
@@ -301,8 +433,8 @@ func (i *Inbox) load(path string) (Record, error) {
 	return record, nil
 }
 
-func writeNew(path string, record Record) error {
-	source, err := json.MarshalIndent(record, "", "  ")
+func writeNew(path string, value any) error {
+	source, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -324,8 +456,8 @@ func writeNew(path string, record Record) error {
 	return durablefs.SyncParent(path)
 }
 
-func replace(path string, record Record) error {
-	source, err := json.MarshalIndent(record, "", "  ")
+func replace(path string, value any) error {
+	source, err := json.MarshalIndent(value, "", "  ")
 	if err != nil {
 		return err
 	}

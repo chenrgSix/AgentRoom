@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"time"
 
 	contracts "convenewire.dev/contracts/generated/go"
@@ -39,6 +40,13 @@ func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessa
 	if err != nil {
 		return err
 	}
+	canceledBeforeAdmission, err := h.Inbox.HasCancellation(record.Request)
+	if err != nil {
+		return err
+	}
+	if canceledBeforeAdmission {
+		return h.cancelBeforeAdmission(ctx, record, send, now)
+	}
 	resumePreparing := duplicate && record.State == StatePreparing
 	var materializations []contracts.VerifiedArtifactMaterializationReceipt
 	var prepareErr error
@@ -73,6 +81,13 @@ func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessa
 				return err
 			}
 		}
+	}
+	canceledBeforeAcceptance, err := h.Inbox.HasCancellation(record.Request)
+	if err != nil {
+		return err
+	}
+	if canceledBeforeAcceptance || h.isExplicitCancel(ctx) {
+		return h.cancelBeforeAdmission(ctx, record, send, now)
 	}
 	accepted := contracts.RunAcceptedMessage{
 		ProtocolVersion: "1.0",
@@ -143,17 +158,104 @@ func (h Handler) runNew(
 	record Record,
 	send Sender,
 ) error {
+	canceled, err := h.Inbox.HasCancellation(record.Request)
+	if err != nil {
+		return err
+	}
+	if canceled || h.isExplicitCancel(ctx) {
+		return h.cancelAfterAcceptance(ctx, record, send)
+	}
 	if h.Gate != nil {
 		release, err := h.Gate.Acquire(ctx, message.Payload.TargetAgentID)
 		if err != nil {
 			return h.handleQueueExit(ctx, record, send)
 		}
 		defer release()
-		if ctx.Err() != nil {
-			return h.handleQueueExit(ctx, record, send)
+		canceled, err = h.Inbox.HasCancellation(record.Request)
+		if err != nil {
+			return err
+		}
+		if canceled || h.isExplicitCancel(ctx) {
+			return h.cancelAfterAcceptance(ctx, record, send)
 		}
 	}
 	return h.OnNew(ctx, record, send)
+}
+
+func (h Handler) isExplicitCancel(ctx context.Context) bool {
+	return h.IsExplicitCancel != nil && h.IsExplicitCancel(ctx)
+}
+
+func (h Handler) cancelAfterAcceptance(
+	ctx context.Context,
+	record Record,
+	send Sender,
+) error {
+	if h.OnQueuedCanceled == nil {
+		return errors.New("queued cancellation handler is unavailable")
+	}
+	reportContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := h.OnQueuedCanceled(reportContext, record, send); err != nil {
+		return err
+	}
+	return h.Inbox.ClearCancellation(record.RunID)
+}
+
+func (h Handler) cancelBeforeAdmission(
+	ctx context.Context,
+	record Record,
+	send Sender,
+	now time.Time,
+) error {
+	if record.State == StatePreparing {
+		var err error
+		record, err = h.Inbox.TransitionLocalState(
+			record.RunID,
+			StatePreparing,
+			StateAccepted,
+			now,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	reportContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	var terminal []any
+	if h.OnQueuedCanceled == nil {
+		return errors.New("queued cancellation handler is unavailable")
+	}
+	if err := h.OnQueuedCanceled(
+		reportContext,
+		record,
+		func(_ context.Context, value any) error {
+			terminal = append(terminal, value)
+			return nil
+		},
+	); err != nil {
+		return err
+	}
+	accepted := contracts.RunAcceptedMessage{
+		ProtocolVersion: "1.0", MessageID: newMessageID(), Timestamp: now,
+		Type: contracts.RunAccepted,
+		Payload: contracts.RunAcceptedPayload{
+			AgentID: record.Request.TargetAgentID, RunID: record.RunID,
+			TraceID: record.Request.TraceID, Sequence: 1,
+		},
+	}
+	if runHasPinnedArtifactContent(record.Request) {
+		accepted.Payload.ArtifactMaterializationError = materializationFailureAcknowledgement()
+	}
+	if err := send(reportContext, accepted); err != nil {
+		return err
+	}
+	for _, value := range terminal {
+		if err := send(reportContext, value); err != nil {
+			return err
+		}
+	}
+	return h.Inbox.ClearCancellation(record.RunID)
 }
 
 func (h Handler) cancelDuringPreparation(
@@ -206,18 +308,21 @@ func (h Handler) cancelDuringPreparation(
 			return err
 		}
 	}
-	return nil
+	return h.Inbox.ClearCancellation(record.RunID)
 }
 
 func (h Handler) handleQueueExit(ctx context.Context, record Record, send Sender) error {
-	if h.IsExplicitCancel == nil || !h.IsExplicitCancel(ctx) || h.OnQueuedCanceled == nil {
+	if !h.isExplicitCancel(ctx) || h.OnQueuedCanceled == nil {
 		// The durable accepted record remains recoverable when the connection or
 		// process context ends for a reason other than an explicit Run cancel.
 		return nil
 	}
 	reportContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	return h.OnQueuedCanceled(reportContext, record, send)
+	if err := h.OnQueuedCanceled(reportContext, record, send); err != nil {
+		return err
+	}
+	return h.Inbox.ClearCancellation(record.RunID)
 }
 
 func newMessageID() string {

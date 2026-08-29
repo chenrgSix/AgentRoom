@@ -15,8 +15,31 @@ import (
 	"convenewire.dev/bridge/internal/operations"
 	"convenewire.dev/bridge/internal/pairing"
 	contracts "convenewire.dev/contracts/generated/go"
+	runtimecontracts "convenewire.dev/contracts/generated/go/runtime"
 	"github.com/coder/websocket"
 )
+
+func contractRunRequest(runID, traceID, targetAgentID string) contracts.RunRequestedMessage {
+	return contracts.RunRequestedMessage{
+		ProtocolVersion: "1.0",
+		MessageID:       "msg_" + strings.TrimPrefix(runID, "run_"),
+		Timestamp:       time.Now().UTC(),
+		Type:            contracts.RunRequested,
+		Payload: contracts.RunRequestedPayload{
+			RunID:             runID,
+			TraceID:           traceID,
+			RoomID:            "room_contract_fixture_12345678",
+			TriggerMessageID:  "msg_contract_trigger_12345678",
+			RequesterMemberID: "member_contract_fixture_12345678",
+			TargetAgentID:     targetAgentID,
+			DeliveryAttemptID: "delivery_contract_fixture_12345678",
+			IdempotencyKey:    "contract-fixture-idempotency-key",
+			Instruction:       "Exercise the Bridge connection boundary.",
+			ContextMessages:   []contracts.ContextMessage{},
+			Deadline:          time.Now().UTC().Add(time.Minute),
+		},
+	}
+}
 
 func TestClientRejectsCrossOriginCredentialBeforeAnyRequest(t *testing.T) {
 	var requests atomic.Int32
@@ -204,7 +227,7 @@ func TestAcceptedProvisioningResultStopsOldConfigurationForReload(t *testing.T) 
 			ProtocolVersion: "1.0", MessageID: "msg_provision_request_12345678",
 			Timestamp: time.Now().UTC(), Type: contracts.AgentProvisionRequested,
 			Payload: contracts.AgentProvisionRequestedPayload{
-				RequestID: "agentprov_request_12345678", DeviceID: "device_test",
+				RequestID: "agentprov_request_12345678", DeviceID: "device_test_12345678",
 				TemplateAgentID: "agent_template_12345678", AgentID: "agent_created_12345678",
 				Name: "Reviewer", Role: "Review", ManagementCode: "12345678",
 			},
@@ -232,7 +255,7 @@ func TestAcceptedProvisioningResultStopsOldConfigurationForReload(t *testing.T) 
 			Command: []string{"agent"}, Workspace: directory,
 		}}},
 		Credential: pairing.Credential{
-			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
+			ServerURL: server.URL, DeviceID: "device_test_12345678", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
 		HandleProvision: func(_ context.Context, requested contracts.AgentProvisionRequestedMessage) contracts.AgentProvisionResultMessage {
@@ -277,12 +300,11 @@ func TestProvisioningIsRejectedAsBusyWhileARunIsActive(t *testing.T) {
 				return
 			}
 		}
-		run := contracts.RunRequestedMessage{
-			Type: contracts.RunRequested,
-			Payload: contracts.RunRequestedPayload{
-				RunID: "run_active_12345678", TargetAgentID: "agent_template_12345678",
-			},
-		}
+		run := contractRunRequest(
+			"run_active_12345678",
+			"trace_active_12345678",
+			"agent_template_12345678",
+		)
 		source, _ := json.Marshal(run)
 		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
 			return
@@ -293,9 +315,10 @@ func TestProvisioningIsRejectedAsBusyWhileARunIsActive(t *testing.T) {
 			return
 		}
 		requested := contracts.AgentProvisionRequestedMessage{
-			ProtocolVersion: "1.0", Type: contracts.AgentProvisionRequested,
+			ProtocolVersion: "1.0", MessageID: "msg_provision_busy_12345678",
+			Timestamp: time.Now().UTC(), Type: contracts.AgentProvisionRequested,
 			Payload: contracts.AgentProvisionRequestedPayload{
-				RequestID: "agentprov_busy_12345678", DeviceID: "device_test",
+				RequestID: "agentprov_busy_12345678", DeviceID: "device_test_12345678",
 				TemplateAgentID: "agent_template_12345678", AgentID: "agent_created_12345678",
 				Name: "Reviewer", Role: "Review", ManagementCode: "12345678",
 			},
@@ -324,7 +347,7 @@ func TestProvisioningIsRejectedAsBusyWhileARunIsActive(t *testing.T) {
 			Name: "Builder", Role: "Implementation", Adapter: "generic",
 			Command: []string{"agent"}, Workspace: directory,
 		}}},
-		Credential: pairing.Credential{ServerURL: server.URL, DeviceID: "device_test", Token: "device-secret"},
+		Credential: pairing.Credential{ServerURL: server.URL, DeviceID: "device_test_12345678", Token: "device-secret"},
 		HandleRun: func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error {
 			close(runStarted)
 			<-releaseRun
@@ -368,11 +391,9 @@ func TestClientStopWaitsForCanceledRunWorkers(t *testing.T) {
 				return
 			}
 		}
-		message, _ := json.Marshal(contracts.RunRequestedMessage{
-			Type: contracts.RunRequested, Payload: contracts.RunRequestedPayload{
-				RunID: "run_draining", TargetAgentID: "agent_draining",
-			},
-		})
+		message, _ := json.Marshal(contractRunRequest(
+			"run_draining", "trace_draining", "agent_draining",
+		))
 		if err := socket.Write(request.Context(), websocket.MessageText, message); err != nil {
 			return
 		}
@@ -619,6 +640,127 @@ stopped:
 	}
 }
 
+func TestClientRejectsSchemaInvalidCentralMessageBeforeRunHandler(t *testing.T) {
+	const privateInstruction = "private instruction must not reach an error"
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		socket, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			return
+		}
+		defer socket.CloseNow()
+		for index := 0; index < 2; index++ {
+			if _, _, err := socket.Read(request.Context()); err != nil {
+				return
+			}
+		}
+		invalid := contractRunRequest(
+			"run_invalid_envelope",
+			"trace_invalid_envelope",
+			"agent_invalid_envelope",
+		)
+		invalid.MessageID = ""
+		invalid.Payload.Instruction = privateInstruction
+		source, err := json.Marshal(invalid)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
+			return
+		}
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+
+	directory := t.TempDir()
+	var handled atomic.Int32
+	client := Client{
+		Config: config.Config{
+			ServerURL: server.URL, DataDir: directory,
+			Agents: []config.AgentConfig{{
+				Name: "Builder", Role: "Implementation", Adapter: "generic",
+				Command: []string{"agent"}, Workspace: directory,
+			}},
+		},
+		Credential: pairing.Credential{
+			ServerURL: server.URL, DeviceID: "device_invalid_envelope",
+			TeamID: "team_invalid_envelope", OwnerMemberID: "member_invalid_envelope",
+			Token: "device-secret",
+		},
+		HandleRun: func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error {
+			handled.Add(1)
+			return nil
+		},
+	}
+	connected, err := client.connectOnce(context.Background())
+	if !connected || !errors.Is(err, runtimecontracts.ErrInvalidBridgeMessage) {
+		t.Fatalf("schema-invalid Central message result=(%t, %v)", connected, err)
+	}
+	if strings.Contains(err.Error(), privateInstruction) {
+		t.Fatalf("schema validation error exposed private content: %q", err)
+	}
+	if handled.Load() != 0 {
+		t.Fatalf("schema-invalid Central message reached %d handlers", handled.Load())
+	}
+}
+
+func TestClientRejectsBinaryCentralMessageBeforeRunHandler(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		socket, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			return
+		}
+		defer socket.CloseNow()
+		for index := 0; index < 2; index++ {
+			if _, _, err := socket.Read(request.Context()); err != nil {
+				return
+			}
+		}
+		source, err := json.Marshal(contractRunRequest(
+			"run_binary_envelope",
+			"trace_binary_envelope",
+			"agent_binary_envelope",
+		))
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if err := socket.Write(request.Context(), websocket.MessageBinary, source); err != nil {
+			return
+		}
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+
+	directory := t.TempDir()
+	var handled atomic.Int32
+	client := Client{
+		Config: config.Config{
+			ServerURL: server.URL, DataDir: directory,
+			Agents: []config.AgentConfig{{
+				Name: "Builder", Role: "Implementation", Adapter: "generic",
+				Command: []string{"agent"}, Workspace: directory,
+			}},
+		},
+		Credential: pairing.Credential{
+			ServerURL: server.URL, DeviceID: "device_binary_envelope",
+			TeamID: "team_binary_envelope", OwnerMemberID: "member_binary_envelope",
+			Token: "device-secret",
+		},
+		HandleRun: func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error {
+			handled.Add(1)
+			return nil
+		},
+	}
+	connected, err := client.connectOnce(context.Background())
+	if !connected || !errors.Is(err, runtimecontracts.ErrInvalidBridgeMessage) {
+		t.Fatalf("binary Central message result=(%t, %v)", connected, err)
+	}
+	if handled.Load() != 0 {
+		t.Fatalf("binary Central message reached %d handlers", handled.Load())
+	}
+}
+
 func TestRunCancelRequestUsesAnExplicitCancellationCause(t *testing.T) {
 	handlerReady := make(chan struct{})
 	causeResult := make(chan error, 1)
@@ -633,14 +775,11 @@ func TestRunCancelRequestUsesAnExplicitCancellationCause(t *testing.T) {
 				return
 			}
 		}
-		requested := contracts.RunRequestedMessage{
-			ProtocolVersion: "1.0", MessageID: "msg_cancel_requested",
-			Timestamp: time.Now().UTC(), Type: contracts.RunRequested,
-			Payload: contracts.RunRequestedPayload{
-				RunID: "run_cancel_requested", TraceID: "trace_cancel_requested",
-				TargetAgentID: "agent_cancel_requested",
-			},
-		}
+		requested := contractRunRequest(
+			"run_cancel_requested",
+			"trace_cancel_requested",
+			"agent_cancel_requested",
+		)
 		source, _ := json.Marshal(requested)
 		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
 			return
@@ -686,6 +825,9 @@ func TestRunCancelRequestUsesAnExplicitCancellationCause(t *testing.T) {
 			causeResult <- context.Cause(ctx)
 			return nil
 		},
+		FenceCanceledRun: func(contracts.RunCancelRequestedMessage) error {
+			return nil
+		},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -709,6 +851,83 @@ func TestRunCancelRequestUsesAnExplicitCancellationCause(t *testing.T) {
 	}
 }
 
+func TestRunCancelRequestWithoutDurableFenceFailsClosed(t *testing.T) {
+	handlerReady := make(chan struct{})
+	causeResult := make(chan error, 1)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		socket, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			return
+		}
+		defer socket.CloseNow()
+		for index := 0; index < 2; index++ {
+			if _, _, err := socket.Read(request.Context()); err != nil {
+				return
+			}
+		}
+		requested := contractRunRequest(
+			"run_cancel_without_fence",
+			"trace_cancel_without_fence",
+			"agent_cancel_without_fence",
+		)
+		source, _ := json.Marshal(requested)
+		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
+			return
+		}
+		select {
+		case <-handlerReady:
+		case <-request.Context().Done():
+			return
+		}
+		canceled := contracts.RunCancelRequestedMessage{
+			ProtocolVersion: "1.0", MessageID: "msg_cancel_without_fence",
+			Timestamp: time.Now().UTC(), Type: contracts.RunCancelRequested,
+			Payload: contracts.RunCancelRequestedPayload{
+				RunID: "run_cancel_without_fence", TraceID: "trace_cancel_without_fence",
+				AgentID: "agent_cancel_without_fence", Reason: "user_requested",
+			},
+		}
+		source, _ = json.Marshal(canceled)
+		_ = socket.Write(request.Context(), websocket.MessageText, source)
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+
+	directory := t.TempDir()
+	client := Client{
+		Config: config.Config{
+			ServerURL: server.URL, DataDir: directory,
+			Agents: []config.AgentConfig{{
+				Name: "Builder", Role: "Implementation", Adapter: "generic",
+				Command: []string{"agent"}, Workspace: directory,
+			}},
+		},
+		Credential: pairing.Credential{
+			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
+			OwnerMemberID: "member_test", Token: "device-secret",
+		},
+		HeartbeatInterval: time.Second,
+		HandleRun: func(ctx context.Context, _ contracts.RunRequestedMessage, _ func(context.Context, any) error) error {
+			close(handlerReady)
+			<-ctx.Done()
+			causeResult <- context.Cause(ctx)
+			return nil
+		},
+	}
+	connected, err := client.connectOnce(context.Background())
+	if !connected || err == nil || !strings.Contains(err.Error(), "fence is unavailable") {
+		t.Fatalf("connectOnce connected=%t error=%v", connected, err)
+	}
+	select {
+	case cause := <-causeResult:
+		if errors.Is(cause, ErrRunCancelRequested) {
+			t.Fatalf("missing fence applied explicit cancellation: %v", cause)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("active Run worker did not drain")
+	}
+}
+
 func TestDuplicateRunRequestDoesNotStartAConcurrentHandler(t *testing.T) {
 	handlerStarted := make(chan struct{})
 	releaseHandler := make(chan struct{})
@@ -724,14 +943,11 @@ func TestDuplicateRunRequestDoesNotStartAConcurrentHandler(t *testing.T) {
 				return
 			}
 		}
-		requested := contracts.RunRequestedMessage{
-			ProtocolVersion: "1.0", MessageID: "msg_duplicate_request",
-			Timestamp: time.Now().UTC(), Type: contracts.RunRequested,
-			Payload: contracts.RunRequestedPayload{
-				RunID: "run_duplicate_request", TraceID: "trace_duplicate_request",
-				TargetAgentID: "agent_duplicate_request",
-			},
-		}
+		requested := contractRunRequest(
+			"run_duplicate_request",
+			"trace_duplicate_request",
+			"agent_duplicate_request",
+		)
 		source, _ := json.Marshal(requested)
 		if err := socket.Write(request.Context(), websocket.MessageText, source); err != nil {
 			return

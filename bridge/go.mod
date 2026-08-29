@@ -9,6 +9,11 @@ require github.com/coder/websocket v1.8.15
 require golang.org/x/sys v0.46.0
 
 require (
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
+	golang.org/x/text v0.39.0 // indirect
+)
+
+require (
 	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect

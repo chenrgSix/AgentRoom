@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 	"unicode/utf8"
 
@@ -222,7 +223,7 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		}
 		return e.emitUnknown(ctx, latest, send, "RUNTIME_EXECUTION_UNKNOWN")
 	}
-	return nil
+	return e.clearTerminalCancellationFence(record.Request)
 }
 
 func (e RuntimeExecutor) now() time.Time {
@@ -242,8 +243,20 @@ func (e RuntimeExecutor) CancelQueued(ctx context.Context, record Record, send S
 	if err != nil {
 		return err
 	}
-	if latest.State != StateAccepted {
+	if isCancellationTerminalState(latest.State) {
 		return e.Replay(ctx, latest, send)
+	}
+	if latest.State == StatePreparing {
+		latest, err = e.Inbox.TransitionLocalState(
+			latest.RunID, StatePreparing, StateAccepted, e.now(),
+		)
+		if err != nil {
+			return err
+		}
+	}
+	if latest.State != StateAccepted && latest.State != StateWorking &&
+		latest.State != StateInputRequired {
+		return fmt.Errorf("Run cannot be canceled before admission: %s", latest.State)
 	}
 	now := e.now()
 	sequence := latest.LastSequence + 1
@@ -255,12 +268,16 @@ func (e RuntimeExecutor) CancelQueued(ctx context.Context, record Record, send S
 			TraceID: latest.Request.TraceID, Sequence: sequence, Status: contracts.Canceled,
 		},
 	}
-	if _, err := e.Inbox.AppendEvent(
+	updated, err := e.Inbox.AppendEvent(
 		latest.RunID, StateCanceled, sequence, message, now,
-	); err != nil {
+	)
+	if err != nil {
 		return err
 	}
-	return send(ctx, message)
+	if latest.State == StateAccepted {
+		return send(ctx, message)
+	}
+	return e.Replay(ctx, updated, send)
 }
 
 func (e RuntimeExecutor) FailMaterialization(
@@ -317,7 +334,10 @@ func (e RuntimeExecutor) failBeforeRuntime(
 	); err != nil {
 		return err
 	}
-	return send(ctx, message)
+	if err := send(ctx, message); err != nil {
+		return err
+	}
+	return e.clearTerminalCancellationFence(record.Request)
 }
 
 func runHasPinnedArtifactContent(run contracts.RunRequestedPayload) bool {
@@ -468,7 +488,10 @@ func (e RuntimeExecutor) emitUnknown(ctx context.Context, record Record, send Se
 	if _, err := e.Inbox.AppendEvent(record.RunID, StateOutcomeUnknown, sequence, message, now); err != nil {
 		return err
 	}
-	return send(ctx, message)
+	if err := send(ctx, message); err != nil {
+		return err
+	}
+	return e.clearTerminalCancellationFence(record.Request)
 }
 
 func (e RuntimeExecutor) Replay(ctx context.Context, record Record, send Sender) error {
@@ -491,6 +514,170 @@ func (e RuntimeExecutor) Replay(ctx context.Context, record Record, send Sender)
 		}
 	}
 	return nil
+}
+
+// ReplayCanceledRun closes the Central cancellation acknowledgement gap without
+// restarting a Runtime. It replays a terminal record or durably fences and
+// terminates a matching record that has not yet reached a terminal state.
+func (e RuntimeExecutor) ReplayCanceledRun(
+	ctx context.Context,
+	requested contracts.RunCancelRequestedMessage,
+	send Sender,
+) error {
+	record, err := e.Inbox.Get(requested.Payload.RunID)
+	if err != nil {
+		if os.IsNotExist(err) {
+			tombstone, recordErr := e.Inbox.RecordCancellation(requested, e.now())
+			if recordErr != nil {
+				return recordErr
+			}
+			if err := send(ctx, cancellationTombstoneStatus(tombstone)); err != nil {
+				return err
+			}
+			return e.Inbox.ClearCancellation(tombstone.RunID)
+		}
+		return fmt.Errorf("load canceled Run replay record: %w", err)
+	}
+	if err := validateRecoveryRecord(record); err != nil {
+		return fmt.Errorf("canceled Run replay record is invalid: %w", err)
+	}
+	if record.RunID != requested.Payload.RunID ||
+		record.Request.TraceID != requested.Payload.TraceID ||
+		record.Request.TargetAgentID != requested.Payload.AgentID {
+		return fmt.Errorf("Run cancellation replay identity mismatch")
+	}
+	if !isCancellationTerminalState(record.State) {
+		if _, err := e.Inbox.RecordCancellation(requested, e.now()); err != nil {
+			return err
+		}
+		return e.cancelTombstonedRecord(ctx, record, send)
+	}
+	if len(record.Events) == 0 {
+		return fmt.Errorf("Run cancellation replay terminal record has no event")
+	}
+	var terminal contracts.RunStatusMessage
+	if err := json.Unmarshal(record.Events[len(record.Events)-1], &terminal); err != nil {
+		return fmt.Errorf("decode canceled Run terminal event: %w", err)
+	}
+	if terminal.ProtocolVersion != "1.0" ||
+		terminal.Type != contracts.RunStatus ||
+		terminal.Payload.RunID != record.RunID ||
+		terminal.Payload.TraceID != record.Request.TraceID ||
+		terminal.Payload.AgentID != record.Request.TargetAgentID ||
+		terminal.Payload.Sequence != record.LastSequence ||
+		!isCancellationTerminalStatus(terminal.Payload.Status) ||
+		stateForStatus(terminal.Payload.Status) != record.State {
+		return fmt.Errorf("Run cancellation replay terminal event is inconsistent")
+	}
+	if err := e.Replay(ctx, record, send); err != nil {
+		return err
+	}
+	return e.Inbox.ClearCancellation(record.RunID)
+}
+
+// StageCancellation durably fences admission for an active connection worker.
+// The worker remains the sole owner of accepted/terminal writes; the inactive
+// replay path is deliberately not invoked concurrently with it.
+func (e RuntimeExecutor) StageCancellation(
+	requested contracts.RunCancelRequestedMessage,
+) error {
+	if _, err := e.Inbox.RecordCancellation(requested, e.now()); err != nil {
+		return err
+	}
+	record, err := e.Inbox.Get(requested.Payload.RunID)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if isCancellationTerminalState(record.State) {
+		return e.Inbox.ClearCancellation(record.RunID)
+	}
+	return nil
+}
+
+func (e RuntimeExecutor) clearTerminalCancellationFence(
+	request contracts.RunRequestedPayload,
+) error {
+	record, err := e.Inbox.Get(request.RunID)
+	if err != nil {
+		return err
+	}
+	if !isCancellationTerminalState(record.State) {
+		return nil
+	}
+	staged, err := e.Inbox.HasCancellation(request)
+	if err != nil || !staged {
+		return err
+	}
+	return e.Inbox.ClearCancellation(request.RunID)
+}
+
+func cancellationTombstoneStatus(
+	tombstone CancellationTombstone,
+) contracts.RunStatusMessage {
+	return contracts.RunStatusMessage{
+		ProtocolVersion: "1.0",
+		MessageID:       tombstone.TerminalStatusMessageID,
+		Timestamp:       tombstone.CreatedAt,
+		Type:            contracts.RunStatus,
+		Payload: contracts.RunStatusPayload{
+			RunID: tombstone.RunID, TraceID: tombstone.TraceID,
+			AgentID: tombstone.AgentID, Sequence: 1,
+			Status: contracts.Canceled,
+		},
+	}
+}
+
+func (e RuntimeExecutor) cancelTombstonedRecord(
+	ctx context.Context,
+	record Record,
+	send Sender,
+) error {
+	reportContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	var events []any
+	if err := e.CancelQueued(
+		reportContext,
+		record,
+		func(_ context.Context, value any) error {
+			events = append(events, value)
+			return nil
+		},
+	); err != nil {
+		return err
+	}
+	accepted := contracts.RunAcceptedMessage{
+		ProtocolVersion: "1.0", MessageID: runtimeMessageID(), Timestamp: e.now(),
+		Type: contracts.RunAccepted,
+		Payload: contracts.RunAcceptedPayload{
+			RunID: record.RunID, TraceID: record.Request.TraceID,
+			AgentID: record.Request.TargetAgentID, Sequence: 1,
+		},
+	}
+	if runHasPinnedArtifactContent(record.Request) {
+		accepted.Payload.ArtifactMaterializationError = materializationFailureAcknowledgement()
+	}
+	if err := send(reportContext, accepted); err != nil {
+		return err
+	}
+	for _, event := range events {
+		if err := send(reportContext, event); err != nil {
+			return err
+		}
+	}
+	return e.Inbox.ClearCancellation(record.RunID)
+}
+
+func isCancellationTerminalState(state State) bool {
+	return state == StateCompleted || state == StateFailed ||
+		state == StateCanceled || state == StateOutcomeUnknown
+}
+
+func isCancellationTerminalStatus(status contracts.RunExecutionStatus) bool {
+	return status == contracts.Completed || status == contracts.Failed ||
+		status == contracts.Canceled || status == contracts.OutcomeUnknown
 }
 
 // Old outbox entries must still occupy their original sequence on recovery.
@@ -543,6 +730,16 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 		recoverable = append(recoverable, record)
 	}
 	for _, record := range recoverable {
+		canceledBeforeRecovery, err := e.Inbox.HasCancellation(record.Request)
+		if err != nil {
+			return err
+		}
+		if canceledBeforeRecovery {
+			if err := e.cancelTombstonedRecord(ctx, record, send); err != nil {
+				return err
+			}
+			continue
+		}
 		if record.State == StatePreparing {
 			continue
 		}

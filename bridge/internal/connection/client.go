@@ -26,6 +26,7 @@ import (
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
 	"convenewire.dev/bridge/internal/workspace"
 	contracts "convenewire.dev/contracts/generated/go"
+	runtimecontracts "convenewire.dev/contracts/generated/go/runtime"
 	"github.com/coder/websocket"
 )
 
@@ -38,6 +39,16 @@ type ProvisionHandler func(
 	context.Context,
 	contracts.AgentProvisionRequestedMessage,
 ) contracts.AgentProvisionResultMessage
+
+type CanceledRunReplayHandler func(
+	context.Context,
+	contracts.RunCancelRequestedMessage,
+	func(context.Context, any) error,
+) error
+
+type CanceledRunFenceHandler func(
+	contracts.RunCancelRequestedMessage,
+) error
 
 // The Bridge protocol permits a Run request with one 32,768-character
 // instruction and up to fifty 32,768-character context messages. Sixteen MiB
@@ -56,6 +67,8 @@ type Client struct {
 	BridgeVersion                     string
 	HeartbeatInterval                 time.Duration
 	HandleRun                         func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
+	FenceCanceledRun                  CanceledRunFenceHandler
+	ReplayCanceledRun                 CanceledRunReplayHandler
 	HandleProvision                   ProvisionHandler
 	RecoverRuns                       func(context.Context, func(context.Context, any) error) error
 	Observer                          operations.Observer
@@ -278,6 +291,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	readError := make(chan error, 1)
 	type activeRun struct {
 		agentID string
+		traceID string
 		cancel  context.CancelCauseFunc
 		token   *struct{}
 	}
@@ -300,23 +314,24 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	go func() {
 		defer close(readerDone)
 		for {
-			_, source, err := socket.Read(ctx)
+			messageType, source, err := socket.Read(ctx)
 			if err != nil {
 				reportReadError(err)
 				return
 			}
-			var envelope struct {
-				Type string `json:"type"`
+			if messageType != websocket.MessageText {
+				reportReadError(runtimecontracts.ErrInvalidBridgeMessage)
+				return
 			}
-			if err := json.Unmarshal(source, &envelope); err != nil {
+			decoded, err := runtimecontracts.DecodeBridgeMessage(source)
+			if err != nil {
 				reportReadError(err)
 				return
 			}
-			if envelope.Type == "run.requested" && c.HandleRun != nil {
-				var requested contracts.RunRequestedMessage
-				if err := json.Unmarshal(source, &requested); err != nil {
-					reportReadError(err)
-					return
+			switch requested := decoded.(type) {
+			case contracts.RunRequestedMessage:
+				if c.HandleRun == nil {
+					continue
 				}
 				runContext, cancel := context.WithCancelCause(connectionContext)
 				token := &struct{}{}
@@ -324,7 +339,10 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 				_, alreadyActive := active[requested.Payload.RunID]
 				if !alreadyActive {
 					active[requested.Payload.RunID] = activeRun{
-						agentID: requested.Payload.TargetAgentID, cancel: cancel, token: token,
+						agentID: requested.Payload.TargetAgentID,
+						traceID: requested.Payload.TraceID,
+						cancel:  cancel,
+						token:   token,
 					}
 				}
 				activeMu.Unlock()
@@ -349,12 +367,9 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 					}
 				}()
 				continue
-			}
-			if envelope.Type == "agent.provision.requested" && c.HandleProvision != nil {
-				var requested contracts.AgentProvisionRequestedMessage
-				if err := json.Unmarshal(source, &requested); err != nil {
-					reportReadError(err)
-					return
+			case contracts.AgentProvisionRequestedMessage:
+				if c.HandleProvision == nil {
+					continue
 				}
 				if err := validateProvisionRequest(c.Credential.DeviceID, requested); err != nil {
 					reportReadError(err)
@@ -383,19 +398,43 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 					return
 				}
 				continue
-			}
-			if envelope.Type == "run.cancel_requested" {
-				var canceled contracts.RunCancelRequestedMessage
-				if err := json.Unmarshal(source, &canceled); err != nil {
-					reportReadError(err)
-					return
-				}
+			case contracts.RunCancelRequestedMessage:
+				canceled := requested
 				activeMu.Lock()
 				running, exists := active[canceled.Payload.RunID]
 				activeMu.Unlock()
-				if exists && running.agentID == canceled.Payload.AgentID {
+				if exists {
+					if running.agentID != canceled.Payload.AgentID ||
+						running.traceID != canceled.Payload.TraceID {
+						reportReadError(fmt.Errorf("Run cancellation identity mismatch"))
+						return
+					}
+					if c.FenceCanceledRun == nil {
+						reportReadError(fmt.Errorf("Run cancellation fence is unavailable"))
+						return
+					}
+					if err := c.FenceCanceledRun(canceled); err != nil {
+						reportReadError(err)
+						return
+					}
 					running.cancel(ErrRunCancelRequested)
+					continue
 				}
+				if c.ReplayCanceledRun == nil {
+					reportReadError(fmt.Errorf("Run cancellation replay is unavailable"))
+					return
+				}
+				if err := c.ReplayCanceledRun(
+					connectionContext,
+					canceled,
+					func(sendContext context.Context, value any) error {
+						return writer.writeJSON(sendContext, value)
+					},
+				); err != nil {
+					reportReadError(err)
+					return
+				}
+				continue
 			}
 		}
 	}()
