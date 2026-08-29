@@ -25,6 +25,8 @@ export const goGateCommands = Object.freeze([
   "go test ./...",
   "go vet ./...",
   "go build ./cmd/convenewirectl",
+  "bash -n scripts/build-central-image.sh",
+  "bash -n scripts/verify-central-image-docker.sh",
   "bash -n scripts/package-central-release.sh",
   "bash -n scripts/verify-central-release.sh",
   "./ops/convenewirectl/scripts/package-central-release.sh",
@@ -41,6 +43,8 @@ export const requiredGoModuleCommands = Object.freeze({
     "go test ./...",
     "go vet ./...",
     "go build ./cmd/convenewirectl",
+    "bash -n scripts/build-central-image.sh",
+    "bash -n scripts/verify-central-image-docker.sh",
     "bash -n scripts/package-central-release.sh",
     "bash -n scripts/verify-central-release.sh"
   ]
@@ -64,6 +68,91 @@ export function assertTagSource(sourceSha, tagSourceSha) {
   invariant(
     sourceSha === tagSourceSha,
     "the Release tag changed after its source commit was resolved"
+  );
+}
+
+export function verifyCentralImageDockerGateSource(source) {
+  const defaultMarker = "# OPS-013_DEFAULT_SERVER_CMD_GATE";
+  const readyMarker = "# OPS-013_READY_GATE";
+  const identityMarker = "# OPS-013_BUILD_IDENTITY_GATE";
+  const defaultStart = source.indexOf(defaultMarker);
+  const readyStart = source.indexOf(readyMarker);
+  const identityStart = source.indexOf(identityMarker);
+  invariant(defaultStart >= 0, "Central Docker gate must mark the default Server command proof");
+  invariant(readyStart > defaultStart, "Central Docker gate must run readiness after default startup");
+  invariant(identityStart > readyStart, "Central Docker gate must check build identity after readiness");
+
+  const commandProof = source.slice(0, defaultStart);
+  const defaultRun = source.slice(defaultStart, readyStart);
+  const readiness = source.slice(readyStart, identityStart);
+  const identity = source.slice(identityStart);
+  invariant(
+    !/(?:^|\s)mapfile(?:\s|$)/u.test(commandProof) &&
+      commandProof.includes("while IFS= read -r reference"),
+    "Central Docker gate must preserve its Bash 3.2 reference reader"
+  );
+  invariant(
+    commandProof.includes("sha256_file()") &&
+      commandProof.includes("command -v shasum") &&
+      commandProof.includes('$(sha256_file "${archive}")'),
+    "Central Docker gate must use its portable SHA-256 helper"
+  );
+  invariant(
+    commandProof.includes(
+      "server_command=$(docker image inspect --format '{{json .Config.Cmd}}'"
+    ) && commandProof.includes(
+      "'[\"node\",\"apps/server/dist/server.js\"]'"
+    ),
+    "Central Docker gate must require the production application Cmd"
+  );
+  invariant(
+    defaultRun.includes("docker run --detach") &&
+      defaultRun.includes('\n  "${server_reference}" >/dev/null') &&
+      !defaultRun.includes("--entrypoint") &&
+      !defaultRun.includes('"${server_reference}" --') &&
+      !defaultRun.includes('"${server_reference}" node'),
+    "Central Docker gate must start the final Server image with no command override"
+  );
+  assertIncludes(defaultRun, [
+    "--pull=never",
+    "--network none",
+    "CONVENE_WIRE_DATABASE_PATH=/data/agent-room.sqlite",
+    'CONVENE_WIRE_RELEASE_VERSION=${release_tag}',
+    'CONVENE_WIRE_SOURCE_COMMIT=${source_commit}',
+    "CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE=/run/secrets/owner_recovery_token",
+    "CONVENE_WIRE_WEB_AUTH_MODE=trusted-team"
+  ], "Central Docker default Server gate");
+  assertIncludes(readiness, [
+    'docker exec "${container_name}" node -e',
+    "/api/health/ready",
+    "docker logs",
+    "did not reach application readiness"
+  ], "Central Docker readiness gate");
+  assertIncludes(identity, [
+    "/api/metrics",
+    "convenewire_build_info{release_version=",
+    "process.env.CONVENE_WIRE_RELEASE_VERSION",
+    "process.env.CONVENE_WIRE_SOURCE_COMMIT",
+    "runtime build identity does not match verified OCI metadata"
+  ], "Central Docker build identity gate");
+}
+
+export function verifyComposeBackupDurabilitySource(source) {
+  const marker = "# OPS-013_STANDALONE_BACKUP_SYNC";
+  const markerIndex = source.indexOf(marker);
+  invariant(
+    markerIndex >= 0,
+    "Compose backup must mark its standalone durability boundary"
+  );
+  const durabilityBoundary = source.slice(markerIndex);
+  invariant(
+    durabilityBoundary.includes("command -v sync") &&
+      /^sync$/mu.test(durabilityBoundary),
+    "Compose backup must use the portable host sync utility"
+  );
+  invariant(
+    !/(?:^|\n)[ \t]*node[ \t]+-e(?:[ \t]|$)/u.test(durabilityBoundary),
+    "Compose backup must not require host Node for durability"
   );
 }
 
@@ -175,7 +264,13 @@ export function verifyReleaseWorkflowSource(source) {
   const validate = requireJob(jobs, "validate-release");
   const repository = requireJob(jobs, "repository-gates");
   const go = requireJob(jobs, "go-gates");
-  const buildJobNames = ["build", "central", "desktop-macos", "desktop-windows"];
+  const buildJobNames = [
+    "build",
+    "central-image",
+    "central",
+    "desktop-macos",
+    "desktop-windows"
+  ];
   const checkoutJobNames = [
     "repository-gates",
     "go-gates",
@@ -245,9 +340,19 @@ export function verifyReleaseWorkflowSource(source) {
       assertNeeds(block, jobName, ["validate-release", "repository-gates", "go-gates"]);
     }
   }
-  assertIncludes(requireJob(jobs, "central"), [
-    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}"
+  const central = requireJob(jobs, "central");
+  assertIncludes(central, [
+    "central-runtime-image-${{ matrix.goarch }}"
   ], "central");
+  assertIncludes(
+    stepForName(central, "Build checksum-pinned Central archive"),
+    [
+      "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
+      "CENTRAL_IMAGE_BUNDLE_DIR: ${{ github.workspace }}/central-image"
+    ],
+    "central package step"
+  );
+  assertNeeds(central, "central", ["central-image"]);
 
   for (const [jobName, stepName] of [
     ["build", "Build archive"],
@@ -261,13 +366,50 @@ export function verifyReleaseWorkflowSource(source) {
     );
   }
 
+  const centralImage = requireJob(jobs, "central-image");
+  assertIncludes(centralImage, [
+    "goarch: [amd64, arm64]",
+    "docker/setup-qemu-action@",
+    "docker/setup-buildx-action@",
+    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
+    "CENTRAL_SBOM_GENERATOR: docker.io/docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9",
+    "CENTRAL_IMAGE_BUILDER_ID:",
+    "./ops/convenewirectl/scripts/build-central-image.sh",
+    "Verify clean-daemon OCI load and digest execution",
+    "./ops/convenewirectl/scripts/verify-central-image-docker.sh",
+    "name: central-runtime-image-${{ matrix.goarch }}",
+    "central-image/*.oci.tar",
+    "central-image/*.metadata.json"
+  ], "central-image");
+  assertIncludes(
+    stepForName(centralImage, "Build one attested offline image bundle"),
+    ["SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}"],
+    "central-image build step"
+  );
+  assertIncludes(
+    stepForName(centralImage, "Verify clean-daemon OCI load and digest execution"),
+    ["SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}"],
+    "central-image Docker verification step"
+  );
+  assertBefore(
+    centralImage,
+    "./ops/convenewirectl/scripts/build-central-image.sh",
+    "./ops/convenewirectl/scripts/verify-central-image-docker.sh",
+    "central-image"
+  );
+  assertBefore(
+    centralImage,
+    "./ops/convenewirectl/scripts/verify-central-image-docker.sh",
+    "Upload once-built Central image bundle",
+    "central-image"
+  );
+
   const desktopWindows = requireJob(jobs, "desktop-windows");
   assertIncludes(desktopWindows, [
     "Download latest stable Windows installer",
     "gh release view",
     "gh release download $previousReleaseTag",
     'throw "Expected exactly one previous stable Windows installer"',
-    "./scripts/test-windows-release-semver.ps1",
     "PREVIOUS_RELEASE_TAG: ${{ steps.previous-stable.outputs.release_tag }}",
     "PREVIOUS_INSTALLER_PATH: ${{ steps.previous-stable.outputs.installer_path }}",
     "-PreviousReleaseTag $env:PREVIOUS_RELEASE_TAG",
@@ -302,10 +444,16 @@ export function verifyReleaseWorkflowSource(source) {
     "node ./scripts/qa/verify-release-workflow.mjs assert-tag-source",
     "gh release view",
     "--json isDraft",
-    "--json assets",
-    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
-    "./bridge/scripts/verify-release-assets.sh"
+    "--json assets"
   ], "publish");
+  assertIncludes(
+    stepForName(publish, "Verify release assets before upload"),
+    [
+      "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
+      "./bridge/scripts/verify-release-assets.sh"
+    ],
+    "publish asset verification step"
+  );
   assertBefore(
     publish,
     "Reconfirm immutable tag source before upload",
@@ -318,10 +466,16 @@ export function verifyReleaseWorkflowSource(source) {
   assertIncludes(verify, [
     "SOURCE_SHA: ${{ needs.validate-release.outputs.source_sha }}",
     '"repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}"',
-    "node ./scripts/qa/verify-release-workflow.mjs assert-tag-source",
-    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
-    "./bridge/scripts/verify-release-assets.sh"
+    "node ./scripts/qa/verify-release-workflow.mjs assert-tag-source"
   ], "verify-release");
+  assertIncludes(
+    stepForName(verify, "Verify uploaded Release assets"),
+    [
+      "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
+      "./bridge/scripts/verify-release-assets.sh"
+    ],
+    "verify-release asset verification step"
+  );
   assertBefore(
     verify,
     "Reconfirm immutable tag source before download verification",
@@ -344,6 +498,14 @@ if (isMain) {
         ".github/workflows/release-bridge.yml"
       );
       verifyReleaseWorkflowSource(await readFile(workflowPath, "utf8"));
+      verifyCentralImageDockerGateSource(await readFile(path.join(
+        repositoryRoot,
+        "ops/convenewirectl/scripts/verify-central-image-docker.sh"
+      ), "utf8"));
+      verifyComposeBackupDurabilitySource(await readFile(path.join(
+        repositoryRoot,
+        "scripts/compose-backup.sh"
+      ), "utf8"));
     }
   } catch (error) {
     console.error(error instanceof Error ? error.message : error);
