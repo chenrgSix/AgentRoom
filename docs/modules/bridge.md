@@ -823,6 +823,17 @@ passed the same 11-asset verifier. The packages remain unsigned and
 manual-update-only, while `BRG-013` stays active as post-release real-login
 evidence. Full evidence is recorded in `docs/acceptance/qa-021-v0.2.0.md`.
 
+Release `v0.4.0` supersedes that baseline with the ConveneWire product and
+repository identity, one-install Central lifecycle control, canonical one-time
+Device pairing, public-CA default deployment, exact-origin scoped private
+trust, Windows Desktop and current-user installer packages, and the complete
+Task/Run/Result/Artifact work surfaces. Release workflow `33231262442` built
+and verified the closed 22-asset matrix from the exact tag, and an independent
+anonymous public download passed the same committed verifier. The packages
+remain unsigned and manual-update-only; the open schema-v4 two-machine tasks
+remain post-release evidence rather than hidden stable claims. Full evidence is
+recorded in `docs/acceptance/qa-033-v0.4.0.md`.
+
 ## Dependencies
 
 Contracts, Registry publication, Security pairing, and Runtime Adapters.

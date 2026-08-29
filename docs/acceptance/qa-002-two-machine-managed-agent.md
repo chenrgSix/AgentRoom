@@ -239,15 +239,15 @@ A run that installs a Caddy root into machine B's OS trust store or manually
 enters a leaf fingerprint is always partial/advanced compatibility evidence,
 even if every application request succeeds.
 
-## Current exact candidate
+## Current exact release
 
-[`v0.4.0-qa031.1`](../releases/v0.4.0-qa031.1.md) is the exact unpublished
-Draft candidate for the replacement physical run. Its exact-source main CI,
-native Windows installer lifecycle, closed 22-asset Release workflow, and
-independent authenticated Draft download all passed. This makes the matching
-Central and Windows Bridge packages available for capture; it does not create
-the missing schema-v4 record.
+[`v0.4.0`](../releases/v0.4.0.md) is the exact stable release for the replacement
+physical run. Its exact-source main CI, native Windows installer lifecycle,
+closed 22-asset Release workflow, stable Latest publication, and independent
+anonymous public download all passed. This makes the matching Central and
+Windows Bridge packages available for capture; it does not create the missing
+schema-v4 record.
 
-Use the matching candidate on both machines and a newly consumed pairing. The
+Use the matching release on both machines and a newly consumed pairing. The
 record must observe the installed canonical `convenewire://` handler; opening a
 legacy `agentroom://` compatibility link cannot satisfy schema-v4 acceptance.

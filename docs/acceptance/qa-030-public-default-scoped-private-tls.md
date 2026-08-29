@@ -199,14 +199,14 @@ boundary while fresh schema-v4 physical evidence, including the installed
 canonical `convenewire://` launch rather than legacy `agentroom://`
 compatibility, remains required for the scoped-private alternative.
 
-## Schema-v4 replacement candidate
+## Schema-v4 replacement release
 
-The unpublished [`v0.4.0-qa031.1` Draft](../releases/v0.4.0-qa031.1.md) is the
-exact matching candidate for the replacement physical capture. Main CI and the
-protected Release workflow passed on commit
-`32de89e882938eb045e884ada71b018068ae4f9e`, including native Windows installer
+The stable [`v0.4.0` release](../releases/v0.4.0.md) is the exact matching
+package set for the replacement physical capture. Main CI and the protected
+Release workflow passed on commit
+`1a538a4bc50dab8567a73d7e2ec56a7c45e246b7`, including native Windows installer
 upgrade checks and the complete 22-asset verification before and after Draft
-upload. A separate authenticated clean download passed the tagged verifier.
+upload. A separate anonymous public download passed the tagged verifier.
 
 This closes package readiness only. `QA-030` remains `BLOCKED` until the fresh
 schema-v4 record binds current-build execution, the canonical
