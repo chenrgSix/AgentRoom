@@ -556,7 +556,9 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	}
 	if bytes.Count(javascript, []byte(`request("/api/device-pairing/start"`)) != 1 ||
 		!bytes.Contains(html, []byte("配对只发送设备名称、平台和 Bridge 版本")) ||
-		!bytes.Contains(javascript, []byte(`pairingLinkFromHash(window.location.hash)`)) {
+		!bytes.Contains(javascript, []byte(`pairingLinkFromHash(window.location.hash)`)) ||
+		!bytes.Contains(javascript, []byte(`elements["server-url"].value = pairingOriginFromLink(suggestedPairingLink)`)) ||
+		!bytes.Contains(javascript, []byte(`elements["device-pairing-link"].addEventListener("input"`)) {
 		t.Fatal("Device pairing must remain one explicit local action with a closed metadata disclosure")
 	}
 	presentation, err := staticFiles.ReadFile("static/bridge-presentation.mjs")
@@ -775,6 +777,9 @@ func TestDevicePairingPreservesLocalProfilesAndProjectsOnlyApprovalState(t *test
 		if input.Link != pairingLink || input.ShortCode != "" {
 			t.Fatalf("unexpected Device pairing input: %#v", input)
 		}
+		if configuration.ServerURL != "http://127.0.0.1:3000" {
+			t.Fatalf("Device pairing did not derive the Server origin from its link: %#v", configuration)
+		}
 		if len(configuration.Agents) != 2 ||
 			configuration.Agents[0].WorkspaceAlias != "Customer Alpha" ||
 			configuration.Agents[1].WorkspaceAlias != "Customer Beta" {
@@ -809,7 +814,7 @@ func TestDevicePairingPreservesLocalProfilesAndProjectsOnlyApprovalState(t *test
 	}
 	payload := DevicePairingInput{
 		EnrollmentInput: EnrollmentInput{
-			ServerURL: "http://127.0.0.1:3000", DeviceName: "Alice Mac",
+			ServerURL: "", DeviceName: "Alice Mac",
 			Runtimes: []RuntimeInput{{
 				Kind: "codex", Enabled: true, Name: "Builder", Role: "builder",
 				ExecutablePath: executablePath, Workspace: filepath.Join(directory, "alpha"),

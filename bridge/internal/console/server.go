@@ -731,6 +731,14 @@ func (s *Service) startDevicePairing(response http.ResponseWriter, request *http
 		writeError(response, http.StatusBadRequest, "Provide exactly one Device pairing link or short code")
 		return
 	}
+	if link != "" {
+		parsed, err := pairing.ParseSessionLink(link)
+		if err != nil {
+			writeError(response, http.StatusBadRequest, err.Error())
+			return
+		}
+		input.ServerURL = parsed.ServerURL
+	}
 	s.mu.Lock()
 	if reason := s.enrollmentBlockedReasonLocked(); reason != "" {
 		s.mu.Unlock()

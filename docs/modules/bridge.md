@@ -105,6 +105,18 @@ self-test, and Bridge start just like legacy enrollment. No local path, command,
 environment variable, Runtime kind, Workspace policy, or Agent roster crosses
 the Device claim boundary.
 
+`BRG-049` makes the canonical link authoritative for the first Central address
+instead of asking the operator to copy information already present in the
+link. Installed protocol launch and manual link paste project one strictly
+parsed HTTPS origin into the local form. The authenticated Console backend then
+independently parses the complete link with the Go pairing validator and derives
+the Server URL before configuration validation, so missing or stale form state
+cannot redirect the claim. This projection never imports a CA, reveals the
+fragment claim secret, or weakens the later exact-origin scoped-private trust
+bootstrap. Manual short-code recovery still requires an already supplied and
+trusted Central address because the short code intentionally contains no
+origin.
+
 ## Local Configuration Console
 
 `convenewire-bridge console` starts the recommended client setup surface on

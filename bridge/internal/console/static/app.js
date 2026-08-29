@@ -1,5 +1,8 @@
 import { pairingView } from "./pairing-view.mjs";
-import { pairingLinkFromHash } from "./device-pairing-launch.mjs";
+import {
+  pairingLinkFromHash,
+  pairingOriginFromLink
+} from "./device-pairing-launch.mjs";
 import { detectedPathForDraft, runtimeDiscoveryView } from "./runtime-discovery.mjs";
 import {
   applyAgentRuntimePolicy,
@@ -72,7 +75,10 @@ if (query.get("token")) {
 } else if (window.location.hash) {
   history.replaceState(null, "", window.location.pathname);
 }
-if (suggestedPairingLink) elements["device-pairing-link"].value = suggestedPairingLink;
+if (suggestedPairingLink) {
+  elements["device-pairing-link"].value = suggestedPairingLink;
+  elements["server-url"].value = pairingOriginFromLink(suggestedPairingLink);
+}
 const token = sessionStorage.getItem("agent-room-console-token") || "";
 if (!token) elements["auth-warning"].classList.remove("hidden");
 let currentState = null;
@@ -911,6 +917,11 @@ elements["submit-device-pairing"].addEventListener("click", async () => {
   } finally {
     elements["submit-device-pairing"].disabled = false;
   }
+});
+
+elements["device-pairing-link"].addEventListener("input", () => {
+  const origin = pairingOriginFromLink(elements["device-pairing-link"].value);
+  if (origin) elements["server-url"].value = origin;
 });
 
 elements["enrollment-form"].addEventListener("submit", async (event) => {
