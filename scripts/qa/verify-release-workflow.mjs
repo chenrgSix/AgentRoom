@@ -1,0 +1,303 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const exactCommitShaPattern = /^[0-9a-f]{40}$/u;
+const resolvedCheckoutRef = "${{ needs.validate-release.outputs.source_sha }}";
+
+export const repositoryGateCommands = Object.freeze([
+  "npm ci",
+  "npm run validate",
+  "npm run build",
+  "npm test",
+  "npm run test:e2e",
+  "npm run lint:docs",
+  "git diff --check",
+  "npm run test:compose",
+  "bash -n scripts/compose-backup.sh",
+  "bash -n scripts/compose-restore.sh"
+]);
+
+export const goGateCommands = Object.freeze([
+  "working-directory: packages/contracts",
+  "working-directory: bridge",
+  "working-directory: ops/convenewirectl",
+  "go test ./...",
+  "go vet ./...",
+  "go build ./cmd/convenewirectl",
+  "bash -n scripts/package-central-release.sh",
+  "bash -n scripts/verify-central-release.sh",
+  "./ops/convenewirectl/scripts/package-central-release.sh",
+  "./ops/convenewirectl/scripts/verify-central-release.sh",
+  "bash -n bridge/scripts/package-release.sh",
+  "bash -n bridge/scripts/package-desktop-darwin.sh",
+  "bash -n bridge/scripts/verify-release-assets.sh"
+]);
+
+export const requiredGoModuleCommands = Object.freeze({
+  "packages/contracts": ["go test ./...", "go vet ./..."],
+  bridge: ["go test ./...", "go vet ./..."],
+  "ops/convenewirectl": [
+    "go test ./...",
+    "go vet ./...",
+    "go build ./cmd/convenewirectl",
+    "bash -n scripts/package-central-release.sh",
+    "bash -n scripts/verify-central-release.sh"
+  ]
+});
+
+function invariant(condition, message) {
+  if (!condition) {
+    throw new Error(`RELEASE_WORKFLOW_POLICY: ${message}`);
+  }
+}
+
+export function assertTagSource(sourceSha, tagSourceSha) {
+  invariant(
+    exactCommitShaPattern.test(sourceSha ?? ""),
+    "the initially resolved source must be one lowercase full commit SHA"
+  );
+  invariant(
+    exactCommitShaPattern.test(tagSourceSha ?? ""),
+    "the current tag source must be one lowercase full commit SHA"
+  );
+  invariant(
+    sourceSha === tagSourceSha,
+    "the Release tag changed after its source commit was resolved"
+  );
+}
+
+function jobBlocks(source) {
+  const lines = source.split(/\r?\n/u);
+  const jobsIndex = lines.findIndex((line) => line === "jobs:");
+  invariant(jobsIndex >= 0, "workflow must declare jobs");
+
+  const starts = [];
+  for (let index = jobsIndex + 1; index < lines.length; index += 1) {
+    const match = /^  ([a-z0-9-]+):\s*$/u.exec(lines[index]);
+    if (match) {
+      starts.push({ name: match[1], index });
+    }
+  }
+  invariant(starts.length > 0, "workflow must declare at least one job");
+
+  return new Map(starts.map((entry, position) => {
+    const end = starts[position + 1]?.index ?? lines.length;
+    return [entry.name, lines.slice(entry.index, end).join("\n")];
+  }));
+}
+
+function requireJob(jobs, name) {
+  const block = jobs.get(name);
+  invariant(block, `required job ${name} is missing`);
+  return block;
+}
+
+function needs(block) {
+  const match = /^    needs:\s*(.+)$/mu.exec(block);
+  invariant(match, "every gated job must declare its dependencies explicitly");
+  const value = match[1].trim();
+  if (value.startsWith("[") && value.endsWith("]")) {
+    return value
+      .slice(1, -1)
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+  return [value];
+}
+
+function assertNeeds(block, jobName, required) {
+  const actual = new Set(needs(block));
+  for (const dependency of required) {
+    invariant(
+      actual.has(dependency),
+      `${jobName} must depend on ${dependency}`
+    );
+  }
+}
+
+function checkoutRefs(block) {
+  const refs = [];
+  const checkoutPattern = /uses:\s*actions\/checkout@[^\n]+\n\s+with:\n\s+ref:\s*([^\n]+)/gu;
+  for (const match of block.matchAll(checkoutPattern)) {
+    refs.push(match[1].trim());
+  }
+  return refs;
+}
+
+function assertResolvedCheckout(block, jobName) {
+  const refs = checkoutRefs(block);
+  invariant(refs.length === 1, `${jobName} must have exactly one explicit checkout`);
+  invariant(
+    refs[0] === resolvedCheckoutRef,
+    `${jobName} must check out validate-release's resolved source SHA`
+  );
+}
+
+function assertIncludes(block, snippets, scope) {
+  for (const snippet of snippets) {
+    invariant(block.includes(snippet), `${scope} must include ${snippet}`);
+  }
+}
+
+function stepForWorkingDirectory(block, workingDirectory) {
+  const directoryLine = `        working-directory: ${workingDirectory}`;
+  const directoryIndex = block.indexOf(directoryLine);
+  invariant(
+    directoryIndex >= 0,
+    `go-gates must include a step for ${workingDirectory}`
+  );
+  const stepStart = block.lastIndexOf("      - name:", directoryIndex);
+  const nextStep = block.indexOf("\n      - name:", directoryIndex);
+  invariant(stepStart >= 0, `go-gates ${workingDirectory} must be a named step`);
+  return block.slice(stepStart, nextStep >= 0 ? nextStep : block.length);
+}
+
+function assertBefore(block, earlier, later, scope) {
+  const earlierIndex = block.indexOf(earlier);
+  const laterIndex = block.indexOf(later);
+  invariant(earlierIndex >= 0, `${scope} must include ${earlier}`);
+  invariant(laterIndex >= 0, `${scope} must include ${later}`);
+  invariant(earlierIndex < laterIndex, `${scope} must run ${earlier} before ${later}`);
+}
+
+export function verifyReleaseWorkflowSource(source) {
+  const jobs = jobBlocks(source);
+  const validate = requireJob(jobs, "validate-release");
+  const repository = requireJob(jobs, "repository-gates");
+  const go = requireJob(jobs, "go-gates");
+  const buildJobNames = ["build", "central", "desktop-macos", "desktop-windows"];
+  const checkoutJobNames = [
+    "repository-gates",
+    "go-gates",
+    ...buildJobNames,
+    "publish",
+    "verify-release"
+  ];
+
+  assertIncludes(validate, [
+    "outputs:",
+    "source_sha: ${{ steps.resolve-source.outputs.source_sha }}",
+    "id: resolve-source",
+    '"repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}"',
+    "printf 'source_sha=%s\\n' \"${source_sha}\" >> \"${GITHUB_OUTPUT}\"",
+    "gh release view",
+    "--json isDraft",
+    "--json assets"
+  ], "validate-release");
+
+  invariant(
+    !source.includes("ref: refs/tags/") && !source.includes("ref: ${{ inputs.release_tag }}"),
+    "no checkout may resolve the mutable tag again"
+  );
+  for (const [jobName, block] of jobs.entries()) {
+    if (block.includes("uses: actions/checkout@")) {
+      assertResolvedCheckout(block, jobName);
+    }
+  }
+  for (const jobName of checkoutJobNames) {
+    assertResolvedCheckout(requireJob(jobs, jobName), jobName);
+  }
+
+  assertNeeds(repository, "repository-gates", ["validate-release"]);
+  assertNeeds(go, "go-gates", ["validate-release"]);
+  assertIncludes(repository, repositoryGateCommands, "repository-gates");
+  assertIncludes(go, goGateCommands, "go-gates");
+  for (const [workingDirectory, commands] of Object.entries(requiredGoModuleCommands)) {
+    assertIncludes(
+      stepForWorkingDirectory(go, workingDirectory),
+      commands,
+      `go-gates ${workingDirectory}`
+    );
+  }
+
+  for (const jobName of buildJobNames) {
+    assertNeeds(requireJob(jobs, jobName), jobName, [
+      "validate-release",
+      "repository-gates",
+      "go-gates"
+    ]);
+  }
+  const assetBuildMarkers = [
+    "package-release.sh",
+    "package-central-release.sh",
+    "package-desktop-darwin.sh",
+    "package-desktop-windows.ps1",
+    "docker build",
+    "docker buildx",
+    "docker/build-push-action@"
+  ];
+  for (const [jobName, block] of jobs.entries()) {
+    if (
+      jobName !== "repository-gates" &&
+      jobName !== "go-gates" &&
+      assetBuildMarkers.some((marker) => block.includes(marker))
+    ) {
+      assertNeeds(block, jobName, ["validate-release", "repository-gates", "go-gates"]);
+    }
+  }
+  assertIncludes(requireJob(jobs, "central"), [
+    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}"
+  ], "central");
+
+  const publish = requireJob(jobs, "publish");
+  assertNeeds(publish, "publish", [
+    "validate-release",
+    "build",
+    "central",
+    "desktop-macos",
+    "desktop-windows"
+  ]);
+  assertIncludes(publish, [
+    "SOURCE_SHA: ${{ needs.validate-release.outputs.source_sha }}",
+    '"repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}"',
+    "node ./scripts/qa/verify-release-workflow.mjs assert-tag-source",
+    "gh release view",
+    "--json isDraft",
+    "--json assets",
+    "./bridge/scripts/verify-release-assets.sh"
+  ], "publish");
+  assertBefore(
+    publish,
+    "Reconfirm immutable tag source before upload",
+    "Upload assets to GitHub Release",
+    "publish"
+  );
+
+  const verify = requireJob(jobs, "verify-release");
+  assertNeeds(verify, "verify-release", ["validate-release", "publish"]);
+  assertIncludes(verify, [
+    "SOURCE_SHA: ${{ needs.validate-release.outputs.source_sha }}",
+    '"repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}"',
+    "node ./scripts/qa/verify-release-workflow.mjs assert-tag-source",
+    "./bridge/scripts/verify-release-assets.sh"
+  ], "verify-release");
+  assertBefore(
+    verify,
+    "Reconfirm immutable tag source before download verification",
+    "Download draft Release assets",
+    "verify-release"
+  );
+}
+
+const scriptPath = fileURLToPath(import.meta.url);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === scriptPath;
+
+if (isMain) {
+  try {
+    if (process.argv[2] === "assert-tag-source") {
+      assertTagSource(process.env.SOURCE_SHA, process.env.TAG_SOURCE_SHA);
+    } else {
+      const repositoryRoot = path.resolve(path.dirname(scriptPath), "../..");
+      const workflowPath = path.join(
+        repositoryRoot,
+        ".github/workflows/release-bridge.yml"
+      );
+      verifyReleaseWorkflowSource(await readFile(workflowPath, "utf8"));
+    }
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }
+}

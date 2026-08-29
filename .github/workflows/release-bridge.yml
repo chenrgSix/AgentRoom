@@ -23,28 +23,47 @@ jobs:
     name: Validate draft Release
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      source_sha: ${{ steps.resolve-source.outputs.source_sha }}
     permissions:
       # GitHub hides draft Releases from tokens without release write access.
       contents: write
     steps:
-      - name: Require a version tag and empty draft Release
+      - name: Resolve immutable Release source
+        id: resolve-source
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           [[ "${RELEASE_TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          source_sha=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" \
+            --jq .sha)
+          [[ "${source_sha}" =~ ^[0-9a-f]{40}$ ]]
+          printf 'source_sha=%s\n' "${source_sha}" >> "${GITHUB_OUTPUT}"
+
+      - name: Require an empty draft Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
           test "$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft --jq .isDraft)" = true
           test "$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json assets --jq '.assets | length')" = 0
 
-  test:
-    name: Test Bridge
+  repository-gates:
+    name: Repository release gates
     needs: validate-release
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: refs/tags/${{ inputs.release_tag }}
+          ref: ${{ needs.validate-release.outputs.source_sha }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version: 22.23.1
+          cache: npm
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -53,14 +72,102 @@ jobs:
           cache-dependency-path: |
             bridge/go.sum
             packages/contracts/go.sum
+            ops/convenewirectl/go.mod
 
-      - name: Run tests
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Validate contracts
+        run: npm run validate
+
+      - name: Build workspaces
+        run: npm run build
+
+      - name: Run workspace tests
+        run: npm test
+
+      - name: Run deterministic end-to-end tests
+        run: npm run test:e2e
+
+      - name: Lint documentation
+        run: npm run lint:docs
+
+      - name: Check patch whitespace
+        run: git diff --check
+
+      - name: Validate central Compose deployment
+        env:
+          CONVENE_WIRE_DOMAIN: team.example.com
+          CONVENE_WIRE_PUBLIC_ORIGIN: https://team.example.com:9443
+          CONVENE_WIRE_OWNER_RECOVERY_TOKEN_FILE: ./deploy/secrets/owner_recovery_token
+        run: |
+          npm run test:compose
+          bash -n scripts/compose-backup.sh
+          bash -n scripts/compose-restore.sh
+
+  go-gates:
+    name: Go release gates
+    needs: validate-release
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ needs.validate-release.outputs.source_sha }}
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
+        with:
+          go-version-file: bridge/go.mod
+          cache-dependency-path: |
+            bridge/go.sum
+            packages/contracts/go.sum
+            ops/convenewirectl/go.mod
+
+      - name: Test and vet Go contracts
+        working-directory: packages/contracts
+        run: |
+          go test ./...
+          go vet ./...
+
+      - name: Test and vet Bridge
         working-directory: bridge
-        run: go test ./...
+        run: |
+          go test ./...
+          go vet ./...
+
+      - name: Test, vet, and build central controller
+        working-directory: ops/convenewirectl
+        run: |
+          go test ./...
+          go vet ./...
+          go build ./cmd/convenewirectl
+          bash -n scripts/package-central-release.sh
+          bash -n scripts/verify-central-release.sh
+
+      - name: Package and verify Central release matrix
+        env:
+          RELEASE_TAG: v0.0.0-release-gate
+          SOURCE_REF: HEAD
+          OUTPUT_DIR: ${{ runner.temp }}/central-dist
+        run: |
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            GOOS=${target%/*} GOARCH=${target#*/} \
+              ./ops/convenewirectl/scripts/package-central-release.sh
+          done
+          ASSET_DIR="${OUTPUT_DIR}" \
+            ./ops/convenewirectl/scripts/verify-central-release.sh
+
+      - name: Check Bridge release scripts
+        run: |
+          bash -n bridge/scripts/package-release.sh
+          bash -n bridge/scripts/package-desktop-darwin.sh
+          bash -n bridge/scripts/verify-release-assets.sh
 
   build:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }}
-    needs: test
+    needs: [validate-release, repository-gates, go-gates]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -81,7 +188,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: refs/tags/${{ inputs.release_tag }}
+          ref: ${{ needs.validate-release.outputs.source_sha }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -112,7 +219,7 @@ jobs:
 
   central:
     name: Build Central ${{ matrix.goos }}/${{ matrix.goarch }}
-    needs: test
+    needs: [validate-release, repository-gates, go-gates]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     strategy:
@@ -131,7 +238,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: refs/tags/${{ inputs.release_tag }}
+          ref: ${{ needs.validate-release.outputs.source_sha }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -144,6 +251,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
+          SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
         run: ./ops/convenewirectl/scripts/package-central-release.sh
 
       - name: Upload Central artifact
@@ -158,7 +266,7 @@ jobs:
 
   desktop-macos:
     name: Build desktop macOS/${{ matrix.goarch }}
-    needs: test
+    needs: [validate-release, repository-gates, go-gates]
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
     strategy:
@@ -173,7 +281,7 @@ jobs:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: refs/tags/${{ inputs.release_tag }}
+          ref: ${{ needs.validate-release.outputs.source_sha }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -205,14 +313,14 @@ jobs:
 
   desktop-windows:
     name: Build desktop Windows/amd64
-    needs: test
+    needs: [validate-release, repository-gates, go-gates]
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: refs/tags/${{ inputs.release_tag }}
+          ref: ${{ needs.validate-release.outputs.source_sha }}
 
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7
@@ -254,7 +362,7 @@ jobs:
 
   publish:
     name: Attach ConveneWire binaries
-    needs: [build, central, desktop-macos, desktop-windows]
+    needs: [validate-release, build, central, desktop-macos, desktop-windows]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -263,7 +371,18 @@ jobs:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: refs/tags/${{ inputs.release_tag }}
+          ref: ${{ needs.validate-release.outputs.source_sha }}
+
+      - name: Reconfirm immutable tag source before upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.validate-release.outputs.source_sha }}
+        run: |
+          TAG_SOURCE_SHA=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" \
+            --jq .sha)
+          export TAG_SOURCE_SHA
+          node ./scripts/qa/verify-release-workflow.mjs assert-tag-source
 
       - name: Require an empty draft Release
         env:
@@ -318,7 +437,7 @@ jobs:
 
   verify-release:
     name: Verify uploaded Release
-    needs: publish
+    needs: [validate-release, publish]
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -328,7 +447,18 @@ jobs:
       - name: Check out tagged source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          ref: refs/tags/${{ inputs.release_tag }}
+          ref: ${{ needs.validate-release.outputs.source_sha }}
+
+      - name: Reconfirm immutable tag source before download verification
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.validate-release.outputs.source_sha }}
+        run: |
+          TAG_SOURCE_SHA=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}" \
+            --jq .sha)
+          export TAG_SOURCE_SHA
+          node ./scripts/qa/verify-release-workflow.mjs assert-tag-source
 
       - name: Download draft Release assets
         env:

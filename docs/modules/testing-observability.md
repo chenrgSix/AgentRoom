@@ -32,6 +32,22 @@ contract checks, Node builds and tests, deterministic cross-process E2E,
 Markdown lint, Go tests and vet, plus a native macOS desktop compile. Release
 workflows do not replace this gate.
 
+`QA-034` additionally makes the Release workflow self-contained at one source
+identity. `validate-release` resolves the requested existing tag once to one
+lowercase 40-character commit SHA and exports only that value. Separate
+Repository and Go jobs check out the SHA and repeat the complete Linux CI
+gates; every Bridge, Central, macOS Desktop and native Windows Desktop asset
+job depends on both gate jobs and checks out the same SHA rather than the tag.
+Before attaching assets and again before downloading them for verification,
+the workflow resolves the tag anew and fails if it no longer names the
+original SHA. The empty Draft precondition and closed release-asset verifier
+remain unchanged. A local pure-policy regression rejects a changed tag, a tag-
+based checkout in any downstream job, a missing Repository or Go gate, a build
+that bypasses either full gate, and either missing pre-use tag check. This
+source-binding implementation does not complete `QA-034` until the `OPS-013`
+immutable-image jobs join the same dependency graph and one synthetic empty
+Draft execution supplies hosted-workflow evidence.
+
 The `QA-001` integration test exercises one authenticated user, one Team and
 Room, two Fake Agents, stable-ID mentions, ordered Run events, Agent replies,
 and SQLite reload through the public HTTP API. It is the central MVP gate; it
