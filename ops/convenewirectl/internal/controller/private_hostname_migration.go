@@ -29,6 +29,11 @@ func (controller *Controller) MigratePrivateHostname(
 	ctx context.Context,
 	raw PrivateHostnameMigrationOptions,
 ) error {
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, raw.DataRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	installation, err := openInstallation(raw.DataRoot)
 	if err != nil {
 		return err
@@ -203,7 +208,7 @@ func (controller *Controller) MigratePrivateHostname(
 		return rollback(err)
 	}
 	candidateManifest.LastSuccessfulStep = "ready"
-	if err := saveManifest(installation.ManifestPath, candidateManifest); err != nil {
+	if err := saveManifestCAS(installation.ManifestPath, &candidateManifest); err != nil {
 		return rollback(err)
 	}
 	fmt.Fprintf(controller.dependencies.Output,

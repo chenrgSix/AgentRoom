@@ -84,25 +84,7 @@ type ExecRunner struct{}
 func (ExecRunner) Run(ctx context.Context, command Command) (string, error) {
 	cmd := exec.CommandContext(ctx, command.Name, command.Args...)
 	cmd.Dir = command.Dir
-	environment := make(map[string]string)
-	for _, value := range os.Environ() {
-		key, _, found := strings.Cut(value, "=")
-		if found {
-			environment[key] = value
-		}
-	}
-	for key, value := range command.Env {
-		environment[key] = key + "=" + value
-	}
-	keys := make([]string, 0, len(environment))
-	for key := range environment {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	cmd.Env = make([]string, 0, len(keys))
-	for _, key := range keys {
-		cmd.Env = append(cmd.Env, environment[key])
-	}
+	cmd.Env = closedCommandEnvironment(os.Environ(), command.Env)
 	output, err := cmd.CombinedOutput()
 	cleanOutput := redactCommandOutput(string(output), command.Env)
 	if err != nil {
@@ -116,6 +98,38 @@ func (ExecRunner) Run(ctx context.Context, command Command) (string, error) {
 		return cleanOutput, fmt.Errorf("%s %s: %w", command.Name, strings.Join(command.Args, " "), err)
 	}
 	return cleanOutput, nil
+}
+
+// closedCommandEnvironment inherits ordinary host process settings needed to
+// locate Docker and its credential helpers, but it never lets ambient product
+// configuration override controller-owned installation state. Product values
+// enter a child only through the explicit command environment or --env-file.
+func closedCommandEnvironment(parent []string, explicit map[string]string) []string {
+	environment := make(map[string]string)
+	for _, value := range parent {
+		key, _, found := strings.Cut(value, "=")
+		if found && !isProductEnvironmentKey(key) {
+			environment[key] = value
+		}
+	}
+	for key, value := range explicit {
+		environment[key] = key + "=" + value
+	}
+	keys := make([]string, 0, len(environment))
+	for key := range environment {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	result := make([]string, 0, len(keys))
+	for _, key := range keys {
+		result = append(result, environment[key])
+	}
+	return result
+}
+
+func isProductEnvironmentKey(key string) bool {
+	return strings.HasPrefix(key, "CONVENE_WIRE_") ||
+		strings.HasPrefix(key, "AGENT_ROOM_")
 }
 
 type PortChecker func(bindAddress string, ports ...int) error
@@ -174,6 +188,7 @@ type ReleaseMetadata struct {
 
 type Manifest struct {
 	SchemaVersion       int    `json:"schemaVersion"`
+	Generation          uint64 `json:"generation,omitempty"`
 	ReleaseVersion      string `json:"releaseVersion"`
 	ReleaseDir          string `json:"releaseDir"`
 	ReleaseDigest       string `json:"releaseDigest"`
@@ -282,6 +297,11 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 			nil,
 		)
 	}
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, options.DataRoot)
+	if err != nil {
+		return Installation{}, err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	installation := installationPaths(options.DataRoot)
 	existing, exists, err := loadManifest(installation.ManifestPath)
 	if err != nil {
@@ -349,8 +369,9 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 			trustEpoch = 1
 		}
 		manifest = Manifest{
-			SchemaVersion: manifestSchemaVersion, ReleaseVersion: metadata.ReleaseVersion,
-			ReleaseDir: options.ReleaseDir, ReleaseDigest: digest,
+			SchemaVersion: manifestSchemaVersion, Generation: 1,
+			ReleaseVersion: metadata.ReleaseVersion,
+			ReleaseDir:     options.ReleaseDir, ReleaseDigest: digest,
 			DataSchemaVersion: metadata.DataSchemaVersion, DataRoot: options.DataRoot,
 			Mode: options.Mode, TLSProfile: options.TLSProfile,
 			InstallationID: installationID, TrustEpoch: trustEpoch,
@@ -589,7 +610,7 @@ func (controller *Controller) validateHost(ctx context.Context) error {
 func (controller *Controller) recordStep(manifest *Manifest, path, step string) error {
 	manifest.LastSuccessfulStep = step
 	manifest.UpdatedAt = controller.dependencies.Now().UTC().Format(time.RFC3339Nano)
-	if err := saveManifest(path, *manifest); err != nil {
+	if err := saveManifestCAS(path, manifest); err != nil {
 		return actionError("MANIFEST_WRITE_FAILED", "could not atomically record installation progress", "Do not start a second install; repair control-directory permissions and retry the same command.", err)
 	}
 	return nil
@@ -901,6 +922,31 @@ func saveManifest(path string, manifest Manifest) error {
 	return writeAtomic(path, value, 0o600)
 }
 
+func saveManifestCAS(path string, manifest *Manifest) error {
+	current, found, err := loadManifest(path)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("manifest disappeared before compare-and-swap")
+	}
+	if current.Generation != manifest.Generation {
+		return actionError(
+			"MANIFEST_STALE",
+			"installation manifest changed during the lifecycle operation",
+			"Do not overwrite the newer state. Re-run status and retry after the current owner finishes.",
+			nil,
+		)
+	}
+	next := *manifest
+	next.Generation++
+	if err := saveManifest(path, next); err != nil {
+		return err
+	}
+	*manifest = next
+	return nil
+}
+
 func loadManifest(path string) (Manifest, bool, error) {
 	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
@@ -998,7 +1044,18 @@ func writeAtomic(path string, value []byte, mode fs.FileMode) error {
 	if err := os.Rename(temporaryPath, path); err != nil {
 		return err
 	}
-	return os.Chmod(path, mode)
+	if err := os.Chmod(path, mode); err != nil {
+		return err
+	}
+	directoryHandle, err := os.Open(directory)
+	if err != nil {
+		return err
+	}
+	if err := directoryHandle.Sync(); err != nil {
+		_ = directoryHandle.Close()
+		return err
+	}
+	return directoryHandle.Close()
 }
 
 func verifyRelease(releaseDir, checksumsPath, expectedChecksumDigest string) (ReleaseMetadata, string, error) {
@@ -1165,7 +1222,15 @@ func dataRootHasState(dataRoot string) bool {
 		return true
 	}
 	controlEntries, err := os.ReadDir(filepath.Join(dataRoot, "control"))
-	return err != nil || len(controlEntries) > 0
+	if err != nil || len(controlEntries) == 0 {
+		return err != nil
+	}
+	if len(controlEntries) != 1 || controlEntries[0].Name() != lifecycleLockFilename ||
+		!controlEntries[0].Type().IsRegular() {
+		return true
+	}
+	lockInfo, err := controlEntries[0].Info()
+	return err != nil || lockInfo.Mode()&os.ModeSymlink != 0 || lockInfo.Mode().Perm()&0o077 != 0
 }
 
 func checkPorts(bindAddress string, ports ...int) error {

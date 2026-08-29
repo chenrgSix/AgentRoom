@@ -417,6 +417,44 @@ func TestInstallIsReentrantAndKeepsSecretsOutOfConfiguration(t *testing.T) {
 	}
 }
 
+func TestConcurrentLifecycleMutationFailsBusyBeforeSecondCommand(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	if _, err := control.Install(
+		context.Background(), installOptions(releaseDir, dataRoot),
+	); err != nil {
+		t.Fatal(err)
+	}
+
+	backupStarted := make(chan struct{})
+	finishBackup := make(chan struct{})
+	runner.hook = func(command Command) {
+		if command.Name == "bash" && strings.Contains(
+			strings.Join(command.Args, " "), "compose-backup.sh",
+		) {
+			close(backupStarted)
+			<-finishBackup
+		}
+	}
+	backupResult := make(chan error, 1)
+	go func() {
+		backupResult <- control.Backup(context.Background(), dataRoot)
+	}()
+	<-backupStarted
+	requireActionCode(
+		t,
+		control.Uninstall(context.Background(), dataRoot),
+		"LIFECYCLE_BUSY",
+	)
+	close(finishBackup)
+	if err := <-backupResult; err != nil {
+		t.Fatalf("owning lifecycle operation failed after contention: %v", err)
+	}
+}
+
 func TestReadinessDialsLocalIngressWhileVerifyingRecordedHostname(t *testing.T) {
 	now := time.Now().UTC()
 	origin, caPath, digest := startHostReadinessServer(
@@ -1058,6 +1096,7 @@ func TestPrivateHostnameMigrationPreservesIdentityAuthorityAndDataBoundary(t *te
 		t.Fatalf("hostname migration did not commit exact target origin: %+v", after)
 	}
 	expected := before
+	expected.Generation = after.Generation
 	expected.Domain = after.Domain
 	expected.PublicOrigin = after.PublicOrigin
 	expected.UpdatedAt = after.UpdatedAt

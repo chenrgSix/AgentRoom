@@ -9,6 +9,11 @@ import (
 )
 
 func (controller *Controller) MigrateLegacyPublicCA(ctx context.Context, dataRoot string) error {
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, dataRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	installation, err := openInstallation(dataRoot)
 	if err != nil {
 		return err
@@ -113,7 +118,7 @@ func (controller *Controller) MigrateLegacyPublicCA(ctx context.Context, dataRoo
 	}); err != nil {
 		return rollback(err)
 	}
-	if err := saveManifest(installation.ManifestPath, candidate); err != nil {
+	if err := saveManifestCAS(installation.ManifestPath, &candidate); err != nil {
 		return actionError(
 			"TLS_PROFILE_MIGRATION_COMMIT_FAILED",
 			"the public-CA profile is ready but the schema-v2 manifest could not be committed",

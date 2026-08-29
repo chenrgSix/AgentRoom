@@ -82,6 +82,16 @@ path; no default hostname, origin or TLS bypass is synthesized. The Compose
 regression runs current-only and legacy-only environments without inheriting
 the operator's local aliases.
 
+`OPS-012` closes the controller-specific parent-process boundary. Every child
+inherits ordinary operating-system settings such as `PATH`, `HOME`, Docker
+context and credential-helper variables, but all ambient `CONVENE_WIRE_*` and
+`AGENT_ROOM_*` values are removed first. The controller then adds only the
+explicit secret-file values required by that command; every other product
+setting comes from the verified generated dotenv file. Consequently an
+operator's exported database path, origin, port, image or TLS variable cannot
+override a controller-owned installation even though raw Compose intentionally
+retains its documented compatibility aliases.
+
 `local` binds Caddy ports to loopback and requires an exact loopback HTTPS
 origin. `direct_https` binds the selected ports for external ingress and
 requires one matching non-loopback HTTPS origin. Caddy remains certificate and
@@ -160,6 +170,23 @@ not a manifest-only label change.
 
 ## Lifecycle commands
 
+Every mutating command owns one non-blocking advisory lock at
+`<data-root>/control/lifecycle.lock`. The owner-only regular lock is neutral for
+first install and persists as coordination state; a competing process receives
+`LIFECYCLE_BUSY` before it executes a second Docker or release-script command.
+Nested controller operations, notably `upgrade` invoking the required `backup`,
+reuse the same context-scoped owner. A command cannot use that owner to mutate
+another data root.
+
+Manifest schema v2 remains compatible and gains an optional monotonic
+`generation`. Existing generation-less manifests begin at zero. Every lifecycle
+commit compares the generation it loaded with the current on-disk generation,
+increments exactly once and rejects stale state with `MANIFEST_STALE`. The
+process lock supplies cross-process exclusion; generation CAS additionally
+prevents a stale in-process snapshot from becoming the last writer. Atomic
+configuration and manifest replacement syncs both the file and its parent
+directory before reporting success.
+
 - `install` validates host versions, ports, free storage, release pin/content,
   atomic state/configuration, Compose, startup migration through Server boot,
   bounded readiness and WebSocket ingress.
@@ -223,9 +250,19 @@ not by themselves prove Web projection, Bridge bootstrap, browser trust or two
 physical machines; `SEC-009`, `BRG-045`, `WEB-048`, `QA-030`, and `QA-002` own
 those boundaries.
 
+`OPS-012` adds a closed-environment regression for authoritative versus ambient
+product variables, same-root lock contention with proof that the rejected
+operation executes no child command, nested-lock reentry, unsafe lock-file
+rejection, install neutrality, manifest generation advancement and stale-CAS
+rejection. The controller suite passes under the Go race detector; Go vet,
+controller build and the real Docker Compose/Caddy configuration validation
+also pass. [Acceptance evidence](../acceptance/ops-012-lifecycle-authority.md)
+records the exact boundary without claiming multi-host or release publication.
+
 ## Tasks
 
 - `OPS-008`: reentrant central installation controller and release package.
 - `OPS-009`: public-default and scoped-private TLS deployment target.
 - `OPS-011`: private DHCP-IP to stable-hostname migration.
+- `OPS-012`: exclusive lifecycle configuration and mutation authority.
 - `QA-028`: deterministic plus physical one-install/one-Device acceptance.

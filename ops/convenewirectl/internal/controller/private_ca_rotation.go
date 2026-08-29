@@ -391,6 +391,11 @@ func (controller *Controller) PreparePrivateCARotation(
 	ctx context.Context,
 	raw PrivateCARotationOptions,
 ) error {
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, raw.DataRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	installation, err := openInstallation(raw.DataRoot)
 	if err != nil {
 		return err
@@ -542,6 +547,11 @@ func (controller *Controller) privateCARotationAcknowledgements(
 }
 
 func (controller *Controller) ActivatePrivateCARotation(ctx context.Context, dataRoot string) error {
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, dataRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	installation, err := openInstallation(dataRoot)
 	if err != nil {
 		return err
@@ -667,7 +677,7 @@ func (controller *Controller) ActivatePrivateCARotation(ctx context.Context, dat
 	if _, err := publishPrivateTrust(installation, candidate, controller.dependencies.Now()); err != nil {
 		return actionError("PRIVATE_ROTATION_COMMIT_FAILED", "the next CA is serving but its public trust artifacts could not be committed", "Preserve the activation journal and repair trust-directory permissions before retrying.", err)
 	}
-	if err := saveManifest(installation.ManifestPath, candidate); err != nil {
+	if err := saveManifestCAS(installation.ManifestPath, &candidate); err != nil {
 		return actionError("PRIVATE_ROTATION_COMMIT_FAILED", "the next CA is serving but the manifest could not be committed", "Preserve the activation journal and repair control-directory permissions before retrying.", err)
 	}
 	if err := os.Remove(installation.RotationJournalPath); err != nil && !errors.Is(err, os.ErrNotExist) {

@@ -102,6 +102,11 @@ func (controller *Controller) Doctor(ctx context.Context, dataRoot string) error
 }
 
 func (controller *Controller) Backup(ctx context.Context, dataRoot string) error {
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, dataRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	installation, err := openInstallation(dataRoot)
 	if err != nil {
 		return err
@@ -131,6 +136,11 @@ func (controller *Controller) Backup(ctx context.Context, dataRoot string) error
 }
 
 func (controller *Controller) Restore(ctx context.Context, dataRoot, backupPath, targetName string) error {
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, dataRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	installation, err := openInstallation(dataRoot)
 	if err != nil {
 		return err
@@ -174,6 +184,11 @@ func (controller *Controller) Restore(ctx context.Context, dataRoot, backupPath,
 }
 
 func (controller *Controller) Uninstall(ctx context.Context, dataRoot string) error {
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, dataRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	installation, err := openInstallation(dataRoot)
 	if err != nil {
 		return err
@@ -208,6 +223,11 @@ func (controller *Controller) Uninstall(ctx context.Context, dataRoot string) er
 }
 
 func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) error {
+	ctx, releaseLifecycle, err := acquireLifecycleLock(ctx, raw.DataRoot)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = releaseLifecycle() }()
 	current, err := openInstallation(raw.DataRoot)
 	if err != nil {
 		return err
