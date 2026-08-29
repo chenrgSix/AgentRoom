@@ -12,7 +12,11 @@ test("health and metrics expose safe operational failure signals", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-ops-"));
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
-    clock: () => now
+    clock: () => now,
+    buildIdentity: {
+      releaseVersion: "v0.4.0-qa035.1",
+      sourceCommit: "0123456789abcdef0123456789abcdef01234567"
+    }
   });
   try {
     const live = await app.inject({ method: "GET", url: "/api/health/live" });
@@ -64,6 +68,10 @@ test("health and metrics expose safe operational failure signals", async () => {
     const metrics = await app.inject({ method: "GET", url: "/api/metrics" });
     assert.equal(metrics.statusCode, 200);
     assert.match(metrics.headers["content-type"] ?? "", /text\/plain/u);
+    assert.match(
+      metrics.body,
+      /^convenewire_build_info\{release_version="v0\.4\.0-qa035\.1",source_commit="0123456789abcdef0123456789abcdef01234567"\} 1$/mu
+    );
     assert.match(metrics.body, /^convenewire_up 1$/mu);
     assert.match(metrics.body, /^convenewire_bridge_connections 0$/mu);
     assert.match(metrics.body, /^convenewire_managed_agents 0$/mu);
@@ -74,6 +82,10 @@ test("health and metrics expose safe operational failure signals", async () => {
       /^convenewire_http_requests_total\{method="GET",status_class="4xx"\} 1$/mu
     );
     assert.match(metrics.body, /^agentroom_up 1$/mu);
+    assert.match(
+      metrics.body,
+      /^agentroom_build_info\{release_version="v0\.4\.0-qa035\.1",source_commit="0123456789abcdef0123456789abcdef01234567"\} 1$/mu
+    );
     assert.match(metrics.body, /^agentroom_bridge_connections 0$/mu);
     assert.match(metrics.body, /^agentroom_managed_agents 0$/mu);
     assert.match(metrics.body, /^agentroom_run_queue_depth 1$/mu);

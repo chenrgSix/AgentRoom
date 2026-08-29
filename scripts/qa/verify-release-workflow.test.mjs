@@ -82,6 +82,20 @@ test("Central packaging cannot resolve its source from the mutable tag", () => {
   );
 });
 
+test("every Bridge package must receive the resolved source SHA", () => {
+  for (const jobName of ["build", "desktop-macos", "desktop-windows"]) {
+    const changed = mutateJob(workflow, jobName, (block) => block.replace(
+      "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
+      "SOURCE_REF: ${{ inputs.release_tag }}"
+    ));
+    assert.throws(
+      () => verifyReleaseWorkflowSource(changed),
+      new RegExp(`${jobName} package step must include SOURCE_REF`, "u"),
+      jobName
+    );
+  }
+});
+
 test("workflow fails policy verification when any repository gate is skipped", () => {
   for (const command of repositoryGateCommands) {
     const changed = mutateJob(workflow, "repository-gates", (block) => block.replace(
@@ -119,6 +133,30 @@ test("workflow fails policy verification if an asset build bypasses full gates",
     () => verifyReleaseWorkflowSource(changed),
     /desktop-windows must depend on repository-gates/u
   );
+});
+
+test("Windows release verification cannot skip the stable upgrade source", () => {
+  const changed = mutateJob(workflow, "desktop-windows", (block) => block.replace(
+    "-PreviousInstallerPath $env:PREVIOUS_INSTALLER_PATH `",
+    "# previous installer skipped"
+  ));
+  assert.throws(
+    () => verifyReleaseWorkflowSource(changed),
+    /desktop-windows must include -PreviousInstallerPath/u
+  );
+});
+
+test("Windows release verification cannot skip candidate ZIP or staging identity", () => {
+  for (const argument of ["CandidateArchivePath", "CandidateExecutablePath"]) {
+    const changed = mutateJob(workflow, "desktop-windows", (block) =>
+      block.replace(new RegExp(`\\s+-${argument}[^\\n]+`, "u"), "")
+    );
+    assert.throws(
+      () => verifyReleaseWorkflowSource(changed),
+      new RegExp(`desktop-windows must include -${argument}`, "u"),
+      argument
+    );
+  }
 });
 
 test("workflow fails policy verification without both pre-use tag rechecks", () => {

@@ -205,6 +205,7 @@ jobs:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
+          SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
         run: ./scripts/package-release.sh
 
       - name: Upload build artifact
@@ -301,6 +302,7 @@ jobs:
         env:
           GOARCH: ${{ matrix.goarch }}
           OUTPUT_DIR: ${{ github.workspace }}/dist
+          SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
         run: ./scripts/package-desktop-darwin.sh
 
       - name: Upload desktop artifact
@@ -334,8 +336,40 @@ jobs:
         working-directory: bridge
         shell: pwsh
         run: |
+          ./scripts/test-windows-release-semver.ps1
           go test -tags desktop ./cmd/convenewire-bridge-desktop
           go vet -tags desktop ./cmd/convenewire-bridge-desktop
+
+      - name: Download latest stable Windows installer
+        id: previous-stable
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $previousDir = Join-Path $env:RUNNER_TEMP "convenewire-desktop-previous"
+          New-Item -ItemType Directory -Force -Path $previousDir | Out-Null
+          $previousReleaseTag = (gh release view `
+            --repo $env:GITHUB_REPOSITORY `
+            --json tagName `
+            --jq .tagName).Trim()
+          if (-not $previousReleaseTag -or $previousReleaseTag -eq $env:RELEASE_TAG) {
+            throw "A distinct latest stable release is required for upgrade verification"
+          }
+          gh release download $previousReleaseTag `
+            --repo $env:GITHUB_REPOSITORY `
+            --pattern "convenewire-bridge-desktop_*_windows_amd64_setup.exe" `
+            --dir $previousDir
+          if ($LASTEXITCODE -ne 0) {
+            throw "Previous stable Windows installer download failed"
+          }
+          $previousInstallers = @(Get-ChildItem `
+            -LiteralPath $previousDir `
+            -Filter "*_setup.exe")
+          if ($previousInstallers.Count -ne 1) {
+            throw "Expected exactly one previous stable Windows installer"
+          }
+          "release_tag=$previousReleaseTag" >> $env:GITHUB_OUTPUT
+          "installer_path=$($previousInstallers[0].FullName)" >> $env:GITHUB_OUTPUT
 
       - name: Build and verify unsigned desktop packages
         working-directory: bridge
@@ -343,11 +377,18 @@ jobs:
         env:
           GOARCH: amd64
           OUTPUT_DIR: ${{ github.workspace }}/dist
+          SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
+          PREVIOUS_RELEASE_TAG: ${{ steps.previous-stable.outputs.release_tag }}
+          PREVIOUS_INSTALLER_PATH: ${{ steps.previous-stable.outputs.installer_path }}
         run: |
           ./scripts/package-desktop-windows.ps1
           $version = $env:RELEASE_TAG.Substring(1)
           ./scripts/verify-desktop-windows-installer.ps1 `
+            -PreviousReleaseTag $env:PREVIOUS_RELEASE_TAG `
+            -PreviousInstallerPath $env:PREVIOUS_INSTALLER_PATH `
             -ReleaseTag $env:RELEASE_TAG `
+            -CandidateArchivePath (Join-Path $env:OUTPUT_DIR "convenewire-bridge-desktop_${version}_windows_amd64.zip") `
+            -CandidateExecutablePath (Join-Path $env:OUTPUT_DIR "convenewire-bridge-desktop_${version}_windows_amd64\ConveneWire Bridge.exe") `
             -InstallerPath (Join-Path $env:OUTPUT_DIR "convenewire-bridge-desktop_${version}_windows_amd64_setup.exe")
 
       - name: Upload desktop artifact
@@ -428,6 +469,7 @@ jobs:
       - name: Verify release assets before upload
         env:
           ASSET_DIR: ${{ github.workspace }}/dist
+          SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
         run: ./bridge/scripts/verify-release-assets.sh
 
       - name: Upload assets to GitHub Release
@@ -472,4 +514,5 @@ jobs:
       - name: Verify uploaded Release assets
         env:
           ASSET_DIR: ${{ github.workspace }}/release-assets
+          SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}
         run: ./bridge/scripts/verify-release-assets.sh

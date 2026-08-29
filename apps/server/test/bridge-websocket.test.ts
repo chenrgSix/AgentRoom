@@ -187,6 +187,8 @@ async function createFixture(
     bridgeVersion: "v0.4.0-qa030.1",
     connectionEpoch: 1,
     deviceId: paired.device.deviceId,
+    sourceCommit: "a".repeat(40),
+    executableSha256: "b".repeat(64),
     supportsAgentProvisioning,
     supportedProtocolVersions: ["1.0"]
   }));
@@ -413,15 +415,20 @@ test("authenticated hello records the current Bridge version without replacing p
     const readObservation = (): {
       connection_epoch: number;
       bridge_version: string;
+      source_commit: string | null;
+      executable_sha256: string | null;
     } => {
       const database = new Database(fixture.databasePath, { readonly: true });
       try {
         return database.prepare(`
-          SELECT connection_epoch, bridge_version
+          SELECT connection_epoch, bridge_version, source_commit,
+                 executable_sha256
           FROM device_bridge_observations WHERE device_id = ?
         `).get(fixture.deviceId) as {
           connection_epoch: number;
           bridge_version: string;
+          source_commit: string | null;
+          executable_sha256: string | null;
         };
       } finally {
         database.close();
@@ -429,7 +436,9 @@ test("authenticated hello records the current Bridge version without replacing p
     };
     assert.deepEqual(readObservation(), {
       connection_epoch: 1,
-      bridge_version: "0.4.0-qa030.1"
+      bridge_version: "0.4.0-qa030.1",
+      source_commit: "a".repeat(40),
+      executable_sha256: "b".repeat(64)
     });
 
     await sendAndFlush(fixture.socket, envelope("bridge.heartbeat", {
@@ -438,7 +447,9 @@ test("authenticated hello records the current Bridge version without replacing p
     }));
     assert.deepEqual(readObservation(), {
       connection_epoch: 1,
-      bridge_version: "0.4.0-qa030.1"
+      bridge_version: "0.4.0-qa030.1",
+      source_commit: "a".repeat(40),
+      executable_sha256: "b".repeat(64)
     });
 
     const invalidSocket = await fixture.app.injectWS("/ws/bridge", {
@@ -460,7 +471,9 @@ test("authenticated hello records the current Bridge version without replacing p
     });
     assert.deepEqual(readObservation(), {
       connection_epoch: 1,
-      bridge_version: "0.4.0-qa030.1"
+      bridge_version: "0.4.0-qa030.1",
+      source_commit: "a".repeat(40),
+      executable_sha256: "b".repeat(64)
     });
   } finally {
     await closeFixture(fixture);

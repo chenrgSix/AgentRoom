@@ -10,6 +10,7 @@ import { normalizeBridgeServerToken } from "./security/bridge-server-token.js";
 import {
   ExtractiveMemoryReducerRunner
 } from "./memory/memory-reducer-runner.js";
+import { resolveBuildIdentity } from "./observability/build-identity.js";
 
 const environmentValue = (
   suffix: string
@@ -59,8 +60,13 @@ const deploymentTrustFile =
 const deploymentTrustRotationFile =
   environmentValue("DEPLOYMENT_TRUST_ROTATION_FILE");
 const webRoot = environmentValue("WEB_ROOT");
+const buildIdentity = resolveBuildIdentity(
+  environmentValue("RELEASE_VERSION"),
+  environmentValue("SOURCE_COMMIT")
+);
 
 const app = await createServerApp({
+  buildIdentity,
   databasePath: resolveDatabasePath(),
   logger: true,
   webAuth,

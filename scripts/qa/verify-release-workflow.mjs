@@ -154,6 +154,14 @@ function stepForWorkingDirectory(block, workingDirectory) {
   return block.slice(stepStart, nextStep >= 0 ? nextStep : block.length);
 }
 
+function stepForName(block, name) {
+  const marker = `      - name: ${name}`;
+  const start = block.indexOf(marker);
+  invariant(start >= 0, `required step ${name} is missing`);
+  const next = block.indexOf("\n      - name:", start + marker.length);
+  return block.slice(start, next >= 0 ? next : block.length);
+}
+
 function assertBefore(block, earlier, later, scope) {
   const earlierIndex = block.indexOf(earlier);
   const laterIndex = block.indexOf(later);
@@ -241,6 +249,45 @@ export function verifyReleaseWorkflowSource(source) {
     "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}"
   ], "central");
 
+  for (const [jobName, stepName] of [
+    ["build", "Build archive"],
+    ["desktop-macos", "Build unsigned desktop archive"],
+    ["desktop-windows", "Build and verify unsigned desktop packages"]
+  ]) {
+    assertIncludes(
+      stepForName(requireJob(jobs, jobName), stepName),
+      ["SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}"],
+      `${jobName} package step`
+    );
+  }
+
+  const desktopWindows = requireJob(jobs, "desktop-windows");
+  assertIncludes(desktopWindows, [
+    "Download latest stable Windows installer",
+    "gh release view",
+    "gh release download $previousReleaseTag",
+    'throw "Expected exactly one previous stable Windows installer"',
+    "./scripts/test-windows-release-semver.ps1",
+    "PREVIOUS_RELEASE_TAG: ${{ steps.previous-stable.outputs.release_tag }}",
+    "PREVIOUS_INSTALLER_PATH: ${{ steps.previous-stable.outputs.installer_path }}",
+    "-PreviousReleaseTag $env:PREVIOUS_RELEASE_TAG",
+    "-PreviousInstallerPath $env:PREVIOUS_INSTALLER_PATH",
+    "-CandidateArchivePath (Join-Path $env:OUTPUT_DIR",
+    "-CandidateExecutablePath (Join-Path $env:OUTPUT_DIR"
+  ], "desktop-windows");
+  assertBefore(
+    desktopWindows,
+    "Download latest stable Windows installer",
+    "./scripts/package-desktop-windows.ps1",
+    "desktop-windows"
+  );
+  assertBefore(
+    desktopWindows,
+    "./scripts/package-desktop-windows.ps1",
+    "./scripts/verify-desktop-windows-installer.ps1",
+    "desktop-windows"
+  );
+
   const publish = requireJob(jobs, "publish");
   assertNeeds(publish, "publish", [
     "validate-release",
@@ -256,6 +303,7 @@ export function verifyReleaseWorkflowSource(source) {
     "gh release view",
     "--json isDraft",
     "--json assets",
+    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
     "./bridge/scripts/verify-release-assets.sh"
   ], "publish");
   assertBefore(
@@ -271,6 +319,7 @@ export function verifyReleaseWorkflowSource(source) {
     "SOURCE_SHA: ${{ needs.validate-release.outputs.source_sha }}",
     '"repos/${GITHUB_REPOSITORY}/commits/${RELEASE_TAG}"',
     "node ./scripts/qa/verify-release-workflow.mjs assert-tag-source",
+    "SOURCE_REF: ${{ needs.validate-release.outputs.source_sha }}",
     "./bridge/scripts/verify-release-assets.sh"
   ], "verify-release");
   assertBefore(

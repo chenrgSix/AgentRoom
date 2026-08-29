@@ -89,6 +89,26 @@ mismatched components, unsafe TLS claims and unexpected Runtime console
 windows. This closes the verifier defect, not the physical gate: `QA-002`,
 `QA-028`, `QA-030` and `BRG-046` still require a fresh installed-Windows run.
 
+`QA-035` removes two remaining formatted-claim shortcuts from that capture.
+The verifier now hashes the exact versioned Windows installer itself, requires
+the digest to agree with both the reviewed input and the unique entry in the
+Release `SHA256SUMS`, and rejects a renamed or symlinked package. Central emits
+one `convenewire_build_info` gauge from its validated v-prefixed Release version
+and full source commit; development uses only the explicit
+`development`/`unknown` pair. Schema-v4 capture requires the live gauge to match
+the current Bridge Release and reviewed Server commit. Tests alter package
+bytes, checksums, runtime source identity and duplicate/malformed evidence so
+each mismatch fails before a PASS file is created.
+
+Native Windows admission also starts with the latest published stable
+installer, verifies its registered payload and protocol handlers, writes
+representative owner configuration, identity and inbox files, upgrades once to
+the distinct candidate, and proves their hashes survive both upgrade and
+uninstall. A same-candidate double install is not upgrade evidence. The local
+implementation remains `ACTIVE` until a hosted native workflow executes that
+path and the next packaged Central exposes its exact build identity; neither a
+macOS test nor source inspection closes those external gates.
+
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to
 Carol Agent. All three Agents claim and complete their Runs; the test verifies
@@ -306,7 +326,10 @@ content, credentials, headers, request bodies, or local paths:
   Bridges, enabled managed Agents, queued Runs, actionable pending delivery
   age, retries, Run outcomes, Agent Presence, and active Run event lag. A
   historical unaccepted Delivery attached to a terminal Run remains traceable
-  but does not inflate pending count or age.
+  but does not inflate pending count or age. It also exposes exactly one
+  `convenewire_build_info` gauge containing the validated Release version and
+  full source commit; these are non-secret artifact identities, not mutable
+  operator labels.
 
 HTTP completion/rejection, Bridge connect/disconnect, Delivery ACK, Run state,
 and Run reply processing emit structured JSON fields. Runtime output and error

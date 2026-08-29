@@ -15,7 +15,8 @@ Server remains authority for Team, Device, Agent, Task and Run state. Machine B
 remains authority for Codex login, executable, Workspace, local permissions,
 Runtime self-test and its exact-origin Bridge trust store.
 
-Status: `BLOCKED` on `QA-031` and a fresh schema-v4 physical record. The
+Status: `BLOCKED` on the next artifact-bound Release and a fresh schema-v4
+physical record. The
 [schema-v3 physical evidence](evidence/qa-002-20260828.md) remains a sanitized
 historical record, but its verifier did not prove that the selected Runs,
 heartbeat and metrics belonged to the current packaged Bridge connection or
@@ -26,9 +27,11 @@ persist an explicit human review receipt. It therefore cannot close this gate.
 - Machine A and machine B are distinct physical hosts. Record only sanitized
   OS and architecture descriptions; do not record a private address or user
   path.
-- The Central and Bridge archives come from the same exact committed source and
-  pass their repository release verifiers. Record each version and the Bridge
-  archive SHA-256.
+- The Central and Bridge packages come from the same exact committed source and
+  pass their repository release verifiers. Keep the downloaded Windows
+  installer, matching desktop ZIP and Release `SHA256SUMS` beside the temporary
+  capture input; record both outer SHA-256 digests only as independently
+  checked inputs.
 - Machine A satisfies the `agentroomctl` host prerequisites. A clean
   `direct_https` install reaches ready without editing `.env` or running
   OpenSSL. The omitted TLS profile selects `public_ca`; an explicit private run
@@ -129,6 +132,7 @@ origin, installation identity, epoch, or CA digest.
   "pairingBridgeVersion": "<initial pairing version>",
   "bridgeVersion": "<current packaged version>",
   "bridgeArchiveSha256": "<64 lowercase hex characters>",
+  "bridgeDesktopArchiveSha256": "<64 lowercase hex characters>",
   "codexVersion": "<safe version only>",
   "tlsProfile": "<public_ca or private_scoped_ca>",
   "httpsVerificationMethod": "<public system CA or Bridge exact-origin private CA>",
@@ -178,11 +182,22 @@ npm run capture:qa-002 -- \
   --input /absolute/temporary/qa-002-input.json \
   --database /absolute/data-root/data/agent-room.sqlite \
   --metrics /absolute/temporary/qa-002-metrics.txt \
+  --bridge-installer /absolute/release/convenewire-bridge-desktop_VERSION_windows_amd64_setup.exe \
+  --bridge-desktop-archive /absolute/release/convenewire-bridge-desktop_VERSION_windows_amd64.zip \
+  --release-checksums /absolute/release/SHA256SUMS \
   --output docs/acceptance/evidence/qa-002-YYYYMMDD.md
 ```
 
 The verifier fails closed unless:
 
+- the supplied non-symlink Windows installer and desktop ZIP have the exact
+  current Bridge version in their closed Release filenames, both computed
+  SHA-256 digests equal their reviewed inputs and unique entries in the
+  downloaded Release `SHA256SUMS`, every ZIP member path is safe, and the ZIP
+  contains exactly one expected managed executable;
+- the internally captured metrics contain exactly one
+  `convenewire_build_info` whose v-prefixed Release version matches the current
+  Bridge package and whose full source commit matches `serverCommit`;
 - the Team has exactly one active Device with at least two enabled managed
   Agents and the selected Agent belongs to that Device;
 - exactly one consumed pairing session binds that Team and Device to the
@@ -190,8 +205,11 @@ The verifier fails closed unless:
   proves the complete stored descriptor and Bridge capability while public
   evidence proves no private descriptor was attached;
 - the latest authenticated Bridge hello for that same Device binds the current
-  packaged version independently of the immutable pairing version, and current
-  Device presence uses the same connection epoch with an available adapter;
+  packaged version, exact source commit and startup-computed executable digest
+  independently of the immutable pairing version; the digest equals the safely
+  inspected executable inside the selected desktop ZIP, and current Device
+  presence uses the same connection epoch with an available adapter. This is an
+  authenticated process observation, not remote hardware attestation;
 - the persisted heartbeat precedes metrics capture by no more than 30 seconds;
 - `metricsCapturedAt` matches the metrics snapshot file modification time within
   five seconds, preventing an old snapshot from being relabeled as current;
@@ -218,7 +236,9 @@ The verifier fails closed unless:
 
 The output file is created once with mode `0600`; the verifier never overwrites
 an earlier record. Delete the temporary JSON and metrics files through the
-host's approved secure-cleanup process after review.
+host's approved secure-cleanup process after review. Retain or remove the
+public Release assets according to the normal package-retention policy; they
+contain no acceptance credential.
 
 ## Review and completion
 
@@ -241,13 +261,15 @@ even if every application request succeeds.
 
 ## Current exact release
 
-[`v0.4.0`](../releases/v0.4.0.md) is the exact stable release for the replacement
-physical run. Its exact-source main CI, native Windows installer lifecycle,
-closed 22-asset Release workflow, stable Latest publication, and independent
-anonymous public download all passed. This makes the matching Central and
-Windows Bridge packages available for capture; it does not create the missing
-schema-v4 record.
+[`v0.4.0`](../releases/v0.4.0.md) remains the current stable historical
+baseline. Its exact-source main CI, native Windows installer lifecycle, closed
+22-asset Release workflow, stable Latest publication, and independent
+anonymous public download passed, but it predates the `QA-035` computed
+artifact and `convenewire_build_info` binding. It therefore cannot satisfy the
+strengthened schema-v4 verifier.
 
-Use the matching release on both machines and a newly consumed pairing. The
-record must observe the installed canonical `convenewire://` handler; opening a
-legacy `agentroom://` compatibility link cannot satisfy schema-v4 acceptance.
+The replacement physical run waits for a later exact Release that contains
+this contract. Use that one matching Release on both machines and a newly
+consumed pairing. The record must observe the installed canonical
+`convenewire://` handler; opening a legacy `agentroom://` compatibility link
+cannot satisfy schema-v4 acceptance.

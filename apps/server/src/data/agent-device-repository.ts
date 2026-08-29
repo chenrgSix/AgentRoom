@@ -299,17 +299,25 @@ export class AgentDeviceRepository {
     if (
       existing &&
       record.connectionEpoch === existing.connectionEpoch &&
-      record.bridgeVersion !== existing.bridgeVersion
+      (record.bridgeVersion !== existing.bridgeVersion ||
+        record.sourceCommit !== existing.sourceCommit ||
+        record.executableSha256 !== existing.executableSha256)
     ) {
-      throw new Error("Device Bridge version changed within one connection epoch");
+      throw new Error("Device Bridge build observation changed within one connection epoch");
     }
     this.database.prepare(`
       INSERT INTO device_bridge_observations (
-        device_id, connection_epoch, bridge_version, observed_at
-      ) VALUES (@deviceId, @connectionEpoch, @bridgeVersion, @observedAt)
+        device_id, connection_epoch, bridge_version, source_commit,
+        executable_sha256, observed_at
+      ) VALUES (
+        @deviceId, @connectionEpoch, @bridgeVersion, @sourceCommit,
+        @executableSha256, @observedAt
+      )
       ON CONFLICT (device_id) DO UPDATE SET
         connection_epoch = excluded.connection_epoch,
         bridge_version = excluded.bridge_version,
+        source_commit = excluded.source_commit,
+        executable_sha256 = excluded.executable_sha256,
         observed_at = excluded.observed_at
     `).run(record);
   }
@@ -334,13 +342,16 @@ export class AgentDeviceRepository {
     deviceId: string
   ): DeviceBridgeObservationRecord | undefined {
     const row = this.database.prepare(`
-      SELECT device_id, connection_epoch, bridge_version, observed_at
+      SELECT device_id, connection_epoch, bridge_version, source_commit,
+             executable_sha256, observed_at
       FROM device_bridge_observations WHERE device_id = ?
     `).get(deviceId) as
       | {
           device_id: string;
           connection_epoch: number;
           bridge_version: string;
+          source_commit: string | null;
+          executable_sha256: string | null;
           observed_at: string;
         }
       | undefined;
@@ -348,6 +359,8 @@ export class AgentDeviceRepository {
       deviceId: row.device_id,
       connectionEpoch: row.connection_epoch,
       bridgeVersion: row.bridge_version,
+      sourceCommit: row.source_commit,
+      executableSha256: row.executable_sha256,
       observedAt: row.observed_at
     };
   }

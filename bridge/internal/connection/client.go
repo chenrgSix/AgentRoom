@@ -18,6 +18,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"convenewire.dev/bridge/internal/buildidentity"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/durablefs"
 	"convenewire.dev/bridge/internal/identity"
@@ -65,6 +66,7 @@ type Client struct {
 	Config                            config.Config
 	Credential                        pairing.Credential
 	BridgeVersion                     string
+	BuildObservation                  buildidentity.Observation
 	HeartbeatInterval                 time.Duration
 	HandleRun                         func(context.Context, contracts.RunRequestedMessage, func(context.Context, any) error) error
 	FenceCanceledRun                  CanceledRunFenceHandler
@@ -158,6 +160,13 @@ func (c Client) retryBounds() (time.Duration, time.Duration) {
 }
 
 func (c Client) connectOnce(ctx context.Context) (bool, error) {
+	buildObservation := c.BuildObservation
+	if buildObservation == (buildidentity.Observation{}) {
+		buildObservation = buildidentity.Current()
+	}
+	if err := buildObservation.Validate(); err != nil {
+		return false, err
+	}
 	if err := pairing.ValidateCredentialOrigin(c.Config.ServerURL, c.Credential); err != nil {
 		return false, err
 	}
@@ -203,6 +212,12 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 	defer cancelConnection()
 	writer := socketWriter{socket: socket}
 	supportsAgentProvisioning := c.HandleProvision != nil
+	var sourceCommit *string
+	var executableSHA256 *string
+	if buildObservation != (buildidentity.Observation{}) {
+		sourceCommit = &buildObservation.SourceCommit
+		executableSHA256 = &buildObservation.ExecutableSHA256
+	}
 	hello := contracts.BridgeHelloMessage{
 		ProtocolVersion: "1.0",
 		MessageID:       newID("msg"),
@@ -212,6 +227,8 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			BridgeVersion:             pairing.NormalizedBridgeVersion(c.BridgeVersion),
 			ConnectionEpoch:           epoch,
 			DeviceID:                  c.Credential.DeviceID,
+			ExecutableSha256:          executableSHA256,
+			SourceCommit:              sourceCommit,
 			SupportsAgentProvisioning: &supportsAgentProvisioning,
 			SupportedProtocolVersions: []string{"1.0"},
 		},

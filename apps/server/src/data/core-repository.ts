@@ -125,6 +125,8 @@ export interface DeviceBridgeObservationRecord {
   deviceId: string;
   connectionEpoch: number;
   bridgeVersion: string;
+  sourceCommit: string | null;
+  executableSha256: string | null;
   observedAt: string;
 }
 

@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
   [string]$ReleaseTag = $env:RELEASE_TAG,
+  [string]$SourceRef = $env:SOURCE_REF,
   [string]$GoArch = $env:GOARCH,
   [string]$OutputDir = $env:OUTPUT_DIR
 )
@@ -21,6 +22,17 @@ if ([string]::IsNullOrWhiteSpace($GoArch)) {
 }
 if (-not $ReleaseTag.StartsWith("v")) {
   throw "Release tag must start with v"
+}
+if ([string]::IsNullOrWhiteSpace($SourceRef)) {
+  $SourceRef = "HEAD"
+}
+$sourceCommit = (& git -C $repositoryRoot rev-parse --verify "$SourceRef^{commit}").Trim()
+if ($LASTEXITCODE -ne 0 -or $sourceCommit -notmatch '^[0-9a-f]{40}$') {
+  throw "SOURCE_REF must resolve to one exact lowercase commit"
+}
+$checkoutCommit = (& git -C $repositoryRoot rev-parse --verify "HEAD^{commit}").Trim()
+if ($LASTEXITCODE -ne 0 -or $sourceCommit -ne $checkoutCommit) {
+  throw "Desktop packaging requires SOURCE_REF to equal the exact checked-out commit"
 }
 
 $version = $ReleaseTag.Substring(1)
@@ -69,7 +81,7 @@ try {
       "build",
       "-tags=desktop,production",
       "-trimpath",
-      "-ldflags=-s -w -H=windowsgui -X=main.version=$ReleaseTag",
+      "-ldflags=-s -w -H=windowsgui -X=main.version=$ReleaseTag -X=main.sourceCommit=$sourceCommit",
       "-o", $binary,
       "./cmd/convenewire-bridge-desktop"
     )
@@ -113,6 +125,9 @@ $binaryText = [Text.Encoding]::ASCII.GetString($binaryBytes)
 if (-not $binaryText.Contains($ReleaseTag)) {
   throw "Built desktop Bridge does not contain the injected version $ReleaseTag"
 }
+if (-not $binaryText.Contains($sourceCommit)) {
+  throw "Built desktop Bridge does not contain the injected source commit $sourceCommit"
+}
 
 Compress-Archive -LiteralPath $staging -DestinationPath $archive -CompressionLevel Optimal
 if (-not (Test-Path -LiteralPath $archive) -or (Get-Item -LiteralPath $archive).Length -eq 0) {
@@ -122,12 +137,28 @@ if (-not (Test-Path -LiteralPath $archive) -or (Get-Item -LiteralPath $archive).
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead($archive)
 try {
-  $members = @($zip.Entries | ForEach-Object { $_.FullName.Replace("\", "/") })
-  foreach ($member in $members) {
-    if ($member.StartsWith("/") -or $member -match '(^|/)\.\.(/|$)') {
+  $seen = [Collections.Generic.HashSet[string]]::new(
+    [StringComparer]::Ordinal
+  )
+  foreach ($entry in $zip.Entries) {
+    $member = $entry.FullName
+    $pathWithoutTrailingSlash = $member.TrimEnd('/')
+    $segments = @($pathWithoutTrailingSlash.Split('/'))
+    if ([string]::IsNullOrWhiteSpace($member) -or
+        $member.Contains("\") -or $member.Contains([char]0) -or
+        $member.StartsWith("/") -or $member -match '^[A-Za-z]:' -or
+        [string]::IsNullOrWhiteSpace($pathWithoutTrailingSlash) -or
+        @($segments | Where-Object {
+          [string]::IsNullOrEmpty($_) -or $_ -eq '.' -or $_ -eq '..'
+        }).Count -gt 0 -or -not $seen.Add($member)) {
       throw "Windows Desktop archive contains an unsafe path: $member"
     }
+    $unixType = ($entry.ExternalAttributes -shr 16) -band 0xF000
+    if ($unixType -eq 0xA000) {
+      throw "Windows Desktop archive contains a symbolic-link path: $member"
+    }
   }
+  $members = @($zip.Entries | ForEach-Object { $_.FullName })
   $requiredMembers = @(
     "$package/ConveneWire Bridge.exe",
     "$package/README.md",
@@ -140,6 +171,25 @@ try {
     if ($members -notcontains $requiredMember) {
       throw "Windows Desktop archive is missing $requiredMember"
     }
+  }
+  $binaryEntries = @($zip.Entries | Where-Object {
+    $_.FullName.Replace("\", "/") -eq "$package/ConveneWire Bridge.exe"
+  })
+  if ($binaryEntries.Count -ne 1) {
+    throw "Windows Desktop archive must contain exactly one managed executable"
+  }
+  $entryStream = $binaryEntries[0].Open()
+  $sha256 = [Security.Cryptography.SHA256]::Create()
+  try {
+    $entryDigest = [BitConverter]::ToString($sha256.ComputeHash($entryStream)).Replace("-", "")
+  }
+  finally {
+    $sha256.Dispose()
+    $entryStream.Dispose()
+  }
+  $stagedDigest = (Get-FileHash -LiteralPath $binary -Algorithm SHA256).Hash
+  if ($entryDigest -ne $stagedDigest) {
+    throw "Windows Desktop archive executable differs from the staged payload"
   }
 }
 finally {

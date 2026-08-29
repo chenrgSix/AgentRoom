@@ -1,6 +1,10 @@
 import type Database from "better-sqlite3";
 
 import type { BridgeConnectionRegistry } from "../bridge/bridge-connection-registry.js";
+import {
+  defaultBuildIdentity,
+  type BuildIdentity
+} from "./build-identity.js";
 
 interface CountRow {
   label: string;
@@ -38,7 +42,8 @@ export class OperationalMetrics {
   public constructor(
     private readonly database: Database.Database,
     private readonly bridges: BridgeConnectionRegistry,
-    private readonly clock: () => string
+    private readonly clock: () => string,
+    private readonly buildIdentity: BuildIdentity = defaultBuildIdentity()
   ) {}
 
   public databaseReady(): boolean {
@@ -106,6 +111,9 @@ export class OperationalMetrics {
   public renderPrometheus(): string {
     const snapshot = this.snapshot();
     const lines = [
+      "# HELP convenewire_build_info Exact release and source identity of this Central process.",
+      "# TYPE convenewire_build_info gauge",
+      `convenewire_build_info{release_version="${this.buildIdentity.releaseVersion}",source_commit="${this.buildIdentity.sourceCommit}"} 1`,
       "# HELP convenewire_up Whether the central service database is ready.",
       "# TYPE convenewire_up gauge",
       `convenewire_up ${this.databaseReady() ? 1 : 0}`,

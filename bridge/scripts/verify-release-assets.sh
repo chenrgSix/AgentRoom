@@ -5,8 +5,16 @@ bridge_root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 repository_root=$(CDPATH= cd -- "${bridge_root}/.." && pwd)
 asset_dir=${ASSET_DIR:?ASSET_DIR is required}
 release_tag=${RELEASE_TAG:?RELEASE_TAG is required}
+source_ref=${SOURCE_REF:-HEAD}
 version=${release_tag#v}
 bundle_version=${version%%-*}
+source_commit=$(git -C "${repository_root}" rev-parse --verify "${source_ref}^{commit}")
+checkout_commit=$(git -C "${repository_root}" rev-parse --verify 'HEAD^{commit}')
+
+if [[ ! "${source_commit}" =~ ^[0-9a-f]{40}$ || "${source_commit}" != "${checkout_commit}" ]]; then
+  echo "Release verification requires SOURCE_REF to equal the exact checked-out commit" >&2
+  exit 1
+fi
 
 if [[ ! "${version}" =~ ^[0-9A-Za-z._-]+$ ]]; then
   echo "Release tag must contain only letters, numbers, dots, underscores, and hyphens" >&2
@@ -117,6 +125,10 @@ assert_binary_version() {
   if ! strings "${binary}" |
     grep -E "${escaped_release_tag}([^0-9A-Za-z._-]|$)" >/dev/null; then
     echo "Binary does not contain the injected release version ${release_tag}: ${binary}" >&2
+    exit 1
+  fi
+  if ! strings "${binary}" | grep -F "${source_commit}" >/dev/null; then
+    echo "Binary does not contain the exact source commit ${source_commit}: ${binary}" >&2
     exit 1
   fi
 }
@@ -359,7 +371,7 @@ verify_macos_desktop_archive "${desktop_archives[0]}" amd64
 verify_macos_desktop_archive "${desktop_archives[1]}" arm64
 verify_windows_desktop_archive "${desktop_archives[2]}" amd64
 verify_windows_desktop_installer "${desktop_installers[0]}"
-ASSET_DIR="${asset_dir}" RELEASE_TAG="${release_tag}" \
+ASSET_DIR="${asset_dir}" RELEASE_TAG="${release_tag}" SOURCE_REF="${source_commit}" \
   "${repository_root}/ops/convenewirectl/scripts/verify-central-release.sh"
 
 printf 'Verified %s release assets for %s\n' "${expected_count}" "${release_tag}"

@@ -19,6 +19,7 @@ import (
 	bridgeartifact "convenewire.dev/bridge/internal/artifact"
 	"convenewire.dev/bridge/internal/bridgecore"
 	"convenewire.dev/bridge/internal/browserlaunch"
+	"convenewire.dev/bridge/internal/buildidentity"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/connection"
 	"convenewire.dev/bridge/internal/console"
@@ -33,7 +34,10 @@ import (
 	contracts "convenewire.dev/contracts/generated/go"
 )
 
-var version = "dev"
+var (
+	version      = "dev"
+	sourceCommit = ""
+)
 
 type repeatedStringFlag []string
 
@@ -51,6 +55,10 @@ func (values *repeatedStringFlag) Set(value string) error {
 }
 
 func main() {
+	if err := buildidentity.Initialize(sourceCommit); err != nil {
+		fmt.Fprintln(os.Stderr, "convenewire-bridge:", err)
+		os.Exit(1)
+	}
 	if err := run(os.Args[1:]); err != nil {
 		fmt.Fprintln(os.Stderr, "convenewire-bridge:", err)
 		os.Exit(1)

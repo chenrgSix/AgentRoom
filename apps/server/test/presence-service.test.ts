@@ -89,6 +89,8 @@ test("heartbeat, adapter health, stale epochs, and TTL derive Presence", async (
       deviceId: device.deviceId,
       connectionEpoch: 2,
       bridgeVersion: "0.4.0-qa030.1",
+      sourceCommit: null,
+      executableSha256: null,
       observedAt: now
     });
     assert.equal(
@@ -120,6 +122,8 @@ test("heartbeat, adapter health, stale epochs, and TTL derive Presence", async (
       deviceId: device.deviceId,
       connectionEpoch: 3,
       bridgeVersion: "0.4.0-qa030.2",
+      sourceCommit: "a".repeat(40),
+      executableSha256: "b".repeat(64),
       adapterAvailable: true,
       now
     });
@@ -127,6 +131,8 @@ test("heartbeat, adapter health, stale epochs, and TTL derive Presence", async (
       deviceId: device.deviceId,
       connectionEpoch: 3,
       bridgeVersion: "0.4.0-qa030.2",
+      sourceCommit: "a".repeat(40),
+      executableSha256: "b".repeat(64),
       observedAt: now
     });
     assert.throws(() => presence.recordHello(devicePrincipal, {
@@ -135,10 +141,18 @@ test("heartbeat, adapter health, stale epochs, and TTL derive Presence", async (
       bridgeVersion: "0.4.0-qa030.3",
       adapterAvailable: true,
       now
-    }), /version changed within one connection epoch/);
+    }), /build observation changed within one connection epoch/);
     assert.throws(() => presence.recordHello(devicePrincipal, {
       deviceId: device.deviceId,
       connectionEpoch: 4,
+      bridgeVersion: "0.4.0-qa030.3",
+      sourceCommit: "a".repeat(40),
+      adapterAvailable: true,
+      now
+    }), /build observation must be one canonical pair/);
+    assert.throws(() => presence.recordHello(devicePrincipal, {
+      deviceId: device.deviceId,
+      connectionEpoch: 5,
       bridgeVersion: "v0.4.0-qa030.3",
       adapterAvailable: true,
       now

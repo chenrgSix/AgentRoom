@@ -1,8 +1,12 @@
-import { readFile, stat, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { lstat, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
 import Database from "better-sqlite3";
+
+import { inspectSafeZipExecutable } from "./inspect-safe-zip-executable.mjs";
 
 const inputKeys = new Set([
   "schemaVersion",
@@ -15,6 +19,7 @@ const inputKeys = new Set([
   "pairingBridgeVersion",
   "bridgeVersion",
   "bridgeArchiveSha256",
+  "bridgeDesktopArchiveSha256",
   "codexVersion",
   "tlsProfile",
   "httpsVerificationMethod",
@@ -174,6 +179,9 @@ function validateInput(input) {
   if (!/^[0-9a-f]{64}$/u.test(input.bridgeArchiveSha256)) {
     fail("bridgeArchiveSha256 must be one SHA-256 digest");
   }
+  if (!/^[0-9a-f]{64}$/u.test(input.bridgeDesktopArchiveSha256)) {
+    fail("bridgeDesktopArchiveSha256 must be one SHA-256 digest");
+  }
   for (const field of [
     "machineA", "machineB", "codexVersion",
     "httpsVerificationMethod"
@@ -230,6 +238,16 @@ function validateInput(input) {
 }
 
 function parseMetrics(source) {
+  const buildLines = source.split(/\r?\n/u).filter((line) =>
+    line.startsWith("convenewire_build_info{")
+  );
+  if (buildLines.length !== 1) {
+    fail("metrics must contain exactly one ConveneWire build identity");
+  }
+  const buildMatch = buildLines[0].match(
+    /^convenewire_build_info\{release_version="([^"]+)",source_commit="([0-9a-f]{40})"\}\s+1$/u
+  );
+  if (!buildMatch) fail("metrics contain an invalid ConveneWire build identity");
   const metrics = new Map();
   for (const line of source.split(/\r?\n/u)) {
     const match = line.match(/^([a-z_]+(?:\{state="[a-z_]+"\})?)\s+([0-9]+(?:\.[0-9]+)?)$/u);
@@ -262,10 +280,106 @@ function parseMetrics(source) {
   if (metrics.get('convenewire_runs{state="completed"}') < 2) {
     fail("metrics did not contain both completed Runs");
   }
-  return Object.fromEntries(required.map((name) => [name, metrics.get(name)]));
+  return {
+    buildIdentity: {
+      releaseVersion: buildMatch[1],
+      sourceCommit: buildMatch[2]
+    },
+    values: Object.fromEntries(required.map((name) => [name, metrics.get(name)]))
+  };
 }
 
-function assertDatabaseScope(database, input) {
+async function sha256File(filename) {
+  const details = await lstat(filename);
+  if (!details.isFile() || details.isSymbolicLink() || details.size < 1) {
+    fail(`${path.basename(filename)} must be one non-empty regular file`);
+  }
+  const digest = createHash("sha256");
+  await new Promise((resolve, reject) => {
+    const stream = createReadStream(filename);
+    stream.on("data", (chunk) => digest.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", resolve);
+  });
+  return digest.digest("hex");
+}
+
+async function readReleaseChecksums(releaseChecksumsPath) {
+  if (path.basename(releaseChecksumsPath) !== "SHA256SUMS") {
+    fail("Release checksums file must be named SHA256SUMS");
+  }
+  const checksumDetails = await lstat(releaseChecksumsPath);
+  if (!checksumDetails.isFile() || checksumDetails.isSymbolicLink() ||
+      checksumDetails.size < 1 || checksumDetails.size > 1_000_000) {
+    fail("Release SHA256SUMS must be one bounded regular file");
+  }
+  const checksumSource = await readFile(releaseChecksumsPath, "utf8");
+  const checksums = new Map();
+  for (const line of checksumSource.split(/\r?\n/u)) {
+    if (!line) continue;
+    const match = line.match(/^([0-9a-f]{64})  ([A-Za-z0-9._-]+)$/u);
+    if (!match || match[2] === "." || match[2] === "..") {
+      fail("Release SHA256SUMS contains an unsafe or malformed entry");
+    }
+    if (checksums.has(match[2])) {
+      fail("Release SHA256SUMS contains a duplicate entry");
+    }
+    checksums.set(match[2], match[1]);
+  }
+  return checksums;
+}
+
+async function verifyBridgeArtifacts(
+  input,
+  bridgeInstallerPath,
+  bridgeDesktopArchivePath,
+  releaseChecksumsPath
+) {
+  const version = normalizedBridgeVersion(input.bridgeVersion, "bridgeVersion");
+  const installerName = path.basename(bridgeInstallerPath);
+  const expectedInstallerName =
+    `convenewire-bridge-desktop_${version}_windows_amd64_setup.exe`;
+  if (installerName !== expectedInstallerName) {
+    fail(`Bridge artifact must be the exact Windows installer ${expectedInstallerName}`);
+  }
+  const desktopArchiveName = path.basename(bridgeDesktopArchivePath);
+  const expectedDesktopArchiveName =
+    `convenewire-bridge-desktop_${version}_windows_amd64.zip`;
+  if (desktopArchiveName !== expectedDesktopArchiveName) {
+    fail(`Bridge artifact must be the exact Windows desktop ZIP ${expectedDesktopArchiveName}`);
+  }
+  const checksums = await readReleaseChecksums(releaseChecksumsPath);
+  const installerSha256 = await sha256File(bridgeInstallerPath);
+  if (installerSha256 !== input.bridgeArchiveSha256) {
+    fail("computed Bridge installer SHA-256 does not match input");
+  }
+  if (checksums.get(installerName) !== installerSha256) {
+    fail("computed Bridge installer SHA-256 does not match Release SHA256SUMS");
+  }
+  const desktopArchiveSha256 = await sha256File(bridgeDesktopArchivePath);
+  if (desktopArchiveSha256 !== input.bridgeDesktopArchiveSha256) {
+    fail("computed Bridge desktop ZIP SHA-256 does not match input");
+  }
+  if (checksums.get(desktopArchiveName) !== desktopArchiveSha256) {
+    fail("computed Bridge desktop ZIP SHA-256 does not match Release SHA256SUMS");
+  }
+  const executableMember =
+    `convenewire-bridge-desktop_${version}_windows_amd64/ConveneWire Bridge.exe`;
+  const executable = await inspectSafeZipExecutable(
+    bridgeDesktopArchivePath,
+    executableMember
+  );
+  return {
+    installerName,
+    installerSha256,
+    desktopArchiveName,
+    desktopArchiveSha256,
+    executableMember,
+    executableSha256: executable.executableSha256
+  };
+}
+
+function assertDatabaseScope(database, input, artifact) {
   const evidenceStart = Date.parse(input.utcStart);
   const metricsCapturedAt = Date.parse(input.metricsCapturedAt);
   const room = database.prepare(`
@@ -336,7 +450,8 @@ function assertDatabaseScope(database, input) {
     fail("consumed pairing does not prove private_scoped_ca capability");
   }
   const observation = database.prepare(`
-    SELECT connection_epoch, bridge_version, observed_at
+    SELECT connection_epoch, bridge_version, source_commit,
+           executable_sha256, observed_at
     FROM device_bridge_observations WHERE device_id = ?
   `).get(input.deviceId);
   if (
@@ -347,10 +462,12 @@ function assertDatabaseScope(database, input) {
       observation.bridge_version,
       "persisted current Bridge version"
     ) !== normalizedBridgeVersion(input.bridgeVersion, "bridgeVersion") ||
+    observation.source_commit !== input.serverCommit ||
+    observation.executable_sha256 !== artifact.executableSha256 ||
     typeof observation.observed_at !== "string" ||
     !observation.observed_at
   ) {
-    fail("current authenticated Bridge version observation does not match");
+    fail("current authenticated Bridge build observation does not match Release artifacts");
   }
   const observedAt = assertTimestampRange(
     observation.observed_at,
@@ -550,8 +667,8 @@ function inspectRun(database, input, kind, scope) {
   };
 }
 
-function render(input, metrics, pairing, online, reconnect) {
-  const metricLines = Object.entries(metrics).map(([name, value]) =>
+function render(input, metrics, artifact, pairing, online, reconnect) {
+  const metricLines = Object.entries(metrics.values).map(([name, value]) =>
     `- \`${name}\`: ${value}`
   ).join("\n");
   return `# QA-002 Two-Machine Managed Agent PASS Evidence
@@ -560,11 +677,17 @@ Generated by the repository verifier from one schema-v4 capture window and an
 explicit human review receipt.
 
 - UTC start/end: ${input.utcStart} / ${input.utcEnd}
-- Server commit: \`${input.serverCommit}\`
+- Central runtime Release/source: \`${metrics.buildIdentity.releaseVersion}\` /
+  \`${metrics.buildIdentity.sourceCommit}\`
 - Machine A: ${input.machineA}
 - Machine B: ${input.machineB}
 - Initial pairing Bridge version: ${pairing.pairingBridgeVersion}
-- Current Bridge version/archive SHA-256: ${pairing.currentBridgeVersion} / \`${input.bridgeArchiveSha256}\`
+- Current Bridge version/installer: ${pairing.currentBridgeVersion} /
+  \`${artifact.installerName}\`
+- Computed installer SHA-256: \`${artifact.installerSha256}\`
+- Current Bridge desktop ZIP: \`${artifact.desktopArchiveName}\`
+- Computed desktop ZIP SHA-256: \`${artifact.desktopArchiveSha256}\`
+- Packaged/running executable SHA-256: \`${artifact.executableSha256}\`
 - Codex version: ${input.codexVersion}
 - TLS profile/HTTPS verification: \`${input.tlsProfile}\` / ${input.httpsVerificationMethod}
 - Team/Room: \`${input.teamId}\` / \`${input.roomId}\`
@@ -577,9 +700,11 @@ explicit human review receipt.
   client OS; no application TLS verification bypass
 - Database pairing proof: exactly one \`${pairing.state}\` session; Device,
   Team, initial Bridge version and \`${pairing.tlsProfile}\` profile matched
-- Authenticated hello proof: current Bridge version matched at
+- Authenticated hello observation: current Bridge version, source commit and
+  running executable digest matched the selected Release ZIP at
   ${pairing.observedAt} on connection epoch ${pairing.connectionEpoch} without
-  replacing the Device or its original pairing identity
+  replacing the Device or its original pairing identity. This is an
+  authenticated process observation, not remote hardware attestation
 - Current heartbeat/metrics capture: ${pairing.heartbeatAt} /
   ${input.metricsCapturedAt}
 - Workspace projection: path-free
@@ -615,7 +740,15 @@ PASS
 `;
 }
 
-export async function captureEvidence({ inputPath, databasePath, metricsPath, outputPath }) {
+export async function captureEvidence({
+  inputPath,
+  databasePath,
+  metricsPath,
+  bridgeInstallerPath,
+  bridgeDesktopArchivePath,
+  releaseChecksumsPath,
+  outputPath
+}) {
   const [inputSource, metricsSource, metricsStat] = await Promise.all([
     readFile(inputPath, "utf8"),
     readFile(metricsPath, "utf8"),
@@ -626,13 +759,27 @@ export async function captureEvidence({ inputPath, databasePath, metricsPath, ou
     fail("metricsCapturedAt does not match the metrics snapshot file time");
   }
   const metrics = parseMetrics(metricsSource);
+  const expectedReleaseVersion = `v${normalizedBridgeVersion(
+    input.bridgeVersion,
+    "bridgeVersion"
+  )}`;
+  if (metrics.buildIdentity.releaseVersion !== expectedReleaseVersion ||
+      metrics.buildIdentity.sourceCommit !== input.serverCommit) {
+    fail("running Central build identity does not match the selected Release");
+  }
+  const artifact = await verifyBridgeArtifacts(
+    input,
+    bridgeInstallerPath,
+    bridgeDesktopArchivePath,
+    releaseChecksumsPath
+  );
   const database = new Database(databasePath, { readonly: true, fileMustExist: true });
   let output;
   try {
-    const pairing = assertDatabaseScope(database, input);
+    const pairing = assertDatabaseScope(database, input, artifact);
     const online = inspectRun(database, input, "online", pairing);
     const reconnect = inspectRun(database, input, "reconnect", pairing);
-    output = render(input, metrics, pairing, online, reconnect);
+    output = render(input, metrics, artifact, pairing, online, reconnect);
   } finally {
     database.close();
   }
@@ -648,16 +795,21 @@ function parseArguments(arguments_) {
   for (let index = 0; index < arguments_.length; index += 2) {
     const key = arguments_[index];
     const value = arguments_[index + 1];
-    if (!["--input", "--database", "--metrics", "--output"].includes(key) || !value) {
-      fail("usage: capture-two-machine-onboarding-evidence --input file --database file --metrics file --output file");
+    if (!["--input", "--database", "--metrics", "--bridge-installer",
+      "--bridge-desktop-archive", "--release-checksums", "--output"]
+      .includes(key) || !value) {
+      fail("usage: capture-two-machine-onboarding-evidence --input file --database file --metrics file --bridge-installer file --bridge-desktop-archive file --release-checksums file --output file");
     }
     result[key.slice(2)] = path.resolve(value);
   }
-  if (Object.keys(result).length !== 4) fail("all four file arguments are required");
+  if (Object.keys(result).length !== 7) fail("all seven file arguments are required");
   return {
     inputPath: result.input,
     databasePath: result.database,
     metricsPath: result.metrics,
+    bridgeInstallerPath: result["bridge-installer"],
+    bridgeDesktopArchivePath: result["bridge-desktop-archive"],
+    releaseChecksumsPath: result["release-checksums"],
     outputPath: result.output
   };
 }

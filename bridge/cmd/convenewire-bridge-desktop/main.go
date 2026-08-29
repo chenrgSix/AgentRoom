@@ -17,6 +17,7 @@ import (
 
 	"convenewire.dev/bridge/internal/autostart"
 	"convenewire.dev/bridge/internal/bridgecore"
+	"convenewire.dev/bridge/internal/buildidentity"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/connection"
 	"convenewire.dev/bridge/internal/console"
@@ -29,9 +30,15 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/icons"
 )
 
-var version = "dev"
+var (
+	version      = "dev"
+	sourceCommit = ""
+)
 
 func main() {
+	if err := buildidentity.Initialize(sourceCommit); err != nil {
+		log.Fatal(err)
+	}
 	if err := run(); err != nil {
 		log.Fatal(err)
 	}

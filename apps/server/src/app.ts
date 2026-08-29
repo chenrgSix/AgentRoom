@@ -57,6 +57,7 @@ import { TeamWaitService } from "./mcp/team-wait-service.js";
 import { ManualTaskWorkService } from
   "./mcp/manual-task-work-service.js";
 import { OperationalMetrics } from "./observability/operational-metrics.js";
+import type { BuildIdentity } from "./observability/build-identity.js";
 import { TraceRepository } from "./observability/trace-repository.js";
 import { AgentService } from "./registry/agent-service.js";
 import { AgentProvisioningService } from
@@ -143,6 +144,7 @@ export interface ServerAppOptions {
   deploymentTrustRotationFile?: string;
   artifactBlobRoot?: string;
   bridgeServerToken?: string;
+  buildIdentity?: BuildIdentity;
   clock?: () => string;
   logger?: boolean;
   loggerInstance?: FastifyBaseLogger;
@@ -374,7 +376,7 @@ export async function createServerApp(
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
   const bridgeConnections = new BridgeConnectionRegistry();
   const operationalMetrics = new OperationalMetrics(
-    database, bridgeConnections, clock
+    database, bridgeConnections, clock, options.buildIdentity
   );
   const delivery = new DeliveryService(
     database,

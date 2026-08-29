@@ -11,6 +11,8 @@ import type {
   WebPrincipal
 } from "../security/auth-service.js";
 
+const sourceCommitPattern = /^[0-9a-f]{40}$/u;
+const executableSha256Pattern = /^[0-9a-f]{64}$/u;
 const bridgeAgentStatuses = new Set<AgentRecord["presence"]>([
   "ready",
   "busy",
@@ -122,6 +124,8 @@ export class PresenceService {
       deviceId: string;
       connectionEpoch: number;
       bridgeVersion: string;
+      sourceCommit?: string;
+      executableSha256?: string;
       adapterAvailable: boolean;
       now: string;
     }
@@ -132,11 +136,20 @@ export class PresenceService {
     if (!isCanonicalBridgeVersion(input.bridgeVersion)) {
       throw new Error("Bridge version must be canonical");
     }
+    const hasBuildIdentity =
+      input.sourceCommit !== undefined || input.executableSha256 !== undefined;
+    if (hasBuildIdentity &&
+        (!sourceCommitPattern.test(input.sourceCommit ?? "") ||
+          !executableSha256Pattern.test(input.executableSha256 ?? ""))) {
+      throw new Error("Bridge build observation must be one canonical pair");
+    }
     const presence = this.presenceRecord(principal, input);
     const observation: DeviceBridgeObservationRecord = {
       deviceId: input.deviceId,
       connectionEpoch: input.connectionEpoch,
       bridgeVersion: input.bridgeVersion,
+      sourceCommit: input.sourceCommit ?? null,
+      executableSha256: input.executableSha256 ?? null,
       observedAt: input.now
     };
     this.repository.recordDeviceHello(presence, observation);

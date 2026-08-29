@@ -32,7 +32,7 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm test` — run implemented workspace tests.
 - `npm run test:bridge-ui` — test the embedded Bridge GUI's pairing state projection.
 - `npm run test:qa-evidence` — test the sanitized two-machine acceptance evidence verifier.
-- `npm run capture:qa-002 -- --input /path/input.json --database /path/agent-room.sqlite --metrics /path/metrics.txt --output /path/evidence.md` — cross-check and render a reviewed two-machine acceptance record without copying secrets or local paths.
+- `npm run capture:qa-002 -- --input /path/input.json --database /path/agent-room.sqlite --metrics /path/metrics.txt --bridge-installer /path/convenewire-bridge-desktop_VERSION_windows_amd64_setup.exe --bridge-desktop-archive /path/convenewire-bridge-desktop_VERSION_windows_amd64.zip --release-checksums /path/SHA256SUMS --output /path/evidence.md` — compute both Windows candidate digests, safely bind the packaged executable and authenticated Bridge/Central build observations to one reviewed two-machine record, and render no secrets or local paths.
 - `npm run test:compose` — verify the default/custom central HTTPS ports and validate the Caddy configuration.
 - `npm run test:e2e` — run deterministic cross-process acceptance tests.
 - `npm run test:e2e:live` — explicitly invoke local Codex and Pi against an isolated temporary Team.
@@ -52,7 +52,7 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `RELEASE_TAG=v0.2.0-rc.3 GOOS=linux GOARCH=amd64 ./scripts/package-release.sh` from `bridge/` — build one portable Bridge archive.
 - `RELEASE_TAG=v0.2.0-rc.3 GOARCH=arm64 ./scripts/package-desktop-darwin.sh` from `bridge/` — build one unsigned native macOS GUI archive.
 - `pwsh -File ./scripts/package-desktop-windows.ps1 -ReleaseTag v0.2.0-rc.3 -GoArch amd64` from `bridge/` on native Windows with Inno Setup — build one unsigned Windows GUI archive and current-user installer.
-- `pwsh -File ./scripts/verify-desktop-windows-installer.ps1 -ReleaseTag v0.2.0-rc.3 -InstallerPath /path/to/setup.exe` from `bridge/` on native Windows — smoke-test install, in-place upgrade, uninstall, and owner-state preservation.
+- `pwsh -File ./scripts/verify-desktop-windows-installer.ps1 -PreviousReleaseTag v0.4.0 -PreviousInstallerPath /path/to/previous_setup.exe -ReleaseTag v0.4.1-rc.1 -CandidateArchivePath /path/to/candidate.zip -CandidateExecutablePath '/path/to/ConveneWire Bridge.exe' -InstallerPath /path/to/candidate_setup.exe` from `bridge/` on native Windows — install the previous stable package, preserve representative owner state through the strictly newer candidate in-place upgrade, then verify uninstall ownership.
 - Dispatching the ConveneWire Release workflow for an empty draft Release builds and verifies five Bridge CLI archives, two macOS GUI archives, one Windows GUI archive, one Windows installer, four Central archives with separate internal-checksum pins, the outer checksums, and license assets.
 - `docker compose up -d --build` — run the trusted-team Server and Caddy profile.
 - `./scripts/compose-backup.sh` — create and copy a verified online SQLite backup.

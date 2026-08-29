@@ -1,12 +1,99 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, utimes, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import {
+  mkdtemp,
+  readFile,
+  rename,
+  symlink,
+  utimes,
+  writeFile
+} from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import Database from "better-sqlite3";
 
-import { captureEvidence } from "./capture-two-machine-onboarding-evidence.mjs";
+import { captureEvidence as captureEvidenceRaw } from
+  "./capture-two-machine-onboarding-evidence.mjs";
+
+const bridgeArchiveName =
+  "convenewire-bridge-desktop_0.4.0-qa030.2_windows_amd64_setup.exe";
+const bridgeArchiveContent = Buffer.from(
+  "deterministic ConveneWire Windows installer fixture\n",
+  "utf8"
+);
+const bridgeArchiveSha256 = createHash("sha256")
+  .update(bridgeArchiveContent)
+  .digest("hex");
+const bridgeDesktopArchiveName =
+  "convenewire-bridge-desktop_0.4.0-qa030.2_windows_amd64.zip";
+const bridgeDesktopPackageName =
+  "convenewire-bridge-desktop_0.4.0-qa030.2_windows_amd64";
+const bridgeExecutableMember = `${bridgeDesktopPackageName}/ConveneWire Bridge.exe`;
+const bridgeExecutableContent = Buffer.from(
+  "deterministic packaged ConveneWire Bridge executable\n",
+  "utf8"
+);
+const bridgeExecutableSha256 = createHash("sha256")
+  .update(bridgeExecutableContent)
+  .digest("hex");
+
+function storedZip(entries) {
+  const localParts = [];
+  const centralParts = [];
+  let localOffset = 0;
+  for (const [name, content] of entries) {
+    const nameBytes = Buffer.from(name, "utf8");
+    const data = Buffer.from(content);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(nameBytes.length, 26);
+    localParts.push(local, nameBytes, data);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(nameBytes.length, 28);
+    central.writeUInt32LE(localOffset, 42);
+    centralParts.push(central, nameBytes);
+    localOffset += local.length + nameBytes.length + data.length;
+  }
+  const centralDirectory = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(centralDirectory.length, 12);
+  end.writeUInt32LE(localOffset, 16);
+  return Buffer.concat([...localParts, centralDirectory, end]);
+}
+
+const bridgeDesktopArchiveContent = storedZip([
+  [`${bridgeDesktopPackageName}/`, Buffer.alloc(0)],
+  [bridgeExecutableMember, bridgeExecutableContent]
+]);
+const bridgeDesktopArchiveSha256 = createHash("sha256")
+  .update(bridgeDesktopArchiveContent)
+  .digest("hex");
+
+function captureEvidence(options) {
+  const directory = path.dirname(options.inputPath);
+  return captureEvidenceRaw({
+    ...options,
+    bridgeInstallerPath: path.join(directory, bridgeArchiveName),
+    bridgeDesktopArchivePath: path.join(directory, bridgeDesktopArchiveName),
+    releaseChecksumsPath: path.join(directory, "SHA256SUMS")
+  });
+}
 
 const ids = {
   teamId: "team_qa002test0001",
@@ -36,7 +123,8 @@ function seed(database) {
     );
     CREATE TABLE device_bridge_observations (
       device_id TEXT PRIMARY KEY, connection_epoch INTEGER NOT NULL,
-      bridge_version TEXT NOT NULL, observed_at TEXT NOT NULL
+      bridge_version TEXT NOT NULL, source_commit TEXT,
+      executable_sha256 TEXT, observed_at TEXT NOT NULL
     );
     CREATE TABLE device_presence (
       device_id TEXT PRIMARY KEY, connection_epoch INTEGER NOT NULL,
@@ -78,8 +166,15 @@ function seed(database) {
     )
   `).run(ids.teamId, ids.deviceId, "e".repeat(64));
   database.prepare(`
-    INSERT INTO device_bridge_observations VALUES (?, 8, '0.4.0-qa030.2', ?)
-  `).run(ids.deviceId, "2026-08-28T10:05:00.000Z");
+    INSERT INTO device_bridge_observations VALUES (
+      ?, 8, '0.4.0-qa030.2', ?, ?, ?
+    )
+  `).run(
+    ids.deviceId,
+    "a".repeat(40),
+    bridgeExecutableSha256,
+    "2026-08-28T10:05:00.000Z"
+  );
   database.prepare(`
     INSERT INTO device_presence VALUES (?, 8, 1, ?)
   `).run(ids.deviceId, "2026-08-28T10:09:30.000Z");
@@ -172,10 +267,11 @@ function input(overrides = {}) {
     metricsCapturedAt: "2026-08-28T10:09:45.000Z",
     serverCommit: "a".repeat(40),
     machineA: "macOS arm64 Central host",
-    machineB: "Linux amd64 client host",
+    machineB: "Windows amd64 client host",
     pairingBridgeVersion: "v0.4.0-rc.1",
     bridgeVersion: "v0.4.0-qa030.2",
-    bridgeArchiveSha256: "b".repeat(64),
+    bridgeArchiveSha256,
+    bridgeDesktopArchiveSha256,
     codexVersion: "codex 1.2.3",
     tlsProfile: "private_scoped_ca",
     httpsVerificationMethod: "Bridge exact-origin private CA",
@@ -213,6 +309,7 @@ function input(overrides = {}) {
 }
 
 const metrics = `convenewire_up 1
+convenewire_build_info{release_version="v0.4.0-qa030.2",source_commit="${"a".repeat(40)}"} 1
 convenewire_bridge_connections 1
 convenewire_managed_agents 2
 convenewire_run_queue_depth 0
@@ -231,6 +328,16 @@ async function fixture() {
   const inputPath = path.join(directory, "input.json");
   const metricsPath = path.join(directory, "metrics.txt");
   const outputPath = path.join(directory, "evidence.md");
+  await writeFile(path.join(directory, bridgeArchiveName), bridgeArchiveContent);
+  await writeFile(
+    path.join(directory, bridgeDesktopArchiveName),
+    bridgeDesktopArchiveContent
+  );
+  await writeFile(
+    path.join(directory, "SHA256SUMS"),
+    `${bridgeArchiveSha256}  ${bridgeArchiveName}\n` +
+      `${bridgeDesktopArchiveSha256}  ${bridgeDesktopArchiveName}\n`
+  );
   await writeFile(metricsPath, metrics);
   const metricsCapturedAt = new Date("2026-08-28T10:09:45.000Z");
   await utimes(metricsPath, metricsCapturedAt, metricsCapturedAt);
@@ -253,7 +360,21 @@ test("physical evidence capture cross-checks Runs and writes only sanitized fact
   assert.match(output, /PASS/u);
   assert.match(output, /`private_scoped_ca` \/ Bridge exact-origin private CA/u);
   assert.match(output, /Initial pairing Bridge version: 0\.4\.0-rc\.1/u);
-  assert.match(output, /Current Bridge version\/archive SHA-256: 0\.4\.0-qa030\.2/u);
+  assert.match(output, /Central runtime Release\/source: `v0\.4\.0-qa030\.2`/u);
+  assert.match(output, /Current Bridge version\/installer: 0\.4\.0-qa030\.2/u);
+  assert.match(
+    output,
+    new RegExp(`Computed installer SHA-256: \\x60${bridgeArchiveSha256}\\x60`, "u")
+  );
+  assert.match(output, /Current Bridge desktop ZIP:/u);
+  assert.match(
+    output,
+    new RegExp(
+      `Packaged/running executable SHA-256: \\x60${bridgeExecutableSha256}\\x60`,
+      "u"
+    )
+  );
+  assert.match(output, /not remote hardware attestation/u);
   assert.match(output, /connection epoch 8/u);
   assert.match(output, /## Human review receipt/u);
   assert.match(output, /Reviewer role: machine-b operator/u);
@@ -296,6 +417,156 @@ test("physical evidence capture accepts the public system-CA profile", async () 
 
   assert.match(output, /`public_ca` \/ public system CA/u);
   assert.match(output, /exactly one `consumed` session/u);
+});
+
+test("physical evidence capture computes artifact and running source identity", async () => {
+  const tamperedArtifact = await fixture();
+  const source = input();
+  delete source.secondAgentId;
+  await writeFile(tamperedArtifact.inputPath, JSON.stringify(source));
+  await writeFile(
+    path.join(tamperedArtifact.directory, bridgeArchiveName),
+    "tampered installer bytes"
+  );
+  await assert.rejects(() => captureEvidence({
+    inputPath: tamperedArtifact.inputPath,
+    databasePath: tamperedArtifact.databasePath,
+    metricsPath: tamperedArtifact.metricsPath,
+    outputPath: tamperedArtifact.outputPath
+  }), /computed Bridge installer SHA-256 does not match input/u);
+
+  const mismatchedRelease = await fixture();
+  await writeFile(mismatchedRelease.inputPath, JSON.stringify(source));
+  await writeFile(
+    path.join(mismatchedRelease.directory, "SHA256SUMS"),
+    `${"f".repeat(64)}  ${bridgeArchiveName}\n`
+  );
+  await assert.rejects(() => captureEvidence({
+    inputPath: mismatchedRelease.inputPath,
+    databasePath: mismatchedRelease.databasePath,
+    metricsPath: mismatchedRelease.metricsPath,
+    outputPath: mismatchedRelease.outputPath
+  }), /does not match Release SHA256SUMS/u);
+
+  const mismatchedRuntime = await fixture();
+  await writeFile(mismatchedRuntime.inputPath, JSON.stringify(source));
+  await writeFile(
+    mismatchedRuntime.metricsPath,
+    metrics.replace(`source_commit="${"a".repeat(40)}"`,
+      `source_commit="${"c".repeat(40)}"`)
+  );
+  const metricsCapturedAt = new Date("2026-08-28T10:09:45.000Z");
+  await utimes(
+    mismatchedRuntime.metricsPath,
+    metricsCapturedAt,
+    metricsCapturedAt
+  );
+  await assert.rejects(() => captureEvidence({
+    inputPath: mismatchedRuntime.inputPath,
+    databasePath: mismatchedRuntime.databasePath,
+    metricsPath: mismatchedRuntime.metricsPath,
+    outputPath: mismatchedRuntime.outputPath
+  }), /running Central build identity does not match the selected Release/u);
+
+  const duplicateChecksum = await fixture();
+  await writeFile(duplicateChecksum.inputPath, JSON.stringify(source));
+  await writeFile(
+    path.join(duplicateChecksum.directory, "SHA256SUMS"),
+    `${bridgeArchiveSha256}  ${bridgeArchiveName}\n${bridgeArchiveSha256}  ${bridgeArchiveName}\n`
+  );
+  await assert.rejects(() => captureEvidence({
+    inputPath: duplicateChecksum.inputPath,
+    databasePath: duplicateChecksum.databasePath,
+    metricsPath: duplicateChecksum.metricsPath,
+    outputPath: duplicateChecksum.outputPath
+  }), /duplicate entry/u);
+
+  const duplicateBuild = await fixture();
+  await writeFile(duplicateBuild.inputPath, JSON.stringify(source));
+  await writeFile(duplicateBuild.metricsPath, `${metrics}${metrics.split("\n")[1]}\n`);
+  await utimes(
+    duplicateBuild.metricsPath,
+    metricsCapturedAt,
+    metricsCapturedAt
+  );
+  await assert.rejects(() => captureEvidence({
+    inputPath: duplicateBuild.inputPath,
+    databasePath: duplicateBuild.databasePath,
+    metricsPath: duplicateBuild.metricsPath,
+    outputPath: duplicateBuild.outputPath
+  }), /exactly one ConveneWire build identity/u);
+
+  const linkedArtifact = await fixture();
+  await writeFile(linkedArtifact.inputPath, JSON.stringify(source));
+  const linkedPath = path.join(linkedArtifact.directory, bridgeArchiveName);
+  const targetPath = path.join(linkedArtifact.directory, "installer-fixture.bin");
+  await rename(linkedPath, targetPath);
+  await symlink(path.basename(targetPath), linkedPath);
+  await assert.rejects(() => captureEvidence({
+    inputPath: linkedArtifact.inputPath,
+    databasePath: linkedArtifact.databasePath,
+    metricsPath: linkedArtifact.metricsPath,
+    outputPath: linkedArtifact.outputPath
+  }), /must be one non-empty regular file/u);
+});
+
+test("physical evidence capture fails closed on unsafe or unbound desktop ZIPs", async () => {
+  const tampered = await fixture();
+  const source = input();
+  delete source.secondAgentId;
+  await writeFile(tampered.inputPath, JSON.stringify(source));
+  await writeFile(
+    path.join(tampered.directory, bridgeDesktopArchiveName),
+    Buffer.concat([bridgeDesktopArchiveContent, Buffer.from("tampered")])
+  );
+  await assert.rejects(() => captureEvidence({
+    inputPath: tampered.inputPath,
+    databasePath: tampered.databasePath,
+    metricsPath: tampered.metricsPath,
+    outputPath: tampered.outputPath
+  }), /computed Bridge desktop ZIP SHA-256 does not match input/u);
+
+  for (const [label, archive, expected] of [
+    [
+      "traversal",
+      storedZip([
+        [bridgeExecutableMember, bridgeExecutableContent],
+        ["../escaped.txt", Buffer.from("unsafe")]
+      ]),
+      /entry path is unsafe/u
+    ],
+    [
+      "duplicate",
+      storedZip([
+        [bridgeExecutableMember, bridgeExecutableContent],
+        [bridgeExecutableMember, bridgeExecutableContent]
+      ]),
+      /duplicate entry/u
+    ],
+    [
+      "missing executable",
+      storedZip([[`${bridgeDesktopPackageName}/README.txt`, Buffer.from("missing")]]),
+      /expected exactly one/u
+    ]
+  ]) {
+    const files = await fixture();
+    const digest = createHash("sha256").update(archive).digest("hex");
+    const archiveBoundInput = input({ bridgeDesktopArchiveSha256: digest });
+    delete archiveBoundInput.secondAgentId;
+    await writeFile(files.inputPath, JSON.stringify(archiveBoundInput));
+    await writeFile(path.join(files.directory, bridgeDesktopArchiveName), archive);
+    await writeFile(
+      path.join(files.directory, "SHA256SUMS"),
+      `${bridgeArchiveSha256}  ${bridgeArchiveName}\n` +
+        `${digest}  ${bridgeDesktopArchiveName}\n`
+    );
+    await assert.rejects(() => captureEvidence({
+      inputPath: files.inputPath,
+      databasePath: files.databasePath,
+      metricsPath: files.metricsPath,
+      outputPath: files.outputPath
+    }), expected, label);
+  }
 });
 
 test("the runbook schema-v4 sample stays structurally aligned with the verifier", async () => {
@@ -437,7 +708,7 @@ test("physical evidence capture binds TLS claims to one consumed pairing", async
   await assert.rejects(capture, /consumed pairing does not match public_ca/u);
 });
 
-test("physical evidence capture binds the package version to authenticated hello state", async () => {
+test("physical evidence capture binds the package build to authenticated hello state", async () => {
   const files = await fixture();
   const source = input();
   delete source.secondAgentId;
@@ -453,7 +724,35 @@ test("physical evidence capture binds the package version to authenticated hello
     databasePath: files.databasePath,
     metricsPath: files.metricsPath,
     outputPath: files.outputPath
-  }), /current authenticated Bridge version observation does not match/u);
+  }), /current authenticated Bridge build observation does not match/u);
+
+  const sourceFiles = await fixture();
+  await writeFile(sourceFiles.inputPath, JSON.stringify(source));
+  const sourceDatabase = new Database(sourceFiles.databasePath);
+  sourceDatabase.prepare(`
+    UPDATE device_bridge_observations SET source_commit = ?
+  `).run("f".repeat(40));
+  sourceDatabase.close();
+  await assert.rejects(() => captureEvidence({
+    inputPath: sourceFiles.inputPath,
+    databasePath: sourceFiles.databasePath,
+    metricsPath: sourceFiles.metricsPath,
+    outputPath: sourceFiles.outputPath
+  }), /current authenticated Bridge build observation does not match/u);
+
+  const executableFiles = await fixture();
+  await writeFile(executableFiles.inputPath, JSON.stringify(source));
+  const executableDatabase = new Database(executableFiles.databasePath);
+  executableDatabase.prepare(`
+    UPDATE device_bridge_observations SET executable_sha256 = ?
+  `).run("f".repeat(64));
+  executableDatabase.close();
+  await assert.rejects(() => captureEvidence({
+    inputPath: executableFiles.inputPath,
+    databasePath: executableFiles.databasePath,
+    metricsPath: executableFiles.metricsPath,
+    outputPath: executableFiles.outputPath
+  }), /current authenticated Bridge build observation does not match/u);
 });
 
 test("physical evidence capture binds every observation to one bounded time window", async () => {

@@ -187,12 +187,21 @@ export function registerBridgeSocketRoutes({
           const bridgeVersion = normalizeBridgeVersion(
             message.payload.bridgeVersion
           );
+          const sourceCommit = message.payload.sourceCommit;
+          const executableSha256 = message.payload.executableSha256;
+          const buildIdentityPresent =
+            sourceCommit !== undefined || executableSha256 !== undefined;
           const supported = message.payload.supportedProtocolVersions;
           if (
             deviceId !== devicePrincipal.deviceId ||
             !Number.isSafeInteger(epoch) ||
             (epoch as number) < 1 ||
             bridgeVersion === undefined ||
+            (buildIdentityPresent &&
+              (typeof sourceCommit !== "string" ||
+                !/^[0-9a-f]{40}$/u.test(sourceCommit) ||
+                typeof executableSha256 !== "string" ||
+                !/^[0-9a-f]{64}$/u.test(executableSha256))) ||
             !Array.isArray(supported) ||
             !supported.includes("1.0")
           ) {
@@ -221,6 +230,8 @@ export function registerBridgeSocketRoutes({
             deviceId: devicePrincipal.deviceId,
             connectionEpoch: registeredEpoch,
             bridgeVersion,
+            ...(sourceCommit !== undefined ? { sourceCommit } : {}),
+            ...(executableSha256 !== undefined ? { executableSha256 } : {}),
             adapterAvailable: true,
             now: clock()
           });

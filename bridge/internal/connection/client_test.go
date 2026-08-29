@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"convenewire.dev/bridge/internal/buildidentity"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/operations"
 	"convenewire.dev/bridge/internal/pairing"
@@ -108,7 +109,11 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 			ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
 			OwnerMemberID: "member_test", Token: "device-secret",
 		},
-		BridgeVersion:     "v0.4.0-qa030.2",
+		BridgeVersion: "v0.4.0-qa030.2",
+		BuildObservation: buildidentity.Observation{
+			SourceCommit:     strings.Repeat("a", 40),
+			ExecutableSHA256: strings.Repeat("b", 64),
+		},
 		HeartbeatInterval: 10 * time.Millisecond,
 		HandleProvision: func(_ context.Context, requested contracts.AgentProvisionRequestedMessage) contracts.AgentProvisionResultMessage {
 			return ProvisionResult(requested, contracts.Rejected, contracts.ProvisioningDisabled)
@@ -131,6 +136,10 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	}
 	if helloPayload["bridgeVersion"] != "0.4.0-qa030.2" {
 		t.Fatalf("Bridge version was not canonicalized: %#v", hello)
+	}
+	if helloPayload["sourceCommit"] != strings.Repeat("a", 40) ||
+		helloPayload["executableSha256"] != strings.Repeat("b", 64) {
+		t.Fatalf("Bridge executable identity was not published as one pair: %#v", hello)
 	}
 	payload, ok := publication["payload"].(map[string]any)
 	if !ok {
@@ -183,6 +192,29 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Bridge client did not stop")
+	}
+}
+
+func TestClientRejectsPartialBuildObservationBeforeNetwork(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requests.Add(1)
+	}))
+	defer server.Close()
+	client := Client{
+		Config: config.Config{ServerURL: server.URL, DataDir: t.TempDir()},
+		Credential: pairing.Credential{
+			ServerURL: server.URL, DeviceID: "device_test", Token: "device-secret",
+		},
+		BuildObservation: buildidentity.Observation{
+			SourceCommit: strings.Repeat("a", 40),
+		},
+	}
+	if _, err := client.connectOnce(context.Background()); err == nil {
+		t.Fatal("partial Bridge build observation was accepted")
+	}
+	if requests.Load() != 0 {
+		t.Fatal("partial Bridge build observation reached the network boundary")
 	}
 }
 

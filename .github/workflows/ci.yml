@@ -167,18 +167,46 @@ jobs:
       - name: Test, vet, and package desktop shell
         working-directory: bridge
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           $outputDir = Join-Path $env:RUNNER_TEMP "convenewire-desktop-windows"
+          $previousDir = Join-Path $env:RUNNER_TEMP "convenewire-desktop-previous"
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+          New-Item -ItemType Directory -Force -Path $previousDir | Out-Null
+          $previousReleaseTag = (gh release view `
+            --repo $env:GITHUB_REPOSITORY `
+            --json tagName `
+            --jq .tagName).Trim()
+          gh release download $previousReleaseTag `
+            --repo $env:GITHUB_REPOSITORY `
+            --pattern "convenewire-bridge-desktop_*_windows_amd64_setup.exe" `
+            --dir $previousDir
+          if ($LASTEXITCODE -ne 0) {
+            throw "Previous stable Windows installer download failed"
+          }
+          $previousInstallers = @(Get-ChildItem `
+            -LiteralPath $previousDir `
+            -Filter "*_setup.exe")
+          if ($previousInstallers.Count -ne 1) {
+            throw "Expected exactly one previous stable Windows installer"
+          }
+          ./scripts/test-windows-release-semver.ps1
           go test ./... -run Windows
           go test -tags desktop ./cmd/convenewire-bridge-desktop
           go vet -tags desktop ./cmd/convenewire-bridge-desktop
           ./scripts/package-desktop-windows.ps1 `
-            -ReleaseTag v0.0.0-ci `
+            -ReleaseTag v999.0.0-ci `
+            -SourceRef $env:GITHUB_SHA `
             -GoArch amd64 `
             -OutputDir $outputDir
           ./scripts/verify-desktop-windows-installer.ps1 `
-            -ReleaseTag v0.0.0-ci `
-            -InstallerPath (Join-Path $outputDir "convenewire-bridge-desktop_0.0.0-ci_windows_amd64_setup.exe")
+            -PreviousReleaseTag $previousReleaseTag `
+            -PreviousInstallerPath $previousInstallers[0].FullName `
+            -ReleaseTag v999.0.0-ci `
+            -CandidateArchivePath (Join-Path $outputDir "convenewire-bridge-desktop_999.0.0-ci_windows_amd64.zip") `
+            -CandidateExecutablePath (Join-Path $outputDir "convenewire-bridge-desktop_999.0.0-ci_windows_amd64\ConveneWire Bridge.exe") `
+            -InstallerPath (Join-Path $outputDir "convenewire-bridge-desktop_999.0.0-ci_windows_amd64_setup.exe")
 
       - name: Upload Windows package smoke artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7

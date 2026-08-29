@@ -5,9 +5,17 @@ bridge_root=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 repository_root=$(CDPATH= cd -- "${bridge_root}/.." && pwd)
 output_dir=${OUTPUT_DIR:-"${bridge_root}/dist"}
 release_tag=${RELEASE_TAG:?RELEASE_TAG is required}
+source_ref=${SOURCE_REF:-HEAD}
 goos=${GOOS:?GOOS is required}
 goarch=${GOARCH:?GOARCH is required}
 version=${release_tag#v}
+
+source_commit=$(git -C "${repository_root}" rev-parse --verify "${source_ref}^{commit}")
+checkout_commit=$(git -C "${repository_root}" rev-parse --verify "HEAD^{commit}")
+if [[ ! "${source_commit}" =~ ^[0-9a-f]{40}$ || "${source_commit}" != "${checkout_commit}" ]]; then
+  echo "Bridge packaging requires SOURCE_REF to equal the exact checked-out commit" >&2
+  exit 1
+fi
 
 if [[ ! "${version}" =~ ^[0-9A-Za-z._-]+$ ]]; then
   echo "Release tag must contain only letters, numbers, dots, underscores, and hyphens" >&2
@@ -39,10 +47,14 @@ mkdir -p "${staging}"
   cd "${bridge_root}"
   CGO_ENABLED=0 GOOS="${goos}" GOARCH="${goarch}" go build \
     -trimpath \
-    -ldflags="-s -w -X main.version=${release_tag}" \
+    -ldflags="-s -w -X main.version=${release_tag} -X main.sourceCommit=${source_commit}" \
     -o "${staging}/${binary}" \
     ./cmd/convenewire-bridge
 )
+if ! strings "${staging}/${binary}" | grep -F "${source_commit}" >/dev/null; then
+  echo "Built Bridge omits the exact source commit ${source_commit}" >&2
+  exit 1
+fi
 cp "${bridge_root}/README.md" "${staging}/README.md"
 cp "${repository_root}/LICENSE" "${staging}/LICENSE"
 cp "${repository_root}/NOTICE" "${staging}/NOTICE"
