@@ -75,17 +75,21 @@ export function verifyCentralImageDockerGateSource(source) {
   const defaultMarker = "# OPS-013_DEFAULT_SERVER_CMD_GATE";
   const readyMarker = "# OPS-013_READY_GATE";
   const identityMarker = "# OPS-013_BUILD_IDENTITY_GATE";
+  const caddyMarker = "# OPS-013_CADDY_EXECUTION_GATE";
   const defaultStart = source.indexOf(defaultMarker);
   const readyStart = source.indexOf(readyMarker);
   const identityStart = source.indexOf(identityMarker);
+  const caddyStart = source.indexOf(caddyMarker);
   invariant(defaultStart >= 0, "Central Docker gate must mark the default Server command proof");
   invariant(readyStart > defaultStart, "Central Docker gate must run readiness after default startup");
   invariant(identityStart > readyStart, "Central Docker gate must check build identity after readiness");
+  invariant(caddyStart > identityStart, "Central Docker gate must check Caddy execution after Server identity");
 
   const commandProof = source.slice(0, defaultStart);
   const defaultRun = source.slice(defaultStart, readyStart);
   const readiness = source.slice(readyStart, identityStart);
-  const identity = source.slice(identityStart);
+  const identity = source.slice(identityStart, caddyStart);
+  const caddyExecution = source.slice(caddyStart);
   invariant(
     !/(?:^|\s)mapfile(?:\s|$)/u.test(commandProof) &&
       commandProof.includes("while IFS= read -r reference"),
@@ -135,6 +139,16 @@ export function verifyCentralImageDockerGateSource(source) {
     "process.env.CONVENE_WIRE_SOURCE_COMMIT",
     "runtime build identity does not match verified OCI metadata"
   ], "Central Docker build identity gate");
+  assertIncludes(caddyExecution, [
+    "--pull=never",
+    "--network none",
+    "--read-only",
+    '"${caddy_reference}" caddy version'
+  ], "Central Docker Caddy execution gate");
+  invariant(
+    !caddyExecution.includes('"${caddy_reference}" version'),
+    "Central Docker Caddy gate must invoke the explicit upstream executable"
+  );
 }
 
 export function verifyComposeBackupDurabilitySource(source) {

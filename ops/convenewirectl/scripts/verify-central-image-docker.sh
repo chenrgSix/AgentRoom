@@ -180,7 +180,10 @@ if ! docker exec "${container_name}" node -e '
   exit 1
 fi
 
+# OPS-013_CADDY_EXECUTION_GATE: the upstream image declares its full command
+# without an Entrypoint, so the executable must remain explicit when overriding
+# that command for the offline identity check.
 docker run --rm --pull=never --network none --read-only \
-  "${caddy_reference}" version >/dev/null
+  "${caddy_reference}" caddy version >/dev/null
 
 printf 'Verified clean-daemon OCI load, default Server readiness/build identity, and digest-only execution for linux/%s\n' "${target_arch}"

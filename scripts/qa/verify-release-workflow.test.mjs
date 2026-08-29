@@ -92,6 +92,14 @@ test("clean-daemon gate cannot bypass the final Server application", () => {
       /build identity gate must include convenewire_build_info/u
     ],
     [
+      "Caddy executable",
+      centralDockerGate.replace(
+        '"${caddy_reference}" caddy version',
+        '"${caddy_reference}" version'
+      ),
+      /Caddy execution gate must include|explicit upstream executable/u
+    ],
+    [
       "Bash 3.2 reference reader",
       centralDockerGate.replace(
         "while IFS= read -r reference; do",
