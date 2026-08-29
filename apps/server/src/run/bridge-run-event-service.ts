@@ -1,4 +1,5 @@
 import type { CoreRepository } from "../data/core-repository.js";
+import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import type {
@@ -44,6 +45,8 @@ const runtimeFailureCategories = new Set([
   "configuration",
   "unknown"
 ]);
+
+const runtimeErrorCodePattern = /^[A-Z][A-Z0-9_]{2,63}$/u;
 
 function safeRuntimeFailureDetails(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -119,10 +122,9 @@ export class BridgeRunEventService {
     }
     if (input.error) {
       if (
-        input.error.code.trim().length === 0 ||
-        input.error.code.length > 120 ||
+        !runtimeErrorCodePattern.test(input.error.code) ||
         input.error.message.trim().length === 0 ||
-        input.error.message.length > 2_000 ||
+        exceedsUnicodeCodePointLimit(input.error.message, 512) ||
         typeof input.error.retryable !== "boolean"
       ) {
         throw new Error("Invalid Runtime error");
@@ -174,12 +176,13 @@ export class BridgeRunEventService {
         input.clarification.kind !== "task" ||
         typeof input.clarification.question !== "string" ||
         input.clarification.question.trim().length === 0 ||
-        input.clarification.question.length > 2_000 ||
+        exceedsUnicodeCodePointLimit(input.clarification.question, 2_000) ||
         (input.clarification.choices !== undefined && choices.length < 2) ||
         choices.length > 8 ||
         choices.some((choice) =>
           typeof choice !== "string" ||
-          choice.trim().length === 0 || choice.length > 240
+          choice.trim().length === 0 ||
+          exceedsUnicodeCodePointLimit(choice, 240)
         ) ||
         new Set(choices).size !== choices.length ||
         input.error !== undefined ||
@@ -273,7 +276,10 @@ export class BridgeRunEventService {
       principal, input.runId, input.traceId, input.agentId
     );
     this.validateSequence(input.sequence);
-    if (input.content.trim().length === 0 || input.content.length > 20_000) {
+    if (
+      input.content.trim().length === 0 ||
+      exceedsUnicodeCodePointLimit(input.content, 20_000)
+    ) {
       throw new Error("Runtime reply must contain 1 to 20000 characters");
     }
     const safeContent = redactSensitiveText(input.content);
@@ -328,14 +334,16 @@ export class BridgeRunEventService {
     this.validateSequence(input.sequence);
     if (
       input.activityId.trim().length === 0 ||
-      input.activityId.length > 160 ||
+      exceedsUnicodeCodePointLimit(input.activityId, 160) ||
       !new Set(["reasoning", "tool"]).has(input.kind) ||
       !new Set(["started", "updated", "completed", "failed"]).has(input.phase) ||
       (input.label !== undefined && (
-        input.label.trim().length === 0 || input.label.length > 120
+        input.label.trim().length === 0 ||
+        exceedsUnicodeCodePointLimit(input.label, 120)
       )) ||
       (input.content !== undefined && (
-        input.content.trim().length === 0 || input.content.length > 4_000
+        input.content.trim().length === 0 ||
+        exceedsUnicodeCodePointLimit(input.content, 4_000)
       )) ||
       (input.reset !== undefined && typeof input.reset !== "boolean")
     ) {
@@ -371,7 +379,7 @@ export class BridgeRunEventService {
     this.validateSequence(input.sequence);
     if (
       input.content.length === 0 ||
-      input.content.length > 20_000 ||
+      exceedsUnicodeCodePointLimit(input.content, 20_000) ||
       (input.reset !== undefined && typeof input.reset !== "boolean")
     ) {
       throw new Error("Runtime output delta must contain 1 to 20000 characters");
@@ -401,7 +409,7 @@ export class BridgeRunEventService {
       return this.runs.applyEvent(run.runId, outputEvent, now);
     }
     const nextOutput = input.reset ? safeContent : currentOutput + safeContent;
-    if (nextOutput.length > 20_000) {
+    if (exceedsUnicodeCodePointLimit(nextOutput, 20_000)) {
       throw new Error("Runtime provisional output exceeds 20000 characters");
     }
     return this.runs.applyEvent(run.runId, outputEvent, now);

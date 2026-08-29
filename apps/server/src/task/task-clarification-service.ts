@@ -3,6 +3,8 @@ import { SqliteTransactionBoundary } from "../data/sqlite-transaction-boundary.j
 import type { RunRecord, RunRepository } from "../run/run-repository.js";
 import type { RunService } from "../run/run-service.js";
 import type { AuthService, WebPrincipal } from "../security/auth-service.js";
+import { agentMentionDisplayLabel } from
+  "../team-room/agent-mention-label.js";
 import type { MessageService } from "../team-room/message-service.js";
 import {
   type ClarificationRepository,
@@ -190,7 +192,7 @@ export class TaskClarificationService {
         mentions: [{
           targetType: "agent",
           targetAgentId: agent.agentId,
-          displayLabel: `${agent.name} / ${agent.role}`
+          displayLabel: agentMentionDisplayLabel(agent.name, agent.role)
         }],
         parentMessageId: clarification.questionMessageId,
         clientMessageId: `client_clarification_${clarification.clarificationId}`,

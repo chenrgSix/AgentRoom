@@ -1,4 +1,5 @@
 import type { CoreRepository } from "../data/core-repository.js";
+import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
 import { redactSensitiveText } from "../security/redaction.js";
 import type {
   RunRecord,
@@ -79,13 +80,15 @@ export class InProcessRunExecutor {
           : event;
         if (
           safeEvent.type === "output" &&
-          (safeEvent.content.length === 0 || safeEvent.content.length > 20_000)
+          (safeEvent.content.length === 0 ||
+            exceedsUnicodeCodePointLimit(safeEvent.content, 20_000))
         ) {
           throw new Error("Runtime output delta must contain 1 to 20000 characters");
         }
         if (
           safeEvent.type === "reply" &&
-          (safeEvent.content.trim().length === 0 || safeEvent.content.length > 20_000)
+          (safeEvent.content.trim().length === 0 ||
+            exceedsUnicodeCodePointLimit(safeEvent.content, 20_000))
         ) {
           throw new Error("Runtime reply must contain 1 to 20000 characters");
         }

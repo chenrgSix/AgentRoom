@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 
+import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
 import { SqliteTransactionBoundary } from
   "../data/sqlite-transaction-boundary.js";
 import { createOpaqueId } from "../domain/identifiers.js";
@@ -1329,7 +1330,7 @@ export class RunRepository {
         source.event_trace_id !== source.run_trace_id ||
         source.content === null ||
         source.content.length < 1 ||
-        source.content.length > 20_000 ||
+        exceedsUnicodeCodePointLimit(source.content, 20_000) ||
         Number.isNaN(Date.parse(source.event_created_at))
       ) {
         return {

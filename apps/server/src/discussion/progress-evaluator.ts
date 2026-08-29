@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 
+import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
 import type {
   AgentAssessment,
   DiscussionPolicy,
@@ -29,7 +30,8 @@ function stringList(value: unknown, maximum = 100): string[] | undefined {
     return undefined;
   }
   const result = value.filter((item): item is string =>
-    typeof item === "string" && item.trim().length > 0 && item.length <= 240
+    typeof item === "string" && item.trim().length > 0 &&
+      !exceedsUnicodeCodePointLimit(item, 240)
   );
   return result.length === value.length ? result : undefined;
 }
@@ -67,9 +69,9 @@ export function parseAgentAssessment(value: unknown): AgentAssessment | null {
       const question = item as Record<string, unknown>;
       if (
         typeof question.id === "string" && question.id.trim().length > 0 &&
-        question.id.length <= 160 &&
+        !exceedsUnicodeCodePointLimit(question.id, 160) &&
         typeof question.question === "string" && question.question.trim().length > 0 &&
-        question.question.length <= 2_000 &&
+        !exceedsUnicodeCodePointLimit(question.question, 2_000) &&
         typeof question.importance === "string" &&
         importanceValues.has(question.importance)
       ) {

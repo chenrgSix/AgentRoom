@@ -11,6 +11,12 @@ import type {
   WebPrincipal
 } from "../security/auth-service.js";
 
+const bridgeAgentStatuses = new Set<AgentRecord["presence"]>([
+  "ready",
+  "busy",
+  "degraded"
+]);
+
 export class PresenceService {
   public constructor(
     private readonly repository: CoreRepository,
@@ -63,13 +69,51 @@ export class PresenceService {
   ): void {
     for (const agent of this.repository.listAgents(principal.teamId)) {
       if (agent.deviceId === input.deviceId && agent.enabled) {
+        const projected = input.adapterAvailable
+          ? agent.presence === "busy" ? "busy" : "ready"
+          : "degraded";
         this.repository.updateAgentPresence(
           agent.agentId,
-          input.adapterAvailable ? "ready" : "degraded",
+          projected,
           input.now
         );
       }
     }
+  }
+
+  public recordAgentStatus(
+    principal: DevicePrincipal,
+    input: {
+      agentId: string;
+      deviceId: string;
+      connectionEpoch: number;
+      status: "ready" | "busy" | "degraded";
+      now: string;
+    }
+  ): AgentRecord {
+    const currentDevicePresence = this.repository.getDevicePresence(
+      input.deviceId
+    );
+    const agent = this.repository.getAgent(input.agentId);
+    if (
+      input.deviceId !== principal.deviceId ||
+      !Number.isSafeInteger(input.connectionEpoch) ||
+      input.connectionEpoch < 1 ||
+      currentDevicePresence?.connectionEpoch !== input.connectionEpoch ||
+      !agent ||
+      agent.teamId !== principal.teamId ||
+      agent.ownerMemberId !== principal.ownerMemberId ||
+      agent.deviceId !== principal.deviceId ||
+      agent.integrationMode !== "managed" ||
+      !agent.enabled ||
+      !bridgeAgentStatuses.has(input.status)
+    ) {
+      throw new Error("Agent status identity mismatch");
+    }
+    this.repository.updateAgentPresence(input.agentId, input.status, input.now);
+    const updated = this.repository.getAgent(input.agentId);
+    if (!updated) throw new Error("Agent disappeared after status update");
+    return updated;
   }
 
   public recordHello(

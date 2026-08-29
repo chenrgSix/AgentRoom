@@ -81,6 +81,18 @@ func TestRejectsUnsafeOrAmbiguousConfig(t *testing.T) {
 	if err := valid.Validate(); err != nil {
 		t.Fatal(err)
 	}
+	unicodeLabels := valid
+	unicodeLabels.DeviceName = strings.Repeat("😀", 80)
+	unicodeLabels.Agents = append([]AgentConfig(nil), valid.Agents...)
+	unicodeLabels.Agents[0].Name = strings.Repeat("🧰", 80)
+	unicodeLabels.Agents[0].Role = strings.Repeat("🛠", 80)
+	if err := unicodeLabels.Validate(); err != nil {
+		t.Fatalf("80-code-point labels should be valid: %v", err)
+	}
+	unicodeLabels.Agents[0].Role = strings.Repeat("🛠", 81)
+	if err := unicodeLabels.Validate(); err == nil {
+		t.Fatal("expected an 81-code-point Agent role to be rejected")
+	}
 	if valid.ResolvedTrustMode() != TrustPinnedSHA256 {
 		t.Fatal("legacy fingerprint-only config must infer pinned_sha256")
 	}

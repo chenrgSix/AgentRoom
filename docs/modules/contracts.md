@@ -67,11 +67,13 @@ suite through Ajv and the Go Draft 2020-12 validator.
 IDs are opaque strings with a lowercase type prefix such as `team_`, `agent_`,
 or `run_`; the suffix is base64url-compatible from its first character and
 carries no business meaning. This includes leading `-` and `_` suffix characters
-emitted by the Server's random base64url generator. Timestamps use RFC 3339 and
-must be normalized to an uppercase `Z` UTC suffix. Protocol versions use
-`major.minor` without a `v` prefix. Unknown message types are rejected by the
-owning message schema. Unknown optional fields are ignored and preserved only
-when the owning module explicitly supports round trips.
+emitted by the Server's random base64url generator. Timestamps use the common
+Go/JavaScript RFC 3339 subset: uppercase `T` and `Z`, seconds `00` through `59`,
+and optional fractional seconds of one through nine digits. Protocol versions use
+`major.minor` without a `v` prefix. Unknown message types and envelope fields
+are rejected. Payload extensions remain valid only where that payload schema
+deliberately declares an extension point; a generic top-level property is not
+rolling-compatibility authority.
 
 ## Bridge Message Contract
 
@@ -104,6 +106,54 @@ before persistence. Heartbeats do not carry or overwrite build identity, and an
 in-place upgrade advances the observation only with a newer connection epoch.
 This separation lets physical evidence prove both the original pairing and the
 currently installed package without requiring a new Device or credential.
+
+`CON-017` makes that JSON Schema executable at both Runtime boundaries. Before
+materializing JSON, generated TypeScript and Go admission gates enforce depth
+64, 8,192 value nodes, 4,096 numbers, a 256-character numeric token and an
+absolute exponent bound of 512. Frames are text-only strict UTF-8, and the same
+raw lexical gate rejects lone, reversed or mismatched Unicode surrogate escapes
+before either runtime can replace or retain a language-specific value. The
+generator then applies a deterministic Ajv
+standalone validator for TypeScript and a dereferenced embedded schema plus one
+startup-compiled validator for Go. The Server decodes each raw Bridge frame
+before any type-specific business parse; the Bridge does the same for each raw
+Central frame before its first business unmarshal. Invalid frames produce only
+a stable rejection and never echo the payload or validator diagnostics.
+
+Generated per-message metadata names every canonical property and declared
+integer/number path. It rejects ASCII or Unicode case-fold aliases before Go's
+`encoding/json` can bind them, normalizes mathematical integer spellings such
+as `1e0`, and gives every declared integer an explicit JavaScript-safe bound.
+Declared numbers must also be finite and may not underflow from a nonzero exact
+decimal to zero. Open extension numbers whose exact value survives a
+JavaScript JSON round trip remain ordinary numbers; unsafe or non-finite values
+remain opaque raw JSON values so re-serialization does not silently change
+them. The limits are cross-language Runtime admission rules in addition to the
+authoritative schema and deliberately reject over-budget open extensions.
+
+The protocol 1.0 envelope now requires its message ID and timestamp and is
+closed to unknown top-level fields. `run.reply` is bounded to the Server's
+20,000-Unicode-code-point persistence limit. All hand-written Server string
+bounds use the same code-point semantics as JSON Schema, including astral
+characters, clarification, activity, assessment, output and Error text. Error
+code shape/length and its 512-code-point message limit agree across schema and
+Server invariants; canonical timestamp negatives also prove every schema-valid
+timestamp can be decoded by the generated Go `time.Time` fields. Unknown
+Error fields are closed while `details` remains the explicit service-allowlisted
+extension point. Its currently interpreted `exitCode` and `stderrCaptured`
+fields are declared so their types are normalized before business use;
+`category` remains a bounded string for forward compatibility and the Server
+maps unknown categories to `unknown`. Golden fixtures prove those negatives in
+both languages and retain the intentionally open payloads used by already
+released 1.0 clients.
+The declared `agent.status` frame is consumed after hello with exact Device,
+connection-epoch and owned-Agent checks; it no longer falls through as a
+hello-required error. Agent publication name and role both use the durable
+80-code-point domain bound (including astral text) across schema, Server,
+Bridge configuration and SQLite.
+The derived structured-Mention display snapshot remains within its historical
+160-code-point storage bound by truncating only the display label; immutable
+`agentId` routing and the full Registry name/role are unchanged.
 
 `CON-012` defines the additive ADR-0021 Device pairing-session HTTP contract.
 It defines opaque pairing/session/attempt IDs, closed session states, bounded

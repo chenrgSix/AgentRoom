@@ -81,6 +81,32 @@ test("malformed assessment fields cannot assert completion or reviewer approval"
   }).action, "continue");
 });
 
+test("assessment bounds count Unicode code points like JSON Schema", () => {
+  const astralQuestion = "😀".repeat(2_000);
+  assert.deepEqual(parseAgentAssessment({
+    openQuestions: [{
+      id: "😀".repeat(160),
+      question: astralQuestion,
+      importance: "high"
+    }],
+    newEvidenceRefs: ["😀".repeat(240)]
+  }), {
+    openQuestions: [{
+      id: "😀".repeat(160),
+      question: astralQuestion,
+      importance: "high"
+    }],
+    newEvidenceRefs: ["😀".repeat(240)]
+  });
+  assert.equal(parseAgentAssessment({
+    openQuestions: [{
+      id: "😀".repeat(161),
+      question: "Still bounded",
+      importance: "high"
+    }]
+  }), null);
+});
+
 test("budget ledger preserves unknown telemetry and protects finalization reserve", () => {
   const startedAt = "2026-08-23T10:00:00.000Z";
   const first = recordTurnUsage({

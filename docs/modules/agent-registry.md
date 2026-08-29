@@ -64,6 +64,10 @@ Presence is derived, not directly assigned:
 
 Heartbeat TTL is server-configured. Network jitter may delay an offline
 transition but must never produce two active Device bindings for one Agent.
+An `agent.status` frame is an authenticated, connection-epoch-scoped Presence
+observation for an Agent owned by that exact Device; it never mutates Run
+state. A healthy Device heartbeat preserves an existing `busy` projection so
+liveness traffic cannot make active work appear ready.
 
 ## Failure and Security
 

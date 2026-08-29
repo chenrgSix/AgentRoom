@@ -4,12 +4,15 @@ import type {
   MessageRecord
 } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
+import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
 import type {
   AuthService,
   McpPrincipal,
   WebPrincipal
 } from "../security/auth-service.js";
 import { redactSensitiveText } from "../security/redaction.js";
+import { maximumAgentMentionDisplayLabelCodePoints } from
+  "./agent-mention-label.js";
 import { containsExactAllMention } from "./exact-agent-mentions.js";
 
 interface MessageCursor {
@@ -107,7 +110,10 @@ export class MessageService {
       if (
         mention.targetType !== "agent" ||
         mention.displayLabel.trim().length === 0 ||
-        mention.displayLabel.length > 160
+        exceedsUnicodeCodePointLimit(
+          mention.displayLabel,
+          maximumAgentMentionDisplayLabelCodePoints
+        )
       ) {
         throw new Error("Malformed structured Agent Mention");
       }

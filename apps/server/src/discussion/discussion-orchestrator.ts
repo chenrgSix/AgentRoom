@@ -2,6 +2,8 @@ import type { CoreRepository } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { RunRecord, RunRepository } from "../run/run-repository.js";
 import type { AuthService, WebPrincipal } from "../security/auth-service.js";
+import { agentMentionDisplayLabel } from
+  "../team-room/agent-mention-label.js";
 import type { MessageService } from "../team-room/message-service.js";
 import type { AgentTaskRepository } from "../task/task-repository.js";
 import {
@@ -216,7 +218,7 @@ export class DiscussionOrchestrator {
       mentions: participantAgents.map((agent) => ({
         targetType: "agent" as const,
         targetAgentId: agent.agentId,
-        displayLabel: `${agent.name} / ${agent.role}`
+        displayLabel: agentMentionDisplayLabel(agent.name, agent.role)
       })),
       now
     });

@@ -491,7 +491,7 @@ func (c Config) Validate() error {
 			}
 		}
 	}
-	if strings.TrimSpace(c.DeviceName) == "" || len(c.DeviceName) > 80 {
+	if strings.TrimSpace(c.DeviceName) == "" || utf8.RuneCountInString(c.DeviceName) > 80 {
 		return fmt.Errorf("deviceName must contain 1 to 80 characters")
 	}
 	if err := c.validateAgentProvisioning(); err != nil {
@@ -549,10 +549,10 @@ func (c Config) validateAgentProvisioning() error {
 }
 
 func (a AgentConfig) validate() error {
-	if strings.TrimSpace(a.Name) == "" || len(a.Name) > 80 {
+	if strings.TrimSpace(a.Name) == "" || utf8.RuneCountInString(a.Name) > 80 {
 		return fmt.Errorf("name must contain 1 to 80 characters")
 	}
-	if strings.TrimSpace(a.Role) == "" || len(a.Role) > 80 {
+	if strings.TrimSpace(a.Role) == "" || utf8.RuneCountInString(a.Role) > 80 {
 		return fmt.Errorf("role must contain 1 to 80 characters")
 	}
 	if a.Adapter != "codex" && a.Adapter != "generic" {

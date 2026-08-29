@@ -5,6 +5,7 @@ import type {
   CoreRepository
 } from "../data/core-repository.js";
 import { createOpaqueId } from "../domain/identifiers.js";
+import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
 import {
   AuthorizationError,
   type AuthService,
@@ -28,7 +29,10 @@ export interface PublishAgentInput {
 
 function normalizedLabel(value: string, label: string): string {
   const normalized = value.trim();
-  if (normalized.length === 0 || normalized.length > 80) {
+  if (
+    normalized.length === 0 ||
+    exceedsUnicodeCodePointLimit(normalized, 80)
+  ) {
     throw new Error(`${label} must contain 1 to 80 characters`);
   }
   return normalized;

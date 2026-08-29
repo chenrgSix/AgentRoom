@@ -126,7 +126,8 @@ async function waitFor(
 
 async function createFixture(
   loggerInstance?: FastifyBaseLogger,
-  supportsAgentProvisioning = true
+  supportsAgentProvisioning = true,
+  agentLabels: { name?: string; role?: string } = {}
 ): Promise<BridgeFixture> {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-bridge-ws-"));
   const databasePath = path.join(directory, "server.sqlite");
@@ -200,9 +201,9 @@ async function createFixture(
       supportsStreaming: false
     },
     deviceId: paired.device.deviceId,
-    name: "Protocol Agent",
+    name: agentLabels.name ?? "Protocol Agent",
     ownerMemberId: paired.device.ownerMemberId,
-    role: "Protocol Test",
+    role: agentLabels.role ?? "Protocol Test",
     runtimePolicy: { filesystemAccess: "read-only" },
     workspaceAlias: "Protocol Workspace",
     workspaceRef: `workspace_${"a".repeat(64)}`,
@@ -234,7 +235,7 @@ async function createFixture(
     headers: authorization,
     payload: { content: "Validate strict Bridge traces", mentionAgentId: agentId }
   });
-  assert.equal(routed.statusCode, 200);
+  assert.equal(routed.statusCode, 200, routed.body);
   const requested = await requestedMessage;
   assert.equal(requested.type, "run.requested");
   return {
@@ -455,12 +456,72 @@ test("authenticated hello records the current Bridge version without replacing p
     }));
     assert.deepEqual(await closed, {
       code: 4_008,
-      reason: "Bridge message rejected: invalid_hello"
+      reason: "Bridge message rejected: invalid_envelope"
     });
     assert.deepEqual(readObservation(), {
       connection_epoch: 1,
       bridge_version: "0.4.0-qa030.1"
     });
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("declared Agent status frames update the owned Agent without heartbeat drift", async () => {
+  const fixture = await createFixture();
+  const readPresence = async (): Promise<string | undefined> => {
+    const response = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/agents`,
+      headers: fixture.authorization
+    });
+    return (response.json() as Array<{ agentId: string; presence: string }>)
+      .find((agent) => agent.agentId === agentId)?.presence;
+  };
+  try {
+    send(fixture.socket, envelope("agent.status", {
+      agentId,
+      deviceId: fixture.deviceId,
+      connectionEpoch: 1,
+      status: "busy"
+    }));
+    await waitFor(async () => (await readPresence()) === "busy");
+
+    send(fixture.socket, envelope("bridge.heartbeat", {
+      connectionEpoch: 1,
+      deviceId: fixture.deviceId
+    }));
+    await waitFor(async () => (await readPresence()) === "busy");
+
+    send(fixture.socket, envelope("agent.status", {
+      agentId,
+      deviceId: fixture.deviceId,
+      connectionEpoch: 1,
+      status: "ready"
+    }));
+    await waitFor(async () => (await readPresence()) === "ready");
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("Agent publication counts astral labels as Unicode code points", async () => {
+  const name = "😀".repeat(80);
+  const role = "🛠".repeat(80);
+  const fixture = await createFixture(undefined, true, { name, role });
+  try {
+    const response = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/agents`,
+      headers: fixture.authorization
+    });
+    const published = (response.json() as Array<{
+      agentId: string;
+      name: string;
+      role: string;
+    }>).find((agent) => agent.agentId === agentId);
+    assert.equal(published?.name, name);
+    assert.equal(published?.role, role);
   } finally {
     await closeFixture(fixture);
   }
@@ -905,7 +966,7 @@ test("an older Bridge cannot receive central Agent provisioning", async () => {
   }
 });
 
-test("Bridge rejects missing traceId as a processed message, not malformed JSON", async () => {
+test("Bridge schema rejects a missing traceId as an invalid envelope", async () => {
   const fixture = await createFixture();
   try {
     const closed = nextClose(fixture.socket);
@@ -916,10 +977,81 @@ test("Bridge rejects missing traceId as a processed message, not malformed JSON"
     }));
     assert.deepEqual(await closed, {
       code: 4_008,
-      reason: "Bridge message rejected: invalid_trace_id"
+      reason: "Bridge message rejected: invalid_envelope"
     });
   } finally {
     await closeFixture(fixture);
+  }
+});
+
+test("Bridge raw decoding rejects a fractional integer before JavaScript rounding", async () => {
+  const fixture = await createFixture();
+  try {
+    await acceptRun(fixture);
+    const closed = nextClose(fixture.socket);
+    const raw = JSON.stringify(envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 2,
+      status: "working"
+    })).replace(
+      '"sequence":2',
+      '"sequence":2.0000000000000000000001'
+    );
+    fixture.socket.send(raw);
+    assert.deepEqual(await closed, {
+      code: 4_008,
+      reason: "Bridge message rejected: invalid_envelope"
+    });
+    assert.equal(await runState(fixture, "delivered"), true);
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("Bridge schema closes required identity and unknown envelope fields", async (t) => {
+  const valid = envelope("run.accepted", {
+    runId: "run_schema_boundary_12345678",
+    traceId: "trace_schema_boundary_12345678",
+    agentId,
+    sequence: 1
+  }) as Record<string, unknown>;
+  const cases: Array<{ name: string; value: Record<string, unknown> }> = [
+    {
+      name: "missing messageId",
+      value: Object.fromEntries(Object.entries(valid).filter(([key]) =>
+        key !== "messageId"
+      ))
+    },
+    {
+      name: "missing timestamp",
+      value: Object.fromEntries(Object.entries(valid).filter(([key]) =>
+        key !== "timestamp"
+      ))
+    },
+    {
+      name: "unknown top-level field",
+      value: { ...valid, localPath: "/must/not/cross/the/wire" }
+    }
+  ];
+
+  for (const scenario of cases) {
+    await t.test(scenario.name, async () => {
+      const logs: CapturedLog[] = [];
+      const fixture = await createFixture(capturingLogger(logs));
+      try {
+        const closed = nextClose(fixture.socket);
+        send(fixture.socket, scenario.value);
+        assert.deepEqual(await closed, {
+          code: 4_008,
+          reason: "Bridge message rejected: invalid_envelope"
+        });
+        assert.doesNotMatch(JSON.stringify(logs), /must\/not\/cross/u);
+      } finally {
+        await closeFixture(fixture);
+      }
+    });
   }
 });
 
@@ -989,11 +1121,11 @@ test("Bridge rejects whitespace traceId on Run reply without echoing content", a
     }));
     const rejection = await closed;
     assert.equal(rejection.code, 4_008);
-    assert.equal(rejection.reason, "Bridge message rejected: invalid_trace_id");
+    assert.equal(rejection.reason, "Bridge message rejected: invalid_envelope");
     assert.doesNotMatch(rejection.reason, /must-not-be-echoed|token/u);
     assert.equal(logs.some((entry) =>
       entry.event === "bridge.message.rejected" &&
-      entry.errorCategory === "invalid_trace_id"
+      entry.errorCategory === "invalid_envelope"
     ), true);
     assert.doesNotMatch(JSON.stringify(logs), /must-not-be-echoed|token=/u);
   } finally {
@@ -1108,6 +1240,103 @@ test("Bridge applies accepted, output, activity, status, and reply messages with
   }
 });
 
+test("Bridge and JSON Schema share Unicode code-point length semantics", async () => {
+  const fixture = await createFixture();
+  try {
+    await acceptRun(fixture);
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 2,
+      status: "working"
+    }));
+    await waitFor(() => runState(fixture, "working"));
+
+    const outputHalf = "😀".repeat(10_000);
+    send(fixture.socket, envelope("run.output_delta", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 3,
+      content: outputHalf
+    }));
+    send(fixture.socket, envelope("run.output_delta", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 4,
+      content: outputHalf
+    }));
+    send(fixture.socket, envelope("run.activity", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 5,
+      activityId: "😀".repeat(100),
+      kind: "reasoning",
+      phase: "updated",
+      label: "😀".repeat(100),
+      content: "😀".repeat(3_000)
+    }));
+    const reply = "😀".repeat(10_001);
+    send(fixture.socket, envelope("run.reply", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 6,
+      content: reply,
+      assessment: {
+        openQuestions: [{
+          id: "😀".repeat(100),
+          question: "😀".repeat(1_001),
+          importance: "high"
+        }]
+      }
+    }));
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 7,
+      status: "failed",
+      error: {
+        code: "RUNTIME_FAILED",
+        message: "😀".repeat(300),
+        retryable: false
+      }
+    }));
+    await waitFor(() => runState(fixture, "failed"));
+
+    const events = await fixture.app.inject({
+      method: "GET",
+      url: `/api/runs/${fixture.runId}/events?after=0`,
+      headers: fixture.authorization
+    });
+    assert.equal(events.statusCode, 200);
+    const records = events.json() as Array<{
+      event: { type: string; content?: string; error?: { message: string } };
+    }>;
+    assert.equal(
+      records.filter(({ event }) => event.type === "output")
+        .reduce((length, { event }) =>
+          length + [...(event.content ?? "")].length, 0),
+      20_000
+    );
+    assert.equal(
+      [...(records.find(({ event }) => event.type === "reply")?.event.content ?? "")]
+        .length,
+      10_001
+    );
+    assert.equal(
+      [...(records.at(-1)?.event.error?.message ?? "")].length,
+      300
+    );
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
 test("Bridge rejects malformed Runtime output metadata", async () => {
   const fixture = await createFixture();
   try {
@@ -1123,8 +1352,44 @@ test("Bridge rejects malformed Runtime output metadata", async () => {
     }));
     assert.deepEqual(await closed, {
       code: 4_008,
-      reason: "Bridge message rejected: run_output_rejected"
+      reason: "Bridge message rejected: invalid_envelope"
     });
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("Bridge schema enforces the Runtime error bound before persistence", async () => {
+  const fixture = await createFixture();
+  try {
+    await acceptRun(fixture);
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 2,
+      status: "working"
+    }));
+    await waitFor(() => runState(fixture, "working"));
+
+    const closed = nextClose(fixture.socket);
+    send(fixture.socket, envelope("run.status", {
+      runId: fixture.runId,
+      traceId: fixture.traceId,
+      agentId,
+      sequence: 3,
+      status: "failed",
+      error: {
+        code: "A".repeat(65),
+        message: "must not persist",
+        retryable: false
+      }
+    }));
+    assert.deepEqual(await closed, {
+      code: 4_008,
+      reason: "Bridge message rejected: invalid_envelope"
+    });
+    assert.equal(await runState(fixture, "working"), true);
   } finally {
     await closeFixture(fixture);
   }
@@ -1153,7 +1418,7 @@ test("Bridge persists only allowlisted Runtime failure details", async () => {
         message: "Runtime process exited unsuccessfully.",
         retryable: false,
         details: {
-          category: "configuration",
+          category: "future_runtime_category",
           exitCode: 7,
           stderrCaptured: true,
           rawStderr: "token=must-never-be-persisted",
@@ -1179,7 +1444,7 @@ test("Bridge persists only allowlisted Runtime failure details", async () => {
       message: "Runtime process exited unsuccessfully.",
       retryable: false,
       details: {
-        category: "configuration",
+        category: "unknown",
         exitCode: 7,
         stderrCaptured: true
       }
@@ -1283,7 +1548,7 @@ test("Bridge rejects permission-shaped Task clarification fields", async () => {
     }));
     assert.deepEqual(await closed, {
       code: 4_008,
-      reason: "Bridge message rejected: run_status_rejected"
+      reason: "Bridge message rejected: invalid_envelope"
     });
   } finally {
     await closeFixture(fixture);
@@ -1316,7 +1581,7 @@ test("Bridge rejects local details inside a Runtime policy summary", async () =>
     }));
     assert.deepEqual(await closed, {
       code: 4_008,
-      reason: "Bridge message rejected: agent_publication_rejected"
+      reason: "Bridge message rejected: invalid_envelope"
     });
   } finally {
     await closeFixture(fixture);
@@ -1375,6 +1640,20 @@ test("Bridge reserves close code 4007 for malformed JSON", async () => {
     assert.equal(logs.some((entry) =>
       entry.event === "bridge.message.malformed"
     ), true);
+  } finally {
+    await closeFixture(fixture);
+  }
+});
+
+test("Bridge rejects binary and invalid UTF-8 frames before JSON decoding", async () => {
+  const fixture = await createFixture();
+  try {
+    const closed = nextClose(fixture.socket);
+    fixture.socket.send(Buffer.from([0xff]), { binary: true });
+    assert.deepEqual(await closed, {
+      code: 4_007,
+      reason: "Malformed Bridge message"
+    });
   } finally {
     await closeFixture(fixture);
   }

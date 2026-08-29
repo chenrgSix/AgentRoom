@@ -3,6 +3,8 @@ import {
   requiredString,
   requiredStringArray
 } from "./http-helpers.js";
+import { agentMentionDisplayLabel } from
+  "../team-room/agent-mention-label.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerMessageRoutes({
@@ -83,7 +85,7 @@ export function registerMessageRoutes({
                 targetType: "agent" as const,
                 targetAgentId: agentId,
                 displayLabel: target
-                  ? `${target.name} / ${target.role}`
+                  ? agentMentionDisplayLabel(target.name, target.role)
                   : agentId
                 };
               })

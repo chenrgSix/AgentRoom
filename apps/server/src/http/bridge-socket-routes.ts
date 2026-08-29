@@ -1,3 +1,5 @@
+import { decodeBridgeMessage } from "@convene-wire/contracts/bridge-validator";
+
 import type { BridgeRunEventService } from "../run/bridge-run-event-service.js";
 import type { AgentRuntimePolicy } from "../data/core-repository.js";
 import { normalizeBridgeVersion } from "../domain/bridge-version.js";
@@ -15,6 +17,7 @@ type BridgeRejectionCategory =
   | "invalid_hello"
   | "heartbeat_identity_mismatch"
   | "agent_publication_rejected"
+  | "agent_status_rejected"
   | "agent_provision_result_rejected"
   | "invalid_trace_id"
   | "run_acceptance_rejected"
@@ -31,6 +34,7 @@ const bridgeLogMessageTypes = new Set([
   "bridge.hello",
   "bridge.heartbeat",
   "agent.publish",
+  "agent.status",
   "agent.provision.result",
   "run.accepted",
   "run.status",
@@ -67,6 +71,23 @@ function safeBridgeLogMessageType(value: unknown): string {
     : "unknown";
 }
 
+function bridgeMessageBytes(source: unknown): Uint8Array | undefined {
+  if (source instanceof Uint8Array) return source;
+  if (source instanceof ArrayBuffer) return new Uint8Array(source);
+  if (!Array.isArray(source) ||
+      source.some((chunk) => !(chunk instanceof Uint8Array))) {
+    return undefined;
+  }
+  const size = source.reduce((total, chunk) => total + chunk.byteLength, 0);
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of source) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return bytes;
+}
+
 export function registerBridgeSocketRoutes({
   advanceDiscussion,
   agentProvisioning,
@@ -91,10 +112,13 @@ export function registerBridgeSocketRoutes({
   }, (socket, request) => {
     const devicePrincipal = auth.authenticateDevice(bearerToken(request), clock());
     let registeredEpoch: number | undefined;
-    socket.on("message", (source: { toString(): string }) => {
-      let parsed: unknown;
+    socket.on("message", (source: unknown, isBinary: boolean) => {
+      let message: BridgeMessageEnvelope | undefined;
       try {
-        parsed = JSON.parse(source.toString()) as unknown;
+        const bytes = isBinary ? undefined : bridgeMessageBytes(source);
+        if (!bytes) throw new TypeError("Bridge frames must be UTF-8 text");
+        message = decodeBridgeMessage(bytes) as
+          BridgeMessageEnvelope | undefined;
       } catch {
         app.log.warn({
           event: "bridge.message.malformed",
@@ -104,9 +128,6 @@ export function registerBridgeSocketRoutes({
         socket.close(4_007, "Malformed Bridge message");
         return;
       }
-      const message = parsed && typeof parsed === "object" && !Array.isArray(parsed)
-        ? parsed as BridgeMessageEnvelope
-        : undefined;
       const rejectMessage = (category: BridgeRejectionCategory): void => {
         const payload = message?.payload && typeof message.payload === "object" &&
           !Array.isArray(message.payload)
@@ -224,6 +245,27 @@ export function registerBridgeSocketRoutes({
           });
           cancellations.resendForDevice(devicePrincipal.deviceId);
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
+          teamChanges.notify(devicePrincipal.teamId);
+          return;
+        }
+        if (message.type === "agent.status" && registeredEpoch !== undefined) {
+          if (
+            typeof message.payload.agentId !== "string" ||
+            message.payload.deviceId !== devicePrincipal.deviceId ||
+            message.payload.connectionEpoch !== registeredEpoch ||
+            !new Set(["ready", "busy", "degraded"])
+              .has(String(message.payload.status))
+          ) {
+            rejectMessage("agent_status_rejected");
+            return;
+          }
+          presence.recordAgentStatus(devicePrincipal, {
+            agentId: message.payload.agentId,
+            deviceId: devicePrincipal.deviceId,
+            connectionEpoch: registeredEpoch,
+            status: message.payload.status as "ready" | "busy" | "degraded",
+            now: clock()
+          });
           teamChanges.notify(devicePrincipal.teamId);
           return;
         }
@@ -709,6 +751,8 @@ export function registerBridgeSocketRoutes({
               ? "run_reply_rejected"
               : message.type === "agent.provision.result"
                 ? "agent_provision_result_rejected"
+              : message.type === "agent.status"
+                ? "agent_status_rejected"
               : message.type === "agent.publish"
                 ? "agent_publication_rejected"
                 : "invalid_envelope";
