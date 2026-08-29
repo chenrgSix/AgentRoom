@@ -45,6 +45,7 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | P17 | Agents exchange verified Artifact content across Bridges without implicit Workspace writes | QA-020 |
 | P18 | One verified install and one Device pairing reach the first ready local Agent without copied long-lived credentials | QA-028 |
 | P19 | Team Workbench exposes Result-gated Task completion without weakening Run recovery or lightweight Room work | QA-029 |
+| P20 | Audited transactional, endpoint, lifecycle, privacy, and release boundaries fail closed under crash, retry, and mixed-platform execution | QA-036 |
 
 ## Milestone G0: Governance and Architecture
 
@@ -356,6 +357,26 @@ preserve the P0-P9 roadmap defined by the v0.2 architecture baseline:
 | TASK-011 | DONE | Record immutable derived Artifact lineage | TASK-010, TASK-006 | migration 0038 plus service, member HTTP, manual-Agent MCP, publication/bind recovery, Context Planner, contract, and Go publisher/Runtime regressions prove bounded `derives_from`/`reviews`/`verifies` relations are atomically appended with ordinary revisioned Artifact B, survive response loss, enter delivered context, and cannot mutate, target newer evidence, or cross Task history |
 | WEB-040 | DONE | Preview safe Artifact snapshot content | TASK-010, ART-001 | `docs/acceptance/web-040-artifact-preview.md` records Member route, UTF-8 bound, component/integration, and isolated real-browser evidence proving Patch, Markdown, and JSON snapshots are reverified by size/SHA-256, limited to 200,000 characters, and rendered as escaped semantically-untrusted text without HTML/image execution, path disclosure, reference-only access, cross-Team access, narrow-screen overflow, or console errors |
 | QA-020 | DONE | Verify Artifact-to-Artifact two-Bridge recovery | BRG-028, BRG-029, ADP-014, TASK-011, WEB-040, QA-004, QA-006 | `docs/acceptance/qa-020-artifact-handoff-recovery.md`, focused lease/publication regressions, and deterministic real-Server/two-Bridge E2E prove lease-before-read, live invalidation, renewable attempts, abandoned-upload reclamation, and root-level Artifact B publication through explicit snapshot CAS alongside the original duplicate, response-loss, restart, digest-failure, terminal-replay, and offline cuts; physical-machine proof remains a separate extension of QA-002 |
+
+## Workstream F9: Post-v0.4.0 Reliability and Release Hardening
+
+These tasks are explicitly coordinated in parallel with the older opt-in
+`BRG-013` platform task. They share no implementation ownership: each task
+updates only its named module boundaries and remains independently revertible.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| RUN-014 | ACTIVE | Make Message routing and reply projection transactionally recoverable | DATA-006, RUN-013 | one durable routing/projection intent per operation, startup reconciliation, uniqueness fences, and fault-injection regressions close Message-before-Run and reply-before-Message crash cuts for managed and manual Runs without duplicate execution or replies |
+| CON-016 | ACTIVE | Define durable managed-Run cancellation acknowledgement | CON-003, RUN-014 | additive schema fixtures and generated TypeScript/Go types define idempotent cancel intent delivery and Bridge acknowledgement while preserving protocol 1.0 compatibility and terminal-state authority |
+| BRG-051 | ACTIVE | Bind every Device credential to its authenticated Central origin | GOV-015, BRG-048, BRG-050 | Console, CLI and real TLS regressions prove public-CA and legacy-pin credentials never cross origin; scoped-private migration remains the only credential-preserving origin change and explicit re-pairing remains available |
+| BRG-052 | ACTIVE | Enforce one Bridge state owner and bounded Runtime process-tree shutdown | BRG-020, BRG-046, BRG-051 | cross-process data-root lock, drained stop/restart/close coverage, parent-directory durable writes, Windows Job Object process-tree cancellation tests, full Go race/vet and desktop compilation prevent overlapping workers, orphan Runtime children and acknowledged-but-lost inbox state |
+| OPS-012 | ACTIVE | Make Central lifecycle configuration and mutation authority exclusive | OPS-010, OPS-011 | real Compose precedence regression, sanitized child environment, per-data-root non-blocking process lock, manifest generation CAS and concurrent lifecycle tests prevent ambient overrides and last-writer-wins installation state |
+| OPS-013 | ACTIVE | Distribute one immutable Central runtime image per Release | OPS-012, QA-008 | tag-SHA-pinned multi-architecture OCI metadata, digest-only Compose activation, SBOM/provenance and clean-cache/offline verification remove target-host source builds and mutable registry resolution from the installed runtime identity |
+| QA-034 | ACTIVE | Bind every Release job to one exact full-CI commit | QA-008, OPS-013 | workflow regressions and a synthetic empty Draft prove one resolved immutable tag SHA passed all repository gates before every Bridge, Desktop and Central job checks out that SHA and assembles the closed asset set |
+| QA-035 | ACTIVE | Bind schema-v4 and Windows upgrade evidence to actual artifacts | CON-015, QA-031, QA-034 | verifier negative cases compute the Bridge archive digest and read exact Server release identity instead of accepting formatted claims; native workflow installs the previous stable installer, preserves real owner state and upgrades to the candidate |
+| WEB-049 | ACTIVE | Block implicit remote content and reduce synchronous SQLite polling amplification | WEB-040, QA-008 | Markdown regressions plus CSP keep remote images click-to-load or same-origin; conditional activity timestamps, event-driven wait and query-count/load tests bound WAL writes and synchronous polling without weakening session expiry or live updates |
+| CON-017 | ACTIVE | Enforce the authoritative Bridge schema at the runtime boundary | CON-016, BRG-052 | generated-validator interoperability tests reject missing envelope identity and unknown fields consistently, align reply/error bounds across JSON Schema, Server and Bridge, and retain rolling compatibility for released protocol 1.0 clients |
+| QA-036 | ACTIVE | Close the post-v0.4.0 hardening audit | RUN-014, CON-016, BRG-051, BRG-052, OPS-012, OPS-013, QA-034, QA-035, WEB-049, CON-017 | clean-tree contracts, builds, unit/fault/race tests, deterministic E2E, Compose, release-verifier, cross-platform compilation, dependency audit and documentation gates pass with no unresolved P0/P1 finding; publication and fresh two-physical-machine evidence remain separate owner-authorized gates |
 
 ## Deferred Beyond MVP
 
