@@ -29,8 +29,9 @@ tool results, and hidden reasoning never become central payloads.
 
 Every push to `main` and every pull request runs schema validation, generated
 contract checks, Node builds and tests, deterministic cross-process E2E,
-Markdown lint, Go tests and vet, plus a native macOS desktop compile. Release
-workflows do not replace this gate.
+Markdown lint, Go tests and vet, a native macOS desktop compile, and a native
+Windows previous-stable-to-distinct-candidate install/upgrade/uninstall gate
+with owner-state preservation. Release workflows do not replace this gate.
 
 `QA-034` additionally makes the Release workflow self-contained at one source
 identity. `validate-release` resolves the requested existing tag once to one
@@ -43,10 +44,13 @@ the workflow resolves the tag anew and fails if it no longer names the
 original SHA. The empty Draft precondition and closed release-asset verifier
 remain unchanged. A local pure-policy regression rejects a changed tag, a tag-
 based checkout in any downstream job, a missing Repository or Go gate, a build
-that bypasses either full gate, and either missing pre-use tag check. This
-source-binding implementation does not complete `QA-034` until the `OPS-013`
-immutable-image jobs join the same dependency graph and one synthetic empty
-Draft execution supplies hosted-workflow evidence.
+that bypasses either full gate, and either missing pre-use tag check. The
+`OPS-013` immutable-image jobs join that same exact-SHA dependency graph: one
+OCI bundle per architecture is built and Docker-verified before all matching
+Central archive jobs consume it. Policy regressions cover dependency,
+source-SHA, pinned scanner, clean-daemon and artifact-consumption bypasses.
+`QA-034` remains `ACTIVE` until one synthetic empty Draft execution supplies
+hosted-workflow evidence.
 
 The `QA-001` integration test exercises one authenticated user, one Team and
 Room, two Fake Agents, stable-ID mentions, ordered Run events, Agent replies,
@@ -106,8 +110,10 @@ representative owner configuration, identity and inbox files, upgrades once to
 the distinct candidate, and proves their hashes survive both upgrade and
 uninstall. A same-candidate double install is not upgrade evidence. The local
 implementation remains `ACTIVE` until a hosted native workflow executes that
-path and the next packaged Central exposes its exact build identity; neither a
-macOS test nor source inspection closes those external gates.
+path, the next packaged Central exposes its exact build identity, and a fresh
+two-physical-machine schema-v4 record binds the installed artifacts to the
+observed processes; neither a macOS test nor source inspection closes those
+external gates.
 
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to

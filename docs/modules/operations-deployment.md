@@ -287,7 +287,14 @@ with both digest references absent, loads only the finalized archive, inspects
 the expected platform/Release/source labels, and executes Server and Caddy with
 `--pull=never`, no network and a read-only root. Hosted Release publication and
 target-host lifecycle acceptance remain separate from this implementation
-evidence.
+evidence. [Acceptance evidence](../acceptance/ops-013-immutable-central-images.md)
+records a clean exact-HEAD `linux/arm64` build and load in which the default
+Server command applied migrations, reached readiness, emitted the matching
+runtime build identity, and the digest-only Caddy image executed successfully.
+Release-image mutation tests and workflow policy close the intended amd64 and
+four schema-v2 archive wiring, but their actual builds remain `QA-034` hosted
+evidence. Hosted publication and target-host lifecycle are also separate
+admission evidence.
 
 ## Tasks
 
@@ -295,4 +302,5 @@ evidence.
 - `OPS-009`: public-default and scoped-private TLS deployment target.
 - `OPS-011`: private DHCP-IP to stable-hostname migration.
 - `OPS-012`: exclusive lifecycle configuration and mutation authority.
+- `OPS-013`: immutable exact-digest Central image release and activation.
 - `QA-028`: deterministic plus physical one-install/one-Device acceptance.
