@@ -4,15 +4,16 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
 	"flag"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
 
 	"convenewire.dev/bridge/internal/autostart"
@@ -80,16 +81,60 @@ func run() error {
 			return fmt.Errorf("resolve Bridge workspace: %w", err)
 		}
 	}
+	activation := &desktopActivation{}
+	defer activation.close()
+	return runWithDesktopInstance(func() (*desktopInstance, error) {
+		return acquireDesktopInstance(initialPairingLink, activation)
+	}, func(instance *desktopInstance) error {
+		return runPrimaryDesktop(*configPath, *dataDir, *workspace, initialPairingLink, *background, activation, instance)
+	})
+}
+
+func runPrimaryDesktop(configPath, dataDir, workspace, initialPairingLink string, background bool,
+	activation *desktopActivation, instance *desktopInstance,
+) error {
 	executable, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("resolve desktop executable: %w", err)
 	}
-	loginStartup := autostart.New(executable, loginArguments(*configPath, *dataDir, *workspace))
+	loginStartup := autostart.New(executable, loginArguments(configPath, dataDir, workspace))
+	var service *console.Service
+	var window *application.WebviewWindow
+	stopStatus := make(chan struct{})
+	var shutdownOnce sync.Once
+	shutdown := func() {
+		shutdownOnce.Do(func() {
+			activation.close()
+			close(stopStatus)
+			if service != nil {
+				service.Close()
+			}
+		})
+	}
+	defer shutdown()
+	assetRouter := http.NewServeMux()
+	windowsOptions := instance.windows
+	windowsOptions.DisableQuitOnLastWindowClosed = true
+	// On macOS/Linux New arbitrates and forwards secondary launches. Windows
+	// already holds its native mutex. No mutable Console state is opened earlier.
+	app := application.New(application.Options{
+		Name:        "ConveneWire Bridge",
+		Description: "Connect local Codex and Pi runtimes to an ConveneWire Team",
+		Icon:        icons.ApplicationLightMode256,
+		Assets: application.AssetOptions{
+			Handler: assetRouter, DisableLogging: true,
+		},
+		SingleInstance: instance.singleInstance,
+		Mac: application.MacOptions{
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
+		},
+		Windows: windowsOptions, OnShutdown: shutdown,
+	})
 
-	service, err := console.New(console.Options{
-		ConfigPath: *configPath,
-		DataDir:    *dataDir,
-		Workspace:  *workspace,
+	service, err = console.New(console.Options{
+		ConfigPath: configPath,
+		DataDir:    dataDir,
+		Workspace:  workspace,
 		Version:    version,
 	}, console.Dependencies{
 		Enroll: enrollment.Join,
@@ -112,49 +157,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	assetRouter.Handle("/", service.Handler())
 	if err := service.StartConfiguredBridge(); err != nil {
-		service.Close()
 		return err
 	}
-
-	var window *application.WebviewWindow
-	stopStatus := make(chan struct{})
-	// Stable across the rename so the old and new display names cannot run as
-	// separate owners of the same Bridge state.
-	instanceKey := sha256.Sum256([]byte("agentroom.dev.bridge.desktop.instance.v1"))
-	app := application.New(application.Options{
-		Name:        "ConveneWire Bridge",
-		Description: "Connect local Codex and Pi runtimes to an ConveneWire Team",
-		Icon:        icons.ApplicationLightMode256,
-		Assets: application.AssetOptions{
-			Handler:        service.Handler(),
-			DisableLogging: true,
-		},
-		SingleInstance: &application.SingleInstanceOptions{
-			UniqueID:      "dev.agentroom.bridge.desktop",
-			EncryptionKey: instanceKey,
-			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
-				if window != nil {
-					if link, linkErr := pairingLinkFromLaunch("", data.Args); linkErr == nil && link != "" {
-						window.SetURL(consoleWindowURL(service.Token(), link))
-					}
-					window.Show()
-					window.Restore()
-					window.Focus()
-				}
-			},
-		},
-		Mac: application.MacOptions{
-			ApplicationShouldTerminateAfterLastWindowClosed: false,
-		},
-		Windows: application.WindowsOptions{
-			DisableQuitOnLastWindowClosed: true,
-		},
-		OnShutdown: func() {
-			close(stopStatus)
-			service.Close()
-		},
-	})
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "ConveneWire Bridge",
@@ -167,9 +173,19 @@ func run() error {
 		BackgroundColour: application.NewRGB(12, 17, 13),
 		DevToolsEnabled:  false,
 	})
-	if *background && service.State().Configured {
+	if background && service.State().Configured && initialPairingLink == "" {
 		window.Hide()
 	}
+	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+		activation.ready(application.InvokeAsync, func(link string) {
+			if link != "" {
+				window.SetURL(consoleWindowURL(service.Token(), link))
+			}
+			window.Show()
+			window.Restore()
+			window.Focus()
+		})
+	})
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		window.Hide()
 		event.Cancel()
@@ -179,16 +195,11 @@ func run() error {
 		if linkErr != nil || link == "" {
 			return
 		}
-		window.SetURL(consoleWindowURL(service.Token(), link))
-		window.Show()
-		window.Restore()
-		window.Focus()
+		activation.accept(link)
 	})
 	if runtime.GOOS == "darwin" {
 		app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
-			window.Show()
-			window.Restore()
-			window.Focus()
+			activation.accept("")
 		})
 	}
 
@@ -229,18 +240,23 @@ func run() error {
 	setTrayState(service.State(), statusItem, startItem, stopItem)
 	go refreshTray(stopStatus, service, statusItem, startItem, stopItem)
 	if err := app.Run(); err != nil {
-		service.Close()
 		return fmt.Errorf("run desktop application: %w", err)
 	}
 	return nil
 }
 
 func pairingLinkFromLaunch(explicit string, arguments []string) (string, error) {
+	if len(explicit) > maxPairingLinkBytes || len(arguments) > 32 {
+		return "", fmt.Errorf("desktop activation exceeds its input limit")
+	}
 	candidates := make([]string, 0, len(arguments)+1)
 	if strings.TrimSpace(explicit) != "" {
 		candidates = append(candidates, strings.TrimSpace(explicit))
 	}
 	for _, argument := range arguments {
+		if len(argument) > maxPairingLinkBytes {
+			return "", fmt.Errorf("desktop activation exceeds its input limit")
+		}
 		trimmed := strings.TrimSpace(argument)
 		lower := strings.ToLower(trimmed)
 		if strings.HasPrefix(lower, "convenewire://") || strings.HasPrefix(lower, "agentroom://") {
@@ -254,7 +270,7 @@ func pairingLinkFromLaunch(explicit string, arguments []string) (string, error) 
 		return "", fmt.Errorf("desktop launch contains multiple Device pairing links")
 	}
 	if _, err := pairing.ParseSessionLink(candidates[0]); err != nil {
-		return "", err
+		return "", fmt.Errorf("desktop launch contains an invalid Device pairing link")
 	}
 	return candidates[0], nil
 }

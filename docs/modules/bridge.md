@@ -655,8 +655,11 @@ stops enrollment and Bridge work before terminating the process.
 Desktop primary/secondary arbitration must happen before Console construction
 or data-root ownership. A secondary launch forwards its validated pairing link
 or wake request to the original window and never starts another worker. A
-bounded in-memory activation pending window readiness prevents an early launch
-from being silently discarded. This does not relax the Console/CLI data-root
+bounded in-memory activation pending window readiness preserves events accepted
+by the transport. Windows uses bounded readiness waiting and acknowledgement.
+The retained macOS Wails notification transport has no acknowledgement before
+its native listener starts in `Run`; the application queue cannot recover an
+event lost inside that earlier dependency startup gap. This does not relax the Console/CLI data-root
 lock or introduce a second Bridge lifecycle manager. Native Windows activation
 evidence remains distinct from cross-compilation.
 

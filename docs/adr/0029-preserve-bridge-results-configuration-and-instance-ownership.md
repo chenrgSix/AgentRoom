@@ -40,14 +40,23 @@ operation and is not added here.
 Decide primary versus secondary desktop launch before constructing the Console,
 opening mutable Bridge state or starting a worker. Forward secondary activation
 only to the existing desktop instance, without weakening the data-root lock.
-Retain a bounded pending activation until the window is ready, including when
-the first process is still starting. Pairing input remains validated and is
+Retain a bounded pending activation accepted by the local transport until the
+window is ready. Windows waits a bounded time for the primary window and
+requires acknowledgement instead of silently succeeding on a lost send.
+Pairing input remains validated and is
 carried only through the existing local activation/WebView-fragment boundary,
 never logged or persisted as a desktop rendezvous credential.
 
 The Console remains the single Bridge lifecycle owner. Platform-specific
 activation plumbing is not another worker state machine. Keep the stable
 desktop application identity and CLI exclusive-lock behavior.
+
+Non-Windows platforms retain the pinned Wails transport. On macOS, Wails takes
+its instance lock in `application.New` but registers its native notification
+listener during `Run`; a notification in that intervening startup window has
+no acknowledgement. The application queue protects events delivered by Wails,
+not notifications Wails never received. Replacing that native transport is
+outside this repair; do not claim cross-platform simultaneous-start delivery.
 
 ## Compatibility and limits
 
