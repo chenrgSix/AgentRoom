@@ -587,6 +587,14 @@ online and offline/reconnect Runs, metrics and human attestations to one
 22-minute window. `QA-002`, `QA-028`, `QA-030`, `QA-035`, and `QA-036` are
 therefore closed without changing stable publication state.
 
+`QA-037` owns the separate stable `v0.4.1` publication graph. It may admit the
+physically accepted `v0.4.1-qa035.1` product source only while every intervening
+change remains documentation-only. The stable tag still requires its own exact
+main CI, empty non-prerelease Draft, protected native/OCI/22-asset workflow,
+stable-to-candidate Windows upgrade, independent pre-publication verification,
+Latest publication and anonymous public-download verification. Candidate
+physical evidence is not rewritten as stable-package execution.
+
 ## Dependencies
 
 All modules. Verification uses public contracts and avoids reaching through
