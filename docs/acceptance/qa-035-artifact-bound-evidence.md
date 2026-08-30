@@ -2,11 +2,11 @@
 
 ## Result
 
-Status: `ACTIVE`. The repository implementation, deterministic negative tests,
-and hosted native Windows previous-stable upgrade are complete. A packaged
-Central execution and fresh two-physical-machine schema-v4 record remain
-required before the task can be marked `DONE`; the hosted Windows result does
-not substitute a target-host Central lifecycle run or a two-machine record.
+Status: `DONE`. The repository implementation, deterministic negative tests,
+hosted native Windows previous-stable upgrade, target-host packaged Central
+execution and reviewed two-physical-machine schema-v4 record are complete.
+Hosted Windows evidence and physical evidence remain separately identified;
+neither is used as a substitute for the other.
 
 ## Closed code boundaries
 
@@ -72,10 +72,20 @@ not substitute a target-host Central lifecycle run or a two-machine record.
   independently downloaded SHA-256 is
   `72239c0cecb27a73ba01710be2f445293479aea75b476573015b5d9e00e5958d`.
 
-## Remaining admission evidence
+## Admission closure
 
-1. Install the exact candidate Central package and confirm its internal metrics
-   emit that Release and source commit.
-2. Perform and commit the fresh two-physical-machine schema-v4 record. That
-   separately closes `QA-002`, `QA-028`, and `QA-030` if every human attestation
-   also passes; `BRG-046` already has separate native and physical evidence.
+- The physical macOS arm64 Central upgraded from `v0.4.1-qa034.4` to the exact
+  `v0.4.1-qa035.1` Darwin arm64 archive. Controller `doctor` passed, and live
+  internal metrics emitted Release `v0.4.1-qa035.1` with source commit
+  `152892e59e90fe17799274009141b07714262378`.
+- Main CI run `33294027654` and protected Draft Release workflow run
+  `33294193123` completed successfully for that exact commit. The Draft remains
+  unpublished and is not represented as stable release admission.
+- The reviewed
+  [schema-v4 record](evidence/qa-002-20260830-schema-v4.md) binds the selected
+  Release installer and ZIP digests, safely inspected and running Windows EXE
+  digest, authenticated Bridge hello, Central build identity, two physical
+  hosts, same-Device offline/reconnect and online Runs, bounded metrics, and
+  every required human attestation. The verifier result is `PASS`.
+- That record separately closes `QA-002`, `QA-028`, and `QA-030`; `BRG-046`
+  retains its earlier native and physical console-suppression evidence.

@@ -1,12 +1,15 @@
 # QA-028 One-Install One-Device Onboarding Evidence
 
-Date: 2026-08-28.
+Date: 2026-08-28; completion update: 2026-08-30.
 
-Status: `BLOCKED` on fresh schema-v4 physical evidence. Deterministic, native
-package, public-download and lifecycle gates remain complete. The
-[schema-v3 evidence](evidence/qa-002-20260828.md) is retained as historical
-diagnostic evidence, but it did not bind its Runs, current connection heartbeat
-and metrics capture to the current packaged Bridge observation.
+Status: `DONE`. Deterministic, native package, public-download and lifecycle
+gates remain complete. The reviewed
+[schema-v4 evidence](evidence/qa-002-20260830-schema-v4.md) now binds one newly
+consumed pairing session, one current Device, two enabled managed Agents, the
+canonical `convenewire://` client entry, Runtime self-test, current connection,
+online Run and exact offline/reconnect Run to the same artifact-bound window.
+The [schema-v3 evidence](evidence/qa-002-20260828.md) remains historical
+diagnostic evidence only.
 
 ## Accepted deterministic behavior
 
@@ -177,12 +180,13 @@ schema-v4 record must prove current-build execution, live connection state, the
 installed canonical `convenewire://` launch, bounded metrics and explicit human
 review before these tasks return to `DONE`.
 
-## Replacement release
+## Schema-v4 closure
 
-The stable [`v0.4.0` release](../releases/v0.4.0.md) is the matching Central and
-Windows Bridge package set for the new capture. Its exact-source CI, Windows
-installer upgrade lifecycle, complete 22-asset matrix, stable Latest
-publication, and independent anonymous public download passed. `QA-028`
-remains `BLOCKED`: package readiness does not replace the fresh schema-v4 proof
-of one install, one consumed Device pairing, current connection, local Runtime
-self-test, online Run, exact offline/reconnect Run, and human review.
+The exact `v0.4.1-qa035.1` candidate at commit
+`152892e59e90fe17799274009141b07714262378` supplied the matching Central and
+Windows Bridge packages. The reviewed schema-v4 record proves one install, one
+consumed Device pairing, unchanged Device identity across restart, current
+connection and local Runtime self-test, one online Run, one queued
+offline/reconnect Run, and a path-free Workspace projection. That physical
+record closes the remaining `QA-028` admission boundary without changing the
+legacy Server Token, manual CA, or credential-copy compatibility boundaries.

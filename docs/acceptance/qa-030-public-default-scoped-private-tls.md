@@ -1,17 +1,19 @@
 # QA-030 Public-Default and Scoped-Private TLS
 
-Date: 2026-08-28
+Date: 2026-08-28; completion update: 2026-08-30
 
 Initial source commit: `17ae30ee2331ac37fb2dafeb7ee0fa2bd7e9f661`
 
 Current physical candidate commit:
 `1b24b0c55c7f70236a66d60fe16362c6e3213b3e`
 
-Status: `BLOCKED` on fresh schema-v4 physical evidence. Deterministic,
-exact-tag, public package and lifecycle gates remain complete. The
-[schema-v3 evidence](evidence/qa-002-20260828.md) is historical diagnostic
-evidence because it did not bind current-package execution and live connection
-state to the declared capture window or persist an explicit review receipt.
+Status: `DONE`. Deterministic public-default, exact-tag, package and lifecycle
+gates remain complete. The reviewed
+[schema-v4 evidence](evidence/qa-002-20260830-schema-v4.md) closes the physical
+`private_scoped_ca` alternative with current-package execution, live
+connection state, exact-origin scoped trust and an explicit review receipt.
+The [schema-v3 evidence](evidence/qa-002-20260828.md) remains historical
+diagnostic evidence only.
 
 ## Deterministic Matrix
 
@@ -199,16 +201,15 @@ boundary while fresh schema-v4 physical evidence, including the installed
 canonical `convenewire://` launch rather than legacy `agentroom://`
 compatibility, remains required for the scoped-private alternative.
 
-## Schema-v4 replacement release
+## Schema-v4 physical closure
 
-The stable [`v0.4.0` release](../releases/v0.4.0.md) is the exact matching
-package set for the replacement physical capture. Main CI and the protected
-Release workflow passed on commit
-`1a538a4bc50dab8567a73d7e2ec56a7c45e246b7`, including native Windows installer
-upgrade checks and the complete 22-asset verification before and after Draft
-upload. A separate anonymous public download passed the tagged verifier.
-
-This closes package readiness only. `QA-030` remains `BLOCKED` until the fresh
-schema-v4 record binds current-build execution, the canonical
-`convenewire://` launch, live connection and Run evidence, bounded metrics and
-reviewed no-OS-CA/no-TLS-bypass attestations to one capture window.
+The exact `v0.4.1-qa035.1` candidate at commit
+`152892e59e90fe17799274009141b07714262378` passed main CI run `33294027654`
+and protected Draft Release workflow run `33294193123`. The physical record
+binds that Central and Windows Bridge build to the canonical
+`convenewire://` launch and `private_scoped_ca` descriptor. The operator
+reviewed and confirmed that Windows received no OS CA import, application TLS
+verification was not bypassed, and no Server Token, Device credential, manual
+`.env`, or OpenSSL step was used. This completes the scoped-private half while
+the deterministic deployment matrix remains authority for the public-CA
+default and no-silent-fallback half.

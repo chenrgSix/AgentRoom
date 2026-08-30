@@ -94,9 +94,10 @@ human review receipt all satisfy one ordered time boundary no longer than 24
 hours. The claimed metrics time must also match the snapshot file time within
 five seconds. Ten focused evidence cases reject missing, stale, reordered or
 mismatched components, unsafe TLS claims and unexpected Runtime console
-windows. This closes the verifier defect, not the physical gate: `QA-002`,
-`QA-028`, and `QA-030` still require a fresh installed-Windows schema-v4 run;
-`BRG-046` has separate native and physical evidence.
+windows. This closed the verifier defect, not the physical gate: at that
+checkpoint `QA-002`, `QA-028`, and `QA-030` still required a fresh
+installed-Windows schema-v4 run, while `BRG-046` had separate native and
+physical evidence. The later 2026-08-30 record closes that physical gate.
 
 `QA-035` removes two remaining formatted-claim shortcuts from that capture.
 The verifier now hashes the exact versioned Windows installer itself, requires
@@ -115,12 +116,13 @@ representative owner configuration, identity and inbox files, upgrades once to
 the distinct candidate, and proves their hashes survive both upgrade and
 uninstall. A same-candidate double install is not upgrade evidence. The local
 implementation and hosted native path passed in exact-source main CI run
-`33287636198` and `v0.4.1-qa034.4` Release run `33287755768`. `QA-035` remains
-`ACTIVE` until that candidate's packaged Central is installed through the
-controller on a target host and exposes its exact build identity, and a fresh
-two-physical-machine schema-v4 record binds the installed artifacts to the
-observed processes; hosted OCI execution, a macOS test, or source inspection
-does not close those external gates.
+`33287636198` and `v0.4.1-qa034.4` Release run `33287755768`. At that checkpoint
+`QA-035` remained `ACTIVE` until a candidate's packaged Central was installed
+through the controller on a target host with exact build identity and a fresh
+two-physical-machine schema-v4 record bound the installed artifacts to the
+observed processes. The later `v0.4.1-qa035.1` target-host and physical record
+closed those external gates; hosted OCI execution, a macOS test, or source
+inspection alone still does not substitute for them.
 
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to
@@ -572,7 +574,18 @@ run `33287636198` and Release run `33287755768` passed on commit
 the 22-asset matrix. A separate anonymous download matched the public Windows
 installer to `SHA256SUMS`, while public Latest remained stable `v0.4.0`.
 Target-host Central execution and fresh two-physical-machine schema-v4 evidence
-remain owned by `QA-035` and `QA-036`.
+remain owned by `QA-035` and `QA-036` rather than being inferred from that
+hosted workflow.
+
+Those external gates later closed on exact `v0.4.1-qa035.1` commit
+`152892e59e90fe17799274009141b07714262378`. A packaged macOS arm64 Central
+reported the matching live build identity, native Windows CI retained the
+uncached Job Object process-tree result, and the reviewed
+[schema-v4 physical record](../acceptance/evidence/qa-002-20260830-schema-v4.md)
+bound the current Windows Bridge artifacts, authenticated hello, pairing,
+online and offline/reconnect Runs, metrics and human attestations to one
+22-minute window. `QA-002`, `QA-028`, `QA-030`, `QA-035`, and `QA-036` are
+therefore closed without changing stable publication state.
 
 ## Dependencies
 

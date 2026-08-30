@@ -15,12 +15,14 @@ Server remains authority for Team, Device, Agent, Task and Run state. Machine B
 remains authority for Codex login, executable, Workspace, local permissions,
 Runtime self-test and its exact-origin Bridge trust store.
 
-Status: `BLOCKED` on the next artifact-bound Release and a fresh schema-v4
-physical record. The
+Status: `DONE`. The reviewed
+[2026-08-30 schema-v4 physical record](evidence/qa-002-20260830-schema-v4.md)
+binds two distinct physical hosts, the exact `v0.4.1-qa035.1` Central and
+Windows Bridge artifacts, current authenticated Bridge observation, bounded
+heartbeat and metrics, online and offline/reconnect Runs, and the explicit
+human review receipt. The older
 [schema-v3 physical evidence](evidence/qa-002-20260828.md) remains a sanitized
-historical record, but its verifier did not prove that the selected Runs,
-heartbeat and metrics belonged to the current packaged Bridge connection or
-persist an explicit human review receipt. It therefore cannot close this gate.
+historical diagnostic only.
 
 ## Preconditions
 
@@ -252,24 +254,21 @@ Markdown embeds that review receipt and is then committed without modification.
 The [2026-08-28 schema-v3 record](evidence/qa-002-20260828.md) is retained as
 historical diagnostic evidence. A post-completion audit demonstrated that its
 accepted UTC window could be moved away from the persisted pairing and Run
-activity without causing the verifier to fail. `QA-002`, `QA-028`, and
-`QA-030` therefore remain blocked until a schema-v4 record binds every selected
-observation to one bounded window and carries an explicit human review receipt.
-A run that installs a Caddy root into machine B's OS trust store or manually
-enters a leaf fingerprint is always partial/advanced compatibility evidence,
-even if every application request succeeds.
+activity without causing the verifier to fail. The replacement
+[schema-v4 record](evidence/qa-002-20260830-schema-v4.md) closes that gap: its
+22-minute window contains pairing, current-build hello, both Runs, heartbeat,
+metrics and review, and the verifier reports `PASS`. A run that installs a
+Caddy root into machine B's OS trust store or manually enters a leaf
+fingerprint remains partial/advanced compatibility evidence even if every
+application request succeeds.
 
 ## Current exact release
 
 [`v0.4.0`](../releases/v0.4.0.md) remains the current stable historical
-baseline. Its exact-source main CI, native Windows installer lifecycle, closed
-22-asset Release workflow, stable Latest publication, and independent
-anonymous public download passed, but it predates the `QA-035` computed
-artifact and `convenewire_build_info` binding. It therefore cannot satisfy the
-strengthened schema-v4 verifier.
-
-The replacement physical run waits for a later exact Release that contains
-this contract. Use that one matching Release on both machines and a newly
-consumed pairing. The record must observe the installed canonical
-`convenewire://` handler; opening a legacy `agentroom://` compatibility link
-cannot satisfy schema-v4 acceptance.
+baseline. The exact schema-v4 acceptance candidate is the unpublished Draft
+prerelease `v0.4.1-qa035.1` at commit
+`152892e59e90fe17799274009141b07714262378`. Main CI run `33294027654` and
+Release workflow run `33294193123` passed on that commit. The physical record
+uses the matching Central archive, Windows installer and desktop ZIP, and the
+installed canonical `convenewire://` entry; it does not treat the legacy
+`agentroom://` compatibility handler as acceptance evidence.

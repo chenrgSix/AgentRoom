@@ -49,6 +49,7 @@ link required by schema-v4 physical acceptance.
   gates pass from the same source change.
 
 The checked-in behavior is complete. It does not retrofit immutable
-`v0.4.1-qa034.4` assets; a later exact-tag Windows package and the fresh
-schema-v4 two-physical-machine record remain release/acceptance evidence owned
-by `QA-002`, `QA-035` and `QA-036`.
+`v0.4.1-qa034.4` assets. The later exact `v0.4.1-qa035.1` Windows package and
+[schema-v4 two-physical-machine record](evidence/qa-002-20260830-schema-v4.md)
+supply the distinct release and acceptance evidence owned by `QA-002`,
+`QA-035` and `QA-036`.

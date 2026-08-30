@@ -486,9 +486,11 @@ in `docs/TASKS.md`.
 
 The `BRG-051`/`BRG-052` local evidence is recorded in
 [Bridge runtime hardening acceptance](../acceptance/brg-051-052-bridge-runtime-hardening.md).
-Native Windows execution of the Job Object process-tree regression and fresh
-two-machine acceptance remain `QA-036` evidence; cross-compilation alone is not
-reported as that platform result.
+Native Windows CI run `33292642155` executed the uncached Job Object
+parent/child/grandchild regression, and the later reviewed
+[schema-v4 physical record](../acceptance/evidence/qa-002-20260830-schema-v4.md)
+closed the distinct two-machine gate. `QA-036` records both results separately;
+cross-compilation alone is not reported as native platform evidence.
 
 `BRG-027` adds durable `run.activity` envelopes without making local execution
 internals public. The Runtime executor persists each redacted activity before

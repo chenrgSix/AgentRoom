@@ -101,7 +101,8 @@ executed on Windows.
   `TestConfigureWindowsRuntimeCommandSuppressesConsoleWindow` and
   `TestWindowsRuntimeJobTerminatesGrandchild`; the Job Object execution gate is
   closed without relying on a restored Go test result.
-- Fresh `QA-002`, `QA-028`, and `QA-030` two-machine evidence remains a
-  separate owner-authorized acceptance run; `BRG-046` has its own native and
-  physical closure record.
+- The later reviewed
+  [schema-v4 record](evidence/qa-002-20260830-schema-v4.md) closes the separate
+  owner-authorized `QA-002`, `QA-028`, and `QA-030` two-machine gate;
+  `BRG-046` retains its own native and physical closure record.
 - Release creation, tagging and publication remain outside this task.

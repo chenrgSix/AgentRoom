@@ -125,11 +125,12 @@ bundle was rebuilt and the complete gate then passed.
   all four schema-v2 Central archives consumed their matching verified
   architecture artifact before the closed 22-asset upload.
 
-## Remaining admission evidence
+## Later admission closure
 
-1. `QA-035` must install and execute a candidate Central archive and match its
-   live build identity; the hosted native Windows upgrade gate passed
-   separately in Release run `33287755768`.
-2. `QA-036` still depends on the remaining target-host and physical results,
-   native Windows Job Object
-   execution, and the fresh two-physical-machine schema-v4 record.
+1. `QA-035` later installed and executed the exact `v0.4.1-qa035.1` Central
+   archive and matched its live build identity; the hosted native Windows
+   upgrade gate remains separately attributed to Release run `33287755768`.
+2. `QA-036` separately records native Windows Job Object execution and the
+   reviewed [two-physical-machine schema-v4 record](evidence/qa-002-20260830-schema-v4.md).
+   Those results close the external admission gates without changing this
+   task's immutable-image authority boundary.
