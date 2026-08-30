@@ -1,8 +1,9 @@
-import React, { type FormEvent } from "react";
+import React, { type FormEvent, useEffect, useRef, useState } from "react";
 
 import { BridgeConnectionPanel } from "../bridge/BridgeConnectionPanel.js";
 import { DevicePairingPanel } from "../device/DevicePairingPanel.js";
 import { AgentProvisioningPanel } from "./AgentProvisioningPanel.js";
+import { AgentSetupChoices, type AgentSetupTarget } from "./AgentSetupChoices.js";
 import { HostedAgentPanel } from "./HostedAgentPanel.js";
 import { type Locale, type TranslationKey, translate } from "../../i18n.js";
 import type { Agent, ConnectionMode, Device, Room } from "../../models.js";
@@ -147,6 +148,7 @@ interface AgentWorkspaceProps {
   readyAgents: number;
   rooms: Room[];
   setupOutput: string | null;
+  setupTarget?: AgentSetupTarget | null;
   sessionToken: string | undefined;
   teamId: string;
   onAgentNameChange: (value: string) => void;
@@ -159,6 +161,8 @@ interface AgentWorkspaceProps {
   onJoinCodeChange: (value: string) => void;
   onManualAgentNameChange: (value: string) => void;
   onAgentChanged: (agent: Agent) => void;
+  onSetupTargetChange?: (target: AgentSetupTarget) => void;
+  onOpenHostedRoom?: (roomId: string) => void;
   onRevokeDevice: (device: Device) => void | Promise<void>;
   onSetAgentEnabled: (agent: Agent, enabled: boolean) => void | Promise<void>;
 }
@@ -188,15 +192,44 @@ export function AgentWorkspace({
   onJoinCodeChange,
   onManualAgentNameChange,
   onAgentChanged,
+  onSetupTargetChange,
+  onOpenHostedRoom,
   onRevokeDevice,
   onSetAgentEnabled,
   readyAgents,
   rooms,
   sessionToken,
   setupOutput,
+  setupTarget,
   teamId
 }: AgentWorkspaceProps) {
   const t = (key: TranslationKey) => translate(locale, key);
+  const [selectedTarget, setSelectedTarget] = useState<AgentSetupTarget | null>(null);
+  const hostedTarget = useRef<HTMLDivElement>(null);
+  const localTarget = useRef<HTMLDivElement>(null);
+  const demoTarget = useRef<HTMLDivElement>(null);
+  const activeTarget = setupTarget ?? selectedTarget;
+
+  const focusTarget = (target: AgentSetupTarget): void => {
+    const destination = target === "hosted" ? hostedTarget.current
+      : target === "local" ? localTarget.current : demoTarget.current;
+    destination?.focus({ preventScroll: true });
+    destination?.scrollIntoView?.({ block: "start", behavior: "auto" });
+  };
+
+  useEffect(() => {
+    if (activeTarget) focusTarget(activeTarget);
+  }, [activeTarget]);
+
+  const selectSetup = (target: AgentSetupTarget): void => {
+    if (target === "hosted" && !currentMemberIsOwner) return;
+    if (target !== "hosted") {
+      onConnectionModeChange(target === "demo" ? "demo" : "managed");
+    }
+    setSelectedTarget(target);
+    onSetupTargetChange?.(target);
+    focusTarget(target);
+  };
 
   return (
     <section className="management-workspace" aria-label={t("agentManagement")}>
@@ -206,10 +239,16 @@ export function AgentWorkspace({
           <h3>{t("manageRuntimes")}</h3>
           <p>{t("manageDescription")}</p>
         </div>
-        <button className="primary-action" onClick={() => onConnectionModeChange("managed")} type="button">
+        <button className="primary-action" onClick={() => selectSetup(currentMemberIsOwner ? "hosted" : "local")} type="button">
           {t("connectAgent")}
         </button>
       </div>
+
+      <AgentSetupChoices
+        currentMemberIsOwner={currentMemberIsOwner}
+        locale={locale}
+        onSelect={selectSetup}
+      />
 
       <div className="metric-grid" aria-label={t("agentStatusSummary")}>
         <article className="metric-card"><strong>{agents.length}</strong><span>{t("totalAgents")}</span></article>
@@ -272,47 +311,58 @@ export function AgentWorkspace({
           )}
         </section>
 
-        <BridgeConnectionPanel
-          agentName={agentName}
-          busy={busy}
-          connectionMode={connectionMode}
-          deviceName={deviceName}
-          joinCode={joinCode}
-          locale={locale}
-          manualAgentName={manualAgentName}
-          onAgentNameChange={onAgentNameChange}
-          onApproveBridgeJoin={onApproveBridgeJoin}
-          onConnectionModeChange={onConnectionModeChange}
-          onCreateBridgeInvite={onCreateBridgeInvite}
-          onCreateFakeAgent={onCreateFakeAgent}
-          onCreateManualAgent={onCreateManualAgent}
-          onDeviceNameChange={onDeviceNameChange}
-          onJoinCodeChange={onJoinCodeChange}
-          onManualAgentNameChange={onManualAgentNameChange}
-          setupOutput={setupOutput}
-        />
+        <div className="agent-setup-destination" ref={demoTarget} tabIndex={-1}>
+          <BridgeConnectionPanel
+            agentName={agentName}
+            busy={busy}
+            connectionMode={connectionMode}
+            deviceName={deviceName}
+            joinCode={joinCode}
+            locale={locale}
+            manualAgentName={manualAgentName}
+            onAgentNameChange={onAgentNameChange}
+            onApproveBridgeJoin={onApproveBridgeJoin}
+            onConnectionModeChange={onConnectionModeChange}
+            onCreateBridgeInvite={onCreateBridgeInvite}
+            onCreateFakeAgent={onCreateFakeAgent}
+            onCreateManualAgent={onCreateManualAgent}
+            onDeviceNameChange={onDeviceNameChange}
+            onJoinCodeChange={onJoinCodeChange}
+            onManualAgentNameChange={onManualAgentNameChange}
+            setupOutput={setupOutput}
+          />
+        </div>
       </div>
 
       {currentMemberIsOwner && (
-        <HostedAgentPanel
-          agents={agents}
-          currentMemberIsOwner={currentMemberIsOwner}
-          key={teamId}
-          locale={locale}
-          onAgentChanged={onAgentChanged}
-          rooms={rooms}
-          sessionToken={sessionToken}
-          teamId={teamId}
-        />
+        <div className="agent-setup-destination" ref={hostedTarget} tabIndex={-1}>
+          <HostedAgentPanel
+            agents={agents}
+            currentMemberIsOwner={currentMemberIsOwner}
+            key={teamId}
+            locale={locale}
+            onAgentChanged={onAgentChanged}
+            onOpenRoom={onOpenHostedRoom}
+            rooms={rooms}
+            sessionToken={sessionToken}
+            teamId={teamId}
+          />
+        </div>
       )}
 
-      <DevicePairingPanel
-        currentMemberIsOwner={currentMemberIsOwner}
-        currentMemberId={currentMemberId}
-        locale={locale}
-        sessionToken={sessionToken}
-        teamId={teamId}
-      />
+      <div className="agent-setup-destination" ref={localTarget} tabIndex={-1}>
+        {currentMemberIsOwner ? (
+          <DevicePairingPanel
+            currentMemberIsOwner={currentMemberIsOwner}
+            currentMemberId={currentMemberId}
+            locale={locale}
+            sessionToken={sessionToken}
+            teamId={teamId}
+          />
+        ) : (
+          <p className="agent-setup-member-help">{t("setupLocalMemberHelp")}</p>
+        )}
+      </div>
 
       <AgentProvisioningPanel
         agents={agents}

@@ -23,9 +23,29 @@ interface HostedAgentPanelProps {
   sessionToken: string | undefined;
   teamId: string;
   onAgentChanged?: (agent: Agent) => void;
+  onOpenRoom?: ((roomId: string) => void) | undefined;
 }
 
 const provider = "openai_responses" as const;
+
+const failureHelpKeys: Readonly<Record<string, TranslationKey>> = {
+  HOSTED_PROVIDER_AUTHENTICATION_FAILED: "hostedFailureAuthentication",
+  HOSTED_PROVIDER_RATE_LIMITED: "hostedFailureRateLimit",
+  HOSTED_PROVIDER_UNAVAILABLE: "hostedFailureUnavailable",
+  HOSTED_PROVIDER_TRANSPORT_UNKNOWN: "hostedFailureUnavailable",
+  HOSTED_PROVIDER_REQUEST_REJECTED: "hostedFailureModel",
+  HOSTED_CONFIGURATION_INVALID: "hostedFailureModel",
+  HOSTED_PROVIDER_PROBE_TIMEOUT: "hostedFailureTimeout",
+  HOSTED_PROVIDER_PROBE_CANCELED: "hostedFailureTimeout",
+  HOSTED_REQUEST_ABORTED: "hostedFailureTimeout"
+};
+
+export function hostedFailureHelp(code: string | null | undefined, locale: Locale): string {
+  const key = code && Object.hasOwn(failureHelpKeys, code)
+    ? failureHelpKeys[code]!
+    : "hostedFailureUnknown";
+  return translate(locale, key);
+}
 
 const hostedPresences = new Set<HostedAgentConfiguration["presence"]>([
   "ready",
@@ -87,7 +107,7 @@ function TestObservation({
   if (!observation) return <span>{t("hostedNoTest")}</span>;
   const observedAt = observationTime(observation.observedAt, locale);
   const failureCode = observation.failureCode &&
-    /^[A-Z][A-Z0-9_]{0,79}$/u.test(observation.failureCode)
+    Object.hasOwn(failureHelpKeys, observation.failureCode)
     ? observation.failureCode
     : null;
   return (
@@ -97,6 +117,11 @@ function TestObservation({
           ? t("hostedTestSucceeded")
           : t("hostedTestFailed")}
       </strong>
+      {observation.status === "failed" && (
+        <span className="hosted-failure-help">
+          {hostedFailureHelp(observation.failureCode, locale)}
+        </span>
+      )}
       {failureCode && <code>{failureCode}</code>}
       {observedAt && (
         <time dateTime={observation.observedAt}>{observedAt}</time>
@@ -110,6 +135,7 @@ export function HostedAgentPanel({
   currentMemberIsOwner,
   locale,
   onAgentChanged,
+  onOpenRoom,
   rooms,
   sessionToken,
   teamId
@@ -137,10 +163,26 @@ export function HostedAgentPanel({
   activeScope.current = scopeToken;
   const loadedConfigurationScope = useRef<typeof scopeToken | null>(null);
 
-  const activeRooms = rooms.filter(({ archivedAt }) => !archivedAt);
+  const activeRooms = rooms.filter((room) => room.teamId === teamId && !room.archivedAt);
+  const selectedActiveRoomIds = selectedRoomIds.filter((roomId) =>
+    activeRooms.some((room) => room.roomId === roomId)
+  );
 
   useEffect(() => () => {
     if (activeScope.current === scopeToken) activeScope.current = null;
+  }, [scopeToken]);
+
+  useEffect(() => {
+    setApiKey("");
+    setProfileApiKeys({});
+    setConnectionTest(null);
+    setName("");
+    setRole("");
+    setModel("");
+    setSelectedRoomIds([]);
+    setBusyAction(null);
+    setNotice(null);
+    setError(null);
   }, [scopeToken]);
 
   useEffect(() => {
@@ -176,6 +218,7 @@ export function HostedAgentPanel({
             ...configuration,
             enabled: refreshed.enabled,
             presence: refreshed.presence,
+            roomIds: refreshed.roomIds,
             configurationLocked: refreshed.configurationLocked,
             hasActiveWork: refreshed.hasActiveWork
           };
@@ -262,7 +305,7 @@ export function HostedAgentPanel({
   };
 
   const testConnection = async (): Promise<void> => {
-    if (!model.trim() || !apiKey) return;
+    if (busyAction !== null || !model.trim() || !apiKey) return;
     const actionScope = scopeToken;
     setBusyAction("connection-test");
     setError(null);
@@ -295,7 +338,7 @@ export function HostedAgentPanel({
 
   const createHostedAgent = async (event: FormEvent): Promise<void> => {
     event.preventDefault();
-    if (!name.trim() || !role.trim() || !model.trim() || !apiKey) return;
+    if (busyAction !== null || !name.trim() || !role.trim() || !model.trim() || !apiKey) return;
     const actionScope = scopeToken;
     setBusyAction("create");
     setError(null);
@@ -312,7 +355,7 @@ export function HostedAgentPanel({
             provider,
             model: model.trim(),
             apiKey,
-            roomIds: selectedRoomIds
+            roomIds: selectedActiveRoomIds
           })
         },
         sessionToken
@@ -324,8 +367,22 @@ export function HostedAgentPanel({
       setModel("");
       setSelectedRoomIds([]);
       setConnectionTest(null);
+      setNotice(t(created.roomIds.length > 0
+        ? "hostedCreatedReady"
+        : "hostedCreatedWithoutRoom"));
     } catch {
-      if (scopeIsActive(actionScope)) failSafely();
+      if (scopeIsActive(actionScope)) {
+        setApiKey("");
+        try {
+          await refreshConfiguration("", actionScope);
+        } catch {
+          // Preserve the safe failure notice even if the read-only refresh fails.
+        }
+        if (scopeIsActive(actionScope)) {
+          setNotice(null);
+          setError(t("hostedCreateFailed"));
+        }
+      }
     } finally {
       if (scopeIsActive(actionScope)) {
         setApiKey("");
@@ -552,13 +609,13 @@ export function HostedAgentPanel({
           <legend>{t("hostedRooms")}</legend>
           <small>{t("hostedRoomsHelp")}</small>
           {activeRooms.length === 0 ? (
-            <p>{t("hostedNoRooms")}</p>
+            <p>{t("hostedNoAvailableRooms")}</p>
           ) : (
             <div>
               {activeRooms.map((room) => (
                 <label key={room.roomId}>
                   <input
-                    checked={selectedRoomIds.includes(room.roomId)}
+                    checked={selectedActiveRoomIds.includes(room.roomId)}
                     onChange={(event) => setSelectedRoomIds((current) =>
                       event.target.checked
                         ? [...current, room.roomId]
@@ -570,6 +627,9 @@ export function HostedAgentPanel({
                 </label>
               ))}
             </div>
+          )}
+          {activeRooms.length > 0 && selectedActiveRoomIds.length === 0 && (
+            <p className="hosted-room-guidance">{t("hostedNoRoomWarning")}</p>
           )}
         </fieldset>
 
@@ -584,18 +644,25 @@ export function HostedAgentPanel({
           />
           <small>{t("hostedApiKeyHelp")}</small>
         </label>
+        <p className="hosted-submit-help">{t("hostedCreateHelp")}</p>
         <div className="hosted-form-actions">
-          <button
-            disabled={busyAction !== null || !model.trim() || !apiKey}
-            onClick={() => void testConnection()}
-            type="button"
-          >
-            {busyAction === "connection-test" ? t("hostedTesting") : t("hostedTestConnection")}
-          </button>
           <button disabled={busyAction !== null} type="submit">
             {busyAction === "create" ? t("hostedCreating") : t("hostedCreate")}
           </button>
         </div>
+        <details className="hosted-advanced-test">
+          <summary>{t("hostedAdvancedTest")}</summary>
+          <p>{t("hostedAdvancedTestHelp")}</p>
+          <div className="hosted-form-actions">
+            <button
+              disabled={busyAction !== null || !model.trim() || !apiKey}
+              onClick={() => void testConnection()}
+              type="button"
+            >
+              {busyAction === "connection-test" ? t("hostedTesting") : t("hostedTestConnection")}
+            </button>
+          </div>
+        </details>
         {connectionTest && (
           <div className="hosted-connection-observation">
             <span>{t("hostedLatestTest")}</span>
@@ -619,6 +686,9 @@ export function HostedAgentPanel({
             const revokeAction = `revoke:${configuration.agentId}`;
             const enabledAction = `enabled:${configuration.agentId}`;
             const profileLocked = configuration.configurationLocked;
+            const authorizedRooms = activeRooms.filter((room) =>
+              configuration.roomIds.includes(room.roomId)
+            );
             return (
               <article className="hosted-profile-card" key={configuration.agentId}>
                 <header>
@@ -637,6 +707,12 @@ export function HostedAgentPanel({
                 <dl className="hosted-profile-facts">
                   <div><dt>{t("hostedProvider")}</dt><dd>OpenAI Responses API</dd></div>
                   <div><dt>{t("hostedModel")}</dt><dd>{configuration.model}</dd></div>
+                  <div>
+                    <dt>{t("hostedRooms")}</dt>
+                    <dd>{authorizedRooms.length > 0
+                      ? authorizedRooms.map((room) => `# ${room.name}`).join(", ")
+                      : t("hostedNoRooms")}</dd>
+                  </div>
                   <div><dt>{t("hostedProfileRevision")}</dt><dd>{configuration.profileRevision}</dd></div>
                   <div>
                     <dt>{t("hostedCredential")}</dt>
@@ -654,6 +730,22 @@ export function HostedAgentPanel({
                     <dd><TestObservation locale={locale} observation={configuration.latestTest} /></dd>
                   </div>
                 </dl>
+
+                {authorizedRooms.length === 0 ? (
+                  <p className="hosted-room-guidance">{t("hostedRoomSetupHelp")}</p>
+                ) : onOpenRoom && (
+                  <div className="hosted-room-links">
+                    {authorizedRooms.map((room) => (
+                      <button
+                        key={room.roomId}
+                        onClick={() => onOpenRoom(room.roomId)}
+                        type="button"
+                      >
+                        {t("hostedOpenRoom")} · # {room.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {profileLocked && (
                   <p className="hosted-profile-fence" role="status">

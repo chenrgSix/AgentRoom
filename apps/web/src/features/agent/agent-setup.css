@@ -1,0 +1,42 @@
+.agent-setup-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; min-width: 0; text-align: left; }
+.agent-setup-choice { display: flex; flex-direction: column; min-width: 0; padding: 20px; border: 1px solid #3d4833; border-radius: 14px; background: #1b2117; }
+.agent-setup-choice.hosted { border-color: #6f8550; background: linear-gradient(145deg, #29351f, #1b2117); }
+.agent-setup-number { color: #bed587; font-size: 12px; font-weight: 800; letter-spacing: .1em; }
+.agent-setup-choice h4 { margin: 14px 0 8px; color: #e6eedb; font-size: 16px; line-height: 1.4; }
+.agent-setup-choice > p { margin: 0 0 10px; color: #b3bea7; font-size: 13px; line-height: 1.65; }
+.agent-setup-choice > small { display: block; margin-bottom: 18px; color: #a0ac94; font-size: 12px; line-height: 1.6; }
+.agent-setup-choice > .agent-setup-restriction { color: #d9c788; font-size: 12px; }
+.agent-setup-choice > button, .hosted-room-links button { align-self: flex-start; margin-top: auto; padding: 9px 12px; border: 1px solid #708345; border-radius: 8px; background: #28341e; color: #d5e9aa; font-size: 12px; font-weight: 750; cursor: pointer; }
+.agent-setup-choice.hosted > button { background: #c3df70; color: #171a12; }
+.agent-setup-choice > button:disabled { cursor: default; opacity: .55; }
+.agent-setup-choice > button:focus-visible, .hosted-room-links button:focus-visible, .hosted-advanced-test summary:focus-visible { outline: 2px solid #c3df70; outline-offset: 4px; }
+.agent-setup-destination { min-width: 0; scroll-margin-block: 20px; }
+.agent-setup-destination:focus { outline: 2px solid #8ea650; outline-offset: 5px; border-radius: 16px; }
+.agent-setup-member-help { padding: 18px; border: 1px solid #4d593f; border-radius: 12px; font-size: 13px; line-height: 1.7; }
+.hosted-agent-panel .hosted-agent-intro, .hosted-agent-panel .hosted-agent-boundary { font-size: 12px; }
+.hosted-agent-panel .hosted-create-fields label, .hosted-agent-panel .hosted-key-field, .hosted-agent-panel .hosted-profile-form label { font-size: 12px; }
+.hosted-agent-panel .hosted-create-fields input, .hosted-agent-panel .hosted-key-field input, .hosted-agent-panel .hosted-profile-form input { font-size: 13px; }
+.hosted-submit-help, .hosted-advanced-test p, .hosted-room-guidance { margin: 0; color: #a4af99; font-size: 12px; line-height: 1.6; }
+.hosted-agent-panel .hosted-room-picker > small, .hosted-agent-panel .hosted-key-field small, .hosted-agent-panel .hosted-profile-form label small, .hosted-agent-panel .hosted-room-picker label { font-size: 12px; }
+.hosted-advanced-test { padding-top: 4px; color: #a4af99; font-size: 12px; }
+.hosted-advanced-test summary { width: fit-content; cursor: pointer; }
+.hosted-advanced-test p { margin-block: 10px; }
+.hosted-agent-panel .hosted-advanced-test .hosted-form-actions button { background: #252d1e; color: #bdd77d; }
+.hosted-agent-panel .hosted-form-actions button, .hosted-agent-panel .hosted-profile-actions button { font-size: 12px; }
+.hosted-room-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.hosted-room-links button { max-width: 100%; overflow-wrap: anywhere; }
+.hosted-test-observation .hosted-failure-help { flex-basis: 100%; font-size: 12px; line-height: 1.55; }
+.hosted-agent-panel .hosted-feedback { font-size: 12px; }
+:root[data-theme="light"] .agent-setup-choice { border-color: #ccd7c0; background: #f5f8ef; }
+:root[data-theme="light"] .agent-setup-choice.hosted { border-color: #a3b878; background: linear-gradient(145deg, #edf5de, #f8faf3); }
+:root[data-theme="light"] .agent-setup-number { color: #5a7330; }
+:root[data-theme="light"] .agent-setup-choice h4 { color: #2d3a23; }
+:root[data-theme="light"] .agent-setup-choice > p, :root[data-theme="light"] .agent-setup-choice > small, :root[data-theme="light"] .hosted-submit-help, :root[data-theme="light"] .hosted-advanced-test, :root[data-theme="light"] .hosted-advanced-test p, :root[data-theme="light"] .hosted-room-guidance { color: #5c6d4f; }
+:root[data-theme="light"] .agent-setup-choice > .agent-setup-restriction { color: #806616; }
+:root[data-theme="light"] .agent-setup-choice > button, :root[data-theme="light"] .hosted-room-links button { background: #e7f0d8; color: #3c5323; }
+:root[data-theme="light"] .agent-setup-choice.hosted > button { background: #c3df70; color: #253519; }
+:root[data-theme="light"] .hosted-agent-panel .hosted-advanced-test button { background: #eef3e5; color: #526a34; }
+@media (max-width: 900px) {
+  .agent-setup-choices { grid-template-columns: minmax(0, 1fr); }
+  .agent-setup-choice { padding: 16px; }
+}

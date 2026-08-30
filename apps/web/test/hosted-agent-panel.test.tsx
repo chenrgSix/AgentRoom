@@ -6,7 +6,7 @@ import { JSDOM } from "jsdom";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 
-import { HostedAgentPanel } from "../src/features/agent/HostedAgentPanel.js";
+import { HostedAgentPanel, hostedFailureHelp } from "../src/features/agent/HostedAgentPanel.js";
 import {
   integrationLabel,
   presenceHelp
@@ -177,18 +177,18 @@ test("creation keeps Rooms explicit and clears API keys after failure and succes
       />
     );
     const page = within(dom.window.document.body);
-    await page.findByText("尚未配置中央 Hosted Agent。");
-    const createButton = page.getByRole("button", { name: "创建 Hosted Agent" });
+    await page.findByText("尚未配置中央 Agent；这是可选功能，不影响其他 Agent。");
+    const createButton = page.getByRole("button", { name: "验证并创建" });
     const form = createButton.closest("form")!;
     const create = within(form);
     const roomCheckbox = create.getByRole("checkbox", { name: "# general" }) as HTMLInputElement;
     assert.equal(roomCheckbox.checked, false);
     assert.equal(create.queryByRole("checkbox", { name: "# archived" }), null);
 
-    fireEvent.change(create.getByLabelText("Hosted Agent 名称"), {
+    fireEvent.change(create.getByLabelText("Agent 名称"), {
       target: { value: "Central Reviewer" }
     });
-    fireEvent.change(create.getByLabelText("Hosted Agent 角色"), {
+    fireEvent.change(create.getByLabelText("Agent 角色"), {
       target: { value: "Reviewer" }
     });
     fireEvent.change(create.getByLabelText("模型"), {
@@ -196,6 +196,7 @@ test("creation keeps Rooms explicit and clears API keys after failure and succes
     });
     const apiKey = create.getByLabelText(/模型 API Key/u) as HTMLInputElement;
     fireEvent.change(apiKey, { target: { value: "sk-failed-browser-secret" } });
+    fireEvent.click(create.getByText("只测试连接（可选）"));
     fireEvent.click(create.getByRole("button", { name: "测试连接" }));
     await page.findByRole("alert");
     await waitFor(() => assert.equal(apiKey.value, ""));
@@ -271,13 +272,13 @@ test("late Hosted mutations cannot project an Agent into a different Team", asyn
       />
     );
     const page = within(dom.window.document.body);
-    await page.findByText("尚未配置中央 Hosted Agent。");
-    const createButton = page.getByRole("button", { name: "创建 Hosted Agent" });
+    await page.findByText("尚未配置中央 Agent；这是可选功能，不影响其他 Agent。");
+    const createButton = page.getByRole("button", { name: "验证并创建" });
     const create = within(createButton.closest("form")!);
-    fireEvent.change(create.getByLabelText("Hosted Agent 名称"), {
+    fireEvent.change(create.getByLabelText("Agent 名称"), {
       target: { value: "Late Team A Agent" }
     });
-    fireEvent.change(create.getByLabelText("Hosted Agent 角色"), {
+    fireEvent.change(create.getByLabelText("Agent 角色"), {
       target: { value: "Reviewer" }
     });
     fireEvent.change(create.getByLabelText("模型"), {
@@ -314,6 +315,155 @@ test("late Hosted mutations cannot project an Agent into a different Team", asyn
     });
     assert.equal(changed.length, 0);
     assert.equal(page.queryByText("Late Team A Agent"), null);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("validate-and-create needs one request and only links explicitly authorized current-Team Rooms", async () => {
+  const dom = installDom();
+  const requests: RequestRecord[] = [];
+  const openedRooms: string[] = [];
+  const foreignRoom: Room = { ...rooms[0]!, roomId: "room_foreign", teamId: "team_foreign", name: "private-other-team" };
+  const unrelatedRoom: Room = { ...rooms[0]!, roomId: "room_unselected", name: "unselected" };
+  const availableRooms = [...rooms, foreignRoom, unrelatedRoom];
+  globalThis.fetch = async (input, init = {}) => {
+    const path = typeof input === "string" ? input : input.url;
+    const method = init.method ?? "GET";
+    const body = typeof init.body === "string" ? JSON.parse(init.body) as unknown : undefined;
+    requests.push({ method, path, ...(body === undefined ? {} : { body }) });
+    if (method === "GET") return jsonResponse([]);
+    if (path === `/api/teams/${teamId}/hosted-agents`) return jsonResponse(configuration());
+    throw new Error("A separate connection test must not be sent during creation");
+  };
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(
+      <HostedAgentPanel agents={[]} currentMemberIsOwner locale="zh-CN" onOpenRoom={(roomId) => openedRooms.push(roomId)} rooms={availableRooms} sessionToken="session_owner" teamId={teamId} />
+    );
+    const page = within(dom.window.document.body);
+    await page.findByText(/尚未配置中央 Agent/u);
+    const form = page.getByRole("button", { name: "验证并创建" }).closest("form")!;
+    const create = within(form);
+    assert.ok(create.queryByRole("checkbox", { name: "# private-other-team" }) === null);
+    assert.ok(create.queryByRole("checkbox", { name: "# archived" }) === null);
+    assert.equal(form.querySelector("details")?.open, false);
+    assert.match(create.getByText(/创建时会自动验证模型连接/u).textContent ?? "", /不需要先单独测试/u);
+    fireEvent.change(create.getByLabelText("Agent 名称"), { target: { value: "Central Reviewer" } });
+    fireEvent.change(create.getByLabelText("Agent 角色"), { target: { value: "Reviewer" } });
+    fireEvent.change(create.getByLabelText("模型"), { target: { value: "gpt-5.4" } });
+    fireEvent.click(create.getByRole("checkbox", { name: "# general" }));
+    const key = create.getByLabelText(/模型 API Key/u) as HTMLInputElement;
+    fireEvent.change(key, { target: { value: "sk-single-create-secret" } });
+    fireEvent.submit(form);
+    const roomLink = await page.findByRole("button", { name: "进入房间对话 · # general" });
+    await waitFor(() => assert.equal(key.value, ""));
+    assert.deepEqual(openedRooms, []);
+    fireEvent.click(roomLink);
+    assert.deepEqual(openedRooms, [rooms[0]!.roomId]);
+    assert.equal(page.queryByRole("button", { name: /进入房间对话 · # unselected/u }), null);
+    const posts = requests.filter(({ method }) => method === "POST");
+    assert.equal(posts.length, 1);
+    assert.deepEqual((posts[0]!.body as { roomIds: string[] }).roomIds, [rooms[0]!.roomId]);
+    assert.doesNotMatch(page.getByText(/Agent 已创建。进入已授权的房间/u).textContent ?? "", /sk-/u);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("uncertain creation refreshes without replay, clears the key, and preserves useful form fields", async () => {
+  const dom = installDom();
+  let reads = 0;
+  let writes = 0;
+  globalThis.fetch = async (_input, init = {}) => {
+    if ((init.method ?? "GET") === "GET") {
+      reads += 1;
+      return jsonResponse(reads === 1 ? [] : [configuration()]);
+    }
+    writes += 1;
+    return jsonResponse({ error: { message: "provider body sk-uncertain-secret" } }, 502);
+  };
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<HostedAgentPanel agents={[]} currentMemberIsOwner locale="zh-CN" rooms={rooms} sessionToken="session_owner" teamId={teamId} />);
+    const page = within(dom.window.document.body);
+    await page.findByText(/尚未配置中央 Agent/u);
+    const form = page.getByRole("button", { name: "验证并创建" }).closest("form")!;
+    const create = within(form);
+    fireEvent.change(create.getByLabelText("Agent 名称"), { target: { value: "Central Reviewer" } });
+    fireEvent.change(create.getByLabelText("Agent 角色"), { target: { value: "Reviewer" } });
+    fireEvent.change(create.getByLabelText("模型"), { target: { value: "gpt-5.4" } });
+    const key = create.getByLabelText(/模型 API Key/u) as HTMLInputElement;
+    fireEvent.change(key, { target: { value: "sk-uncertain-secret" } });
+    fireEvent.submit(form);
+    const error = await page.findByRole("alert");
+    await waitFor(() => assert.equal(key.value, ""));
+    assert.match(error.textContent ?? "", /避免重复创建/u);
+    assert.doesNotMatch(error.textContent ?? "", /sk-uncertain-secret|provider body/u);
+    assert.equal((create.getByLabelText("Agent 名称") as HTMLInputElement).value, "Central Reviewer");
+    assert.equal((create.getByLabelText("模型") as HTMLInputElement).value, "gpt-5.4");
+    assert.equal(reads, 2);
+    assert.equal(writes, 1);
+    assert.ok(page.getByText("Central Reviewer", { selector: "h4" }));
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("changing Owner scope clears draft secrets and Room selections", async () => {
+  const dom = installDom();
+  globalThis.fetch = async () => jsonResponse([]);
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    const view = render(<HostedAgentPanel agents={[]} currentMemberIsOwner locale="zh-CN" rooms={rooms} sessionToken="session_owner" teamId={teamId} />);
+    const page = within(dom.window.document.body);
+    await page.findByText(/尚未配置中央 Agent/u);
+    fireEvent.change(page.getByLabelText(/模型 API Key/u), { target: { value: "sk-draft-owner-secret" } });
+    fireEvent.click(page.getByRole("checkbox", { name: "# general" }));
+    view.rerender(<HostedAgentPanel agents={[]} currentMemberIsOwner={false} locale="zh-CN" rooms={rooms} sessionToken="session_member" teamId={teamId} />);
+    assert.equal(view.container.textContent, "");
+    view.rerender(<HostedAgentPanel agents={[]} currentMemberIsOwner locale="zh-CN" rooms={rooms} sessionToken="session_owner_new" teamId={teamId} />);
+    await waitFor(() => assert.equal((page.getByLabelText(/模型 API Key/u) as HTMLInputElement).value, ""));
+    assert.equal((page.getByRole("checkbox", { name: "# general" }) as HTMLInputElement).checked, false);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("safe provider failures explain a next action without echoing arbitrary codes", () => {
+  assert.match(hostedFailureHelp("HOSTED_PROVIDER_AUTHENTICATION_FAILED", "zh-CN"), /API Key.*模型访问权限/u);
+  assert.match(hostedFailureHelp("HOSTED_PROVIDER_RATE_LIMITED", "zh-CN"), /额度或请求频率/u);
+  assert.match(hostedFailureHelp("HOSTED_PROVIDER_UNAVAILABLE", "en"), /outbound network/u);
+  assert.match(hostedFailureHelp("HOSTED_PROVIDER_REQUEST_REJECTED", "en"), /model name/u);
+  assert.match(hostedFailureHelp("HOSTED_PROVIDER_PROBE_TIMEOUT", "en"), /timed out/u);
+  assert.doesNotMatch(hostedFailureHelp("sk-arbitrary-secret", "zh-CN"), /sk-arbitrary-secret/u);
+  assert.doesNotMatch(hostedFailureHelp("constructor", "en"), /function|constructor/u);
+});
+
+test("authoritative refresh removes Room links after a grant is revoked", async () => {
+  const dom = installDom();
+  let listed = configuration();
+  globalThis.fetch = async () => jsonResponse([listed]);
+  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    const view = render(<HostedAgentPanel agents={[]} currentMemberIsOwner locale="zh-CN" onOpenRoom={() => {}} rooms={rooms} sessionToken="session_owner" teamId={teamId} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("button", { name: "进入房间对话 · # general" });
+    listed = configuration({ roomIds: [], presence: "degraded" });
+    view.rerender(<HostedAgentPanel agents={[{
+      agentId: listed.agentId,
+      enabled: true,
+      integrationMode: "hosted",
+      name: listed.name,
+      presence: listed.presence,
+      role: listed.role
+    }]} currentMemberIsOwner locale="zh-CN" onOpenRoom={() => {}} rooms={rooms} sessionToken="session_owner" teamId={teamId} />);
+    await waitFor(() => assert.ok(page.queryByRole("button", { name: "进入房间对话 · # general" }) === null));
+    assert.ok(page.getByText(/连接测试成功不代表已获得房间访问权/u));
   } finally {
     cleanup();
     dom.window.close();
@@ -643,7 +793,7 @@ test("Hosted labels state the same remote-only boundary in English and Chinese",
     presence: "ready",
     role: "Reviewer"
   };
-  assert.equal(integrationLabel("hosted", "en"), "Central Hosted Agent");
+  assert.equal(integrationLabel("hosted", "en"), "Central Agent");
   assert.match(presenceHelp(hosted, "en"), /cannot operate a computer/u);
   assert.match(presenceHelp(hosted, "zh-CN"), /不能操作电脑/u);
 
