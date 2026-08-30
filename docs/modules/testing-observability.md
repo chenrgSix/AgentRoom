@@ -141,7 +141,9 @@ borrowed-owner, symlink, drained stop/start/hot-restart/close, durable-write and
 Windows Job Object parent/child/grandchild cases. Full Go race/vet and desktop
 compilation are local gates. The Windows Job Object regression must also run on
 native Windows before `QA-036`; a successful cross-compile is only build
-evidence.
+evidence. The native job uses `-count=1` and verbose output so an exact run must
+execute the process tree rather than restore a cached Go test result; a workflow
+policy regression rejects removal of that boundary.
 
 `RUN-014` fault injection rejects a mentioned Run insert after Message
 allocation and rejects both reply Message and reply-mapping inserts after event

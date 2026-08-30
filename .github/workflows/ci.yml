@@ -195,7 +195,7 @@ jobs:
             throw "Expected exactly one previous stable Windows installer"
           }
           ./scripts/test-windows-release-semver.ps1
-          go test ./... -run Windows
+          go test -count=1 ./... -run Windows -v
           go test -tags desktop ./cmd/convenewire-bridge-desktop
           go vet -tags desktop ./cmd/convenewire-bridge-desktop
           ./scripts/package-desktop-windows.ps1 `

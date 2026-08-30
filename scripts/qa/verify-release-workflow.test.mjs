@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import {
   assertTagSource,
   repositoryGateCommands,
+  verifyCIWorkflowSource,
   verifyCentralImageDockerGateSource,
   verifyComposeBackupDurabilitySource,
   verifyReleaseWorkflowSource
@@ -18,6 +19,10 @@ const workflowPath = path.resolve(
   "../../.github/workflows/release-bridge.yml"
 );
 const workflow = await readFile(workflowPath, "utf8");
+const ciWorkflow = await readFile(path.resolve(
+  scriptDirectory,
+  "../../.github/workflows/ci.yml"
+), "utf8");
 const centralDockerGate = await readFile(path.resolve(
   scriptDirectory,
   "../../ops/convenewirectl/scripts/verify-central-image-docker.sh"
@@ -44,6 +49,17 @@ test("Release workflow binds every checkout and build gate to one source SHA", (
   assert.doesNotThrow(() => verifyReleaseWorkflowSource(workflow));
   assert.doesNotThrow(() => verifyCentralImageDockerGateSource(centralDockerGate));
   assert.doesNotThrow(() => verifyComposeBackupDurabilitySource(composeBackup));
+});
+
+test("native Windows process-tree regressions cannot reuse the Go test cache", () => {
+  assert.doesNotThrow(() => verifyCIWorkflowSource(ciWorkflow));
+  assert.throws(
+    () => verifyCIWorkflowSource(ciWorkflow.replace(
+      "go test -count=1 ./... -run Windows -v",
+      "go test ./... -run Windows"
+    )),
+    /must execute uncached/u
+  );
 });
 
 test("backup durability cannot add a host Node runtime dependency", () => {

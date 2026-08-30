@@ -71,6 +71,21 @@ export function assertTagSource(sourceSha, tagSourceSha) {
   );
 }
 
+export function verifyCIWorkflowSource(source) {
+  invariant(
+    source.includes("runs-on: windows-latest"),
+    "CI must retain one native Windows job"
+  );
+  invariant(
+    source.includes("go test -count=1 ./... -run Windows -v"),
+    "native Windows process regressions must execute uncached and report test names"
+  );
+  invariant(
+    !source.includes("go test ./... -run Windows"),
+    "native Windows process regressions must not use the cacheable command"
+  );
+}
+
 export function verifyCentralImageDockerGateSource(source) {
   const defaultMarker = "# OPS-013_DEFAULT_SERVER_CMD_GATE";
   const readyMarker = "# OPS-013_READY_GATE";
