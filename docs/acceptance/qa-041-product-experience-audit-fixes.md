@@ -91,3 +91,26 @@ two full files pass 21 tests. Command, from `apps/web`:
 ```sh
 node ../../node_modules/tsx/dist/cli.mjs --test test/context-races.test.tsx test/session-expiry.test.tsx
 ```
+
+## Final automated verification
+
+Final implementation source: `daef26f`, including session activation fix
+`75cb210` and recovery-lifetime fix `78bbbd3`. The final full test run includes
+all 15 new regression cases; no production source changed after it started.
+
+| Command | Result |
+| --- | --- |
+| `npm test` | 570 passed: Server 328, Web 137, contracts 14, Bridge UI 42, QA policy/evidence 32, product fixture 2, site 15; generated contracts, TypeScript and Go contract checks also passed |
+| `npm run build` | Server, Web and contracts passed; Web entry bundle remains above Vite's 500 kB advisory threshold (587.22 kB minified, 179.76 kB gzip) |
+| `npm run validate` | 9 schemas and 125 fixtures passed |
+| `npm run test:e2e` | 6 deterministic cross-process tests passed; 1 opt-in live Codex/Pi case intentionally skipped |
+| `npm run test:compose` | Default/custom Central ports and Caddy configuration valid |
+| `npm run lint:docs` and `git diff --check` | Passed |
+
+The new recovery fixture's owned temporary-directory count is zero after
+completion. Tests do not use the user's database or a real provider. This
+repair reruns component/integration and deterministic cross-process checks;
+it does not claim a new interactive-browser visual acceptance, native
+packaging run, physical-platform acceptance or live-provider certification.
+Changes are local commits only: no push, deployment, website republish or
+application Release is performed.
