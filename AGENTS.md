@@ -29,6 +29,10 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm ci` — install locked workspace dependencies.
 - `npm run validate` — validate all registered JSON Schemas.
 - `npm run build` — build every implemented workspace.
+- `npm run build:site` — build the credential-free product website for the `/ConveneWire/` GitHub Pages base.
+- `npm run test:site` — verify static routes, metadata, capability boundaries, copy controls and isolated preview responses with Node.js only.
+- `npm run preview:site` — build and serve the product website on a printed loopback-only URL.
+- `git diff --check -- site` — check the website's `.editorconfig`-aligned HTML/CSS/JavaScript edits for whitespace errors; no generated `site/dist/` files are committed.
 - `npm test` — run implemented workspace tests.
 - `npm run test:bridge-ui` — test the embedded Bridge GUI's pairing state projection.
 - `npm run test:qa-evidence` — test the sanitized two-machine acceptance evidence verifier.

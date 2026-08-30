@@ -10,6 +10,9 @@ Bridge on an execution machine for local Runtime and Workspace capabilities.
 MCP lets a running Agent use Team capabilities. WebSocket plus the Bridge lets
 the Team wake a managed Agent.
 
+[Product website](https://chenrgsix.github.io/ConveneWire/) ·
+[Getting started](https://chenrgsix.github.io/ConveneWire/guide/)
+
 ## Status
 
 The central Team MVP is runnable: the Fastify API and React UI persist Teams,
@@ -64,6 +67,7 @@ packages/
   contracts/    JSON Schema and generated TypeScript/Go types
 bridge/         Go Bridge and runtime adapters
 ops/            Central release verification and lifecycle controller
+site/           Static product website and getting-started guide
 docs/modules/   Module ownership, contracts, and acceptance boundaries
 docs/adr/       Architecture decision records
 docs/TASKS.md   Authoritative milestones and delivery state

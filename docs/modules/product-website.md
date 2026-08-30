@@ -33,6 +33,27 @@ GitHub Pages workflow publishes the tested static artifact with minimal Pages
 permissions. It must not modify application Release assets or require a second
 application service. Exact commands are registered with the implementation.
 
+- `npm run test:site` runs dependency-free Node.js static/content/link,
+  clipboard-control and loopback preview regression tests. The root `npm test`
+  also includes this suite.
+- `npm run build:site` expands the allowlisted HTML routes and shared fragments,
+  copies only public static assets into `site/dist/`, and writes the exact Git
+  revision to page metadata and `version.json`.
+- `npm run preview:site` builds and serves that artifact on a printed
+  loopback-only URL under `/ConveneWire/`; it is not an application server.
+- `git diff --check -- site` checks whitespace; source formatting follows
+  `.editorconfig` without a new formatter dependency.
+
+The Pages workflow runs tests before building, uses commit-pinned actions,
+uploads only `site/dist/`, and grants `pages:write`/`id-token:write` only to the
+dependent deploy job. Pull requests validate without deploying. No model,
+application, or personal credentials are provided to the site build.
+
+The root and guide have distinct canonical/social metadata. When no valid
+social image exists, omit image metadata rather than reference a missing or
+generic asset. Installation links and stable-version claims must be rechecked
+when application packages change.
+
 ## Verification
 
 Product acceptance precedes website implementation. Static build/content/link
