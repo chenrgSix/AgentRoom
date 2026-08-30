@@ -148,7 +148,7 @@ test("Hosted migration preserves version-51 Agent foreign-key graphs", async () 
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [52]);
+  assert.deepEqual(migrated.appliedVersions, [52, 53]);
 
   const database = openDatabase(databasePath);
   try {
@@ -419,8 +419,8 @@ test("Hosted migration preserves version-51 Agent foreign-key graphs", async () 
     assert.equal(reopened.pragma("foreign_keys", { simple: true }), 1);
     assert.deepEqual(reopened.pragma("foreign_key_check"), []);
     assert.equal((reopened.prepare(`
-      SELECT count(*) AS count FROM schema_migrations WHERE version = 52
-    `).get() as { count: number }).count, 1);
+      SELECT count(*) AS count FROM schema_migrations WHERE version IN (52, 53)
+    `).get() as { count: number }).count, 2);
   } finally {
     reopened.close();
   }
