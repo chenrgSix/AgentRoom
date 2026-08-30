@@ -13,7 +13,7 @@ import {
   useState
 } from "react";
 
-import { jsonRequest } from "../../api-client.js";
+import { captureWebSessionScope, isStaleWebSessionError, jsonRequest } from "../../api-client.js";
 import type { Locale } from "../../i18n.js";
 import type {
   ArtifactPreview,
@@ -166,8 +166,15 @@ export function TaskWorkDetail({
   const previewRequestId = useRef(0);
   const operationIds = useRef(new Map<string, string>());
   const detailRequestId = useRef(0);
-  const activeTaskId = useRef(taskId);
-  activeTaskId.current = taskId;
+  const mounted = useRef(true);
+  const detailScope = useMemo(() => ({
+    taskId, memberId: currentMember?.memberId ?? null, token,
+    isCurrentSession: captureWebSessionScope()
+  }), [currentMember?.memberId, taskId, token]);
+  const activeDetailScope = useRef(detailScope);
+  activeDetailScope.current = detailScope;
+  const isCurrentDetail = useCallback(() => mounted.current &&
+    activeDetailScope.current === detailScope && detailScope.isCurrentSession(), [detailScope]);
   const lastRefreshKey = useRef(refreshKey);
   const selectedRunSequence = detail?.runs.find(({ runId }) => runId === selectedRunId)?.lastSequence;
   const evidenceScope = useMemo<RunEvidenceScope>(() => ({
@@ -180,6 +187,15 @@ export function TaskWorkDetail({
   const runDetailError = currentEvidence?.error ?? null;
   const runDetailLoading = tab === "runs" && selectedRunId !== null && (!currentEvidence || currentEvidence.status === "loading");
 
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      detailRequestId.current += 1;
+      previewRequestId.current += 1;
+    };
+  }, []);
+
   const operationIdFor = (key: string): string => {
     const existing = operationIds.current.get(key);
     if (existing) return existing;
@@ -189,19 +205,20 @@ export function TaskWorkDetail({
   };
 
   const loadDetail = useCallback(async (clearError = true) => {
-    if (activeTaskId.current !== taskId) return;
+    if (!isCurrentDetail()) return;
     const requestId = ++detailRequestId.current;
     setLoading(true);
     if (clearError) setError(null);
     try {
       const task = await jsonRequest<TaskProjection>(`/api/tasks/${taskId}`, {}, token);
+      if (!isCurrentDetail() || requestId !== detailRequestId.current) return;
       const [runs, results, artifactPage, roomDiscussions] = await Promise.all([
         jsonRequest<DetailedRun[]>(`/api/tasks/${taskId}/runs`, {}, token),
         jsonRequest<ResultProjection[]>(`/api/tasks/${taskId}/results`, {}, token),
         jsonRequest<TaskArtifactPage>(`/api/tasks/${taskId}/artifacts`, {}, token),
         jsonRequest<DiscussionView[]>(`/api/rooms/${task.roomId}/discussions`, {}, token)
       ]);
-      if (requestId !== detailRequestId.current || activeTaskId.current !== taskId) return;
+      if (requestId !== detailRequestId.current || !isCurrentDetail()) return;
       setDetail({
         artifacts: artifactPage.artifacts,
         discussions: roomDiscussions.filter(({ discussion }) => discussion.taskId === taskId),
@@ -213,11 +230,11 @@ export function TaskWorkDetail({
         ? current
         : runs.at(-1)?.runId ?? null);
     } catch (reason) {
-      if (requestId === detailRequestId.current) setError(String(reason));
+      if (requestId === detailRequestId.current && isCurrentDetail() && !isStaleWebSessionError(reason)) setError(String(reason));
     } finally {
-      if (requestId === detailRequestId.current) setLoading(false);
+      if (requestId === detailRequestId.current && isCurrentDetail()) setLoading(false);
     }
-  }, [taskId, token]);
+  }, [isCurrentDetail, taskId, token]);
 
   useEffect(() => {
     setTab("overview");
@@ -316,7 +333,7 @@ export function TaskWorkDetail({
   }
 
   async function reviewResult(result: ResultProjection, decision: "accepted" | "rejected") {
-    if (!detail || !canReview) return;
+    if (!isCurrentDetail() || !detail || !canReview) return;
     const key = `review:${result.resultId}:${decision}`;
     const reason = reviewReasons[result.resultId]?.trim();
     if (!reason) return;
@@ -334,10 +351,12 @@ export function TaskWorkDetail({
           completeTask: decision === "accepted" && Boolean(completeTask[result.resultId])
         })
       }, token);
+      if (!isCurrentDetail()) return;
       operationIds.current.delete(key);
       await loadDetail(false);
-      onChanged();
+      if (isCurrentDetail()) onChanged();
     } catch (reasonValue) {
+      if (!isCurrentDetail() || isStaleWebSessionError(reasonValue)) return;
       setCommandError(text(
         `命令未确认：${String(reasonValue)}。已重新载入权威状态；重试会复用同一操作 ID。`,
         `Command was not confirmed: ${String(reasonValue)}. Authoritative state was reloaded; retry reuses the same operation ID.`,
@@ -345,12 +364,12 @@ export function TaskWorkDetail({
       ));
       await loadDetail(false);
     } finally {
-      setBusyKey(null);
+      if (isCurrentDetail()) setBusyKey(null);
     }
   }
 
   async function createFollowUp(result: ResultProjection, nextActionKey: string, description: string) {
-    if (!detail || !canReview) return;
+    if (!isCurrentDetail() || !detail || !canReview) return;
     const key = `follow-up:${result.resultId}:${nextActionKey}`;
     const title = (followUpTitles[key] ?? description).trim();
     if (!title) return;
@@ -370,21 +389,24 @@ export function TaskWorkDetail({
         },
         token
       );
+      if (!isCurrentDetail()) return;
       operationIds.current.delete(key);
       onChanged();
       onOpenTask(childTask.taskId, childTask.roomId);
     } catch (reasonValue) {
+      if (!isCurrentDetail() || isStaleWebSessionError(reasonValue)) return;
       setCommandError(text(
         `后续 Task 状态未知：${String(reasonValue)}。请重试；同一操作 ID 会返回同一 Task。`,
         `Follow-up Task state is unknown: ${String(reasonValue)}. Retry safely; the same operation ID resolves to the same Task.`,
         locale
       ));
     } finally {
-      setBusyKey(null);
+      if (isCurrentDetail()) setBusyKey(null);
     }
   }
 
   async function previewArtifact(artifact: TaskArtifact) {
+    if (!isCurrentDetail()) return;
     const requestId = ++previewRequestId.current;
     setArtifactPreview(null);
     setArtifactPreviewBusyId(artifact.artifactId);
@@ -393,7 +415,7 @@ export function TaskWorkDetail({
       const preview = await jsonRequest<ArtifactPreview>(
         `/api/tasks/${taskId}/artifacts/${artifact.artifactId}/preview`, {}, token
       );
-      if (requestId !== previewRequestId.current || activeTaskId.current !== taskId) return;
+      if (requestId !== previewRequestId.current || !isCurrentDetail()) return;
       if (preview.taskId !== taskId || preview.artifactId !== artifact.artifactId ||
         preview.artifactRevision !== artifact.artifactRevision || preview.integrity !== "verified" ||
         preview.trust !== "untrusted" || preview.sha256 !== artifact.contentSha256) {
@@ -401,9 +423,9 @@ export function TaskWorkDetail({
       }
       setArtifactPreview(preview);
     } catch (reason) {
-      if (requestId === previewRequestId.current) setArtifactPreviewError(String(reason));
+      if (requestId === previewRequestId.current && isCurrentDetail() && !isStaleWebSessionError(reason)) setArtifactPreviewError(String(reason));
     } finally {
-      if (requestId === previewRequestId.current) setArtifactPreviewBusyId(null);
+      if (requestId === previewRequestId.current && isCurrentDetail()) setArtifactPreviewBusyId(null);
     }
   }
 
@@ -540,9 +562,9 @@ export function TaskWorkDetail({
                   locale={locale}
                   memberId={currentMember?.memberId ?? null}
                   onChanged={async (newRunId) => {
-                    if (activeTaskId.current !== taskId) return;
+                    if (!isCurrentDetail()) return;
                     await loadDetail(false);
-                    if (activeTaskId.current !== taskId) return;
+                    if (!isCurrentDetail()) return;
                     if (newRunId) setSelectedRunId(newRunId);
                     onChanged();
                   }}

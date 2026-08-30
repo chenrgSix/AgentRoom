@@ -1,7 +1,7 @@
 import type { TaskProjection } from "@convene-wire/contracts/task-result";
 import React, { useEffect, useRef, useState } from "react";
 
-import { jsonRequest } from "../../api-client.js";
+import { captureWebSessionScope, isStaleWebSessionError, jsonRequest } from "../../api-client.js";
 import type { Locale } from "../../i18n.js";
 import { clearRecoveryReceipt, readRecoveryReceipt, saveRecoveryReceipt, type RecoveryCommand, type RecoveryKind, type RecoveryReceiptScope } from "./recovery-receipt.js";
 
@@ -41,7 +41,7 @@ function operationId(): string {
 }
 
 export function RunRecoveryControls(props: RunRecoveryControlsProps) {
-  const key = JSON.stringify([props.memberId, props.task.teamId, props.task.taskId, props.run.runId]);
+  const key = JSON.stringify([props.memberId, props.task.teamId, props.task.taskId, props.run.runId, props.token]);
   return <ScopedRunRecoveryControls {...props} key={key} />;
 }
 
@@ -75,12 +75,14 @@ function ScopedRunRecoveryControls({ canManage, evidenceReady, locale, memberId,
   useEffect(() => {
     if (run.state !== "outcome_unknown") return;
     let stopped = false;
+    const isCurrentSession = captureWebSessionScope();
+    const isCurrentRequest = () => !stopped && mounted.current && isCurrentSession();
     setAckLoading(true);
     setAckError(null);
     void jsonRequest<{ acknowledgement: Acknowledgement | null }>(
       `/api/runs/${run.runId}/ambiguity-acknowledgement`, {}, token
     ).then((result) => {
-      if (stopped) return;
+      if (!isCurrentRequest()) return;
       if (result.acknowledgement && (result.acknowledgement.runId !== run.runId ||
         !Number.isSafeInteger(result.acknowledgement.taskRevisionAfter) ||
         result.acknowledgement.taskRevisionAfter < 1 || typeof result.acknowledgement.reason !== "string")) {
@@ -98,9 +100,9 @@ function ScopedRunRecoveryControls({ canManage, evidenceReady, locale, memberId,
           setCommandError(null);
         }
       }
-    }).catch(() => {
-      if (!stopped) setAckError(t("无法核实此尝试的确认记录，请重新检查后再操作。", "Could not verify this attempt's acknowledgement. Check again before continuing."));
-    }).finally(() => { if (!stopped) setAckLoading(false); });
+    }).catch((error: unknown) => {
+      if (isCurrentRequest() && !isStaleWebSessionError(error)) setAckError(t("无法核实此尝试的确认记录，请重新检查后再操作。", "Could not verify this attempt's acknowledgement. Check again before continuing."));
+    }).finally(() => { if (isCurrentRequest()) setAckLoading(false); });
     return () => { stopped = true; };
   }, [locale, memberId, reloadKey, run.runId, run.state, scope, task.taskRevision, token]);
 
@@ -117,7 +119,9 @@ function ScopedRunRecoveryControls({ canManage, evidenceReady, locale, memberId,
   const canRetry = canManage && evidenceReady && !receipts.blocked && (Boolean(pendingRetry) || (runnable && budgetAvailable && assigned && (!unknown || (acknowledgement !== null && !ackLoading && !ackError))));
 
   async function submit(kind: RecoveryKind) {
-    if (!canManage || !evidenceReady || receipts.blocked || sending.current) return;
+    const isCurrentSession = captureWebSessionScope();
+    const isCurrentOperation = () => mounted.current && isCurrentSession();
+    if (!isCurrentOperation() || !canManage || !evidenceReady || receipts.blocked || sending.current) return;
     if (kind === "ack" && (!unknown || acknowledgement || ackLoading || ackError || !checked || !(pendingAck?.reason ?? reason).trim())) return;
     if (kind === "retry" && (!canRetry || !retryChecked)) return;
     let command: RecoveryCommand;
@@ -144,6 +148,8 @@ function ScopedRunRecoveryControls({ canManage, evidenceReady, locale, memberId,
         `/api/runs/${run.runId}/${kind === "ack" ? "ambiguity-acknowledgement" : "retry"}`,
         { method: "POST", body: JSON.stringify(command) }, token
       );
+      // A detached view leaves its exact receipt for explicit reconciliation.
+      if (!isCurrentOperation()) return;
       if (kind === "ack" && (result.runId !== run.runId || !("taskRevisionAfter" in result) ||
         !Number.isSafeInteger(result.taskRevisionAfter) || result.taskRevisionAfter < 1 || typeof result.reason !== "string")) {
         throw new Error("Acknowledgement response could not be verified");
@@ -161,6 +167,9 @@ function ScopedRunRecoveryControls({ canManage, evidenceReady, locale, memberId,
       }
       await onChanged(kind === "retry" ? result.runId : undefined);
     } catch (error) {
+      // Never turn an old response into a new request under a replacement
+      // session. Its receipt remains unresolved until the member reopens it.
+      if (!isCurrentOperation() || isStaleWebSessionError(error)) return;
       // A definitive compare-and-swap rejection may use the refreshed revision.
       // An uncertain transport response must retain the exact operation identity.
       if (!confirmed && error instanceof Error && error.message === "Task revision conflict") {
@@ -185,7 +194,7 @@ function ScopedRunRecoveryControls({ canManage, evidenceReady, locale, memberId,
       try { await onChanged(); } catch { /* Keep the receipt when the refresh is unavailable. */ }
     } finally {
       sending.current = false;
-      if (mounted.current) setBusy(false);
+      if (isCurrentOperation()) setBusy(false);
     }
   }
 
