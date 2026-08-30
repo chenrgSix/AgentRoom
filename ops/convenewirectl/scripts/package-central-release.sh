@@ -10,6 +10,8 @@ release_schema=${CENTRAL_RELEASE_SCHEMA:-2}
 image_bundle_dir=${CENTRAL_IMAGE_BUNDLE_DIR:-}
 target_os=${GOOS:?GOOS is required}
 target_arch=${GOARCH:?GOARCH is required}
+host_os=$(go env GOHOSTOS)
+host_arch=$(go env GOHOSTARCH)
 version=${release_tag#v}
 
 if [[ ! "${release_tag}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -107,7 +109,9 @@ if [[ "${release_schema}" == 2 ]]; then
   mkdir -p "${staging}/image"
   cp "${image_archive}" "${staging}/image/${image_archive_name}"
   cp "${image_metadata}" "${staging}/image/${image_metadata_name}"
-  go -C "${controller_root}" run ./cmd/convenewire-release-image verify \
+  # This verifier is a packaging-time host tool. The surrounding GOOS/GOARCH
+  # select the shipped controller and must not cross-compile the go run helper.
+  GOOS="${host_os}" GOARCH="${host_arch}" go -C "${controller_root}" run ./cmd/convenewire-release-image verify \
     --bundle-root "${staging}" \
     --metadata "image/${image_metadata_name}" \
     --release-version "${release_tag}" \
@@ -123,8 +127,6 @@ else
 fi
 rm -rf -- "${staging}/ops"
 
-host_os=$(go env GOHOSTOS)
-host_arch=$(go env GOHOSTARCH)
 if [[ "${target_os}/${target_arch}" == "${host_os}/${host_arch}" ]]; then
   built_version=$("${staging}/bin/convenewirectl" version)
   if [[ "${built_version}" != "${release_tag}" ]]; then
