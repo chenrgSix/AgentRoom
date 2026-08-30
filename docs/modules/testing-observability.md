@@ -244,6 +244,14 @@ while offline, reconnects to one reply, and then verifies distinct accepted and
 unaccepted revocation outcomes. This deterministic same-host evidence does not
 replace the physical two-machine TLS gate.
 
+The scenario confirms each Bridge process exited, then advances its isolated
+Server clock 31 seconds before asserting the 30-second Presence TTL projection.
+It therefore tests offline semantics without racing a wall-clock wait against
+the same TTL boundary. A failed, canceled, expired, or outcome-unknown reconnect
+Run fails immediately with its event record; a timeout reports the last observed
+state and Bridge process status. This deterministic clock is test authority, not
+a change to the production heartbeat interval or a product latency objective.
+
 `QA-030` is the prerequisite trust gate introduced by ADR-0023. Deterministic
 coverage must prove public-default ACME/system validation and no fallback;
 closed trust-schema interoperability; fixed-path, no-secret and no-redirect

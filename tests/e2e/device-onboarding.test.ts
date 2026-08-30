@@ -22,7 +22,8 @@ interface ProcessCapture {
 
 async function waitFor<T>(
   read: () => Promise<T | undefined>,
-  timeoutMs = 30_000
+  timeoutMs = 30_000,
+  timeoutDetail?: () => string
 ): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -30,7 +31,10 @@ async function waitFor<T>(
     if (value !== undefined) return value;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
-  throw new Error("Timed out waiting for Device-onboarding state");
+  const detail = timeoutDetail?.();
+  throw new Error(
+    `Timed out waiting for Device-onboarding state${detail ? `: ${detail}` : ""}`
+  );
 }
 
 function captureProcess(
@@ -50,31 +54,62 @@ function captureProcess(
 }
 
 async function waitForExit(capture: ProcessCapture, timeoutMs = 15_000): Promise<void> {
-  if (capture.process.exitCode !== null) {
+  const hasExited = () =>
+    capture.process.exitCode !== null || capture.process.signalCode !== null;
+  if (hasExited()) {
     assert.equal(capture.process.exitCode, 0, capture.stderr());
     return;
   }
+  let onExit!: (code: number | null) => void;
+  const exit = new Promise<number | null>((resolve) => {
+    onExit = resolve;
+    capture.process.once("exit", onExit);
+  });
+  if (hasExited()) {
+    capture.process.removeListener("exit", onExit);
+    assert.equal(capture.process.exitCode, 0, capture.stderr());
+    return;
+  }
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
   const exitCode = await Promise.race([
-    new Promise<number | null>((resolve) =>
-      capture.process.once("exit", (code) => resolve(code))
-    ),
+    exit,
     new Promise<"timeout">((resolve) =>
-      setTimeout(() => resolve("timeout"), timeoutMs)
+      timeoutHandle = setTimeout(() => resolve("timeout"), timeoutMs)
     )
   ]);
+  if (timeoutHandle) clearTimeout(timeoutHandle);
+  capture.process.removeListener("exit", onExit);
   assert.notEqual(exitCode, "timeout", "Process did not exit in time");
   assert.equal(exitCode, 0, capture.stderr());
 }
 
-async function stopProcess(capture: ProcessCapture, signal: NodeJS.Signals): Promise<void> {
-  if (capture.process.exitCode !== null) return;
+async function stopProcess(
+  capture: ProcessCapture,
+  signal: NodeJS.Signals
+): Promise<boolean> {
+  const hasExited = () =>
+    capture.process.exitCode !== null || capture.process.signalCode !== null;
+  if (hasExited()) return true;
+  let resolveExit!: () => void;
+  const exit = new Promise<void>((resolve) => {
+    resolveExit = resolve;
+    capture.process.once("exit", resolve);
+  });
+  if (hasExited()) {
+    capture.process.removeListener("exit", resolveExit);
+    return true;
+  }
   capture.process.kill(signal);
-  await Promise.race([
-    new Promise<void>((resolve) =>
-      capture.process.once("exit", () => resolve())
-    ),
-    new Promise<void>((resolve) => setTimeout(resolve, 5_000))
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  const result = await Promise.race([
+    exit,
+    new Promise<"timeout">((resolve) =>
+      timeoutHandle = setTimeout(() => resolve("timeout"), 5_000)
+    )
   ]);
+  if (timeoutHandle) clearTimeout(timeoutHandle);
+  capture.process.removeListener("exit", resolveExit);
+  return result !== "timeout" || hasExited();
 }
 
 async function startConsole(
@@ -130,9 +165,11 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
 }, async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-device-e2e-"));
   const bridgeServerToken = "unused-zero-copy-server-token-12345678901234567890";
+  let nowMilliseconds = Date.now();
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
-    bridgeServerToken
+    bridgeServerToken,
+    clock: () => new Date(nowMilliseconds).toISOString()
   });
   let pairingProcess: ProcessCapture | undefined;
   let consoleProcess: Awaited<ReturnType<typeof startConsole>> | undefined;
@@ -345,8 +382,13 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
       code: "RUNTIME_PROBE_OK"
     });
 
-    stage = "queue offline work and reconnect";
-    await stopProcess(consoleProcess, "SIGTERM");
+    stage = "project paired Agents offline";
+    assert.equal(
+      await stopProcess(consoleProcess, "SIGTERM"),
+      true,
+      `Bridge Console did not stop after SIGTERM: ${consoleProcess.stderr()}`
+    );
+    nowMilliseconds += 31_000;
     await waitFor(async () => {
       const response = await app.inject({
         method: "GET",
@@ -369,16 +411,39 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
     assert.equal(offlineMessage.statusCode, 200, offlineMessage.body);
     const offlineRunId = offlineMessage.json().runs[0].runId as string;
     assert.equal(offlineMessage.json().runs[0].state, "queued");
+    stage = "reconnect queued offline work";
     consoleProcess = await startConsole(bridgeBinary, configPath);
+    let lastReconnectState = "not_observed";
     const reconnected = await waitFor(async () => {
       const response = await app.inject({
         method: "GET",
         url: `/api/runs/${offlineRunId}`,
         headers: authorization
       });
+      assert.equal(response.statusCode, 200, response.body);
       const run = response.json() as { state: string };
+      lastReconnectState = run.state;
+      if (new Set([
+        "failed",
+        "canceled",
+        "expired",
+        "outcome_unknown"
+      ]).has(run.state)) {
+        const events = await app.inject({
+          method: "GET",
+          url: `/api/runs/${offlineRunId}/events`,
+          headers: authorization
+        });
+        throw new Error(
+          `Offline reconnect Run reached ${run.state}: ${events.body}`
+        );
+      }
       return run.state === "completed" ? run : undefined;
-    });
+    }, 30_000, () =>
+      `last Run state=${lastReconnectState}, ` +
+      `Bridge exit=${consoleProcess?.process.exitCode ??
+        consoleProcess?.process.signalCode ?? "running"}`
+    );
     assert.equal(reconnected.state, "completed");
     const reconnectEvents = await app.inject({
       method: "GET",
@@ -413,7 +478,12 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
       const run = response.json() as { state: string };
       return run.state === "working" ? true : undefined;
     });
-    await stopProcess(consoleProcess, "SIGKILL");
+    assert.equal(
+      await stopProcess(consoleProcess, "SIGKILL"),
+      true,
+      `Bridge Console did not stop after SIGKILL: ${consoleProcess.stderr()}`
+    );
+    nowMilliseconds += 31_000;
     await waitFor(async () => {
       const response = await app.inject({
         method: "GET",
