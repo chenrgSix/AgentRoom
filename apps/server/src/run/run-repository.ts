@@ -1228,6 +1228,28 @@ export class RunRepository {
     });
   }
 
+  public applyReplyAndTerminal(
+    runId: string,
+    replyEvent: Extract<RuntimeEvent, { type: "reply" }>,
+    terminalEvent: Extract<RuntimeEvent, { type: "status" }> & {
+      status: "completed";
+    },
+    now: string
+  ): AppliedRunEvent {
+    if (terminalEvent.sequence !== replyEvent.sequence + 1) {
+      throw new Error("Runtime reply and completion sequences must be contiguous");
+    }
+    return this.transactions.immediate(() => {
+      const reply = this.applyReply(runId, replyEvent, now);
+      if (!reply.applied) return reply;
+      const terminal = this.applyRuntimeEvent(runId, terminalEvent, now);
+      if (!terminal.applied) {
+        throw new Error("Runtime completion was not applied with its reply");
+      }
+      return terminal;
+    });
+  }
+
   public listUnprojectedReplyEvents(): Array<{
     runId: string;
     replySequence: number;
