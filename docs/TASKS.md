@@ -437,7 +437,7 @@ lifecycle ownership without another service or Bridge change.
 | WEB-058 | DONE | Preserve scoped drafts and explicit failed-message retries | GOV-019, WEB-038, WEB-054 | storage/composer and real Server/App tests prove User/Team/Room/Task isolation, reload, 24h TTL, malformed/quota handling, actual logout/401 clearing, immutable retry identity and no automatic replay; QA-042 records browser recovery |
 | WEB-059 | DONE | Restore authorized navigation and Work search | GOV-019, WEB-053, WEB-055 | 10 parser, 14 navigation-controller and 8 real Server/App navigation tests plus search/page regressions pass; QA-042 verifies direct links, tabs, back/forward, filters and safe denied-target fallback |
 | WEB-060 | DONE | Consolidate Web session and Room synchronization controllers | GOV-019, WEB-054, WEB-055, WEB-056 | 16 controller and 2 late-snapshot/new-Task App regressions pass with existing expiry/recovery/history tests; independent success ordering preserves Tasks, Runs and first settings while retired callbacks/timers stay inactive |
-| QA-042 | ACTIVE | Verify continuous Web work end to end | CON-018, WEB-057, WEB-058, WEB-059, WEB-060 | 660 tests, build, 9 schemas/133 fixtures and production-browser desktop/720/390 flows pass; see acceptance/qa-042-continuous-web-work.md; final deterministic E2E and cleanup evidence being recorded |
+| QA-042 | DONE | Verify continuous Web work end to end | CON-018, WEB-057, WEB-058, WEB-059, WEB-060 | acceptance/qa-042-continuous-web-work.md records source c447253, 660 tests, build, 9 schemas/133 fixtures, 6 deterministic E2E passes with live provider skipped, Compose/docs checks and production-browser desktop/720/390 flows; owned preview and temporary data/caches cleaned |
 
 ## Deferred Beyond MVP
 

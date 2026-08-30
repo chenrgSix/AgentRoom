@@ -89,6 +89,11 @@ observations and do not imply physical Bridge/platform or paid-provider testing.
 
 ## Verification
 
+Final implementation source is `c447253`, including the separately committed
+search addition `aa24f62` and cursor-order repair `033b601`. The final test run
+started after the production edits and final fixture correction; no production
+code changed afterwards.
+
 The final `npm test` run passed **660 tests**: Server 335, Web 220, contracts 14,
 Bridge UI 42, QA policy/evidence 32, product fixture 2 and website 15. Generated
 contracts, Web/Server TypeScript and Go contract checks also passed.
@@ -98,11 +103,21 @@ Vite's existing 500 kB advisory threshold; code splitting is not claimed here.
 `npm run validate` passed all 9 schemas and 133 fixtures. Compose/Caddy
 configuration validation and maintained Markdown lint passed.
 
+Final deterministic `npm run test:e2e` passed all six cross-process scenarios:
+Hosted HTTP without Bridge, manual MCP handoff, two-Bridge Artifact recovery,
+Device onboarding and both managed reasoning-sharing modes. The live Codex/Pi
+provider scenario was intentionally skipped, not counted as passed.
+
 Go verification uses task-scoped writable `GOCACHE` and `GOMODCACHE`; the first
 attempt could not write the sandbox's default user cache. No global permission
 or ownership change was made. Some old UI fixtures used IDs shorter than the
 wire contract; those fixtures were corrected without weakening URL validation.
 Existing session/history tests were updated only for deliberate URL restoration
 and the additional creation refresh, retaining their security assertions.
+
+The owned preview process was stopped, its temporary databases were removed by
+the harness cleanup, and both loopback ports were confirmed closed. This run's
+temporary logs, scripts and Go caches were removed; no user database, shared
+cache, installation or user-owned browser tab was removed.
 
 Delivery state is recorded only in [TASKS](../TASKS.md).
