@@ -12,6 +12,10 @@ pass. `QA-038` remains `ACTIVE` because production-browser and release-package
 admission are explicitly unverified below; that evidence is not substituted by
 component tests or build success.
 
+Post-implementation audit repairs and refreshed local deterministic evidence
+are recorded in [QA-039](qa-039-hosted-agent-audit-fixes.md). They do not change
+this record's remaining production-browser and release-package admission.
+
 ## Goal and authority boundary
 
 After Central starts, an Owner may explicitly configure a Device-free Hosted
