@@ -37,6 +37,8 @@ type fakeRunner struct {
 	rotationAcknowledgementResponse string
 	activeServerImageID             string
 	activeCaddyImageID              string
+	configuredServerImageID         string
+	configuredCaddyImageID          string
 	runtimeBuildIdentity            string
 	activeRuntimeReleaseVersion     string
 	activeRuntimeSourceCommit       string
@@ -44,6 +46,8 @@ type fakeRunner struct {
 	caddyStopped                    bool
 	stopServerAfterUp               bool
 	stopCaddyAfterUp                bool
+	runtimeImageStore               string
+	unavailableImageReferences      map[string]bool
 	backupSequence                  int
 }
 
@@ -68,11 +72,16 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 	}
 	if command.Name == "docker" && len(command.Args) >= 3 &&
 		command.Args[0] == "image" && command.Args[1] == "inspect" {
+		reference := command.Args[len(command.Args)-1]
+		if runner.unavailableImageReferences[reference] ||
+			!runner.runtimeImageReferenceAvailable(reference) {
+			return "", fmt.Errorf("unknown test runtime image reference %q", reference)
+		}
 		if strings.Contains(joined, "{{.Id}}") {
-			if strings.Contains(joined, releaseimage.ServerRepository+"@") {
-				return "sha256:" + strings.Repeat("c", 64) + "\n", nil
+			if imageID := testRuntimeImageID(reference); imageID != "" {
+				return imageID + "\n", nil
 			}
-			return "sha256:" + strings.Repeat("d", 64) + "\n", nil
+			return "", fmt.Errorf("unknown test runtime image reference %q", reference)
 		}
 		return "linux/amd64\n", nil
 	}
@@ -95,6 +104,10 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 					runner.activeRuntimeReleaseVersion = strings.Trim(rawValue, `"`)
 				case "CONVENE_WIRE_SOURCE_COMMIT":
 					runner.activeRuntimeSourceCommit = strings.Trim(rawValue, `"`)
+				case "CONVENE_WIRE_SERVER_IMAGE":
+					runner.configuredServerImageID = testRuntimeImageID(strings.Trim(rawValue, `"`))
+				case "CONVENE_WIRE_CADDY_IMAGE":
+					runner.configuredCaddyImageID = testRuntimeImageID(strings.Trim(rawValue, `"`))
 				}
 			}
 			break
@@ -108,12 +121,12 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 			if runner.activeServerImageID != "" {
 				return runner.activeServerImageID + "\n", nil
 			}
-			return "sha256:" + strings.Repeat("c", 64) + "\n", nil
+			return runner.configuredServerImageID + "\n", nil
 		}
 		if runner.activeCaddyImageID != "" {
 			return runner.activeCaddyImageID + "\n", nil
 		}
-		return "sha256:" + strings.Repeat("d", 64) + "\n", nil
+		return runner.configuredCaddyImageID + "\n", nil
 	}
 	if command.Name == "docker" && len(command.Args) >= 2 &&
 		command.Args[0] == "exec" {
@@ -175,6 +188,30 @@ func (runner *fakeRunner) Run(_ context.Context, command Command) (string, error
 		return "Set CONVENE_WIRE_DATABASE_PATH=/data/restored.sqlite, then run docker compose up -d.\n", nil
 	}
 	return "", nil
+}
+
+func (runner *fakeRunner) runtimeImageReferenceAvailable(reference string) bool {
+	isConfigDigest := runtimeImageIDPattern.MatchString(reference)
+	isManifestDigest := runtimeImagePattern.MatchString(reference)
+	switch runner.runtimeImageStore {
+	case "containerd":
+		return isManifestDigest
+	case "both":
+		return isConfigDigest || isManifestDigest
+	default:
+		return isConfigDigest
+	}
+}
+
+func testRuntimeImageID(reference string) string {
+	if runtimeImageIDPattern.MatchString(reference) {
+		return reference
+	}
+	if runtimeImagePattern.MatchString(reference) {
+		_, digest, _ := strings.Cut(reference, "@")
+		return digest
+	}
+	return ""
 }
 
 func writeTestCA(t *testing.T, path string, now time.Time) string {
@@ -455,6 +492,7 @@ func createOCIRelease(t *testing.T, parent, version string, dataSchema int) stri
 		images = append(images, releaseimage.ImageMetadata{
 			Role: identity.role, Repository: identity.repository,
 			Digest: manifest.Digest, Reference: identity.repository + "@" + manifest.Digest,
+			RuntimeReference: config.Digest,
 			SBOM: releaseimage.Attestation{
 				Path: sbomPath, SHA256: hex.EncodeToString(sbomDigest[:]),
 				PredicateType: releaseimage.SPDXPredicateType,
@@ -504,6 +542,18 @@ func createOCIRelease(t *testing.T, parent, version string, dataSchema int) stri
 	if err != nil {
 		t.Fatal(err)
 	}
+	dockerManifest := make([]any, 0, len(images))
+	for _, image := range images {
+		dockerManifest = append(dockerManifest, map[string]any{
+			"Config":   "blobs/sha256/" + strings.TrimPrefix(image.RuntimeReference, "sha256:"),
+			"RepoTags": []string{image.Repository + ":" + version},
+			"Layers":   []string{},
+		})
+	}
+	dockerManifestBytes, err := json.Marshal(dockerManifest)
+	if err != nil {
+		t.Fatal(err)
+	}
 	versionWithoutPrefix := strings.TrimPrefix(version, "v")
 	archiveName := "convenewire-central-image_" + versionWithoutPrefix + "_linux_amd64.oci.tar"
 	metadataName := "convenewire-central-image_" + versionWithoutPrefix + "_linux_amd64.metadata.json"
@@ -518,8 +568,9 @@ func createOCIRelease(t *testing.T, parent, version string, dataSchema int) stri
 	}
 	tarWriter := tar.NewWriter(archiveFile)
 	entries := map[string][]byte{
-		"oci-layout": []byte("{\"imageLayoutVersion\":\"1.0.0\"}\n"),
-		"index.json": append(indexBytes, '\n'),
+		"oci-layout":    []byte("{\"imageLayoutVersion\":\"1.0.0\"}\n"),
+		"index.json":    append(indexBytes, '\n'),
+		"manifest.json": append(dockerManifestBytes, '\n'),
 	}
 	for digest, value := range blobs {
 		entries["blobs/sha256/"+digest] = value
@@ -743,8 +794,8 @@ func TestOCIInstallLoadsExactImagesAndDisablesBuildAndPull(t *testing.T) {
 	for _, expected := range []string{
 		`CONVENE_WIRE_RELEASE_VERSION="v1.2.3"`,
 		`CONVENE_WIRE_SOURCE_COMMIT="` + strings.Repeat("a", 40) + `"`,
-		`CONVENE_WIRE_SERVER_IMAGE="convenewire/server@sha256:`,
-		`CONVENE_WIRE_CADDY_IMAGE="convenewire/caddy@sha256:`,
+		`CONVENE_WIRE_SERVER_IMAGE="sha256:`,
+		`CONVENE_WIRE_CADDY_IMAGE="sha256:`,
 	} {
 		if !bytes.Contains(environment, []byte(expected)) {
 			t.Fatalf("closed environment omits %q:\n%s", expected, environment)
@@ -775,9 +826,303 @@ func TestOCIInstallLoadsExactImagesAndDisablesBuildAndPull(t *testing.T) {
 			t.Fatalf("OCI install requested a network pull: %s", joined)
 		}
 	}
-	if loadIndex < 0 || inspectCount != 4 || configIndex <= loadIndex ||
+	if loadIndex < 0 || inspectCount != 6 || configIndex <= loadIndex ||
 		upIndex <= configIndex || runtimeIdentityIndex <= upIndex {
 		t.Fatalf("unexpected load/verify/config/start/identity order: load=%d inspect=%d config=%d up=%d identity=%d", loadIndex, inspectCount, configIndex, upIndex, runtimeIdentityIndex)
+	}
+}
+
+func TestOCIInstallSelectsContainerdManifestDigestPair(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	metadata, _, err := verifyRelease(
+		releaseDir,
+		filepath.Join(releaseDir, "SHA256SUMS"),
+		checksumPin(releaseDir),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner := &fakeRunner{
+		failOnce:          map[string]int{},
+		runtimeImageStore: "containerd",
+	}
+	installation, err := New(testDependencies(runner, &bytes.Buffer{})).Install(
+		context.Background(),
+		installOptions(releaseDir, filepath.Join(root, "state")),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, _ := metadata.RuntimeImages.Image(releaseimage.ServerRole)
+	caddy, _ := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
+	if installation.Manifest.ServerImage != server.Reference ||
+		installation.Manifest.CaddyImage != caddy.Reference {
+		t.Fatalf("containerd install did not persist the complete manifest-digest pair: %+v", installation.Manifest)
+	}
+	environment, err := os.ReadFile(installation.EnvironmentPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`CONVENE_WIRE_SERVER_IMAGE="` + server.Reference + `"`,
+		`CONVENE_WIRE_CADDY_IMAGE="` + caddy.Reference + `"`,
+	} {
+		if !bytes.Contains(environment, []byte(expected)) {
+			t.Fatalf("containerd environment omits %q:\n%s", expected, environment)
+		}
+	}
+}
+
+func TestOCIInstallRejectsPartialRuntimeImageGenerationsBeforeConfiguration(t *testing.T) {
+	tests := []struct {
+		name  string
+		store string
+		role  string
+	}{
+		{name: "partial classic pair", store: "classic", role: releaseimage.CaddyRole},
+		{name: "partial containerd pair", store: "containerd", role: releaseimage.CaddyRole},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			root := t.TempDir()
+			releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+			metadata, _, err := verifyRelease(
+				releaseDir,
+				filepath.Join(releaseDir, "SHA256SUMS"),
+				checksumPin(releaseDir),
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			image, _ := metadata.RuntimeImages.Image(test.role)
+			unavailable := image.RuntimeReference
+			if test.store == "containerd" {
+				unavailable = image.Reference
+			}
+			runner := &fakeRunner{
+				failOnce:                   map[string]int{},
+				runtimeImageStore:          test.store,
+				unavailableImageReferences: map[string]bool{unavailable: true},
+			}
+			dataRoot := filepath.Join(root, "state")
+			_, err = New(testDependencies(runner, &bytes.Buffer{})).Install(
+				context.Background(),
+				installOptions(releaseDir, dataRoot),
+			)
+			requireActionCode(t, err, "RUNTIME_IMAGE_VERIFY_FAILED")
+			manifest, found, loadErr := loadManifest(installationPaths(dataRoot).ManifestPath)
+			if loadErr != nil || !found || manifest.LastSuccessfulStep != "secrets_ready" ||
+				!runtimeImagesUnresolved(manifest) {
+				t.Fatalf("partial image generation crossed the selection boundary: %+v found=%t err=%v", manifest, found, loadErr)
+			}
+			if _, statErr := os.Stat(installationPaths(dataRoot).EnvironmentPath); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("partial image generation rendered an environment: %v", statErr)
+			}
+			for _, command := range runner.commands {
+				joined := command.Name + " " + strings.Join(command.Args, " ")
+				if strings.Contains(joined, " config --quiet") || strings.Contains(joined, " up -d ") {
+					t.Fatalf("partial image generation reached Compose: %s", joined)
+				}
+			}
+		})
+	}
+}
+
+func TestOCIInstallReentryNeverSwitchesPersistedRuntimeImageGeneration(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installed, err := control.Install(
+		context.Background(),
+		installOptions(releaseDir, dataRoot),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := installed.Manifest
+	runner.runtimeImageStore = "containerd"
+	_, err = control.Install(context.Background(), installOptions(releaseDir, dataRoot))
+	requireActionCode(t, err, "RUNTIME_IMAGE_VERIFY_FAILED")
+	current, found, loadErr := loadManifest(installed.ManifestPath)
+	if loadErr != nil || !found || !manifestsEqualIgnoringUpdatedAt(current, original) {
+		t.Fatalf("reentry switched the persisted runtime image generation: %+v found=%t err=%v", current, found, loadErr)
+	}
+}
+
+func TestOCIReadyReentryBackfillsSourceCommitWithoutRegressingOnImageFailure(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	installed, err := control.Install(
+		context.Background(),
+		installOptions(releaseDir, dataRoot),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	historical := installed.Manifest
+	historical.SourceCommit = ""
+	if err := saveManifest(installed.ManifestPath, historical); err != nil {
+		t.Fatal(err)
+	}
+	runner.runtimeImageStore = "containerd"
+	_, err = control.Install(context.Background(), installOptions(releaseDir, dataRoot))
+	requireActionCode(t, err, "RUNTIME_IMAGE_VERIFY_FAILED")
+	current, found, loadErr := loadManifest(installed.ManifestPath)
+	if loadErr != nil || !found || current.LastSuccessfulStep != "ready" ||
+		current.SourceCommit != strings.Repeat("a", 40) ||
+		current.ServerImage != historical.ServerImage ||
+		current.CaddyImage != historical.CaddyImage {
+		t.Fatalf("historical ready reentry regressed after image failure: %+v found=%t err=%v", current, found, loadErr)
+	}
+}
+
+func TestOCIInstallSelectionCASFailureStaysUnresolvedAndRetries(t *testing.T) {
+	root := t.TempDir()
+	releaseDir := createOCIRelease(t, root, "v1.2.3", 1)
+	dataRoot := filepath.Join(root, "state")
+	paths := installationPaths(dataRoot)
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	platformInspections := 0
+	injected := false
+	runner.hook = func(command Command) {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if injected || !strings.Contains(joined, "{{.Os}}/{{.Architecture}}") {
+			return
+		}
+		platformInspections++
+		if platformInspections != 2 {
+			return
+		}
+		manifest, found, err := loadManifest(paths.ManifestPath)
+		if err != nil || !found || !runtimeImagesUnresolved(manifest) {
+			t.Fatalf("selection CAS injection saw an invalid boundary: %+v found=%t err=%v", manifest, found, err)
+		}
+		manifest.Generation++
+		if err := saveManifest(paths.ManifestPath, manifest); err != nil {
+			t.Fatal(err)
+		}
+		injected = true
+	}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	_, err := control.Install(context.Background(), installOptions(releaseDir, dataRoot))
+	requireActionCode(t, err, "MANIFEST_WRITE_FAILED")
+	manifest, found, loadErr := loadManifest(paths.ManifestPath)
+	if loadErr != nil || !found || manifest.LastSuccessfulStep != "secrets_ready" ||
+		!runtimeImagesUnresolved(manifest) {
+		t.Fatalf("selection CAS failure crossed its unresolved boundary: %+v found=%t err=%v", manifest, found, loadErr)
+	}
+	if _, statErr := os.Stat(paths.EnvironmentPath); !errors.Is(statErr, os.ErrNotExist) {
+		t.Fatalf("selection CAS failure rendered an environment: %v", statErr)
+	}
+	runner.hook = nil
+	result, err := control.Install(context.Background(), installOptions(releaseDir, dataRoot))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Manifest.LastSuccessfulStep != "ready" || !hasPinnedRuntimeImages(result.Manifest) {
+		t.Fatalf("selection CAS retry did not converge: %+v", result.Manifest)
+	}
+}
+
+func TestRuntimeImageManifestCompatibilityRequiresOneReferenceGeneration(t *testing.T) {
+	serverRuntime := "sha256:" + strings.Repeat("1", 64)
+	caddyRuntime := "sha256:" + strings.Repeat("2", 64)
+	serverLegacy := releaseimage.ServerRepository + "@sha256:" + strings.Repeat("3", 64)
+	caddyLegacy := releaseimage.CaddyRepository + "@sha256:" + strings.Repeat("4", 64)
+	metadata := ReleaseMetadata{
+		SchemaVersion: releaseSchemaVersion,
+		RuntimeImages: releaseimage.Metadata{
+			Platform: "linux/amd64",
+			Images: []releaseimage.ImageMetadata{
+				{
+					Role: releaseimage.ServerRole, Reference: serverLegacy,
+					RuntimeReference: serverRuntime,
+				},
+				{
+					Role: releaseimage.CaddyRole, Reference: caddyLegacy,
+					RuntimeReference: caddyRuntime,
+				},
+			},
+		},
+	}
+
+	runtimeManifest := Manifest{}
+	applyRuntimeImages(&runtimeManifest, metadata)
+	if !runtimeImagesUnresolved(runtimeManifest) {
+		t.Fatalf("unresolved manifest selected a Docker-specific generation: %+v", runtimeManifest)
+	}
+	applySelectedRuntimeImages(&runtimeManifest, metadata, serverRuntime, caddyRuntime)
+	if runtimeManifest.ServerImage != serverRuntime ||
+		runtimeManifest.CaddyImage != caddyRuntime ||
+		runtimeManifest.RuntimeImagePlatform != metadata.RuntimeImages.Platform {
+		t.Fatalf("new manifest did not select OCI config IDs: %+v", runtimeManifest)
+	}
+	if !runtimeImagesMatch(runtimeManifest, metadata) {
+		t.Fatal("new raw image-ID pair did not match its verified metadata")
+	}
+
+	legacyManifest := runtimeManifest
+	legacyManifest.ServerImage = serverLegacy
+	legacyManifest.CaddyImage = caddyLegacy
+	if !runtimeImagesMatch(legacyManifest, metadata) {
+		t.Fatal("complete legacy repo@manifest pair was not accepted")
+	}
+
+	mixedManifest := runtimeManifest
+	mixedManifest.CaddyImage = caddyLegacy
+	if runtimeImagesMatch(mixedManifest, metadata) {
+		t.Fatal("mixed raw and legacy reference generations matched")
+	}
+	wrongRuntimeManifest := runtimeManifest
+	wrongRuntimeManifest.CaddyImage = "sha256:" + strings.Repeat("5", 64)
+	if runtimeImagesMatch(wrongRuntimeManifest, metadata) {
+		t.Fatal("unverified raw image ID matched")
+	}
+}
+
+func TestManifestValidationAcceptsOnlyCompleteRuntimeReferenceGenerations(t *testing.T) {
+	serverRuntime := "sha256:" + strings.Repeat("1", 64)
+	caddyRuntime := "sha256:" + strings.Repeat("2", 64)
+	serverLegacy := releaseimage.ServerRepository + "@sha256:" + strings.Repeat("3", 64)
+	caddyLegacy := releaseimage.CaddyRepository + "@sha256:" + strings.Repeat("4", 64)
+	base := Manifest{
+		SchemaVersion:  manifestSchemaVersion,
+		InstallationID: "install_" + strings.Repeat("a", 16),
+		Mode:           "local", TLSProfile: "local",
+		RuntimeImagePlatform: "linux/amd64",
+	}
+	tests := []struct {
+		name   string
+		server string
+		caddy  string
+		valid  bool
+	}{
+		{name: "raw image ID pair", server: serverRuntime, caddy: caddyRuntime, valid: true},
+		{name: "legacy repo digest pair", server: serverLegacy, caddy: caddyLegacy, valid: true},
+		{name: "raw Server with legacy Caddy", server: serverRuntime, caddy: caddyLegacy},
+		{name: "legacy Server with raw Caddy", server: serverLegacy, caddy: caddyRuntime},
+		{name: "swapped legacy roles", server: caddyLegacy, caddy: serverLegacy},
+		{name: "incomplete raw pair", server: serverRuntime},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			manifest := base
+			manifest.ServerImage = test.server
+			manifest.CaddyImage = test.caddy
+			err := validateManifest(manifest)
+			if test.valid && err != nil {
+				t.Fatalf("valid runtime reference pair rejected: %v", err)
+			}
+			if !test.valid && err == nil {
+				t.Fatal("invalid runtime reference pair accepted")
+			}
+		})
 	}
 }
 
@@ -880,7 +1225,7 @@ func TestOCIInstallLoadFailureStopsBeforeCompose(t *testing.T) {
 		}
 	}
 	manifest, found, loadErr := loadManifest(installationPaths(dataRoot).ManifestPath)
-	if loadErr != nil || !found || manifest.LastSuccessfulStep != "configuration_ready" {
+	if loadErr != nil || !found || manifest.LastSuccessfulStep != "secrets_ready" {
 		t.Fatalf("load failure was not retry-safe: %+v found=%v err=%v", manifest, found, loadErr)
 	}
 }
@@ -1306,6 +1651,14 @@ func seedUpgradeJournal(
 	target.ReleaseDigest = digest
 	target.DataSchemaVersion = metadata.DataSchemaVersion
 	applyRuntimeImages(&target, metadata)
+	server, _ := metadata.RuntimeImages.Image(releaseimage.ServerRole)
+	caddy, _ := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
+	applySelectedRuntimeImages(
+		&target,
+		metadata,
+		server.RuntimeReference,
+		caddy.RuntimeReference,
+	)
 	target.LastSuccessfulStep = "upgrade_validating"
 	target.UpdatedAt = time.Date(2026, 8, 28, 1, 3, 0, 0, time.UTC).
 		Format(time.RFC3339Nano)
@@ -1504,6 +1857,8 @@ func TestUpgradeCleansCommittedTargetJournalWithoutReplayingMutation(t *testing.
 	}
 	runner.activeRuntimeReleaseVersion = committed.ReleaseVersion
 	runner.activeRuntimeSourceCommit = committed.SourceCommit
+	runner.activeServerImageID = testRuntimeImageID(committed.ServerImage)
+	runner.activeCaddyImageID = testRuntimeImageID(committed.CaddyImage)
 	start := len(runner.commands)
 	if err := control.Upgrade(context.Background(), UpgradeOptions{
 		DataRoot: dataRoot, ReleaseDir: targetRelease,
@@ -1720,8 +2075,18 @@ func TestUpgradeFromLegacyReleaseLoadsOCIOnlyAfterVerifiedBackup(t *testing.T) {
 		t.Fatal(err)
 	}
 	journalPresentAtMutation := false
+	journalBoundBeforeTargetConfig := false
 	runner.hook = func(command Command) {
 		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, " config --quiet") {
+			journal, found, err := loadUpgradeJournal(
+				installationPaths(dataRoot).UpgradeJournalPath,
+			)
+			if err != nil || !found || !hasPinnedRuntimeImages(journal.Target) {
+				t.Fatalf("target configuration preceded durable runtime selection: %+v found=%t err=%v", journal, found, err)
+			}
+			journalBoundBeforeTargetConfig = true
+		}
 		if !strings.Contains(joined, "docker image load --input") {
 			return
 		}
@@ -1762,6 +2127,181 @@ func TestUpgradeFromLegacyReleaseLoadsOCIOnlyAfterVerifiedBackup(t *testing.T) {
 	}
 	if !journalPresentAtMutation {
 		t.Fatal("OCI upgrade never proved its pre-mutation journal boundary")
+	}
+	if !journalBoundBeforeTargetConfig {
+		t.Fatal("OCI upgrade never proved its post-load runtime journal binding")
+	}
+}
+
+func TestOCIUpgradePersistsContainerdManifestDigestPair(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+	targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{
+		failOnce:          map[string]int{},
+		runtimeImageStore: "containerd",
+	}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	if _, err := control.Install(
+		context.Background(),
+		installOptions(currentRelease, dataRoot),
+	); err != nil {
+		t.Fatal(err)
+	}
+	if err := control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	metadata, _, err := verifyRelease(
+		targetRelease,
+		filepath.Join(targetRelease, "SHA256SUMS"),
+		checksumPin(targetRelease),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	server, _ := metadata.RuntimeImages.Image(releaseimage.ServerRole)
+	caddy, _ := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
+	manifest, found, err := loadManifest(installationPaths(dataRoot).ManifestPath)
+	if err != nil || !found || manifest.ServerImage != server.Reference ||
+		manifest.CaddyImage != caddy.Reference || manifest.LastSuccessfulStep != "ready" {
+		t.Fatalf("containerd upgrade did not commit one manifest-digest pair: %+v found=%t err=%v", manifest, found, err)
+	}
+}
+
+func TestOCIUpgradePartialSelectionKeepsPreparedJournalAndRetriesWithoutBackup(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+	targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	current, err := control.Install(
+		context.Background(),
+		installOptions(currentRelease, dataRoot),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	metadata, _, err := verifyRelease(
+		targetRelease,
+		filepath.Join(targetRelease, "SHA256SUMS"),
+		checksumPin(targetRelease),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	caddy, _ := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
+	runner.unavailableImageReferences = map[string]bool{caddy.RuntimeReference: true}
+	err = control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	})
+	requireActionCode(t, err, "RUNTIME_IMAGE_VERIFY_FAILED")
+	manifest, found, loadErr := loadManifest(current.ManifestPath)
+	if loadErr != nil || !found || !manifestsEqualIgnoringUpdatedAt(manifest, current.Manifest) {
+		t.Fatalf("partial upgrade selection changed the active manifest: %+v found=%t err=%v", manifest, found, loadErr)
+	}
+	journal, found, loadErr := loadUpgradeJournal(current.UpgradeJournalPath)
+	if loadErr != nil || !found || journal.Phase != upgradePhasePrepared ||
+		!runtimeImagesUnresolved(journal.Target) {
+		t.Fatalf("partial upgrade selection lost its unresolved prepared boundary: %+v found=%t err=%v", journal, found, loadErr)
+	}
+	runner.unavailableImageReferences = nil
+	if err := control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if runner.backupSequence != 1 {
+		t.Fatalf("runtime selection recovery repeated the verified backup: %d", runner.backupSequence)
+	}
+}
+
+func TestOCIUpgradeRuntimeJournalBindFailureStopsBeforeConfigurationAndRetries(t *testing.T) {
+	root := t.TempDir()
+	currentRelease := createOCIRelease(t, root, "v1.2.3", 1)
+	targetRelease := createOCIRelease(t, root, "v1.3.0", 2)
+	dataRoot := filepath.Join(root, "state")
+	runner := &fakeRunner{failOnce: map[string]int{}}
+	control := New(testDependencies(runner, &bytes.Buffer{}))
+	current, err := control.Install(
+		context.Background(),
+		installOptions(currentRelease, dataRoot),
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	journalBackup := current.UpgradeJournalPath + ".test-backup"
+	platformInspections := 0
+	sawTargetLoad := false
+	injected := false
+	runner.hook = func(command Command) {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, "docker image load --input") {
+			sawTargetLoad = true
+		}
+		if injected || !sawTargetLoad ||
+			!strings.Contains(joined, "{{.Os}}/{{.Architecture}}") {
+			return
+		}
+		platformInspections++
+		if platformInspections != 2 {
+			return
+		}
+		journal, found, err := loadUpgradeJournal(current.UpgradeJournalPath)
+		if err != nil || !found || journal.Phase != upgradePhasePrepared ||
+			!runtimeImagesUnresolved(journal.Target) {
+			t.Fatalf("journal bind injection saw an invalid boundary: %+v found=%t err=%v", journal, found, err)
+		}
+		if err := os.Rename(current.UpgradeJournalPath, journalBackup); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Mkdir(current.UpgradeJournalPath, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		injected = true
+	}
+	start := len(runner.commands)
+	err = control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	})
+	requireActionCode(t, err, "UPGRADE_JOURNAL_WRITE_FAILED")
+	for _, command := range runner.commands[start:] {
+		joined := command.Name + " " + strings.Join(command.Args, " ")
+		if strings.Contains(joined, " config --quiet") || strings.Contains(joined, " up -d ") {
+			t.Fatalf("journal bind failure reached target configuration or services: %s", joined)
+		}
+	}
+	manifest, found, loadErr := loadManifest(current.ManifestPath)
+	if loadErr != nil || !found || !manifestsEqualIgnoringUpdatedAt(manifest, current.Manifest) {
+		t.Fatalf("journal bind failure changed the active manifest: %+v found=%t err=%v", manifest, found, loadErr)
+	}
+	if err := os.Remove(current.UpgradeJournalPath); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(journalBackup, current.UpgradeJournalPath); err != nil {
+		t.Fatal(err)
+	}
+	journal, found, loadErr := loadUpgradeJournal(current.UpgradeJournalPath)
+	if loadErr != nil || !found || journal.Phase != upgradePhasePrepared ||
+		!runtimeImagesUnresolved(journal.Target) {
+		t.Fatalf("failed journal bind did not preserve the prepared target: %+v found=%t err=%v", journal, found, loadErr)
+	}
+	runner.hook = nil
+	if err := control.Upgrade(context.Background(), UpgradeOptions{
+		DataRoot: dataRoot, ReleaseDir: targetRelease,
+		ChecksumsSHA256: checksumPin(targetRelease),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if runner.backupSequence != 1 {
+		t.Fatalf("journal bind recovery repeated the verified backup: %d", runner.backupSequence)
 	}
 }
 

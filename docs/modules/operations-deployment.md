@@ -34,10 +34,18 @@ this verification passes.
 The release workflow builds one Linux OCI bundle per amd64/arm64 architecture
 from the exact resolved Release commit, then embeds that same architecture's
 bundle unchanged in both its Linux and macOS controller archives. Each bundle
-contains the Server and pinned Caddy images selected only by manifest digest,
-per-image SPDX statements, one exact-source provenance statement and closed
-metadata binding Release, source, platform, archive hash, image digests,
-builder and pinned SBOM generator. The images are never published under a
+contains the Server and pinned Caddy images, a strictly derived
+Docker-save-compatible `manifest.json` projection for classic Docker image
+stores, per-image SPDX statements, one exact-source provenance statement and
+closed metadata binding Release, source, platform, archive hash, OCI manifest
+digests, Docker config image IDs, builder and pinned SBOM generator. The Docker
+manifest may reference only the same configs and ordered layers already
+selected by the verified OCI manifests.
+After load, runtime activation selects one complete store-supported generation:
+both immutable config image IDs for a classic Docker image store, or both
+repository-qualified OCI manifest digests for a containerd image store. A
+partial or mixed Server/Caddy generation fails closed. OCI manifest digests
+remain the SBOM/provenance subjects. The images are never published under a
 mutable registry tag as an installation dependency.
 
 Each Central archive also contains the controller, Compose source context for
@@ -57,7 +65,8 @@ and canonical CA DER digest in addition to the exact release/checksum,
 release/data locations, data-schema version, isolated Compose project name,
 network mode, domain/origin/ports, legacy Server Token selection, timestamps,
 and last successful step. New image-backed Releases additionally record the
-source commit, exact Server/Caddy digest references and Linux platform. It
+source commit, the exact selected Server/Caddy reference pair and Linux
+platform. It
 contains no secret value,
 credential, local Runtime configuration, Workspace path, or Team state.
 Atomic stage recording makes exact `install` reentry converge after checksum,
@@ -237,14 +246,17 @@ or a release-owned script. A directory whose content or checksum manifest has
 drifted is diagnostic input only, not trusted executable installation state.
 
 Release-metadata schema 2 disables target-host application builds. Before
-Compose validation or start, the controller verifies the embedded OCI archive
-and attestations against the already pinned release, imports it with
-`docker image load`, inspects both exact digest references and platform, and
-runs Compose with `--no-build --pull never`. Status, doctor, reinstall and
-upgrade revalidate those identities. Release-metadata schema 1 remains an
-explicit compatibility path and alone may use the historical source build;
-schema 2 cannot silently fall back to it after missing image content, Docker
-failure or registry reachability.
+Compose validation or start, the controller verifies the embedded OCI archive,
+its exact Docker-save projection and attestations against the already pinned
+release, imports it with `docker image load`, resolves one complete config-ID or
+repository-qualified manifest-digest pair, atomically records that selection
+before rendering Compose configuration, inspects both exact identities and
+platform, and runs Compose with `--no-build --pull never`. Once recorded,
+status, doctor, reinstall and upgrade revalidate that same generation rather
+than switching to another one. Release-metadata schema 1 remains an explicit
+compatibility path and alone may use the historical source build; schema 2
+cannot silently fall back to it after missing image content, Docker failure or
+registry reachability.
 
 ## Verification
 
@@ -281,16 +293,18 @@ controller build and the real Docker Compose/Caddy configuration validation
 also pass. [Acceptance evidence](../acceptance/ops-012-lifecycle-authority.md)
 records the exact boundary without claiming multi-host or release publication.
 
-`OPS-013` adds structural mutation tests for OCI descriptors, blobs, labels,
-SBOMs, provenance, metadata and controller commands. Its real Docker gate starts
-with both digest references absent, loads only the finalized archive, inspects
-the expected platform/Release/source labels, and executes Server and Caddy with
-`--pull=never`, no network and a read-only root. Hosted Release publication and
-target-host lifecycle acceptance remain separate from this implementation
-evidence. [Acceptance evidence](../acceptance/ops-013-immutable-central-images.md)
-records a clean exact-HEAD `linux/arm64` build and load in which the default
-Server command applied migrations, reached readiness, emitted the matching
-runtime build identity, and the digest-only Caddy image executed successfully.
+`OPS-013` adds structural mutation tests for OCI descriptors, Docker-save
+projection, blobs, labels, SBOMs, provenance, metadata and controller commands.
+The current Docker verifier requires all four candidate references to be absent,
+loads only the finalized archive, selects one complete store-supported pair,
+inspects the expected immutable identity/platform/Release/source labels, and
+executes Server and Caddy from that same pair with `--pull=never`, no network
+and a read-only root. Exact-commit execution of the current projection in
+classic and containerd image stores remains pending. [Prior acceptance
+evidence](../acceptance/ops-013-immutable-central-images.md) records a clean
+`linux/arm64` run for the earlier manifest-digest archive and is not proof of the
+current dual-layout projection. Hosted Release publication and target-host
+lifecycle acceptance remain separate from this implementation evidence.
 Release-image mutation tests and workflow policy close the intended amd64 and
 four schema-v2 archive wiring, but their actual builds remain `QA-034` hosted
 evidence. Hosted publication and target-host lifecycle are also separate

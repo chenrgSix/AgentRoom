@@ -49,7 +49,7 @@ expected_archive_sha=$(jq -er \
   --arg platform "linux/${target_arch}" \
   --arg archive "image/${archive_name}" \
   --arg generator "${sbom_generator}" '
-    select(.schemaVersion == 1 and
+    select(.schemaVersion == 2 and
       .releaseVersion == $release and
       .sourceCommit == $source and
       .platform == $platform and
@@ -63,25 +63,90 @@ if [[ "$(sha256_file "${archive}")" != "${expected_archive_sha}" ]]; then
   exit 1
 fi
 
-references_output=$(jq -er '
-  select((.images | length) == 2) |
-  [.images[] |
-    select((.role == "server" and .repository == "convenewire/server") or
-      (.role == "caddy" and .repository == "convenewire/caddy")) |
-    select(.reference == (.repository + "@" + .digest)) |
-    .reference] | unique[]
+runtime_records_output=$(jq -er '
+  select(.schemaVersion == 2 and (.images | length) == 2) |
+  .images as $images |
+  [
+    [
+      $images[] |
+      select(.role == "server" and .repository == "convenewire/server") |
+      select(
+        (.digest | type) == "string" and
+        (.digest | test("^sha256:[0-9a-f]{64}$")) and
+        .reference == (.repository + "@" + .digest) and
+        (.runtimeReference | type) == "string" and
+        (.runtimeReference | test("^sha256:[0-9a-f]{64}$"))
+      )
+    ],
+    [
+      $images[] |
+      select(.role == "caddy" and .repository == "convenewire/caddy") |
+      select(
+        (.digest | type) == "string" and
+        (.digest | test("^sha256:[0-9a-f]{64}$")) and
+        .reference == (.repository + "@" + .digest) and
+        (.runtimeReference | type) == "string" and
+        (.runtimeReference | test("^sha256:[0-9a-f]{64}$"))
+      )
+    ]
+  ] |
+  select(.[0] | length == 1) |
+  select(.[1] | length == 1) |
+  .[] | .[0] | [.role, .runtimeReference, .reference, .digest] | @tsv
 ' "${metadata}")
+server_runtime_reference=
+caddy_runtime_reference=
+server_manifest_reference=
+caddy_manifest_reference=
+server_manifest_digest=
+caddy_manifest_digest=
+while IFS=$'\t' read -r role runtime_reference manifest_reference manifest_digest; do
+  case "${role}" in
+    server)
+      if [[ -n "${server_runtime_reference}" ]]; then
+        echo "Central OCI metadata contains duplicate Server runtime references" >&2
+        exit 1
+      fi
+      server_runtime_reference=${runtime_reference}
+      server_manifest_reference=${manifest_reference}
+      server_manifest_digest=${manifest_digest}
+      ;;
+    caddy)
+      if [[ -n "${caddy_runtime_reference}" ]]; then
+        echo "Central OCI metadata contains duplicate Caddy runtime references" >&2
+        exit 1
+      fi
+      caddy_runtime_reference=${runtime_reference}
+      caddy_manifest_reference=${manifest_reference}
+      caddy_manifest_digest=${manifest_digest}
+      ;;
+    *)
+      echo "Central OCI metadata contains an unsupported runtime image role" >&2
+      exit 1
+      ;;
+  esac
+done <<< "${runtime_records_output}"
+if [[ -z "${server_runtime_reference}" || -z "${caddy_runtime_reference}" ||
+  -z "${server_manifest_reference}" || -z "${caddy_manifest_reference}" ||
+  -z "${server_manifest_digest}" || -z "${caddy_manifest_digest}" ||
+  "${server_runtime_reference}" == "${caddy_runtime_reference}" ]]; then
+  echo "Central OCI metadata does not contain two distinct role-bound runtime references" >&2
+  exit 1
+fi
+
+references_output=$(printf '%s\n%s\n%s\n%s\n' \
+  "${server_runtime_reference}" "${caddy_runtime_reference}" \
+  "${server_manifest_reference}" "${caddy_manifest_reference}")
 references=()
 while IFS= read -r reference; do
   if [[ -n "${reference}" ]]; then
     references[${#references[@]}]=${reference}
   fi
 done <<< "${references_output}"
-if [[ "${#references[@]}" -ne 2 ]]; then
-  echo "Central OCI metadata does not contain exactly two digest-only runtime references" >&2
+if [[ "${#references[@]}" -ne 4 ]]; then
+  echo "Central OCI metadata does not contain exactly four runtime reference candidates" >&2
   exit 1
 fi
-
 for reference in "${references[@]}"; do
   if docker image inspect "${reference}" >/dev/null 2>&1; then
     echo "Clean-daemon proof failed: ${reference} existed before bundle load" >&2
@@ -91,22 +156,63 @@ done
 
 docker image load --input "${archive}"
 
-for reference in "${references[@]}"; do
+classic_server_available=false
+classic_caddy_available=false
+if docker image inspect "${server_runtime_reference}" >/dev/null 2>&1; then
+  classic_server_available=true
+fi
+if docker image inspect "${caddy_runtime_reference}" >/dev/null 2>&1; then
+  classic_caddy_available=true
+fi
+if [[ "${classic_server_available}" != "${classic_caddy_available}" ]]; then
+  echo "Loaded OCI bundle exposed only part of the classic config-digest image pair" >&2
+  exit 1
+fi
+
+reference_generation=
+server_expected_image_id=${server_runtime_reference}
+caddy_expected_image_id=${caddy_runtime_reference}
+if [[ "${classic_server_available}" == true ]]; then
+  server_reference=${server_runtime_reference}
+  caddy_reference=${caddy_runtime_reference}
+  reference_generation=classic-config-digest
+else
+  containerd_server_available=false
+  containerd_caddy_available=false
+  if docker image inspect "${server_manifest_reference}" >/dev/null 2>&1; then
+    containerd_server_available=true
+  fi
+  if docker image inspect "${caddy_manifest_reference}" >/dev/null 2>&1; then
+    containerd_caddy_available=true
+  fi
+  if [[ "${containerd_server_available}" != "${containerd_caddy_available}" ]]; then
+    echo "Loaded OCI bundle exposed only part of the containerd manifest-digest image pair" >&2
+    exit 1
+  fi
+  if [[ "${containerd_server_available}" != true ]]; then
+    echo "Loaded OCI bundle exposed no complete supported runtime image pair" >&2
+    exit 1
+  fi
+  server_reference=${server_manifest_reference}
+  caddy_reference=${caddy_manifest_reference}
+  server_expected_image_id=${server_manifest_digest}
+  caddy_expected_image_id=${caddy_manifest_digest}
+  reference_generation=containerd-manifest-digest
+fi
+
+references=("${server_reference}" "${caddy_reference}")
+expected_image_ids=("${server_expected_image_id}" "${caddy_expected_image_id}")
+for index in "${!references[@]}"; do
+  reference=${references[${index}]}
+  expected_image_id=${expected_image_ids[${index}]}
   identity=$(docker image inspect --format \
-    '{{.Os}}/{{.Architecture}} {{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.version"}}' \
+    '{{.Id}} {{.Os}}/{{.Architecture}} {{index .Config.Labels "org.opencontainers.image.revision"}} {{index .Config.Labels "org.opencontainers.image.version"}}' \
     "${reference}")
-  if [[ "${identity}" != "linux/${target_arch} ${source_commit} ${release_tag}" ]]; then
+  if [[ "${identity}" != "${expected_image_id} linux/${target_arch} ${source_commit} ${release_tag}" ]]; then
     echo "Loaded runtime image identity is invalid for ${reference}: ${identity}" >&2
     exit 1
   fi
 done
-
-server_reference=$(printf '%s\n' "${references[@]}" | awk '/^convenewire\/server@sha256:/ { print }')
-caddy_reference=$(printf '%s\n' "${references[@]}" | awk '/^convenewire\/caddy@sha256:/ { print }')
-if [[ -z "${server_reference}" || -z "${caddy_reference}" ]]; then
-  echo "Loaded OCI bundle omitted one required digest-only image" >&2
-  exit 1
-fi
 
 server_command=$(docker image inspect --format '{{json .Config.Cmd}}' "${server_reference}")
 if [[ "${server_command}" != '["node","apps/server/dist/server.js"]' ]]; then
@@ -186,4 +292,5 @@ fi
 docker run --rm --pull=never --network none --read-only \
   "${caddy_reference}" caddy version >/dev/null
 
-printf 'Verified clean-daemon OCI load, default Server readiness/build identity, and digest-only execution for linux/%s\n' "${target_arch}"
+printf 'Verified clean-daemon OCI load, default Server readiness/build identity, and %s execution for linux/%s\n' \
+  "${reference_generation}" "${target_arch}"

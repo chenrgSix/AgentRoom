@@ -50,6 +50,7 @@ var (
 	domainPattern          = regexp.MustCompile(`^[A-Za-z0-9.-]+$`)
 	commitPattern          = regexp.MustCompile(`^[0-9a-f]{40,64}$`)
 	runtimeImagePattern    = regexp.MustCompile(`^convenewire/(server|caddy)@sha256:[0-9a-f]{64}$`)
+	runtimeImageIDPattern  = regexp.MustCompile(`^sha256:[0-9a-f]{64}$`)
 	runtimePlatformPattern = regexp.MustCompile(`^linux/(amd64|arm64)$`)
 )
 
@@ -407,8 +408,20 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	}
 	if exists && manifest.SourceCommit == "" {
 		manifest.SourceCommit = metadata.SourceCommit
+		if existing.LastSuccessfulStep == "ready" {
+			if err := controller.recordStep(&manifest, installation.ManifestPath, "ready"); err != nil {
+				return Installation{}, err
+			}
+		}
 	}
 	installation.Manifest = manifest
+	readyReentry := exists && existing.LastSuccessfulStep == "ready"
+	recordProgress := func(step string) error {
+		if readyReentry {
+			return nil
+		}
+		return controller.recordStep(&manifest, installation.ManifestPath, step)
+	}
 	if err := ensureDirectories(options.DataRoot); err != nil {
 		return Installation{}, actionError(
 			"STORAGE_PREPARE_FAILED",
@@ -417,7 +430,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 			err,
 		)
 	}
-	if err := controller.recordStep(&manifest, installation.ManifestPath, "storage_ready"); err != nil {
+	if err := recordProgress("storage_ready"); err != nil {
 		return Installation{}, err
 	}
 	if err := ensureSecret(installation.OwnerSecretPath, controller.dependencies.Random); err != nil {
@@ -428,22 +441,26 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 			return Installation{}, actionError("SECRET_PREPARE_FAILED", "could not prepare the legacy Server Token", "Check the data-root permissions and retry without printing the secret.", err)
 		}
 	}
-	if err := controller.recordStep(&manifest, installation.ManifestPath, "secrets_ready"); err != nil {
+	if err := recordProgress("secrets_ready"); err != nil {
 		return Installation{}, err
+	}
+	installation.Manifest = manifest
+	if metadata.SchemaVersion == releaseSchemaVersion {
+		selectedManifest, err := controller.ensureReleaseImagesLoaded(ctx, installation, metadata)
+		if err != nil {
+			return Installation{}, err
+		}
+		manifest = selectedManifest
+		if err := recordProgress("images_loaded"); err != nil {
+			return Installation{}, err
+		}
+		installation.Manifest = manifest
 	}
 	if err := renderConfiguration(options, metadata.ReleaseVersion, installation); err != nil {
 		return Installation{}, actionError("CONFIG_RENDER_FAILED", "could not render atomic installation configuration", "Check the control-directory permissions and retry.", err)
 	}
-	if err := controller.recordStep(&manifest, installation.ManifestPath, "configuration_ready"); err != nil {
+	if err := recordProgress("configuration_ready"); err != nil {
 		return Installation{}, err
-	}
-	if err := controller.ensureReleaseImagesLoaded(ctx, installation, metadata); err != nil {
-		return Installation{}, err
-	}
-	if metadata.SchemaVersion == releaseSchemaVersion {
-		if err := controller.recordStep(&manifest, installation.ManifestPath, "images_loaded"); err != nil {
-			return Installation{}, err
-		}
 	}
 	commandEnvironment, err := installationEnvironment(installation)
 	if err != nil {
@@ -452,14 +469,14 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 	if _, err := controller.runCompose(ctx, installation, commandEnvironment, "config", "--quiet"); err != nil {
 		return Installation{}, actionError("COMPOSE_INVALID", "Docker Compose rejected the complete ConveneWire model", "Inspect the reported Compose error; generated secrets and data were preserved for an exact retry.", err)
 	}
-	if err := controller.recordStep(&manifest, installation.ManifestPath, "compose_validated"); err != nil {
+	if err := recordProgress("compose_validated"); err != nil {
 		return Installation{}, err
 	}
 	if _, err := controller.runCompose(ctx, installation, commandEnvironment,
 		composeUpArguments(manifest, true)...); err != nil {
 		return Installation{}, actionError("SERVICES_START_FAILED", "ConveneWire services did not reach the Compose running boundary", "Run convenewirectl doctor for bounded service and log guidance, then retry install with the same arguments.", err)
 	}
-	if err := controller.recordStep(&manifest, installation.ManifestPath, "services_started"); err != nil {
+	if err := recordProgress("services_started"); err != nil {
 		return Installation{}, err
 	}
 	if options.TLSProfile == "private_scoped_ca" {
@@ -471,7 +488,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 			return Installation{}, actionError("PRIVATE_CA_CHANGED", "the active private CA differs from the installation manifest", "Do not overwrite the pin or fall back. Restore the recorded Caddy state or perform an authenticated overlap rotation.", nil)
 		}
 		manifest.CACertificateSHA256 = digest
-		if err := controller.recordStep(&manifest, installation.ManifestPath, "private_trust_ready"); err != nil {
+		if err := recordProgress("private_trust_ready"); err != nil {
 			return Installation{}, err
 		}
 	}
@@ -499,7 +516,7 @@ func (controller *Controller) Install(ctx context.Context, raw InstallOptions) (
 			err,
 		)
 	}
-	if err := controller.recordStep(&manifest, installation.ManifestPath, "ready"); err != nil {
+	if err := recordProgress("ready"); err != nil {
 		return Installation{}, err
 	}
 	installation.Manifest = manifest
@@ -677,22 +694,42 @@ func applyRuntimeImages(manifest *Manifest, metadata ReleaseMetadata) {
 	manifest.ServerImage = ""
 	manifest.CaddyImage = ""
 	manifest.RuntimeImagePlatform = ""
-	if metadata.SchemaVersion != releaseSchemaVersion {
-		return
-	}
-	server, _ := metadata.RuntimeImages.Image(releaseimage.ServerRole)
-	caddy, _ := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
-	manifest.ServerImage = server.Reference
-	manifest.CaddyImage = caddy.Reference
+}
+
+func applySelectedRuntimeImages(
+	manifest *Manifest,
+	metadata ReleaseMetadata,
+	serverReference,
+	caddyReference string,
+) {
+	manifest.ServerImage = serverReference
+	manifest.CaddyImage = caddyReference
 	manifest.RuntimeImagePlatform = metadata.RuntimeImages.Platform
 }
 
 func runtimeImagesMatch(manifest Manifest, metadata ReleaseMetadata) bool {
-	expected := Manifest{}
-	applyRuntimeImages(&expected, metadata)
-	return manifest.ServerImage == expected.ServerImage &&
-		manifest.CaddyImage == expected.CaddyImage &&
-		manifest.RuntimeImagePlatform == expected.RuntimeImagePlatform
+	if metadata.SchemaVersion != releaseSchemaVersion {
+		return manifest.ServerImage == "" && manifest.CaddyImage == "" &&
+			manifest.RuntimeImagePlatform == ""
+	}
+	server, serverFound := metadata.RuntimeImages.Image(releaseimage.ServerRole)
+	caddy, caddyFound := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
+	if !serverFound || !caddyFound ||
+		manifest.RuntimeImagePlatform != metadata.RuntimeImages.Platform {
+		return false
+	}
+	runtimePair := server.RuntimeReference != "" && caddy.RuntimeReference != "" &&
+		manifest.ServerImage == server.RuntimeReference &&
+		manifest.CaddyImage == caddy.RuntimeReference
+	legacyPair := server.Reference != "" && caddy.Reference != "" &&
+		manifest.ServerImage == server.Reference &&
+		manifest.CaddyImage == caddy.Reference
+	return runtimePair || legacyPair
+}
+
+func runtimeImagesUnresolved(manifest Manifest) bool {
+	return manifest.ServerImage == "" && manifest.CaddyImage == "" &&
+		manifest.RuntimeImagePlatform == ""
 }
 
 func hasPinnedRuntimeImages(manifest Manifest) bool {
@@ -714,9 +751,9 @@ func (controller *Controller) ensureReleaseImagesLoaded(
 	ctx context.Context,
 	installation Installation,
 	metadata ReleaseMetadata,
-) error {
+) (Manifest, error) {
 	if metadata.SchemaVersion == legacyReleaseSchemaVersion {
-		return nil
+		return installation.Manifest, nil
 	}
 	archive := filepath.Join(installation.Manifest.ReleaseDir, filepath.FromSlash(metadata.RuntimeImages.Archive))
 	if _, err := controller.dependencies.Runner.Run(ctx, Command{
@@ -724,22 +761,164 @@ func (controller *Controller) ensureReleaseImagesLoaded(
 		Name: "docker",
 		Args: []string{"image", "load", "--input", archive},
 	}); err != nil {
-		return actionError(
+		return Manifest{}, actionError(
 			"RUNTIME_IMAGE_LOAD_FAILED",
 			"the verified offline Central image bundle could not be loaded",
 			"Keep the release archive unchanged, repair Docker storage or access, and retry the exact lifecycle command; network pulls and source rebuilds are disabled.",
 			err,
 		)
 	}
-	if err := controller.inspectRuntimeImages(ctx, installation.Manifest); err != nil {
-		return actionError(
+	if hasPinnedRuntimeImages(installation.Manifest) {
+		if !runtimeImagesMatch(installation.Manifest, metadata) {
+			return Manifest{}, actionError(
+				"RUNTIME_IMAGE_VERIFY_FAILED",
+				"the recorded Central image generation does not match the verified release metadata",
+				"Do not edit the installation manifest or substitute image references. Restore the exact checksum-verified release and retry.",
+				nil,
+			)
+		}
+		if err := controller.verifyRecordedRuntimeImageGeneration(ctx, installation.Manifest, metadata); err != nil {
+			return Manifest{}, actionError(
+				"RUNTIME_IMAGE_VERIFY_FAILED",
+				"Docker did not expose the recorded digest-pinned Central image generation after loading",
+				"Do not switch image generations, substitute tags, or enable pulls. Repair Docker's local image store and retry from the checksum-verified release archive.",
+				err,
+			)
+		}
+		if err := controller.inspectRuntimeImages(ctx, installation.Manifest); err != nil {
+			return Manifest{}, actionError(
+				"RUNTIME_IMAGE_VERIFY_FAILED",
+				"Docker did not expose the recorded digest-pinned Central images for the required platform",
+				"Do not substitute tags or enable pulls. Repair Docker's local image store and retry from the checksum-verified release archive.",
+				err,
+			)
+		}
+		return installation.Manifest, nil
+	}
+	serverReference, caddyReference, err := controller.selectRuntimeImageGeneration(ctx, metadata)
+	if err != nil {
+		return Manifest{}, actionError(
+			"RUNTIME_IMAGE_VERIFY_FAILED",
+			"Docker did not expose one complete digest-pinned Central image generation after loading",
+			"Do not substitute tags or enable pulls. Repair Docker's local image store and retry from the checksum-verified release archive.",
+			err,
+		)
+	}
+	selected := installation.Manifest
+	applySelectedRuntimeImages(&selected, metadata, serverReference, caddyReference)
+	if err := controller.inspectRuntimeImages(ctx, selected); err != nil {
+		return Manifest{}, actionError(
 			"RUNTIME_IMAGE_VERIFY_FAILED",
 			"Docker did not expose the exact digest-pinned Central images after loading",
 			"Do not substitute tags or enable pulls. Repair Docker's local image store and retry from the checksum-verified release archive.",
 			err,
 		)
 	}
+	return selected, nil
+}
+
+func (controller *Controller) verifyRecordedRuntimeImageGeneration(
+	ctx context.Context,
+	manifest Manifest,
+	metadata ReleaseMetadata,
+) error {
+	server, _ := metadata.RuntimeImages.Image(releaseimage.ServerRole)
+	caddy, _ := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
+	expectedServerID := server.Digest
+	expectedCaddyID := caddy.Digest
+	if manifest.ServerImage == server.RuntimeReference && manifest.CaddyImage == caddy.RuntimeReference {
+		expectedServerID = server.RuntimeReference
+		expectedCaddyID = caddy.RuntimeReference
+	}
+	serverAvailable, err := controller.runtimeImageReferenceAvailable(ctx, manifest.ServerImage, expectedServerID)
+	if err != nil {
+		return err
+	}
+	caddyAvailable, err := controller.runtimeImageReferenceAvailable(ctx, manifest.CaddyImage, expectedCaddyID)
+	if err != nil {
+		return err
+	}
+	if !serverAvailable || !caddyAvailable {
+		return fmt.Errorf("Docker did not expose both roles from the recorded runtime image generation")
+	}
 	return nil
+}
+
+func (controller *Controller) selectRuntimeImageGeneration(
+	ctx context.Context,
+	metadata ReleaseMetadata,
+) (string, string, error) {
+	server, serverFound := metadata.RuntimeImages.Image(releaseimage.ServerRole)
+	caddy, caddyFound := metadata.RuntimeImages.Image(releaseimage.CaddyRole)
+	if !serverFound || !caddyFound {
+		return "", "", fmt.Errorf("verified image metadata omits a runtime role")
+	}
+
+	serverConfigAvailable, err := controller.runtimeImageReferenceAvailable(
+		ctx,
+		server.RuntimeReference,
+		server.RuntimeReference,
+	)
+	if err != nil {
+		return "", "", err
+	}
+	caddyConfigAvailable, err := controller.runtimeImageReferenceAvailable(
+		ctx,
+		caddy.RuntimeReference,
+		caddy.RuntimeReference,
+	)
+	if err != nil {
+		return "", "", err
+	}
+	if serverConfigAvailable && caddyConfigAvailable {
+		return server.RuntimeReference, caddy.RuntimeReference, nil
+	}
+	if serverConfigAvailable != caddyConfigAvailable {
+		return "", "", fmt.Errorf("Docker exposed only one OCI config-digest runtime role")
+	}
+
+	serverManifestAvailable, err := controller.runtimeImageReferenceAvailable(
+		ctx,
+		server.Reference,
+		server.Digest,
+	)
+	if err != nil {
+		return "", "", err
+	}
+	caddyManifestAvailable, err := controller.runtimeImageReferenceAvailable(
+		ctx,
+		caddy.Reference,
+		caddy.Digest,
+	)
+	if err != nil {
+		return "", "", err
+	}
+	if serverManifestAvailable && caddyManifestAvailable {
+		return server.Reference, caddy.Reference, nil
+	}
+	if serverManifestAvailable != caddyManifestAvailable {
+		return "", "", fmt.Errorf("Docker exposed only one OCI manifest-digest runtime role")
+	}
+	return "", "", fmt.Errorf("Docker exposed neither supported runtime image generation")
+}
+
+func (controller *Controller) runtimeImageReferenceAvailable(
+	ctx context.Context,
+	reference,
+	expectedID string,
+) (bool, error) {
+	output, err := controller.dependencies.Runner.Run(ctx, Command{
+		Name: "docker",
+		Args: []string{"image", "inspect", "--format", "{{.Id}}", reference},
+	})
+	if err != nil {
+		return false, nil
+	}
+	actualID := strings.TrimSpace(output)
+	if actualID != expectedID {
+		return false, fmt.Errorf("image reference %s resolved to %q instead of its verified digest", reference, actualID)
+	}
+	return true, nil
 }
 
 func (controller *Controller) inspectRuntimeImages(ctx context.Context, manifest Manifest) error {
@@ -1128,10 +1307,13 @@ func validateManifest(manifest Manifest) error {
 		}
 	}
 	if imageFieldCount != 0 {
-		if imageFieldCount != 3 || !runtimeImagePattern.MatchString(manifest.ServerImage) ||
-			!strings.HasPrefix(manifest.ServerImage, releaseimage.ServerRepository+"@") ||
-			!runtimeImagePattern.MatchString(manifest.CaddyImage) ||
-			!strings.HasPrefix(manifest.CaddyImage, releaseimage.CaddyRepository+"@") ||
+		runtimePair := runtimeImageIDPattern.MatchString(manifest.ServerImage) &&
+			runtimeImageIDPattern.MatchString(manifest.CaddyImage)
+		legacyPair := runtimeImagePattern.MatchString(manifest.ServerImage) &&
+			strings.HasPrefix(manifest.ServerImage, releaseimage.ServerRepository+"@") &&
+			runtimeImagePattern.MatchString(manifest.CaddyImage) &&
+			strings.HasPrefix(manifest.CaddyImage, releaseimage.CaddyRepository+"@")
+		if imageFieldCount != 3 || (!runtimePair && !legacyPair) ||
 			!runtimePlatformPattern.MatchString(manifest.RuntimeImagePlatform) {
 			return fmt.Errorf("runtime image identity is incomplete or invalid")
 		}
@@ -1389,7 +1571,12 @@ func matchInstall(existing Manifest, options InstallOptions, metadata ReleaseMet
 	if existing.SourceCommit != "" && existing.SourceCommit != metadata.SourceCommit {
 		return actionError("INSTALL_CONFLICT", "source commit differs from the existing installation manifest", "Retry with the exact original release archive. Use convenewirectl upgrade to change a checksum-pinned release.", nil)
 	}
-	if !runtimeImagesMatch(existing, metadata) {
+	runtimeImagesRetryable := metadata.SchemaVersion == releaseSchemaVersion &&
+		runtimeImagesUnresolved(existing) &&
+		(existing.LastSuccessfulStep == "release_verified" ||
+			existing.LastSuccessfulStep == "storage_ready" ||
+			existing.LastSuccessfulStep == "secrets_ready")
+	if !runtimeImagesRetryable && !runtimeImagesMatch(existing, metadata) {
 		return actionError("INSTALL_CONFLICT", "runtime image digests differ from the existing installation manifest", "Retry with the exact original release archive. Use convenewirectl upgrade to change a checksum-pinned runtime image set.", nil)
 	}
 	return nil

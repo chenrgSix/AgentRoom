@@ -86,7 +86,7 @@ func (controller *Controller) verifyActiveRuntimeIdentity(
 		if !imageIDPattern.MatchString(activeID) ||
 			!imageIDPattern.MatchString(expectedID) || activeID != expectedID {
 			return fmt.Errorf(
-				"service %s runs image %q instead of the manifest digest",
+				"service %s runs image %q instead of the recorded immutable image identity",
 				service.name,
 				activeID,
 			)

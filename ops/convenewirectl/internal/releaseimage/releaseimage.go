@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	MetadataSchemaVersion = 1
+	MetadataSchemaVersion = 2
 	OCIIndexMediaType     = "application/vnd.oci.image.index.v1+json"
 	OCIManifestMediaType  = "application/vnd.oci.image.manifest.v1+json"
 	OCIConfigMediaType    = "application/vnd.oci.image.config.v1+json"
@@ -60,11 +60,12 @@ type Metadata struct {
 }
 
 type ImageMetadata struct {
-	Role       string      `json:"role"`
-	Repository string      `json:"repository"`
-	Digest     string      `json:"digest"`
-	Reference  string      `json:"reference"`
-	SBOM       Attestation `json:"sbom"`
+	Role             string      `json:"role"`
+	Repository       string      `json:"repository"`
+	Digest           string      `json:"digest"`
+	Reference        string      `json:"reference"`
+	RuntimeReference string      `json:"runtimeReference"`
+	SBOM             Attestation `json:"sbom"`
 }
 
 type Attestation struct {
@@ -115,6 +116,12 @@ type imageManifest struct {
 	MediaType     string       `json:"mediaType"`
 	Config        descriptor   `json:"config"`
 	Layers        []descriptor `json:"layers"`
+}
+
+type dockerManifestItem struct {
+	Config   string   `json:"Config"`
+	RepoTags []string `json:"RepoTags"`
+	Layers   []string `json:"Layers"`
 }
 
 type imageConfig struct {
@@ -405,6 +412,25 @@ func writeFinalArchive(options FinalizeOptions, resolved []rawResolved, provenan
 	if err := writeTarFile(writer, "index.json", append(rootBytes, '\n')); err != nil {
 		return Metadata{}, err
 	}
+	dockerManifest := make([]dockerManifestItem, 0, len(resolved))
+	for _, image := range resolved {
+		layers := make([]string, 0, len(image.Manifest.Layers))
+		for _, layer := range image.Manifest.Layers {
+			layers = append(layers, dockerBlobPath(layer.Digest))
+		}
+		dockerManifest = append(dockerManifest, dockerManifestItem{
+			Config:   dockerBlobPath(image.Manifest.Config.Digest),
+			RepoTags: []string{image.Repository + ":" + options.ReleaseVersion},
+			Layers:   layers,
+		})
+	}
+	dockerManifestBytes, err := json.Marshal(dockerManifest)
+	if err != nil {
+		return Metadata{}, err
+	}
+	if err := writeTarFile(writer, "manifest.json", append(dockerManifestBytes, '\n')); err != nil {
+		return Metadata{}, err
+	}
 
 	writtenBlobs := map[string]struct{}{}
 	for _, image := range resolved {
@@ -450,7 +476,7 @@ func writeFinalArchive(options FinalizeOptions, resolved []rawResolved, provenan
 	for _, image := range resolved {
 		metadata.Images = append(metadata.Images, ImageMetadata{
 			Role: image.Role, Repository: image.Repository, Digest: image.Primary.Digest,
-			Reference: image.Repository + "@" + image.Primary.Digest,
+			Reference: image.Repository + "@" + image.Primary.Digest, RuntimeReference: image.Manifest.Config.Digest,
 			SBOM: Attestation{
 				Path: image.SBOMInternalPath, SHA256: digestBytes(image.SBOMStatement), PredicateType: SPDXPredicateType,
 			},
@@ -627,6 +653,7 @@ func validateMetadata(metadata Metadata) error {
 	for _, image := range metadata.Images {
 		if seen[image.Role] || image.Repository != expectedRepository(image.Role) ||
 			!sha256Pattern.MatchString(image.Digest) || image.Reference != image.Repository+"@"+image.Digest ||
+			!sha256Pattern.MatchString(image.RuntimeReference) ||
 			image.SBOM.Path != "attestations/"+image.Role+".sbom.spdx.json" ||
 			image.SBOM.PredicateType != SPDXPredicateType || !hexSHA256Pattern.MatchString(image.SBOM.SHA256) {
 			return fmt.Errorf("image metadata for role %q is invalid", image.Role)
@@ -655,6 +682,38 @@ func verifyFinalLayout(scan archiveScan, metadata Metadata) error {
 	}
 	if len(index.Manifests) != len(metadata.Images) {
 		return fmt.Errorf("OCI index must contain exactly the declared runtime images")
+	}
+	dockerManifest, err := decodeDockerManifest(scan.SmallFiles["manifest.json"])
+	if err != nil {
+		return err
+	}
+	if len(dockerManifest) != len(metadata.Images) {
+		return fmt.Errorf("Docker manifest.json must contain exactly the declared runtime images")
+	}
+	dockerByRole := make(map[string]dockerManifestItem, len(dockerManifest))
+	seenDockerConfigs := make(map[string]struct{}, len(dockerManifest))
+	for _, item := range dockerManifest {
+		if len(item.RepoTags) != 1 {
+			return fmt.Errorf("Docker manifest item must contain exactly one role tag")
+		}
+		role := ""
+		for _, image := range metadata.Images {
+			if item.RepoTags[0] == image.Repository+":"+metadata.ReleaseVersion {
+				role = image.Role
+				break
+			}
+		}
+		if role == "" {
+			return fmt.Errorf("Docker manifest contains an unexpected role tag %q", item.RepoTags[0])
+		}
+		if _, duplicate := dockerByRole[role]; duplicate {
+			return fmt.Errorf("Docker manifest contains duplicate role tag %q", item.RepoTags[0])
+		}
+		if _, duplicate := seenDockerConfigs[item.Config]; duplicate {
+			return fmt.Errorf("Docker manifest contains duplicate config path %q", item.Config)
+		}
+		dockerByRole[role] = item
+		seenDockerConfigs[item.Config] = struct{}{}
 	}
 	expectedOS, expectedArch, _ := strings.Cut(metadata.Platform, "/")
 	referenced := map[string]struct{}{}
@@ -687,6 +746,23 @@ func verifyFinalLayout(scan archiveScan, metadata Metadata) error {
 		}
 		if err := validateConfig(configBytes, metadata.Platform, metadata.ReleaseVersion, metadata.SourceCommit); err != nil {
 			return err
+		}
+		dockerItem, found := dockerByRole[image.Role]
+		if !found {
+			return fmt.Errorf("Docker manifest omits %s role tag", image.Role)
+		}
+		if expected := dockerBlobPath(manifest.Config.Digest); dockerItem.Config != expected {
+			return fmt.Errorf("Docker manifest config for %s does not match OCI manifest", image.Role)
+		}
+		if image.RuntimeReference != manifest.Config.Digest {
+			return fmt.Errorf("runtime reference for %s does not match OCI config digest", image.Role)
+		}
+		expectedLayers := make([]string, 0, len(manifest.Layers))
+		for _, layer := range manifest.Layers {
+			expectedLayers = append(expectedLayers, dockerBlobPath(layer.Digest))
+		}
+		if !equalStrings(dockerItem.Layers, expectedLayers) {
+			return fmt.Errorf("Docker manifest layers for %s do not match OCI manifest order", image.Role)
 		}
 		referenced[selected.Digest] = struct{}{}
 		referenced[manifest.Config.Digest] = struct{}{}
@@ -843,6 +919,7 @@ func scanArchive(filename string, allowAttestations bool) (archiveScan, error) {
 		}
 		isBlob := blobPathPattern.MatchString(name)
 		isKnown := name == "index.json" || name == "oci-layout" || isBlob ||
+			(allowAttestations && name == "manifest.json") ||
 			(allowAttestations && strings.HasPrefix(name, "attestations/"))
 		if !isKnown {
 			return archiveScan{}, fmt.Errorf("OCI archive contains unexpected entry %s", name)
@@ -896,6 +973,17 @@ func decodeManifest(value []byte) (imageManifest, error) {
 	if err := json.Unmarshal(value, &manifest); err != nil || manifest.SchemaVersion != 2 ||
 		manifest.MediaType != OCIManifestMediaType || manifest.Config.Digest == "" {
 		return imageManifest{}, fmt.Errorf("OCI image manifest is invalid")
+	}
+	return manifest, nil
+}
+
+func decodeDockerManifest(value []byte) ([]dockerManifestItem, error) {
+	var manifest []dockerManifestItem
+	if err := decodeStrict(value, &manifest); err != nil {
+		return nil, fmt.Errorf("Docker manifest.json is invalid: %w", err)
+	}
+	if manifest == nil {
+		return nil, fmt.Errorf("Docker manifest.json is invalid")
 	}
 	return manifest, nil
 }
@@ -959,6 +1047,22 @@ func expectedRepository(role string) string {
 	default:
 		return ""
 	}
+}
+
+func dockerBlobPath(digest string) string {
+	return "blobs/sha256/" + strings.TrimPrefix(digest, "sha256:")
+}
+
+func equalStrings(left, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for index := range left {
+		if left[index] != right[index] {
+			return false
+		}
+	}
+	return true
 }
 
 func roleOrder(role string) int {

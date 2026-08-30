@@ -55,6 +55,17 @@ func TestFinalizeAndVerifyBundle(t *testing.T) {
 	if len(verified.Images) != 2 {
 		t.Fatalf("VerifyBundle() image count = %d, want 2", len(verified.Images))
 	}
+	if verified.SchemaVersion != 2 {
+		t.Fatalf("VerifyBundle() schema version = %d, want 2", verified.SchemaVersion)
+	}
+	scan, err := scanArchive(fixture.archivePath, true)
+	if err != nil {
+		t.Fatalf("scan finalized archive: %v", err)
+	}
+	dockerManifest, err := decodeDockerManifest(scan.SmallFiles["manifest.json"])
+	if err != nil {
+		t.Fatalf("decode finalized Docker manifest: %v", err)
+	}
 	for _, role := range []string{ServerRole, CaddyRole} {
 		image, ok := verified.Image(role)
 		if !ok {
@@ -63,9 +74,163 @@ func TestFinalizeAndVerifyBundle(t *testing.T) {
 		if image.Reference != image.Repository+"@"+image.Digest {
 			t.Fatalf("VerifyBundle() %s reference = %q, want digest-only reference", role, image.Reference)
 		}
+		if !sha256Pattern.MatchString(image.RuntimeReference) {
+			t.Fatalf("VerifyBundle() %s runtime reference = %q, want config digest", role, image.RuntimeReference)
+		}
+		matched := false
+		for _, item := range dockerManifest {
+			if len(item.RepoTags) == 1 && item.RepoTags[0] == image.Repository+":"+testReleaseVersion {
+				matched = item.Config == dockerBlobPath(image.RuntimeReference)
+			}
+		}
+		if !matched {
+			t.Fatalf("Docker manifest does not bind %s runtime reference %q", role, image.RuntimeReference)
+		}
 		if image.SBOM.PredicateType != SPDXPredicateType {
 			t.Fatalf("VerifyBundle() %s SBOM predicate = %q", role, image.SBOM.PredicateType)
 		}
+	}
+}
+
+func TestVerifyBundleRejectsDockerManifestMismatch(t *testing.T) {
+	tests := []struct {
+		name          string
+		mutate        func([]dockerManifestItem) []dockerManifestItem
+		wantSubstring string
+	}{
+		{
+			name: "extra image",
+			mutate: func(items []dockerManifestItem) []dockerManifestItem {
+				return append(items, items[0])
+			},
+			wantSubstring: "must contain exactly the declared runtime images",
+		},
+		{
+			name: "extra role tag",
+			mutate: func(items []dockerManifestItem) []dockerManifestItem {
+				items[0].RepoTags = append(items[0].RepoTags, "example.invalid/extra:latest")
+				return items
+			},
+			wantSubstring: "exactly one role tag",
+		},
+		{
+			name: "duplicate role tag",
+			mutate: func(items []dockerManifestItem) []dockerManifestItem {
+				items[1].RepoTags = append([]string(nil), items[0].RepoTags...)
+				return items
+			},
+			wantSubstring: "duplicate role tag",
+		},
+		{
+			name: "unexpected role tag",
+			mutate: func(items []dockerManifestItem) []dockerManifestItem {
+				items[0].RepoTags[0] = "example.invalid/server:" + testReleaseVersion
+				return items
+			},
+			wantSubstring: "unexpected role tag",
+		},
+		{
+			name: "duplicate config",
+			mutate: func(items []dockerManifestItem) []dockerManifestItem {
+				items[1].Config = items[0].Config
+				return items
+			},
+			wantSubstring: "duplicate config path",
+		},
+		{
+			name: "wrong config",
+			mutate: func(items []dockerManifestItem) []dockerManifestItem {
+				items[0].Config = items[0].Layers[0]
+				return items
+			},
+			wantSubstring: "config for server does not match OCI manifest",
+		},
+		{
+			name: "layer order",
+			mutate: func(items []dockerManifestItem) []dockerManifestItem {
+				items[0].Layers[0], items[0].Layers[1] = items[0].Layers[1], items[0].Layers[0]
+				return items
+			},
+			wantSubstring: "layers for server do not match OCI manifest order",
+		},
+		{
+			name: "extra layer",
+			mutate: func(items []dockerManifestItem) []dockerManifestItem {
+				items[0].Layers = append(items[0].Layers, items[0].Layers[0])
+				return items
+			},
+			wantSubstring: "layers for server do not match OCI manifest order",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			fixture := createFinalizedFixture(t)
+			scan, err := scanArchive(fixture.archivePath, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var manifest []dockerManifestItem
+			if err := decodeStrict(scan.SmallFiles["manifest.json"], &manifest); err != nil {
+				t.Fatal(err)
+			}
+			manifest = test.mutate(manifest)
+			value := append(mustJSON(t, manifest), '\n')
+			rewriteTarEntry(t, fixture.archivePath, "manifest.json", &value)
+			rebindFixtureArchive(t, &fixture)
+
+			_, err = VerifyBundle(fixture.bundleRoot, fixture.metadataRelative, testReleaseVersion, testSourceCommit, "amd64")
+			if err == nil || !strings.Contains(err.Error(), test.wantSubstring) {
+				t.Fatalf("VerifyBundle() error = %v, want substring %q", err, test.wantSubstring)
+			}
+		})
+	}
+}
+
+func TestVerifyBundleRejectsMissingOrExtendedDockerManifest(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		fixture := createFinalizedFixture(t)
+		rewriteTarEntry(t, fixture.archivePath, "manifest.json", nil)
+		rebindFixtureArchive(t, &fixture)
+
+		_, err := VerifyBundle(fixture.bundleRoot, fixture.metadataRelative, testReleaseVersion, testSourceCommit, "amd64")
+		if err == nil || !strings.Contains(err.Error(), "Docker manifest.json is invalid") {
+			t.Fatalf("VerifyBundle() error = %v, want missing Docker manifest rejection", err)
+		}
+	})
+
+	t.Run("unknown field", func(t *testing.T) {
+		fixture := createFinalizedFixture(t)
+		scan, err := scanArchive(fixture.archivePath, true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var manifest []map[string]any
+		if err := json.Unmarshal(scan.SmallFiles["manifest.json"], &manifest); err != nil {
+			t.Fatal(err)
+		}
+		manifest[0]["Parent"] = strings.Repeat("a", 64)
+		value := append(mustJSON(t, manifest), '\n')
+		rewriteTarEntry(t, fixture.archivePath, "manifest.json", &value)
+		rebindFixtureArchive(t, &fixture)
+
+		_, err = VerifyBundle(fixture.bundleRoot, fixture.metadataRelative, testReleaseVersion, testSourceCommit, "amd64")
+		if err == nil || !strings.Contains(err.Error(), "Docker manifest.json is invalid") {
+			t.Fatalf("VerifyBundle() error = %v, want extended Docker manifest rejection", err)
+		}
+	})
+}
+
+func TestVerifyBundleRejectsRuntimeReferenceMismatch(t *testing.T) {
+	fixture := createFinalizedFixture(t)
+	fixture.metadata.Images[0].RuntimeReference = "sha256:" + strings.Repeat("f", 64)
+	if err := writeJSONAtomic(fixture.metadataPath, fixture.metadata, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := VerifyBundle(fixture.bundleRoot, fixture.metadataRelative, testReleaseVersion, testSourceCommit, "amd64")
+	if err == nil || !strings.Contains(err.Error(), "runtime reference for server does not match OCI config digest") {
+		t.Fatalf("VerifyBundle() error = %v, want runtime-reference binding rejection", err)
 	}
 }
 
@@ -329,14 +494,16 @@ func writeRawBuildKitOCI(t *testing.T, filename string, options rawOCIFixtureOpt
 	config.Config.Labels = map[string]string{
 		"org.opencontainers.image.revision": options.sourceCommit,
 		"org.opencontainers.image.version":  options.releaseVersion,
+		"org.opencontainers.image.title":    options.repository,
 	}
 	configDescriptor := addBlob(OCIConfigMediaType, mustJSON(t, config))
-	layerDescriptor := addBlob("application/vnd.oci.image.layer.v1.tar", []byte("runtime layer for "+options.repository))
+	layerDescriptor := addBlob("application/vnd.oci.image.layer.v1.tar", []byte("runtime layer one for "+options.repository))
+	secondLayerDescriptor := addBlob("application/vnd.oci.image.layer.v1.tar", []byte("runtime layer two for "+options.repository))
 	manifest := imageManifest{
 		SchemaVersion: 2,
 		MediaType:     OCIManifestMediaType,
 		Config:        configDescriptor,
-		Layers:        []descriptor{layerDescriptor},
+		Layers:        []descriptor{layerDescriptor, secondLayerDescriptor},
 	}
 	primary := addBlob(OCIManifestMediaType, mustJSON(t, manifest))
 	primary.Platform = &platform{Architecture: architecture, OS: osName}
@@ -488,6 +655,85 @@ func rewriteTarWithExtraEntry(t *testing.T, filename, extraName string, extra []
 		t.Fatal(err)
 	}
 	if err := os.Rename(temporary, filename); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func rewriteTarEntry(t *testing.T, filename, entryName string, replacement *[]byte) {
+	t.Helper()
+	source, err := os.Open(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	temporary := filename + ".rewrite"
+	destination, err := os.Create(temporary)
+	if err != nil {
+		_ = source.Close()
+		t.Fatal(err)
+	}
+	reader := tar.NewReader(source)
+	writer := tar.NewWriter(destination)
+	found := false
+	for {
+		header, err := reader.Next()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			closeTarRewrite(source, writer, destination)
+			t.Fatal(err)
+		}
+		if header.Name == entryName {
+			found = true
+			if replacement != nil {
+				if err := writer.WriteHeader(&tar.Header{Name: entryName, Mode: 0o644, Typeflag: tar.TypeReg, Size: int64(len(*replacement))}); err != nil {
+					closeTarRewrite(source, writer, destination)
+					t.Fatal(err)
+				}
+				if _, err := writer.Write(*replacement); err != nil {
+					closeTarRewrite(source, writer, destination)
+					t.Fatal(err)
+				}
+			}
+			continue
+		}
+		cloned := *header
+		if err := writer.WriteHeader(&cloned); err != nil {
+			closeTarRewrite(source, writer, destination)
+			t.Fatal(err)
+		}
+		if header.Size > 0 {
+			if _, err := io.CopyN(writer, reader, header.Size); err != nil {
+				closeTarRewrite(source, writer, destination)
+				t.Fatal(err)
+			}
+		}
+	}
+	if !found {
+		closeTarRewrite(source, writer, destination)
+		t.Fatalf("tar entry %q was not found", entryName)
+	}
+	if err := source.Close(); err != nil {
+		_ = writer.Close()
+		_ = destination.Close()
+		t.Fatal(err)
+	}
+	if err := writer.Close(); err != nil {
+		_ = destination.Close()
+		t.Fatal(err)
+	}
+	if err := destination.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(temporary, filename); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func rebindFixtureArchive(t *testing.T, fixture *finalizedFixture) {
+	t.Helper()
+	fixture.metadata.ArchiveSHA256 = mustDigestFile(t, fixture.archivePath)
+	if err := writeJSONAtomic(fixture.metadataPath, fixture.metadata, 0o644); err != nil {
 		t.Fatal(err)
 	}
 }

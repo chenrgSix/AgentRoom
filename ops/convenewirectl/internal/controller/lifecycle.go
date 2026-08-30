@@ -326,11 +326,14 @@ func (controller *Controller) Upgrade(ctx context.Context, raw UpgradeOptions) e
 		return actionError("RELEASE_TARGET_MISMATCH", "target release does not match this host", "Use the target Central archive published for this host operating system and architecture.", nil)
 	}
 	if recovering {
+		unresolvedPreparedTarget := journal.Phase == upgradePhasePrepared &&
+			runtimeImagesUnresolved(journal.Target) &&
+			metadata.SchemaVersion == releaseSchemaVersion
 		if releaseDir != journal.Target.ReleaseDir || digest != journal.Target.ReleaseDigest ||
 			metadata.ReleaseVersion != journal.Target.ReleaseVersion ||
 			metadata.SourceCommit != journal.Target.SourceCommit ||
 			metadata.DataSchemaVersion != journal.Target.DataSchemaVersion ||
-			!runtimeImagesMatch(journal.Target, metadata) {
+			(!unresolvedPreparedTarget && !runtimeImagesMatch(journal.Target, metadata)) {
 			return actionError(
 				"UPGRADE_RECOVERY_TARGET_MISMATCH",
 				"the requested upgrade does not match the durable interrupted target",
@@ -484,11 +487,27 @@ func (controller *Controller) continueUpgrade(
 		LegacyServerToken: targetManifest.LegacyServerToken,
 		ProjectName:       targetManifest.ProjectName,
 	}
+	selectedTarget, err := controller.ensureReleaseImagesLoaded(ctx, target, metadata)
+	if err != nil {
+		return err
+	}
+	if !manifestsEqualIgnoringUpdatedAt(selectedTarget, targetManifest) {
+		selectedTarget.UpdatedAt = controller.dependencies.Now().UTC().Format(time.RFC3339Nano)
+		journal.Target = selectedTarget
+		journal.UpdatedAt = selectedTarget.UpdatedAt
+		if err := saveUpgradeJournal(current.UpgradeJournalPath, *journal); err != nil {
+			return actionError(
+				"UPGRADE_JOURNAL_WRITE_FAILED",
+				"the loaded target image generation could not be recorded in the durable upgrade journal",
+				"No target configuration or service mutation was attempted. Repair the journal path and retry only this exact target; the verified images may remain in Docker's local store.",
+				err,
+			)
+		}
+		targetManifest = selectedTarget
+		target.Manifest = targetManifest
+	}
 	if err := renderConfiguration(options, metadata.ReleaseVersion, target); err != nil {
 		return actionError("UPGRADE_CONFIG_FAILED", "could not render the isolated target configuration", "Repair the reported host condition and retry only the pending exact target.", err)
-	}
-	if err := controller.ensureReleaseImagesLoaded(ctx, target, metadata); err != nil {
-		return err
 	}
 	environment, err := installationEnvironment(target)
 	if err != nil {
