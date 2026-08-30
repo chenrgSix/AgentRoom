@@ -7,8 +7,11 @@ import test from "node:test";
 import type { FastifyInstance } from "fastify";
 
 import { createServerApp } from "../src/app.js";
+import { openDatabase } from "../src/data/database.js";
 import { hostedOpenAIResponsesEndpoint } from
   "../src/runtime/hosted-openai-responses-adapter.js";
+import { AuthService, AuthorizationError } from
+  "../src/security/auth-service.js";
 
 const now = "2026-08-30T05:00:00.000Z";
 const apiKey = "sk-hosted-api-test-ABCDEFGHIJKLMNOP";
@@ -349,6 +352,14 @@ test("provider execution failure remains degraded until a successful check", asy
   await app.ready();
   try {
     const { authorization, roomId, teamId } = await bootstrap(app);
+    const manual = await app.inject({
+      method: "POST",
+      url: `/api/teams/${teamId}/manual-agents`,
+      headers: { authorization },
+      payload: { name: "Unaffected Manual Agent", role: "Reviewer" }
+    });
+    assert.equal(manual.statusCode, 200, manual.body);
+    const manualAgentId = manual.json().agent.agentId as string;
     const agent = await createHostedAgent(
       app, authorization, teamId, roomId, "Central Health Agent"
     );
@@ -372,6 +383,11 @@ test("provider execution failure remains degraded until a successful check", asy
         ).presence,
         "degraded"
       );
+      const manualProjection = agents.json().find(
+        (candidate: { agentId: string }) => candidate.agentId === manualAgentId
+      );
+      assert.equal(manualProjection.integrationMode, "manual");
+      assert.equal(manualProjection.presence, "manual");
     }
     const checked = await app.inject({
       method: "POST",
@@ -390,6 +406,12 @@ test("provider execution failure remains degraded until a successful check", asy
         candidate.agentId === agent.agentId
       ).presence,
       "ready"
+    );
+    assert.equal(
+      restored.json().find((candidate: { agentId: string }) =>
+        candidate.agentId === manualAgentId
+      ).integrationMode,
+      "manual"
     );
     assert.equal(providerCall, 3);
   } finally {
@@ -645,6 +667,369 @@ test("queued Hosted work expires behind per-Agent concurrency without HTTPS", as
     assert.equal((await waitForTerminal(app, authorization, secondRunId)).state,
       "expired");
     assert.equal(providerCall, 2);
+  } finally {
+    await app.close();
+  }
+});
+
+test("Hosted authorization fences reject cross-Team, cross-Room, stale, and active mutations", async () => {
+  const directory = await mkdtemp(path.join(
+    os.tmpdir(),
+    "convene-wire-hosted-fences-"
+  ));
+  let providerCall = 0;
+  let probeCall = 0;
+  let executionCall = 0;
+  let executionStarted!: () => void;
+  const started = new Promise<void>((resolve) => {
+    executionStarted = resolve;
+  });
+  let abortObserved!: () => void;
+  const aborted = new Promise<void>((resolve) => {
+    abortObserved = resolve;
+  });
+  const hostedFetch = (async (_input, init) => {
+    providerCall += 1;
+    const body = JSON.parse(String(init?.body)) as { input?: unknown };
+    if (JSON.stringify(body.input).includes("single word READY")) {
+      probeCall += 1;
+      return providerResponse("READY", `resp_hosted_fence_probe_${probeCall}`);
+    }
+    executionCall += 1;
+    if (executionCall > 1) {
+      throw new Error("Rejected Hosted mutation opened provider HTTPS");
+    }
+    executionStarted();
+    return new Promise<Response>((_resolve, reject) => {
+      const rejectAbort = () => {
+        abortObserved();
+        reject(new DOMException("Aborted", "AbortError"));
+      };
+      if (init?.signal?.aborted) rejectAbort();
+      else init?.signal?.addEventListener("abort", rejectAbort, { once: true });
+    });
+  }) as typeof fetch;
+  const app = await createServerApp({
+    databasePath: path.join(directory, "server.sqlite"),
+    hostedFetch,
+    clock: () => now,
+    logger: false
+  });
+  await app.ready();
+  try {
+    const { authorization, roomId, teamId } = await bootstrap(app);
+    const foreignTeam = await app.inject({
+      method: "POST",
+      url: "/api/teams",
+      headers: { authorization },
+      payload: { name: "Foreign Hosted Team" }
+    });
+    assert.equal(foreignTeam.statusCode, 200, foreignTeam.body);
+    const foreignTeamId = foreignTeam.json().team.teamId as string;
+    const foreignRoom = await app.inject({
+      method: "POST",
+      url: `/api/teams/${foreignTeamId}/rooms`,
+      headers: { authorization },
+      payload: { name: "foreign" }
+    });
+    assert.equal(foreignRoom.statusCode, 200, foreignRoom.body);
+    const foreignRoomId = foreignRoom.json().roomId as string;
+
+    const crossTeam = await app.inject({
+      method: "POST",
+      url: `/api/teams/${teamId}/hosted-agents`,
+      headers: { authorization },
+      payload: {
+        name: "Cross Team Hosted",
+        role: "Remote model",
+        provider: "openai_responses",
+        model: "gpt-5.4-mini",
+        apiKey,
+        roomIds: [foreignRoomId]
+      }
+    });
+    assert.equal(crossTeam.statusCode, 403, crossTeam.body);
+    assert.equal(crossTeam.json().error.code, "FORBIDDEN");
+    assert.equal(providerCall, 0);
+
+    const hosted = await createHostedAgent(
+      app,
+      authorization,
+      teamId,
+      roomId,
+      "Central Scoped Agent"
+    );
+    assert.equal(providerCall, 1);
+    assert.equal(probeCall, 1);
+    const privateRoom = await app.inject({
+      method: "POST",
+      url: `/api/teams/${teamId}/rooms`,
+      headers: { authorization },
+      payload: { name: "private" }
+    });
+    assert.equal(privateRoom.statusCode, 200, privateRoom.body);
+    const privateRoomId = privateRoom.json().roomId as string;
+    const crossRoom = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${privateRoomId}/messages`,
+      headers: { authorization },
+      payload: {
+        content: "Do not route outside the explicit Room.",
+        mentionAgentIds: [hosted.agentId]
+      }
+    });
+    assert.equal(crossRoom.statusCode, 400, crossRoom.body);
+    assert.match(crossRoom.json().error.message, /Mention target is unavailable/u);
+    assert.equal(providerCall, 1);
+
+    const updated = await app.inject({
+      method: "PATCH",
+      url: `/api/hosted-agents/${hosted.agentId}/profile`,
+      headers: { authorization },
+      payload: {
+        expectedProfileRevision: hosted.profileRevision,
+        model: "gpt-5.4"
+      }
+    });
+    assert.equal(updated.statusCode, 200, updated.body);
+    assert.equal(updated.json().profileRevision, 2);
+    assert.equal(providerCall, 2);
+    assert.equal(probeCall, 2);
+    const stale = await app.inject({
+      method: "PATCH",
+      url: `/api/hosted-agents/${hosted.agentId}/profile`,
+      headers: { authorization },
+      payload: {
+        expectedProfileRevision: hosted.profileRevision,
+        model: "gpt-5.4-mini"
+      }
+    });
+    assert.equal(stale.statusCode, 409, stale.body);
+    assert.equal(stale.json().error.code, "CONFLICT");
+    assert.match(stale.json().error.message, /changed; reload and retry/u);
+    assert.equal(providerCall, 3);
+    const afterStale = await app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/hosted-agents`,
+      headers: { authorization }
+    });
+    assert.equal(afterStale.statusCode, 200, afterStale.body);
+    assert.equal(afterStale.json()[0].profileRevision, 2);
+    assert.equal(afterStale.json()[0].model, "gpt-5.4");
+    assert.equal(executionCall, 0);
+
+    const sent = await app.inject({
+      method: "POST",
+      url: `/api/rooms/${roomId}/messages`,
+      headers: { authorization },
+      payload: {
+        content: "Hold this Run open while mutations are attempted.",
+        mentionAgentIds: [hosted.agentId]
+      }
+    });
+    assert.equal(sent.statusCode, 200, sent.body);
+    const runId = sent.json().runs[0].runId as string;
+    await started;
+    assert.equal(executionCall, 1);
+    const providerCallsAtDispatch = providerCall;
+
+    const activeProfile = await app.inject({
+      method: "PATCH",
+      url: `/api/hosted-agents/${hosted.agentId}/profile`,
+      headers: { authorization },
+      payload: {
+        expectedProfileRevision: 2,
+        model: "gpt-5.4-mini"
+      }
+    });
+    assert.equal(activeProfile.statusCode, 409, activeProfile.body);
+    assert.match(activeProfile.json().error.message, /locked while work is active/u);
+    const activeDisable = await app.inject({
+      method: "PATCH",
+      url: `/api/agents/${hosted.agentId}`,
+      headers: { authorization },
+      payload: { enabled: false }
+    });
+    assert.equal(activeDisable.statusCode, 400, activeDisable.body);
+    assert.match(activeDisable.json().error.message, /cannot be disabled while/u);
+    assert.equal(providerCall, providerCallsAtDispatch);
+
+    const canceled = await app.inject({
+      method: "POST",
+      url: `/api/runs/${runId}/cancel`,
+      headers: { authorization },
+      payload: { reason: "Close the active-work fence test" }
+    });
+    assert.equal(canceled.statusCode, 200, canceled.body);
+    assert.equal(canceled.json().state, "outcome_unknown");
+    await aborted;
+  } finally {
+    await app.close();
+  }
+});
+
+test("Hosted provider credentials grant no Result, Task, Member, Device, or MCP authority", async () => {
+  const directory = await mkdtemp(path.join(
+    os.tmpdir(),
+    "convene-wire-hosted-authority-"
+  ));
+  const databasePath = path.join(directory, "server.sqlite");
+  const hostedFetch = (async () =>
+    providerResponse("READY", "resp_hosted_authority_probe")) as typeof fetch;
+  const app = await createServerApp({
+    databasePath,
+    hostedFetch,
+    clock: () => now,
+    logger: false
+  });
+  await app.ready();
+  try {
+    const { authorization, roomId, teamId } = await bootstrap(app);
+    const hosted = await createHostedAgent(
+      app,
+      authorization,
+      teamId,
+      roomId,
+      "Central Authority-Limited Agent"
+    );
+    const configurations = await app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/hosted-agents`,
+      headers: { authorization }
+    });
+    const configuration = configurations.json()[0] as Record<string, unknown>;
+    assert.equal("credential" in configuration, false);
+    assert.equal("token" in configuration, false);
+    assert.equal("apiKey" in configuration, false);
+    assert.equal(configurations.body.includes(apiKey), false);
+
+    const tasks = await app.inject({
+      method: "GET",
+      url: `/api/rooms/${roomId}/tasks`,
+      headers: { authorization }
+    });
+    assert.equal(tasks.statusCode, 200, tasks.body);
+    const task = tasks.json()[0] as {
+      taskId: string;
+      definitionRevision: number;
+      criteriaRevision: number;
+      taskRevision: number;
+    };
+    const hostedAuthorization = `Bearer ${apiKey}`;
+    const resultProposal = await app.inject({
+      method: "POST",
+      url: `/api/tasks/${task.taskId}/results`,
+      headers: { authorization: hostedAuthorization },
+      payload: {
+        operationId: "op_hosted_result_denied_0001",
+        taskId: task.taskId,
+        definitionRevision: task.definitionRevision,
+        criteriaRevision: task.criteriaRevision,
+        proposedAtTaskRevision: task.taskRevision,
+        supersedesResultId: null,
+        outcome: "informational",
+        summary: "A Hosted provider credential must not propose this Result.",
+        risks: [],
+        openQuestions: [],
+        nextActions: [],
+        sources: [],
+        criterionClaims: []
+      }
+    });
+    assert.equal(resultProposal.statusCode, 401, resultProposal.body);
+    const ambiguityAcknowledgement = await app.inject({
+      method: "POST",
+      url: "/api/runs/run_hosted_authority_denied/ambiguity-acknowledgement",
+      headers: { authorization: hostedAuthorization },
+      payload: {
+        operationId: "op_hosted_ambiguity_denied_0001",
+        expectedTaskRevision: task.taskRevision,
+        reason: "A Hosted provider credential must not acknowledge ambiguity."
+      }
+    });
+    assert.equal(
+      ambiguityAcknowledgement.statusCode,
+      401,
+      ambiguityAcknowledgement.body
+    );
+    const taskCompletion = await app.inject({
+      method: "PATCH",
+      url: `/api/tasks/${task.taskId}`,
+      headers: { authorization: hostedAuthorization },
+      payload: { state: "completed" }
+    });
+    assert.equal(taskCompletion.statusCode, 401, taskCompletion.body);
+    const memberCommand = await app.inject({
+      method: "POST",
+      url: `/api/teams/${teamId}/members`,
+      headers: { authorization: hostedAuthorization },
+      payload: {
+        userId: "user_hosted_authority_denied",
+        displayName: "Denied Hosted Member"
+      }
+    });
+    assert.equal(memberCommand.statusCode, 401, memberCommand.body);
+    const deviceCommand = await app.inject({
+      method: "GET",
+      url: `/api/teams/${teamId}/devices`,
+      headers: { authorization: hostedAuthorization }
+    });
+    assert.equal(deviceCommand.statusCode, 401, deviceCommand.body);
+    const mcpCommand = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        accept: "application/json, text/event-stream",
+        authorization: hostedAuthorization
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-06-18",
+          capabilities: {},
+          clientInfo: { name: "hosted-denied", version: "1" }
+        }
+      }
+    });
+    assert.equal(mcpCommand.statusCode, 401, mcpCommand.body);
+
+    const database = openDatabase(databasePath);
+    try {
+      const agent = database.prepare(`
+        SELECT integration_mode, device_id FROM agents WHERE agent_id = ?
+      `).get(hosted.agentId) as {
+        integration_mode: string;
+        device_id: string | null;
+      };
+      assert.deepEqual(agent, {
+        integration_mode: "hosted",
+        device_id: null
+      });
+      assert.equal((database.prepare(`
+        SELECT count(*) AS count FROM mcp_credentials WHERE agent_id = ?
+      `).get(hosted.agentId) as { count: number }).count, 0);
+      const auth = new AuthService(database);
+      const owner = auth.authenticateWebSession(
+        authorization.slice("Bearer ".length),
+        now
+      );
+      assert.throws(
+        () => auth.issueMcpCredential(owner, hosted.agentId, now),
+        (error: unknown) => error instanceof AuthorizationError &&
+          error.code === "FORBIDDEN" &&
+          /Manual Agent ownership denied/u.test(error.message)
+      );
+      assert.throws(
+        () => auth.issueDeviceCredential(hosted.agentId, now),
+        (error: unknown) => error instanceof AuthorizationError &&
+          error.code === "FORBIDDEN" &&
+          /Device is not active/u.test(error.message)
+      );
+    } finally {
+      database.close();
+    }
   } finally {
     await app.close();
   }

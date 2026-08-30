@@ -353,6 +353,21 @@ test("Central Hosted Agent completes a real-HTTP Mention without Bridge", {
       status: "ready",
       checks: { database: "ready", bridge: "not_configured" }
     });
+    const metricsResponse = await fetch(`${baseUrl}/api/metrics`);
+    const metrics = await metricsResponse.text();
+    apiTranscript.push(JSON.stringify({
+      method: "GET",
+      pathname: "/api/metrics",
+      status: metricsResponse.status,
+      headers: Object.fromEntries(metricsResponse.headers),
+      body: metrics
+    }));
+    assert.equal(metricsResponse.status, 200);
+    assert.match(
+      metricsResponse.headers.get("content-type") ?? "",
+      /^text\/plain/u
+    );
+    assert.equal(metrics.includes(apiKey), false);
 
     assert.equal(hostedRequests.length, 2);
     for (const request of hostedRequests) {

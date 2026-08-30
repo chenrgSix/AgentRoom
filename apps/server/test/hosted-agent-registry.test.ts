@@ -227,6 +227,41 @@ test("Hosted Agent creation requires explicit Rooms and no local Runtime authori
       now
     }), /require start, streaming, and interrupt/u);
 
+    const conversionDevice = fixture.registry.registerOwnDevice(
+      fixture.owner,
+      fixture.created.team.teamId,
+      "Conversion Attempt Device",
+      now
+    );
+    const conversionCredential = fixture.auth.issueDeviceCredential(
+      conversionDevice.deviceId,
+      now
+    );
+    const conversionPrincipal = fixture.auth.authenticateDevice(
+      conversionCredential.secret,
+      now
+    );
+    assert.throws(() => fixture.agents.publishDeviceAgent(conversionPrincipal, {
+      agentId: hosted.agentId,
+      name: "Converted Hosted Agent",
+      role: "Managed",
+      capabilities: {
+        supportsHandoff: true,
+        supportsInterrupt: true,
+        supportsResume: true,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      now
+    }), /Bridge Agent identity ownership denied/u);
+    assert.deepEqual(
+      {
+        integrationMode: fixture.repository.getAgent(hosted.agentId)?.integrationMode,
+        deviceId: fixture.repository.getAgent(hosted.agentId)?.deviceId
+      },
+      { integrationMode: "hosted", deviceId: null }
+    );
+
     fixture.repository.createUser({
       userId: "user_hosted_member_12345678",
       displayName: "Bob",
