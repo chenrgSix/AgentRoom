@@ -302,6 +302,7 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .integration-badge { width: fit-content; padding: 4px 7px; border-radius: 6px; background: #27301f; color: #bcd47c; font-size: 9px; font-weight: 750; }
 .integration-badge.manual { background: #1e2c36; color: #91bddf; }
 .integration-badge.fake { background: #332d1e; color: #d9bd76; }
+.integration-badge.hosted { background: #2d243c; color: #c6afe5; }
 .agent-policy-summary { margin: 0; padding: 8px 9px; border: 1px solid #30372c; border-radius: 9px; background: #11140f; }
 .agent-policy-summary > div { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-width: 0; }
 .agent-policy-summary dt { color: #747d6c; font-size: 9px; font-weight: 700; letter-spacing: .03em; }
@@ -312,6 +313,52 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .policy-badge.workspace-write { border-color: #697942; background: #202719; color: #cbe37c; }
 .policy-badge.local-policy { border-color: #455b69; background: #172129; color: #9bc9e4; }
 .policy-badge.unreported { border-style: dashed; color: #798173; }
+
+.hosted-agent-panel { display: grid; gap: 15px; }
+.hosted-agent-heading { margin-bottom: 0; }
+.hosted-agent-intro { max-width: 900px; margin: 0; color: #858e7d; font-size: 10px; line-height: 1.65; }
+.hosted-agent-boundary { margin: 0; padding: 11px 12px; border: 1px solid #506039; border-radius: 10px; background: #1c2317; color: #c6db91; font-size: 10px; line-height: 1.55; }
+.hosted-create-form { display: grid; gap: 13px; padding: 15px; border: 1px solid #343c2f; border-radius: 12px; background: #141712; }
+.hosted-create-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.hosted-create-fields label, .hosted-key-field, .hosted-profile-form label { display: grid; gap: 6px; min-width: 0; color: #aeb7a5; font-size: 9px; font-weight: 750; }
+.hosted-create-fields input, .hosted-key-field input, .hosted-profile-form input { width: 100%; min-width: 0; padding: 9px 10px; border: 1px solid #3c4536; border-radius: 8px; outline: none; background: #10130e; color: #e2e8d9; font-size: 10px; }
+.hosted-create-fields input:focus, .hosted-key-field input:focus, .hosted-profile-form input:focus { border-color: #84994f; }
+.hosted-create-fields output { display: flex; align-items: center; min-height: 35px; padding: 9px 10px; border: 1px solid #343c2f; border-radius: 8px; background: #191d16; color: #bdcaac; font-size: 10px; }
+.hosted-key-field small, .hosted-profile-form label small, .hosted-room-picker > small { color: #747e6e; font-size: 8px; font-weight: 500; line-height: 1.5; }
+.hosted-room-picker { min-width: 0; margin: 0; padding: 11px 12px; border: 1px solid #343c2f; border-radius: 10px; }
+.hosted-room-picker legend { padding: 0 5px; color: #b8c4ab; font-size: 9px; font-weight: 800; }
+.hosted-room-picker > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 9px; }
+.hosted-room-picker label { display: flex; align-items: center; gap: 7px; min-width: 0; padding: 8px; border: 1px solid #31392d; border-radius: 8px; color: #aeb7a5; font-size: 9px; cursor: pointer; }
+.hosted-room-picker label span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hosted-room-picker input { accent-color: #bdda69; }
+.hosted-room-picker p { margin: 8px 0 0; color: #778072; font-size: 9px; }
+.hosted-form-actions, .hosted-profile-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.hosted-form-actions button, .hosted-profile-actions button { padding: 8px 10px; border: 1px solid #708345; border-radius: 8px; background: #252d1e; color: #bdd77d; font-size: 9px; font-weight: 800; cursor: pointer; }
+.hosted-form-actions button:last-child { background: #bdda69; color: #171b12; }
+.hosted-form-actions button:disabled, .hosted-profile-actions button:disabled { cursor: default; opacity: .52; }
+.hosted-connection-observation { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding: 9px 10px; border: 1px solid #343c2f; border-radius: 9px; color: #8d9785; font-size: 9px; }
+.hosted-feedback { margin: 0; padding: 9px 11px; border: 1px solid; border-radius: 9px; font-size: 9px; line-height: 1.5; }
+.hosted-feedback.error { border-color: #65413c; background: #2c1b19; color: #d99a91; }
+.hosted-feedback.success { border-color: #52693d; background: #1b2717; color: #b9d886; }
+.hosted-agent-empty { margin: 0; padding: 17px; border: 1px dashed #3a4232; border-radius: 10px; color: #7e8871; font-size: 10px; text-align: center; }
+.hosted-profile-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.hosted-profile-card { display: grid; align-content: start; gap: 13px; min-width: 0; padding: 14px; border: 1px solid #343a30; border-radius: 12px; background: #151813; }
+.hosted-profile-card > header { display: flex; align-items: start; justify-content: space-between; gap: 10px; }
+.hosted-profile-card h4 { margin: 0; color: #ecf0e5; font-size: 13px; }
+.hosted-profile-card header p { margin: 3px 0 0; color: #7e8578; font-size: 9px; }
+.hosted-profile-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; overflow: hidden; margin: 0; border: 1px solid #30372c; border-radius: 9px; background: #30372c; }
+.hosted-profile-facts > div { display: grid; gap: 4px; min-width: 0; padding: 8px 9px; background: #11140f; }
+.hosted-profile-facts dt { color: #747d6c; font-size: 8px; font-weight: 700; }
+.hosted-profile-facts dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: #c5cebb; font-size: 9px; }
+.hosted-profile-facts .hosted-latest-test { grid-column: 1 / 3; }
+.hosted-test-observation { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.hosted-test-observation strong { color: #b8d879; font-size: 9px; }
+.hosted-test-observation.failed strong { color: #d49a91; }
+.hosted-test-observation code { padding: 2px 4px; border-radius: 4px; background: #241c19; color: #d2a29a; font-size: 8px; overflow-wrap: anywhere; }
+.hosted-test-observation time { color: #747e6e; font-size: 8px; }
+.hosted-profile-form { display: grid; gap: 10px; }
+.hosted-profile-fence { margin: 0; padding: 9px 10px; border: 1px solid #665d3c; border-radius: 9px; background: #292415; color: #dfc778; font-size: 9px; line-height: 1.5; }
+.hosted-profile-actions button:nth-child(3) { border-color: #63453f; color: #d19a91; }
 
 .connection-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; padding: 4px; border: 1px solid #30372c; border-radius: 10px; background: #10120f; }
 .connection-tabs button { min-width: 0; padding: 8px 7px; border: 0; border-radius: 7px; background: transparent; color: #798170; font-size: 9px; font-weight: 750; cursor: pointer; }
@@ -879,6 +926,26 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .agent-policy-summary { border-color: #d5dccd; background: #f2f5ee; }
 :root[data-theme="light"] .agent-policy-summary dt { color: #697364; }
 :root[data-theme="light"] .policy-badge { background: #fff; }
+:root[data-theme="light"] .hosted-agent-boundary { border-color: #bdcba7; background: #eef5e4; color: #4c642b; }
+:root[data-theme="light"] .hosted-create-form,
+:root[data-theme="light"] .hosted-profile-card { border-color: #d5dccd; background: #f5f8f1; }
+:root[data-theme="light"] .hosted-create-fields input,
+:root[data-theme="light"] .hosted-key-field input,
+:root[data-theme="light"] .hosted-profile-form input { border-color: #c9d1c1; background: #fff; color: #263021; }
+:root[data-theme="light"] .hosted-create-fields output { border-color: #d5dccd; background: #eef2e9; color: #4e5c46; }
+:root[data-theme="light"] .hosted-room-picker,
+:root[data-theme="light"] .hosted-room-picker label,
+:root[data-theme="light"] .hosted-connection-observation { border-color: #d5dccd; }
+:root[data-theme="light"] .hosted-profile-card h4 { color: #303b2a; }
+:root[data-theme="light"] .hosted-profile-card header p,
+:root[data-theme="light"] .hosted-agent-intro { color: #65705f; }
+:root[data-theme="light"] .hosted-profile-facts { border-color: #d5dccd; background: #d5dccd; }
+:root[data-theme="light"] .hosted-profile-facts > div { background: #fff; }
+:root[data-theme="light"] .hosted-profile-facts dd { color: #35402e; }
+:root[data-theme="light"] .hosted-feedback.error { border-color: #d9aaa3; background: #fff0ed; color: #8a3d35; }
+:root[data-theme="light"] .hosted-feedback.success { border-color: #b8c99f; background: #eef7e4; color: #4f6c28; }
+:root[data-theme="light"] .hosted-profile-fence { border-color: #d5c78e; background: #fff9df; color: #75621f; }
+:root[data-theme="light"] .integration-badge.hosted { background: #eee6f7; color: #684b86; }
 :root[data-theme="light"] .policy-badge.read-only { border-color: #b9c3b2; color: #576154; }
 :root[data-theme="light"] .policy-badge.workspace-write { border-color: #9aad72; background: #edf4df; color: #587125; }
 :root[data-theme="light"] .policy-badge.local-policy { border-color: #a4bdca; background: #edf5f8; color: #47728a; }
@@ -1119,6 +1186,12 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .management-intro h3 { font-size: 23px; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .agent-card-grid { grid-template-columns: 1fr; }
+  .hosted-create-fields, .hosted-profile-facts { grid-template-columns: minmax(0, 1fr); }
+  .hosted-profile-facts .hosted-latest-test { grid-column: 1; }
+  .hosted-room-picker > div { grid-template-columns: minmax(0, 1fr); }
+  .hosted-profile-list { grid-template-columns: minmax(0, 1fr); }
+  .hosted-form-actions, .hosted-profile-actions { align-items: stretch; flex-direction: column; }
+  .hosted-form-actions button, .hosted-profile-actions button { width: 100%; }
   .control-panel { padding: 15px; }
   .provisioning-form { grid-template-columns: 1fr; }
   .provisioning-form > label, .provisioning-form > select { grid-column: 1; }
@@ -1178,4 +1251,5 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .device-grid { grid-template-columns: 1fr; }
   .provisioning-request-list { grid-template-columns: 1fr; }
+  .hosted-profile-list { grid-template-columns: minmax(0, 1fr); }
 }

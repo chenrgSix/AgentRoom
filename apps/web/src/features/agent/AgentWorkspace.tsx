@@ -3,18 +3,23 @@ import React, { type FormEvent } from "react";
 import { BridgeConnectionPanel } from "../bridge/BridgeConnectionPanel.js";
 import { DevicePairingPanel } from "../device/DevicePairingPanel.js";
 import { AgentProvisioningPanel } from "./AgentProvisioningPanel.js";
+import { HostedAgentPanel } from "./HostedAgentPanel.js";
 import { type Locale, type TranslationKey, translate } from "../../i18n.js";
-import type { Agent, ConnectionMode, Device } from "../../models.js";
+import type { Agent, ConnectionMode, Device, Room } from "../../models.js";
 
 export function integrationLabel(mode: Agent["integrationMode"], locale: Locale): string {
   if (mode === "managed") return translate(locale, "managedBridge");
   if (mode === "manual") return translate(locale, "mcpParticipant");
+  if (mode === "hosted") return translate(locale, "centralHostedAgent");
   return translate(locale, "demoRuntime");
 }
 
 export function presenceHelp(agent: Agent, locale: Locale): string {
   if (locale === "en") {
     if (agent.integrationMode === "fake") return "Simulation only; does not call a model";
+    if (agent.integrationMode === "hosted") {
+      return "Remote model only; cannot operate a computer, read or write files, or execute commands";
+    }
     if (agent.presence === "ready") return "Ready to receive Team tasks";
     if (agent.presence === "busy") return "Working on a Team task";
     if (agent.presence === "degraded") return "Connected with limited capability";
@@ -22,6 +27,9 @@ export function presenceHelp(agent: Agent, locale: Locale): string {
     return "Start its Bridge or MCP client to make it available";
   }
   if (agent.integrationMode === "fake") return "仅用于模拟，不会调用模型";
+  if (agent.integrationMode === "hosted") {
+    return "仅调用远程模型，不能操作电脑、读写文件或执行命令";
+  }
   if (agent.presence === "ready") return "已就绪，可以接收 Team 任务";
   if (agent.presence === "busy") return "正在执行 Team 任务";
   if (agent.presence === "degraded") return "已连接，但部分能力不可用";
@@ -137,6 +145,7 @@ interface AgentWorkspaceProps {
   managedAgents: number;
   manualAgentName: string;
   readyAgents: number;
+  rooms: Room[];
   setupOutput: string | null;
   sessionToken: string | undefined;
   teamId: string;
@@ -149,6 +158,7 @@ interface AgentWorkspaceProps {
   onDeviceNameChange: (value: string) => void;
   onJoinCodeChange: (value: string) => void;
   onManualAgentNameChange: (value: string) => void;
+  onAgentChanged: (agent: Agent) => void;
   onRevokeDevice: (device: Device) => void | Promise<void>;
   onSetAgentEnabled: (agent: Agent, enabled: boolean) => void | Promise<void>;
 }
@@ -177,9 +187,11 @@ export function AgentWorkspace({
   onDeviceNameChange,
   onJoinCodeChange,
   onManualAgentNameChange,
+  onAgentChanged,
   onRevokeDevice,
   onSetAgentEnabled,
   readyAgents,
+  rooms,
   sessionToken,
   setupOutput,
   teamId
@@ -238,7 +250,9 @@ export function AgentWorkspace({
                   <span className={`integration-badge ${agent.integrationMode}`}>
                     {integrationLabel(agent.integrationMode, locale)}
                   </span>
-                  <AgentPolicySummary locale={locale} policy={agent.runtimePolicy} />
+                  {agent.integrationMode !== "hosted" && (
+                    <AgentPolicySummary locale={locale} policy={agent.runtimePolicy} />
+                  )}
                   <small>{presenceHelp(agent, locale)}</small>
                   {currentMemberIsOwner && (
                     <button
@@ -278,6 +292,19 @@ export function AgentWorkspace({
           setupOutput={setupOutput}
         />
       </div>
+
+      {currentMemberIsOwner && (
+        <HostedAgentPanel
+          agents={agents}
+          currentMemberIsOwner={currentMemberIsOwner}
+          key={teamId}
+          locale={locale}
+          onAgentChanged={onAgentChanged}
+          rooms={rooms}
+          sessionToken={sessionToken}
+          teamId={teamId}
+        />
+      )}
 
       <DevicePairingPanel
         currentMemberIsOwner={currentMemberIsOwner}

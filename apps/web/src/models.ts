@@ -45,11 +45,42 @@ export interface Agent {
   enabled?: boolean;
   name: string;
   role: string;
-  integrationMode: "managed" | "manual" | "fake";
+  integrationMode: "managed" | "manual" | "fake" | "hosted";
   presence: string;
   runtimePolicy?: {
     filesystemAccess: "read-only" | "workspace-write" | "local-policy";
   } | null;
+}
+
+export type HostedProvider = "openai_responses";
+
+export interface HostedProviderTestObservation {
+  observationId: string;
+  teamId: string;
+  agentId: string | null;
+  profileRevision: number | null;
+  provider: HostedProvider;
+  model: string;
+  status: "succeeded" | "failed";
+  failureCode: string | null;
+  observedAt: string;
+}
+
+export interface HostedAgentConfiguration {
+  agentId: string;
+  teamId: string;
+  name: string;
+  role: string;
+  enabled: boolean;
+  presence: "ready" | "busy" | "degraded" | "offline";
+  roomIds: string[];
+  profileRevision: number;
+  provider: HostedProvider;
+  model: string;
+  credentialConfigured: boolean;
+  credentialRevoked: boolean;
+  latestTest: HostedProviderTestObservation | null;
+  updatedAt: string;
 }
 
 export interface Message {

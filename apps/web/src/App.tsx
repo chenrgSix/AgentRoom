@@ -2062,9 +2062,16 @@ export function App() {
             onDeviceNameChange={setDeviceName}
             onJoinCodeChange={setJoinCode}
             onManualAgentNameChange={setManualAgentName}
+            onAgentChanged={(updated) => setAgents((current) => {
+              const exists = current.some(({ agentId }) => agentId === updated.agentId);
+              return exists
+                ? current.map((agent) => agent.agentId === updated.agentId ? updated : agent)
+                : [...current, updated];
+            })}
             onRevokeDevice={revokeDevice}
             onSetAgentEnabled={setAgentEnabled}
             readyAgents={readyAgents}
+            rooms={rooms}
             setupOutput={setupOutput}
             sessionToken={session?.token}
             teamId={selectedTeam.teamId}
