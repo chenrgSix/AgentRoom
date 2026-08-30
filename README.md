@@ -21,7 +21,7 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 - Current baseline:
   [convenewire_network_design_v0.2.md](convenewire_network_design_v0.2.md)
 - Stable release:
-  [ConveneWire v0.4.0](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.0)
+  [ConveneWire v0.4.1](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.1)
 - Historical baseline:
   [agent_room_network_design_v0.1.md](agent_room_network_design_v0.1.md)
 - Contributor rules: [CONTRIBUTING.md](CONTRIBUTING.md)

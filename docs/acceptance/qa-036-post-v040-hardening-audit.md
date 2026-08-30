@@ -50,6 +50,8 @@ cross-compilation as native execution.
   no-CA/no-bypass/no-secret-copy attestation. The schema-v4 verifier binds
   those confirmations to the bounded persisted capture and reports `PASS`.
 
-The `v0.4.1-qa035.1` GitHub Release remains an unpublished Draft prerelease.
-This audit closure does not authorize publication or change stable Latest from
-`v0.4.0`.
+At this audit's closure, the `v0.4.1-qa035.1` GitHub Release remained an
+unpublished Draft prerelease and stable Latest remained `v0.4.0`; this audit did
+not itself authorize publication. The later Owner-authorized
+[QA-037 stable release](qa-037-v0.4.1.md) independently built, published and
+verified `v0.4.1` without mutating that candidate Draft.

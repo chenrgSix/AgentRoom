@@ -264,11 +264,14 @@ application request succeeds.
 
 ## Current exact release
 
-[`v0.4.0`](../releases/v0.4.0.md) remains the current stable historical
-baseline. The exact schema-v4 acceptance candidate is the unpublished Draft
+[`v0.4.1`](../releases/v0.4.1.md) is the current stable release. The exact
+schema-v4 physical acceptance candidate remains the unpublished Draft
 prerelease `v0.4.1-qa035.1` at commit
 `152892e59e90fe17799274009141b07714262378`. Main CI run `33294027654` and
 Release workflow run `33294193123` passed on that commit. The physical record
 uses the matching Central archive, Windows installer and desktop ZIP, and the
 installed canonical `convenewire://` entry; it does not treat the legacy
-`agentroom://` compatibility handler as acceptance evidence.
+`agentroom://` compatibility handler as acceptance evidence. Only documentation
+changed between that candidate and stable tag `v0.4.1`; `QA-037` separately
+records exact stable-package CI, native upgrade, 22-asset and public-download
+verification without relabeling the candidate record as stable-binary execution.
