@@ -56,6 +56,20 @@ function maximumTimestamp(values: Array<string | null | undefined>): string {
   return values.filter((value): value is string => Boolean(value)).sort().at(-1)!;
 }
 
+function compareCodeUnits(left: string, right: string): number {
+  return left === right ? 0 : left < right ? -1 : 1;
+}
+
+function compareWorkbenchPosition(
+  left: Pick<WorkbenchCursor, "updatedAt" | "taskId">,
+  right: Pick<WorkbenchCursor, "updatedAt" | "taskId">
+): number {
+  // Cursor continuation and page sorting must share this exact total order.
+  // Opaque IDs include case and punctuation, so locale collation is unsuitable.
+  return compareCodeUnits(right.updatedAt, left.updatedAt) ||
+    compareCodeUnits(left.taskId, right.taskId);
+}
+
 function latestRun(runs: RunRecord[]): RunRecord | undefined {
   return runs.toSorted((left, right) =>
     right.createdAt.localeCompare(left.createdAt) ||
@@ -203,15 +217,9 @@ export class WorkbenchService {
       }
       if (query.updatedAfter && item.updatedAt < query.updatedAfter) return false;
       if (query.updatedBefore && item.updatedAt > query.updatedBefore) return false;
-      if (cursor && !(
-        item.updatedAt < cursor.updatedAt ||
-        (item.updatedAt === cursor.updatedAt && item.taskId > cursor.taskId)
-      )) return false;
+      if (cursor && compareWorkbenchPosition(item, cursor) <= 0) return false;
       return true;
-    }).sort((left, right) =>
-      right.updatedAt.localeCompare(left.updatedAt) ||
-      left.taskId.localeCompare(right.taskId)
-    );
+    }).sort(compareWorkbenchPosition);
 
     const page = items.slice(0, query.limit);
     const last = page.at(-1);

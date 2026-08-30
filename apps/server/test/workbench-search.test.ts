@@ -8,11 +8,14 @@ import test, { type TestContext } from "node:test";
 import type { TaskProjection, WorkbenchPage } from "@convene-wire/contracts/task-result";
 
 import { createServerApp } from "../src/app.js";
+import { openDatabase } from "../src/data/database.js";
+import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 async function fixture(t: TestContext) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convenewire-workbench-search-"));
+  const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({
-    databasePath: path.join(directory, "server.sqlite"),
+    databasePath,
     clock: () => "2026-08-31T10:00:00.000Z",
     logger: false
   });
@@ -66,7 +69,7 @@ async function fixture(t: TestContext) {
     assert.equal(response.statusCode, 200);
   }
   return {
-    app, teamId, visibleRoomId, hiddenRoomId, ownerHeaders, memberHeaders,
+    app, databasePath, teamId, visibleRoomId, hiddenRoomId, ownerHeaders, memberHeaders,
     async create(title: string, roomId = visibleRoomId, headers = ownerHeaders): Promise<TaskProjection> {
       const created = await app.inject({
         method: "POST", url: `/api/rooms/${roomId}/tasks`, headers,
@@ -214,6 +217,56 @@ test("omitted and blank searches retain the pre-search cursor fingerprint", asyn
   }
   const changed = await f.query({ search: "legacy", cursor: firstPage.nextCursor });
   assert.equal(changed.statusCode, 400);
+});
+
+test("mixed-case and punctuation Task IDs at one timestamp paginate in one binary total order", async (t) => {
+  const f = await fixture(t);
+  const template = await f.create("Template outside the matching search");
+  const expected = [
+    "task_-aaaaaaa", "task_A-aaaaaa", "task_A_aaaaaa", "task_Aaaaaaaa",
+    "task_Zzzzzzzz", "task__aaaaaaa", "task_aaaaaaaa", "task_zzzzzzzz"
+  ];
+  const database = openDatabase(f.databasePath);
+  try {
+    const tasks = new AgentTaskRepository(database);
+    const original = tasks.get(template.taskId)!;
+    // Seed exact contract-valid IDs through the repository, retaining all the
+    // real Task revisions/ownership while removing random-ID test flakiness.
+    for (const taskId of expected.toReversed()) {
+      tasks.create({ ...original, taskId, title: `Binary order ${taskId}`,
+        taskDisplayNumber: tasks.nextDisplayNumber(f.teamId) });
+    }
+  } finally { database.close(); }
+
+  for (const search of ["Binary order", undefined]) {
+    const parameters = search ? { search } : {};
+    const all = await f.query(parameters);
+    assert.equal(all.statusCode, 200, all.body);
+    const allItems = all.json<WorkbenchPage>().items;
+    assert.ok(allItems.every(({ updatedAt }) => updatedAt === "2026-08-31T10:00:00.000Z"));
+    const expectedIds = search ? expected : allItems.map(({ taskId }) => taskId).sort();
+    for (const limit of [1, 2, 3]) {
+      const received: string[] = [];
+      const cursors = new Set<string>();
+      let cursor: string | null = null;
+      do {
+        const response = await f.query({ ...parameters, limit: String(limit), ...(cursor ? { cursor } : {}) });
+        assert.equal(response.statusCode, 200, response.body);
+        const page = response.json<WorkbenchPage>();
+        assert.ok(page.items.length <= limit);
+        received.push(...page.items.map(({ taskId }) => taskId));
+        cursor = page.nextCursor;
+        if (cursor) {
+          assert.equal(cursors.has(cursor), false, "the next cursor must advance");
+          cursors.add(cursor);
+          assert.ok(cursors.size < expectedIds.length, "pagination must terminate");
+        }
+      } while (cursor);
+      assert.deepEqual(received, expectedIds, `${search ?? "no search"}, page size ${limit}`);
+      assert.equal(new Set(received).size, expectedIds.length, "every authorized Task appears exactly once");
+    }
+    assert.deepEqual(allItems.map(({ taskId }) => taskId), expectedIds, "full pages use the same total order");
+  }
 });
 
 test("search validation enforces one string and a trimmed 100-code-point bound", async (t) => {

@@ -1,5 +1,10 @@
 # Task Collaboration Module
 
+Workbench pages use one binary total order for both sorting and cursor
+continuation: descending update time, then ascending opaque Task ID. Localized
+string collation must not differ from continuation comparison when timestamps
+tie, including mixed-case and punctuation-bearing IDs.
+
 Workbench search follows [ADR-0028](../adr/0028-preserve-continuous-web-work.md):
 bounded title/display-number matching occurs only inside authorized Rooms and
 the selected Work scope. Search never changes Task identity, ordering, ownership
