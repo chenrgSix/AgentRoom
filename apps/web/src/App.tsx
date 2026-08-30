@@ -127,6 +127,8 @@ export function App() {
   );
   const [session, setSession] = useState<LocalSession | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  // Auth transitions must be visible to HTTP expiry events before React commits.
+  const sessionAuthorityRef = useRef<{ session: LocalSession | null; mode: AuthMode | null }>({ session: null, mode: null });
   const [authState, setAuthState] = useState<AuthGateState>("loading");
   const [pendingInvitationToken, setPendingInvitationToken] = useState<string | null>(() =>
     invitationTokenFromFragment(window.location.hash)
@@ -619,6 +621,7 @@ export function App() {
       displayName: user.displayName,
       ...(token ? { token } : {})
     };
+    sessionAuthorityRef.current = { session: next, mode };
     setAuthMode(mode);
     setSession(next);
     setAuthState("authenticated");
@@ -630,12 +633,7 @@ export function App() {
     setError(null);
     try {
       const next = await localBootstrap();
-      advanceWebSessionGeneration();
-      setBusy(false);
-      setAuthMode("local");
-      setSession(next);
-      setAuthState("authenticated");
-      await loadTeams(next);
+      await activateSession(next, "local", next.token);
     } catch (reason) {
       if (isStaleWebSessionError(reason)) return;
       setAuthState("local_bootstrap");
@@ -755,13 +753,13 @@ export function App() {
 
   useEffect(() => {
     const expire = () => {
-      if (!session) return;
+      if (!sessionAuthorityRef.current.session) return;
       clearAuthenticatedSession();
       setError(null);
     };
     window.addEventListener(webSessionExpiredEvent, expire);
     return () => window.removeEventListener(webSessionExpiredEvent, expire);
-  }, [authMode, session]);
+  }, []);
 
   useLayoutEffect(() => {
     setRooms([]);
@@ -1392,6 +1390,9 @@ export function App() {
   }
 
   function clearAuthenticatedSession() {
+    const authority = sessionAuthorityRef.current;
+    if (!authority.session) return;
+    sessionAuthorityRef.current = { session: null, mode: authority.mode };
     advanceWebSessionGeneration();
     setBusy(false);
     setTeamBusy(false);
@@ -1420,7 +1421,7 @@ export function App() {
     setSelectedWorkTaskId(null);
     setMemberInvitation(null);
     setSetupOutput(null);
-    setAuthState(authMode === "local" ? "local_bootstrap" : "sign_in_required");
+    setAuthState(authority.mode === "local" ? "local_bootstrap" : "sign_in_required");
   }
 
   async function signOut() {

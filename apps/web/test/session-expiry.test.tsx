@@ -88,6 +88,111 @@ function authenticatedMock() {
   };
 }
 
+for (const mode of ["trusted-team", "local"] as const) {
+  test(`a fast first Team-list 401 after ${mode} status restoration reaches the correct access gate`, async () => {
+    const dom = installDom();
+    const originalFetch = globalThis.fetch;
+    const paths: string[] = [];
+    let expiredEvents = 0;
+    dom.window.addEventListener(webSessionExpiredEvent, () => { expiredEvents += 1; });
+    globalThis.fetch = async (input) => {
+      const path = String(input);
+      paths.push(path);
+      if (path === "/api/auth/status") return response({ mode, state: "authenticated", user });
+      // Resolve immediately: the session effect from the loading render still
+      // has a null session when this first protected request completes.
+      if (path === "/api/teams") return failure(401);
+      throw new Error(`Unexpected request: ${path}`);
+    };
+    const { cleanup, render, within } = await import("@testing-library/react");
+    try {
+      render(<App />);
+      const page = within(dom.window.document.body);
+      await page.findByRole("heading", { name: mode === "local" ? "本地模式" : "回到你的 Team" });
+      assert.equal(expiredEvents, 1);
+      assert.deepEqual(paths, ["/api/auth/status", "/api/teams"]);
+      assert.equal(page.queryByRole("heading", { name: "创建你的第一个 Team" }), null);
+      assert.equal(page.queryByRole("button", { name: "退出登录", exact: true }), null);
+      if (mode === "local") {
+        assert.ok(page.getByRole("button", { name: "进入本地工作区" }));
+        assert.equal(page.queryByRole("heading", { name: "成员重新登录" }), null);
+      } else {
+        assert.ok(page.getByRole("heading", { name: "成员重新登录" }));
+        assert.equal(page.queryByRole("button", { name: "进入本地工作区" }), null);
+      }
+    } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
+  });
+}
+
+for (const recovery of ["member", "owner"] as const) {
+  test(`a fast first Team-list 401 after ${recovery} recovery does not leave a false authenticated workspace`, async () => {
+    const dom = installDom();
+    const originalFetch = globalThis.fetch;
+    const paths: string[] = [];
+    let expiredEvents = 0;
+    dom.window.addEventListener(webSessionExpiredEvent, () => { expiredEvents += 1; });
+    globalThis.fetch = async (input) => {
+      const path = String(input);
+      paths.push(path);
+      if (path === "/api/auth/status") return response({ mode: "trusted-team", state: "sign_in_required" });
+      if (path === `/api/auth/recover-${recovery}`) return response({ user });
+      if (path === "/api/teams") return failure(401);
+      throw new Error(`Unexpected request: ${path}`);
+    };
+    const { act, cleanup, fireEvent, render, within } = await import("@testing-library/react");
+    try {
+      render(<App />);
+      const page = within(dom.window.document.body);
+      await page.findByRole("heading", { name: "回到你的 Team" });
+      fireEvent.change(page.getByLabelText(recovery === "member" ? "一次性成员恢复码" : "恢复密钥"), {
+        target: { value: "synthetic-recovery-code" }
+      });
+      await act(async () => {
+        fireEvent.click(page.getByRole("button", {
+          name: recovery === "member" ? "恢复原成员身份" : "恢复访问", exact: true
+        }));
+      });
+      await page.findByRole("heading", { name: "回到你的 Team" });
+      assert.equal(expiredEvents, 1);
+      assert.deepEqual(paths, ["/api/auth/status", `/api/auth/recover-${recovery}`, "/api/teams"]);
+      assert.equal(page.queryByRole("heading", { name: "创建你的第一个 Team" }), null);
+      assert.equal(page.queryByRole("button", { name: "退出登录", exact: true }), null);
+      assert.equal((page.getByLabelText("一次性成员恢复码") as HTMLInputElement).value, "");
+      assert.equal((page.getByLabelText("恢复密钥") as HTMLInputElement).value, "");
+    } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
+  });
+}
+
+test("a fast first Team-list 401 after local bootstrap returns to local entry without starting another bootstrap", async () => {
+  const dom = installDom();
+  const originalFetch = globalThis.fetch;
+  const paths: string[] = [];
+  let expiredEvents = 0;
+  dom.window.addEventListener(webSessionExpiredEvent, () => { expiredEvents += 1; });
+  globalThis.fetch = async (input, init = {}) => {
+    const path = String(input);
+    paths.push(path);
+    if (path === "/api/auth/status") return response({ mode: "local", state: "local_bootstrap" });
+    if (path === "/api/bootstrap") return response({ user, session: { token: "synthetic-local-session" } });
+    if (path === "/api/teams") {
+      assert.equal(new Headers(init.headers).get("authorization"), "Bearer synthetic-local-session");
+      return failure(401);
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  };
+  const { cleanup, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<App />);
+    const page = within(dom.window.document.body);
+    await waitFor(() => assert.equal(expiredEvents, 1));
+    await page.findByRole("heading", { name: "本地模式" });
+    assert.ok(page.getByRole("button", { name: "进入本地工作区" }));
+    assert.equal(page.queryByRole("heading", { name: "成员重新登录" }), null);
+    assert.equal(page.queryByRole("button", { name: "退出登录", exact: true }), null);
+    assert.deepEqual(paths, ["/api/auth/status", "/api/bootstrap", "/api/teams"]);
+  } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
+});
+
 test("an expired Cookie on a protected GET returns App to existing-member recovery", async () => {
   const dom = installDom();
   const originalFetch = globalThis.fetch;
