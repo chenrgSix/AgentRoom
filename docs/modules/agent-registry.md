@@ -148,6 +148,12 @@ Agent as degraded, but it is neither a Device heartbeat nor Central health.
 Unconfigured installations contain no Hosted Agent and preserve current
 Presence behavior.
 
+Only membership in an unarchived Room satisfies Hosted Room availability.
+Participant/settings and Room lifecycle mutations refresh affected Hosted
+Agents after commit. A transition from no usable Room to a usable Room may
+restore ready state, but an unrelated Room edit does not erase a persisted
+provider-execution failure.
+
 ## Verification
 
 - Reconnect converges publication without duplicate Agents.

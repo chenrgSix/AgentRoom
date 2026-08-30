@@ -147,6 +147,70 @@ test("an Owner persists Room collaboration policy with participant settings", as
   }
 });
 
+test("Room settings restore Hosted availability without clearing unrelated failures", async () => {
+  const { auth, database, repository, service } = await createFixture();
+  try {
+    const created = service.createTeamForUser({
+      userId: "user_hosted_room_settings_12345678",
+      userDisplayName: "Alice",
+      teamName: "Hosted Room Settings",
+      now
+    });
+    const session = auth.issueWebSession(
+      created.owner.userId ?? "",
+      now,
+      "2026-08-22T11:00:00.000Z"
+    );
+    const owner = auth.authenticateWebSession(session.secret, now);
+    const room = service.createRoom(owner, created.team.teamId, "hosted", now);
+    const agent = new AgentService(repository, auth).publishAgent(owner, {
+      teamId: created.team.teamId,
+      deviceId: null,
+      name: "Hosted Reviewer",
+      role: "Review",
+      integrationMode: "hosted",
+      capabilities: {
+        supportsHandoff: true,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      roomIds: [],
+      now
+    });
+    const projectedRooms = new TeamRoomService(repository, auth, {
+      getAvailability(agentId) {
+        if (agentId !== agent.agentId) return undefined;
+        return repository.isRoomAgent(room.roomId, agentId) ? "ready" : "degraded";
+      }
+    });
+    const updateParticipants = (agentIds: string[]) => {
+      const settings = projectedRooms.getRoomSettings(owner, room.roomId);
+      return projectedRooms.updateRoomSettings(owner, room.roomId, {
+        participants: { memberIds: [created.owner.memberId], agentIds },
+        collaborationPolicy: settings.room.collaborationPolicy,
+        expectedRevision: settings.room.settingsRevision
+      }, now);
+    };
+
+    assert.equal(repository.getAgent(agent.agentId)?.presence, "degraded");
+    updateParticipants([agent.agentId]);
+    assert.equal(repository.getAgent(agent.agentId)?.presence, "ready");
+
+    repository.updateAgentPresence(agent.agentId, "degraded", now);
+    updateParticipants([agent.agentId]);
+    assert.equal(repository.getAgent(agent.agentId)?.presence, "degraded");
+
+    updateParticipants([]);
+    assert.equal(repository.getAgent(agent.agentId)?.presence, "degraded");
+    updateParticipants([agent.agentId]);
+    assert.equal(repository.getAgent(agent.agentId)?.presence, "ready");
+  } finally {
+    database.close();
+  }
+});
+
 test("a non-member cannot discover Team Rooms", async () => {
   const { auth, database, repository, service } = await createFixture();
   try {
