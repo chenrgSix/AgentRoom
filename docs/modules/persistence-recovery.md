@@ -161,6 +161,27 @@ SQLite row. Backups deliberately contain the envelope and required wrapping
 metadata so restore preserves configured Hosted Agents, but verification and
 operator output never decrypt or print the provider key.
 
+Migration 0054 permits only the one-way local-to-trusted keyring upgrade in
+addition to the existing one-time retirement. On trusted-team adoption, startup
+atomically rewraps every local keyring under the existing Owner recovery root,
+including retired versions, without changing its data key or credential
+envelopes. It verifies all versions before commit. A durable cleanup marker,
+`secure_delete`, `VACUUM`, and a truncated WAL remove old local-root copies from
+the active database before startup succeeds. Interrupted cleanup remains marked
+and resumes on the next startup; failure closes the database and refuses to
+claim a completed upgrade. Previously exported backups and filesystem snapshots
+cannot be retroactively scrubbed and are not deleted by this operation.
+
+An incompatible mode or wrong recovery root makes Hosted credentials unavailable
+and Hosted Presence degraded; ordinary Central health, authentication and Team
+operations remain usable. No fallback silently trusts a database-contained root
+in trusted-team mode. Restoring the correct recovery authority requires restart.
+Database, WAL, SHM, rollback-journal, and direct-backup files use mode `0600` on
+POSIX systems, including existing database files opened by migration or startup.
+New data and backup directories use `0700`; an explicitly selected pre-existing
+parent directory is not chmodded. Backups reserve an exclusive private file
+before copying credential-bearing pages and never overwrite an existing target.
+
 One Hosted invocation intent freezes Run, Agent, profile and credential
 versions, provider/model identifiers, prompt digest, deadline, and operation
 identity. A unique Run foreign key permits one automatic outbound attempt. The

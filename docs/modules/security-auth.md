@@ -231,6 +231,15 @@ that protects ordinary projections from plaintext but is not represented as
 protection against full database theft. Neither mode adds a Hosted-specific key
 file, environment variable, Docker secret, or startup argument.
 
+Local-to-trusted adoption rewraps existing local keyrings under the current
+Owner recovery material and removes local-root copies from the live database
+and WAL before completing startup. Existing backups and filesystem snapshots
+retain their original security boundary and must still be protected by the
+operator. A wrong root or a trusted-to-local mode change disables Hosted
+credential use without disabling ordinary Central operation; it never falls
+back to the weaker root. POSIX database/sidecar/backup files are restricted to
+`0600`, and newly created data/backup directories to `0700`.
+
 Only code-defined provider presets with fixed HTTPS origins are valid in the
 first version. Arbitrary URLs, cross-origin redirects, URL credentials,
 plaintext HTTP, provider proxies, and tool endpoints are rejected before a

@@ -5,6 +5,8 @@ import path from "node:path";
 
 import Database from "better-sqlite3";
 
+import { secureDatabaseFiles } from "./database.js";
+
 const migrationFilename = /^(?<version>[0-9]{4})_(?<name>[a-z0-9_]+)\.sql$/;
 const migrationDirectiveMarker = "-- convenewire:migration";
 const foreignKeysOffDirective =
@@ -126,6 +128,7 @@ export async function migrateDatabase(
 ): Promise<MigrationResult> {
   const normalizedDatabasePath = path.resolve(databasePath);
   const migrations = await loadMigrations(path.resolve(migrationsDirectory));
+  secureDatabaseFiles(normalizedDatabasePath);
   const database = new Database(normalizedDatabasePath);
 
   try {

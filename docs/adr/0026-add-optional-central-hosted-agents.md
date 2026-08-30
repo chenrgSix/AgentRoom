@@ -100,6 +100,18 @@ that prevents accidental plaintext projection but, honestly, does not protect
 against theft of the whole local database. Database file permissions, backup
 protection, and trusted-team recovery material remain the stronger boundaries.
 
+When an existing local installation adopts trusted-team mode, startup must
+atomically rewrap the data keys of all local keyrings under the current Owner
+recovery authority while preserving credential versions, then remove the old
+local-root copies from the live SQLite database and WAL before claiming completion.
+Interrupted cleanup is durable and retried at startup; incomplete cleanup
+fails startup closed. A wrong recovery root or incompatible mode otherwise
+degrades Hosted credential availability only, leaving ordinary Central usable.
+There is no silent downgrade. Previously exported backups or filesystem
+snapshots retain their original local-mode boundary and are not deleted or
+retroactively protected by adoption. POSIX database and backup files are private
+(`0600`); newly created data and backup directories are `0700`.
+
 Credential replacement is versioned. New Runs bind the current version while
 an active Run retains its frozen version. Revocation immediately rejects new
 Runs and requests best-effort cancellation of active calls without deleting

@@ -7,14 +7,24 @@ import {
   createHostedCredentialKeyring,
   decryptHostedCredential,
   encryptHostedCredential,
+  HostedCredentialDecryptionError,
   type HostedCredentialEnvelope,
   type HostedCredentialScope,
   type HostedWrappedDataKey,
-  unwrapHostedCredentialDataKey
+  unwrapHostedCredentialDataKey,
+  wrapHostedCredentialDataKey
 } from "../security/hosted-credential-cipher.js";
 import { SqliteTransactionBoundary } from "./sqlite-transaction-boundary.js";
 
 export const hostedProvider = "openai_responses" as const;
+const rootUpgradeCleanupMetadataKey = "hosted_credential_root_upgrade_cleanup";
+
+class HostedCredentialAuthorityUnavailableError extends Error {
+  public constructor() {
+    super("Hosted credential recovery authority is unavailable");
+    this.name = "HostedCredentialAuthorityUnavailableError";
+  }
+}
 
 export interface HostedExecutionLimits {
   maxInputCharacters: number;
@@ -175,11 +185,30 @@ function mapObservation(row: ObservationRow): HostedProviderTestObservation {
 }
 
 export class HostedAgentRepository {
+  private credentialAuthorityError: Error | undefined;
+
   public constructor(
     private readonly database: Database.Database,
     private readonly root: HostedCredentialRoot,
     private readonly transactions = new SqliteTransactionBoundary(database)
-  ) {}
+  ) {
+    try {
+      this.ensureRootCompatibility();
+    } catch (error) {
+      if (
+        error instanceof HostedCredentialDecryptionError ||
+        error instanceof HostedCredentialAuthorityUnavailableError
+      ) {
+        this.credentialAuthorityError = error;
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  public isCredentialAuthorityAvailable(): boolean {
+    return this.credentialAuthorityError === undefined;
+  }
 
   public createCredential(input: {
     agentId: string;
@@ -188,6 +217,7 @@ export class HostedAgentRepository {
     apiKey: string;
     now: string;
   }): { credentialId: string; credentialVersion: number } {
+    this.requireCredentialAuthority();
     return this.transactions.immediate(() => {
       const active = this.database.prepare(`
         SELECT credential_version FROM hosted_provider_credentials
@@ -306,6 +336,7 @@ export class HostedAgentRepository {
   }
 
   public resolveExecutionProfile(agentId: string): HostedExecutionProfile {
+    this.requireCredentialAuthority();
     const row = this.database.prepare(`
       SELECT profile.*, credential.credential_id,
         credential.encryption_cipher, credential.key_version,
@@ -531,6 +562,7 @@ export class HostedAgentRepository {
       latest_status: "succeeded" | "failed" | null;
     } | undefined;
     if (!row) return undefined;
+    if (!this.isCredentialAuthorityAvailable()) return "degraded";
     return row.enabled === 1 && row.has_room === 1 && row.revoked_at === null &&
       row.latest_status === "succeeded"
       ? "ready"
@@ -593,12 +625,19 @@ export class HostedAgentRepository {
   }
 
   private unwrap(row: KeyringRow): Buffer {
-    const rootSecret = row.root_mode === "local_database"
-      ? row.local_root_key
-      : this.root.mode === "trusted_recovery" ? this.root.secret : null;
-    if (!rootSecret) {
-      throw new Error("Hosted credential recovery authority is unavailable");
+    if (row.root_mode !== this.root.mode) {
+      throw new HostedCredentialAuthorityUnavailableError();
     }
+    const rootSecret = this.root.mode === "trusted_recovery"
+      ? this.root.secret
+      : row.local_root_key;
+    if (!rootSecret) {
+      throw new HostedCredentialAuthorityUnavailableError();
+    }
+    return this.unwrapWithRoot(row, rootSecret);
+  }
+
+  private unwrapWithRoot(row: KeyringRow, rootSecret: Buffer | string): Buffer {
     const wrapped: HostedWrappedDataKey = {
       cipher: row.wrapping_cipher,
       kdf: row.key_derivation,
@@ -612,5 +651,129 @@ export class HostedAgentRepository {
       row.key_version,
       wrapped
     );
+  }
+
+  private requireCredentialAuthority(): void {
+    if (this.credentialAuthorityError) throw this.credentialAuthorityError;
+  }
+
+  private ensureRootCompatibility(): void {
+    const needsPrivateCleanup = this.root.mode === "trusted_recovery" ||
+      this.hasPendingRootUpgradeCleanup();
+    if (needsPrivateCleanup && this.database.inTransaction) {
+      throw new Error("Hosted credential authority must initialize outside a transaction");
+    }
+    const previousSecureDelete = needsPrivateCleanup
+      ? this.database.pragma("secure_delete", { simple: true }) as number
+      : undefined;
+    if (needsPrivateCleanup) this.database.pragma("secure_delete = ON");
+    try {
+      // A previous process may have committed the rewrap but stopped before
+      // removing old root bytes from SQLite free pages or WAL snapshots.
+      this.finishRootUpgradeCleanup();
+      this.transactions.immediate(() => {
+        const rows = this.database.prepare(`
+          SELECT * FROM hosted_credential_keyrings ORDER BY key_version
+        `).all() as KeyringRow[];
+        let upgraded = false;
+        for (const row of rows) {
+          if (
+            this.root.mode === "trusted_recovery" &&
+            row.root_mode === "local_database"
+          ) {
+            this.upgradeLocalKeyring(row, this.root.secret);
+            upgraded = true;
+          } else {
+            this.unwrap(row).fill(0);
+          }
+        }
+        if (upgraded) {
+          this.database.prepare(`
+            INSERT INTO system_metadata (key, value, updated_at)
+            VALUES (?, 'pending', ?)
+            ON CONFLICT(key) DO UPDATE SET
+              value = excluded.value, updated_at = excluded.updated_at
+          `).run(rootUpgradeCleanupMetadataKey, new Date().toISOString());
+        }
+      });
+      this.finishRootUpgradeCleanup();
+    } finally {
+      if (previousSecureDelete !== undefined) {
+        this.database.pragma(`secure_delete = ${previousSecureDelete}`);
+      }
+    }
+  }
+
+  private upgradeLocalKeyring(row: KeyringRow, trustedRoot: string): void {
+    const localRoot = row.local_root_key;
+    if (!localRoot) throw new HostedCredentialAuthorityUnavailableError();
+    let dataKey: Buffer | undefined;
+    let verifiedDataKey: Buffer | undefined;
+    try {
+      dataKey = this.unwrapWithRoot(row, localRoot);
+      const wrapped = wrapHostedCredentialDataKey(
+        trustedRoot,
+        row.key_version,
+        dataKey
+      );
+      const changed = this.database.prepare(`
+        UPDATE hosted_credential_keyrings
+        SET root_mode = 'trusted_recovery', local_root_key = NULL,
+            kdf_salt = ?, wrapped_data_key_ciphertext = ?,
+            wrapped_data_key_nonce = ?, wrapped_data_key_auth_tag = ?
+        WHERE key_version = ? AND root_mode = 'local_database'
+      `).run(
+        wrapped.kdfSalt,
+        wrapped.ciphertext,
+        wrapped.nonce,
+        wrapped.tag,
+        row.key_version
+      );
+      if (changed.changes !== 1) {
+        throw new Error("Hosted credential root changed during adoption");
+      }
+      const upgraded = this.database.prepare(`
+        SELECT * FROM hosted_credential_keyrings WHERE key_version = ?
+      `).get(row.key_version) as KeyringRow;
+      verifiedDataKey = this.unwrapWithRoot(upgraded, trustedRoot);
+      if (!verifiedDataKey.equals(dataKey)) {
+        throw new HostedCredentialDecryptionError();
+      }
+    } finally {
+      dataKey?.fill(0);
+      verifiedDataKey?.fill(0);
+      localRoot.fill(0);
+    }
+  }
+
+  private hasPendingRootUpgradeCleanup(): boolean {
+    return this.database.prepare(`
+      SELECT 1 FROM system_metadata WHERE key = ?
+    `).get(rootUpgradeCleanupMetadataKey) !== undefined;
+  }
+
+  private finishRootUpgradeCleanup(): void {
+    if (!this.hasPendingRootUpgradeCleanup()) return;
+    try {
+      // VACUUM also removes copies left in free pages before secure_delete was
+      // enabled. Checkpointing must truncate old WAL frames before startup can
+      // claim the database no longer contains a self-sufficient local root.
+      this.database.exec("VACUUM");
+      const checkpoints = this.database.pragma("wal_checkpoint(TRUNCATE)") as
+        Array<{ busy: number; log: number; checkpointed: number }>;
+      if (
+        checkpoints.length !== 1 || checkpoints[0]?.busy !== 0 ||
+        checkpoints[0].log > 0
+      ) {
+        throw new Error("Hosted credential cleanup requires exclusive database access");
+      }
+      this.database.prepare(`
+        DELETE FROM system_metadata WHERE key = ?
+      `).run(rootUpgradeCleanupMetadataKey);
+    } catch (error) {
+      throw new Error("Hosted credential root upgrade cleanup is incomplete", {
+        cause: error
+      });
+    }
   }
 }

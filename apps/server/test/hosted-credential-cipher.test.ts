@@ -6,7 +6,8 @@ import {
   decryptHostedCredential,
   encryptHostedCredential,
   HostedCredentialDecryptionError,
-  unwrapHostedCredentialDataKey
+  unwrapHostedCredentialDataKey,
+  wrapHostedCredentialDataKey
 } from "../src/security/hosted-credential-cipher.js";
 
 const root = "owner-recovery-token-0123456789abcdef";
@@ -69,6 +70,31 @@ test("Hosted credential envelopes fail closed for tampering and wrong authority"
       scope.keyVersion,
       keyring.wrapped
     ),
+    HostedCredentialDecryptionError
+  );
+});
+
+test("Hosted keyring rewrapping preserves credential envelopes and changes authority", () => {
+  const localRoot = Buffer.alloc(32, 41);
+  const keyring = createHostedCredentialKeyring(localRoot, scope.keyVersion);
+  const encrypted = encryptHostedCredential(
+    "sk-rewrapped-credential",
+    keyring.dataKey,
+    scope
+  );
+  const wrapped = wrapHostedCredentialDataKey(root, scope.keyVersion, keyring.dataKey);
+  const recovered = unwrapHostedCredentialDataKey(root, scope.keyVersion, wrapped);
+  assert.deepEqual(recovered, keyring.dataKey);
+  assert.equal(
+    decryptHostedCredential(encrypted, recovered, scope),
+    "sk-rewrapped-credential"
+  );
+  assert.throws(
+    () => unwrapHostedCredentialDataKey(localRoot, scope.keyVersion, wrapped),
+    HostedCredentialDecryptionError
+  );
+  assert.throws(
+    () => unwrapHostedCredentialDataKey(root, scope.keyVersion + 1, wrapped),
     HostedCredentialDecryptionError
   );
 });

@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { chmod, mkdtemp, rm, stat } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import {
   databaseFilename,
+  prepareDatabaseDirectory,
   resolveDatabasePath
 } from "../src/data/database-location.js";
 
@@ -60,4 +63,21 @@ test("rejects conflicting current and legacy database paths", () => {
     }),
     /CONVENE_WIRE_DATABASE_PATH conflicts with legacy AGENT_ROOM_DATABASE_PATH/u
   );
+});
+
+test("new database directories are private without chmodding existing shared parents", async (t) => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-private-data-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await chmod(directory, 0o755);
+  const dataDirectory = path.join(directory, "nested", "data");
+  await prepareDatabaseDirectory(path.join(dataDirectory, databaseFilename));
+  if (process.platform !== "win32") {
+    assert.equal((await stat(path.dirname(dataDirectory))).mode & 0o777, 0o700);
+    assert.equal((await stat(dataDirectory)).mode & 0o777, 0o700);
+    assert.equal((await stat(directory)).mode & 0o777, 0o755);
+  }
+  await prepareDatabaseDirectory(path.join(directory, databaseFilename));
+  if (process.platform !== "win32") {
+    assert.equal((await stat(directory)).mode & 0o777, 0o755);
+  }
 });

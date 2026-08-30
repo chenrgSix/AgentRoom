@@ -45,5 +45,10 @@ export function resolveDatabasePath(
 export async function prepareDatabaseDirectory(
   databasePath: string
 ): Promise<void> {
-  await mkdir(path.dirname(path.resolve(databasePath)), { recursive: true });
+  // Existing parents may be shared directories selected by an explicit
+  // database path. Do not chmod those; protect the exact SQLite files too.
+  await mkdir(path.dirname(path.resolve(databasePath)), {
+    recursive: true,
+    mode: 0o700
+  });
 }

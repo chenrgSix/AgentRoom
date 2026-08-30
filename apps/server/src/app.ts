@@ -221,13 +221,19 @@ export async function createServerApp(
     options.anonymousRateLimit?.maximumAttempts,
     options.anonymousRateLimit?.windowMilliseconds
   );
-  const hostedAgentRepository = new HostedAgentRepository(
-    database,
-    webAuth.mode === "trusted-team"
-      ? { mode: "trusted_recovery", secret: webAuth.ownerRecoveryToken }
-      : { mode: "local_database" },
-    transactions
-  );
+  let hostedAgentRepository: HostedAgentRepository;
+  try {
+    hostedAgentRepository = new HostedAgentRepository(
+      database,
+      webAuth.mode === "trusted-team"
+        ? { mode: "trusted_recovery", secret: webAuth.ownerRecoveryToken }
+        : { mode: "local_database" },
+      transactions
+    );
+  } catch (error) {
+    database.close();
+    throw error;
+  }
   const teamRooms = new TeamRoomService(core, auth, hostedAgentRepository);
   const registry = new MemberDeviceService(core, auth);
   const agents = new AgentService(core, auth);

@@ -77,13 +77,18 @@ function deriveWrappingKey(
   if (salt.byteLength !== keyLength) {
     throw new Error("Hosted credential KDF salt must contain 32 bytes");
   }
-  return Buffer.from(hkdfSync(
-    "sha256",
-    requireRootSecret(rootSecret),
-    salt,
-    wrappingInfo,
-    keyLength
-  ));
+  const source = requireRootSecret(rootSecret);
+  try {
+    return Buffer.from(hkdfSync(
+      "sha256",
+      source,
+      salt,
+      wrappingInfo,
+      keyLength
+    ));
+  } finally {
+    source.fill(0);
+  }
 }
 
 function wrapAad(keyVersion: number): Buffer {
@@ -167,21 +172,37 @@ export function createHostedCredentialKeyring(
   keyVersion: number
 ): NewHostedCredentialKeyring {
   const dataKey = randomBytes(keyLength);
+  try {
+    return {
+      dataKey,
+      wrapped: wrapHostedCredentialDataKey(rootSecret, keyVersion, dataKey)
+    };
+  } catch (error) {
+    dataKey.fill(0);
+    throw error;
+  }
+}
+
+export function wrapHostedCredentialDataKey(
+  rootSecret: Buffer | string,
+  keyVersion: number,
+  dataKey: Buffer
+): HostedWrappedDataKey {
+  const plaintext = requireDataKey(dataKey);
   const kdfSalt = randomBytes(keyLength);
-  const encrypted = encrypt(
-    dataKey,
-    deriveWrappingKey(rootSecret, kdfSalt),
-    wrapAad(keyVersion)
-  );
-  return {
-    dataKey,
-    wrapped: {
+  let wrappingKey: Buffer | undefined;
+  try {
+    wrappingKey = deriveWrappingKey(rootSecret, kdfSalt);
+    return {
       cipher: hostedCredentialCipher,
       kdf: hostedCredentialKdf,
       kdfSalt,
-      ...encrypted
-    }
-  };
+      ...encrypt(plaintext, wrappingKey, wrapAad(keyVersion))
+    };
+  } finally {
+    plaintext.fill(0);
+    wrappingKey?.fill(0);
+  }
 }
 
 export function unwrapHostedCredentialDataKey(
@@ -195,15 +216,22 @@ export function unwrapHostedCredentialDataKey(
   ) {
     throw new HostedCredentialDecryptionError();
   }
+  let wrappingKey: Buffer | undefined;
+  let plaintext: Buffer | undefined;
   try {
-    return requireDataKey(decrypt(
+    wrappingKey = deriveWrappingKey(rootSecret, wrapped.kdfSalt);
+    plaintext = decrypt(
       wrapped,
-      deriveWrappingKey(rootSecret, wrapped.kdfSalt),
+      wrappingKey,
       wrapAad(keyVersion)
-    ));
+    );
+    return requireDataKey(plaintext);
   } catch (error) {
     if (error instanceof HostedCredentialDecryptionError) throw error;
     throw new HostedCredentialDecryptionError();
+  } finally {
+    wrappingKey?.fill(0);
+    plaintext?.fill(0);
   }
 }
 
