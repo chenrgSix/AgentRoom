@@ -6,7 +6,7 @@ import React from "react";
 
 import { App } from "../src/App.js";
 import { advanceWebSessionGeneration, jsonRequest } from "../src/api-client.js";
-import type { Member, Message, Room, Run, Team } from "../src/models.js";
+import type { AgentTask, Member, Message, Room, Run, Team } from "../src/models.js";
 
 const now = "2026-08-31T00:00:00.000Z";
 const user = { userId: "user_context_owner", displayName: "Owner" };
@@ -422,5 +422,338 @@ test("six bounded history pages remain intact after a live message without skipp
     assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
     assert.deepEqual(forwardCursors, ["opaque-live-sequence-600"]);
     assert.equal(tailReads, 1);
+  } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
+});
+
+test("reconciliation restores the older cursor after a failed first Room snapshot and preserves loaded history", async () => {
+  const dom = installDom(true);
+  const originalFetch = globalThis.fetch;
+  const change = deferred<Response>();
+  const beforeCursors: string[] = [];
+  const forwardCursors: string[] = [];
+  let changes = 0;
+  let runReads = 0;
+  let tailReads = 0;
+  const historyItems = (first: number) => Array.from({ length: 100 }, (_, index) => {
+    const sequence = first + index;
+    return message(roomA, sequence, `Recovered history ${sequence}`);
+  });
+  globalThis.fetch = async (input, init = {}) => {
+    const path = String(input);
+    if (path.startsWith(`/api/teams/${teamA.teamId}/changes?`)) {
+      changes += 1;
+      if (changes === 1) return response({ cursor: 1, changed: true, reset: true, team: true, roomIds: [], runRoomIds: [] });
+      return changes === 2 ? change.promise : pendingChange(init.signal);
+    }
+    if (path === `/api/rooms/${roomA.roomId}/runs`) {
+      runReads += 1;
+      return runReads === 1
+        ? response({ error: { message: "Temporary initial Run read failure" } }, 503)
+        : response([]);
+    }
+    if (path.startsWith(`/api/rooms/${roomA.roomId}/messages?`)) {
+      const query = new URL(path, "https://team.example.com").searchParams;
+      assert.equal(query.get("limit"), "100");
+      const before = query.get("beforeCursor");
+      if (before) {
+        beforeCursors.push(before);
+        assert.equal(before, "opaque-recovered-history-101");
+        return response({
+          items: historyItems(1), nextCursor: null, olderCursor: null,
+          syncCursor: "opaque-history-through-100"
+        });
+      }
+      const cursor = query.get("cursor");
+      if (cursor) {
+        forwardCursors.push(cursor);
+        assert.equal(cursor, "opaque-recovered-live-200", "history must not rewind live synchronization");
+        return response({
+          items: [message(roomA, 201, "Live message after recovered history")],
+          nextCursor: null, olderCursor: null, syncCursor: "opaque-recovered-live-201"
+        });
+      }
+      assert.equal(query.get("tail"), "true");
+      tailReads += 1;
+      return response({
+        items: historyItems(101), nextCursor: null,
+        olderCursor: "opaque-recovered-history-101", syncCursor: "opaque-recovered-live-200"
+      });
+    }
+    const result = commonResponse(path, [teamA], [roomA]);
+    if (result) return result;
+    throw new Error(`Unexpected request: ${path}`);
+  };
+  const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<App />);
+    const page = within(dom.window.document.body);
+    fireEvent.click(await page.findByRole("button", { name: "⌁ 对话", exact: true }));
+    await page.findByText("Recovered history 101");
+    await waitFor(() => assert.equal(changes, 2));
+    assert.equal(tailReads, 2, "a new tail snapshot must recover the failed initial batch");
+    fireEvent.click(await page.findByRole("button", { name: "加载更早的消息" }));
+    await page.findByText("Recovered history 1");
+    assert.deepEqual(beforeCursors, ["opaque-recovered-history-101"]);
+    assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 200);
+    assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
+    await act(async () => {
+      change.resolve(response({ cursor: 2, changed: true, reset: false, team: true, roomIds: [], runRoomIds: [] }));
+      await change.promise;
+    });
+    await page.findByText("Live message after recovered history");
+    assert.ok(page.getByText("Recovered history 1"));
+    assert.ok(page.getByText("Recovered history 100"));
+    assert.ok(page.getByText("Recovered history 200"));
+    assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 201);
+    assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
+    assert.deepEqual(forwardCursors, ["opaque-recovered-live-200"]);
+    assert.equal(tailReads, 2);
+  } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
+});
+
+test("a concurrent late tail cannot replace the recovery cursor while an older page is pending", async () => {
+  const dom = installDom(true);
+  const originalFetch = globalThis.fetch;
+  const lateTail = deferred<Response>();
+  const firstHistory = deferred<Response>();
+  const beforeCursors: string[] = [];
+  const forwardCursors: string[] = [];
+  let changes = 0;
+  let runReads = 0;
+  let tailReads = 0;
+  const historyPage = (first: number) => ({
+    items: Array.from({ length: 100 }, (_, index) => {
+      const sequence = first + index;
+      return message(roomA, sequence, `Concurrent recovery history ${sequence}`);
+    }),
+    nextCursor: null,
+    olderCursor: first > 1 ? `opaque-concurrent-history-${first}` : null,
+    syncCursor: `opaque-concurrent-live-${first + 99}`
+  });
+  globalThis.fetch = async (input, init = {}) => {
+    const path = String(input);
+    if (path.startsWith(`/api/teams/${teamA.teamId}/changes?`)) {
+      changes += 1;
+      return changes === 1
+        ? response({ cursor: 1, changed: true, reset: false, team: false, roomIds: [roomA.roomId], runRoomIds: [] })
+        : pendingChange(init.signal);
+    }
+    if (path === `/api/rooms/${roomA.roomId}/runs`) {
+      runReads += 1;
+      return runReads === 1
+        ? response({ error: { message: "Temporary initial Run read failure" } }, 503)
+        : response([]);
+    }
+    if (path.startsWith(`/api/rooms/${roomA.roomId}/messages?`)) {
+      const query = new URL(path, "https://team.example.com").searchParams;
+      assert.equal(query.get("limit"), "100");
+      const before = query.get("beforeCursor");
+      if (before) {
+        beforeCursors.push(before);
+        if (beforeCursors.length === 1) return firstHistory.promise;
+        assert.equal(before, beforeCursors.length === 2
+          ? "opaque-concurrent-history-201"
+          : "opaque-concurrent-history-101");
+        return response(historyPage(beforeCursors.length === 2 ? 101 : 1));
+      }
+      const cursor = query.get("cursor");
+      if (cursor) {
+        forwardCursors.push(cursor);
+        assert.equal(cursor, "opaque-concurrent-live-300", "the late tail and older pages must not rewind live synchronization");
+        return response({
+          items: [message(roomA, 301, "Live after concurrent history recovery")],
+          nextCursor: null, olderCursor: null, syncCursor: "opaque-concurrent-live-301"
+        });
+      }
+      assert.equal(query.get("tail"), "true");
+      tailReads += 1;
+      return tailReads === 2 ? lateTail.promise : response(historyPage(201));
+    }
+    const result = commonResponse(path, [teamA], [roomA]);
+    if (result) return result;
+    throw new Error(`Unexpected request: ${path}`);
+  };
+  const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<App />);
+    const page = within(dom.window.document.body);
+    fireEvent.click(await page.findByRole("button", { name: "⌁ 对话", exact: true }));
+    await waitFor(() => assert.equal(tailReads, 2));
+    // Room and full refreshes have separate single-flight scopes. Let a
+    // visibility refresh restore history before the slower Room read commits.
+    await act(async () => {
+      dom.window.document.dispatchEvent(new dom.window.Event("visibilitychange"));
+    });
+    await page.findByText("Concurrent recovery history 201");
+    assert.equal(tailReads, 3);
+    fireEvent.click(page.getByRole("button", { name: "加载更早的消息" }));
+    await waitFor(() => assert.deepEqual(beforeCursors, ["opaque-concurrent-history-201"]));
+    await act(async () => {
+      lateTail.resolve(response(historyPage(151)));
+      await lateTail.promise;
+    });
+    await waitFor(() => assert.equal(changes, 2));
+    assert.equal((page.getByRole("button", { name: "正在加载历史消息…" }) as HTMLButtonElement).disabled, true);
+    await act(async () => {
+      firstHistory.resolve(response({ error: { message: "Temporary older read failure" } }, 503));
+      await firstHistory.promise;
+    });
+    await page.findByText(/Temporary older read failure/u);
+    fireEvent.click(page.getByRole("button", { name: "加载更早的消息" }));
+    await page.findByText("Concurrent recovery history 101");
+    fireEvent.click(page.getByRole("button", { name: "加载更早的消息" }));
+    await page.findByText("Concurrent recovery history 1");
+    assert.deepEqual(beforeCursors, [
+      "opaque-concurrent-history-201", "opaque-concurrent-history-201", "opaque-concurrent-history-101"
+    ]);
+    assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 300);
+    assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
+    await act(async () => {
+      dom.window.document.dispatchEvent(new dom.window.Event("visibilitychange"));
+    });
+    await page.findByText("Live after concurrent history recovery");
+    assert.deepEqual(forwardCursors, ["opaque-concurrent-live-300"]);
+    assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 301);
+    assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
+    assert.equal(tailReads, 3);
+  } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
+});
+
+test("a late successful initial snapshot preserves history loaded after sending a message and does not rewind live sync", async () => {
+  const dom = installDom(true);
+  const originalFetch = globalThis.fetch;
+  const initialOutput = deferred<Response>();
+  const change = deferred<Response>();
+  const beforeCursors: string[] = [];
+  const forwardCursors: string[] = [];
+  let taskCreated = false;
+  let messageSent = false;
+  let outputReads = 0;
+  let runReads = 0;
+  let tailReads = 0;
+  let changes = 0;
+  const task: AgentTask = {
+    taskId: "task_during_initial_snapshot", roomId: roomA.roomId, parentTaskId: null,
+    title: "Work during initial snapshot", goal: "Keep delivered history intact.",
+    state: "open", primaryAgentId: null, isDefault: false, updatedAt: now
+  };
+  const sentMessage = {
+    ...message(roomA, 201, "Sent while initial output is pending"), taskId: task.taskId
+  };
+  const historyMessage = (sequence: number) => sequence === 201
+    ? sentMessage
+    : message(roomA, sequence, `Initial snapshot history ${sequence}`);
+  const initialRun: Run = {
+    runId: "run_delayed_initial_snapshot", taskId: historyMessage(200).taskId,
+    triggerMessageId: historyMessage(200).messageId, targetAgentId: "agent_delayed_initial_snapshot",
+    state: "working", updatedAt: now
+  };
+  globalThis.fetch = async (input, init = {}) => {
+    const path = String(input);
+    if (path.startsWith(`/api/runs/${initialRun.runId}/events?`)) {
+      outputReads += 1;
+      return initialOutput.promise;
+    }
+    if (path.startsWith(`/api/teams/${teamA.teamId}/changes?`)) {
+      changes += 1;
+      return changes === 1 ? change.promise : pendingChange(init.signal);
+    }
+    if (path === `/api/rooms/${roomA.roomId}/runs`) {
+      runReads += 1;
+      return response(runReads === 1 ? [initialRun] : []);
+    }
+    if (path === `/api/rooms/${roomA.roomId}/tasks`) {
+      if (init.method === "POST") {
+        taskCreated = true;
+        return response(task);
+      }
+      return response(taskCreated ? [task] : []);
+    }
+    if (path === `/api/tasks/${task.taskId}/clarifications`) return response([]);
+    if (path === `/api/tasks/${task.taskId}/artifacts`) return response({ artifacts: [], nextCursor: null });
+    if (path === `/api/rooms/${roomA.roomId}/messages` && init.method === "POST") {
+      messageSent = true;
+      return response({ message: sentMessage, runs: [] });
+    }
+    if (path.startsWith(`/api/rooms/${roomA.roomId}/messages?`)) {
+      const query = new URL(path, "https://team.example.com").searchParams;
+      assert.equal(query.get("limit"), "100");
+      const before = query.get("beforeCursor");
+      if (before) {
+        beforeCursors.push(before);
+        assert.equal(before, beforeCursors.length === 1
+          ? "opaque-delayed-history-102" : "opaque-delayed-history-2");
+        return response(beforeCursors.length === 1 ? {
+          items: Array.from({ length: 100 }, (_, index) => historyMessage(index + 2)),
+          nextCursor: null, olderCursor: "opaque-delayed-history-2", syncCursor: "opaque-delayed-live-101"
+        } : {
+          items: [historyMessage(1)], nextCursor: null, olderCursor: null, syncCursor: "opaque-delayed-live-1"
+        });
+      }
+      const cursor = query.get("cursor");
+      if (cursor) {
+        forwardCursors.push(cursor);
+        assert.equal(cursor, "opaque-delayed-live-201", "the earlier initial snapshot must not rewind the committed tail");
+        return response({
+          items: [message(roomA, 202, "Live after delayed initial snapshot")],
+          nextCursor: null, olderCursor: null, syncCursor: "opaque-delayed-live-202"
+        });
+      }
+      assert.equal(query.get("tail"), "true");
+      tailReads += 1;
+      const first = messageSent ? 102 : 101;
+      return response({
+        items: Array.from({ length: 100 }, (_, index) => historyMessage(first + index)),
+        nextCursor: null, olderCursor: `opaque-delayed-history-${first}`,
+        syncCursor: `opaque-delayed-live-${first + 99}`
+      });
+    }
+    const result = commonResponse(path, [teamA], [roomA]);
+    if (result) return result;
+    throw new Error(`Unexpected request: ${path}`);
+  };
+  const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<App />);
+    const page = within(dom.window.document.body);
+    await waitFor(() => assert.equal(outputReads, 1));
+    fireEvent.click(page.getByRole("button", { name: "⌁ 对话", exact: true }));
+    fireEvent.click(page.getByRole("button", { name: "+ 新任务" }));
+    const dialog = within(await page.findByRole("dialog", { name: "创建长期任务" }));
+    fireEvent.change(dialog.getByLabelText("任务名称"), { target: { value: task.title } });
+    fireEvent.change(dialog.getByLabelText("任务目标"), { target: { value: task.goal } });
+    fireEvent.click(dialog.getByRole("button", { name: "创建并切换" }));
+    await waitFor(() => assert.equal((page.getByLabelText("当前任务") as HTMLSelectElement).value, task.taskId));
+    fireEvent.change(page.getByLabelText("消息"), { target: { value: sentMessage.content } });
+    fireEvent.click(page.getByRole("button", { name: "发送", exact: true }));
+    await page.findByText("Initial snapshot history 102");
+    assert.equal(tailReads, 2, "sending refreshes the tail while the initial output read remains pending");
+    assert.equal(changes, 0);
+    for (const sequence of [2, 1]) {
+      fireEvent.click(page.getByRole("button", { name: "加载更早的消息" }));
+      await page.findByText(`Initial snapshot history ${sequence}`);
+    }
+    assert.deepEqual(beforeCursors, ["opaque-delayed-history-102", "opaque-delayed-history-2"]);
+    assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 201);
+    assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
+    await act(async () => {
+      initialOutput.resolve(response([]));
+      await initialOutput.promise;
+    });
+    await waitFor(() => assert.equal(changes, 1));
+    assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 201,
+      "the late initial snapshot must not discard history or the already delivered message");
+    assert.ok(page.getByText("Initial snapshot history 1"));
+    assert.ok(page.getByText(sentMessage.content));
+    assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
+    await act(async () => {
+      change.resolve(response({ cursor: 1, changed: true, reset: false, team: true, roomIds: [], runRoomIds: [] }));
+      await change.promise;
+    });
+    await page.findByText("Live after delayed initial snapshot");
+    assert.deepEqual(forwardCursors, ["opaque-delayed-live-201"]);
+    assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 202);
+    assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
+    assert.equal(tailReads, 2);
   } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
 });

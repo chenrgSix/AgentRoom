@@ -54,3 +54,40 @@ Command, from `apps/web`:
 ```sh
 node ../../node_modules/tsx/dist/cli.mjs --test test/session-expiry.test.tsx
 ```
+
+## Room history recovery
+
+When any request in the initial Room snapshot failed, reconciliation could
+restore recent messages but discarded that tail page's older cursor. A
+separate per-Room initialization flag now restores the backward boundary from
+the first committed tail page, whether it arrives through initial loading,
+reconciliation or an action-triggered Room refresh. The flag is checked at
+commit time, not request start. A null cursor after reaching the beginning of
+history therefore remains final; neither incremental pages nor a concurrent
+older tail response can reset it.
+
+The initial-recovery regression failed before the fix: a 200-message Room
+showed only its last 100 messages without a history button after a transient
+Run-list failure. It now loads all 200 and keeps them during live updates.
+A concurrent room/full refresh regression additionally holds a history read
+pending while an older tail response arrives, forces a transient history
+failure, and proves the retry retains its exact boundary. All 300 messages
+remain reachable; a subsequent live delta advances from sequence 300 to 301
+rather than rewinding to the old tail or historical page.
+
+Cross-review exposed one additional cut within the same history repair: a
+successful initial snapshot could wait for Run output while the user created
+a Task, sent a message and loaded history through an action-triggered refresh.
+The delayed initial snapshot then replaced all 201 visible messages with its
+old 100-message page while leaving the history cursor exhausted. The new
+UI-action regression reproduced that loss before the final correction. Initial
+snapshots now merge messages and only advance the live checkpoint; the test
+preserves all 201 messages and subsequently reads live sequence 202 from
+cursor 201, not the old cursor 200.
+
+All nine context-race tests pass; together with session-expiry coverage the
+two full files pass 21 tests. Command, from `apps/web`:
+
+```sh
+node ../../node_modules/tsx/dist/cli.mjs --test test/context-races.test.tsx test/session-expiry.test.tsx
+```

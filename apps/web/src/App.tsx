@@ -240,6 +240,7 @@ export function App() {
   const diagnosticRequestsRef = useRef(new Set<string>());
   const historyRequestRef = useRef(0);
   const historyPendingRef = useRef(false);
+  const historyInitializedRef = useRef(false);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const roomContextRef = useRef("");
   roomContextRef.current = JSON.stringify([selectedTeamId, selectedRoomId, session?.userId, session?.token]);
@@ -248,6 +249,14 @@ export function App() {
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
   const pendingRoomTaskIdRef = useRef<string | null>(null);
   selectedTaskIdRef.current = selectedTaskId;
+
+  const initializeRoomHistoryCursor = (page: RoomMessagePage): void => {
+    // null also means all history is loaded; never use the cursor as this flag.
+    // Recheck at commit time so concurrent tail refreshes cannot reset history.
+    if (historyInitializedRef.current) return;
+    historyInitializedRef.current = true;
+    setOlderMessageCursor(page.olderCursor ?? null);
+  };
 
   const commitRunOutputEvents = (
     roomRuns: Run[],
@@ -816,6 +825,7 @@ export function App() {
     ++historyRequestRef.current;
     setInitializedRoomContext(null);
     historyPendingRef.current = false;
+    historyInitializedRef.current = false;
     setOlderMessageCursor(null);
     setHistoryLoading(false);
     setHistoryError(null);
@@ -900,13 +910,19 @@ export function App() {
         session.token
       );
       if (stopped || roomContextRef.current !== context) return;
-      setMessages(page.items);
-      setOlderMessageCursor(page.olderCursor ?? null);
-      messageSyncRef.current = {
-        roomId: selectedRoomId,
-        cursor: page.syncCursor ?? null,
-        sequence: page.items.at(-1)?.sequence ?? 0
-      };
+      // An action-triggered refresh may already have committed a newer tail
+      // and loaded history while this initial snapshot waited for Run output.
+      setMessages((current) => mergeRoomMessages(current, page.items, Infinity));
+      initializeRoomHistoryCursor(page);
+      const sequence = page.items.at(-1)?.sequence ?? 0;
+      const currentSync = messageSyncRef.current;
+      if (!currentSync || currentSync.roomId !== selectedRoomId || sequence >= currentSync.sequence) {
+        messageSyncRef.current = {
+          roomId: selectedRoomId,
+          cursor: page.syncCursor ?? currentSync?.cursor ?? null,
+          sequence
+        };
+      }
       setRuns(nextRuns);
       commitRunOutputEvents(nextRuns, outputBatches);
       setDiscussions(nextDiscussions);
@@ -985,6 +1001,8 @@ export function App() {
     if (!session || !selectedTeamId || !selectedRoomId ||
       initializedRoomContext !== roomContextRef.current) return;
     let stopped = false;
+    const context = roomContextRef.current;
+    const isCurrentRoom = () => !stopped && roomContextRef.current === context && isCurrentSession();
     let activeController: AbortController | null = null;
     let retryTimer: number | null = null;
     const refresh = async (scope: "events" | "room" | "full") => {
@@ -997,7 +1015,7 @@ export function App() {
             nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
             session.token
           );
-          if (!stopped) {
+          if (isCurrentRoom()) {
             setRuns(nextRuns);
             commitRunOutputEvents(nextRuns, outputBatches);
           }
@@ -1008,6 +1026,7 @@ export function App() {
           : null;
         let cursor = sync?.cursor ?? null;
         let sequence = sync?.sequence ?? 0;
+        let tailPage: RoomMessagePage | null = null;
         const changedMessages: Message[] = [];
         for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
           const messagePath = cursor
@@ -1016,6 +1035,7 @@ export function App() {
           const page = await jsonRequest<RoomMessagePage>(
             messagePath, {}, session.token
           );
+          if (pageNumber === 0 && !cursor) tailPage = page;
           changedMessages.push(...page.items);
           sequence = Math.max(sequence, page.items.at(-1)?.sequence ?? sequence);
           cursor = page.nextCursor ?? page.syncCursor ?? cursor;
@@ -1056,8 +1076,9 @@ export function App() {
           nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
           session.token
         );
-        if (!stopped) {
+        if (isCurrentRoom()) {
           setMessages((current) => mergeRoomMessages(current, changedMessages, Infinity));
+          if (tailPage) initializeRoomHistoryCursor(tailPage);
           const currentSync = messageSyncRef.current;
           if (
             !currentSync ||
@@ -1095,7 +1116,7 @@ export function App() {
           }
         }
       } catch (reason) {
-        if (!stopped) reportError(reason);
+        if (isCurrentRoom()) reportError(reason);
       }
     };
     const refreshRoomSingleFlight = createSingleFlight(() => refresh("room"));
@@ -1585,6 +1606,7 @@ export function App() {
     ]);
     if (roomContextRef.current !== context) return;
     setMessages((current) => mergeRoomMessages(current, page.items, Infinity));
+    initializeRoomHistoryCursor(page);
     const sequence = page.items.at(-1)?.sequence ?? 0;
     const currentSync = messageSyncRef.current;
     if (
