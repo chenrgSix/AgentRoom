@@ -30,13 +30,17 @@ legacy `not_recorded` condition; no historical execution context is invented.
 New Runs capture their manifest after the existing context-fence trigger and
 before any managed Delivery can be emitted.
 
-Migration 0052 adds the ADR-0026 `hosted` Agent integration mode, versioned
-Hosted Runtime Profiles, authenticated provider-credential envelopes, safe
-connection-test observations, and one unique Hosted invocation intent per Run.
-It adds no local path, command, environment, Workspace, Docker, desktop,
-Bridge, provider-response body, plaintext credential, or duplicate prompt
-column. Existing Agents and Runs retain their exact integration and delivery
-semantics; no Hosted row is synthesized during migration.
+Migration 0052 plus corrective Migration 0053 add the ADR-0026 `hosted` Agent
+integration mode, versioned Hosted Runtime Profiles, authenticated
+provider-credential envelopes, safe connection-test observations, and one
+unique Hosted invocation intent per Run. Migration 0052 remains byte-for-byte
+identical to its initially applied history; Migration 0053 alone replaces the
+invocation state trigger so equal timestamps within one clock tick are valid
+while time reversal and invalid lifecycle transitions remain rejected. They add
+no local path, command, environment, Workspace, Docker, desktop, Bridge,
+provider-response body, plaintext credential, or duplicate prompt column.
+Existing Agents and Runs retain their exact integration and delivery semantics;
+no Hosted row is synthesized during migration.
 
 ## Storage Model
 
