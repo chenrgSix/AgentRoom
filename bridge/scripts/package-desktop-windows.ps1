@@ -11,6 +11,28 @@ Set-StrictMode -Version Latest
 
 $bridgeRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $repositoryRoot = Split-Path $bridgeRoot -Parent
+. (Join-Path $PSScriptRoot "windows-desktop-icons.ps1")
+$productIcon = (Resolve-Path (Join-Path $bridgeRoot "desktop\windows\icon.ico")).Path
+
+function Invoke-WindowsResourceCheck {
+  param(
+    [ValidateSet("check", "verify")][string]$Mode,
+    [string]$ExecutablePath = ""
+  )
+  $resolvedExecutable = ""
+  if ($Mode -eq "verify") {
+    # Resolve relative output directories before switching to the tool module.
+    $resolvedExecutable = (Resolve-Path -LiteralPath $ExecutablePath).Path
+  }
+  Push-Location (Join-Path $bridgeRoot "tools\windows-resources")
+  try {
+    $arguments = @("run", ".", "-root", $repositoryRoot, "-mode", $Mode)
+    if ($Mode -eq "verify") { $arguments += @("-exe", $resolvedExecutable) }
+    & go @arguments
+    if ($LASTEXITCODE -ne 0) { throw "Windows product icon resource $Mode failed" }
+  }
+  finally { Pop-Location }
+}
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
   $OutputDir = Join-Path $bridgeRoot "dist"
 }
@@ -55,6 +77,8 @@ if ($LASTEXITCODE -ne 0) {
 if ("$hostOS/$hostArch" -ne "windows/$GoArch") {
   throw "Desktop package requires a native windows/$GoArch builder; found $hostOS/$hostArch"
 }
+
+Invoke-WindowsResourceCheck -Mode check
 
 $package = "convenewire-bridge-desktop_${version}_windows_${GoArch}"
 $staging = Join-Path $OutputDir $package
@@ -128,6 +152,9 @@ if (-not $binaryText.Contains($ReleaseTag)) {
 if (-not $binaryText.Contains($sourceCommit)) {
   throw "Built desktop Bridge does not contain the injected source commit $sourceCommit"
 }
+
+Invoke-WindowsResourceCheck -Mode verify -ExecutablePath $binary
+Assert-ConveneWireNativeIcon -ExecutablePath $binary -IconPath $productIcon
 
 Compress-Archive -LiteralPath $staging -DestinationPath $archive -CompressionLevel Optimal
 if (-not (Test-Path -LiteralPath $archive) -or (Get-Item -LiteralPath $archive).Length -eq 0) {
@@ -217,6 +244,7 @@ $compilerArguments = @(
   "/DSourceDir=$staging",
   "/DOutputDir=$OutputDir",
   "/DOutputBaseFilename=$installerBase",
+  "/DIconFile=$productIcon",
   $installerScript
 )
 & $compiler @compilerArguments
@@ -238,6 +266,8 @@ if ($installerProductName -ne "ConveneWire Bridge" -or
   throw ("Windows Desktop installer has unexpected product metadata: " +
     "ProductName='$installerProductName', FileVersion='$installerFileVersion'")
 }
+
+Assert-ConveneWireNativeIcon -ExecutablePath $installer -IconPath $productIcon
 
 Write-Output $archive
 Write-Output $installer

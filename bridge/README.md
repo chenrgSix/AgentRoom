@@ -117,6 +117,27 @@ ZIP and an unsigned current-user installer. Native CI performs an initial
 install, in-place upgrade, and uninstall while proving owner configuration is
 preserved. Windows login-startup integration remains unsupported.
 
+Windows executable, installer and shortcuts share the product icon generated
+from `site/public/mark.svg`; the window and tray use its PNG counterpart. The
+architecture-suffixed `.syso` is checked in so a regular Windows `go build`
+includes the icon. To regenerate or verify the resources, run from
+`bridge/tools/windows-resources`:
+
+```bash
+go run . -root ../../.. -mode generate
+go run . -root ../../.. -mode check
+go test ./...
+go vet ./...
+go run . -root ../../.. -mode verify -exe /absolute/path/to/ConveneWire-Bridge.exe
+```
+
+These build-time tools have their own pinned dependencies and are not included
+in the Bridge runtime. Native packaging also checks Shell icon extraction and
+shortcut targets. Replacing a missing icon in an older installed release
+requires a newly built installer or executable; changing source alone does not
+update an existing installation. The desktop shortcut is still optional during
+installation.
+
 `console` is the headless compatibility setup path. It opens the complete token-bearing
 URL in the default browser and also prints it as a fallback. Pass `--no-open`
 for a headless environment. The local page detects Codex and Pi, requests Team

@@ -696,6 +696,18 @@ Upgrade and uninstall own program files and protocol registration only;
 configuration and credentials under the user's application-data directory or a
 configured external DataDir remain outside installer ownership.
 
+Windows desktop builds embed the existing product mark as a multi-size icon
+resource in the executable, under the window and class identifiers expected by
+Wails. Both identifiers share the same image payloads. The
+installer, shortcuts, protocol registration, window and tray use the same mark.
+The generated PNG, ICO and architecture-specific resource object are checked
+against their SVG source by the isolated `bridge/tools/windows-resources`
+module. Packaging verifies the actual executable's icon resource tree and
+rejects missing, corrupt or different icons before distribution. Native Windows
+checks additionally extract the installer and installed executable icons and
+verify shortcut icon targets. These presentation resources do not alter the
+application manifest, privileges, pairing protocol or installer data ownership.
+
 The app uses the installed Microsoft Edge WebView2 Runtime and may trigger an
 unknown-publisher SmartScreen warning. The installer checks Microsoft's
 documented per-machine and per-user Runtime registrations. If WebView2 is

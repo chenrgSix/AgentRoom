@@ -13,6 +13,9 @@
 #ifndef OutputBaseFilename
   #error OutputBaseFilename is required
 #endif
+#ifndef IconFile
+  #error IconFile is required
+#endif
 
 [Setup]
 AppId={{2FA4C87B-E4E4-4929-B229-8F2B13DB1EF6}
@@ -45,6 +48,7 @@ OutputBaseFilename={#OutputBaseFilename}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile={#IconFile}
 SetupLogging=yes
 VersionInfoVersion={#BundleVersion}
 VersionInfoProductVersion={#BundleVersion}
@@ -73,8 +77,8 @@ Source: "{#SourceDir}\TRADEMARKS.md"; DestDir: "{app}"; Flags: ignoreversion
 Type: files; Name: "{app}\AgentRoom Bridge.exe"
 
 [Icons]
-Name: "{group}\ConveneWire Bridge"; Filename: "{app}\ConveneWire Bridge.exe"; WorkingDir: "{app}"
-Name: "{autodesktop}\ConveneWire Bridge"; Filename: "{app}\ConveneWire Bridge.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\ConveneWire Bridge"; Filename: "{app}\ConveneWire Bridge.exe"; WorkingDir: "{app}"; IconFilename: "{app}\ConveneWire Bridge.exe"; IconIndex: 0
+Name: "{autodesktop}\ConveneWire Bridge"; Filename: "{app}\ConveneWire Bridge.exe"; WorkingDir: "{app}"; IconFilename: "{app}\ConveneWire Bridge.exe"; IconIndex: 0; Tasks: desktopicon
 
 [Registry]
 Root: HKCU; Subkey: "Software\Classes\convenewire"; ValueType: string; ValueName: ""; ValueData: "URL:ConveneWire Device Pairing"; Flags: uninsdeletekey

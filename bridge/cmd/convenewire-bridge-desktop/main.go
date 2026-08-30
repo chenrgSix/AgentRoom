@@ -123,7 +123,7 @@ func runPrimaryDesktop(configPath, dataDir, workspace, initialPairingLink string
 	app := application.New(application.Options{
 		Name:        "ConveneWire Bridge",
 		Description: "Connect local Codex and Pi runtimes to an ConveneWire Team",
-		Icon:        icons.ApplicationLightMode256,
+		Icon:        desktopApplicationIcon(runtime.GOOS),
 		Assets: application.AssetOptions{
 			Handler: assetRouter, DisableLogging: true,
 		},
@@ -211,7 +211,7 @@ func runPrimaryDesktop(configPath, dataDir, workspace, initialPairingLink string
 	if runtime.GOOS == "darwin" {
 		tray.SetTemplateIcon(icons.SystrayMacTemplate)
 	} else {
-		tray.SetIcon(icons.SystrayLight)
+		tray.SetIcon(desktopTrayIcon(runtime.GOOS))
 	}
 	tray.SetTooltip("ConveneWire Bridge")
 	menu := app.NewMenu()

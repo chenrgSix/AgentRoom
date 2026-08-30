@@ -18,6 +18,9 @@ $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
 . (Join-Path $PSScriptRoot "windows-release-semver.ps1")
+. (Join-Path $PSScriptRoot "windows-desktop-icons.ps1")
+$bridgeRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
+$productIcon = (Resolve-Path (Join-Path $bridgeRoot "desktop\windows\icon.ico")).Path
 Assert-ConveneWireReleaseUpgrade `
   -PreviousReleaseTag $PreviousReleaseTag `
   -CandidateReleaseTag $ReleaseTag
@@ -33,6 +36,8 @@ $hostOS = (& go env GOHOSTOS).Trim()
 if ($LASTEXITCODE -ne 0 -or $hostOS -ne "windows") {
   throw "Installer verification requires a native Windows host"
 }
+Assert-ConveneWireNativeIcon -ExecutablePath $installer -IconPath $productIcon
+Assert-ConveneWireNativeIcon -ExecutablePath $candidateExecutable -IconPath $productIcon
 
 $verificationRoot = Join-Path ([IO.Path]::GetTempPath()) ("convenewire-installer-" + [guid]::NewGuid().ToString("N"))
 $installDir = Join-Path $env:LOCALAPPDATA "Programs\ConveneWire Bridge"
@@ -175,6 +180,14 @@ function Assert-InstalledPayload {
   }
   if (-not (Test-Path -LiteralPath $startMenuLink)) {
     throw "Installer did not create the current-user Start menu shortcut"
+  }
+  if (-not [string]::IsNullOrWhiteSpace($ExpectedExecutableSHA256)) {
+    # The previous stable fixture predates this repair. Enforce the product
+    # icon on the candidate after upgrade, not retroactively on that release.
+    $installedExecutable = Join-Path $installDir "ConveneWire Bridge.exe"
+    Assert-ConveneWireNativeIcon -ExecutablePath $installedExecutable -IconPath $productIcon
+    Assert-ConveneWireNativeIcon -ExecutablePath (Join-Path $installDir "unins000.exe") -IconPath $productIcon
+    Assert-ConveneWireShortcutIcon -ShortcutPath $startMenuLink -ExecutablePath $installedExecutable
   }
   if (-not (Test-Path -LiteralPath $uninstallKey)) {
     throw "Installer did not register a current-user uninstaller"

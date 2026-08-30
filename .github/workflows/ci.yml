@@ -166,6 +166,18 @@ jobs:
           cache-dependency-path: |
             bridge/go.sum
             packages/contracts/go.sum
+            bridge/tools/windows-resources/go.sum
+
+      - name: Test and check Windows product icon resources
+        working-directory: bridge/tools/windows-resources
+        shell: pwsh
+        run: |
+          go test ./...
+          if ($LASTEXITCODE -ne 0) { throw "Windows resource tool tests failed" }
+          go vet ./...
+          if ($LASTEXITCODE -ne 0) { throw "Windows resource tool vet failed" }
+          go run . -root $env:GITHUB_WORKSPACE -mode check
+          if ($LASTEXITCODE -ne 0) { throw "Windows product resources are not reproducible" }
 
       - name: Test, vet, and package desktop shell
         working-directory: bridge
@@ -195,6 +207,7 @@ jobs:
             throw "Expected exactly one previous stable Windows installer"
           }
           ./scripts/test-windows-release-semver.ps1
+          ./scripts/test-windows-desktop-icons.ps1
           go test -count=1 ./... -run Windows -v
           go test -tags desktop ./cmd/convenewire-bridge-desktop
           go vet -tags desktop ./cmd/convenewire-bridge-desktop
