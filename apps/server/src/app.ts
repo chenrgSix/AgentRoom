@@ -221,9 +221,6 @@ export async function createServerApp(
     options.anonymousRateLimit?.maximumAttempts,
     options.anonymousRateLimit?.windowMilliseconds
   );
-  const teamRooms = new TeamRoomService(core, auth);
-  const registry = new MemberDeviceService(core, auth);
-  const agents = new AgentService(core, auth);
   const hostedAgentRepository = new HostedAgentRepository(
     database,
     webAuth.mode === "trusted-team"
@@ -231,6 +228,9 @@ export async function createServerApp(
       : { mode: "local_database" },
     transactions
   );
+  const teamRooms = new TeamRoomService(core, auth, hostedAgentRepository);
+  const registry = new MemberDeviceService(core, auth);
+  const agents = new AgentService(core, auth);
   const agentProvisioning = new AgentProvisioningService(
     database,
     core,

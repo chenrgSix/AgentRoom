@@ -36,7 +36,12 @@ async function fixture(options: {
   const transactions = new SqliteTransactionBoundary(database);
   const core = new CoreRepository(database, transactions);
   const auth = new AuthService(database);
-  const teamRooms = new TeamRoomService(core, auth);
+  const repository = new HostedAgentRepository(
+    database,
+    options.root ?? { mode: "local_database" },
+    transactions
+  );
+  const teamRooms = new TeamRoomService(core, auth, repository);
   const agents = new AgentService(core, auth);
   const created = teamRooms.createTeamForUser({
     userId: "user_hostedowner12345678",
@@ -51,11 +56,6 @@ async function fixture(options: {
   );
   const principal = auth.authenticateWebSession(session.secret, now);
   const room = teamRooms.createRoom(principal, created.team.teamId, "general", now);
-  const repository = new HostedAgentRepository(
-    database,
-    options.root ?? { mode: "local_database" },
-    transactions
-  );
   const calls: Array<{ model: string; apiKey: string }> = [];
   const probe = options.probe ?? {
     async test(input) {
@@ -220,6 +220,51 @@ test("Hosted Agent configuration is explicit, encrypted, revisioned, and recover
     } finally {
       restoredDatabase.close();
     }
+  } finally {
+    context.database.close();
+  }
+});
+
+test("Hosted Presence follows active Room membership and lifecycle", async () => {
+  const context = await fixture();
+  try {
+    const created = await context.service.create(context.principal, {
+      teamId: context.created.team.teamId,
+      name: "Central Room Agent",
+      role: "Remote model",
+      provider: hostedProvider,
+      model: "gpt-5.4-mini",
+      apiKey: "sk-room-presence-secret",
+      roomIds: [context.room.roomId],
+      now
+    });
+    assert.equal(created.presence, "ready");
+
+    context.teamRooms.replaceRoomParticipants(context.principal, context.room.roomId, {
+      memberIds: [context.created.owner.memberId],
+      agentIds: []
+    }, "2026-08-30T03:01:00.000Z");
+    assert.equal(context.repository.getAvailability(created.agentId), "degraded");
+    assert.equal(context.core.getAgent(created.agentId)?.presence, "degraded");
+
+    context.teamRooms.replaceRoomParticipants(context.principal, context.room.roomId, {
+      memberIds: [context.created.owner.memberId],
+      agentIds: [created.agentId]
+    }, "2026-08-30T03:02:00.000Z");
+    assert.equal(context.repository.getAvailability(created.agentId), "ready");
+    assert.equal(context.core.getAgent(created.agentId)?.presence, "ready");
+
+    context.teamRooms.updateRoom(context.principal, context.room.roomId, {
+      archived: true
+    }, "2026-08-30T03:03:00.000Z");
+    assert.equal(context.repository.getAvailability(created.agentId), "degraded");
+    assert.equal(context.core.getAgent(created.agentId)?.presence, "degraded");
+
+    context.teamRooms.updateRoom(context.principal, context.room.roomId, {
+      archived: false
+    }, "2026-08-30T03:04:00.000Z");
+    assert.equal(context.repository.getAvailability(created.agentId), "ready");
+    assert.equal(context.core.getAgent(created.agentId)?.presence, "ready");
   } finally {
     context.database.close();
   }

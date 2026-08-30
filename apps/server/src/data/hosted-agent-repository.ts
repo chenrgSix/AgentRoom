@@ -501,8 +501,11 @@ export class HostedAgentRepository {
     const row = this.database.prepare(`
       SELECT agent.enabled, credential.revoked_at,
         EXISTS (
-          SELECT 1 FROM room_agent_participants participant
+          SELECT 1
+          FROM room_agent_participants participant
+          JOIN rooms room ON room.room_id = participant.room_id
           WHERE participant.agent_id = agent.agent_id
+            AND room.archived_at IS NULL
         ) AS has_room,
         observation.status AS latest_status
       FROM agents agent

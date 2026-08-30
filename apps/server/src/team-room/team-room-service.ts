@@ -27,6 +27,10 @@ export interface RoomSettings {
   participants: RoomParticipants;
 }
 
+export interface HostedRoomAvailabilitySource {
+  getAvailability(agentId: string): "ready" | "degraded" | undefined;
+}
+
 function normalizedName(value: string, label: string): string {
   const normalized = value.trim();
   if (normalized.length === 0 || normalized.length > 80) {
@@ -38,7 +42,8 @@ function normalizedName(value: string, label: string): string {
 export class TeamRoomService {
   public constructor(
     private readonly repository: CoreRepository,
-    private readonly auth: AuthService
+    private readonly auth: AuthService,
+    private readonly hostedAgents?: HostedRoomAvailabilitySource
   ) {}
 
   public createTeamForUser(input: {
@@ -165,7 +170,9 @@ export class TeamRoomService {
     if (input.archived === true && this.repository.hasActiveWorkForRoom(roomId)) {
       throw new Error("Room cannot be archived while Runs or Discussions are active");
     }
-    return this.repository.updateRoomLifecycle(roomId, {
+    const participantIds = this.repository.getRoomParticipants(roomId).agentIds;
+    const priorAvailability = this.captureHostedAvailability(participantIds);
+    const updated = this.repository.updateRoomLifecycle(roomId, {
       name: input.name === undefined
         ? existing.name
         : normalizedName(input.name, "Room name"),
@@ -173,6 +180,10 @@ export class TeamRoomService {
         ? existing.archivedAt ?? null
         : input.archived ? now : null
     });
+    if (updated.archivedAt !== existing.archivedAt) {
+      this.projectHostedAvailability(participantIds, priorAvailability, now);
+    }
+    return updated;
   }
 
   public getRoomParticipants(
@@ -211,11 +222,16 @@ export class TeamRoomService {
       throw new Error("Authorized Room disappeared during participant update");
     }
     const { memberIds, agentIds } = this.validateRoomParticipants(room, input);
-    return this.repository.replaceRoomParticipants(
+    const previousAgentIds = this.repository.getRoomParticipants(roomId).agentIds;
+    const affectedAgentIds = [...new Set([...previousAgentIds, ...agentIds])];
+    const priorAvailability = this.captureHostedAvailability(affectedAgentIds);
+    const participants = this.repository.replaceRoomParticipants(
       roomId,
       { memberIds, agentIds },
       now
     );
+    this.projectHostedAvailability(affectedAgentIds, priorAvailability, now);
+    return participants;
   }
 
   public updateRoomSettings(
@@ -241,13 +257,20 @@ export class TeamRoomService {
     if (!Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 1) {
       throw new Error("Room settings revision must be a positive integer");
     }
-    return this.repository.replaceRoomSettings(
+    const previousAgentIds = this.repository.getRoomParticipants(roomId).agentIds;
+    const affectedAgentIds = [
+      ...new Set([...previousAgentIds, ...participants.agentIds])
+    ];
+    const priorAvailability = this.captureHostedAvailability(affectedAgentIds);
+    const settings = this.repository.replaceRoomSettings(
       roomId,
       participants,
       collaborationPolicy,
       input.expectedRevision,
       now
     );
+    this.projectHostedAvailability(affectedAgentIds, priorAvailability, now);
+    return settings;
   }
 
   public getRoom(
@@ -298,5 +321,45 @@ export class TeamRoomService {
       throw new Error("Room Agent must be an enabled Agent in the Room Team");
     }
     return { memberIds, agentIds };
+  }
+
+  private captureHostedAvailability(
+    agentIds: string[]
+  ): Map<string, "ready" | "degraded" | undefined> {
+    const availability = new Map<
+      string,
+      "ready" | "degraded" | undefined
+    >();
+    if (!this.hostedAgents) return availability;
+    for (const agentId of agentIds) {
+      const agent = this.repository.getAgent(agentId);
+      if (agent?.integrationMode === "hosted") {
+        availability.set(agentId, this.hostedAgents.getAvailability(agentId));
+      }
+    }
+    return availability;
+  }
+
+  private projectHostedAvailability(
+    agentIds: string[],
+    priorAvailability: Map<string, "ready" | "degraded" | undefined>,
+    now: string
+  ): void {
+    if (!this.hostedAgents) return;
+    for (const agentId of agentIds) {
+      const agent = this.repository.getAgent(agentId);
+      if (!agent || agent.integrationMode !== "hosted" || !agent.enabled) continue;
+      const availability = this.hostedAgents.getAvailability(agentId);
+      if (availability !== "ready") {
+        this.repository.updateAgentPresence(agentId, "degraded", now);
+      } else if (
+        priorAvailability.get(agentId) !== "ready" &&
+        agent.presence !== "busy"
+      ) {
+        // Promote only when this Room mutation repairs an availability gap.
+        // Unrelated Room edits must not erase a persisted provider failure.
+        this.repository.updateAgentPresence(agentId, "ready", now);
+      }
+    }
   }
 }
