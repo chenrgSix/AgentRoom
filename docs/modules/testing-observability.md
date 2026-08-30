@@ -11,6 +11,11 @@ console hygiene. Existing Bridge, Compose, schema and migration behavior remains
 in regression scope. Website publication follows this gate and is verified
 separately from an application Release or physical-platform/provider admission.
 
+Product audit regressions cover delayed Run retries across local sign-out and
+sign-in, immediate protected 401s during session activation, and initial Room
+snapshot failure followed by live reconciliation and backward history paging.
+Fixtures use temporary owned data and no external model invocation.
+
 `test:product-experience` verifies a temporary, Owner-bound fixture with 125
 history messages, more than 100 Tasks, an unknown-outcome attempt and a real
 uploaded/sealed Artifact plus proposed Result. It runs in local and trusted

@@ -50,6 +50,11 @@ Loaded Room pages remain available until leaving that Room; refreshing Work
 preserves the loaded page window and waits for an in-flight load-more request.
 Protected response generation checks reject stale successes as well as 401s,
 so switching identities cannot restore an old Team or credential output.
+Derived Run recovery refreshes also require the originating session and detail
+to remain current. A protected 401 during initial activation returns directly
+to the correct trusted/local entry gate, even before React effects reattach.
+Reconciliation after a failed initial Room read restores backward pagination;
+normal live refresh does not reset an already loaded history window.
 Uncertain Run recovery commands keep exact identity-bound receipts in this
 tab's session storage across detail navigation/reload. Storage failure blocks
 new submission; receipts never replace server authorization or revision checks.
