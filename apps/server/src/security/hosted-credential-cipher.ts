@@ -214,11 +214,11 @@ export function encryptHostedCredential(
 ): HostedCredentialEnvelope {
   const bytes = Buffer.from(apiKey, "utf8");
   if (
-    bytes.byteLength < 1 ||
+    bytes.byteLength < 16 ||
     bytes.byteLength > 512 ||
-    /[\u0000\r\n]/u.test(apiKey)
+    /[\p{White_Space}\p{Cc}\p{Cf}]/u.test(apiKey)
   ) {
-    throw new Error("Hosted provider credential must contain 1 to 512 bytes");
+    throw new Error("Hosted provider credential must contain 16 to 512 bytes without whitespace");
   }
   return {
     cipher: hostedCredentialCipher,

@@ -639,7 +639,7 @@ END;
 
 CREATE TRIGGER hosted_invocation_intents_require_monotonic_state
 BEFORE UPDATE OF state ON hosted_invocation_intents
-WHEN NEW.updated_at IS OLD.updated_at OR NOT (
+WHEN NEW.updated_at < OLD.updated_at OR NOT (
   (OLD.state = 'prepared' AND NEW.state IN (
     'dispatching', 'failed', 'canceled'
   )) OR

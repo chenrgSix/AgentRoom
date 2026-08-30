@@ -45,7 +45,7 @@ test("Hosted credential envelopes round-trip without storing plaintext", () => {
 test("Hosted credential envelopes fail closed for tampering and wrong authority", () => {
   const keyring = createHostedCredentialKeyring(root, scope.keyVersion);
   const dataKey = keyring.dataKey;
-  const encrypted = encryptHostedCredential("sk-private", dataKey, scope);
+  const encrypted = encryptHostedCredential("sk-private-credential", dataKey, scope);
 
   const tampered = {
     ...encrypted,
@@ -77,10 +77,10 @@ test("Hosted credential validation rejects control characters and bad keys", () 
   const keyring = createHostedCredentialKeyring(root, scope.keyVersion);
   assert.throws(
     () => encryptHostedCredential("sk-key\nforged", keyring.dataKey, scope),
-    /1 to 512 bytes/u
+    /16 to 512 bytes/u
   );
   assert.throws(
-    () => encryptHostedCredential("sk-key", Buffer.alloc(31), scope),
+    () => encryptHostedCredential("sk-valid-credential", Buffer.alloc(31), scope),
     /32 bytes/u
   );
 });
