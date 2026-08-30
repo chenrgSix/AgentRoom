@@ -57,6 +57,8 @@ listener during `Run`; a notification in that intervening startup window has
 no acknowledgement. The application queue protects events delivered by Wails,
 not notifications Wails never received. Replacing that native transport is
 outside this repair; do not claim cross-platform simultaneous-start delivery.
+The subsequently accepted ADR-0030 implements the requested macOS follow-up
+with an early acknowledged transport, replacing this deferral.
 
 ## Compatibility and limits
 

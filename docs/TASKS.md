@@ -444,6 +444,8 @@ lifecycle ownership without another service or Bridge change.
 The three Bridge repairs are explicitly coordinated parallel implementation
 streams. Scope is fixed by ADR-0029; broad Console decomposition, release
 publication and new physical-platform acceptance are not part of this work.
+The requested macOS follow-up uses ADR-0030 and native isolated-process
+acceptance; it does not defer the implementation behind a future release.
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
@@ -451,8 +453,10 @@ publication and new physical-platform acceptance are not part of this work.
 | BRG-054 | DONE | Preserve durable Runtime outcomes after delivery failure | GOV-020, BRG-005, BRG-052 | terminal_delivery_failure_test.go reproduces all five durable boundaries before the fix and proves unchanged bytes/sequence/observer, exact restart and duplicate replay with one invocation, cancellation-fence retention until successful replay, and unchanged unfinished-execution uncertainty; complete delivery tests, race and vet pass |
 | BRG-055 | DONE | Preserve Generic CLI profiles during ordinary Agent editing | GOV-020, ADP-005, BRG-019 | agent_edit_test.go proves complete configuration, identity and RuntimeScope preservation, explicit Workspace changes, 15 negative edit cases and unchanged creation; 48 embedded UI tests, full Console/race/vet and Bridge tests pass; isolated 1280x720 browser rename/reload and creation controls show no overflow or warning/error logs, and the fixture verifies persisted configuration equality |
 | BRG-056 | DONE | Forward secondary desktop activation before Console ownership | GOV-020, BRG-043, BRG-052 | activation codec/queue/reentry/lease and real temporary Console-owner regressions, 13 native macOS desktop tests plus race/vet/build, Windows native test source and amd64 cross-compilation/cross-vet prove primary-only state opening and bounded Windows forwarding; native Windows execution remains unclaimed and macOS pre-listener delivery is explicitly deferred to BRG-057 |
-| BRG-057 | PLANNED | Acknowledge macOS activation before the native notification listener is ready | BRG-056 | future native macOS startup/forward acknowledgement and packaged concurrent-launch evidence must close Wails beta.12's New-to-Run notification gap; BRG-056 only preserves events the dependency actually delivers |
+| GOV-021 | DONE | Define acknowledged macOS activation before Console startup | GOV-020, BRG-056 | accepted ADR-0030 and Bridge module define early user-local IPC, peer validation, bounded acknowledgement, native URL capture, stable ownership and mixed-version limits |
+| BRG-057 | ACTIVE | Acknowledge macOS activation before the native notification listener is ready | GOV-021, BRG-056 | real macOS delayed-listener/UI subprocess regressions, acknowledgement-loss/no-resend and ownership/security negatives, native AppleEvent capture, desktop/race/vet/build and Windows compatibility compilation |
 | QA-043 | DONE | Verify the three Bridge audit repairs | BRG-054, BRG-055, BRG-056 | [committed acceptance](acceptance/qa-043-bridge-audit-repairs.md) records full Bridge/race/vet, 666 JS/TS tests, 6 deterministic E2Es, build/schema/docs gates, 13 macOS desktop tests/race/vet/build, Windows cross-compilation/cross-vet, real Generic-editor browser/persistence acceptance, independent review and cleaned task-owned fixtures; native Windows execution and the BRG-057 macOS dependency gap remain explicitly separate |
+| QA-044 | PLANNED | Verify acknowledged macOS startup activation | BRG-057 | committed current-source native-process and platform regression evidence, known package/physical limits, cleaned owned fixtures and review |
 
 ## Deferred Beyond MVP
 

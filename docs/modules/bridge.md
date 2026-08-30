@@ -657,9 +657,17 @@ or data-root ownership. A secondary launch forwards its validated pairing link
 or wake request to the original window and never starts another worker. A
 bounded in-memory activation pending window readiness preserves events accepted
 by the transport. Windows uses bounded readiness waiting and acknowledgement.
-The retained macOS Wails notification transport has no acknowledgement before
-its native listener starts in `Run`; the application queue cannot recover an
-event lost inside that earlier dependency startup gap. This does not relax the Console/CLI data-root
+The macOS follow-up in
+[ADR-0030](../adr/0030-acknowledge-macos-desktop-activation-before-console-startup.md)
+requires an acknowledged Unix-domain receiver before Console/Wails startup,
+with stable instance ownership, private OS-selected rendezvous paths and
+same-effective-user peer verification before proof is sent. Bounded admission
+and I/O reject uncertain or malformed forwarding without starting another
+Console. Native secondary AppleEvent capture preserves URL activation; primary
+URL events retain the existing handler. Wakes cannot erase a pending pairing
+intent, and conflicting pending pairing links are rejected rather than silently
+overwritten. Old primaries without the new handshake fail explicitly instead of
+using Wails' unacknowledged notification fallback. This does not relax the Console/CLI data-root
 lock or introduce a second Bridge lifecycle manager. Native Windows activation
 evidence remains distinct from cross-compilation.
 
