@@ -116,3 +116,13 @@ Observed in the in-app Chromium browser against the production build:
 
 The product gate precedes SITE-001 implementation. Website build and public
 GitHub Pages verification are recorded separately.
+
+## Post-push CI confirmation
+
+The [implementation CI run](https://github.com/chenrgSix/ConveneWire/actions/runs/33325890848)
+for `654a2e1de1a42044314e896c1904f9a6a2461c22` completed successfully after the
+website-only addition. Repository (contracts/build/tests/E2E/docs/Compose), Go,
+Desktop Windows and Desktop macOS jobs all passed. The root test command now
+also includes the website's 15 tests; the 540-test product gate above remains
+the pre-website evidence. Native CI builds and package smoke checks do not
+replace physical interactive acceptance or change application Release assets.
