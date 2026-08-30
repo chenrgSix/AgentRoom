@@ -64,6 +64,13 @@ bounded dialog scrolling, contained Tab navigation and Escape/focus restoration.
 
 ## Primary Surfaces
 
+[ADR-0028](../adr/0028-preserve-continuous-web-work.md) adds Work creation and
+navigation-only next-action shortcuts, allowlisted authorized URL restoration,
+bounded Server Task search and identity/context-scoped tab-local draft/outbox
+recovery. Session invalidation clears saved unsent work; storage failure is
+visible and never causes automatic replay. Shared session and Room controllers
+own lifecycle fences and synchronization, not Server domain decisions.
+
 - Authenticated Team and Room shell.
 - Default Team Workbench with Mine/Team scope, authorized Task grouping, every
   attention reason, criteria coverage, budget/telemetry, latest Run/Result, and

@@ -423,6 +423,22 @@ publishing the website does not publish a new application Release.
 | WEB-056 | DONE | Restore backward history after initial Room read failure | WEB-053, QA-040 | nine context-race tests pass, including failed-snapshot recovery, concurrent tail/history retry, and delayed initial snapshot versus a user-triggered refresh; [QA-041](acceptance/qa-041-product-experience-audit-fixes.md) proves retained 200/300-message windows and monotonic live cursors |
 | QA-041 | DONE | Verify product experience audit repairs | WEB-054, WEB-055, WEB-056 | [audit-fix acceptance](acceptance/qa-041-product-experience-audit-fixes.md) records 15 new regressions, 570 passing tests, 6 deterministic E2Es, build/schema/Compose/docs checks and cleaned owned fixtures; Server/Bridge protocols, deployment and Release state are unchanged, with live-provider and new visual/native acceptance explicitly excluded |
 
+## Workstream F12: Continuous Web Work
+
+[ADR-0028](adr/0028-preserve-continuous-web-work.md) defines actionable Work,
+authorized search, recoverable navigation, same-tab drafts and shared Web
+lifecycle ownership without another service or Bridge change.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-019 | DONE | Define continuous Web work and lifecycle boundaries | GOV-018, QA-041 | accepted ADR-0028 and owning modules define search authority, navigation validation, tab-local draft privacy, explicit retry and shared session/Room ownership; documentation checks pass |
+| CON-018 | ACTIVE | Add bounded authorized Workbench search | GOV-019, CON-013, WEB-046 | additive schema, generated TypeScript/Go and fixtures plus Server tests prove title/display-number search, validation, Room privacy, cursor binding and unchanged no-search callers |
+| WEB-057 | ACTIVE | Make Work an actionable entry point | GOV-019, WEB-052, WEB-055 | Work creates Tasks in the selected authorized Room and next-action links select the correct input/review/recovery surface without automatic mutation or inferred authorization; component and browser evidence cover keyboard and narrow layouts |
+| WEB-058 | ACTIVE | Preserve scoped drafts and explicit failed-message retries | GOV-019, WEB-038, WEB-054 | tests prove User/Team/Room/Task isolation, switch/reload restore, bounded TTL storage, malformed/quota handling, logout clearing, immutable client-message identity and no automatic replay |
+| WEB-059 | ACTIVE | Restore authorized navigation and Work search | GOV-019, WEB-053, WEB-055 | URL/direct-link/reload/back-forward tests preserve Task/tab/filters, reject inaccessible or invalid targets, fence late results and integrate bounded Server search with page reset |
+| WEB-060 | ACTIVE | Consolidate Web session and Room synchronization controllers | GOV-019, WEB-054, WEB-055, WEB-056 | extracted controllers own session/context lifetimes and snapshot/delta/history commits while all existing expiry, recovery, initial-failure and concurrent-history tests pass |
+| QA-042 | PLANNED | Verify continuous Web work end to end | CON-018, WEB-057, WEB-058, WEB-059, WEB-060 | focused and full automated gates plus isolated production-browser primary flows and responsive/console evidence close ADR-0028 without provider, user-data, deployment or Release changes |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

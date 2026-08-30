@@ -1,5 +1,10 @@
 # Contracts Module
 
+[ADR-0028](../adr/0028-preserve-continuous-web-work.md) adds optional bounded
+`search` to Workbench queries. It matches authorized Task titles or exact Team
+display numbers and binds pagination to normalized search. Existing callers
+remain valid; JSON Schema and generated TypeScript/Go fixtures are authoritative.
+
 - Prefix: `CON`
 - Implementation: `packages/contracts/`
 - Owns: cross-language wire schemas and compatibility policy

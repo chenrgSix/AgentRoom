@@ -2,6 +2,11 @@
 
 ## Product Experience Acceptance
 
+ADR-0028 additionally requires authorized Work search, direct Work actions,
+tab-local draft/outbox isolation and logout cleanup, URL/back-forward restoration,
+and shared session/Room controller regressions. Production-browser checks use
+synthetic fixtures and never invoke a paid provider or change an installation.
+
 ADR-0027 acceptance records first-use Central/local/demo selection, same-identity
 member recovery, explicit ambiguous Run recovery, criteria/evidence review and
 history pagination. Use isolated temporary data and deterministic providers;

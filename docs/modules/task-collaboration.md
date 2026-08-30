@@ -1,5 +1,10 @@
 # Task Collaboration Module
 
+Workbench search follows [ADR-0028](../adr/0028-preserve-continuous-web-work.md):
+bounded title/display-number matching occurs only inside authorized Rooms and
+the selected Work scope. Search never changes Task identity, ordering, ownership
+or mutation permissions, and cursors cannot be reused with another search.
+
 - Prefix: `TASK`
 - Implementation: `apps/server/src/task/`, migrations
   0024/0026/0027/0028/0029/0030/0031/0032/0033/0034/0037/0038/0043/0045, and the Web Room
