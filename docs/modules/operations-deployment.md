@@ -299,12 +299,13 @@ The current Docker verifier requires all four candidate references to be absent,
 loads only the finalized archive, selects one complete store-supported pair,
 inspects the expected immutable identity/platform/Release/source labels, and
 executes Server and Caddy from that same pair with `--pull=never`, no network
-and a read-only root. Exact-commit execution of the current projection in
-classic and containerd image stores remains pending. [Prior acceptance
-evidence](../acceptance/ops-013-immutable-central-images.md) records a clean
-`linux/arm64` run for the earlier manifest-digest archive and is not proof of the
-current dual-layout projection. Hosted Release publication and target-host
-lifecycle acceptance remain separate from this implementation evidence.
+and a read-only root. [Acceptance
+evidence](../acceptance/ops-013-immutable-central-images.md) records one
+exact-commit `linux/arm64` archive passing the complete Server/Caddy gate in
+Docker 29.4 containerd storage through its manifest-digest pair and in an
+isolated Docker 28.0.4 classic store through its config-ID pair. Hosted Release
+publication and target-host lifecycle acceptance remain separate from this
+implementation evidence.
 Release-image mutation tests and workflow policy close the intended amd64 and
 four schema-v2 archive wiring, but their actual builds remain `QA-034` hosted
 evidence. Hosted publication and target-host lifecycle are also separate

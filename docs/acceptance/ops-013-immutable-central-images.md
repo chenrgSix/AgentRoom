@@ -8,17 +8,67 @@
 
 One resolved Release source commit produces one OCI bundle per Linux
 architecture. The bundle contains exactly the Server and Caddy runtime images,
-addresses both by manifest digest, binds their Release/source/platform labels,
-and carries a pinned-generator SPDX SBOM plus source-bound SLSA provenance.
-Central archives embed the matching same-architecture bundle, while the
-controller loads and activates only the recorded digest references without a
-target-host build or registry fallback.
+binds both their OCI manifest digests and Docker config image IDs, derives one
+strict Docker-save projection from the same configs and ordered layers, binds
+their Release/source/platform labels, and carries a pinned-generator SPDX SBOM
+plus source-bound SLSA provenance. Central archives embed the matching
+same-architecture bundle. After load, the controller activates one complete
+store-supported Server/Caddy pair and persists that generation before rendering
+Compose, without a target-host build or registry fallback.
 
 This record closes the repository implementation task. It does not publish a
 Release, substitute arm64 execution for hosted amd64 execution, install a
 Central archive on a target host, or close `QA-034`, `QA-035`, or `QA-036`.
 
-## Exact real-Docker evidence
+## Current dual-store exact-commit evidence
+
+- Source commit: `72042832c87bd13d966188018f14e63bed65af66`
+- Candidate identity: `v0.4.1-qa034.2`
+- Platform under execution: `linux/arm64`
+- Archive SHA-256:
+  `558e2f253df89c4a884335c9b2a93dd9bfa167d4ec1b546230fd5041d14cbfdc`
+- Server OCI manifest:
+  `sha256:422aa9ea8b9c567bb25e08062a053f0b89acd72de80a49520a0936b1bd4bf3ef`
+- Server config image ID:
+  `sha256:7c76039111cb8096773ea7315aab756275fde5a2f61eacb422010683ef892c5f`
+- Caddy OCI manifest:
+  `sha256:5859d734243d1dab0dd1b2e41f96682fae2ebba1f5b78c541ad1aa7f52b5f86d`
+- Caddy config image ID:
+  `sha256:96663390a7ee4b6e6605ab8b626c00e6178614b7b7e503dcc5ea745acf369878`
+
+One exact archive was verified from an absent-candidate boundary in both image
+stores:
+
+- Docker Engine `29.4.0` with
+  `io.containerd.snapshotter.v1` selected the two repository-qualified OCI
+  manifest references and returned:
+
+  ```text
+  Verified clean-daemon OCI load, default Server readiness/build identity, and containerd-manifest-digest execution for linux/arm64
+  ```
+
+- An isolated Docker Engine `28.0.4` daemon with classic `overlay2` selected
+  the two config image IDs and returned:
+
+  ```text
+  Verified clean-daemon OCI load, default Server readiness/build identity, and classic-config-digest execution for linux/arm64
+  ```
+
+Both runs loaded only the archive identified above, retained one whole
+Server/Caddy reference generation, and executed with `--pull=never`. The Server
+used its image-default command, applied migrations, reached readiness, and
+emitted the exact candidate/source build identity. Caddy executed from the same
+selected generation. Partial, mixed, missing, or wrong-ID generations fail
+before runtime execution in the verifier and controller regressions.
+
+Controller recovery tests additionally prove that a failed install selection
+CAS writes no configuration and that a failed upgrade-journal generation bind
+starts no target service; exact retry converges without repeating the verified
+backup. The controller and release-image suites pass under the race detector,
+and deterministic cross-process E2E passes with five scenarios and one explicit
+live-Runtime skip.
+
+## Prior manifest-only real-Docker evidence
 
 - Source commit: `5b3f31ed2389da61846c2f689b81c4055c4813ba`
 - Synthetic Release identity: `v0.0.0-final.1`; no tag or Release was created
@@ -33,7 +83,7 @@ Central archive on a target host, or close `QA-034`, `QA-035`, or `QA-036`.
 - SBOM generator:
   `docker.io/docker/buildkit-syft-scanner@sha256:ae4f3b554449e7e25548e7d8ccc029d17357348e30c6e3df01b92bc93654d6a9`
 
-The build ran from a clean worktree with `SOURCE_REF=HEAD`, the exact source
+The prior build ran from a clean worktree with `SOURCE_REF=HEAD`, the exact source
 commit above, the pinned scanner, and local builder/invocation identities. The
 Docker verifier began with both new digest references absent, checked the
 archive digest and metadata, loaded only that bundle, and returned:
