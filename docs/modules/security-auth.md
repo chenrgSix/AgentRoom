@@ -219,6 +219,10 @@ unbounded replacement calls. These bounds are built in, not deployment inputs.
 Profile mutation rejects a stale revision before probing and rechecks revision,
 active work and credential revocation inside the final SQLite transaction.
 Late configured-test results cannot overwrite a newer profile or a busy Agent.
+Unavailable wrapping authority rejects credential-bearing probes before any
+request. A saved-profile probe also rechecks Owner/Team authority, current
+revision and credential revocation after acquiring its concurrency slot, so
+queued work cannot use a credential revoked while it was waiting.
 
 Provider credentials are accepted only on write-only mutation requests and
 are encrypted before SQLite persistence. Authenticated reads return provider,

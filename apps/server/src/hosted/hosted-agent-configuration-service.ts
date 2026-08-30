@@ -52,6 +52,12 @@ interface HostedProviderProbeWaiter {
   signal: AbortSignal;
 }
 
+class HostedProviderProbeDispatchRejectedError extends Error {
+  public constructor(cause: unknown) {
+    super("Hosted provider probe dispatch was rejected", { cause });
+  }
+}
+
 class HostedProviderProbeCoordinator {
   readonly #policy: HostedProviderProbePolicy;
   #active = 0;
@@ -82,7 +88,8 @@ class HostedProviderProbeCoordinator {
       model: string;
       apiKey: string;
     },
-    callerSignal?: AbortSignal
+    callerSignal?: AbortSignal,
+    beforeDispatch?: () => void
   ): Promise<HostedProviderProbeResult> {
     const operation = new AbortController();
     this.#operations.add(operation);
@@ -114,10 +121,17 @@ class HostedProviderProbeCoordinator {
       });
       // A transport that ignores cancellation must keep its slot until it
       // settles, rather than allowing timed-out requests to accumulate work.
-      const probing = Promise.resolve().then(() => operation.signal.aborted
-        ? { status: "failed" as const, failureCode: abortCode }
-        : this.probe.test({ ...input, signal: operation.signal }))
-        .finally(release);
+      const probing = Promise.resolve().then(() => {
+        if (operation.signal.aborted) {
+          return { status: "failed" as const, failureCode: abortCode };
+        }
+        try {
+          beforeDispatch?.();
+        } catch (error) {
+          throw new HostedProviderProbeDispatchRejectedError(error);
+        }
+        return this.probe.test({ ...input, signal: operation.signal });
+      }).finally(release);
       return await Promise.race([probing, aborted]);
     } catch (error) {
       if (operation.signal.aborted) {
@@ -306,6 +320,7 @@ export class HostedAgentConfigurationService {
     }
   ): Promise<HostedProviderTestObservation> {
     this.requireOwner(principal, input.teamId);
+    this.requireCredentialAuthority();
     const provider = validatedProvider(input.provider);
     const model = normalizedModel(input.model);
     const apiKey = validatedApiKey(input.apiKey);
@@ -329,6 +344,7 @@ export class HostedAgentConfigurationService {
     input: CreateHostedAgentInput
   ): Promise<HostedAgentConfigurationProjection> {
     const actor = this.requireOwner(principal, input.teamId);
+    this.requireCredentialAuthority();
     const provider = validatedProvider(input.provider);
     const model = normalizedModel(input.model);
     const apiKey = validatedApiKey(input.apiKey);
@@ -405,7 +421,14 @@ export class HostedAgentConfigurationService {
     const execution = this.repository.resolveExecutionProfile(agentId);
     let result: HostedProviderProbeResult;
     try {
-      result = await this.safeProbe(execution, signal);
+      result = await this.safeProbe(execution, signal, () =>
+        this.requireCurrentProbeProfile(principal, {
+          agentId,
+          teamId: agent.teamId,
+          profileRevision: execution.profileRevision,
+          credentialRevoked: false
+        })
+      );
     } finally {
       execution.apiKey = "";
     }
@@ -446,6 +469,7 @@ export class HostedAgentConfigurationService {
     input: UpdateHostedAgentProfileInput
   ): Promise<HostedAgentConfigurationProjection> {
     const agent = this.requireHostedAgent(principal, input.agentId);
+    this.requireCredentialAuthority();
     const expectedProfileRevision = requirePositiveRevision(
       input.expectedProfileRevision
     );
@@ -475,7 +499,12 @@ export class HostedAgentConfigurationService {
         provider: currentProfile.provider,
         model,
         apiKey
-      }, input.signal);
+      }, input.signal, () => this.requireCurrentProbeProfile(principal, {
+        agentId: agent.agentId,
+        teamId: agent.teamId,
+        profileRevision: expectedProfileRevision,
+        credentialRevoked: credentialRevokedAtStart
+      }));
       if (test.status !== "ready") {
         throw new Error("Hosted provider connection test failed");
       }
@@ -586,6 +615,36 @@ export class HostedAgentConfigurationService {
     return actor;
   }
 
+  private requireCredentialAuthority(): void {
+    if (!this.repository.isCredentialAuthorityAvailable()) {
+      throw new Error("Hosted credential recovery authority is unavailable");
+    }
+  }
+
+  private requireCurrentProbeProfile(
+    principal: WebPrincipal,
+    expected: {
+      agentId: string;
+      teamId: string;
+      profileRevision: number;
+      credentialRevoked: boolean;
+    }
+  ): void {
+    const agent = this.requireHostedAgent(principal, expected.agentId);
+    if (agent.teamId !== expected.teamId) {
+      throw new AuthorizationError("FORBIDDEN", "Hosted Agent Team access denied");
+    }
+    this.requireCredentialAuthority();
+    const profile = this.repository.getCurrentProfile(agent.agentId);
+    if (
+      profile?.profileRevision !== expected.profileRevision ||
+      this.configuration(agent.teamId, agent.agentId).credentialRevoked !==
+        expected.credentialRevoked
+    ) {
+      throw new Error("Hosted Runtime Profile changed; reload and retry");
+    }
+  }
+
   private requireHostedAgent(
     principal: WebPrincipal,
     agentId: string
@@ -628,19 +687,26 @@ export class HostedAgentConfigurationService {
     };
   }
 
-  private async safeProbe(input: {
-    provider: typeof hostedProvider;
-    model: string;
-    apiKey: string;
-  }, signal?: AbortSignal): Promise<HostedProviderProbeResult> {
+  private async safeProbe(
+    input: {
+      provider: typeof hostedProvider;
+      model: string;
+      apiKey: string;
+    },
+    signal?: AbortSignal,
+    beforeDispatch?: () => void
+  ): Promise<HostedProviderProbeResult> {
     try {
-      const result = await this.#probes.test(input, signal);
+      const result = await this.#probes.test(input, signal, beforeDispatch);
       if (result.status === "ready") return result;
       return {
         status: "failed",
         failureCode: result.failureCode ?? "HOSTED_PROVIDER_UNAVAILABLE"
       };
-    } catch {
+    } catch (error) {
+      if (error instanceof HostedProviderProbeDispatchRejectedError) {
+        throw error.cause;
+      }
       return {
         status: "failed",
         failureCode: "HOSTED_PROVIDER_UNAVAILABLE"

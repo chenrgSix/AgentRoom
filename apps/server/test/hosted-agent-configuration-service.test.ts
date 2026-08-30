@@ -320,6 +320,187 @@ test("stale Hosted profile updates are rejected before provider dispatch", async
   }
 });
 
+test("unavailable Hosted root authority rejects credential-bearing probes", async () => {
+  const context = await fixture({
+    root: {
+      mode: "trusted_recovery",
+      secret: "original-recovery-token-0123456789abcdef"
+    }
+  });
+  let unavailableService: HostedAgentConfigurationService | undefined;
+  try {
+    const created = await context.service.create(context.principal, {
+      ...connectionInput(context.created.team.teamId),
+      name: "Root Fenced",
+      role: "Remote model",
+      roomIds: [context.room.roomId]
+    });
+    const transactions = new SqliteTransactionBoundary(context.database);
+    const unavailableRepository = new HostedAgentRepository(
+      context.database,
+      {
+        mode: "trusted_recovery",
+        secret: "wrong-recovery-token-0123456789abcdefXYZ"
+      },
+      transactions
+    );
+    assert.equal(unavailableRepository.isCredentialAuthorityAvailable(), false);
+    assert.equal(unavailableRepository.getAvailability(created.agentId), "degraded");
+    context.core.updateAgentPresence(created.agentId, "degraded", now);
+    let providerCalls = 0;
+    unavailableService = new HostedAgentConfigurationService(
+      unavailableRepository,
+      context.core,
+      context.agents,
+      context.auth,
+      transactions,
+      {
+        async test() {
+          providerCalls += 1;
+          return { status: "ready" };
+        }
+      }
+    );
+    const observationCount = (context.database.prepare(`
+      SELECT count(*) AS count FROM hosted_provider_test_observations
+    `).get() as { count: number }).count;
+    await assert.rejects(unavailableService.create(context.principal, {
+      ...connectionInput(context.created.team.teamId),
+      name: "Rejected Root",
+      role: "Remote model",
+      roomIds: [context.room.roomId]
+    }), /Hosted credential recovery authority is unavailable/u);
+    assert.equal(providerCalls, 0);
+    await assert.rejects(unavailableService.updateProfile(context.principal, {
+      agentId: created.agentId,
+      expectedProfileRevision: 1,
+      model: "gpt-5.4",
+      apiKey: "sk-rejected-root-replacement-secret",
+      now
+    }), /Hosted credential recovery authority is unavailable/u);
+    assert.equal(providerCalls, 0);
+    await assert.rejects(unavailableService.testConnection(
+      context.principal,
+      connectionInput(context.created.team.teamId)
+    ), /Hosted credential recovery authority is unavailable/u);
+    assert.equal(providerCalls, 0);
+    assert.equal(unavailableRepository.getCurrentProfile(created.agentId)?.profileRevision, 1);
+    assert.equal(unavailableRepository.getAvailability(created.agentId), "degraded");
+    assert.equal(context.core.getAgent(created.agentId)?.presence, "degraded");
+    assert.equal((context.database.prepare(`
+      SELECT count(*) AS count FROM agents
+    `).get() as { count: number }).count, 1);
+    assert.equal((context.database.prepare(`
+      SELECT count(*) AS count FROM hosted_provider_test_observations
+    `).get() as { count: number }).count, observationCount);
+  } finally {
+    unavailableService?.shutdown();
+    context.service.shutdown();
+    context.database.close();
+  }
+});
+
+for (const operation of ["configured-test", "update-saved-key", "update-new-key"] as const) {
+  for (const change of ["revoked", "revised"] as const) {
+    test(`queued ${operation} rejects a ${change} profile before provider dispatch`, {
+      timeout: 5_000
+    }, async () => {
+      const held: Array<ReturnType<typeof deferred<HostedProviderProbeResult>>> = [];
+      const slotsOccupied = deferred<void>();
+      const providerModels: string[] = [];
+      const context = await fixture({
+        probe: {
+          async test(input) {
+            providerModels.push(input.model);
+            if (input.model.startsWith("hold-")) {
+              const pending = deferred<HostedProviderProbeResult>();
+              held.push(pending);
+              if (held.length === 2) slotsOccupied.resolve();
+              return pending.promise;
+            }
+            return { status: "ready" };
+          }
+        }
+      });
+      const pending: Array<Promise<unknown>> = [];
+      try {
+        const created = await context.service.create(context.principal, {
+          ...connectionInput(context.created.team.teamId),
+          name: "Dispatch Fenced",
+          role: "Remote model",
+          roomIds: [context.room.roomId]
+        });
+        for (const model of ["hold-first", "hold-second"]) {
+          pending.push(context.service.testConnection(context.principal, {
+            ...connectionInput(context.created.team.teamId),
+            model
+          }));
+        }
+        await slotsOccupied.promise;
+        const queued = operation === "configured-test"
+          ? context.service.testConfigured(context.principal, created.agentId, now)
+          : context.service.updateProfile(context.principal, {
+              agentId: created.agentId,
+              expectedProfileRevision: 1,
+              model: "gpt-5.4",
+              ...(operation === "update-new-key"
+                ? { apiKey: "sk-never-dispatched-replacement-secret" }
+                : {}),
+              now
+            });
+        pending.push(assert.rejects(queued, /changed; reload and retry/u));
+        if (change === "revoked") {
+          context.service.revokeCredential(context.principal, created.agentId, 1, now);
+        } else {
+          context.repository.createProfile({
+            agentId: created.agentId,
+            teamId: created.teamId,
+            provider: hostedProvider,
+            model: "gpt-5.4-new",
+            credentialVersion: 1,
+            createdByMemberId: context.created.owner.memberId,
+            expectedRevision: 1,
+            now
+          });
+        }
+        context.core.updateAgentPresence(created.agentId, "degraded", now);
+        for (const probe of held) probe.resolve({ status: "ready" });
+        await Promise.all(pending);
+        assert.deepEqual(providerModels, [
+          "gpt-5.4-mini", "hold-first", "hold-second"
+        ]);
+        assert.equal(context.core.getAgent(created.agentId)?.presence, "degraded");
+        assert.equal(
+          context.repository.getCurrentProfile(created.agentId)?.profileRevision,
+          change === "revoked" ? 1 : 2
+        );
+        assert.equal((context.database.prepare(`
+          SELECT count(*) AS count FROM hosted_provider_credentials
+          WHERE agent_id = ?
+        `).get(created.agentId) as { count: number }).count, 1);
+        assert.equal((context.database.prepare(`
+          SELECT count(*) AS count FROM hosted_provider_test_observations
+          WHERE agent_id = ?
+        `).get(created.agentId) as { count: number }).count, 1);
+        const afterRejection = await context.service.testConnection(
+          context.principal,
+          {
+            ...connectionInput(context.created.team.teamId),
+            model: "capacity-restored"
+          }
+        );
+        assert.equal(afterRejection.status, "succeeded");
+        assert.equal(providerModels.at(-1), "capacity-restored");
+      } finally {
+        context.service.shutdown();
+        for (const probe of held) probe.resolve({ status: "failed" });
+        await Promise.allSettled(pending);
+        context.database.close();
+      }
+    });
+  }
+}
+
 test("queued work locks configuration and is rechecked after the provider probe", async () => {
   const updateStarted = deferred<void>();
   const completeUpdateProbe = deferred<HostedProviderProbeResult>();
