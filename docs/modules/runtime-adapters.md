@@ -160,6 +160,19 @@ stream, provisional output, and final reply each have independent byte limits;
 unknown fields, raw headers, raw error bodies, hidden reasoning, provider tool
 protocol, and credentials never become Run events.
 
+The parser accepts `response.created` in either `queued` or `in_progress`
+state and a monotonic queued-to-in-progress transition before output. Duplicate,
+backward, unrelated, and response-ID-mismatched lifecycle events remain invalid.
+This follows the provider's documented
+[Responses lifecycle](https://developers.openai.com/api/reference/java/resources/beta/subresources/responses).
+Raw delta, part, and final text must agree before their safe projection is
+accepted. Control characters are removed before the same ordered redaction
+rules apply to both streaming and final text. A stateful redactor retains
+possible credential suffixes across deltas and content parts; ordinary safe
+text still streams immediately. Only a validated completion may flush the
+remaining safe tail, so an interrupted stream cannot publish an unfinished
+sensitive value.
+
 `RUN-015` persists the invocation intent and crosses to `dispatching` before
 this adapter may open a request. The adapter is not a replay authority. A
 Server restart, abort without a trustworthy provider outcome, or ambiguous

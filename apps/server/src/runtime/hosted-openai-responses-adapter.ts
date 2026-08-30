@@ -1,7 +1,10 @@
 import { createHash } from "node:crypto";
 
 import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
-import { redactSensitiveText } from "../security/redaction.js";
+import {
+  redactSensitiveText,
+  StreamingSensitiveTextRedactor
+} from "../security/redaction.js";
 import {
   HostedSseParserError,
   type HostedSseParserLimits,
@@ -103,7 +106,11 @@ function configurationError(message: string): HostedOpenAIResponsesError {
 }
 
 function safeText(value: string): string {
-  return redactSensitiveText(value).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, "");
+  return redactSensitiveText(stripControlCharacters(value));
+}
+
+function stripControlCharacters(value: string): string {
+  return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/gu, "");
 }
 
 function utf8Bytes(value: string): number {
@@ -609,8 +616,13 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
     let sequence = this.#firstSequence;
     let created = false;
     let providerResponseId: string | undefined;
+    let providerLifecycle: "queued" | "in_progress" | undefined;
+    let queuedEventObserved = false;
+    let inProgressEventObserved = false;
     let pendingTerminal: PendingTerminal | undefined;
     let provisionalText = "";
+    let projectedText = "";
+    const streamRedactor = new StreamingSensitiveTextRedactor();
     const outputItems = new Map<number, OutputItemState>();
     const parts = new Map<string, TextPartState>();
 
@@ -636,13 +648,17 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
             );
           }
           const providerResponse = requireMatchingResponse(event, undefined);
-          if (providerResponse.status !== "in_progress") {
+          if (
+            providerResponse.status !== "queued" &&
+            providerResponse.status !== "in_progress"
+          ) {
             throw protocolError(
               "HOSTED_PROVIDER_PROTOCOL_INVALID",
               "Hosted provider creation status is invalid."
             );
           }
           providerResponseId = responseId(providerResponse.id);
+          providerLifecycle = providerResponse.status;
           created = true;
           yield { type: "status", sequence: sequence++, status: "working" };
           continue;
@@ -664,9 +680,46 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
             "Hosted provider emitted output before its creation event."
           );
         }
-        if (type === "response.in_progress") {
-          requireMatchingResponse(event, providerResponseId);
+        if (type === "response.queued") {
+          const providerResponse = requireMatchingResponse(event, providerResponseId);
+          if (
+            providerResponse.status !== "queued" ||
+            providerLifecycle !== "queued" ||
+            queuedEventObserved
+          ) {
+            throw protocolError(
+              "HOSTED_PROVIDER_PROTOCOL_INVALID",
+              "Hosted provider queued lifecycle is invalid."
+            );
+          }
+          queuedEventObserved = true;
           continue;
+        }
+        if (type === "response.in_progress") {
+          const providerResponse = requireMatchingResponse(event, providerResponseId);
+          if (
+            providerResponse.status !== "in_progress" ||
+            inProgressEventObserved ||
+            outputItems.size > 0
+          ) {
+            throw protocolError(
+              "HOSTED_PROVIDER_PROTOCOL_INVALID",
+              "Hosted provider in-progress lifecycle is invalid."
+            );
+          }
+          providerLifecycle = "in_progress";
+          inProgressEventObserved = true;
+          continue;
+        }
+        if (
+          providerLifecycle !== "in_progress" &&
+          type !== "response.failed" &&
+          type !== "response.incomplete"
+        ) {
+          throw protocolError(
+            "HOSTED_PROVIDER_PROTOCOL_INVALID",
+            "Hosted provider emitted output before entering in-progress state."
+          );
         }
         if (type === "response.output_item.added" || type === "response.output_item.done") {
           const outputIndex = indexValue(event.output_index);
@@ -744,7 +797,7 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
               state.done === undefined ||
               state.contentDone ||
               typeof completedPart !== "string" ||
-              safeText(completedPart) !== state.done
+              completedPart !== state.done
             ) {
               throw protocolError(
                 "HOSTED_PROVIDER_PROTOCOL_INVALID",
@@ -816,9 +869,8 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
               "Hosted provider text part ordering is invalid."
             );
           }
-          const safeDelta = safeText(event.delta);
-          state.deltas += safeDelta;
-          provisionalText += safeDelta;
+          state.deltas += event.delta;
+          provisionalText += event.delta;
           if (exceedsUnicodeCodePointLimit(provisionalText, maximumOutputCodePoints)) {
             throw new HostedOpenAIResponsesError(
               "HOSTED_PROVIDER_STREAM_OVERFLOW",
@@ -828,6 +880,8 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
             );
           }
           parts.set(key, state);
+          const safeDelta = streamRedactor.push(stripControlCharacters(event.delta));
+          projectedText += safeDelta;
           if (safeDelta.length > 0) {
             yield { type: "output", sequence: sequence++, content: safeDelta };
           }
@@ -854,7 +908,6 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
               "Hosted provider returned an invalid completed text part."
             );
           }
-          const safeFinal = safeText(finalValue);
           const key = partKey(outputIndex, contentIndex);
           const state = parts.get(key);
           if (
@@ -862,17 +915,17 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
             state.kind !== kind ||
             state.done !== undefined ||
             state.contentDone ||
-            (state.deltas.length > 0 && state.deltas !== safeFinal)
+            (state.deltas.length > 0 && state.deltas !== finalValue)
           ) {
             throw protocolError(
               "HOSTED_PROVIDER_PROTOCOL_INVALID",
               "Hosted provider completed text does not match its deltas."
             );
           }
-          state.done = safeFinal;
+          state.done = finalValue;
           parts.set(key, state);
           if (state.deltas.length === 0) {
-            provisionalText += safeFinal;
+            provisionalText += finalValue;
             if (exceedsUnicodeCodePointLimit(provisionalText, maximumOutputCodePoints)) {
               throw new HostedOpenAIResponsesError(
                 "HOSTED_PROVIDER_STREAM_OVERFLOW",
@@ -881,7 +934,11 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
                 "Hosted provider output exceeded its visible text limit."
               );
             }
-            yield { type: "output", sequence: sequence++, content: safeFinal };
+            const safeTextPart = streamRedactor.push(stripControlCharacters(finalValue));
+            projectedText += safeTextPart;
+            if (safeTextPart.length > 0) {
+              yield { type: "output", sequence: sequence++, content: safeTextPart };
+            }
           }
           continue;
         }
@@ -893,7 +950,7 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
               "Hosted provider completion status is invalid."
             );
           }
-          const completed = safeText(completedVisibleText(providerResponse));
+          const completedRaw = completedVisibleText(providerResponse);
           const streamed = [...parts.values()]
             .sort((left, right) => left.outputIndex - right.outputIndex ||
               left.contentIndex - right.contentIndex)
@@ -907,18 +964,31 @@ export class HostedOpenAIResponsesAdapter implements RuntimeAdapter {
             [...parts.values()].some((part) =>
               part.done === undefined || !part.contentDone
             ) ||
-            streamed !== completed
+            streamed !== completedRaw
           ) {
             throw protocolError(
               "HOSTED_PROVIDER_PROTOCOL_INVALID",
               "Hosted provider final reply does not match its completed text parts."
             );
           }
+          const completed = safeText(completedRaw);
+          const safeTail = streamRedactor.finish();
+          if (projectedText + safeTail !== completed) {
+            throw protocolError(
+              "HOSTED_PROVIDER_PROTOCOL_INVALID",
+              "Hosted provider projected text does not match its final reply."
+            );
+          }
+          const terminalEvents: RuntimeEvent[] = [];
+          if (safeTail.length > 0) {
+            terminalEvents.push({ type: "output", sequence: sequence++, content: safeTail });
+          }
+          terminalEvents.push(
+            { type: "reply", sequence: sequence++, content: completed },
+            { type: "status", sequence: sequence++, status: "completed" }
+          );
           pendingTerminal = {
-            events: [
-              { type: "reply", sequence: sequence++, content: completed },
-              { type: "status", sequence: sequence++, status: "completed" }
-            ]
+            events: terminalEvents
           };
           continue;
         }

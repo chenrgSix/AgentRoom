@@ -236,6 +236,12 @@ intent. There is no automatic dispatch retry after step 3, including timeout,
 connection loss, malformed stream, abort, Server restart, or response-loss
 ambiguity.
 
+Dispatch revalidates the current active Team/Room and exact Agent membership,
+including when a previously prepared intent is recovered. A removed Agent
+fails locally before its prompt reaches HTTPS; an already expired queued Run
+settles any prepared intent in the same process rather than waiting for another
+restart.
+
 Definite validation, TLS, or HTTP rejection before provider acceptance may
 fail the Run with a closed safe code. Raw URL, headers, response body, provider
 request ID, quota/account detail, prompt, credential, and stack trace never

@@ -35,16 +35,32 @@ function frame(type: string, fields: Record<string, unknown>): string {
   return `event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n`;
 }
 
-function successfulFrames(): string[] {
+function successfulFrames(options: {
+  text?: string;
+  deltas?: string[];
+  kind?: "output_text" | "refusal";
+  queued?: boolean;
+} = {}): string[] {
+  const text = options.text ?? "Hello, world.";
+  const deltas = options.deltas ?? ["Hello, ", "world."];
+  const kind = options.kind ?? "output_text";
+  const textField = kind === "output_text" ? "text" : "refusal";
+  const part = { type: kind, [textField]: text };
   const message = {
     type: "message",
     role: "assistant",
-    content: [{ type: "output_text", text: "Hello, world." }]
+    content: [part]
   };
   return [
     frame("response.created", {
-      response: { id: providerResponseId, status: "in_progress" }
+      response: {
+        id: providerResponseId,
+        status: options.queued ? "queued" : "in_progress"
+      }
     }),
+    ...(options.queued ? [frame("response.queued", {
+      response: { id: providerResponseId, status: "queued" }
+    })] : []),
     frame("response.in_progress", {
       response: { id: providerResponseId, status: "in_progress" }
     }),
@@ -74,27 +90,22 @@ function successfulFrames(): string[] {
     frame("response.content_part.added", {
       output_index: 1,
       content_index: 0,
-      part: { type: "output_text", text: "" }
+      part: { type: kind, [textField]: "" }
     }),
-    frame("response.output_text.delta", {
+    ...deltas.map((delta) => frame(`response.${kind}.delta`, {
       output_index: 1,
       content_index: 0,
-      delta: "Hello, "
-    }),
-    frame("response.output_text.delta", {
+      delta
+    })),
+    frame(`response.${kind}.done`, {
       output_index: 1,
       content_index: 0,
-      delta: "world."
-    }),
-    frame("response.output_text.done", {
-      output_index: 1,
-      content_index: 0,
-      text: "Hello, world."
+      [textField]: text
     }),
     frame("response.content_part.done", {
       output_index: 1,
       content_index: 0,
-      part: { type: "output_text", text: "Hello, world." }
+      part
     }),
     frame("response.output_item.done", {
       output_index: 1,
@@ -216,6 +227,348 @@ test("Hosted OpenAI adapter sends one fixed text-only Responses request", async 
   assert.doesNotMatch(publicProjection, /authorization|Current instruction/iu);
   assert.doesNotMatch(JSON.stringify(events), /chain of thought|must-not-be-projected/iu);
   assert.match(adapter.requestSha256, /^[a-f0-9]{64}$/u);
+});
+
+test("Hosted OpenAI adapter projects ordinary deltas before text completion", async () => {
+  const request = runtimeRequest();
+  const frames = successfulFrames();
+  const doneFrameIndex = frames.findIndex((value) =>
+    value.startsWith("event: response.output_text.done\n")
+  );
+  let nextFrameIndex = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    pull(controller) {
+      const next = frames[nextFrameIndex];
+      if (next === undefined) {
+        controller.close();
+        return;
+      }
+      nextFrameIndex += 1;
+      controller.enqueue(new TextEncoder().encode(next));
+    }
+  }, { highWaterMark: 0 });
+  const adapter = HostedOpenAIResponsesAdapter.prepare({
+    profile: { model: "gpt-5.4-mini" },
+    apiKey,
+    request,
+    fetch: fetchReturning(new Response(stream, {
+      headers: { "content-type": "text/event-stream" }
+    }))
+  });
+  const execution = adapter.execute(request);
+  const iterator = execution[Symbol.asyncIterator]();
+  try {
+    assert.deepEqual((await iterator.next()).value, {
+      type: "status", sequence: 1, status: "working"
+    });
+    assert.deepEqual((await iterator.next()).value, {
+      type: "output", sequence: 2, content: "Hello, "
+    });
+    assert.ok(nextFrameIndex <= doneFrameIndex);
+    assert.deepEqual((await iterator.next()).value, {
+      type: "output", sequence: 3, content: "world."
+    });
+    assert.ok(nextFrameIndex <= doneFrameIndex);
+    assert.deepEqual(await Array.fromAsync(execution), [
+      { type: "reply", sequence: 4, content: "Hello, world." },
+      { type: "status", sequence: 5, status: "completed" }
+    ]);
+  } finally {
+    await iterator.return?.();
+  }
+});
+
+test("Hosted OpenAI adapter redacts credentials across semantic delta boundaries", async (t) => {
+  const cases: Array<{
+    name: string;
+    deltas: string[];
+    text?: string;
+    expected: string;
+    kind?: "output_text" | "refusal";
+  }> = [
+    {
+      name: "assignment marker and value",
+      deltas: ["Visible to", "ken=super", "secretvalue", "; safe."],
+      expected: "Visible [REDACTED]; safe."
+    },
+    {
+      name: "Bearer marker and terminal value",
+      deltas: ["Visible Be", "arer abcdef", "ghijklmnop"],
+      expected: "Visible [REDACTED]"
+    },
+    {
+      name: "OpenAI key marker and value",
+      deltas: ["Visible s", "k-abcdefgh", "ijklmnop", "; safe."],
+      expected: "Visible [REDACTED]; safe."
+    },
+    {
+      name: "GitHub credential marker and value",
+      deltas: ["Visible gh", "p_abcdefghij", "klmnopqrst", "; safe."],
+      expected: "Visible [REDACTED]; safe."
+    },
+    {
+      name: "AWS key ending in a partial marker",
+      deltas: ["Visible AK", "IAAAAAAAAA", "AAAAAAAA", "; safe."],
+      expected: "Visible [REDACTED]; safe."
+    },
+    {
+      name: "unbounded assignment whitespace and value",
+      deltas: [
+        "Visible pass",
+        `word${" ".repeat(80)}=`,
+        `${" ".repeat(80)}${"a".repeat(128)}`,
+        "; safe."
+      ],
+      expected: "Visible [REDACTED]; safe."
+    },
+    {
+      name: "nested markers retain ordered full-text redaction",
+      deltas: ["Visible to", "ken=Be", "arer abcdef", "ghijklmnop", "; safe."],
+      expected: "Visible [REDACTED]; safe."
+    },
+    {
+      name: "nested marker cannot expose the enclosing credential prefix",
+      deltas: ["Visible token=shortBe", "arer abcdefghijklmnop", "; safe."],
+      expected: "Visible [REDACTED]; safe."
+    },
+    {
+      name: "adjacent credential markers",
+      deltas: ["Visible sk-abcdefgh", "ijklmnop;gh", "p_abcdefghijklmnopqrst", "; safe."],
+      expected: "Visible [REDACTED];[REDACTED]; safe."
+    },
+    {
+      name: "control removal cannot assemble an unredacted credential",
+      deltas: ["Visible to\u0000", "ken=super", "secret\u0000value", "; safe."],
+      expected: "Visible [REDACTED]; safe."
+    },
+    {
+      name: "final-only text follows the same canonical redaction path",
+      deltas: [],
+      text: "Visible to\u0000ken=supersecretvalue",
+      expected: "Visible [REDACTED]"
+    },
+    {
+      name: "refusal text uses the same redaction boundary",
+      deltas: ["Cannot expose sec", "ret=super", "secretvalue", "; safe."],
+      expected: "Cannot expose [REDACTED]; safe.",
+      kind: "refusal"
+    }
+  ];
+
+  for (const candidate of cases) {
+    await t.test(candidate.name, async () => {
+      const request = runtimeRequest();
+      const adapter = HostedOpenAIResponsesAdapter.prepare({
+        profile: { model: "gpt-5.4-mini" },
+        apiKey,
+        request,
+        fetch: fetchReturning(sseResponse(successfulFrames({
+          text: candidate.text ?? candidate.deltas.join(""),
+          deltas: candidate.deltas,
+          ...(candidate.kind ? { kind: candidate.kind } : {})
+        })))
+      });
+      const events = await collect(adapter, request);
+      for (const event of events) {
+        if (event.type === "output") assert.equal(event.reset, undefined);
+      }
+      const output = events.flatMap((event) =>
+        event.type === "output" ? [event.content] : []
+      ).join("");
+      const reply = events.find((event) => event.type === "reply");
+      assert.equal(output, candidate.expected);
+      assert.equal(reply?.content, candidate.expected);
+      assert.equal(events.at(-1)?.type, "status");
+      assert.deepEqual(events.map((event) => event.sequence),
+        events.map((_event, index) => index + 1));
+    });
+  }
+});
+
+test("Hosted OpenAI adapter shares one redaction tail across content parts", async () => {
+  const request = runtimeRequest();
+  const content = [
+    { type: "output_text", text: "Visible token=super" },
+    { type: "output_text", text: "secretvalue; safe." }
+  ];
+  const message = { type: "message", role: "assistant", content };
+  const frames = [
+    frame("response.created", {
+      response: { id: providerResponseId, status: "in_progress" }
+    }),
+    frame("response.output_item.added", {
+      output_index: 0,
+      item: { type: "message", role: "assistant", content: [] }
+    }),
+    ...content.flatMap((part, contentIndex) => [
+      frame("response.content_part.added", {
+        output_index: 0,
+        content_index: contentIndex,
+        part: { type: "output_text", text: "" }
+      }),
+      frame("response.output_text.delta", {
+        output_index: 0,
+        content_index: contentIndex,
+        delta: part.text
+      }),
+      frame("response.output_text.done", {
+        output_index: 0,
+        content_index: contentIndex,
+        text: part.text
+      }),
+      frame("response.content_part.done", {
+        output_index: 0,
+        content_index: contentIndex,
+        part
+      })
+    ]),
+    frame("response.output_item.done", { output_index: 0, item: message }),
+    frame("response.completed", {
+      response: { id: providerResponseId, status: "completed", output: [message] }
+    })
+  ];
+  const adapter = HostedOpenAIResponsesAdapter.prepare({
+    profile: { model: "gpt-5.4-mini" },
+    apiKey,
+    request,
+    fetch: fetchReturning(sseResponse(frames))
+  });
+  const events = await collect(adapter, request);
+  assert.equal(events.flatMap((event) =>
+    event.type === "output" ? [event.content] : []
+  ).join(""), "Visible [REDACTED]; safe.");
+  assert.equal(events.find((event) => event.type === "reply")?.content,
+    "Visible [REDACTED]; safe.");
+});
+
+test("Hosted OpenAI adapter accepts queued-to-in-progress Responses lifecycle", async () => {
+  const request = runtimeRequest();
+  const adapter = HostedOpenAIResponsesAdapter.prepare({
+    profile: { model: "gpt-5.4-mini" },
+    apiKey,
+    request,
+    fetch: fetchReturning(sseResponse(successfulFrames({ queued: true })))
+  });
+  assert.deepEqual(await collect(adapter, request), [
+    { type: "status", sequence: 1, status: "working" },
+    { type: "output", sequence: 2, content: "Hello, " },
+    { type: "output", sequence: 3, content: "world." },
+    { type: "reply", sequence: 4, content: "Hello, world." },
+    { type: "status", sequence: 5, status: "completed" }
+  ]);
+});
+
+test("Hosted OpenAI adapter never flushes a sensitive tail from an unfinished stream", async () => {
+  const request = runtimeRequest();
+  const frames = successfulFrames({
+    text: "Visible token=supersecretvalue",
+    deltas: ["Visible token=super", "secretvalue"]
+  });
+  const firstDelta = frames.findIndex((value) =>
+    value.startsWith("event: response.output_text.delta\n")
+  );
+  const adapter = HostedOpenAIResponsesAdapter.prepare({
+    profile: { model: "gpt-5.4-mini" },
+    apiKey,
+    request,
+    fetch: fetchReturning(sseResponse(frames.slice(0, firstDelta + 1)))
+  });
+  const events: RuntimeEvent[] = [];
+  await assert.rejects(async () => {
+    for await (const event of adapter.execute(request)) events.push(event);
+  }, (error: unknown) => error instanceof HostedOpenAIResponsesError &&
+    error.code === "HOSTED_PROVIDER_STREAM_ENDED_EARLY");
+  assert.deepEqual(events, [
+    { type: "status", sequence: 1, status: "working" },
+    { type: "output", sequence: 2, content: "Visible " }
+  ]);
+});
+
+test("Hosted OpenAI adapter compares raw provider text before redacted projection", async () => {
+  const request = runtimeRequest();
+  const adapter = HostedOpenAIResponsesAdapter.prepare({
+    profile: { model: "gpt-5.4-mini" },
+    apiKey,
+    request,
+    fetch: fetchReturning(sseResponse(successfulFrames({
+      text: "token=supersecretvalue",
+      deltas: ["token=anothersecretvalue"]
+    })))
+  });
+  const failure = await adapterFailure(adapter, request);
+  assert.equal(failure.code, "HOSTED_PROVIDER_PROTOCOL_INVALID");
+  assert.doesNotMatch(failure.message, /supersecretvalue|anothersecretvalue/u);
+});
+
+test("Hosted OpenAI adapter rejects invalid lifecycle and unrelated events", async (t) => {
+  const created = frame("response.created", {
+    response: { id: providerResponseId, status: "queued" }
+  });
+  const queued = frame("response.queued", {
+    response: { id: providerResponseId, status: "queued" }
+  });
+  const progress = frame("response.in_progress", {
+    response: { id: providerResponseId, status: "in_progress" }
+  });
+  const cases: Array<{ name: string; frames: string[] }> = [
+    { name: "queued before creation", frames: [queued] },
+    { name: "duplicate queued", frames: [created, queued, queued] },
+    { name: "queued after in-progress", frames: [created, progress, queued] },
+    { name: "duplicate in-progress", frames: [created, progress, progress] },
+    {
+      name: "queued status mismatch",
+      frames: [created, frame("response.queued", {
+        response: { id: providerResponseId, status: "in_progress" }
+      })]
+    },
+    {
+      name: "queued response identity mismatch",
+      frames: [created, frame("response.queued", {
+        response: { id: "resp_other_test_456", status: "queued" }
+      })]
+    },
+    {
+      name: "in-progress status mismatch",
+      frames: [created, frame("response.in_progress", {
+        response: { id: providerResponseId, status: "queued" }
+      })]
+    },
+    {
+      name: "output while queued",
+      frames: [created, queued, frame("response.output_item.added", {
+        output_index: 0,
+        item: { type: "message", role: "assistant", content: [] }
+      })]
+    },
+    {
+      name: "unrelated response event",
+      frames: [created, queued, progress, frame("response.unrelated", {})]
+    },
+    {
+      name: "late in-progress after output",
+      frames: [frame("response.created", {
+        response: { id: providerResponseId, status: "in_progress" }
+      }), frame("response.output_item.added", {
+        output_index: 0,
+        item: { type: "message", role: "assistant", content: [] }
+      }), progress]
+    }
+  ];
+
+  for (const candidate of cases) {
+    await t.test(candidate.name, async () => {
+      const request = runtimeRequest();
+      const adapter = HostedOpenAIResponsesAdapter.prepare({
+        profile: { model: "gpt-5.4-mini" },
+        apiKey,
+        request,
+        fetch: fetchReturning(sseResponse(candidate.frames))
+      });
+      const failure = await adapterFailure(adapter, request);
+      assert.equal(failure.code, "HOSTED_PROVIDER_PROTOCOL_INVALID");
+      assert.equal(failure.disposition, "failed");
+    });
+  }
 });
 
 test("Hosted OpenAI adapter rejects malformed, incomplete, and overflowing streams", async (t) => {
