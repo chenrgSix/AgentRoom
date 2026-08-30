@@ -214,10 +214,16 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		return send(eventContext, message)
 	})
 	if err != nil {
+		latest, loadErr := e.Inbox.Get(record.RunID)
+		if loadErr == nil && isTerminalState(latest.State) {
+			// The persisted result remains authoritative even if its send failed.
+			// Return the original error so reconnect can replay it; keep any
+			// cancellation fence until that delivery succeeds.
+			return err
+		}
 		finished.State = operations.RuntimeError
 		finished.LastStatus = string(contracts.OutcomeUnknown)
 		finished.ErrorCode = "RUNTIME_EXECUTION_UNKNOWN"
-		latest, loadErr := e.Inbox.Get(record.RunID)
 		if loadErr != nil {
 			return loadErr
 		}
