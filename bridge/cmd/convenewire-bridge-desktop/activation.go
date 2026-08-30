@@ -82,6 +82,12 @@ func (a *desktopActivation) accept(link string) bool {
 		a.mu.Unlock()
 		return false
 	}
+	if validated != "" && a.link != "" && a.link != validated {
+		// A previously acknowledged pairing intent must not be replaced while
+		// waiting for the UI. Its exact duplicate and ordinary wakes may coalesce.
+		a.mu.Unlock()
+		return false
+	}
 	a.pending = true
 	if validated != "" {
 		a.link = validated

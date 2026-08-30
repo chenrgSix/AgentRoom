@@ -202,6 +202,33 @@ func TestActivationDeliveryAllowsNativeReentryAndShutdown(t *testing.T) {
 	}
 }
 
+func TestActivationRejectsConflictingPairingUntilPendingIntentDispatched(t *testing.T) {
+	var activation desktopActivation
+	defer activation.close()
+	first := testActivationLink()
+	second := strings.Replace(first, "pairing_12345678", "pairing_87654321", 1)
+	var queued []func()
+	var delivered []string
+	if !activation.accept(first) || activation.accept(second) ||
+		!activation.accept(first) || !activation.accept("") {
+		t.Fatal("pending admission did not preserve the acknowledged pairing")
+	}
+	activation.ready(func(fn func()) { queued = append(queued, fn) }, func(link string) {
+		delivered = append(delivered, link)
+	})
+	if len(queued) != 1 {
+		t.Fatal("duplicate pairing or wake added a second pending dispatch")
+	}
+	queued[0]()
+	if !reflect.DeepEqual(delivered, []string{first}) || !activation.accept(second) || len(queued) != 2 {
+		t.Fatal("draining the first pairing did not permit a subsequent pairing")
+	}
+	queued[1]()
+	if !reflect.DeepEqual(delivered, []string{first, second}) {
+		t.Fatal("pairing dispatch order changed")
+	}
+}
+
 func TestActivationConcurrentStartupUsesOneQueuedDrain(t *testing.T) {
 	var activation desktopActivation
 	var queuedMu sync.Mutex
