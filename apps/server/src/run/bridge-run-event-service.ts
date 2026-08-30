@@ -71,7 +71,9 @@ export class BridgeRunEventService {
     private readonly core: CoreRepository,
     private readonly runs: RunRepository,
     private readonly evidenceConsumption?: ResultEvidenceConsumptionRepository,
-    private readonly delivery?: Pick<DeliveryService, "validateRoomContextConsumption">
+    private readonly delivery?: Pick<
+      DeliveryService, "validateRoomContextConsumption" | "getRuntimeScope"
+    >
   ) {}
 
   public applyStatus(
@@ -133,6 +135,13 @@ export class BridgeRunEventService {
     if (input.session) {
       const trigger = this.core.getMessage(run.triggerMessageId);
       const agent = this.core.getAgent(run.targetAgentId);
+      // An Agent may publish a different Workspace/policy before replaying its
+      // durable inbox. Only the frozen Delivery describes this Run's execution.
+      // Production always supplies DeliveryService; the fallback retains the
+      // unscoped repository-only service compatibility used by legacy callers.
+      const expectedRuntimeScope = this.delivery
+        ? this.delivery.getRuntimeScope(run.runId)
+        : agent?.runtimeScopeId;
       const hasEvidenceCursor =
         input.session.runtimeScopeId !== undefined ||
         input.session.resultEvidenceRevision !== undefined;
@@ -149,7 +158,7 @@ export class BridgeRunEventService {
           !/^[0-9a-f]{64}$/u.test(input.session.runtimeScopeId) ||
           !Number.isSafeInteger(input.session.resultEvidenceRevision) ||
           (input.session.resultEvidenceRevision ?? -1) < 0 ||
-          !agent || agent.runtimeScopeId !== input.session.runtimeScopeId
+          !agent || expectedRuntimeScope !== input.session.runtimeScopeId
         ))
       ) {
         throw new Error("Invalid logical Runtime session status");

@@ -470,8 +470,8 @@ Implementation is sequential; native-platform evidence remains explicit.
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
 | GOV-022 | DONE | Define cross-layer Bridge audit repair boundaries | GOV-020, GOV-021, BRG-060 | accepted ADR-0031, owning Bridge/Run modules and all 241 maintained Markdown files pass documentation checks |
-| RUN-016 | ACTIVE | Validate replayed Runtime scope against its frozen Delivery | GOV-022, RUN-014, BRG-054 | real Server reconnect before/after terminal delivery, duplicate and forged-scope regressions retain one outcome and a usable connection |
-| BRG-061 | READY | Separate new-Agent identity from historical name aliases | GOV-022, BRG-055 | rename/reuse/reload/save-failure tests preserve distinct identities; ambiguous active identities fail closed |
+| RUN-016 | DONE | Validate replayed Runtime scope against its frozen Delivery | GOV-022, RUN-014, BRG-054 | bridge-scope-replay.test.ts proves sent/unsent terminal replay across two reconnects, Central restart, subsequent complete Runs and forged current-scope rejection; existing event regression and Server production build pass |
+| BRG-061 | ACTIVE | Separate new-Agent identity from historical name aliases | GOV-022, BRG-055 | rename/reuse/reload/save-failure tests preserve distinct identities; ambiguous active identities fail closed |
 | BRG-062 | READY | Preserve complete Codex and Pi configuration during metadata edits | GOV-022, BRG-055 | full configuration/scope equality and explicit environment/policy edits pass Console and embedded UI regressions |
 | BRG-063 | READY | Deliver activation only after the WebView is ready | GOV-022, BRG-057 | first-load barrier and queued early activation regressions plus desktop compilation; native Windows execution reported separately |
 | BRG-064 | READY | Consume all supported desktop pairing URL forms in the final page | GOV-022, BRG-053 | custom/HTTPS/loopback and nested-length final-page tests pass with ambiguous/unsafe negative cases |

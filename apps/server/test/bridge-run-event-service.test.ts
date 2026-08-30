@@ -69,6 +69,7 @@ test("Bridge events enforce ownership, ordering, and one reply projection", asyn
       runRepository,
       undefined,
       {
+        getRuntimeScope: () => runtimeScopeId,
         validateRoomContextConsumption: (...input) => {
           validatedRoomContextReceipts.push(input);
         }

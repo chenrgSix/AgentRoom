@@ -299,6 +299,10 @@ export class DeliveryService {
     }
   }
 
+  public getRuntimeScope(runId: string): string | undefined {
+    return this.getByRun(runId)?.payload.session?.runtimeScopeId;
+  }
+
   public getByRun(runId: string): DeliveryRecord | undefined {
     const row = this.database.prepare(`
       SELECT * FROM run_deliveries WHERE run_id = ?
