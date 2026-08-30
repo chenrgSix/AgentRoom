@@ -281,7 +281,24 @@ export class HostedRunScheduler {
           }, this.clock()).run
         : undefined;
       if (beforePreparation) {
+        if (this.invocations.getByRun(runId)) {
+          this.invocations.settleFromRun(
+            runId,
+            "HOSTED_RUN_EXPIRED_PRE_DISPATCH",
+            this.clock()
+          );
+        }
+        this.projectHostedPresence(beforePreparation);
         await this.notifyTerminal(beforePreparation, active);
+        return;
+      }
+      if (queued && !this.hasCurrentRoomScope(queued)) {
+        const failed = this.failBeforeDispatch(
+          queued,
+          "HOSTED_ROOM_ACCESS_REVOKED",
+          "Hosted Agent Room access was revoked before provider dispatch."
+        );
+        await this.notifyTerminal(failed, active);
         return;
       }
       prepared = this.executor.prepare(runId);
@@ -305,8 +322,19 @@ export class HostedRunScheduler {
         execution.apiKey = "";
       }
       const room = this.core.getRoom(prepared.run.roomId);
-      if (!room || room.teamId !== execution.teamId) {
-        throw new Error("Hosted Run Team scope is unavailable");
+      if (
+        !room ||
+        room.archivedAt !== null ||
+        room.teamId !== execution.teamId ||
+        !this.core.isRoomAgent(prepared.run.roomId, prepared.agent.agentId)
+      ) {
+        const failed = this.failBeforeDispatch(
+          prepared.run,
+          "HOSTED_ROOM_ACCESS_REVOKED",
+          "Hosted Agent Room access was revoked before provider dispatch."
+        );
+        await this.notifyTerminal(failed, active);
+        return;
       }
       this.invocations.prepare({
         runId,
@@ -480,6 +508,42 @@ export class HostedRunScheduler {
       status: "outcome_unknown",
       error: { code, message, retryable: false }
     }, now).run;
+  }
+
+  private failBeforeDispatch(
+    run: RunRecord,
+    code: string,
+    message: string
+  ): RunRecord {
+    const now = this.clock();
+    const latest = this.runs.getRun(run.runId) ?? run;
+    if (terminalStates.has(latest.state)) return latest;
+    const failed = this.runs.applyEvent(run.runId, {
+      type: "status",
+      sequence: latest.lastSequence + 1,
+      status: "failed",
+      error: { code, message, retryable: false }
+    }, now).run;
+    if (this.invocations.getByRun(run.runId)) {
+      this.invocations.settleFromRun(run.runId, code, now);
+    }
+    this.projectHostedPresence(failed);
+    return failed;
+  }
+
+  private hasCurrentRoomScope(run: RunRecord): boolean {
+    const room = this.core.getRoom(run.roomId);
+    const team = room && this.core.getTeam(room.teamId);
+    const agent = this.core.getAgent(run.targetAgentId);
+    return Boolean(
+      room &&
+      team &&
+      agent &&
+      room.archivedAt === null &&
+      team.archivedAt === null &&
+      room.teamId === agent.teamId &&
+      this.core.isRoomAgent(run.roomId, run.targetAgentId)
+    );
   }
 
   private terminalFailureCode(run: RunRecord): string {

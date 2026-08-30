@@ -620,6 +620,59 @@ test("overdue queued Hosted Run expires before resolving a revoked credential", 
     restarted.scheduler.recover();
     await waitForState(restarted.runs, fixture.run.runId, "expired");
     assert.equal(providerCalls, 0);
+    assert.equal(
+      restarted.invocations.getByRun(fixture.run.runId)?.state,
+      "failed"
+    );
+    assert.equal(
+      restarted.invocations.getByRun(fixture.run.runId)?.failureCode,
+      "HOSTED_RUN_EXPIRED_PRE_DISPATCH"
+    );
+  } finally {
+    await restarted.scheduler.shutdown();
+    restarted.database.close();
+  }
+});
+
+test("Room removal closes a prepared Hosted Run before HTTPS dispatch", async () => {
+  const fixture = await createPreparedFixture("hosted-room-revoked-");
+  const participants = fixture.core.getRoomParticipants(fixture.room.roomId);
+  fixture.core.replaceRoomParticipants(fixture.room.roomId, {
+    memberIds: participants.memberIds,
+    agentIds: participants.agentIds.filter(
+      (agentId) => agentId !== fixture.agent.agentId
+    )
+  }, later);
+  fixture.database.close();
+
+  let providerCalls = 0;
+  const restarted = restart(
+    fixture.databasePath,
+    () => later,
+    (async () => {
+      providerCalls += 1;
+      throw new Error("Revoked Room access must not perform HTTPS");
+    }) as typeof fetch
+  );
+  try {
+    restarted.scheduler.recover();
+    await waitForState(restarted.runs, fixture.run.runId, "failed");
+    await waitForIdle(restarted.scheduler);
+    assert.equal(providerCalls, 0);
+    assert.equal(
+      restarted.invocations.getByRun(fixture.run.runId)?.state,
+      "failed"
+    );
+    assert.equal(
+      restarted.invocations.getByRun(fixture.run.runId)?.failureCode,
+      "HOSTED_ROOM_ACCESS_REVOKED"
+    );
+    const terminal = restarted.runs.listEvents(fixture.run.runId, 0).at(-1);
+    assert.equal(terminal?.event.type, "status");
+    assert.equal(
+      terminal?.event.type === "status" ? terminal.event.error?.code : undefined,
+      "HOSTED_ROOM_ACCESS_REVOKED"
+    );
   } finally {
     await restarted.scheduler.shutdown();
     restarted.database.close();
