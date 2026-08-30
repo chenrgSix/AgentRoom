@@ -161,6 +161,11 @@ restarts and reconnects retain one intent and one terminal Run history.
 6. Stop retrying after acceptance, cancellation, expiry, or Agent revocation.
 
 Delivery is at least once; execution is idempotent through the Bridge inbox.
+Reported Runtime scope is validated against that Run's immutable Delivery
+session, not a later Agent publication. Replaying a persisted result after a
+Workspace/configuration change must remain valid without weakening Device,
+trace, sequence or evidence-page validation. Scoped reports without matching
+Delivery evidence fail closed; legacy unscoped events remain compatible.
 An unaccepted Delivery row remains an immutable transport fact after its Run
 becomes terminal, but it is no longer actionable backlog. Queue and oldest
 pending-delivery metrics therefore count only `pending` Deliveries whose Run is

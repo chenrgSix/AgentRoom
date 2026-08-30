@@ -461,6 +461,26 @@ acceptance; it does not defer the implementation behind a future release.
 | QA-044 | DONE | Verify acknowledged macOS startup activation | BRG-057 | [native activation acceptance](acceptance/qa-044-macos-startup-activation.md) records 33 native desktop tests, full Bridge and desktop race/vet/build, eight native scenarios repeated three times with race, real AppleEvent and secondary-process acknowledgement, 48 UI tests, Windows compatibility cross-compilation/vet, independent review and cleaned 633-MB owned fixtures; packaged LaunchServices, native Windows and Release evidence remain separate |
 | BRG-060 | DONE | Embed and verify the Windows desktop product icon | BRG-038, BRG-039, BRG-056 | [local PE acceptance](acceptance/brg-060-windows-product-icons.md) records missing baseline resources and a passing rebuilt Windows EXE, deterministic seven-size resources and shared Wails aliases, nine tool tests/race/vet, PNG visual/geometry checks, desktop and full Bridge regressions, 48 UI and 37 QA tests, installer/shortcut validation wired into Windows CI, and explicit unexecuted native-platform limits |
 
+## Workstream F14: Cross-layer Bridge Audit Closure
+
+[ADR-0031](adr/0031-preserve-cross-layer-bridge-recovery.md) fixes the nine
+follow-up findings without new services, provider calls or Release publication.
+Implementation is sequential; native-platform evidence remains explicit.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-022 | DONE | Define cross-layer Bridge audit repair boundaries | GOV-020, GOV-021, BRG-060 | accepted ADR-0031, owning Bridge/Run modules and all 241 maintained Markdown files pass documentation checks |
+| RUN-016 | ACTIVE | Validate replayed Runtime scope against its frozen Delivery | GOV-022, RUN-014, BRG-054 | real Server reconnect before/after terminal delivery, duplicate and forged-scope regressions retain one outcome and a usable connection |
+| BRG-061 | READY | Separate new-Agent identity from historical name aliases | GOV-022, BRG-055 | rename/reuse/reload/save-failure tests preserve distinct identities; ambiguous active identities fail closed |
+| BRG-062 | READY | Preserve complete Codex and Pi configuration during metadata edits | GOV-022, BRG-055 | full configuration/scope equality and explicit environment/policy edits pass Console and embedded UI regressions |
+| BRG-063 | READY | Deliver activation only after the WebView is ready | GOV-022, BRG-057 | first-load barrier and queued early activation regressions plus desktop compilation; native Windows execution reported separately |
+| BRG-064 | READY | Consume all supported desktop pairing URL forms in the final page | GOV-022, BRG-053 | custom/HTTPS/loopback and nested-length final-page tests pass with ambiguous/unsafe negative cases |
+| QA-045 | READY | Propagate every native Windows test failure through CI and Release | GOV-022, QA-008 | command-failure propagation regression and workflow mutation checks reject false-green test steps |
+| BRG-065 | READY | Keep missing-WebView2 installation non-interactive in silent mode | GOV-022, BRG-039 | suppressible prerequisite handling and missing-Runtime regression source; native execution reported separately |
+| BRG-066 | READY | Normalize native desktop packaging output paths | GOV-022, BRG-038 | relative/absolute/space-containing output paths and different invocation directories retain exact artifact placement |
+| BRG-067 | READY | Align macOS minimum version and compiled deployment target | GOV-022, BRG-038 | supported minimum, bundle metadata and Mach-O deployment checks agree; old-system execution remains a separate gate |
+| QA-046 | READY | Verify the nine cross-layer audit repairs | RUN-016, BRG-061, BRG-062, BRG-063, BRG-064, QA-045, BRG-065, BRG-066, BRG-067 | committed local regression/integration evidence, clean diff, per-fix commits and explicit native-platform limits |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

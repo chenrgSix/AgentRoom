@@ -171,6 +171,12 @@ and Codex/Pi probes do not apply to Generic profiles. Cross-kind edits fail
 closed; Runtime conversion needs a separate explicit operation and is not part
 of this editor. New supported profiles can still choose Codex or Pi.
 
+[ADR-0031](../adr/0031-preserve-cross-layer-bridge-recovery.md) extends full
+metadata-edit preservation to Codex and Pi. Explicit changes patch the saved
+profile rather than reconstructing it. New-Agent allocation distinguishes
+historical display-name aliases from active identities; two configured Agents
+cannot share an ID. Existing ambiguous rosters fail closed for owner repair.
+
 Configuration updates are atomically persisted. A running managed connection
 restarts with an epoch fence so a late old process cannot overwrite new state;
 a deliberately stopped Bridge remains stopped. Agent and connection mutations
@@ -674,6 +680,14 @@ handshake fail explicitly instead of using Wails' unacknowledged notification
 fallback. This does not relax the Console/CLI data-root lock or introduce a
 second Bridge lifecycle manager. Native Windows activation evidence remains
 distinct from cross-compilation.
+
+Activation delivery waits for the first actual WebView page load, not the
+application-started notification. The final page consumes the same supported
+custom and HTTP(S) pairing link forms as the Go validator, with bounds that
+allow the complete encoded nested fragment. Native prerequisite dialogs remain
+suppressible in unattended installation. Packaging resolves output paths once,
+and macOS metadata and compiler deployment targets share the supported minimum.
+Native test exit codes must fail CI/Release immediately.
 
 The tray exposes status, open, start, stop, and quit actions. Configuration,
 Device pairing, legacy Team enrollment, Codex/Pi discovery, and Owner approval
