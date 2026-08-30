@@ -128,6 +128,19 @@ bootstrap private trust unless the Bridge already has valid trust for that
 origin. Public sessions omit the descriptor, and absence never enables TOFU or
 verification-disabled TLS.
 
+### Existing-member access recovery
+
+[ADR-0027](../adr/0027-close-product-entry-and-recovery-flows.md) adds a
+15-minute, one-use Owner-issued code for an existing ordinary member. The target
+User must belong only to the issuing Owner's Team and must not be any Owner.
+Issuance and claim revalidate current authority and the active Team; replacement
+and explicit revocation invalidate unused codes. Only a hash is persisted, and
+the issuance response is the only plaintext projection. The sign-in form sends
+the code in a same-Origin body, never a URL or browser storage. Claim atomically
+preserves User/Member identity, consumes the code, revokes old Web sessions and
+issues a new Cookie. Device, Room and Task ownership are unchanged. Multi-Team
+and Owner identity recovery deliberately remain outside this delegated path.
+
 ## Authorization Rules
 
 - Team membership gates Team-level Member and Agent administration.

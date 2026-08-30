@@ -42,6 +42,12 @@ provider-response body, plaintext credential, or duplicate prompt column.
 Existing Agents and Runs retain their exact integration and delivery semantics;
 no Hosted row is synthesized during migration.
 
+ADR-0027 adds a dedicated `web_member_recoveries` table through an additive
+migration. It retains only the random capability hash, exact issuing/target
+identities, expiry and consumed/revoked state. Replacement, consumption and
+session replacement are immediate transactions; applied migration checksums
+remain immutable. Recovery never creates a replacement User or Member.
+
 ## Storage Model
 
 Repositories expose domain operations rather than raw SQL to other modules.

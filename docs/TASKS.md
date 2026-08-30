@@ -401,6 +401,24 @@ authority. Unconfigured installations remain behaviorally unchanged.
 | QA-038 | ACTIVE | Verify optional Central Hosted Agent end to end | DATA-007, SEC-010, REG-006, ADP-018, RUN-015, WEB-050, QA-004, QA-008, QA-039 | committed fake-HTTPS E2E and crash/security matrix plus full schema, Node test/build, docs, deterministic E2E, Compose/readiness/backup compatibility, existing managed/manual/Fake behavior and unchanged Bridge Go/race/vet/Desktop/package gates prove P21 without a paid provider credential, extra service/configuration, client upgrade, formal Result authority, production-provider claim or Release publication |
 | QA-039 | DONE | Close the Central Hosted Agent implementation audit | DATA-007, SEC-010, REG-006, ADP-018, RUN-015 | [audit-fix evidence](acceptance/qa-039-hosted-agent-audit-fixes.md) proves dispatch-time Room revocation, boundary-safe streaming redaction, trusted-root adoption, mutation atomicity, bounded and dispatch-revalidated probes, queued Responses events, recovery settlement, Room-derived Presence, restrictive local persistence and explicit Web locks; full local schema/build/Node/E2E/Compose and unchanged-Bridge Go/race/vet/macOS gates pass without a client or deployment change; separate QA-038 production-admission gates remain open |
 
+## Workstream F11: Product Experience and Public Website
+
+[ADR-0027](adr/0027-close-product-entry-and-recovery-flows.md) keeps the
+single-Central deployment and existing Bridge authority. The entry, identity,
+work, and history slices below are explicitly coordinated parallel streams.
+Website implementation starts only after the product acceptance gate passes;
+publishing the website does not publish a new application Release.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-018 | DONE | Define product entry, recovery, history and public-site boundaries | GOV-017, QA-039 | accepted ADR-0027 and Web, Security, Persistence, QA and website module boundaries freeze scope, explicit human recovery authority, privacy, compatibility and validation without a new service |
+| WEB-051 | ACTIVE | Guide users to a first useful Agent reply | GOV-018, REG-006, RUN-015 | focused tests and browser evidence distinguish Central/local/demo entry, same-Room readiness, explicit Room grants, validate-and-create, safe actionable errors, cleared secrets and a post-create Room destination in Chinese and English |
+| SEC-011 | ACTIVE | Recover an existing member identity with Owner approval | GOV-018, SEC-005 | migration, Server and Web tests prove expiring one-use hash-only member recovery, current Owner/single-Team ordinary-member authority, same identity and Room/device/task preservation, revocation, session replacement and negative Origin/replay/cross-Team/Owner tests |
+| WEB-052 | ACTIVE | Make work recovery and evidence review actionable | GOV-018, WEB-047, RUN-014, CON-013 | focused tests and browser evidence prove optional canonical acceptance criteria, exact authorized ambiguity status, separate audited acknowledgement/new-attempt actions, safe Artifact previews and unchanged completion/Hosted authority |
+| WEB-053 | ACTIVE | Keep older work and Room history reachable | GOV-018, ROOM-002, WEB-046 | Server and Web regressions prove backward Room paging, Work cursor/filter controls, deduplication, stable scroll, race-safe Team/Room/scope switches and preservation of forward synchronization |
+| QA-040 | PLANNED | Verify the product experience iteration | WEB-051, SEC-011, WEB-052, WEB-053 | committed acceptance evidence records schema/build/full Node and deterministic E2E checks, relevant Go/Compose compatibility, production-browser primary flows, keyboard and responsive layouts, console hygiene and explicit physical/provider exclusions |
+| SITE-001 | PLANNED | Build and publish the ConveneWire product website | GOV-018, QA-040 | static site tests/build, truthful capability and installation links, responsive accessible product narrative, exact-commit GitHub Pages deployment and independent public HTTP verification are recorded without application credentials or a new application Release |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

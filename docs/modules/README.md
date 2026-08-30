@@ -33,6 +33,7 @@ document and the task list in the same commit.
 | BRG | [Bridge](bridge.md) | Connection and local delivery state | `bridge/`, `apps/server/` | CON, REG, SEC |
 | ADP | [Runtime Adapters](runtime-adapters.md) | Local Runtime process/Team Session and bounded Central model HTTP execution | `bridge/internal/runtime/`, `apps/server/src/runtime/` | CON, BRG, DATA, SEC |
 | WEB | [Web UI](web-ui.md) | Browser presentation state | `apps/web/` | ROOM, REG, TASK, RUN, BRG, SEC |
+| SITE | [Product Website](product-website.md) | Static public product narrative | `site/` | WEB, QA |
 | DATA | [Persistence and Recovery](persistence-recovery.md) | Database and projection durability | `apps/server/` | CON |
 | SEC | [Security and Authentication](security-auth.md) | Identity, credentials, authorization | server and Bridge | CON |
 | OPS | [Operations and Deployment](operations-deployment.md) | Central install manifest and lifecycle orchestration | `ops/convenewirectl/`, Compose, deployment scripts | DATA, SEC |

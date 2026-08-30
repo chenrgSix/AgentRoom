@@ -1,5 +1,16 @@
 # Testing and Observability
 
+## Product Experience Acceptance
+
+ADR-0027 acceptance records first-use Central/local/demo selection, same-identity
+member recovery, explicit ambiguous Run recovery, criteria/evidence review and
+history pagination. Use isolated temporary data and deterministic providers;
+do not use a paid model credential. Pair focused negative security tests with
+production-browser checks, keyboard operation, desktop/720/390-width layout and
+console hygiene. Existing Bridge, Compose, schema and migration behavior remains
+in regression scope. Website publication follows this gate and is verified
+separately from an application Release or physical-platform/provider admission.
+
 ## Scope
 
 - Prefixes: `QA` and `OPS`

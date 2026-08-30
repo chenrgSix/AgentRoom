@@ -33,6 +33,20 @@ Dark is the default presentation theme. Users can switch to a light theme from
 desktop or narrow-screen navigation, and the choice is persisted locally
 without changing server-owned state.
 
+## Product Entry and Recovery
+
+[ADR-0027](../adr/0027-close-product-entry-and-recovery-flows.md) defines
+Central/local/demo setup choices, current-Room readiness and a first-reply
+destination. Hosted setup validates during creation, explains safe failures and
+Room access, and keeps credentials transient. Member access recovery is an
+explicit Owner-issued short-lived code, not a new invitation or password store.
+
+Work creation may add canonical acceptance criteria through simple templates.
+Run ambiguity is read from the exact Run record; acknowledgement and retry stay
+separate authorized actions. Evidence review reuses the verified Artifact preview.
+Workbench filters/cursors and backward Room history remain Server-authorized;
+history loading neither advances live sync nor replaces a newer navigation.
+
 ## Primary Surfaces
 
 - Authenticated Team and Room shell.
