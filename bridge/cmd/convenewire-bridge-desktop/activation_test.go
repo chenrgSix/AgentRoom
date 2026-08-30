@@ -229,6 +229,45 @@ func TestActivationRejectsConflictingPairingUntilPendingIntentDispatched(t *test
 	}
 }
 
+func TestActivationInitialPairingSharesAdmissionBeforeReceiverStartup(t *testing.T) {
+	first := testActivationLink()
+	second := strings.Replace(first, "pairing_12345678", "pairing_87654321", 1)
+	activation, err := newDesktopActivation(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer activation.close()
+	if activation.accept(second) || !activation.accept(first) || !activation.accept("") {
+		t.Fatal("initial pairing was not protected from subsequent startup activation")
+	}
+	var queued []func()
+	var delivered []string
+	activation.ready(func(fn func()) { queued = append(queued, fn) }, func(link string) {
+		delivered = append(delivered, link)
+	})
+	if len(queued) != 1 || len(delivered) != 0 {
+		t.Fatal("initial pairing bypassed the main-thread activation queue")
+	}
+	queued[0]()
+	if !reflect.DeepEqual(delivered, []string{first}) {
+		t.Fatal("initial pairing changed or was delivered twice")
+	}
+}
+
+func TestActivationInitialEmptyAndInvalidLinksDoNotBecomeWakes(t *testing.T) {
+	activation, err := newDesktopActivation("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer activation.close()
+	activation.ready(func(func()) { t.Fatal("ordinary launch scheduled a wake") }, func(string) {
+		t.Fatal("ordinary launch forced a background window open")
+	})
+	if invalid, err := newDesktopActivation("convenewire://invalid#claimSecret=private"); invalid != nil || !errors.Is(err, errInvalidActivation) {
+		t.Fatal("malformed initial pairing did not fail closed")
+	}
+}
+
 func TestActivationConcurrentStartupUsesOneQueuedDrain(t *testing.T) {
 	var activation desktopActivation
 	var queuedMu sync.Mutex

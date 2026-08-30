@@ -43,9 +43,12 @@ protocol is added. The Console remains the only Bridge lifecycle owner.
 Keep a validated pending pairing intent until the main-thread UI dispatcher is
 ready. Wakes may coalesce but cannot erase a pending pairing link. A distinct
 pairing link cannot silently replace a previously acknowledged pending link;
-reject it until the pending intent has been dispatched. Call native UI code
-outside the intent mutex. Closing the receiver rejects new intents and clears
-pending in-memory proof.
+reject it until the pending intent has been dispatched. Admit an explicit
+first-launch pairing link into the same queue before publishing the receiver,
+instead of independently embedding it in the initial WebView URL. A link-free
+background launch does not enqueue a wake. Call native UI code outside the
+intent mutex. Closing the receiver rejects new intents and clears pending
+in-memory proof.
 
 For a secondary macOS process with no explicit URL argument, use a bounded
 native AppleEvent capture before forwarding; bypassing Wails must not turn a

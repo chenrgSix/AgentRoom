@@ -657,19 +657,23 @@ or data-root ownership. A secondary launch forwards its validated pairing link
 or wake request to the original window and never starts another worker. A
 bounded in-memory activation pending window readiness preserves events accepted
 by the transport. Windows uses bounded readiness waiting and acknowledgement.
-The macOS follow-up in
+The macOS transport in
 [ADR-0030](../adr/0030-acknowledge-macos-desktop-activation-before-console-startup.md)
-requires an acknowledged Unix-domain receiver before Console/Wails startup,
+opens an acknowledged Unix-domain receiver before Console/Wails startup,
 with stable instance ownership, private OS-selected rendezvous paths and
 same-effective-user peer verification before proof is sent. Bounded admission
 and I/O reject uncertain or malformed forwarding without starting another
 Console. Native secondary AppleEvent capture preserves URL activation; primary
 URL events retain the existing handler. Wakes cannot erase a pending pairing
 intent, and conflicting pending pairing links are rejected rather than silently
-overwritten. Old primaries without the new handshake fail explicitly instead of
-using Wails' unacknowledged notification fallback. This does not relax the Console/CLI data-root
-lock or introduce a second Bridge lifecycle manager. Native Windows activation
-evidence remains distinct from cross-compilation.
+overwritten. The first launch's explicit pairing link enters this same queue
+before the receiver is published; the initial WebView loads without a pairing
+fragment and receives the reserved link only through the UI dispatcher. A plain
+background launch does not create a wake. Old primaries without the new
+handshake fail explicitly instead of using Wails' unacknowledged notification
+fallback. This does not relax the Console/CLI data-root lock or introduce a
+second Bridge lifecycle manager. Native Windows activation evidence remains
+distinct from cross-compilation.
 
 The tray exposes status, open, start, stop, and quit actions. Configuration,
 Device pairing, legacy Team enrollment, Codex/Pi discovery, and Owner approval

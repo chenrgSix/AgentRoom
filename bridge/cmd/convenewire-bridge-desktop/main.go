@@ -81,7 +81,10 @@ func run() error {
 			return fmt.Errorf("resolve Bridge workspace: %w", err)
 		}
 	}
-	activation := &desktopActivation{}
+	activation, err := newDesktopActivation(initialPairingLink)
+	if err != nil {
+		return err
+	}
 	defer activation.close()
 	return runWithDesktopInstance(func() (*desktopInstance, error) {
 		return acquireDesktopInstance(initialPairingLink, activation)
@@ -115,8 +118,8 @@ func runPrimaryDesktop(configPath, dataDir, workspace, initialPairingLink string
 	assetRouter := http.NewServeMux()
 	windowsOptions := instance.windows
 	windowsOptions.DisableQuitOnLastWindowClosed = true
-	// On macOS/Linux New arbitrates and forwards secondary launches. Windows
-	// already holds its native mutex. No mutable Console state is opened earlier.
+	// Darwin and Windows already hold their native instance lease and transport.
+	// The remaining platforms arbitrate in New, before mutable Console state.
 	app := application.New(application.Options{
 		Name:        "ConveneWire Bridge",
 		Description: "Connect local Codex and Pi runtimes to an ConveneWire Team",
@@ -163,9 +166,10 @@ func runPrimaryDesktop(configPath, dataDir, workspace, initialPairingLink string
 	}
 
 	window = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:             "ConveneWire Bridge",
-		Title:            "ConveneWire Bridge",
-		URL:              consoleWindowURL(service.Token(), initialPairingLink),
+		Name:  "ConveneWire Bridge",
+		Title: "ConveneWire Bridge",
+		// Initial and forwarded pairing both arrive through the activation queue.
+		URL:              consoleWindowURL(service.Token(), ""),
 		Width:            980,
 		Height:           780,
 		MinWidth:         760,

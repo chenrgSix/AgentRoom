@@ -72,6 +72,16 @@ type desktopActivation struct {
 	deliver   func(string)
 }
 
+func newDesktopActivation(initialLink string) (*desktopActivation, error) {
+	activation := &desktopActivation{}
+	// Seed before publishing the receiver so a second launch cannot replace the
+	// primary's initial intent. An ordinary background launch is not a wake.
+	if initialLink != "" && !activation.accept(initialLink) {
+		return nil, errInvalidActivation
+	}
+	return activation, nil
+}
+
 func (a *desktopActivation) accept(link string) bool {
 	validated, err := pairingLinkFromLaunch(link, nil)
 	if err != nil {
