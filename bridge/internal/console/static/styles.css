@@ -370,6 +370,9 @@ input, select {
   background: var(--surface-subtle);
   color: var(--text);
 }
+.workspace-field { display: grid; gap: 7px; }
+.workspace-picker-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 7px; }
+.workspace-picker { white-space: nowrap; }
 .panel > label { margin-top: 12px; }
 .runtime-card { padding: 17px 0 3px; border-top: 1px solid var(--line); }
 .runtime-card:first-of-type { padding-top: 0; border-top: 0; }

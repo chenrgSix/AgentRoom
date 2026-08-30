@@ -260,7 +260,13 @@
               <button class="secondary" id="codex-preflight" type="button">保存前预检</button>
               <span id="codex-preflight-result">预检不会保存配置或重启 Bridge。</span>
             </div>
-            <label>工作区<input class="workspace" id="codex-workspace" required></label>
+            <div class="workspace-field">
+              <label for="codex-workspace">工作区</label>
+              <span class="workspace-picker-row">
+                <input class="workspace" id="codex-workspace" required>
+                <button class="secondary workspace-picker hidden" type="button" data-workspace-picker-for="codex-workspace" aria-label="选择 Codex 工作区文件夹">选择文件夹</button>
+              </span>
+            </div>
             <label>工作区别名（仅此别名可同步到中央）<input id="codex-workspace-alias" maxlength="80" placeholder="留空则使用目录名"></label>
             <label>文件沙箱<select id="codex-sandbox"><option value="workspace-write">允许修改工作区</option><option value="read-only">只读</option></select></label>
             <label>会话占用策略
@@ -288,7 +294,13 @@
               <button class="secondary" id="pi-preflight" type="button">保存前预检</button>
               <span id="pi-preflight-result">预检不会保存配置或重启 Bridge。</span>
             </div>
-            <label>工作区<input class="workspace" id="pi-workspace"></label>
+            <div class="workspace-field">
+              <label for="pi-workspace">工作区</label>
+              <span class="workspace-picker-row">
+                <input class="workspace" id="pi-workspace">
+                <button class="secondary workspace-picker hidden" type="button" data-workspace-picker-for="pi-workspace" aria-label="选择 Pi 工作区文件夹">选择文件夹</button>
+              </span>
+            </div>
             <label>工作区别名（仅此别名可同步到中央）<input id="pi-workspace-alias" maxlength="80" placeholder="留空则使用目录名"></label>
             <label>凭据环境变量名称（可选）<input id="pi-credential-env" placeholder="例如 ANTHROPIC_API_KEY"></label>
             <p class="runtime-policy" id="pi-permission-policy">权限跟随本机 Pi：本地启用的工具、扩展、Skills 与项目上下文保持生效；中央服务无法提升权限。</p>
@@ -419,7 +431,13 @@
             <button class="secondary" id="agent-preflight" type="button">保存前预检</button>
             <span id="agent-preflight-result">先验证当前表单；不会写入文件或重启 Bridge。</span>
           </div>
-          <label>工作区<input id="agent-workspace" required></label>
+          <div class="workspace-field">
+            <label for="agent-workspace">工作区</label>
+            <span class="workspace-picker-row">
+              <input id="agent-workspace" required>
+              <button class="secondary workspace-picker hidden" type="button" data-workspace-picker-for="agent-workspace" aria-label="选择 Agent 工作区文件夹">选择文件夹</button>
+            </span>
+          </div>
           <label>工作区别名（仅此别名可同步到中央）<input id="agent-workspace-alias" maxlength="80" placeholder="留空则使用目录名"></label>
           <label id="agent-sandbox-field">文件沙箱
             <select id="agent-sandbox">

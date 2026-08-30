@@ -14,6 +14,7 @@ import {
 import { createSessionGuideController } from "./session-guide.mjs";
 import { agentPresentation, connectionPresentation } from "./bridge-presentation.mjs";
 import { reasoningConsentView } from "./reasoning-consent-view.mjs";
+import { initializeWorkspacePickers } from "./workspace-picker.mjs";
 
 const elements = Object.fromEntries([
   "app-sidebar", "setup-intro", "page-context", "page-title", "phase", "phase-label",
@@ -157,6 +158,8 @@ function showError(error) {
   elements["pairing-modal-error"].textContent = message;
   elements["pairing-modal-error"].classList.toggle("hidden", !message);
 }
+
+void initializeWorkspacePickers({onError: showError});
 
 function setRuntime(kind, enabled) {
   elements[`${kind}-fields`].classList.toggle("hidden", !enabled);

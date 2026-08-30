@@ -512,6 +512,9 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="add-agent"`, `id="agent-modal-backdrop"`, `id="agent-form"`,
 		`id="codex-use-detected"`, `id="codex-preflight"`,
 		`id="agent-use-detected"`, `id="agent-preflight"`,
+		`data-workspace-picker-for="codex-workspace"`,
+		`data-workspace-picker-for="pi-workspace"`,
+		`data-workspace-picker-for="agent-workspace"`,
 		`id="pi-permission-policy"`, `id="agent-pi-permission-policy"`,
 		`id="codex-session-ownership-policy"`, `id="agent-codex-session-ownership-policy"`,
 		`id="edit-connection"`, `id="connection-modal-backdrop"`,
@@ -555,6 +558,10 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 	if bytes.Count(javascript, []byte(`request("/api/runtime-preflight"`)) != 1 ||
 		!bytes.Contains(javascript, []byte(`elements["agent-use-detected"]`)) {
 		t.Fatal("draft Runtime preflight and detected-value action must remain explicit")
+	}
+	if !bytes.Contains(javascript, []byte(`initializeWorkspacePickers({onError: showError})`)) ||
+		bytes.Count(html, []byte(`data-workspace-picker-for=`)) != 3 {
+		t.Fatal("every local Workspace field must expose the desktop folder picker")
 	}
 	if bytes.Count(javascript, []byte(`request("/api/device-pairing/start"`)) != 2 ||
 		bytes.Count(javascript, []byte(`request("/api/device-pairing/restart"`)) != 1 ||
