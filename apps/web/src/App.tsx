@@ -8,18 +8,23 @@ import {
 } from "react";
 
 import type { BridgeJoinApproval } from "@convene-wire/contracts/bridge-messages";
-import type { WorkbenchPage } from "@convene-wire/contracts/task-result";
 
 import {
   activeRunStates,
+  advanceWebSessionGeneration,
   bridgeServerURL,
+  captureWebSessionScope,
+  HttpRequestError,
   invitationTokenFromFragment,
+  isStaleWebSessionError,
   jsonRequest,
   loadRunOutputEvents,
-  localBootstrap
+  localBootstrap,
+  webSessionExpiredEvent
 } from "./api-client.js";
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
 import { AccessGate } from "./features/auth/AccessGate.js";
+import { AgentSetupChoices, type AgentSetupTarget } from "./features/agent/AgentSetupChoices.js";
 import {
   AgentWorkspace,
   presenceLabel,
@@ -40,8 +45,10 @@ import { TaskClarifications } from "./features/task/TaskClarifications.js";
 import { MemoryCandidateReview } from "./features/task/MemoryCandidateReview.js";
 import { ArtifactPreviewPanel } from "./features/task/ArtifactPreviewPanel.js";
 import { TaskCreateDialog, TaskSelector } from "./features/task/TaskControls.js";
+import { parseTaskCriteria } from "./features/task/task-criteria.js";
 import { TaskWorkDetail } from "./features/work/TaskWorkDetail.js";
 import { WorkWorkspace } from "./features/work/WorkWorkspace.js";
+import { useWorkbench } from "./features/work/useWorkbench.js";
 import {
   type Agent,
   type AgentTask,
@@ -111,6 +118,7 @@ const localeKey = "agent-room.locale";
 const themeKey = "agent-room.theme";
 
 export function App() {
+  const isCurrentSession = captureWebSessionScope();
   const [theme, setTheme] = useState<Theme>(() =>
     localStorage.getItem(themeKey) === "light" ? "light" : "dark"
   );
@@ -133,6 +141,10 @@ export function App() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
   const [messages, setMessages] = useState<Message[]>([]);
+  const [olderMessageCursor, setOlderMessageCursor] = useState<string | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [initializedRoomContext, setInitializedRoomContext] = useState<string | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [runOutputs, setRunOutputs] = useState<
     Record<string, RunOutputProjection>
@@ -156,11 +168,23 @@ export function App() {
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
   const [selectedWorkTaskId, setSelectedWorkTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<WorkspaceView>("work");
-  const [workbenchItems, setWorkbenchItems] = useState<WorkbenchPage["items"]>([]);
-  const [workbenchLoading, setWorkbenchLoading] = useState(false);
-  const [workbenchError, setWorkbenchError] = useState<string | null>(null);
   const [workScope, setWorkScope] = useState<"mine" | "team">("mine");
+  const [workLifecycleState, setWorkLifecycleState] = useState("");
+  const [workOwnerMemberId, setWorkOwnerMemberId] = useState("");
+  const {
+    items: workbenchItems,
+    loading: workbenchLoading,
+    loadingMore: workbenchLoadingMore,
+    error: workbenchError,
+    hasMore: workbenchHasMore,
+    refresh: refreshWorkbenchState,
+    loadMore: loadMoreWork
+  } = useWorkbench({
+    teamId: selectedTeamId, session, scope: workScope,
+    lifecycleState: workLifecycleState, ownerMemberId: workOwnerMemberId
+  });
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
+  const [agentSetupTarget, setAgentSetupTarget] = useState<AgentSetupTarget | null>(null);
   const [teamDialogOpen, setTeamDialogOpen] = useState(false);
   const [taskDialogOpen, setTaskDialogOpen] = useState(false);
   const [lifecycleDialogOpen, setLifecycleDialogOpen] = useState(false);
@@ -183,6 +207,7 @@ export function App() {
   const [teamName, setTeamName] = useState("");
   const [taskTitle, setTaskTitle] = useState("");
   const [taskGoal, setTaskGoal] = useState("");
+  const [taskCriteria, setTaskCriteria] = useState("");
   const [clarificationAnswers, setClarificationAnswers] = useState<
     Record<string, string>
   >({});
@@ -202,12 +227,20 @@ export function App() {
   const [memoryCandidateBusyId, setMemoryCandidateBusyId] = useState<string | null>(null);
   const [participantBusy, setParticipantBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const reportError = (reason: unknown) => {
+    if (!isStaleWebSessionError(reason)) setError(String(reason));
+  };
   const messageSyncRef = useRef<{
     roomId: string;
     cursor: string | null;
     sequence: number;
   } | null>(null);
   const diagnosticRequestsRef = useRef(new Set<string>());
+  const historyRequestRef = useRef(0);
+  const historyPendingRef = useRef(false);
+  const composerInputRef = useRef<HTMLTextAreaElement>(null);
+  const roomContextRef = useRef("");
+  roomContextRef.current = JSON.stringify([selectedTeamId, selectedRoomId, session?.userId, session?.token]);
   const runOutputSyncRef = useRef(new Map<string, RunOutputProjection>());
   const runActivitySyncRef = useRef(new Map<string, RunActivityProjection>());
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
@@ -301,6 +334,9 @@ export function App() {
     return agents.filter(({ agentId }) => visible.has(agentId));
   }, [agents, roomParticipants.agentIds]);
   const readyAgents = agents.filter((agent) => agent.presence === "ready").length;
+  const readyRoomAgents = roomAgents.filter((agent) => agent.enabled !== false && agent.presence === "ready");
+  const hasRealRoomReply = messages.some((message) => message.senderType === "agent" &&
+    agents.some((agent) => agent.agentId === message.senderId && agent.integrationMode !== "fake"));
   const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
   const activeDevices = devices.filter((device) => device.status === "active").length;
   const currentMember = members.find((member) => member.userId === session?.userId) ?? null;
@@ -328,8 +364,8 @@ export function App() {
     visibleDiscussionExpanded
   } = useDiscussionController({
     discussions,
-    onBusy: setBusy,
-    onError: setError,
+    onBusy: (next) => { if (isCurrentSession()) setBusy(next); },
+    onError: (next) => { if (isCurrentSession()) setError(next); },
     onRoomStateChanged: refreshRoomState,
     selectedTaskId,
     session
@@ -361,7 +397,8 @@ export function App() {
     agents,
     locale,
     onDelivered: async (message, nextRuns) => {
-      setMessages((current) => mergeRoomMessages(current, [message]));
+      if (!isCurrentSession()) return;
+      setMessages((current) => mergeRoomMessages(current, [message], Infinity));
       setRuns((current) => {
         const byId = new Map(current.map((run) => [run.runId, run]));
         for (const run of nextRuns) byId.set(run.runId, run);
@@ -369,7 +406,7 @@ export function App() {
       });
       await refreshRoomState();
     },
-    onError: setError,
+    onError: (next) => { if (isCurrentSession()) setError(next); },
     onRoomStateChanged: refreshRoomState,
     roomAgents,
     roomPolicy: selectedRoomPolicy,
@@ -464,9 +501,9 @@ export function App() {
     try {
       await loadLifecycleResources(session, selectedTeamId);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setLifecycleBusy(false);
+      if (isCurrentSession()) setLifecycleBusy(false);
     }
   }
 
@@ -477,9 +514,9 @@ export function App() {
     try {
       await loadLifecycleResources(session, teamId);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setLifecycleBusy(false);
+      if (isCurrentSession()) setLifecycleBusy(false);
     }
   }
 
@@ -498,9 +535,9 @@ export function App() {
       await loadTeams(session);
       await loadLifecycleResources(session, team.teamId);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setLifecycleBusy(false);
+      if (isCurrentSession()) setLifecycleBusy(false);
     }
   }
 
@@ -530,10 +567,10 @@ export function App() {
       await loadLifecycleResources(session, room.teamId);
       return true;
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
       return false;
     } finally {
-      setLifecycleBusy(false);
+      if (isCurrentSession()) setLifecycleBusy(false);
     }
   }
 
@@ -564,9 +601,9 @@ export function App() {
           .map(({ agentId }) => agentId));
       }
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setLifecycleBusy(false);
+      if (isCurrentSession()) setLifecycleBusy(false);
     }
   }
 
@@ -575,6 +612,8 @@ export function App() {
     mode: AuthMode,
     token?: string
   ) {
+    advanceWebSessionGeneration();
+    setBusy(false);
     const next: LocalSession = {
       userId: user.userId,
       displayName: user.displayName,
@@ -591,15 +630,18 @@ export function App() {
     setError(null);
     try {
       const next = await localBootstrap();
+      advanceWebSessionGeneration();
+      setBusy(false);
       setAuthMode("local");
       setSession(next);
       setAuthState("authenticated");
       await loadTeams(next);
     } catch (reason) {
+      if (isStaleWebSessionError(reason)) return;
       setAuthState("local_bootstrap");
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -617,9 +659,9 @@ export function App() {
       });
       await activateSession(result.user, "trusted-team");
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -636,9 +678,9 @@ export function App() {
       });
       await activateSession(result.user, "trusted-team");
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -658,9 +700,25 @@ export function App() {
       setPendingInvitationToken(null);
       await activateSession(result.user, "trusted-team");
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
+    }
+  }
+
+  async function recoverMember(token: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await jsonRequest<{ user: AuthenticatedUser }>("/api/auth/recover-member", {
+        method: "POST",
+        body: JSON.stringify({ token })
+      });
+      await activateSession(result.user, "trusted-team");
+    } catch (reason) {
+      reportError(reason);
+    } finally {
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -688,7 +746,7 @@ export function App() {
         setAuthState(status.state);
       })
       .catch((reason: unknown) => {
-        if (!stopped) setError(String(reason));
+        if (!stopped) reportError(reason);
       });
     return () => {
       stopped = true;
@@ -696,12 +754,23 @@ export function App() {
   }, []);
 
   useEffect(() => {
-    if (!session || !selectedTeamId) {
-      setRooms([]);
-      setMembers([]);
-      setAgents([]);
-      return;
-    }
+    const expire = () => {
+      if (!session) return;
+      clearAuthenticatedSession();
+      setError(null);
+    };
+    window.addEventListener(webSessionExpiredEvent, expire);
+    return () => window.removeEventListener(webSessionExpiredEvent, expire);
+  }, [authMode, session]);
+
+  useLayoutEffect(() => {
+    setRooms([]);
+    setMembers([]);
+    setAgents([]);
+    setDevices([]);
+    setSelectedRoomId(null);
+    if (!session || !selectedTeamId) return;
+    let stopped = false;
     setError(null);
     void Promise.all([
       jsonRequest<Room[]>(
@@ -725,6 +794,7 @@ export function App() {
         session.token
       )
     ]).then(([nextRooms, nextAgents, nextMembers, nextDevices]) => {
+      if (stopped) return;
       setRooms(nextRooms);
       setAgents(nextAgents);
       setMembers(nextMembers);
@@ -734,36 +804,23 @@ export function App() {
           ? current
           : nextRooms[0]?.roomId ?? null
       );
-    }).catch((reason: unknown) => setError(String(reason)));
+    }).catch((reason: unknown) => { if (!stopped) reportError(reason); });
+    return () => { stopped = true; };
   }, [selectedTeamId, session]);
 
   useEffect(() => {
-    if (!session || !selectedTeamId) {
-      setWorkbenchItems([]);
-      setWorkbenchError(null);
-      setWorkbenchLoading(false);
-      return;
-    }
-    let stopped = false;
-    setWorkbenchLoading(true);
-    setWorkbenchError(null);
-    void jsonRequest<WorkbenchPage>(
-      `/api/teams/${selectedTeamId}/work-items?scope=${workScope}&limit=100`,
-      {},
-      session.token
-    ).then((page) => {
-      if (!stopped) setWorkbenchItems(page.items);
-    }).catch((reason: unknown) => {
-      if (!stopped) setWorkbenchError(String(reason));
-    }).finally(() => {
-      if (!stopped) setWorkbenchLoading(false);
-    });
-    return () => {
-      stopped = true;
-    };
-  }, [selectedTeamId, session, workScope]);
+    setWorkOwnerMemberId("");
+    setWorkLifecycleState("");
+    setAgentSetupTarget(null);
+  }, [selectedTeamId]);
 
   useEffect(() => {
+    ++historyRequestRef.current;
+    setInitializedRoomContext(null);
+    historyPendingRef.current = false;
+    setOlderMessageCursor(null);
+    setHistoryLoading(false);
+    setHistoryError(null);
     if (!session || !selectedRoomId) {
       setMessages([]);
       setRuns([]);
@@ -784,6 +841,7 @@ export function App() {
       return;
     }
     let stopped = false;
+    const context = roomContextRef.current;
     messageSyncRef.current = {
       roomId: selectedRoomId,
       cursor: null,
@@ -838,12 +896,14 @@ export function App() {
       nextTasks,
       nextMemoryCandidates
     ]) => {
+      if (stopped || roomContextRef.current !== context) return;
       const outputBatches = await loadRunOutputEvents(
         nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
         session.token
       );
-      if (stopped) return;
+      if (stopped || roomContextRef.current !== context) return;
       setMessages(page.items);
+      setOlderMessageCursor(page.olderCursor ?? null);
       messageSyncRef.current = {
         roomId: selectedRoomId,
         cursor: page.syncCursor ?? null,
@@ -870,14 +930,19 @@ export function App() {
         room.roomId === nextSettings.room.roomId ? nextSettings.room : room
       ));
       retainMentionAgentIds(nextSettings.participants.agentIds);
+      setInitializedRoomContext(context);
     })
       .catch((reason: unknown) => {
-        if (!stopped) setError(String(reason));
+        if (!stopped && roomContextRef.current === context) {
+          reportError(reason);
+          // Let the existing reconciliation loop recover a failed first read.
+          setInitializedRoomContext(context);
+        }
       });
     return () => {
       stopped = true;
     };
-  }, [selectedRoomId, session]);
+  }, [selectedRoomId, selectedTeamId, session]);
 
   useEffect(() => {
     if (!session || !selectedTaskId) {
@@ -902,7 +967,7 @@ export function App() {
     ).then((nextClarifications) => {
       if (!stopped) setClarifications(nextClarifications);
     }).catch((reason: unknown) => {
-      if (!stopped) setError(String(reason));
+      if (!stopped) reportError(reason);
     });
     void jsonRequest<TaskArtifactPage>(
       `/api/tasks/${selectedTaskId}/artifacts`,
@@ -911,7 +976,7 @@ export function App() {
     ).then((artifactPage) => {
       if (!stopped) setArtifacts(artifactPage.artifacts);
     }).catch((reason: unknown) => {
-      if (!stopped) setArtifactPreviewError(String(reason));
+      if (!stopped && !isStaleWebSessionError(reason)) setArtifactPreviewError(String(reason));
     });
     return () => {
       stopped = true;
@@ -919,7 +984,8 @@ export function App() {
   }, [runs, selectedTaskId, session]);
 
   useEffect(() => {
-    if (!session || !selectedTeamId || !selectedRoomId) return;
+    if (!session || !selectedTeamId || !selectedRoomId ||
+      initializedRoomContext !== roomContextRef.current) return;
     let stopped = false;
     let activeController: AbortController | null = null;
     let retryTimer: number | null = null;
@@ -993,7 +1059,7 @@ export function App() {
           session.token
         );
         if (!stopped) {
-          setMessages((current) => mergeRoomMessages(current, changedMessages));
+          setMessages((current) => mergeRoomMessages(current, changedMessages, Infinity));
           const currentSync = messageSyncRef.current;
           if (
             !currentSync ||
@@ -1031,26 +1097,14 @@ export function App() {
           }
         }
       } catch (reason) {
-        if (!stopped) setError(String(reason));
+        if (!stopped) reportError(reason);
       }
     };
     const refreshRoomSingleFlight = createSingleFlight(() => refresh("room"));
     const refreshFullSingleFlight = createSingleFlight(() => refresh("full"));
     const refreshEventsSingleFlight = createSingleFlight(() => refresh("events"));
     const refreshWorkbenchSingleFlight = createSingleFlight(async () => {
-      try {
-        const page = await jsonRequest<WorkbenchPage>(
-          `/api/teams/${selectedTeamId}/work-items?scope=${workScope}&limit=100`,
-          {},
-          session.token
-        );
-        if (!stopped) {
-          setWorkbenchItems(page.items);
-          setWorkbenchError(null);
-        }
-      } catch (reason) {
-        if (!stopped) setWorkbenchError(String(reason));
-      }
+      if (!stopped) await refreshWorkbenchState();
     });
     const delay = (milliseconds: number) => new Promise<void>((resolve) => {
       retryTimer = window.setTimeout(() => {
@@ -1112,7 +1166,7 @@ export function App() {
       window.clearInterval(fallbackTimer);
       document.removeEventListener("visibilitychange", reconcileVisible);
     };
-  }, [selectedRoomId, selectedTeamId, session, workScope]);
+  }, [selectedRoomId, selectedTeamId, session, initializedRoomContext, refreshWorkbenchState]);
 
   useEffect(() => {
     if (!session || !selectedRoomId) return;
@@ -1135,7 +1189,7 @@ export function App() {
       }).catch((reason: unknown) => {
         diagnosticRequestsRef.current.delete(run.runId);
         if (messageSyncRef.current?.roomId === selectedRoomId) {
-          setError(String(reason));
+          reportError(reason);
         }
       });
     }
@@ -1156,9 +1210,9 @@ export function App() {
       setSelectedTeamId(created.team.teamId);
       setTeamDialogOpen(false);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setTeamBusy(false);
+      if (isCurrentSession()) setTeamBusy(false);
     }
   }
 
@@ -1177,9 +1231,9 @@ export function App() {
       setRooms((current) => [...current, room]);
       setSelectedRoomId(room.roomId);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setTeamBusy(false);
+      if (isCurrentSession()) setTeamBusy(false);
     }
   }
 
@@ -1195,7 +1249,7 @@ export function App() {
         `/api/rooms/${selectedRoomId}/tasks`,
         {
           method: "POST",
-          body: JSON.stringify({ title: taskTitle, goal: taskGoal })
+          body: JSON.stringify({ title: taskTitle, goal: taskGoal, criteria: parseTaskCriteria(taskCriteria, locale) })
         },
         session.token
       );
@@ -1203,11 +1257,12 @@ export function App() {
       setSelectedTaskId(task.taskId);
       setTaskTitle("");
       setTaskGoal("");
+      setTaskCriteria("");
       setTaskDialogOpen(false);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setTaskBusy(false);
+      if (isCurrentSession()) setTaskBusy(false);
     }
   }
 
@@ -1231,9 +1286,9 @@ export function App() {
       setRoomSettingsDraftRevision(settings.room.settingsRevision);
       setParticipantDialogOpen(true);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setParticipantBusy(false);
+      if (isCurrentSession()) setParticipantBusy(false);
     }
   }
 
@@ -1269,6 +1324,7 @@ export function App() {
       retainMentionAgentIds(updated.participants.agentIds);
       setParticipantDialogOpen(false);
     } catch (reason) {
+      if (isStaleWebSessionError(reason)) return;
       if (String(reason).includes("Room settings changed; reload and retry")) {
         const latest = await jsonRequest<RoomSettings>(
           `/api/rooms/${selectedRoomId}/settings`,
@@ -1287,10 +1343,10 @@ export function App() {
           ? "房间设置已被其他客户端更新，已载入最新内容，请确认后再保存。"
           : "Room settings changed in another client. Latest settings were loaded; review and save again.");
       } else {
-        setError(String(reason));
+        reportError(reason);
       }
     } finally {
-      setParticipantBusy(false);
+      if (isCurrentSession()) setParticipantBusy(false);
     }
   }
 
@@ -1318,9 +1374,9 @@ export function App() {
       setMemberInvitation(invitation);
       setInvitationCopied(false);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setTeamBusy(false);
+      if (isCurrentSession()) setTeamBusy(false);
     }
   }
 
@@ -1328,10 +1384,43 @@ export function App() {
     if (!memberInvitation) return;
     try {
       await navigator.clipboard.writeText(memberInvitation.claimUrl);
+      if (!isCurrentSession()) return;
       setInvitationCopied(true);
     } catch (reason) {
-      setError(String(reason));
+      if (isCurrentSession()) reportError(reason);
     }
+  }
+
+  function clearAuthenticatedSession() {
+    advanceWebSessionGeneration();
+    setBusy(false);
+    setTeamBusy(false);
+    setTaskBusy(false);
+    setLifecycleBusy(false);
+    setParticipantBusy(false);
+    setClarificationBusyId(null);
+    setMemoryCandidateBusyId(null);
+    setArtifactPreviewBusyId(null);
+    setArtifactPreviewError(null);
+    setSession(null);
+    setTeams([]);
+    setRooms([]);
+    setMembers([]);
+    setAgents([]);
+    setDevices([]);
+    setMessages([]);
+    setRuns([]);
+    setDiscussions([]);
+    setTasks([]);
+    setArtifacts([]);
+    setArtifactPreview(null);
+    setInitializedRoomContext(null);
+    setSelectedTeamId(null);
+    setSelectedRoomId(null);
+    setSelectedWorkTaskId(null);
+    setMemberInvitation(null);
+    setSetupOutput(null);
+    setAuthState(authMode === "local" ? "local_bootstrap" : "sign_in_required");
   }
 
   async function signOut() {
@@ -1344,24 +1433,12 @@ export function App() {
         { method: "DELETE" },
         session.token
       );
-      setSession(null);
-      setTeams([]);
-      setRooms([]);
-      setMembers([]);
-      setAgents([]);
-      setDevices([]);
-      setMessages([]);
-      setRuns([]);
-      setDiscussions([]);
-      setSelectedTeamId(null);
-      setSelectedRoomId(null);
-      setSelectedWorkTaskId(null);
-      setMemberInvitation(null);
-      setAuthState(authMode === "local" ? "local_bootstrap" : "sign_in_required");
+      clearAuthenticatedSession();
     } catch (reason) {
-      setError(String(reason));
+      if (reason instanceof HttpRequestError && reason.status === 401) clearAuthenticatedSession();
+      else reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -1382,9 +1459,9 @@ export function App() {
       setAgentName("");
       setAgents((current) => [...current, agent]);
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -1408,9 +1485,9 @@ export function App() {
         `codex mcp add convene-wire --url ${window.location.origin}/mcp --bearer-token-env-var CONVENE_WIRE_MCP_TOKEN`
       ].join("\n"));
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -1436,9 +1513,9 @@ export function App() {
         `convenewire-bridge pair --config bridge.json --code '${invite.code}'`
       ].join("\n"));
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -1464,9 +1541,9 @@ export function App() {
             "The client will finish registration and come online automatically."
       );
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setBusy(false);
+      if (isCurrentSession()) setBusy(false);
     }
   }
 
@@ -1483,12 +1560,13 @@ export function App() {
         item.deviceId === revoked.deviceId ? revoked : item
       ));
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     }
   }
 
   async function refreshRoomState() {
     if (!session || !selectedRoomId) return;
+    const context = roomContextRef.current;
     const [page, nextRuns, nextDiscussions, nextTasks, nextMemoryCandidates] = await Promise.all([
       jsonRequest<RoomMessagePage>(
         `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`, {}, session.token
@@ -1504,7 +1582,8 @@ export function App() {
       ),
       loadPendingMemoryCandidates(selectedRoomId, session.token)
     ]);
-    setMessages((current) => mergeRoomMessages(current, page.items));
+    if (roomContextRef.current !== context) return;
+    setMessages((current) => mergeRoomMessages(current, page.items, Infinity));
     const sequence = page.items.at(-1)?.sequence ?? 0;
     const currentSync = messageSyncRef.current;
     if (
@@ -1531,21 +1610,31 @@ export function App() {
     );
   }
 
-  async function refreshWorkbenchState() {
-    if (!session || !selectedTeamId || workbenchLoading) return;
-    setWorkbenchLoading(true);
-    setWorkbenchError(null);
+  async function loadOlderMessages() {
+    if (!session || !selectedRoomId || !olderMessageCursor || historyPendingRef.current) return;
+    const context = roomContextRef.current;
+    const requestId = ++historyRequestRef.current;
+    historyPendingRef.current = true;
+    setHistoryLoading(true);
+    setHistoryError(null);
     try {
-      const page = await jsonRequest<WorkbenchPage>(
-        `/api/teams/${selectedTeamId}/work-items?scope=${workScope}&limit=100`,
+      const page = await jsonRequest<RoomMessagePage>(
+        `/api/rooms/${selectedRoomId}/messages?limit=100&beforeCursor=${encodeURIComponent(olderMessageCursor)}`,
         {},
         session.token
       );
-      setWorkbenchItems(page.items);
+      if (roomContextRef.current !== context || requestId !== historyRequestRef.current) return;
+      // Keep the loaded window aligned with the Server's opaque older cursor.
+      // Implicitly trimming it would make subsequent pages silently skip history.
+      setMessages((current) => mergeRoomMessages(current, page.items, Infinity));
+      setOlderMessageCursor(page.olderCursor ?? null);
     } catch (reason) {
-      setWorkbenchError(String(reason));
+      if (!isStaleWebSessionError(reason) && roomContextRef.current === context && requestId === historyRequestRef.current) setHistoryError(String(reason));
     } finally {
-      setWorkbenchLoading(false);
+      if (roomContextRef.current === context && requestId === historyRequestRef.current) {
+        historyPendingRef.current = false;
+        setHistoryLoading(false);
+      }
     }
   }
 
@@ -1602,9 +1691,9 @@ export function App() {
       });
       await refreshRoomState();
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     } finally {
-      setClarificationBusyId(null);
+      if (isCurrentSession()) setClarificationBusyId(null);
     }
   }
 
@@ -1625,7 +1714,8 @@ export function App() {
         candidateId !== reviewed.candidateId
       ));
     } catch (reason) {
-      setError(String(reason));
+      if (isStaleWebSessionError(reason)) return;
+      reportError(reason);
       if (selectedRoomId) {
         try {
           setMemoryCandidates(await jsonRequest<MemoryCandidate[]>(
@@ -1636,7 +1726,7 @@ export function App() {
         }
       }
     } finally {
-      setMemoryCandidateBusyId(null);
+      if (isCurrentSession()) setMemoryCandidateBusyId(null);
     }
   }
 
@@ -1654,10 +1744,11 @@ export function App() {
         setArtifactPreview(preview);
       }
     } catch (reason) {
+      if (isStaleWebSessionError(reason)) return;
       setArtifactPreview(null);
       setArtifactPreviewError(String(reason));
     } finally {
-      setArtifactPreviewBusyId(null);
+      if (isCurrentSession()) setArtifactPreviewBusyId(null);
     }
   }
 
@@ -1673,13 +1764,36 @@ export function App() {
         run.runId === updated.runId ? updated : run
       ));
     } catch (reason) {
-      setError(String(reason));
+      reportError(reason);
     }
   }
 
   function revealConnectionSetup() {
-    setConnectionMode("managed");
+    setAgentSetupTarget(null);
     setActiveView("agents");
+  }
+
+  function chooseAgentSetup(target: AgentSetupTarget) {
+    setAgentSetupTarget(target);
+    if (target === "demo") {
+      setConnectionMode("demo");
+      if (!agentName.trim()) setAgentName(locale === "zh-CN" ? "体验助手" : "Demo Agent");
+    } else if (target === "local") setConnectionMode("managed");
+    setActiveView("agents");
+  }
+
+  async function openHostedRoom(roomId: string) {
+    if (!session || !rooms.some((room) => room.roomId === roomId)) return;
+    const context = roomContextRef.current;
+    try {
+      const settings = await jsonRequest<RoomSettings>(`/api/rooms/${roomId}/settings`, {}, session.token);
+      if (roomContextRef.current !== context) return;
+      if (selectedRoomId === roomId) setRoomParticipants(settings.participants);
+      setSelectedRoomId(roomId);
+      setActiveView("room");
+    } catch (reason) {
+      reportError(reason);
+    }
   }
 
   function revealTeamMembers() {
@@ -1697,6 +1811,7 @@ export function App() {
         onClaimInvitation={claimInvitation}
         onEnterLocal={enterLocalSession}
         onRecoverOwner={recoverOwner}
+        onRecoverMember={recoverMember}
         onSetupOwner={setupOwner}
         onToggleLocale={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")}
         onToggleTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")}
@@ -2008,19 +2123,35 @@ export function App() {
             token={session?.token}
           />
         ) : activeView === "work" && selectedRoom ? (
+          <div className="work-home">
+          {agents.length === 0 && (
+            <section className="work-onboarding">
+              <p className="eyebrow">{locale === "zh-CN" ? "从第一个 Agent 开始" : "Start with your first Agent"}</p>
+              <h3>{locale === "zh-CN" ? "选择适合你的开始方式" : "Choose how you want to begin"}</h3>
+              <AgentSetupChoices currentMemberIsOwner={currentMember?.role === "owner"} locale={locale} onSelect={chooseAgentSetup} />
+            </section>
+          )}
           <WorkWorkspace
             agentNames={agentNames}
             error={workbenchError}
             items={workbenchItems}
             loading={workbenchLoading}
+            loadingMore={workbenchLoadingMore}
+            hasMore={workbenchHasMore}
+            lifecycleState={workLifecycleState}
+            ownerMemberId={workOwnerMemberId}
             locale={locale}
             memberNames={memberNames}
             onOpenTask={openWorkbenchTask}
+            onLoadMore={() => void loadMoreWork()}
+            onLifecycleStateChange={setWorkLifecycleState}
+            onOwnerMemberIdChange={setWorkOwnerMemberId}
             onRefresh={() => void refreshWorkbenchState()}
             onScopeChange={setWorkScope}
             roomNames={roomNames}
             scope={workScope}
           />
+          </div>
         ) : activeView === "members" ? (
           <TeamMembersWorkspace
             authMode={authMode}
@@ -2062,6 +2193,8 @@ export function App() {
             onDeviceNameChange={setDeviceName}
             onJoinCodeChange={setJoinCode}
             onManualAgentNameChange={setManualAgentName}
+            onSetupTargetChange={chooseAgentSetup}
+            onOpenHostedRoom={(roomId) => void openHostedRoom(roomId)}
             onAgentChanged={(updated) => setAgents((current) => {
               const exists = current.some(({ agentId }) => agentId === updated.agentId);
               return exists
@@ -2073,6 +2206,7 @@ export function App() {
             readyAgents={readyAgents}
             rooms={rooms}
             setupOutput={setupOutput}
+            setupTarget={agentSetupTarget}
             sessionToken={session?.token}
             teamId={selectedTeam.teamId}
           />
@@ -2099,44 +2233,32 @@ export function App() {
             </form>
           </section>
         ) : messages.length === 0 && pendingRoomMessages.length === 0 ? (
-          <section className="empty-stage">
+          <section className="empty-stage room-onboarding">
             <div className="orb"><span>✦</span></div>
-            <p className="eyebrow">{agents.length === 0 ? (locale === "zh-CN" ? "第 3 步，共 3 步" : "STEP 3 OF 3") : t("centralTeamReady")}</p>
+            <p className="eyebrow">{locale === "zh-CN" ? "第 3 步 · 收到第一条真实回复" : "STEP 3 · Get your first real reply"}</p>
             <h3>
-              {agents.length === 0
+              {readyRoomAgents.length === 0
                 ? t("addAgentOrStart")
                 : `${t("startConversation")} #${selectedRoom.name}`}
             </h3>
             <p>{t("timelineHelp")}</p>
-            {agents.length === 0 && (
-              <div className="onboarding-actions">
-                <form className="action-card" onSubmit={createFakeAgent}>
-                  <span className="action-kicker">{t("tryNow")}</span>
-                  <strong>{t("addDemoAgent")}</strong>
-                  <p>{locale === "zh-CN" ? "使用进程内运行时体验提及与回复流程。" : "Use the in-process runtime to explore mentions and replies."}</p>
-                  <input
-                    aria-label={t("demoAgentName")}
-                    onChange={(event) => setAgentName(event.target.value)}
-                    placeholder={locale === "zh-CN" ? "评审助手" : "Review Bot"}
-                    required
-                    value={agentName}
-                  />
-                  <button disabled={busy}>{busy ? t("creating") : t("addDemoAgent")}</button>
-                </form>
-                <div className="action-card">
-                  <span className="action-kicker">{t("useRuntime")}</span>
-                  <strong>{t("connectRealAgent")}</strong>
-                  <p>{t("connectRealAgentHelp")}</p>
-                  <button onClick={revealConnectionSetup} type="button">{t("openConnectionSetup")}</button>
-                </div>
-              </div>
+            {readyRoomAgents.length === 0 && (
+              <>
+                <p>{locale === "zh-CN" ? "当前房间还没有就绪的 Agent。已注册不等于可以在这里回复，请检查状态和房间授权。" : "No Agent is ready in this Room yet. Check availability and Room access, not just registration."}</p>
+                <AgentSetupChoices currentMemberIsOwner={currentMember?.role === "owner"} locale={locale} onSelect={chooseAgentSetup} />
+              </>
             )}
           </section>
         ) : (
           <RoomTimeline
+            key={selectedRoom.roomId}
             agentsById={agentsById}
             composerBusy={composerBusy}
             locale={locale}
+            hasOlderMessages={olderMessageCursor !== null}
+            historyLoading={historyLoading}
+            historyError={historyError}
+            onLoadOlderMessages={loadOlderMessages}
             membersById={membersById}
             messages={messages}
             onCancelRun={cancelRun}
@@ -2153,6 +2275,24 @@ export function App() {
         )}
         {selectedRoom && activeView === "room" && (
           <div className="room-dock">
+            {!hasRealRoomReply && (
+              <div className="first-reply-guide" role="status">
+                <span>{readyRoomAgents.some((agent) => agent.integrationMode !== "fake")
+                  ? (locale === "zh-CN" ? "下一步：选择一个 Agent，写下你的问题并发送，收到第一条真实回复。" : "Next: choose an Agent, write your question and send it to get a real reply.")
+                  : readyRoomAgents.length > 0
+                    ? (locale === "zh-CN" ? "当前为演示体验，不会调用真实模型。准备好后可创建中央 Agent 或连接本机 Agent。" : "This is a demo, without real model calls. Add a Central or local Agent when you are ready.")
+                    : (locale === "zh-CN" ? "聊天已经可以使用；让 Agent 回复需要先配置并授权到当前房间。" : "Chat is ready. To receive an Agent reply, configure one and grant it access to this Room.")}</span>
+                <button type="button" onClick={() => {
+                  const target = readyRoomAgents.find((agent) => agent.integrationMode !== "fake") ?? readyRoomAgents[0];
+                  if (target) {
+                    selectMention(target);
+                    composerInputRef.current?.focus();
+                  } else revealConnectionSetup();
+                }}>{readyRoomAgents.length > 0
+                  ? (locale === "zh-CN" ? "选择 Agent 提问" : "Ask an Agent")
+                  : (locale === "zh-CN" ? "配置 Agent" : "Set up an Agent")}</button>
+              </div>
+            )}
             {visibleDiscussion && (
               <DiscussionStatus
                 activeDiscussion={activeDiscussion}
@@ -2309,6 +2449,7 @@ export function App() {
                 )}
                 <textarea
                   aria-label={t("message")}
+                  ref={composerInputRef}
                   onChange={handleMessageChange}
                   onKeyDown={handleMessageKeyDown}
                   placeholder={locale === "zh-CN"
@@ -2350,9 +2491,11 @@ export function App() {
       {taskDialogOpen && selectedRoom && (
         <TaskCreateDialog
           busy={taskBusy}
+          criteria={taskCriteria}
           goal={taskGoal}
           locale={locale}
           onClose={() => setTaskDialogOpen(false)}
+          onCriteriaChange={setTaskCriteria}
           onGoalChange={setTaskGoal}
           onSubmit={createAgentTask}
           onTitleChange={setTaskTitle}

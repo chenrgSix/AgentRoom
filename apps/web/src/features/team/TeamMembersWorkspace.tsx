@@ -7,6 +7,7 @@ import type {
   MemberInvitation,
   Team
 } from "../../models.js";
+import { MemberRecoveryPanel } from "./MemberRecoveryPanel.js";
 
 interface TeamMembersWorkspaceProps {
   authMode: AuthMode | null;
@@ -111,6 +112,14 @@ export function TeamMembersWorkspace({
             </>
           )}
         </section>
+        {authMode === "trusted-team" && currentMember?.role === "owner" && (
+          <MemberRecoveryPanel
+            key={`${selectedTeam.teamId}:${currentMember.memberId}`}
+            locale={locale}
+            members={members}
+            teamId={selectedTeam.teamId}
+          />
+        )}
       </div>
     </section>
   );

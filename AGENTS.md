@@ -32,6 +32,8 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm test` — run implemented workspace tests.
 - `npm run test:bridge-ui` — test the embedded Bridge GUI's pairing state projection.
 - `npm run test:qa-evidence` — test the sanitized two-machine acceptance evidence verifier.
+- `npm run test:product-experience` — verify disposable local/trusted product acceptance fixtures with real sealed evidence.
+- `CONVENE_WIRE_PRODUCT_PREVIEW=1 npm run preview:product-experience` — serve the built Web UI on two isolated loopback QA servers, with synthetic model responses and temporary data removed on shutdown; never use for deployment.
 - `npm run capture:qa-002 -- --input /path/input.json --database /path/agent-room.sqlite --metrics /path/metrics.txt --bridge-installer /path/convenewire-bridge-desktop_VERSION_windows_amd64_setup.exe --bridge-desktop-archive /path/convenewire-bridge-desktop_VERSION_windows_amd64.zip --release-checksums /path/SHA256SUMS --output /path/evidence.md` — compute both Windows candidate digests, safely bind the packaged executable and authenticated Bridge/Central build observations to one reviewed two-machine record, and render no secrets or local paths.
 - `npm run test:compose` — verify the default/custom central HTTPS ports and validate the Caddy configuration.
 - `npm run test:e2e` — run deterministic cross-process acceptance tests.

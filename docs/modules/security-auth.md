@@ -57,8 +57,10 @@ tokens travel in a URL fragment so reverse proxies do not receive them in
 request logs.
 
 ADR-0027 existing-member recovery uses Owner-only
-`POST /api/teams/:teamId/members/:memberId/recovery` and `DELETE` on the
-same path. The response exposes a newly issued plaintext code only once.
+`POST /api/teams/:teamId/members/:memberId/recovery` and
+`DELETE /api/teams/:teamId/members/:memberId/recovery/:recoveryId`.
+Revocation targets the exact issued capability, never a replacement code.
+The response exposes a newly issued plaintext code only once.
 `POST /api/auth/recover-member` consumes it without creating a new identity.
 Migration 0055 stores only its hash, issuer, target and expiry; consumption
 atomically revokes prior Web sessions. The target must still be an ordinary

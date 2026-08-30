@@ -11,6 +11,15 @@ console hygiene. Existing Bridge, Compose, schema and migration behavior remains
 in regression scope. Website publication follows this gate and is verified
 separately from an application Release or physical-platform/provider admission.
 
+`test:product-experience` verifies a temporary, Owner-bound fixture with 125
+history messages, more than 100 Tasks, an unknown-outcome attempt and a real
+uploaded/sealed Artifact plus proposed Result. It runs in local and trusted
+Cookie modes as part of `npm test`. The explicitly enabled
+`preview:product-experience` harness serves the production Web build with fresh
+loopback-only databases and simulated provider responses; it neither forwards
+network model calls nor reads the user's application data. The harness is not
+a deployment command and removes its exact temporary data on normal shutdown.
+
 ## Scope
 
 - Prefixes: `QA` and `OPS`

@@ -6,26 +6,76 @@ import {
 import type { LocalSession, Run } from "./models.js";
 
 const userKey = "agent-room.local-user";
+export const webSessionExpiredEvent = "convenewire:web-session-expired";
+let webSessionGeneration = 0;
+
+export function advanceWebSessionGeneration(): void {
+  webSessionGeneration += 1;
+}
+
+export function captureWebSessionScope(): () => boolean {
+  const generation = webSessionGeneration;
+  return () => generation === webSessionGeneration;
+}
+
+export class StaleWebSessionError extends Error {
+  public constructor() {
+    super("The request belongs to a previous Web session");
+    this.name = "AbortError";
+  }
+}
+
+export function isStaleWebSessionError(reason: unknown): reason is StaleWebSessionError {
+  return reason instanceof StaleWebSessionError;
+}
+
+export class HttpRequestError extends Error {
+  public constructor(message: string, public readonly status: number) {
+    super(message);
+  }
+}
 
 export async function jsonRequest<T>(
   path: string,
   options: RequestInit = {},
   token?: string
 ): Promise<T> {
-  const response = await fetch(path, {
-    ...options,
-    credentials: "same-origin",
-    headers: {
-      ...(options.body ? { "content-type": "application/json" } : {}),
-      ...(token ? { authorization: `Bearer ${token}` } : {}),
-      ...options.headers
+  const generation = webSessionGeneration;
+  const publicEntry = /^\/api\/(?:bootstrap$|auth\/(?:status$|setup$|recover-owner$|recover-member$|member-invitations\/claim$))/u.test(path);
+  const requireCurrentSession = () => {
+    if (!publicEntry && generation !== webSessionGeneration) {
+      throw new StaleWebSessionError();
     }
-  });
-  const body = await response.json() as T & {
-    error?: { message?: string };
   };
+  let response: Response;
+  try {
+    response = await fetch(path, {
+      ...options,
+      credentials: "same-origin",
+      headers: {
+        ...(options.body ? { "content-type": "application/json" } : {}),
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...options.headers
+      }
+    });
+  } catch (reason) {
+    requireCurrentSession();
+    throw reason;
+  }
+  requireCurrentSession();
+  let body: T & { error?: { message?: string } };
+  try {
+    body = await response.json() as typeof body;
+  } catch (reason) {
+    requireCurrentSession();
+    throw reason;
+  }
+  requireCurrentSession();
   if (!response.ok) {
-    throw new Error(body.error?.message ?? `Request failed (${response.status})`);
+    if (response.status === 401 && !publicEntry && generation === webSessionGeneration && typeof window !== "undefined") {
+      window.dispatchEvent(new window.Event(webSessionExpiredEvent));
+    }
+    throw new HttpRequestError(body.error?.message ?? `Request failed (${response.status})`, response.status);
   }
   return body;
 }

@@ -773,7 +773,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     fireEvent.change(within(taskDialog).getByLabelText("任务名称"), {
       target: { value: "OAuth 迁移" }
     });
-    fireEvent.change(within(taskDialog).getByLabelText("目标与完成口径"), {
+    fireEvent.change(within(taskDialog).getByLabelText("任务目标"), {
       target: { value: "完成 OAuth 迁移并通过回归测试。" }
     });
     fireEvent.click(within(taskDialog).getByRole("button", { name: "创建并切换" }));
@@ -787,7 +787,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     );
     assert.deepEqual(JSON.parse(createTaskRequest?.body ?? "{}"), {
       title: "OAuth 迁移",
-      goal: "完成 OAuth 迁移并通过回归测试。"
+      goal: "完成 OAuth 迁移并通过回归测试。",
+      criteria: []
     });
     fireEvent.change(screen.getByLabelText("当前任务"), {
       target: { value: roomTask.taskId }

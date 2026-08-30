@@ -105,6 +105,7 @@ export interface Message {
 export interface RoomMessagePage {
   items: Message[];
   nextCursor: string | null;
+  olderCursor?: string | null;
   syncCursor?: string;
 }
 

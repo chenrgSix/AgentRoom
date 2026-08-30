@@ -2,10 +2,10 @@
 
 > “有什么事跟我的Codex说去吧。”
 
-ConveneWire is a lightweight collaboration layer that organizes existing
-AI coding runtimes into a centrally managed Team. The central Web service owns
-Rooms, messages, mentions, routing, and history. A small, headless Bridge on
-each participant machine receives routed work and invokes the local runtime.
+ConveneWire is a self-hosted workspace for people and AI Agents. The central
+Web service brings Rooms, tasks, execution history and delivery evidence into
+one Team. Use an optional Central Agent for HTTP model calls, or connect a
+Bridge on an execution machine for local Runtime and Workspace capabilities.
 
 MCP lets a running Agent use Team capabilities. WebSocket plus the Bridge lets
 the Team wake a managed Agent.
@@ -32,6 +32,11 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
   [docs/acceptance/qa-002-two-machine-managed-agent.md](docs/acceptance/qa-002-two-machine-managed-agent.md)
 - Security and clean-room audit:
   [docs/acceptance/qa-005-security-clean-room-audit.md](docs/acceptance/qa-005-security-clean-room-audit.md)
+
+Current source includes Central HTTP Agents and the
+[product experience iteration](docs/acceptance/qa-040-product-experience.md).
+These changes are newer than the v0.4.1 stable packages; downloading v0.4.1
+does not include them. Website publication is not an application Release.
 
 ## Technology Baseline
 
@@ -93,14 +98,28 @@ npm run dev:web                  # http://127.0.0.1:5173
 Open `http://127.0.0.1:5173`. On first use:
 
 1. Create a Team, then create its first Room.
-2. Open **智能体管理** (Agent Management).
-3. Add two **演示智能体** to verify both Runs and collaboration without a
-   local AI runtime.
+2. Choose **创建中央 Agent** (Create a Central Agent), **连接本机 Agent**
+   (Connect a local Agent), or **先体验演示** (Try a demo).
+3. For a Central Agent, the Team Owner fills in a model and API key, explicitly
+   selects Rooms, then chooses **验证并创建** (Validate and create). For a demo,
+   add a demonstration Agent without a model or key.
 4. Return to the Room, type `@`, select one Agent for a normal Run or multiple
    Agents for an adaptive discussion, enter a message, and send.
 
 A message without a structured `@Agent` mention is stored in the Room but does
 not wake an Agent.
+
+Central Agents currently use the fixed OpenAI Responses HTTPS endpoint. They
+do not install Codex/Pi, add another service, access a computer, read files or
+execute tools. Configuration is optional and happens in the Web UI after
+startup; provider keys are encrypted in the existing database. Validation and
+execution may incur provider usage and send authorized Room context to that
+provider. Formal Result review/completion remains a separate governed action.
+
+An existing trusted-Team member who loses their session should ask the Owner
+for a 15-minute recovery code in **Team 成员**, then use **成员重新登录** on the
+sign-in page. A new invitation creates another identity; recovery preserves the
+existing member. This path only supports ordinary single-Team members.
 
 ### Connect local Codex or Pi with the Bridge
 

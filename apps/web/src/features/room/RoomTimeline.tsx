@@ -1,4 +1,6 @@
+import { useLayoutEffect, useRef } from "react";
 import { activeRunStates } from "../../api-client.js";
+import { errorLabel } from "../../presentation.js";
 import {
   AgentRunActivity,
   diagnosticCategoryLabel,
@@ -25,6 +27,10 @@ interface RoomTimelineProps {
   agentsById: Map<string, Agent>;
   composerBusy: boolean;
   locale: Locale;
+  hasOlderMessages?: boolean;
+  historyLoading?: boolean;
+  historyError?: string | null;
+  onLoadOlderMessages?: () => Promise<void>;
   membersById: Map<string, Member>;
   messages: Message[];
   pendingMessages: PendingRoomMessage[];
@@ -64,6 +70,10 @@ export function RoomTimeline({
   agentsById,
   composerBusy,
   locale,
+  hasOlderMessages = false,
+  historyLoading = false,
+  historyError = null,
+  onLoadOlderMessages,
   membersById,
   messages,
   onCancelRun,
@@ -78,13 +88,50 @@ export function RoomTimeline({
   session
 }: RoomTimelineProps) {
   const t = (key: TranslationKey) => translate(locale, key);
+  const timelineRef = useRef<HTMLElement>(null);
+  const anchorRef = useRef<{ messageId: string; top: number } | null>(null);
+  const findAnchor = () => Array.from(timelineRef.current?.querySelectorAll<HTMLElement>("[data-message-id]") ?? [])
+    .find((element) => element.dataset.messageId === anchorRef.current?.messageId);
+  useLayoutEffect(() => {
+    const anchor = anchorRef.current;
+    const timeline = timelineRef.current;
+    if (!anchor || !timeline || messages[0]?.messageId === anchor.messageId) return;
+    const element = findAnchor();
+    if (element) timeline.scrollTop += element.getBoundingClientRect().top - anchor.top;
+    anchorRef.current = null;
+  }, [messages]);
+  const loadOlder = async () => {
+    if (!onLoadOlderMessages || historyLoading) return;
+    const first = timelineRef.current?.querySelector<HTMLElement>("[data-message-id]");
+    anchorRef.current = first?.dataset.messageId
+      ? { messageId: first.dataset.messageId, top: first.getBoundingClientRect().top }
+      : null;
+    await onLoadOlderMessages();
+  };
+  useLayoutEffect(() => {
+    if (!historyLoading) anchorRef.current = null;
+  }, [historyLoading]);
   const navigateInternal = (href: string): void => {
     const target = parseWorkTaskLink(href, window.location.origin);
     if (target) onOpenWorkTask(target.taskId, target.roomId);
   };
 
   return (
-    <section className="timeline" aria-label={t("roomMessages")}>
+    <section className="timeline" aria-label={t("roomMessages")} ref={timelineRef}
+      onScroll={() => {
+        const anchor = anchorRef.current;
+        const element = findAnchor();
+        if (anchor && element) anchor.top = element.getBoundingClientRect().top;
+      }}>
+      {(hasOlderMessages || historyError) && (
+        <div className="history-toolbar">
+          <button disabled={historyLoading} onClick={() => void loadOlder()} type="button">
+            {historyLoading ? (locale === "zh-CN" ? "正在加载历史消息…" : "Loading earlier messages…")
+              : (locale === "zh-CN" ? "加载更早的消息" : "Load earlier messages")}
+          </button>
+          {historyError && <p role="alert">{errorLabel(historyError, locale)}</p>}
+        </div>
+      )}
       {messages.map((message) => {
         const senderName = message.senderType === "agent"
           ? agentsById.get(message.senderId)?.name ?? t("agent")
@@ -103,7 +150,7 @@ export function RoomTimeline({
           : undefined;
 
         return (
-          <article className={`message ${message.senderType}-message`} key={message.messageId}>
+          <article className={`message ${message.senderType}-message`} key={message.messageId} data-message-id={message.messageId}>
             <span className={`avatar ${message.senderType}`}>{avatarLabel}</span>
             <div className="message-card">
               <header>
