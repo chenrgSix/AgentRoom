@@ -1199,11 +1199,6 @@ func (s *Service) updateAgent(response http.ResponseWriter, request *http.Reques
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
-	agent, err := buildRuntime(input)
-	if err != nil {
-		writeError(response, http.StatusBadRequest, err.Error())
-		return
-	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if err := s.requireConfigurationMutationLocked(); err != nil {
@@ -1228,6 +1223,20 @@ func (s *Service) updateAgent(response http.ResponseWriter, request *http.Reques
 		return
 	}
 	previous := candidate.Agents[selected]
+	if strings.TrimSpace(input.Kind) != previous.RuntimeKind {
+		writeError(response, http.StatusConflict, "Runtime kind cannot change during editing; add a separate Agent profile")
+		return
+	}
+	var agent config.AgentConfig
+	if previous.RuntimeKind == "generic" {
+		agent, err = editGenericRuntime(previous, input)
+	} else {
+		agent, err = buildRuntime(input)
+	}
+	if err != nil {
+		writeError(response, http.StatusBadRequest, err.Error())
+		return
+	}
 	if agent.RuntimeKind == "codex" && previous.RuntimeKind == "codex" &&
 		input.CodexSessionConflictPolicy == "" {
 		agent.CodexSessionConflictPolicy = previous.ResolvedCodexSessionConflictPolicy()
@@ -1602,6 +1611,37 @@ func buildRuntime(runtime RuntimeInput) (config.AgentConfig, error) {
 		}
 	default:
 		return config.AgentConfig{}, fmt.Errorf("Runtime kind must be codex or pi")
+	}
+	return agent, nil
+}
+
+func editGenericRuntime(previous config.AgentConfig, input RuntimeInput) (config.AgentConfig, error) {
+	if len(previous.Command) == 0 || input.ExecutablePath != previous.Command[0] ||
+		input.Sandbox != "" || input.CodexSessionConflictPolicy != "" || input.CredentialEnvironmentVar != "" {
+		return config.AgentConfig{}, fmt.Errorf("Generic CLI Runtime settings are read-only; editing preserves the saved command and policies")
+	}
+	// Keep every owner-authored Runtime field, including arguments, environment
+	// policy and output protocol. A metadata edit must not construct a preset or
+	// require a currently discoverable executable (commands may use PATH).
+	agent := previous
+	agent.Name = strings.TrimSpace(input.Name)
+	agent.Role = strings.TrimSpace(input.Role)
+	if input.Workspace != previous.Workspace {
+		if strings.TrimSpace(input.Workspace) == "" {
+			return config.AgentConfig{}, fmt.Errorf("Generic CLI workspace is required")
+		}
+		workspace, err := existingDirectory(input.Workspace)
+		if err != nil {
+			return config.AgentConfig{}, fmt.Errorf("Generic CLI workspace: %w", err)
+		}
+		agent.Workspace = workspace
+	}
+	agent.WorkspaceAlias = strings.TrimSpace(input.WorkspaceAlias)
+	if agent.WorkspaceAlias == "" {
+		agent.WorkspaceAlias = config.DefaultWorkspaceAlias(agent.Workspace)
+	}
+	if err := config.ValidateWorkspaceAlias(agent.WorkspaceAlias); err != nil {
+		return config.AgentConfig{}, err
 	}
 	return agent, nil
 }

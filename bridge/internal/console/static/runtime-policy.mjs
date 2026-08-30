@@ -19,9 +19,10 @@ export function applyEnrollmentCodexPolicy(enabled, control) {
 
 export function applyAgentRuntimePolicy(kind, control, codexPolicy, piPolicy) {
   const codex = kind === "codex";
+  const pi = kind === "pi";
   codexPolicy.classList.toggle("hidden", !codex);
-  piPolicy.classList.toggle("hidden", codex);
-  setDescription(control, codex ? agentCodexPolicyID : agentPiPolicyID);
+  piPolicy.classList.toggle("hidden", !pi);
+  setDescription(control, codex ? agentCodexPolicyID : pi ? agentPiPolicyID : "agent-generic-runtime-help");
 }
 
 export function codexSessionConflictPolicyDescription(policy) {

@@ -53,6 +53,7 @@ const elements = Object.fromEntries([
   "agent-modal-backdrop", "agent-modal-title", "close-agent-modal", "cancel-agent-modal",
   "agent-modal-error",
   "agent-form", "agent-kind", "agent-name", "agent-role", "agent-path", "agent-workspace", "agent-workspace-alias",
+  "agent-generic-option", "agent-runtime-edit-help", "agent-generic-runtime-help", "agent-runtime-draft-actions",
   "agent-sandbox-field", "agent-sandbox", "agent-session-conflict-policy-field",
   "agent-session-conflict-policy", "agent-credential-field", "agent-credential-env",
   "agent-codex-session-ownership-policy", "agent-codex-session-ownership-policy-copy",
@@ -199,7 +200,7 @@ function probeSummary(result) {
 }
 
 async function preflightDraft(kind, source, button, resultElement) {
-  if (draftPreflightRunning) return;
+  if (draftPreflightRunning || (kind !== "codex" && kind !== "pi")) return;
   draftPreflightRunning = true;
   button.disabled = true;
   const saveButton = source === "agent" ? elements["save-agent"] : elements["submit-enrollment"];
@@ -362,12 +363,19 @@ function syncAgentProvisioningFields() {
 }
 
 function syncAgentKindFields() {
-  const codex = elements["agent-kind"].value === "codex";
+  const kind = elements["agent-kind"].value;
+  const codex = kind === "codex";
+  const generic = kind === "generic";
   elements["agent-sandbox-field"].classList.toggle("hidden", !codex);
   elements["agent-session-conflict-policy-field"].classList.toggle("hidden", !codex);
-  elements["agent-credential-field"].classList.toggle("hidden", codex);
+  elements["agent-credential-field"].classList.toggle("hidden", kind !== "pi");
+  elements["agent-path"].readOnly = generic;
+  elements["agent-path"].setAttribute("aria-describedby", generic ? "agent-generic-runtime-help" : "agent-discovery-help");
+  elements["agent-generic-runtime-help"].classList.toggle("hidden", !generic);
+  elements["agent-runtime-draft-actions"].classList.toggle("hidden", generic);
+  elements["agent-preflight"].disabled = generic || draftPreflightRunning;
   applyAgentRuntimePolicy(
-    elements["agent-kind"].value,
+    kind,
     elements["agent-kind"],
     elements["agent-codex-session-ownership-policy"],
     elements["agent-pi-permission-policy"]
@@ -376,20 +384,27 @@ function syncAgentKindFields() {
     elements["agent-session-conflict-policy"].value,
     elements["agent-codex-session-ownership-policy-copy"]
   );
-  renderDiscovery("agent", codex ? "codex" : "pi");
+  renderDiscovery("agent", kind);
 }
 
 function renderDiscovery(prefix, kind) {
+  const preset = kind === "codex" || kind === "pi";
+  elements[`${prefix}-discovery-status`].classList.toggle("hidden", !preset);
+  elements[`${prefix}-discovery-help`].classList.toggle("hidden", !preset);
+  elements[`${prefix}-use-detected`].disabled = !preset || discoveryRunning;
+  if (!preset) {
+    elements[`${prefix}-install-link`].classList.add("hidden");
+    return;
+  }
   if (!currentState) return;
   const view = runtimeDiscoveryView(kind, currentState);
   elements[`${prefix}-discovery-status`].textContent = view.status;
   elements[`${prefix}-discovery-help`].textContent = view.help;
   elements[`${prefix}-install-link`].classList.toggle("hidden", !view.showCodexInstall);
-  elements[`${prefix}-use-detected`].disabled = discoveryRunning;
 }
 
 async function useDetectedRuntime(prefix, kind) {
-  if (discoveryRunning) return;
+  if (discoveryRunning || (kind !== "codex" && kind !== "pi")) return;
   const input = elements[`${prefix}-path`];
   const draftPath = input.value;
   const draftAgent = editingAgentId;
@@ -417,13 +432,16 @@ async function useDetectedRuntime(prefix, kind) {
 function openAgentModal(agent = null) {
   showError(null);
   editingAgentId = agent?.agentId || null;
-  const kind = agent?.kind === "pi" ? "pi" : "codex";
+  const kind = agent ? agent.kind : "codex";
   elements["agent-modal-title"].textContent = agent ? `编辑 ${agent.name}` : "添加智能体";
+  elements["agent-generic-option"].disabled = kind !== "generic";
+  elements["agent-generic-option"].hidden = kind !== "generic";
+  elements["agent-kind"].disabled = Boolean(agent);
   elements["agent-kind"].value = kind;
+  elements["agent-runtime-edit-help"].classList.toggle("hidden", !agent);
   elements["agent-name"].value = agent?.name || (kind === "pi" ? "Local Pi" : "Local Codex");
   elements["agent-role"].value = agent?.role || (kind === "pi" ? "Reviewer" : "Implementation");
-  elements["agent-path"].value = agent?.executablePath ||
-    (kind === "pi" ? currentState.detectedPi : currentState.detectedCodex) || "";
+  elements["agent-path"].value = agent ? agent.executablePath || "" : currentState.detectedCodex || "";
   elements["agent-workspace"].value = agent?.workspace || currentState.agents[0]?.workspace || currentState.workspace || "";
   elements["agent-workspace-alias"].value = agent?.workspaceAlias || "";
   elements["agent-sandbox"].value = agent?.sandbox || "workspace-write";

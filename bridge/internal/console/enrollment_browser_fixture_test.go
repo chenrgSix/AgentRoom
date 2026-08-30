@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"reflect"
 	"runtime"
 	"sync"
 	"testing"
@@ -16,6 +17,62 @@ import (
 	"convenewire.dev/bridge/internal/operations"
 	"convenewire.dev/bridge/internal/pairing"
 )
+
+// Opt-in real Console editor fixture. Its temporary credentials are synthetic;
+// Runtime discovery, probing and execution never invoke an installed tool.
+func TestGenericEditorBrowserFixture(t *testing.T) {
+	if os.Getenv("CONVENE_WIRE_GENERIC_EDITOR_UI_FIXTURE") != "1" {
+		t.Skip("opt-in isolated Generic editor browser fixture")
+	}
+	dependencies := inertDependencies()
+	dependencies.DiscoverRuntime = func(string) RuntimeDiscovery { return RuntimeDiscovery{} }
+	dependencies.ProbeRuntime = func(context.Context, config.AgentConfig) RuntimeProbeResult {
+		return RuntimeProbeResult{Code: "FIXTURE_NO_RUNTIME"}
+	}
+	service, configuration := pairedRecoveryService(t, dependencies)
+	generic := config.AgentConfig{
+		Name: "Generic Worker", Role: "Builder", Adapter: "generic", RuntimeKind: "generic",
+		Command:   []string{configuration.Agents[0].Command[0], "--policy", "owner policy with spaces"},
+		Workspace: configuration.Agents[0].Workspace, WorkspaceAlias: "Custom Workspace",
+		EnvAllowlist:   []string{"PATH", "OWNER_PROVIDER_TOKEN"},
+		OutputProtocol: config.OutputProtocolConveneWireJSONLV1,
+	}
+	configuration.Agents[0] = generic
+	service.mu.Lock()
+	err := service.replaceConfigurationLocked(configuration)
+	service.mu.Unlock()
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentID := service.State().Agents[0].AgentID
+	finished := make(chan struct{})
+	var stop sync.Once
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /fixture/stop", func(response http.ResponseWriter, _ *http.Request) {
+		response.WriteHeader(http.StatusNoContent)
+		stop.Do(func() { close(finished) })
+	})
+	mux.Handle("/", service.Handler())
+	server := httptest.NewServer(mux)
+	defer server.Close()
+	fmt.Printf("GENERIC_EDITOR_FIXTURE_URL=%s/?token=%s\n", server.URL, service.Token())
+	select {
+	case <-finished:
+	case <-time.After(20 * time.Minute):
+		t.Fatal("browser fixture timed out")
+	}
+	persisted, err := config.Load(service.options.ConfigPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := generic
+	want.Name = "Renamed Generic Worker"
+	if len(persisted.Agents) != 2 || !reflect.DeepEqual(persisted.Agents[0], want) ||
+		!reflect.DeepEqual(persisted.Agents[1], configuration.Agents[1]) ||
+		service.State().Agents[0].AgentID != agentID {
+		t.Fatal("browser rename did not preserve the complete Generic configuration and identities")
+	}
+}
 
 // Opt-in first-run fixture: an empty temporary configuration and no central or
 // Runtime calls. It keeps visual acceptance independent from a real Device.

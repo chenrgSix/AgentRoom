@@ -1612,10 +1612,24 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	service.StopBridge()
 	waitSignal(t, stopped, "Bridge stop before offline Agent edit")
 
-	edited := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agents/"+firstID, RuntimeInput{
+	beforeConversion, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conversion := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agents/"+firstID, RuntimeInput{
 		Kind: "pi", Name: "Renamed First", Role: "Planner",
 		ExecutablePath: executablePath, Workspace: directory,
 		CredentialEnvironmentVar: "ANTHROPIC_API_KEY",
+	})
+	conversion.Body.Close()
+	afterConversion, err := os.ReadFile(configPath)
+	if conversion.StatusCode != http.StatusConflict || err != nil || !bytes.Equal(beforeConversion, afterConversion) ||
+		service.State().Agents[0].Name != "First Codex" {
+		t.Fatalf("ordinary edit converted the Runtime or changed configuration: %d, %v", conversion.StatusCode, err)
+	}
+	edited := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agents/"+firstID, RuntimeInput{
+		Kind: "codex", Name: "Renamed First", Role: "Planner",
+		ExecutablePath: executablePath, Workspace: directory, Sandbox: "read-only",
 	})
 	var editedView AgentView
 	if err := json.NewDecoder(edited.Body).Decode(&editedView); err != nil {
@@ -1623,7 +1637,7 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	}
 	edited.Body.Close()
 	if edited.StatusCode != http.StatusOK || editedView.AgentID != firstID ||
-		editedView.Name != "Renamed First" || editedView.Kind != "pi" {
+		editedView.Name != "Renamed First" || editedView.Kind != "codex" || editedView.Sandbox != "read-only" {
 		t.Fatalf("unexpected edited Agent: %d %#v", edited.StatusCode, editedView)
 	}
 	if service.State().BridgeRunning {
@@ -1651,7 +1665,7 @@ func TestAgentEndpointsAddAndEditOneStableIdentity(t *testing.T) {
 	service.runtimeTests[firstID] = struct{}{}
 	service.mu.Unlock()
 	selfTestConflict := consoleRequest(t, server.URL, service.Token(), http.MethodPut, "/api/agents/"+firstID, RuntimeInput{
-		Kind: "pi", Name: "Blocked Rename", Role: "Planner",
+		Kind: "codex", Name: "Blocked Rename", Role: "Planner",
 		ExecutablePath: executablePath, Workspace: directory,
 	})
 	selfTestConflict.Body.Close()

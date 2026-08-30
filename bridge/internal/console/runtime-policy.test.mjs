@@ -59,6 +59,17 @@ test("disabled enrollment Codex removes its hidden policy description", () => {
   assert.equal(control.attributes.has("aria-describedby"), false);
 });
 
+test("Generic Runtime has no Codex or Pi policy description", () => {
+  const control = controlFixture();
+  const codexPolicy = policyFixture(false);
+  const piPolicy = policyFixture(false);
+
+  applyAgentRuntimePolicy("generic", control, codexPolicy, piPolicy);
+  assert.equal(codexPolicy.classes.has("hidden"), true);
+  assert.equal(piPolicy.classes.has("hidden"), true);
+  assert.equal(control.attributes.get("aria-describedby"), "agent-generic-runtime-help");
+});
+
 test("Codex session conflict policy explains continuity before saving", () => {
   const copy = {textContent: ""};
 
