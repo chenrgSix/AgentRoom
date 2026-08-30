@@ -120,6 +120,37 @@ test("Room Message tail snapshot resumes after the newest message", async () => 
     assert.equal(snapshot.items[0]?.sequence, 6);
     assert.equal(snapshot.items.at(-1)?.sequence, 105);
     assert.equal(snapshot.nextCursor, null);
+    assert.ok(snapshot.olderCursor);
+    const older = messages.listMessages(principal, {
+      roomId: room.roomId,
+      beforeCursor: snapshot.olderCursor,
+      limit: 3
+    });
+    assert.deepEqual(older.items.map(({ sequence }) => sequence), [3, 4, 5]);
+    assert.ok(older.olderCursor);
+    const oldest = messages.listMessages(principal, {
+      roomId: room.roomId,
+      beforeCursor: older.olderCursor,
+      limit: 3
+    });
+    assert.deepEqual(oldest.items.map(({ sequence }) => sequence), [1, 2]);
+    assert.equal(oldest.olderCursor, null);
+    for (const options of [{ tail: true }, { cursor: snapshot.syncCursor }]) {
+      assert.throws(() => messages.listMessages(principal, {
+        roomId: room.roomId,
+        beforeCursor: snapshot.olderCursor ?? undefined,
+        ...options
+      }), /backward cursor cannot be combined/u);
+    }
+    const otherRoom = teams.createRoom(principal, created.team.teamId, "other", now);
+    assert.throws(() => messages.listMessages(principal, {
+      roomId: otherRoom.roomId,
+      beforeCursor: snapshot.olderCursor ?? undefined
+    }), /Invalid Room message cursor/u);
+    assert.throws(() => messages.listMessages(principal, {
+      roomId: room.roomId,
+      beforeCursor: "invalid-cursor"
+    }), /Invalid Room message cursor/u);
 
     const newest = messages.createMemberMessage(principal, {
       roomId: room.roomId,

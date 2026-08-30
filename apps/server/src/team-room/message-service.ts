@@ -23,6 +23,7 @@ interface MessageCursor {
 export interface MessagePage {
   items: MessageRecord[];
   nextCursor: string | null;
+  olderCursor: string | null;
   syncCursor: string;
 }
 
@@ -194,7 +195,13 @@ export class MessageService {
 
   public listMessages(
     principal: WebPrincipal,
-    input: { roomId: string; cursor?: string; limit?: number; tail?: boolean }
+    input: {
+      roomId: string;
+      cursor?: string;
+      beforeCursor?: string;
+      limit?: number;
+      tail?: boolean;
+    }
   ): MessagePage {
     this.auth.requireRoomMember(principal, input.roomId);
     const limit = input.limit ?? 50;
@@ -204,14 +211,25 @@ export class MessageService {
     if (input.cursor && input.tail) {
       throw new Error("Message cursor and tail mode cannot be combined");
     }
-    if (input.tail) {
-      const latest = this.repository.latestMessageSequence(input.roomId);
+    if (input.beforeCursor && (input.cursor || input.tail)) {
+      throw new Error("Message backward cursor cannot be combined with cursor or tail mode");
+    }
+    if (input.tail || input.beforeCursor) {
+      const through = input.beforeCursor
+        ? decodeCursor(input.beforeCursor, input.roomId).sequence - 1
+        : this.repository.latestMessageSequence(input.roomId);
+      const rows = through <= 0
+        ? []
+        : this.repository.listMessagesThrough(input.roomId, through, limit + 1);
+      const items = rows.slice(-limit);
+      const first = items[0];
       return {
-        items: latest === 0
-          ? []
-          : this.repository.listMessagesThrough(input.roomId, latest, limit),
+        items,
         nextCursor: null,
-        syncCursor: encodeCursor({ roomId: input.roomId, sequence: latest })
+        olderCursor: rows.length > limit && first
+          ? encodeCursor({ roomId: input.roomId, sequence: first.sequence })
+          : null,
+        syncCursor: encodeCursor({ roomId: input.roomId, sequence: Math.max(0, through) })
       };
     }
     const after = input.cursor
@@ -226,6 +244,7 @@ export class MessageService {
       nextCursor: hasMore && last
         ? encodeCursor({ roomId: input.roomId, sequence: last.sequence })
         : null,
+      olderCursor: null,
       syncCursor: encodeCursor({
         roomId: input.roomId,
         sequence: last?.sequence ?? after

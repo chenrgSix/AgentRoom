@@ -133,6 +133,14 @@ export class RunService {
     return manifest;
   }
 
+  public getAmbiguityAcknowledgement(
+    principal: WebPrincipal,
+    runId: string
+  ): RunAmbiguityAcknowledgement | null {
+    this.get(principal, runId);
+    return this.runs.getAmbiguityAcknowledgement(runId) ?? null;
+  }
+
   public acknowledgeAmbiguity(
     principal: WebPrincipal,
     runId: string,

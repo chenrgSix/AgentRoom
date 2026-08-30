@@ -110,6 +110,14 @@ test("Run retry creates new lineage only after audited ambiguity acknowledgement
     assert.equal(runDetail.statusCode, 200);
     assert.equal(runDetail.json().taskId, task.taskId);
     assert.equal(runDetail.json().instruction, "Perform the bounded attempt.");
+    const initialAmbiguity = await app.inject({
+      method: "GET",
+      url: `/api/runs/${firstRun.runId as string}/ambiguity-acknowledgement`,
+      headers: { authorization }
+    });
+    assert.equal(initialAmbiguity.statusCode, 200);
+    assert.deepEqual(initialAmbiguity.json(), { acknowledgement: null });
+    assert.equal(initialAmbiguity.headers["cache-control"], "no-store");
 
     const outsiderBootstrap = await app.inject({
       method: "POST",
@@ -133,6 +141,17 @@ test("Run retry creates new lineage only after audited ambiguity acknowledgement
       headers: { authorization: outsiderAuthorization }
     });
     assert.equal(hiddenRunDetail.statusCode, 403);
+    const hiddenAcknowledgement = await app.inject({
+      method: "GET",
+      url: `/api/runs/${firstRun.runId as string}/ambiguity-acknowledgement`,
+      headers: { authorization: outsiderAuthorization }
+    });
+    assert.equal(hiddenAcknowledgement.statusCode, 403);
+    const anonymousAcknowledgement = await app.inject({
+      method: "GET",
+      url: `/api/runs/${firstRun.runId as string}/ambiguity-acknowledgement`
+    });
+    assert.equal(anonymousAcknowledgement.statusCode, 401);
 
     const firstManifestResponse = await app.inject({
       method: "GET",
@@ -247,6 +266,14 @@ test("Run retry creates new lineage only after audited ambiguity acknowledgement
     assert.equal(acknowledged.statusCode, 200);
     assert.equal(acknowledged.json().taskRevisionBefore, 3);
     assert.equal(acknowledged.json().taskRevisionAfter, 4);
+    const storedAcknowledgement = await app.inject({
+      method: "GET",
+      url: `/api/runs/${firstRun.runId as string}/ambiguity-acknowledgement`,
+      headers: { authorization }
+    });
+    assert.deepEqual(storedAcknowledgement.json(), {
+      acknowledgement: acknowledged.json()
+    });
     const acknowledgementReplay = await app.inject({
       method: "POST",
       url: `/api/runs/${firstRun.runId as string}/ambiguity-acknowledgement`,

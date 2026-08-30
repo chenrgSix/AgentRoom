@@ -74,6 +74,12 @@ in an audited request before another Run may start or the Task may become
 terminal. The acknowledgement preserves `outcome_unknown` and never asserts
 whether an external side effect occurred.
 
+`GET /api/runs/:runId/ambiguity-acknowledgement` authorizes current Room
+membership and returns `{ acknowledgement: record | null }` with `no-store`.
+It reads the exact Run, not the Task's highest-priority attention summary. The
+Web uses this additive read to explain a prior confirmation after refresh;
+only the existing authorized POST operations acknowledge or create a new Run.
+
 ADR-0026 applies the same rule to a Hosted provider call. Once its durable
 intent crosses to `dispatching`, a process restart or lost provider outcome is
 ambiguous even when the provider has no tools: blindly retrying could duplicate

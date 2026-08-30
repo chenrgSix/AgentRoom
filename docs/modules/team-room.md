@@ -85,6 +85,17 @@ client's newer roster or policy. Depth is always persisted in the range 1
 through 4, including while Agent handoffs are disabled, so re-enabling the
 capability restores the chosen bound.
 
+## Historical Message Reads
+
+`GET /api/rooms/:roomId/messages` retains its forward `cursor` and `tail=true`
+semantics. An additive `beforeCursor` returns up to 100 earlier Messages in
+ascending sequence order, excluding the cursor boundary. Tail and backward
+pages expose `olderCursor` only when earlier rows remain. The cursor is opaque,
+Room-bound and mutually exclusive with forward/tail modes. Current Room
+membership is checked on every page. A historical page never changes the Web's
+separate live `syncCursor`; the browser merges immutable IDs and preserves the
+reader's scroll anchor.
+
 ## Message Write Flow
 
 1. Authenticate the actor and authorize Room membership.

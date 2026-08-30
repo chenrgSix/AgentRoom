@@ -1,5 +1,6 @@
 import {
   bodyObject,
+  noStore,
   requiredPositiveInteger,
   requiredString
 } from "./http-helpers.js";
@@ -62,6 +63,17 @@ export function registerRunRoutes({
       principal(request),
       request.params.runId
     )
+  );
+  app.get<{ Params: { runId: string } }>(
+    "/api/runs/:runId/ambiguity-acknowledgement",
+    async (request, reply) => {
+      noStore(reply);
+      return {
+        acknowledgement: runs.getAmbiguityAcknowledgement(
+          principal(request), request.params.runId
+        )
+      };
+    }
   );
   app.post<{ Params: { runId: string } }>(
     "/api/runs/:runId/ambiguity-acknowledgement",
