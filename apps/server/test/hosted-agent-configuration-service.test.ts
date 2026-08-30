@@ -175,6 +175,22 @@ test("Hosted Agent configuration is explicit, encrypted, revisioned, and recover
       () => context.repository.resolveExecutionProfile(created.agentId),
       /credential is unavailable/u
     );
+
+    const restored = await context.service.updateProfile(context.principal, {
+      agentId: created.agentId,
+      expectedProfileRevision: 2,
+      model: "gpt-5.4-mini",
+      apiKey: "sk-restored-hosted-secret",
+      now: "2026-08-30T03:03:00.000Z"
+    });
+    assert.equal(restored.profileRevision, 3);
+    assert.equal(restored.credentialRevoked, false);
+    assert.equal(restored.presence, "ready");
+    assert.equal(
+      context.repository.resolveExecutionProfile(created.agentId).apiKey,
+      "sk-restored-hosted-secret"
+    );
+    assert.equal(context.calls.length, 3);
   } finally {
     context.database.close();
   }

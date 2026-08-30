@@ -266,13 +266,19 @@ export class HostedAgentConfigurationService {
       input.expectedProfileRevision
     );
     const model = normalizedModel(input.model);
-    const current = this.repository.resolveExecutionProfile(agent.agentId);
+    const currentProfile = this.repository.getCurrentProfile(agent.agentId);
+    if (!currentProfile) {
+      throw new Error("Hosted Agent Runtime Profile is unavailable");
+    }
+    const currentExecution = input.apiKey === undefined
+      ? this.repository.resolveExecutionProfile(agent.agentId)
+      : undefined;
     let apiKey = input.apiKey === undefined
-      ? current.apiKey
+      ? currentExecution!.apiKey
       : validatedApiKey(input.apiKey);
     try {
       const test = await this.safeProbe({
-        provider: current.provider,
+        provider: currentProfile.provider,
         model,
         apiKey
       });
@@ -282,7 +288,7 @@ export class HostedAgentConfigurationService {
       this.transactions.immediate(() => {
         const actor = this.requireOwner(principal, agent.teamId);
         const credentialVersion = input.apiKey === undefined
-          ? current.credentialVersion
+          ? currentProfile.credentialVersion
           : this.repository.createCredential({
               agentId: agent.agentId,
               teamId: agent.teamId,
@@ -293,7 +299,7 @@ export class HostedAgentConfigurationService {
         const profile = this.repository.createProfile({
           agentId: agent.agentId,
           teamId: agent.teamId,
-          provider: current.provider,
+          provider: currentProfile.provider,
           model,
           credentialVersion,
           createdByMemberId: actor.memberId,
@@ -319,7 +325,7 @@ export class HostedAgentConfigurationService {
         );
       });
     } finally {
-      current.apiKey = "";
+      if (currentExecution) currentExecution.apiKey = "";
       apiKey = "";
     }
     return this.configuration(agent.teamId, agent.agentId);
