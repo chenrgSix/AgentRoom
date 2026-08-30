@@ -252,6 +252,7 @@ function baseFetch(activeResult: () => ResultProjection = () => result) {
     if (path === "/api/runs/run_detail_0002/context-manifest") {
       return json({ ...manifest, workspacePath: "/Users/alice/private" });
     }
+    if (path === "/api/runs/run_detail_0002/ambiguity-acknowledgement") return json({ acknowledgement: null });
     throw new Error(`Unexpected request: ${path}`);
   };
 }
@@ -408,4 +409,436 @@ test("Task detail remains single-column and horizontally bounded on narrow scree
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.work-overview-grid, \.work-run-layout \{ grid-template-columns: minmax\(0, 1fr\); \}/u);
   assert.match(css, /\.work-tabs \{[^}]*overflow-x: auto/u);
   assert.doesNotMatch(css, /\.work-detail[^}]*min-width:\s*[4-9]\d\dpx/u);
+});
+
+test("unknown outcome acknowledgement and retry remain separate, fenced, explicit actions", async () => {
+  const dom = installDom();
+  const fallback = baseFetch();
+  let activeTask = structuredClone(task);
+  let acknowledgement: { runId: string; reason: string; taskRevisionAfter: number } | null = null;
+  const acknowledgements: Array<Record<string, unknown>> = [];
+  const retries: Array<Record<string, unknown>> = [];
+  const acknowledgementPath = "/api/runs/run_detail_0002/ambiguity-acknowledgement";
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    if (path === `/api/tasks/${task.taskId}`) return json(activeTask);
+    if (path === acknowledgementPath && init?.method === "POST") {
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      acknowledgements.push(body);
+      acknowledgement = { runId: "run_detail_0002", reason: String(body.reason), taskRevisionAfter: 5 };
+      activeTask = { ...activeTask, taskRevision: 5 };
+      return json(acknowledgement);
+    }
+    if (path === acknowledgementPath) return json({ acknowledgement });
+    if (path === "/api/runs/run_detail_0002/retry") {
+      retries.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      if (retries.length === 1) {
+        activeTask = { ...activeTask, taskRevision: 6, budgetUsage: { ...activeTask.budgetUsage, runAttempts: 5 } };
+        return json({ error: { message: "Response lost" } }, 503);
+      }
+      return json({ runId: "run_detail_0003" });
+    }
+    return fallback(input);
+  };
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<TaskWorkDetail {...detailProps()} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    const reason = await page.findByRole("textbox", { name: "Observed outcome and acknowledgement reason" });
+    assert.equal((page.getByRole("button", { name: "Start new attempt" }) as HTMLButtonElement).disabled, true);
+    assert.equal((page.getByRole("button", { name: "Record acknowledgement" }) as HTMLButtonElement).disabled, true);
+    fireEvent.change(reason, { target: { value: "Checked the remote operation; no duplicate side effect." } });
+    fireEvent.click(page.getByRole("checkbox", { name: "I have checked the evidence and external effects." }));
+    fireEvent.click(page.getByRole("button", { name: "Record acknowledgement" }));
+    await page.findByText(/Acknowledgement recorded:/u);
+    assert.equal(acknowledgements.length, 1);
+    assert.equal(acknowledgements[0]?.expectedTaskRevision, 4);
+    assert.equal(retries.length, 0, "acknowledgement must never dispatch a retry");
+    fireEvent.click(page.getByRole("checkbox", { name: "I explicitly authorize one new execution attempt." }));
+    fireEvent.click(page.getByRole("button", { name: "Start new attempt" }));
+    await page.findByText(/The operation is not confirmed/u);
+    await waitFor(() => assert.equal((page.getByRole("button", { name: "Check previous new attempt" }) as HTMLButtonElement).disabled, false));
+    fireEvent.click(page.getByRole("tab", { name: "Overview" }));
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    await page.findByRole("button", { name: "Check previous new attempt" });
+    fireEvent.click(page.getByRole("checkbox", { name: "I explicitly authorize one new execution attempt." }));
+    fireEvent.click(page.getByRole("button", { name: "Check previous new attempt" }));
+    await waitFor(() => assert.equal(retries.length, 2));
+    assert.deepEqual(retries[0], retries[1], "uncertain retry preserves the exact operation and original revision across tabs");
+    assert.equal(retries[0]?.expectedTaskRevision, 5);
+    assert.notEqual(retries[0]?.operationId, acknowledgements[0]?.operationId);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("unknown Run controls fail closed when its exact acknowledgement cannot be read", async () => {
+  const dom = installDom();
+  const fallback = baseFetch();
+  let writes = 0;
+  globalThis.fetch = async (input, init) => {
+    if (init?.method === "POST") writes += 1;
+    if (String(input).endsWith("/ambiguity-acknowledgement")) return json({ error: { message: "Unavailable" } }, 503);
+    return fallback(input);
+  };
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  try {
+    render(<TaskWorkDetail {...detailProps()} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    await page.findByText(/Could not verify this attempt/u);
+    assert.equal((page.getByRole("button", { name: "Start new attempt" }) as HTMLButtonElement).disabled, true);
+    assert.equal(page.queryByRole("button", { name: "Record acknowledgement" }), null);
+    assert.equal(writes, 0);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("an unconfirmed acknowledgement retains its original payload across tabs", async () => {
+  const dom = installDom();
+  const fallback = baseFetch();
+  const writes: Array<Record<string, unknown>> = [];
+  let acknowledgement: { runId: string; reason: string; taskRevisionAfter: number } | null = null;
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    if (path.endsWith("/ambiguity-acknowledgement")) {
+      if (init?.method !== "POST") return json({ acknowledgement });
+      const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+      writes.push(body);
+      if (writes.length === 1) return json({ error: { message: "Response unavailable" } }, 503);
+      acknowledgement = { runId: "run_detail_0002", reason: String(body.reason), taskRevisionAfter: 5 };
+      return json(acknowledgement);
+    }
+    return fallback(input);
+  };
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<TaskWorkDetail {...detailProps()} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    fireEvent.change(await page.findByRole("textbox", { name: "Observed outcome and acknowledgement reason" }), { target: { value: "Manually checked the external outcome." } });
+    fireEvent.click(page.getByRole("checkbox", { name: "I have checked the evidence and external effects." }));
+    fireEvent.click(page.getByRole("button", { name: "Record acknowledgement" }));
+    await page.findByText(/The operation is not confirmed/u);
+    await page.findByRole("button", { name: "Check previous acknowledgement" });
+    fireEvent.click(page.getByRole("tab", { name: "Overview" }));
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    const field = await page.findByRole("textbox", { name: "Observed outcome and acknowledgement reason" }) as HTMLTextAreaElement;
+    assert.equal(field.value, "Manually checked the external outcome.");
+    assert.equal(field.disabled, true, "an uncertain command must not silently change its evidence");
+    fireEvent.click(page.getByRole("checkbox", { name: "I have checked the evidence and external effects." }));
+    fireEvent.click(page.getByRole("button", { name: "Check previous acknowledgement" }));
+    await waitFor(() => assert.equal(writes.length, 2));
+    assert.deepEqual(writes[0], writes[1]);
+    await page.findByText(/Acknowledgement recorded:/u);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("an already acknowledged outcome can be recovered after a fresh page load", async () => {
+  const dom = installDom();
+  const fallback = baseFetch();
+  globalThis.fetch = async (input) => {
+    if (String(input).endsWith("/ambiguity-acknowledgement")) return json({
+      acknowledgement: { runId: "run_detail_0002", reason: "Checked earlier by the Owner.", taskRevisionAfter: 5 }
+    });
+    return fallback(input);
+  };
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  try {
+    render(<TaskWorkDetail {...detailProps()} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    await page.findByText(/Acknowledgement recorded: Checked earlier/u);
+    assert.equal(page.queryByRole("button", { name: "Record acknowledgement" }), null);
+    fireEvent.click(page.getByRole("checkbox", { name: "I explicitly authorize one new execution attempt." }));
+    assert.equal((page.getByRole("button", { name: "Start new attempt" }) as HTMLButtonElement).disabled, false);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("an uncertain retry survives closing details and reuses its receipt after a fresh page", async () => {
+  let dom = installDom();
+  const fallback = baseFetch();
+  const writes: Array<Record<string, unknown>> = [];
+  const committed = new Map<string, string>();
+  let activeTask = structuredClone(task);
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    if (path === `/api/tasks/${task.taskId}`) return json(activeTask);
+    if (path.endsWith("/ambiguity-acknowledgement")) return json({ acknowledgement: {
+      runId: "run_detail_0002", reason: "Checked external effects earlier.", taskRevisionAfter: 4
+    } });
+    if (path === "/api/runs/run_detail_0002/retry") {
+      const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
+      writes.push(body);
+      if (!committed.has(String(body.operationId))) committed.set(String(body.operationId), "run_recovered_0003");
+      if (writes.length === 1) {
+        activeTask = { ...activeTask, taskRevision: 5 };
+        throw new Error("Response lost after the retry was committed");
+      }
+      return json({ runId: committed.get(String(body.operationId)) });
+    }
+    return fallback(input);
+  };
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    const first = render(<TaskWorkDetail {...detailProps()} />);
+    let page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    await page.findByText(/Acknowledgement recorded:/u);
+    fireEvent.click(page.getByRole("checkbox", { name: "I explicitly authorize one new execution attempt." }));
+    fireEvent.click(page.getByRole("button", { name: "Start new attempt" }));
+    await page.findByText(/The operation is not confirmed/u);
+    await waitFor(() => assert.equal((page.getByRole("button", { name: "Check previous new attempt" }) as HTMLButtonElement).disabled, false));
+    const saved = Array.from({ length: dom.window.sessionStorage.length }, (_, index) => {
+      const key = dom.window.sessionStorage.key(index)!;
+      return [key, dom.window.sessionStorage.getItem(key)!] as const;
+    });
+    assert.equal(saved.length, 1);
+    first.unmount();
+    dom.window.close();
+    dom = installDom();
+    for (const [key, value] of saved) dom.window.sessionStorage.setItem(key, value);
+    render(<TaskWorkDetail {...detailProps()} />);
+    page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    await page.findByText(/Acknowledgement recorded:/u);
+    const retry = await page.findByRole("button", { name: "Check previous new attempt" });
+    fireEvent.click(page.getByRole("checkbox", { name: "I explicitly authorize one new execution attempt." }));
+    fireEvent.click(retry);
+    await waitFor(() => assert.equal(writes.length, 2));
+    assert.deepEqual(writes[0], writes[1]);
+    assert.equal(writes[1]?.expectedTaskRevision, 4, "replay keeps the revision authorized before response loss");
+    assert.equal(committed.size, 1, "reopening the page must not create another retry operation");
+    await waitFor(() => assert.equal(dom.window.sessionStorage.length, 0));
+  } finally { cleanup(); dom.window.close(); }
+});
+
+test("recovery mutations fail closed when session storage cannot read or persist receipts", async () => {
+  for (const failure of ["read", "write", "silent-write"] as const) {
+    const dom = installDom();
+    const fallback = baseFetch();
+    let writes = 0;
+    globalThis.fetch = async (input, init) => {
+      if (init?.method === "POST") writes += 1;
+      const response = await fallback(input);
+      if (String(input).endsWith("/runs")) {
+        const runs = await response.json() as Array<Record<string, unknown>>;
+        return json(runs.map((run) => ({ ...run, state: "failed" })));
+      }
+      return response;
+    };
+    const browserStorage = dom.window.sessionStorage;
+    Object.defineProperty(dom.window, "sessionStorage", { configurable: true, value: {
+      getItem: (key: string) => {
+        if (failure === "read") throw new Error("Storage unavailable");
+        return browserStorage.getItem(key);
+      },
+      setItem: () => { if (failure === "write") throw new Error("Storage full"); },
+      removeItem: (key: string) => browserStorage.removeItem(key)
+    } });
+    const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+    try {
+      render(<TaskWorkDetail {...detailProps()} />);
+      const page = within(dom.window.document.body);
+      await page.findByRole("heading", { name: task.title });
+      fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+      await page.findByText("<script>alert('event')</script>");
+      fireEvent.click(page.getByRole("checkbox", { name: "I explicitly authorize one new execution attempt." }));
+      fireEvent.click(page.getByRole("button", { name: "Start new attempt" }));
+      await page.findByText(/The browser cannot safely read or save recovery receipts/u);
+      assert.equal((page.getByRole("button", { name: "Start new attempt" }) as HTMLButtonElement).disabled, true);
+      assert.equal(writes, 0, `${failure} must block before an external mutation`);
+    } finally { cleanup(); dom.window.close(); }
+  }
+});
+
+test("switching Runs clears previous evidence immediately and blocks recovery on loading or failure", async () => {
+  const dom = installDom();
+  const fallback = baseFetch();
+  const pending: Array<(response: Response) => void> = [];
+  let writes = 0;
+  globalThis.fetch = async (input, init) => {
+    const path = String(input);
+    if (init?.method === "POST") writes += 1;
+    if (path === `/api/tasks/${task.taskId}/runs`) {
+      const runs = await (await fallback(input)).json() as Array<Record<string, unknown>>;
+      return json([{ ...runs[0], runId: "run_detail_0001", attemptNumber: 1, state: "failed" }, ...runs]);
+    }
+    if (path === "/api/runs/run_detail_0001/events?after=0") return json([{ sequence: 1, createdAt: task.updatedAt, event: { type: "reply", content: "Evidence for Run A only" } }]);
+    if (path === "/api/runs/run_detail_0001/context-manifest") return json({ ...manifest, runId: "run_detail_0001", goal: "Context for Run A only" });
+    if (path === "/api/runs/run_detail_0002/events?after=0") return new Promise<Response>((resolve) => pending.push(resolve));
+    return fallback(input);
+  };
+  const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<TaskWorkDetail {...detailProps()} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    fireEvent.click(page.getByRole("button", { name: /Attempt 1/u }));
+    await page.findByText("Evidence for Run A only");
+    assert.ok(page.getByText("Context for Run A only"));
+    fireEvent.click(page.getByRole("button", { name: /Attempt 2/u }));
+    assert.ok(page.queryByText("Evidence for Run A only") === null);
+    assert.ok(page.queryByText("Context for Run A only") === null);
+    await page.findByRole("textbox", { name: "Observed outcome and acknowledgement reason" });
+    assert.ok(page.getByText("Loading evidence for this attempt…"));
+    assert.equal((page.getByRole("button", { name: "Record acknowledgement" }) as HTMLButtonElement).disabled, true);
+    assert.equal((page.getByRole("checkbox", { name: "I have checked the evidence and external effects." }) as HTMLInputElement).disabled, true);
+    await act(async () => { for (const resolve of pending.splice(0)) resolve(json({ error: { message: "Run B evidence unavailable" } }, 503)); });
+    await page.findByRole("button", { name: "Reload attempt evidence" });
+    assert.ok(page.queryByText("Evidence for Run A only") === null);
+    assert.equal((page.getByRole("button", { name: "Record acknowledgement" }) as HTMLButtonElement).disabled, true);
+    fireEvent.click(page.getByRole("button", { name: "Reload attempt evidence" }));
+    await waitFor(() => assert.equal(pending.length, 1));
+    fireEvent.click(page.getByRole("button", { name: /Attempt 1/u }));
+    await page.findByText("Evidence for Run A only");
+    await act(async () => { pending[0]!(json([{ sequence: 1, createdAt: task.updatedAt, event: { type: "reply", content: "Late evidence for Run B" } }])); });
+    assert.ok(page.queryByText("Late evidence for Run B") === null);
+    assert.ok(page.getByText("Evidence for Run A only"));
+    assert.equal(writes, 0);
+  } finally { cleanup(); dom.window.close(); }
+});
+
+test("recovery distinguishes an absent legacy manifest from an unavailable or mismatched manifest", async () => {
+  for (const mode of ["absent", "unavailable", "mismatched"] as const) {
+    const dom = installDom();
+    const fallback = baseFetch();
+    globalThis.fetch = async (input) => {
+      if (String(input).endsWith("/context-manifest")) {
+        return mode === "mismatched" ? json({ ...manifest, runId: "run_other_0001" }) : json({ error: {
+          message: mode === "absent" ? "Run Context Manifest was not recorded" : "Manifest request unavailable"
+        } }, mode === "absent" ? 400 : 503);
+      }
+      return fallback(input);
+    };
+    const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+    try {
+      render(<TaskWorkDetail {...detailProps()} />);
+      const page = within(dom.window.document.body);
+      await page.findByRole("heading", { name: task.title });
+      fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+      const checkbox = await page.findByRole("checkbox", { name: "I have checked the evidence and external effects." }) as HTMLInputElement;
+      if (mode === "absent") {
+        await waitFor(() => assert.equal(checkbox.disabled, false));
+        assert.ok(page.getByText("No context manifest was recorded for this Run."));
+      } else {
+        await page.findByRole("button", { name: "Reload attempt evidence" });
+        assert.equal(checkbox.disabled, true);
+        assert.ok(page.queryByText("<script>alert('event')</script>") === null);
+      }
+    } finally { cleanup(); dom.window.close(); }
+  }
+});
+
+test("a new retry is blocked by exhausted budgets and completed attempts cannot be retried", async () => {
+  for (const state of ["failed", "completed"]) {
+    const dom = installDom();
+    const fallback = baseFetch();
+    let writes = 0;
+    globalThis.fetch = async (input, init) => {
+      if (init?.method === "POST") writes += 1;
+      if (String(input) === `/api/tasks/${task.taskId}`) return json({
+        ...task, budgetUsage: { ...task.budgetUsage, runAttempts: task.budgetPolicy.maxRunAttempts }
+      });
+      const response = await fallback(input);
+      if (String(input).endsWith("/runs")) {
+        const runs = await response.json() as Array<Record<string, unknown>>;
+        return json(runs.map((run) => ({ ...run, state })));
+      }
+      return response;
+    };
+    const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+    try {
+      render(<TaskWorkDetail {...detailProps()} />);
+      const page = within(dom.window.document.body);
+      await page.findByRole("heading", { name: task.title });
+      fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+      if (state === "failed") {
+        assert.equal((page.getByRole("button", { name: "Start new attempt" }) as HTMLButtonElement).disabled, true);
+        assert.ok(page.getByText(/The execution budget is exhausted/u));
+      } else {
+        assert.equal(page.queryByRole("button", { name: "Start new attempt" }), null);
+      }
+      assert.equal(writes, 0);
+    } finally {
+      cleanup();
+      dom.window.close();
+    }
+  }
+});
+
+test("members without Task ownership cannot acknowledge or retry a Run", async () => {
+  const dom = installDom();
+  globalThis.fetch = baseFetch();
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  try {
+    render(<TaskWorkDetail {...detailProps({ ...owner, role: "member", memberId: "member_observer_0001" })} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
+    await page.findByText(/Only the Task Owner or Team Owner can/u);
+    assert.equal(page.queryByRole("button", { name: "Start new attempt" }), null);
+    assert.equal(page.queryByRole("button", { name: "Record acknowledgement" }), null);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("Result evidence opens the authorized verified Artifact as text and rejects mismatched previews", async () => {
+  const dom = installDom();
+  const fallback = baseFetch();
+  let mismatch = false;
+  const paths: string[] = [];
+  globalThis.fetch = async (input) => {
+    const path = String(input);
+    if (path.endsWith("/preview")) {
+      paths.push(path);
+      return json({
+        artifactId: "artifact_detail_0001", artifactRevision: 1,
+        taskId: mismatch ? "task_other_0001" : task.taskId,
+        type: "test_result", title: "Focused test evidence", summary: "Verified evidence",
+        mediaType: "text/markdown", sha256: "a".repeat(64), sizeBytes: 100,
+        integrity: "verified", trust: "untrusted", text: "<script>untrusted evidence</script>", truncated: false
+      });
+    }
+    return fallback(input);
+  };
+  const { cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+  try {
+    render(<TaskWorkDetail {...detailProps()} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Results" }));
+    fireEvent.click(page.getByRole("button", { name: "Inspect evidence" }));
+    const preview = await page.findByRole("region", { name: "Artifact content preview" });
+    assert.equal(preview.querySelector("pre > code")?.textContent, "<script>untrusted evidence</script>");
+    assert.equal(dom.window.document.querySelector("script"), null);
+    assert.deepEqual(paths, [`/api/tasks/${task.taskId}/artifacts/artifact_detail_0001/preview`]);
+    fireEvent.click(page.getByRole("button", { name: "Close" }));
+    mismatch = true;
+    fireEvent.click(page.getByRole("button", { name: "Inspect evidence" }));
+    await page.findByText(/Artifact identity or integrity does not match/u);
+    await waitFor(() => assert.equal(page.queryByRole("region", { name: "Artifact content preview" }), null));
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
 });

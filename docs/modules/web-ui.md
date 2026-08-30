@@ -46,6 +46,16 @@ Run ambiguity is read from the exact Run record; acknowledgement and retry stay
 separate authorized actions. Evidence review reuses the verified Artifact preview.
 Workbench filters/cursors and backward Room history remain Server-authorized;
 history loading neither advances live sync nor replaces a newer navigation.
+Loaded Room pages remain available until leaving that Room; refreshing Work
+preserves the loaded page window and waits for an in-flight load-more request.
+Protected response generation checks reject stale successes as well as 401s,
+so switching identities cannot restore an old Team or credential output.
+Uncertain Run recovery commands keep exact identity-bound receipts in this
+tab's session storage across detail navigation/reload. Storage failure blocks
+new submission; receipts never replace server authorization or revision checks.
+Attempt changes synchronously hide old evidence and disable recovery until the
+selected attempt's evidence loads. Task creation supports optional criteria,
+bounded dialog scrolling, contained Tab navigation and Escape/focus restoration.
 
 ## Primary Surfaces
 

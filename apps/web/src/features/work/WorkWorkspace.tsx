@@ -10,12 +10,19 @@ interface WorkWorkspaceProps {
   error: string | null;
   items: WorkbenchItem[];
   loading: boolean;
+  loadingMore?: boolean;
+  hasMore?: boolean;
+  lifecycleState?: string;
   locale: Locale;
   memberNames: ReadonlyMap<string, string>;
   onOpenTask: (taskId: string, roomId: string) => void;
+  onLoadMore?: () => void;
+  onLifecycleStateChange?: (value: string) => void;
+  onOwnerMemberIdChange?: (value: string) => void;
   onRefresh: () => void;
   onScopeChange: (scope: "mine" | "team") => void;
   roomNames: ReadonlyMap<string, string>;
+  ownerMemberId?: string;
   scope: "mine" | "team";
 }
 
@@ -173,12 +180,19 @@ export function WorkWorkspace({
   error,
   items,
   loading,
+  loadingMore = false,
+  hasMore = false,
+  lifecycleState = "",
   locale,
   memberNames,
   onOpenTask,
+  onLoadMore,
+  onLifecycleStateChange,
+  onOwnerMemberIdChange,
   onRefresh,
   onScopeChange,
   roomNames,
+  ownerMemberId = "",
   scope
 }: WorkWorkspaceProps) {
   const groups: Array<{ key: GroupKey; title: string }> = [
@@ -213,8 +227,19 @@ export function WorkWorkspace({
           </button>
         </div>
       </header>
+      {(onLifecycleStateChange || onOwnerMemberIdChange) && <div className="work-filters" aria-label={locale === "zh-CN" ? "筛选工作" : "Filter work"}>
+        {onLifecycleStateChange && <label>{locale === "zh-CN" ? "任务状态" : "Task state"}<select onChange={(event) => onLifecycleStateChange(event.target.value)} value={lifecycleState}>
+          <option value="">{locale === "zh-CN" ? "全部状态" : "All states"}</option>
+          {["draft", "ready", "active", "review", "completed", "canceled"].map((state) => <option key={state} value={state}>{label(state, locale)}</option>)}
+        </select></label>}
+        {onOwnerMemberIdChange && <label>{locale === "zh-CN" ? "负责人" : "Owner"}<select onChange={(event) => onOwnerMemberIdChange(event.target.value)} value={ownerMemberId}>
+          <option value="">{locale === "zh-CN" ? "全部负责人" : "All owners"}</option>
+          {[...memberNames].map(([memberId, name]) => <option key={memberId} value={memberId}>{name}</option>)}
+        </select></label>}
+        {(lifecycleState || ownerMemberId) && <button className="work-inline-link" onClick={() => { onLifecycleStateChange?.(""); onOwnerMemberIdChange?.(""); }} type="button">{locale === "zh-CN" ? "清除筛选" : "Clear filters"}</button>}
+      </div>}
       {error && <p className="work-error" role="alert">{error}</p>}
-      {!loading && items.length === 0 ? (
+      {!loading && !error && items.length === 0 ? (
         <div className="work-empty">
           <span>✓</span>
           <strong>{locale === "zh-CN" ? "当前范围没有工作项" : "No work items in this scope"}</strong>
@@ -246,6 +271,11 @@ export function WorkWorkspace({
           })}
         </div>
       )}
+      {items.length > 0 && <footer className="work-pagination">
+        <p role="status">{locale === "zh-CN" ? `已加载 ${items.length} 项工作` : `${items.length} work items loaded`}</p>
+        {hasMore && onLoadMore && <button className="work-inline-link" disabled={loading || loadingMore} onClick={onLoadMore} type="button">{loadingMore ? (locale === "zh-CN" ? "加载中…" : "Loading…") : (locale === "zh-CN" ? "加载更多工作" : "Load more work")}</button>}
+        {!hasMore && !loading && <small>{locale === "zh-CN" ? "已显示当前筛选下的全部工作" : "All work matching the current filters is shown"}</small>}
+      </footer>}
     </section>
   );
 }

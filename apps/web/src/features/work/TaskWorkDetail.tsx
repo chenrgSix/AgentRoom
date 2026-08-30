@@ -16,11 +16,14 @@ import {
 import { jsonRequest } from "../../api-client.js";
 import type { Locale } from "../../i18n.js";
 import type {
+  ArtifactPreview,
   DiscussionView,
   Member,
   TaskArtifact,
   TaskArtifactPage
 } from "../../models.js";
+import { ArtifactPreviewPanel } from "../task/ArtifactPreviewPanel.js";
+import { RunRecoveryControls } from "./RunRecoveryControls.js";
 
 type Tab = "overview" | "runs" | "results" | "artifacts" | "discussion" | "audit";
 
@@ -63,6 +66,22 @@ interface DetailState {
   results: ResultProjection[];
   runs: DetailedRun[];
   task: TaskProjection;
+}
+
+interface RunEvidenceScope {
+  taskId: string;
+  runId: string | null;
+  memberId: string | null;
+  token: string | undefined;
+  lastSequence: number | undefined;
+}
+
+interface RunEvidence {
+  scope: RunEvidenceScope;
+  status: "loading" | "ready" | "failed";
+  events: DetailedRunEvent[];
+  manifest: RunContextManifest | null;
+  error: string | null;
 }
 
 interface TaskWorkDetailProps {
@@ -137,12 +156,29 @@ export function TaskWorkDetail({
   const [completeTask, setCompleteTask] = useState<Record<string, boolean>>({});
   const [followUpTitles, setFollowUpTitles] = useState<Record<string, string>>({});
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
-  const [runEvents, setRunEvents] = useState<DetailedRunEvent[]>([]);
-  const [runManifest, setRunManifest] = useState<RunContextManifest | null>(null);
-  const [runDetailError, setRunDetailError] = useState<string | null>(null);
+  const [runEvidence, setRunEvidence] = useState<RunEvidence | null>(null);
+  const [evidenceReloadKey, setEvidenceReloadKey] = useState(0);
+  const [artifactPreview, setArtifactPreview] = useState<ArtifactPreview | null>(null);
+  const [artifactPreviewBusyId, setArtifactPreviewBusyId] = useState<string | null>(null);
+  const [artifactPreviewError, setArtifactPreviewError] = useState<string | null>(null);
+  const [evidenceResultId, setEvidenceResultId] = useState<string | null>(null);
+  const [evidenceArtifactId, setEvidenceArtifactId] = useState<string | null>(null);
+  const previewRequestId = useRef(0);
   const operationIds = useRef(new Map<string, string>());
   const detailRequestId = useRef(0);
+  const activeTaskId = useRef(taskId);
+  activeTaskId.current = taskId;
   const lastRefreshKey = useRef(refreshKey);
+  const selectedRunSequence = detail?.runs.find(({ runId }) => runId === selectedRunId)?.lastSequence;
+  const evidenceScope = useMemo<RunEvidenceScope>(() => ({
+    taskId, runId: selectedRunId, memberId: currentMember?.memberId ?? null, token, lastSequence: selectedRunSequence
+  }), [currentMember?.memberId, selectedRunId, selectedRunSequence, taskId, token]);
+  // Render-time scope fencing prevents even one frame of the previous Run's evidence.
+  const currentEvidence = runEvidence?.scope === evidenceScope ? runEvidence : null;
+  const runEvents = currentEvidence?.status === "ready" ? currentEvidence.events : [];
+  const runManifest = currentEvidence?.status === "ready" ? currentEvidence.manifest : null;
+  const runDetailError = currentEvidence?.error ?? null;
+  const runDetailLoading = tab === "runs" && selectedRunId !== null && (!currentEvidence || currentEvidence.status === "loading");
 
   const operationIdFor = (key: string): string => {
     const existing = operationIds.current.get(key);
@@ -153,6 +189,7 @@ export function TaskWorkDetail({
   };
 
   const loadDetail = useCallback(async (clearError = true) => {
+    if (activeTaskId.current !== taskId) return;
     const requestId = ++detailRequestId.current;
     setLoading(true);
     if (clearError) setError(null);
@@ -164,7 +201,7 @@ export function TaskWorkDetail({
         jsonRequest<TaskArtifactPage>(`/api/tasks/${taskId}/artifacts`, {}, token),
         jsonRequest<DiscussionView[]>(`/api/rooms/${task.roomId}/discussions`, {}, token)
       ]);
-      if (requestId !== detailRequestId.current) return;
+      if (requestId !== detailRequestId.current || activeTaskId.current !== taskId) return;
       setDetail({
         artifacts: artifactPage.artifacts,
         discussions: roomDiscussions.filter(({ discussion }) => discussion.taskId === taskId),
@@ -188,6 +225,13 @@ export function TaskWorkDetail({
     setSelectedRunId(null);
     setCommandError(null);
     operationIds.current.clear();
+    setRunEvidence(null);
+    previewRequestId.current += 1;
+    setArtifactPreview(null);
+    setArtifactPreviewBusyId(null);
+    setArtifactPreviewError(null);
+    setEvidenceArtifactId(null);
+    setEvidenceResultId(null);
     lastRefreshKey.current = refreshKey;
     void loadDetail();
   }, [loadDetail, taskId]);
@@ -200,28 +244,33 @@ export function TaskWorkDetail({
 
   useEffect(() => {
     if (!selectedRunId || tab !== "runs") {
-      setRunEvents([]);
-      setRunManifest(null);
-      setRunDetailError(null);
+      setRunEvidence(null);
       return;
     }
     let stopped = false;
-    setRunDetailError(null);
+    setRunEvidence({ scope: evidenceScope, status: "loading", events: [], manifest: null, error: null });
     void Promise.all([
       jsonRequest<DetailedRunEvent[]>(`/api/runs/${selectedRunId}/events?after=0`, {}, token),
       jsonRequest<RunContextManifest>(`/api/runs/${selectedRunId}/context-manifest`, {}, token)
-        .catch(() => null)
+        .catch((reason: unknown) => {
+          if (reason instanceof Error && reason.message === "Run Context Manifest was not recorded") return null;
+          throw reason;
+        })
     ]).then(([events, manifest]) => {
       if (stopped) return;
-      setRunEvents([...events].sort((left, right) => left.sequence - right.sequence));
-      setRunManifest(manifest);
+      if (manifest && (manifest.runId !== selectedRunId || manifest.taskId !== taskId)) {
+        throw new Error(text("上下文清单与当前尝试不匹配，已拒绝显示。", "The context manifest does not match this attempt and was refused.", locale));
+      }
+      setRunEvidence({
+        scope: evidenceScope, status: "ready", events: [...events].sort((left, right) => left.sequence - right.sequence), manifest, error: null
+      });
     }).catch((reason: unknown) => {
-      if (!stopped) setRunDetailError(String(reason));
+      if (!stopped) setRunEvidence({ scope: evidenceScope, status: "failed", events: [], manifest: null, error: String(reason) });
     });
     return () => { stopped = true; };
-  }, [selectedRunId, tab, token]);
+  }, [evidenceReloadKey, evidenceScope, locale, selectedRunId, tab, taskId, token]);
 
-  const canReview = Boolean(currentMember && detail && (
+  const canReview = Boolean(currentMember && detail && currentMember.teamId === detail.task.teamId && (
     currentMember.role === "owner" || currentMember.memberId === detail.task.ownerMemberId
   ));
   const selectedRun = detail?.runs.find(({ runId }) => runId === selectedRunId) ?? null;
@@ -333,6 +382,36 @@ export function TaskWorkDetail({
     } finally {
       setBusyKey(null);
     }
+  }
+
+  async function previewArtifact(artifact: TaskArtifact) {
+    const requestId = ++previewRequestId.current;
+    setArtifactPreview(null);
+    setArtifactPreviewBusyId(artifact.artifactId);
+    setArtifactPreviewError(null);
+    try {
+      const preview = await jsonRequest<ArtifactPreview>(
+        `/api/tasks/${taskId}/artifacts/${artifact.artifactId}/preview`, {}, token
+      );
+      if (requestId !== previewRequestId.current || activeTaskId.current !== taskId) return;
+      if (preview.taskId !== taskId || preview.artifactId !== artifact.artifactId ||
+        preview.artifactRevision !== artifact.artifactRevision || preview.integrity !== "verified" ||
+        preview.trust !== "untrusted" || preview.sha256 !== artifact.contentSha256) {
+        throw new Error(text("成果身份或校验信息不匹配，已拒绝显示。", "Artifact identity or integrity does not match; preview was refused.", locale));
+      }
+      setArtifactPreview(preview);
+    } catch (reason) {
+      if (requestId === previewRequestId.current) setArtifactPreviewError(String(reason));
+    } finally {
+      if (requestId === previewRequestId.current) setArtifactPreviewBusyId(null);
+    }
+  }
+
+  function closePreview() {
+    previewRequestId.current += 1;
+    setArtifactPreview(null);
+    setArtifactPreviewBusyId(null);
+    setArtifactPreviewError(null);
   }
 
   if (loading && !detail) {
@@ -454,8 +533,25 @@ export function TaskWorkDetail({
                   ? text("无", "None", locale)
                   : linkedResults.map((result) => `v${result.resultVersion} (${display(result.state)})`).join(", ")}</p>
                 {linkedResults.length > 0 && <button className="work-inline-link" onClick={() => setTab("results")} type="button">{text("查看关联 Result", "View linked Results", locale)}</button>}
-                {selectedRun.state === "outcome_unknown" && <p className="work-warning">{text("结果未知：在确认外部副作用前不可安全重试。", "Outcome unknown: retry is unsafe until external side effects are acknowledged.", locale)}</p>}
-                {runDetailError && <p role="alert">{runDetailError}</p>}
+                <RunRecoveryControls
+                  canManage={canReview}
+                  evidenceReady={currentEvidence?.status === "ready"}
+                  key={selectedRun.runId}
+                  locale={locale}
+                  memberId={currentMember?.memberId ?? null}
+                  onChanged={async (newRunId) => {
+                    if (activeTaskId.current !== taskId) return;
+                    await loadDetail(false);
+                    if (activeTaskId.current !== taskId) return;
+                    if (newRunId) setSelectedRunId(newRunId);
+                    onChanged();
+                  }}
+                  run={selectedRun}
+                  task={task}
+                  token={token}
+                />
+                {runDetailLoading && <p role="status">{text("正在载入此尝试的证据…", "Loading evidence for this attempt…", locale)}</p>}
+                {runDetailError && <div><p role="alert">{runDetailError}</p><button className="work-inline-link" onClick={() => setEvidenceReloadKey((current) => current + 1)} type="button">{text("重新载入尝试证据", "Reload attempt evidence", locale)}</button></div>}
                 <section>
                   <h5>{text("上下文清单", "Context manifest", locale)}</h5>
                   {runManifest ? <>
@@ -492,7 +588,25 @@ export function TaskWorkDetail({
                 <h5>{text("标准声明", "Criterion claims", locale)}</h5>
                 <ul>{result.proposal.criterionClaims.map((claim) => <li key={claim.criterionKey}><strong>{display(claim.coverage)}</strong> — {claim.explanation}<small>{claim.evidenceRefIds.join(", ")}</small></li>)}</ul>
                 <h5>{text("证据来源", "Evidence sources", locale)}</h5>
-                <ul>{result.proposal.sources.map((source) => <li key={source.evidenceRefId}>{display(source.kind)} · {sourceIdentity(source)}</li>)}</ul>
+                <ul>{result.proposal.sources.map((source) => {
+                  const artifact = source.kind === "artifact" ? detail.artifacts.find(({ artifactId }) => artifactId === source.artifactId) : undefined;
+                  const sourceRun = source.kind === "run_event" ? detail.runs.find(({ runId }) => runId === source.runId) : undefined;
+                  return <li key={source.evidenceRefId}>
+                    {artifact ? <>
+                      <span>{artifact.title} · r{artifact.artifactRevision}</span>
+                      {artifact.contentMode === "snapshot_blob" ? <button className="work-inline-link" disabled={artifactPreviewBusyId !== null} onClick={() => { setEvidenceArtifactId(artifact.artifactId); setEvidenceResultId(result.resultId); void previewArtifact(artifact); }} type="button">{text("查看证据", "Inspect evidence", locale)}</button> : <small>{text("仅引用；没有可验证的内容快照。", "Reference only; no verifiable content snapshot.", locale)}</small>}
+                    </> : sourceRun ? <button className="work-inline-link" onClick={() => { setSelectedRunId(sourceRun.runId); setTab("runs"); }} type="button">{text("查看运行事件", "Inspect Run events", locale)} · #{source.sequence ?? "?"}</button> : <span>{display(source.kind)} · {sourceIdentity(source)}</span>}
+                  </li>;
+                })}</ul>
+                {evidenceResultId === result.resultId && <ArtifactPreviewPanel
+                  artifacts={detail.artifacts.filter(({ artifactId }) => artifactId === evidenceArtifactId)}
+                  busyId={artifactPreviewBusyId}
+                  error={artifactPreviewError}
+                  locale={locale}
+                  onClose={closePreview}
+                  onPreview={previewArtifact}
+                  preview={artifactPreview?.artifactId === evidenceArtifactId ? artifactPreview : null}
+                />}
                 {result.proposal.risks.length > 0 && <><h5>{text("风险", "Risks", locale)}</h5><ul>{result.proposal.risks.map((risk) => <li key={risk}>{risk}</li>)}</ul></>}
                 {result.proposal.openQuestions.length > 0 && <><h5>{text("开放问题", "Open questions", locale)}</h5><ul>{result.proposal.openQuestions.map((question) => <li key={question}>{question}</li>)}</ul></>}
                 {result.review && <p>{text("审核", "Review", locale)}: {display(result.review.decision)} · {result.review.reason}</p>}
@@ -517,7 +631,9 @@ export function TaskWorkDetail({
         )}
 
         {tab === "artifacts" && <div className="work-artifact-list">
-          {detail.artifacts.length === 0 ? <p>{text("尚无 Artifact", "No Artifacts yet", locale)}</p> : detail.artifacts.map((artifact) => <article key={artifact.artifactId}><strong>{artifact.title}</strong><span>{display(artifact.type)} · r{artifact.artifactRevision}</span><p>{artifact.summary}</p><small>{artifact.contentMode === "snapshot_blob" ? text("不可变快照", "Immutable snapshot", locale) : text("仅引用", "Reference only", locale)}</small></article>)}
+          {detail.artifacts.length === 0 && <p>{text("尚无 Artifact", "No Artifacts yet", locale)}</p>}
+          <ArtifactPreviewPanel artifacts={detail.artifacts} busyId={artifactPreviewBusyId} error={artifactPreviewError} locale={locale} onClose={closePreview} onPreview={(artifact) => { setEvidenceResultId(null); setEvidenceArtifactId(null); return previewArtifact(artifact); }} preview={artifactPreview} />
+          {detail.artifacts.filter(({ contentMode }) => contentMode !== "snapshot_blob").map((artifact) => <article key={artifact.artifactId}><strong>{artifact.title}</strong><span>{display(artifact.type)} · r{artifact.artifactRevision}</span><p>{artifact.summary}</p><small>{text("仅引用；没有可验证的内容快照。", "Reference only; no verifiable content snapshot.", locale)}</small></article>)}
         </div>}
 
         {tab === "discussion" && <div className="work-discussion-list">

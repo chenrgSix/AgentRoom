@@ -182,3 +182,41 @@ test("Work layout collapses to one card column on narrow screens", async () => {
   assert.match(css, /@media \(max-width: 760px\)[\s\S]*\.work-card-grid \{ grid-template-columns: minmax\(0, 1fr\); \}/u);
   assert.doesNotMatch(css, /\.work-card[^}]*min-width:\s*[4-9]\d\dpx/u);
 });
+
+test("work filters and pagination use explicit root callbacks and preserve authoritative rows", async () => {
+  const dom = installDom();
+  const states: string[] = [];
+  const owners: string[] = [];
+  let pages = 0;
+  const props = {
+    agentNames: new Map<string, string>(), error: null, items: [item()], loading: false,
+    locale: "en" as const, memberNames: new Map([["member_workbench_0001", "Alice"]]),
+    onOpenTask: () => undefined, onRefresh: () => undefined, onScopeChange: () => undefined,
+    roomNames: new Map<string, string>(), scope: "team" as const,
+    lifecycleState: "active", ownerMemberId: "member_workbench_0001", hasMore: true,
+    onLifecycleStateChange: (value: string) => states.push(value),
+    onOwnerMemberIdChange: (value: string) => owners.push(value), onLoadMore: () => { pages += 1; }
+  };
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  try {
+    const view = render(<WorkWorkspace {...props} />);
+    const page = within(dom.window.document.body);
+    fireEvent.change(page.getByRole("combobox", { name: "Task state" }), { target: { value: "completed" } });
+    fireEvent.change(page.getByRole("combobox", { name: "Owner" }), { target: { value: "" } });
+    assert.deepEqual(states, ["completed"]);
+    assert.deepEqual(owners, [""]);
+    assert.ok(page.getByText("Verify the Workbench"), "the component must not filter a partial page itself");
+    fireEvent.click(page.getByRole("button", { name: "Load more work" }));
+    assert.equal(pages, 1);
+    view.rerender(<WorkWorkspace {...props} loadingMore />);
+    assert.equal((page.getByRole("button", { name: "Loading…" }) as HTMLButtonElement).disabled, true);
+    view.rerender(<WorkWorkspace {...props} hasMore={false} />);
+    assert.equal(page.queryByRole("button", { name: "Load more work" }), null);
+    assert.ok(page.getByText("All work matching the current filters is shown"));
+    fireEvent.click(page.getByRole("button", { name: "Clear filters" }));
+    assert.deepEqual(states, ["completed", ""]);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});

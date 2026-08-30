@@ -33,6 +33,14 @@ reuses the authorized digest-verified text preview and never executes content.
 An additive authorized Run ambiguity read returns the exact durable
 acknowledgement or null. Explicit human acknowledgement and a new retry attempt
 remain separate revisioned/idempotent commands; no automatic retry is added.
+Before submitting either command, the Web records and verifies its exact
+operation identity and payload in this tab's session storage, bound to the
+Member, Team, Task and Run. Uncertain responses retain the receipt across detail
+navigation and reload; unavailable or corrupted storage blocks submission.
+Receipts are not credentials and do not grant authority. Closing the tab or
+clearing browser data is not a supported cross-browser recovery mechanism.
+Switching Runs immediately hides previous evidence, and recovery commands stay
+disabled until the selected attempt's own evidence is successfully loaded.
 
 ### Existing-member recovery
 
@@ -65,6 +73,11 @@ with forward sync or tail mode are rejected. Historical pages do not move the
 live synchronization checkpoint. Existing forward cursor and tail clients remain
 compatible. Web merges by immutable Message identity, preserves the reader's
 scroll position and drops responses from previous Room/session contexts.
+The current Room's explicitly loaded window is preserved until navigation;
+each backward request is bounded to 100 entries. Silent client-side trimming
+must not separate the visible first entry from the opaque older-page cursor.
+Every protected HTTP response, including a successful response, is fenced by
+the current Web session generation before it can update browser state.
 
 Workbench paging and filters consume the existing authorized Server projection.
 They do not fabricate counters, search hidden Rooms or assemble a parallel Task

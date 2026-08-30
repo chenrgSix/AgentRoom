@@ -1,0 +1,28 @@
+.work-filters, .work-pagination { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
+.work-filters label { display: grid; min-width: 150px; gap: 6px; color: #bac6ac; font-size: 12px; }
+.work-filters select { max-width: 240px; padding: 9px 11px; border: 1px solid #46523a; border-radius: 8px; background: #171d13; color: #e0e8d8; font: inherit; }
+.work-pagination { align-items: center; padding-top: 12px; color: #a3ae98; font-size: 12px; }
+.work-pagination p { margin: 0; }
+.work-inline-link:disabled { cursor: default; opacity: .5; }
+.work-recovery { display: grid; gap: 10px; }
+.work-recovery .work-review-controls { min-width: 0; }
+.work-recovery .work-review-controls label { font-size: 12px; line-height: 1.5; }
+.work-recovery .work-review-controls label:has(input) { display: flex; align-items: start; gap: 7px; }
+.work-recovery input[type="checkbox"] { flex: 0 0 auto; margin-top: 3px; }
+.work-recovery button { justify-self: start; }
+.work-result-card li .work-inline-link { display: inline-block; margin: 4px 0 4px 8px; }
+.task-delivery-options { display: grid; gap: 9px; margin: 8px 0; padding: 12px; border: 1px solid #3d4537; border-radius: 9px; }
+.task-delivery-options summary { cursor: pointer; color: #d2dfba; font-size: 12px; font-weight: 750; }
+.task-delivery-options p, .task-delivery-options small { display: block; color: #9ca98e; font-size: 12px; line-height: 1.55; }
+.task-delivery-options textarea { margin: 7px 0; }
+.task-criteria-templates { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0; }
+.task-criteria-templates button { padding: 7px 10px; border: 1px solid #46523a; border-radius: 7px; background: #20261c; color: #bfd27f; cursor: pointer; font: inherit; font-size: 12px; }
+:root[data-theme="light"] .work-filters label, :root[data-theme="light"] .work-pagination, :root[data-theme="light"] .task-delivery-options p, :root[data-theme="light"] .task-delivery-options small { color: #526443; }
+:root[data-theme="light"] .work-filters select, :root[data-theme="light"] .task-criteria-templates button { background: #f5f8ef; color: #354827; border-color: #bacba9; }
+:root[data-theme="light"] .task-delivery-options summary { color: #354827; }
+@media (max-width: 760px) {
+  .work-filters { align-items: stretch; }
+  .work-filters label { flex: 1 1 130px; min-width: 0; }
+  .work-filters select { width: 100%; max-width: none; }
+  .work-recovery .work-review-controls button { max-width: 100%; white-space: normal; }
+}
