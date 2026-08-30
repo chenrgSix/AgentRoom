@@ -19,11 +19,23 @@ const bridgeAgentStatuses = new Set<AgentRecord["presence"]>([
   "degraded"
 ]);
 
+export type HostedAgentAvailability = "ready" | "degraded";
+
+export interface HostedAgentPresenceSource {
+  getAvailability(agentId: string): HostedAgentAvailability | undefined;
+}
+
+const unavailableHostedAgents: HostedAgentPresenceSource = {
+  getAvailability: () => undefined
+};
+
 export class PresenceService {
   public constructor(
     private readonly repository: CoreRepository,
     private readonly auth: AuthService,
-    private readonly ttlMilliseconds = 30_000
+    private readonly ttlMilliseconds = 30_000,
+    private readonly hostedAgents: HostedAgentPresenceSource =
+      unavailableHostedAgents
   ) {}
 
   public recordHeartbeat(
@@ -166,7 +178,15 @@ export class PresenceService {
     const nowMilliseconds = Date.parse(now);
     return this.repository.listAgents(teamId).map((agent) => {
       let presence = agent.presence;
-      if (agent.integrationMode === "manual") {
+      if (agent.integrationMode === "hosted") {
+        if (!agent.enabled) {
+          presence = "offline";
+        } else if (presence !== "busy") {
+          presence = this.hostedAgents.getAvailability(agent.agentId) === "ready"
+            ? "ready"
+            : "degraded";
+        }
+      } else if (agent.integrationMode === "manual") {
         presence = "manual";
       } else if (!agent.deviceId) {
         presence = "offline";

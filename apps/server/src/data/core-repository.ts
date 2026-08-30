@@ -73,6 +73,10 @@ export interface AgentRuntimePolicy {
   filesystemAccess: "read-only" | "workspace-write" | "local-policy";
 }
 
+export interface CreateAgentOptions {
+  roomIds?: readonly string[];
+}
+
 export interface AgentRecord {
   agentId: string;
   teamId: string;
@@ -80,7 +84,7 @@ export interface AgentRecord {
   deviceId: string | null;
   name: string;
   role: string;
-  integrationMode: "managed" | "manual" | "fake";
+  integrationMode: "managed" | "manual" | "fake" | "hosted";
   capabilities: AgentCapabilities;
   runtimePolicy: AgentRuntimePolicy | null;
   runtimeScopeId?: string | null;
@@ -177,8 +181,11 @@ export class CoreRepository {
     this.agentsAndDevices.createDevice(device);
   }
 
-  public createAgent(agent: AgentRecord): void {
-    this.agentsAndDevices.createAgent(agent);
+  public createAgent(
+    agent: AgentRecord,
+    options?: CreateAgentOptions
+  ): void {
+    this.agentsAndDevices.createAgent(agent, options);
   }
 
   public updateAgentPublication(agent: AgentRecord): void {

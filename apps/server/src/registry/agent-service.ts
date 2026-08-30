@@ -18,12 +18,13 @@ export interface PublishAgentInput {
   deviceId: string | null;
   name: string;
   role: string;
-  integrationMode: "managed" | "manual" | "fake";
+  integrationMode: "managed" | "manual" | "fake" | "hosted";
   capabilities: AgentCapabilities;
   runtimePolicy?: AgentRuntimePolicy | null;
   runtimeScopeId?: string | null;
   workspaceRef?: string | null;
   workspaceGeneration?: string | null;
+  roomIds?: readonly string[];
   now: string;
 }
 
@@ -81,6 +82,38 @@ function validateCapabilities(input: PublishAgentInput): void {
   ) {
     throw new Error("Workspace snapshot identity is invalid");
   }
+  if (input.integrationMode === "hosted") {
+    if (
+      input.deviceId !== null ||
+      input.runtimePolicy != null ||
+      input.runtimeScopeId != null ||
+      input.workspaceRef != null ||
+      input.workspaceGeneration != null
+    ) {
+      throw new Error("Hosted Agents cannot bind Device or local Runtime state");
+    }
+    if (
+      !input.capabilities.supportsStart ||
+      !input.capabilities.supportsStreaming ||
+      !input.capabilities.supportsInterrupt
+    ) {
+      throw new Error(
+        "Hosted Agents require start, streaming, and interrupt capabilities"
+      );
+    }
+    if (
+      input.capabilities.supportsResume ||
+      input.capabilities.supportsRoomContextCoverage === true ||
+      input.capabilities.supportsWorkspaceLeases === true ||
+      input.capabilities.supportsArtifactPublication === true ||
+      input.capabilities.supportsArtifactMaterialization === true
+    ) {
+      throw new Error(
+        "Hosted Agents cannot advertise Bridge Runtime capabilities"
+      );
+    }
+    return;
+  }
   if (
     input.capabilities.supportsWorkspaceLeases === true &&
     input.workspaceRef == null
@@ -113,6 +146,33 @@ function validateCapabilities(input: PublishAgentInput): void {
   }
 }
 
+function explicitHostedRoomIds(
+  input: PublishAgentInput
+): readonly string[] | undefined {
+  if (input.integrationMode !== "hosted") {
+    if (input.roomIds !== undefined) {
+      throw new Error("Explicit Room IDs are reserved for Hosted Agents");
+    }
+    return undefined;
+  }
+  if (!Array.isArray(input.roomIds)) {
+    throw new Error("Hosted Agent creation requires explicit Room IDs");
+  }
+  const roomIds = input.roomIds as readonly unknown[];
+  if (
+    roomIds.some((roomId) =>
+      typeof roomId !== "string" || roomId.length === 0
+    )
+  ) {
+    throw new Error("Hosted Agent Room IDs are invalid");
+  }
+  const typedRoomIds = roomIds as readonly string[];
+  if (new Set(typedRoomIds).size !== typedRoomIds.length) {
+    throw new Error("Hosted Agent Room IDs must be unique");
+  }
+  return typedRoomIds;
+}
+
 export class AgentService {
   public constructor(
     private readonly repository: CoreRepository,
@@ -125,6 +185,13 @@ export class AgentService {
   ): AgentRecord {
     const member = this.auth.requireTeamMember(principal, input.teamId);
     validateCapabilities(input);
+    const roomIds = explicitHostedRoomIds(input);
+    if (input.integrationMode === "hosted" && member.role !== "owner") {
+      throw new AuthorizationError(
+        "FORBIDDEN",
+        "Only a Team owner can create a Hosted Agent"
+      );
+    }
     if (input.deviceId) {
       const device = this.repository.getDevice(input.deviceId);
       if (
@@ -134,6 +201,19 @@ export class AgentService {
         device.status !== "active"
       ) {
         throw new AuthorizationError("FORBIDDEN", "Device ownership denied");
+      }
+    }
+    for (const roomId of roomIds ?? []) {
+      const room = this.repository.getRoom(roomId);
+      if (
+        !room ||
+        room.teamId !== input.teamId ||
+        room.archivedAt != null
+      ) {
+        throw new AuthorizationError(
+          "FORBIDDEN",
+          "Hosted Agent Room access denied"
+        );
       }
     }
     const agent: AgentRecord = {
@@ -149,12 +229,22 @@ export class AgentService {
       runtimeScopeId: input.runtimeScopeId ?? null,
       workspaceRef: input.workspaceRef ?? null,
       workspaceGeneration: input.workspaceGeneration ?? null,
+      workspaceAlias: null,
       enabled: true,
-      presence: input.integrationMode === "manual" ? "manual" : "offline",
+      presence: input.integrationMode === "manual" ? "manual"
+        : input.integrationMode === "hosted" ? "degraded"
+          : "offline",
       createdAt: input.now,
       updatedAt: input.now
     };
-    this.repository.createAgent(agent);
+    if (input.integrationMode === "hosted") {
+      if (roomIds === undefined) {
+        throw new Error("Hosted Agent Room validation did not return a Room list");
+      }
+      this.repository.createAgent(agent, { roomIds });
+    } else {
+      this.repository.createAgent(agent);
+    }
     return agent;
   }
 

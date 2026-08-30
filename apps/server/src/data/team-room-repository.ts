@@ -123,7 +123,9 @@ export class TeamRoomRepository {
       this.database.prepare(`
         INSERT INTO room_agent_participants (room_id, agent_id, added_at)
         SELECT @roomId, agent_id, @createdAt
-        FROM agents WHERE team_id = @teamId AND enabled = 1
+        FROM agents
+        WHERE team_id = @teamId AND enabled = 1
+          AND integration_mode <> 'hosted'
       `).run(room);
     });
   }

@@ -4,6 +4,7 @@ import type {
   AgentCapabilities,
   AgentRecord,
   AgentRuntimePolicy,
+  CreateAgentOptions,
   DeviceBridgeObservationRecord,
   DevicePresenceRecord,
   DeviceRecord
@@ -30,6 +31,34 @@ interface AgentRow {
   updated_at: string;
 }
 
+function assertHostedAgentBoundary(agent: AgentRecord): void {
+  if (agent.integrationMode !== "hosted") return;
+  if (
+    agent.deviceId !== null ||
+    agent.runtimePolicy != null ||
+    agent.runtimeScopeId != null ||
+    agent.workspaceRef != null ||
+    agent.workspaceGeneration != null ||
+    agent.workspaceAlias != null
+  ) {
+    throw new Error("Hosted Agents cannot persist Device or local Runtime state");
+  }
+  if (
+    !agent.capabilities.supportsStart ||
+    !agent.capabilities.supportsStreaming ||
+    !agent.capabilities.supportsInterrupt ||
+    agent.capabilities.supportsResume ||
+    agent.capabilities.supportsRoomContextCoverage === true ||
+    agent.capabilities.supportsWorkspaceLeases === true ||
+    agent.capabilities.supportsArtifactPublication === true ||
+    agent.capabilities.supportsArtifactMaterialization === true
+  ) {
+    throw new Error(
+      "Hosted Agent capabilities exceed the Central HTTP boundary"
+    );
+  }
+}
+
 export class AgentDeviceRepository {
   public constructor(
     private readonly database: Database.Database,
@@ -46,7 +75,22 @@ export class AgentDeviceRepository {
     `).run(device);
   }
 
-  public createAgent(agent: AgentRecord): void {
+  public createAgent(
+    agent: AgentRecord,
+    options?: CreateAgentOptions
+  ): void {
+    assertHostedAgentBoundary(agent);
+    const roomIds = options?.roomIds;
+    if (agent.integrationMode === "hosted") {
+      if (roomIds === undefined) {
+        throw new Error("Hosted Agent creation requires explicit Room IDs");
+      }
+      if (new Set(roomIds).size !== roomIds.length) {
+        throw new Error("Hosted Agent Room IDs must be unique");
+      }
+    } else if (roomIds !== undefined) {
+      throw new Error("Explicit Room IDs are reserved for Hosted Agents");
+    }
     this.transactions.immediate(() => {
       this.database.prepare(`
         INSERT INTO agents (
@@ -72,7 +116,26 @@ export class AgentDeviceRepository {
           : null,
         enabled: agent.enabled ? 1 : 0
       });
-      if (agent.enabled) {
+      if (agent.integrationMode === "hosted") {
+        const addRoom = this.database.prepare(`
+          INSERT INTO room_agent_participants (room_id, agent_id, added_at)
+          SELECT room_id, @agentId, @createdAt
+          FROM rooms
+          WHERE room_id = @roomId AND team_id = @teamId AND archived_at IS NULL
+        `);
+        const updateRoom = this.database.prepare(`
+          UPDATE rooms SET settings_revision = settings_revision + 1
+          WHERE room_id = ?
+        `);
+        for (const roomId of roomIds ?? []) {
+          if (addRoom.run({ ...agent, roomId }).changes !== 1) {
+            throw new Error(
+              "Hosted Agent Room must be active and belong to its Team"
+            );
+          }
+          updateRoom.run(roomId);
+        }
+      } else if (agent.enabled) {
         this.database.prepare(`
           INSERT INTO room_agent_participants (room_id, agent_id, added_at)
           SELECT room_id, @agentId, @createdAt FROM rooms WHERE team_id = @teamId
@@ -242,7 +305,9 @@ export class AgentDeviceRepository {
     const existing = this.getAgent(agentId);
     if (!existing) throw new Error(`Agent not found: ${agentId}`);
     const presence = enabled
-      ? existing.integrationMode === "manual" ? "manual" : "offline"
+      ? existing.integrationMode === "manual" ? "manual"
+        : existing.integrationMode === "hosted" ? "degraded"
+          : "offline"
       : "offline";
     this.database.prepare(`
       UPDATE agents
