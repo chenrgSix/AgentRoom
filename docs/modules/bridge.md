@@ -163,6 +163,14 @@ selects the record, and the local identity map binds a renamed display name
 back to that ID so a rename does not register a new central Agent. Agent
 deletion is outside this task.
 
+[ADR-0029](../adr/0029-preserve-bridge-results-configuration-and-instance-ownership.md)
+binds ordinary edits to the saved Runtime kind. Generic CLI metadata edits
+preserve the full owner-authored command, arguments, environment allowlist,
+output protocol and Runtime policy instead of constructing a preset. Discovery
+and Codex/Pi probes do not apply to Generic profiles. Cross-kind edits fail
+closed; Runtime conversion needs a separate explicit operation and is not part
+of this editor. New supported profiles can still choose Codex or Pi.
+
 Configuration updates are atomically persisted. A running managed connection
 restarts with an epoch fence so a late old process cannot overwrite new state;
 a deliberately stopped Bridge remains stopped. Agent and connection mutations
@@ -381,6 +389,13 @@ Server delivery to resume materialization. A duplicate returns verified or
 reused receipts and cannot start a second Runtime process. If recovery cannot
 determine whether a process finished after acceptance, the Bridge reports
 `outcome_unknown` rather than guessing.
+
+A failed terminal-event send is delivery failure, not execution uncertainty.
+If the terminal state or `input_required` boundary was durably appended, retain
+its exact sequence and events; reconnect and duplicate delivery replay it
+without another Runtime invocation. Infer `outcome_unknown` only while the
+durable record remains unfinished. Keep cancellation fences until replay or
+delivery succeeds.
 
 The MVP inbox uses one owner-only, fsynced JSON record per Run under `dataDir`.
 Acceptance is serialized, verifies both idempotency key and payload hash, and
@@ -636,6 +651,14 @@ process, prevents duplicate desktop instances, and starts an already-paired
 Bridge automatically. Closing the window hides it to the system tray; it does
 not disconnect managed Agents. An explicit tray **Quit** action gracefully
 stops enrollment and Bridge work before terminating the process.
+
+Desktop primary/secondary arbitration must happen before Console construction
+or data-root ownership. A secondary launch forwards its validated pairing link
+or wake request to the original window and never starts another worker. A
+bounded in-memory activation pending window readiness prevents an early launch
+from being silently discarded. This does not relax the Console/CLI data-root
+lock or introduce a second Bridge lifecycle manager. Native Windows activation
+evidence remains distinct from cross-compilation.
 
 The tray exposes status, open, start, stop, and quit actions. Configuration,
 Device pairing, legacy Team enrollment, Codex/Pi discovery, and Owner approval

@@ -439,6 +439,20 @@ lifecycle ownership without another service or Bridge change.
 | WEB-060 | DONE | Consolidate Web session and Room synchronization controllers | GOV-019, WEB-054, WEB-055, WEB-056 | 16 controller and 2 late-snapshot/new-Task App regressions pass with existing expiry/recovery/history tests; independent success ordering preserves Tasks, Runs and first settings while retired callbacks/timers stay inactive |
 | QA-042 | DONE | Verify continuous Web work end to end | CON-018, WEB-057, WEB-058, WEB-059, WEB-060 | acceptance/qa-042-continuous-web-work.md records source c447253, 660 tests, build, 9 schemas/133 fixtures, 6 deterministic E2E passes with live provider skipped, Compose/docs checks and production-browser desktop/720/390 flows; owned preview and temporary data/caches cleaned |
 
+## Workstream F13: Bridge Audit Repairs
+
+The three Bridge repairs are explicitly coordinated parallel implementation
+streams. Scope is fixed by ADR-0029; broad Console decomposition, release
+publication and new physical-platform acceptance are not part of this work.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-020 | DONE | Define Bridge audit repair and ownership boundaries | GOV-013, BRG-052, QA-042 | accepted ADR-0029 and owning Bridge module define durable-result preservation, configuration-safe editing, early desktop arbitration and separate platform verification |
+| BRG-054 | ACTIVE | Preserve durable Runtime outcomes after delivery failure | GOV-020, BRG-005, BRG-052 | terminal failure injection, observer, restart/replay, duplicate and unfinished-execution regressions; relevant Go and race gates |
+| BRG-055 | ACTIVE | Preserve Generic CLI profiles during ordinary Agent editing | GOV-020, ADP-005, BRG-019 | complete Runtime configuration and stable identity preservation, explicit cross-kind rejection, embedded UI regressions and Console tests |
+| BRG-056 | ACTIVE | Forward secondary desktop activation before Console ownership | GOV-020, BRG-043, BRG-052 | primary-only Console construction, queued early activation, unchanged exclusive ownership, desktop tests/build and separately recorded Windows execution boundary |
+| QA-043 | PLANNED | Verify the three Bridge audit repairs | BRG-054, BRG-055, BRG-056 | committed acceptance with focused and integration results, clean diff, review and explicit native/provider exclusions |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |
