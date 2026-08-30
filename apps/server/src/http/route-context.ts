@@ -10,6 +10,8 @@ import type { BridgeConnectionRegistry } from "../bridge/bridge-connection-regis
 import type { CoreRepository } from "../data/core-repository.js";
 import type { DiscussionOrchestrator } from "../discussion/discussion-orchestrator.js";
 import type { DiscussionRepository } from "../discussion/discussion-repository.js";
+import type { HostedAgentConfigurationService } from
+  "../hosted/hosted-agent-configuration-service.js";
 import type { TeamWaitService } from "../mcp/team-wait-service.js";
 import type { ManualTaskWorkService } from
   "../mcp/manual-task-work-service.js";
@@ -81,10 +83,12 @@ export interface ServerRouteContext {
   devicePairingSessions: DevicePairingSessionService;
   discussions: DiscussionOrchestrator;
   discussionRepository: DiscussionRepository;
+  dispatchRun: (run: PersistedRun) => Promise<PersistedRun>;
   dispatchDiscussionRuns: (runs: PersistedRun[]) => Promise<void>;
   executor: InProcessRunExecutor;
   fakeAdapters: Map<string, FakeRuntimeAdapter>;
   handoffs: HandoffService;
+  hostedAgents: HostedAgentConfigurationService;
   limitAnonymous: (request: FastifyRequest, bucket: string) => void;
   manualRuns: ManualRunService;
   manualTaskWork: ManualTaskWorkService;

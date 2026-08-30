@@ -349,6 +349,21 @@ export class HostedAgentConfigurationService {
     return this.configuration(agent.teamId, agentId);
   }
 
+  public refreshEnabledPresence(
+    principal: WebPrincipal,
+    agentId: string,
+    now: string
+  ) {
+    const agent = this.requireHostedAgent(principal, agentId);
+    const presence = !agent.enabled
+      ? "offline" as const
+      : this.repository.getAvailability(agentId) === "ready"
+        ? "ready" as const
+        : "degraded" as const;
+    this.core.updateAgentPresence(agentId, presence, now);
+    return this.core.getAgent(agentId)!;
+  }
+
   private requireOwner(
     principal: WebPrincipal,
     teamId: string

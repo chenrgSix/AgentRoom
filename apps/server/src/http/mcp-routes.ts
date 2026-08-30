@@ -13,7 +13,7 @@ export function registerMcpRoutes({
   auth,
   clock,
   core,
-  delivery,
+  dispatchRun,
   handoffs,
   manualRuns,
   manualTaskWork,
@@ -30,7 +30,7 @@ export function registerMcpRoutes({
     const server = createTeamMcpServer(mcpPrincipal, {
       clock,
       core,
-      delivery,
+      dispatchRun,
       handoffs,
       manualRuns,
       manualTaskWork,

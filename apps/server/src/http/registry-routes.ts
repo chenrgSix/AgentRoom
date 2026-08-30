@@ -21,6 +21,7 @@ export function registerRegistryRoutes({
   core,
   deviceRevocation,
   fakeAdapters,
+  hostedAgents,
   limitAnonymous,
   pairing,
   presence,
@@ -45,7 +46,17 @@ export function registerRegistryRoutes({
     async (request) => {
       const body = bodyObject(request);
       const enabled = requiredBoolean(body.enabled, "enabled");
-      return agents.setEnabled(principal(request), request.params.agentId, enabled, clock());
+      const now = clock();
+      const actor = principal(request);
+      const updated = agents.setEnabled(
+        actor,
+        request.params.agentId,
+        enabled,
+        now
+      );
+      return updated.integrationMode === "hosted"
+        ? hostedAgents.refreshEnabledPresence(actor, updated.agentId, now)
+        : updated;
     }
   );
   app.delete<{ Params: { teamId: string; deviceId: string } }>(

@@ -3,9 +3,9 @@ import type { ResultProposal } from "@convene-wire/contracts/task-result";
 import * as z from "zod/v4";
 
 import type { CoreRepository } from "../data/core-repository.js";
-import type { DeliveryService } from "../run/delivery-service.js";
 import type { HandoffService } from "../run/handoff-service.js";
 import type { ManualRunService } from "../run/manual-run-service.js";
+import type { RunRecord } from "../run/run-repository.js";
 import type { McpPrincipal } from "../security/auth-service.js";
 import type { MessageService } from "../team-room/message-service.js";
 import type { ManualTaskWorkService } from "./manual-task-work-service.js";
@@ -15,7 +15,7 @@ import type { TaskArtifactService } from "../task/task-artifact-service.js";
 interface TeamMcpDependencies {
   clock: () => string;
   core: CoreRepository;
-  delivery: DeliveryService;
+  dispatchRun: (run: RunRecord) => Promise<RunRecord>;
   handoffs: HandoffService;
   manualRuns: ManualRunService;
   manualTaskWork: ManualTaskWorkService;
@@ -307,7 +307,7 @@ export function createTeamMcpServer(
     const run = dependencies.handoffs.create(principal, {
       parentRunId, targetAgentId, instruction
     }, dependencies.clock());
-    dependencies.delivery.dispatch(run.runId);
+    await dependencies.dispatchRun(run);
     return toolResult({ run });
   });
   return server;

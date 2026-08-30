@@ -322,6 +322,8 @@ test("Hosted Presence derives from injected profile availability without Bridge 
 
     assert.equal(readHosted()?.presence, "degraded");
     availability = "ready";
+    assert.equal(readHosted()?.presence, "degraded");
+    fixture.repository.updateAgentPresence(hosted.agentId, "ready", now);
     assert.equal(readHosted()?.presence, "ready");
 
     fixture.repository.updateAgentPresence(hosted.agentId, "busy", now);
@@ -341,6 +343,8 @@ test("Hosted Presence derives from injected profile availability without Bridge 
       fixture.agents.setEnabled(fixture.owner, hosted.agentId, true, now).presence,
       "degraded"
     );
+    assert.equal(readHosted()?.presence, "degraded");
+    fixture.repository.updateAgentPresence(hosted.agentId, "ready", now);
     assert.equal(readHosted()?.presence, "ready");
 
     const device = fixture.registry.registerOwnDevice(

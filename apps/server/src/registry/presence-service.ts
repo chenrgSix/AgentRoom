@@ -181,10 +181,17 @@ export class PresenceService {
       if (agent.integrationMode === "hosted") {
         if (!agent.enabled) {
           presence = "offline";
-        } else if (presence !== "busy") {
-          presence = this.hostedAgents.getAvailability(agent.agentId) === "ready"
-            ? "ready"
-            : "degraded";
+        } else if (presence === "busy") {
+          presence = "busy";
+        } else if (
+          this.hostedAgents.getAvailability(agent.agentId) !== "ready"
+        ) {
+          presence = "degraded";
+        } else if (presence !== "ready") {
+          // A persisted degraded projection records the latest execution or
+          // provider-test availability observation. Only an explicit later
+          // successful observation promotes it back to ready.
+          presence = "degraded";
         }
       } else if (agent.integrationMode === "manual") {
         presence = "manual";

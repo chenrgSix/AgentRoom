@@ -26,10 +26,15 @@ export interface CancellationServiceOptions {
   sweepBatchSize?: number;
 }
 
+export interface HostedRunCancellation {
+  cancel(runId: string, memberId: string, reason: string): RunRecord;
+}
+
 export class CancellationService {
   private readonly ackTimeoutMilliseconds: number;
   private readonly retryIntervalMilliseconds: number;
   private readonly sweepBatchSize: number;
+  private hostedCancellation: HostedRunCancellation | undefined;
 
   public constructor(
     private readonly core: CoreRepository,
@@ -56,6 +61,13 @@ export class CancellationService {
     );
   }
 
+  public attachHostedCancellation(cancellation: HostedRunCancellation): void {
+    if (this.hostedCancellation) {
+      throw new Error("Hosted Run cancellation is already attached");
+    }
+    this.hostedCancellation = cancellation;
+  }
+
   public cancel(principal: WebPrincipal, runId: string, reason: string): RunRecord {
     const run = this.runs.getRun(runId);
     if (!run) throw new Error(`Run not found: ${runId}`);
@@ -64,6 +76,13 @@ export class CancellationService {
       throw new AuthorizationError("FORBIDDEN", "Run cancellation denied");
     }
     if (terminalStates.has(run.state)) return run;
+    const target = this.core.getAgent(run.targetAgentId);
+    if (target?.integrationMode === "hosted") {
+      if (!this.hostedCancellation || !target.capabilities.supportsInterrupt) {
+        throw new Error("Target Hosted Agent does not support interruption");
+      }
+      return this.hostedCancellation.cancel(runId, member.memberId, reason);
+    }
     const existing = this.runs.getCancellationIntent(run.runId);
     const delivery = this.runs.getCancellationDelivery(run.runId);
     // Any durable Delivery row is possibly visible to Bridge: the process can

@@ -20,6 +20,7 @@ import { ArtifactPublicationService } from
 import { LocalArtifactBlobStore } from
   "./artifact/local-artifact-blob-store.js";
 import { CoreRepository } from "./data/core-repository.js";
+import { HostedAgentRepository } from "./data/hosted-agent-repository.js";
 import { BridgeConnectionRegistry } from "./bridge/bridge-connection-registry.js";
 import { openDatabase } from "./data/database.js";
 import { prepareDatabaseDirectory } from "./data/database-location.js";
@@ -43,6 +44,7 @@ import { registerPrivateCARotationRoutes } from
 import { registerMcpRoutes } from "./http/mcp-routes.js";
 import { registerMessageRoutes } from "./http/message-routes.js";
 import { registerMemoryCandidateRoutes } from "./http/memory-candidate-routes.js";
+import { registerHostedAgentRoutes } from "./http/hosted-agent-routes.js";
 import { registerRegistryRoutes } from "./http/registry-routes.js";
 import type { ServerRouteContext } from "./http/route-context.js";
 import { registerRunRoutes } from "./http/run-routes.js";
@@ -76,8 +78,13 @@ import { RunProjectionReconciler } from
   "./run/run-projection-reconciler.js";
 import { RunRepository } from "./run/run-repository.js";
 import { RunService } from "./run/run-service.js";
+import { HostedInvocationRepository } from
+  "./run/hosted-invocation-repository.js";
+import { HostedRunScheduler } from "./run/hosted-run-scheduler.js";
 import { FakeRuntimeAdapter } from "./runtime/fake-runtime-adapter.js";
 import { InProcessRunExecutor } from "./runtime/in-process-run-executor.js";
+import { HostedOpenAIResponsesProbe } from
+  "./runtime/hosted-openai-responses-adapter.js";
 import { AuthService, AuthorizationError, type WebPrincipal } from "./security/auth-service.js";
 import {
   AnonymousRateLimiter,
@@ -98,6 +105,8 @@ import {
   normalizeBridgeServerToken
 } from "./security/bridge-server-token.js";
 import { TrustedWebAccessService } from "./security/trusted-web-access-service.js";
+import { HostedAgentConfigurationService } from
+  "./hosted/hosted-agent-configuration-service.js";
 import type { WebAuthConfiguration } from "./security/web-auth-config.js";
 import { TeamRoomService } from "./team-room/team-room-service.js";
 import { TeamChangeService } from "./team-room/team-change-service.js";
@@ -148,6 +157,7 @@ export interface ServerAppOptions {
   clock?: () => string;
   logger?: boolean;
   loggerInstance?: FastifyBaseLogger;
+  hostedFetch?: typeof fetch;
   memoryReducer?: MemoryReducerRunner;
   memoryReducerSweepMilliseconds?: number;
   trustProxyHops?: number;
@@ -214,13 +224,25 @@ export async function createServerApp(
   const teamRooms = new TeamRoomService(core, auth);
   const registry = new MemberDeviceService(core, auth);
   const agents = new AgentService(core, auth);
+  const hostedAgentRepository = new HostedAgentRepository(
+    database,
+    webAuth.mode === "trusted-team"
+      ? { mode: "trusted_recovery", secret: webAuth.ownerRecoveryToken }
+      : { mode: "local_database" },
+    transactions
+  );
   const agentProvisioning = new AgentProvisioningService(
     database,
     core,
     auth,
     transactions
   );
-  const presence = new PresenceService(core, auth);
+  const presence = new PresenceService(
+    core,
+    auth,
+    30_000,
+    hostedAgentRepository
+  );
   const messages = new MessageService(core, auth);
   const teamWait = new TeamWaitService(core, auth, teamChanges);
   const pairing = new BridgePairingService(database, core, auth);
@@ -419,34 +441,44 @@ export async function createServerApp(
   let cancellationSweepTimer: ReturnType<typeof setInterval> | undefined;
   let memoryReducerSweepTimer: ReturnType<typeof setInterval> | undefined;
   let memoryReducerSweepInFlight = false;
-  const dispatchDiscussionRun = async (run: ReturnType<RunRepository["getRun"]>) => {
-    if (!run) return;
+  let hostedScheduler: HostedRunScheduler;
+  const dispatchRun = async (
+    run: NonNullable<ReturnType<RunRepository["getRun"]>>
+  ): Promise<NonNullable<ReturnType<RunRepository["getRun"]>>> => {
+    if (new Set([
+      "completed", "failed", "canceled", "expired", "outcome_unknown"
+    ]).has(run.state)) return run;
     const agent = core.getAgent(run.targetAgentId);
     const adapter = fakeAdapters.get(run.targetAgentId);
     if (adapter) {
       const turn = discussionRepository.findTurnByRun(run.runId);
+      const firstSequence = run.lastSequence + 1;
       adapter.enqueue({
         expectedInstruction: run.instruction,
         events: [
-          { type: "status", sequence: 1, status: "working" },
+          { type: "status", sequence: firstSequence, status: "working" },
           {
             type: "reply",
-            sequence: 2,
-            content: turn?.kind === "finalization"
-              ? `${agent?.name ?? "Agent"} 结论：保留已形成的共识，并明确记录未决问题。`
-              : `${agent?.name ?? "Agent"}：建议核对证据、风险和未决问题。`
+            sequence: firstSequence + 1,
+            content: turn
+              ? turn.kind === "finalization"
+                ? `${agent?.name ?? "Agent"} 结论：保留已形成的共识，并明确记录未决问题。`
+                : `${agent?.name ?? "Agent"}：建议核对证据、风险和未决问题。`
+              : `${agent?.name ?? "Agent"} completed: ${run.instruction}`
           },
-          { type: "status", sequence: 3, status: "completed" }
+          { type: "status", sequence: firstSequence + 2, status: "completed" }
         ]
       });
       const completed = await executor.execute(run.runId, adapter);
       await routeAgentReplyMentions(completed.runId);
-      if (completed.state === "input_required") {
-        await pauseDiscussionForInput(completed.runId);
-      } else {
-        await advanceDiscussion(completed.runId);
+      if (turn) {
+        if (completed.state === "input_required") {
+          await pauseDiscussionForInput(completed.runId);
+        } else {
+          await advanceDiscussion(completed.runId);
+        }
       }
-      return;
+      return completed;
     }
     if (agent?.integrationMode === "managed") {
       const dispatched = delivery.dispatch(run.runId);
@@ -459,12 +491,15 @@ export async function createServerApp(
         sendCount: dispatched?.sendCount ?? 0,
         sent: (dispatched?.sendCount ?? 0) > 0
       }, "Managed Run delivery processed");
+    } else if (agent?.integrationMode === "hosted") {
+      hostedScheduler.enqueue(run.runId);
     }
+    return runRepository.getRun(run.runId) ?? run;
   };
   const dispatchDiscussionRuns = async (
     runs: NonNullable<ReturnType<RunRepository["getRun"]>>[]
   ): Promise<void> => {
-    await Promise.all(runs.map((run) => dispatchDiscussionRun(run)));
+    await Promise.all(runs.map((run) => dispatchRun(run)));
   };
   const advanceDiscussion = async (runId: string): Promise<void> => {
     const result = discussions.onRunTerminal(runId);
@@ -478,33 +513,6 @@ export async function createServerApp(
       await dispatchDiscussionRuns(result.scheduledRuns);
     }
   };
-  const dispatchOrdinaryHandoffRun = async (
-    run: NonNullable<ReturnType<RunRepository["getRun"]>>
-  ): Promise<void> => {
-    if (new Set([
-      "completed", "failed", "canceled", "expired", "outcome_unknown"
-    ]).has(run.state)) return;
-    const agent = core.getAgent(run.targetAgentId);
-    const adapter = fakeAdapters.get(run.targetAgentId);
-    if (adapter) {
-      adapter.enqueue({
-        expectedInstruction: run.instruction,
-        events: [
-          { type: "status", sequence: 1, status: "working" },
-          {
-            type: "reply",
-            sequence: 2,
-            content: `${agent?.name ?? "Agent"} completed: ${run.instruction}`
-          },
-          { type: "status", sequence: 3, status: "completed" }
-        ]
-      });
-      await executor.execute(run.runId, adapter);
-      await routeAgentReplyMentions(run.runId);
-      return;
-    }
-    if (agent?.integrationMode === "managed") delivery.dispatch(run.runId);
-  };
   async function routeAgentReplyMentions(runId: string): Promise<void> {
     for (const intent of runRepository.listPendingReplyRoutingIntents(runId)) {
       if (!discussionRepository.findTurnByRun(runId)) {
@@ -514,7 +522,7 @@ export async function createServerApp(
           clock()
         );
         for (const run of routedRuns) {
-          await dispatchOrdinaryHandoffRun(run);
+          await dispatchRun(run);
         }
       }
       runRepository.completeReplyRoutingIntent(
@@ -524,6 +532,42 @@ export async function createServerApp(
       );
     }
   }
+  const hostedInvocations = new HostedInvocationRepository(
+    database,
+    runRepository,
+    transactions
+  );
+  hostedScheduler = new HostedRunScheduler(
+    core,
+    runRepository,
+    hostedAgentRepository,
+    hostedInvocations,
+    executor,
+    clock,
+    {
+      ...(options.hostedFetch ? { fetch: options.hostedFetch } : {}),
+      onTerminal: async (run) => {
+        await routeAgentReplyMentions(run.runId);
+        if (discussionRepository.findTurnByRun(run.runId)) {
+          if (run.state === "input_required") {
+            await pauseDiscussionForInput(run.runId);
+          } else {
+            await advanceDiscussion(run.runId);
+          }
+        }
+      }
+    }
+  );
+  cancellations.attachHostedCancellation(hostedScheduler);
+  const hostedAgents = new HostedAgentConfigurationService(
+    hostedAgentRepository,
+    core,
+    agents,
+    auth,
+    transactions,
+    new HostedOpenAIResponsesProbe(options.hostedFetch ?? globalThis.fetch),
+    (agentId) => hostedScheduler.revokeAgent(agentId)
+  );
   const sweepDiscussionDeadlines = async (): Promise<void> => {
     if (discussionSweepInFlight) return;
     discussionSweepInFlight = true;
@@ -659,12 +703,12 @@ export async function createServerApp(
     }
   });
 
-  app.addHook("onClose", (_instance, done) => {
+  app.addHook("onClose", async () => {
     if (discussionSweepTimer) clearInterval(discussionSweepTimer);
     if (cancellationSweepTimer) clearInterval(cancellationSweepTimer);
     if (memoryReducerSweepTimer) clearInterval(memoryReducerSweepTimer);
+    await hostedScheduler.shutdown();
     database.close();
-    done();
   });
   app.setErrorHandler((error, request, reply) => {
     if (error instanceof AnonymousRateLimitError) {
@@ -699,6 +743,8 @@ export async function createServerApp(
     const statusCode = message.includes("UNIQUE constraint failed") ||
       message.startsWith("Device pairing conflict:") ||
       message === "Room settings changed; reload and retry" ||
+      message === "Hosted Runtime Profile changed; reload and retry" ||
+      message === "Hosted Agent configuration is locked while work is active" ||
       message.startsWith("Agent provisioning conflict:") ||
       message.startsWith("Room already has an active Discussion:") ||
       message.startsWith("Task already has an active Discussion:")
@@ -740,10 +786,12 @@ export async function createServerApp(
     devicePairingSessions,
     discussions,
     discussionRepository,
+    dispatchRun,
     dispatchDiscussionRuns,
     executor,
     fakeAdapters,
     handoffs,
+    hostedAgents,
     limitAnonymous,
     longTermMemory,
     memoryCandidates,
@@ -788,6 +836,7 @@ export async function createServerApp(
   registerResultRoutes(routeContext);
   registerWorkbenchRoutes(routeContext);
   registerRegistryRoutes(routeContext);
+  registerHostedAgentRoutes(routeContext);
   registerDevicePairingSessionRoutes(routeContext);
   registerPrivateCARotationRoutes(routeContext);
   registerMessageRoutes(routeContext);
@@ -833,17 +882,19 @@ export async function createServerApp(
       sentRunIds: cancellationRecovery.sentRunIds
     }, "Pending Run cancellation intents were recovered");
   }
-  for (const run of projectionRecovery.queuedRuns) {
-    const dispatched = delivery.dispatch(run.runId);
+  const hostedRecovery = hostedScheduler.recover();
+  if (
+    hostedRecovery.outcomeUnknownRunIds.length > 0 ||
+    hostedRecovery.reconciledRunIds.length > 0
+  ) {
     app.log.info({
-      event: "run.delivery.recovered",
-      traceId: run.traceId,
-      runId: run.runId,
-      agentId: run.targetAgentId,
-      deviceId: dispatched?.deviceId ?? null,
-      sendCount: dispatched?.sendCount ?? 0,
-      sent: (dispatched?.sendCount ?? 0) > 0
-    }, "Recovered Run delivery processed");
+      event: "run.hosted.recovered",
+      outcomeUnknownRunIds: hostedRecovery.outcomeUnknownRunIds,
+      reconciledRunIds: hostedRecovery.reconciledRunIds
+    }, "Hosted Run invocation intents were recovered");
+  }
+  for (const run of projectionRecovery.queuedRuns) {
+    await dispatchRun(run);
   }
   await dispatchDiscussionRuns(discussions.recover());
   for (const runId of new Set(

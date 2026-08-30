@@ -11,13 +11,10 @@ export function registerMessageRoutes({
   app,
   clock,
   core,
-  delivery,
-  executor,
-  fakeAdapters,
+  dispatchRun,
   memberMessageRuns,
   messages,
   principal,
-  routeAgentReplyMentions,
   runRepository
 }: ServerRouteContext): void {
   app.get<{
@@ -102,37 +99,8 @@ export function registerMessageRoutes({
       }
       const executedRuns = [];
       for (const run of persisted.runs) {
-        const adapter = fakeAdapters.get(run.targetAgentId);
-        if (!adapter) {
-          const dispatched = delivery.dispatch(run.runId);
-          app.log.info({
-            event: "run.delivery.dispatched",
-            traceId: run.traceId,
-            runId: run.runId,
-            agentId: run.targetAgentId,
-            deviceId: dispatched?.deviceId ?? null,
-            sendCount: dispatched?.sendCount ?? 0,
-            sent: (dispatched?.sendCount ?? 0) > 0
-          }, "Managed Run delivery processed");
-          executedRuns.push(runRepository.getRun(run.runId) ?? run);
-          continue;
-        }
-        const target = core.getAgent(run.targetAgentId);
-        adapter.enqueue({
-          expectedInstruction: message.content,
-          events: [
-            { type: "status", sequence: 1, status: "working" },
-            {
-              type: "reply",
-              sequence: 2,
-              content: `${target?.name ?? "Agent"} completed: ${message.content}`
-            },
-            { type: "status", sequence: 3, status: "completed" }
-          ]
-        });
-        const completed = await executor.execute(run.runId, adapter);
-        executedRuns.push(completed);
-        await routeAgentReplyMentions(run.runId);
+        await dispatchRun(run);
+        executedRuns.push(runRepository.getRun(run.runId) ?? run);
       }
       return {
         message,

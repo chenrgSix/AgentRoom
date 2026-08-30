@@ -25,7 +25,7 @@ export function registerTaskRoutes({
   artifactPreviews,
   clock,
   core,
-  delivery,
+  dispatchRun,
   longTermMemory,
   principal,
   taskArtifacts,
@@ -530,7 +530,7 @@ export function registerTaskRoutes({
         requiredString(body.answer, "answer", 20_000),
         clock()
       );
-      const dispatched = delivery.dispatch(resumed.run.runId);
+      const dispatchedRun = await dispatchRun(resumed.run);
       app.log.info({
         event: "task.clarification.resumed",
         traceId: resumed.run.traceId,
@@ -539,9 +539,7 @@ export function registerTaskRoutes({
         requestingRunId: resumed.clarification.requestingRunId,
         continuationRunId: resumed.run.runId,
         agentId: resumed.run.targetAgentId,
-        deviceId: dispatched?.deviceId ?? null,
-        sendCount: dispatched?.sendCount ?? 0,
-        sent: (dispatched?.sendCount ?? 0) > 0
+        state: dispatchedRun.state
       }, "Task clarification resumed");
       const room = core.getRoom(resumed.clarification.roomId);
       if (room) {

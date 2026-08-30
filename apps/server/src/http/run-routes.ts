@@ -12,6 +12,7 @@ export function registerRunRoutes({
   cancellations,
   clock,
   core,
+  dispatchRun,
   principal,
   runRepository,
   runs,
@@ -104,6 +105,7 @@ export function registerRunRoutes({
         },
         clock()
       );
+      await dispatchRun(retry);
       return retry;
     }
   );

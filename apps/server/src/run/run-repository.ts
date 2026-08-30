@@ -55,7 +55,7 @@ export interface RunContextManifest {
   target: {
     agentId: string;
     deviceId: string | null;
-    runtimeKind: "generic" | "manual" | "fake";
+    runtimeKind: "generic" | "manual" | "fake" | "not_recorded";
     workspaceAlias: string | null;
   };
   included: {
@@ -1655,7 +1655,7 @@ export class RunRepository {
       FROM agents WHERE agent_id = ?
     `).get(run.targetAgentId) as {
       device_id: string | null;
-      integration_mode: "managed" | "manual" | "fake";
+      integration_mode: "managed" | "manual" | "fake" | "hosted";
       capabilities_json: string;
       runtime_policy_json: string | null;
       workspace_alias: string | null;
@@ -1706,7 +1706,9 @@ export class RunRepository {
         deviceId: agent.device_id,
         runtimeKind: agent.integration_mode === "managed"
           ? "generic"
-          : agent.integration_mode,
+          : agent.integration_mode === "hosted"
+            ? "not_recorded"
+            : agent.integration_mode,
         workspaceAlias: agent.workspace_alias
       },
       included: {
