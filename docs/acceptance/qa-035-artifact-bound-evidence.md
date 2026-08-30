@@ -2,11 +2,11 @@
 
 ## Result
 
-Status: `ACTIVE`. The repository implementation and deterministic negative
-tests are complete. A hosted native Windows previous-stable upgrade and a
-packaged Central execution remain required before the task can be marked
-`DONE`; this record does not substitute macOS or source inspection for either
-gate.
+Status: `ACTIVE`. The repository implementation, deterministic negative tests,
+and hosted native Windows previous-stable upgrade are complete. A packaged
+Central execution and fresh two-physical-machine schema-v4 record remain
+required before the task can be marked `DONE`; the hosted Windows result does
+not substitute a target-host Central lifecycle run or a two-machine record.
 
 ## Closed code boundaries
 
@@ -64,15 +64,18 @@ gate.
   result inferred from these text checks.
 - Main CI run `33282676255` reached the native Windows install/upgrade verifier
   but exposed a `StrictMode` cleanup failure when the fixture inbox became
-  empty. The array-materialization repair is local implementation evidence
-  only; a successful exact-commit native rerun remains required below.
+  empty. The array-materialization repair added the focused regression.
+- Exact-source main CI run `33287636198` and `v0.4.1-qa034.4` Release run
+  `33287755768` then passed the native Windows stable `v0.4.0` to candidate
+  install/upgrade/uninstall verifier, including owner-state preservation and
+  installed/staging/ZIP executable digest equality. The published installer's
+  independently downloaded SHA-256 is
+  `72239c0cecb27a73ba01710be2f445293479aea75b476573015b5d9e00e5958d`.
 
 ## Remaining admission evidence
 
-1. Run the native Windows CI/Release verifier against one actual prior stable
-   installer and a distinct candidate produced from the resolved Release SHA.
-2. Install the next exact Central package and confirm its internal metrics emit
-   that Release and source commit.
-3. Perform and commit the fresh two-physical-machine schema-v4 record. That
-   separately closes `QA-002`, `QA-028`, `QA-030` and `BRG-046` if every human
-   attestation also passes.
+1. Install the exact candidate Central package and confirm its internal metrics
+   emit that Release and source commit.
+2. Perform and commit the fresh two-physical-machine schema-v4 record. That
+   separately closes `QA-002`, `QA-028`, and `QA-030` if every human attestation
+   also passes; `BRG-046` already has separate native and physical evidence.

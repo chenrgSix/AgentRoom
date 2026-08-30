@@ -49,8 +49,12 @@ that bypasses either full gate, and either missing pre-use tag check. The
 OCI bundle per architecture is built and Docker-verified before all matching
 Central archive jobs consume it. Policy regressions cover dependency,
 source-SHA, pinned scanner, clean-daemon and artifact-consumption bypasses.
-`QA-034` remains `ACTIVE` until one synthetic empty Draft execution supplies
-hosted-workflow evidence.
+`QA-034` is `DONE`. [Hosted workflow
+evidence](../acceptance/qa-034-exact-release-workflow.md) records exact-source
+main CI, all 19 protected Release jobs, both Central image architectures, four
+matching Central archives, native Windows stable-to-candidate upgrade, closed
+22-asset verification, prerelease publication, and an independent anonymous
+Windows installer/checksum download for `v0.4.1-qa034.4`.
 
 The `QA-001` integration test exercises one authenticated user, one Team and
 Room, two Fake Agents, stable-ID mentions, ordered Run events, Agent replies,
@@ -91,7 +95,8 @@ hours. The claimed metrics time must also match the snapshot file time within
 five seconds. Ten focused evidence cases reject missing, stale, reordered or
 mismatched components, unsafe TLS claims and unexpected Runtime console
 windows. This closes the verifier defect, not the physical gate: `QA-002`,
-`QA-028`, `QA-030` and `BRG-046` still require a fresh installed-Windows run.
+`QA-028`, and `QA-030` still require a fresh installed-Windows schema-v4 run;
+`BRG-046` has separate native and physical evidence.
 
 `QA-035` removes two remaining formatted-claim shortcuts from that capture.
 The verifier now hashes the exact versioned Windows installer itself, requires
@@ -109,11 +114,13 @@ installer, verifies its registered payload and protocol handlers, writes
 representative owner configuration, identity and inbox files, upgrades once to
 the distinct candidate, and proves their hashes survive both upgrade and
 uninstall. A same-candidate double install is not upgrade evidence. The local
-implementation remains `ACTIVE` until a hosted native workflow executes that
-path, the next packaged Central exposes its exact build identity, and a fresh
+implementation and hosted native path passed in exact-source main CI run
+`33287636198` and `v0.4.1-qa034.4` Release run `33287755768`. `QA-035` remains
+`ACTIVE` until that candidate's packaged Central is installed through the
+controller on a target host and exposes its exact build identity, and a fresh
 two-physical-machine schema-v4 record binds the installed artifacts to the
-observed processes; neither a macOS test nor source inspection closes those
-external gates.
+observed processes; hosted OCI execution, a macOS test, or source inspection
+does not close those external gates.
 
 `QA-003` uses only public Web and Remote MCP endpoints. A Team Owner assigns a
 root Run to Alice Agent, Alice hands off to Bob Agent, and Bob hands off to
@@ -553,6 +560,14 @@ stable Latest publication, and an independent anonymous public download all
 passed. The owner-selected same-host smoke is deliberately not a schema-v4
 physical record: `QA-002`, `QA-028`, and `QA-030` remain blocked and visible
 after stable publication.
+
+`QA-034` records the exact-source `v0.4.1-qa034.4` prerelease workflow. Main CI
+run `33287636198` and Release run `33287755768` passed on commit
+`75afb5b7d2591c2aad3c514552f737532b0af94d`; the latter closed all 19 jobs and
+the 22-asset matrix. A separate anonymous download matched the public Windows
+installer to `SHA256SUMS`, while public Latest remained stable `v0.4.0`.
+Target-host Central execution and fresh two-physical-machine schema-v4 evidence
+remain owned by `QA-035` and `QA-036`.
 
 ## Dependencies
 

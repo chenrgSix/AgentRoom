@@ -303,13 +303,12 @@ and a read-only root. [Acceptance
 evidence](../acceptance/ops-013-immutable-central-images.md) records one
 exact-commit `linux/arm64` archive passing the complete Server/Caddy gate in
 Docker 29.4 containerd storage through its manifest-digest pair and in an
-isolated Docker 28.0.4 classic store through its config-ID pair. Hosted Release
-publication and target-host lifecycle acceptance remain separate from this
-implementation evidence.
-Release-image mutation tests and workflow policy close the intended amd64 and
-four schema-v2 archive wiring, but their actual builds remain `QA-034` hosted
-evidence. Hosted publication and target-host lifecycle are also separate
-admission evidence.
+isolated Docker 28.0.4 classic store through its config-ID pair. `QA-034`
+[hosted Release evidence](../acceptance/qa-034-exact-release-workflow.md) adds
+successful clean-daemon execution for both Linux architectures and all four
+matching schema-v2 archive builds in Release run `33287755768`. Target-host
+lifecycle acceptance remains separate from both implementation and hosted
+publication evidence.
 
 ## Tasks
 

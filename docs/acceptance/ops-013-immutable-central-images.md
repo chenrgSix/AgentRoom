@@ -16,9 +16,10 @@ same-architecture bundle. After load, the controller activates one complete
 store-supported Server/Caddy pair and persists that generation before rendering
 Compose, without a target-host build or registry fallback.
 
-This record closes the repository implementation task. It does not publish a
-Release, substitute arm64 execution for hosted amd64 execution, install a
-Central archive on a target host, or close `QA-034`, `QA-035`, or `QA-036`.
+This record closes the repository implementation task. Follow-up `QA-034`
+hosted evidence now publishes and executes both Linux architectures; this
+record still does not install a Central archive on a target host or close
+`QA-035` or `QA-036`.
 
 ## Current dual-store exact-commit evidence
 
@@ -118,15 +119,17 @@ bundle was rebuilt and the complete gate then passed.
 - workflow policy tests require exact-SHA full gates, one once-built image
   artifact per architecture, the pinned scanner and the clean-daemon verifier;
 - workflow policy tests also require each of the four schema-v2 Central archive
-  jobs to consume its matching once-built architecture artifact. Actual amd64
-  image execution and all four schema-v2 archive builds remain `QA-034` hosted
-  evidence rather than a result inferred from that static wiring check.
+  jobs to consume its matching once-built architecture artifact.
+- `QA-034` Release run `33287755768` supplied the separate hosted evidence:
+  both `linux/amd64` and `linux/arm64` clean-daemon image executions passed and
+  all four schema-v2 Central archives consumed their matching verified
+  architecture artifact before the closed 22-asset upload.
 
 ## Remaining admission evidence
 
-1. `QA-034` must run the complete protected workflow against one synthetic
-   empty Draft Release.
-2. `QA-035` must install and execute a candidate Central archive and match its
-   live build identity, alongside the hosted native Windows upgrade gate.
-3. `QA-036` still depends on those hosted results, native Windows Job Object
+1. `QA-035` must install and execute a candidate Central archive and match its
+   live build identity; the hosted native Windows upgrade gate passed
+   separately in Release run `33287755768`.
+2. `QA-036` still depends on the remaining target-host and physical results,
+   native Windows Job Object
    execution, and the fresh two-physical-machine schema-v4 record.
