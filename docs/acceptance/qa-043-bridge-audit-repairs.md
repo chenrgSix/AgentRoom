@@ -7,6 +7,12 @@
 - Result: local regression/build acceptance passed; native and dependency
   limitations remain explicit below
 
+The macOS startup dependency limitation below records the state at this
+acceptance's implementation commits. The subsequent BRG-057 repair and its
+native evidence are recorded in
+[QA-044](qa-044-macos-startup-activation.md); the original results are retained
+here without retroactively claiming those later checks.
+
 ## Findings and repairs
 
 All three reported issues were present in the current source.
