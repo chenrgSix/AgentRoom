@@ -13,6 +13,8 @@ import { hostedOpenAIResponsesEndpoint } from
 
 const now = "2026-08-30T08:00:00.000Z";
 const apiKey = "hosted-e2e-fake-key-DO-NOT-USE-0123456789";
+const outputCredential = "chunked-hosted-output-secret-0123456789";
+const expectedReply = "Hosted streaming response; [REDACTED]";
 
 interface ApiResponse<T> {
   body: string;
@@ -207,7 +209,10 @@ test("Central Hosted Agent completes a real-HTTP Mention without Bridge", {
     return hostedRequests.length === 1
       ? providerResponse(["READY"], "resp_hosted_e2e_probe")
       : providerResponse(
-          ["Hosted ", "streaming response"],
+          [
+            "Hosted ", "streaming response; to", "ken=",
+            outputCredential.slice(0, 12), outputCredential.slice(12)
+          ],
           "resp_hosted_e2e_run"
         );
   }) as typeof fetch;
@@ -320,19 +325,22 @@ test("Central Hosted Agent completes a real-HTTP Mention without Bridge", {
     assert.equal(terminal.state, "completed", JSON.stringify(terminal));
 
     const events = await requestJson<Array<{
-      event: { content?: string; status?: string; type: string };
+      event: { content?: string; sequence: number; status?: string; type: string };
     }>>(baseUrl, apiTranscript, `/api/runs/${runId}/events`, { token });
     assert.equal(events.status, 200, events.body);
+    const eventTypes = events.value.map(({ event }) => event.type);
+    assert.deepEqual(eventTypes.filter((type, index) =>
+      type !== "output" || eventTypes[index - 1] !== "output"
+    ), ["status", "status", "output", "reply", "status"]);
     assert.deepEqual(
-      events.value.map(({ event }) => event.type),
-      ["status", "status", "output", "output", "reply", "status"]
+      events.value.map(({ event }) => event.sequence),
+      events.value.map((_event, index) => index + 1)
     );
-    assert.deepEqual(
-      events.value
-        .filter(({ event }) => event.type === "output")
-        .map(({ event }) => event.content),
-      ["Hosted ", "streaming response"]
-    );
+    const output = events.value.filter(({ event }) => event.type === "output");
+    assert.ok(output.length >= 2);
+    assert.equal(output.map(({ event }) => event.content).join(""), expectedReply);
+    assert.equal(events.value.at(-2)?.event.content, expectedReply);
+    assert.equal(events.value.at(-1)?.event.status, "completed");
 
     const messages = await requestJson<{
       items: Array<{ content: string; senderId: string }>;
@@ -341,7 +349,7 @@ test("Central Hosted Agent completes a real-HTTP Mention without Bridge", {
     });
     assert.equal(messages.status, 200, messages.body);
     assert.equal(messages.value.items.some(({ content, senderId }) =>
-      content === "Hosted streaming response" &&
+      content === expectedReply &&
       senderId === created.value.agentId
     ), true);
 
@@ -383,6 +391,10 @@ test("Central Hosted Agent completes a real-HTTP Mention without Bridge", {
     }
     assert.equal(apiTranscript.join("\n").includes(apiKey), false);
     assert.equal(logEntries.join("\n").includes(apiKey), false);
+    for (const sensitive of [outputCredential, outputCredential.slice(0, 12)]) {
+      assert.equal(apiTranscript.join("\n").includes(sensitive), false);
+      assert.equal(logEntries.join("\n").includes(sensitive), false);
+    }
   } finally {
     if (app) await app.close();
     await rm(directory, { recursive: true, force: true });

@@ -409,6 +409,14 @@ Node and documentation gates, and unchanged Bridge Go/race/vet/Desktop/package
 gates. It does not claim real-provider production acceptance or authorize a
 Release.
 
+`QA-039` is the post-implementation Hosted audit closure required before
+`QA-038` can complete. It adds regressions for Room revocation, cross-delta
+redaction, wrapping-root adoption, probe time/capacity/cancellation, profile
+mutation races, queued Responses events, recovered intent settlement,
+Room-derived Presence, local file permissions and explicit Web work locks.
+Its local deterministic evidence does not replace the separate browser,
+physical-platform, release-package or production-provider admission gates.
+
 The current security and exported-tree evidence is recorded in
 `docs/acceptance/qa-005-security-clean-room-audit.md`. Its PASS applies only to
 the documented trusted Owner deployment boundary and lists remaining release
