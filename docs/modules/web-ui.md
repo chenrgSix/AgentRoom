@@ -75,6 +75,10 @@ without changing server-owned state.
 - Same-owner central Agent creation from an online Bridge template, with a
   transient management-code input and durable pending, rejected, or ready
   status but no local Runtime configuration or saved-code projection.
+- Owner-only Central Hosted Agent setup after Server startup: supported
+  provider/model selection, write-only API-key input, content-free connection
+  test, explicit initial Rooms, create, replace/revoke credential, and
+  disable/re-enable controls without deployment configuration.
 - Selected Room participant roster projected from Team members and visible Agents.
 - Owner-only Room settings for participant access, multi-Agent Discussion,
   `@all`, Agent-to-Agent handoffs, and maximum handoff depth.
@@ -336,9 +340,33 @@ boundary.
 The current MVP separates Team conversation from the Agent control plane. The
 Room view owns messages, mentions, and Runs. The Agents view owns runtime
 roster, status, managed enrollment approval, MCP credentials, demo runtimes,
-and trusted Devices. Fake Agents are explicitly labeled as simulations and are
-not presented as production connections. Secrets are shown only in the
-immediate setup result and are never returned by list APIs.
+Central Hosted profiles, and trusted Devices. Fake Agents are explicitly
+labeled as simulations and are not presented as production connections.
+Secrets are shown only in the immediate setup result and are never returned by
+list APIs.
+
+ADR-0026 makes Hosted setup optional. An unconfigured installation shows one
+non-blocking Owner action and otherwise preserves the existing Agent, Room, and
+readiness experience. The form explains that Hosted Agents send authorized
+Room context to the selected external provider and have no computer, shell,
+filesystem, Workspace, or Bridge capability. Initial Room selection is
+explicit and never defaults to every Room.
+
+The API-key control is write-only and cleared after every settled create,
+replace, revoke, or failed transport attempt. A configured card receives only
+provider/model labels, profile revision, configured/revoked state, safe latest
+test observation, derived Presence, and active-work fence. It never receives
+plaintext, ciphertext, nonce/tag, Authorization headers, provider response
+bodies, account/quota detail, or a reversible mask. A Hosted badge is distinct
+from managed, manual, and Fake and does not claim local Runtime availability.
+
+The setup state machine renders `unconfigured`, `testing`, `ready`, `degraded`,
+`revoked`, and `disabled` without converting provider reachability into Central
+health. Configuration and credential mutations remain revision-fenced and
+surface stale-state recovery. Active Runs visibly fence model/key changes.
+Hosted Runs reuse normal Run cards, streaming output, terminal replies,
+handoffs, and Discussion progress. The first version renders no Hosted Result
+proposal, review, Task-completion, or ambiguity-acknowledgement control.
 
 Each Agent card presents the Server-owned `runtimePolicy.filesystemAccess`
 projection without interpreting missing data. `read-only` means the managed
@@ -435,6 +463,13 @@ HttpOnly session Cookie. The UI never reads or stores the Cookie value.
 - Keep a management code only in the controlled input until one submission
   settles. Clear it after success, rejection, or transport failure; never put
   it in request history, browser storage, URLs, logs, or status projection.
+- Keep a Hosted provider key only in its controlled write-only input until one
+  submission settles. Clear it on every outcome; never copy it into query
+  state, local/session storage, URLs, errors, analytics, DOM status text, or a
+  retry object.
+- Show Hosted setup/mutation actions only to Team Owners and exact configured
+  profile state only inside its Team. Browser filtering never replaces Server
+  authorization, fixed provider-origin validation, or Room scope checks.
 - Meet keyboard navigation and visible focus requirements for core workflows.
 
 ## Verification and Tasks
@@ -468,6 +503,16 @@ states, every closed rejection reason, retry identity, and code clearing. The
 full-App browser-DOM flow proves the same behavior through the production page
 coordinator. Exact evidence and the live-browser limitation are recorded in
 [the local acceptance](../acceptance/web-044-agent-provisioning.md).
+
+`WEB-050` adds the ADR-0026 Hosted setup and lifecycle surface. Focused
+component tests cover Owner/non-Owner visibility, unconfigured startup,
+provider/model validation, fixed connection-test projection, explicit Room
+selection, create, stale revision, key clearing, replacement, revocation,
+disable/re-enable, active-work fences, ready/busy/degraded rendering, and the
+absence of local-computer and formal-Result controls. Production browser
+acceptance covers Chinese/English, light/dark, keyboard operation, zero console
+secret/error leakage, and zero horizontal overflow at desktop, 720 px, and
+390 px widths.
 
 `WEB-045` adds the Owner-guided Device pairing panel. Focused component
 coverage proves locally encoded QR/link and manual short-code presentation,
@@ -545,5 +590,5 @@ full-refresh compatibility fallback.
 
 ## Dependencies
 
-Team/Room, Task Collaboration, Registry, Run Orchestration, Bridge pairing APIs,
-and Security.
+Team/Room, Task Collaboration, Registry, Run Orchestration, Runtime Adapters,
+Bridge pairing APIs, and Security.

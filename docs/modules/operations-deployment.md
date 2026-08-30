@@ -113,6 +113,34 @@ operator's exported database path, origin, port, image or TLS variable cannot
 override a controller-owned installation even though raw Compose intentionally
 retains its documented compatibility aliases.
 
+## Optional Central Hosted Agent Boundary
+
+[ADR-0026](../adr/0026-add-optional-central-hosted-agents.md) is implemented as
+code inside the existing Server image. It adds no service, sidecar, container,
+image, process, port, volume, bind mount, Docker socket, health dependency,
+Compose key, environment variable, startup argument, generated dotenv field,
+installation-manifest field, or lifecycle-controller command. The normal
+Server image rebuild is the only deployment artifact change.
+
+Hosted configuration occurs after startup through authenticated Web APIs and is
+stored with the existing SQLite data. Packaged trusted-team deployments reuse
+the already prepared Owner recovery authority for domain-separated credential
+wrapping; there is no Hosted-specific `master.key` or secret directory. Online
+backup and staged restore carry encrypted Hosted rows through the existing
+database path without Operations decrypting or reporting a provider key.
+
+An unconfigured installation makes no provider request and has identical
+startup/readiness behavior. Once an Owner configures a profile, only the Server
+needs outbound HTTPS reachability to its code-defined provider origin. Egress
+denial, DNS/TLS failure, provider outage, or credential revocation degrades that
+Hosted Agent only. Caddy, Bridge ingress, Device pairing, managed execution,
+backup, upgrade, status, doctor, and Central readiness remain independent.
+
+The Server container stays non-root with dropped capabilities. Hosted execution
+does not scan the host for Pi/Codex, start a child Runtime, mount a Workspace,
+read a host path, access a desktop, or control Docker. Those capabilities remain
+available only through an explicitly installed and paired Bridge.
+
 `local` binds Caddy ports to loopback and requires an exact loopback HTTPS
 origin. `direct_https` binds the selected ports for external ingress and
 requires one matching non-loopback HTTPS origin. Caddy remains certificate and
@@ -274,6 +302,11 @@ real Docker Compose and live TLS evidence is recorded in
 direct-HTTPS host installs without claiming public ACME or a physical second
 machine; those remain separate QA evidence.
 
+`QA-038` verifies the unchanged Compose service/port/volume/environment model,
+unconfigured startup and readiness, encrypted SQLite backup/restore, denied
+provider egress degradation, and execution against a fixed fake HTTPS provider.
+It does not add an Operations task or require a real paid provider credential.
+
 `OPS-009` evidence covers public-default selection, ineligible-host no-fallback
 errors, legacy no-relabel behavior, inspected public migration, one bounded
 public-CA artifact, named current/next PKI provisioning, strict acknowledgement
@@ -318,3 +351,5 @@ publication evidence.
 - `OPS-012`: exclusive lifecycle configuration and mutation authority.
 - `OPS-013`: immutable exact-digest Central image release and activation.
 - `QA-028`: deterministic plus physical one-install/one-Device acceptance.
+- `GOV-017`/`QA-038`: optional in-image Hosted Agent boundary and deterministic
+  acceptance; no new deployment lifecycle surface.

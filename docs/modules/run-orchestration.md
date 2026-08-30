@@ -37,6 +37,8 @@ the bounded attempt, delivery, event sequence, and terminal result.
   Delivery payload; never resolve live upload or Workspace state on retry.
 - Persist safe Task clarification requests and create one authorized
   continuation Run after a Room answer.
+- Persist one Central Hosted invocation intent before outbound HTTPS and
+  recover any ambiguous accepted call without automatic replay.
 
 ## State Machine
 
@@ -71,6 +73,12 @@ new attempt automatically; a Task or Team Owner must acknowledge the ambiguity
 in an audited request before another Run may start or the Task may become
 terminal. The acknowledgement preserves `outcome_unknown` and never asserts
 whether an external side effect occurred.
+
+ADR-0026 applies the same rule to a Hosted provider call. Once its durable
+intent crosses to `dispatching`, a process restart or lost provider outcome is
+ambiguous even when the provider has no tools: blindly retrying could duplicate
+charges and disclose the prompt twice. Recovery records `outcome_unknown` and
+requires the existing audited acknowledgement before a new Run.
 
 Run creation atomically validates Task lifecycle,
 scheduling state, budget, Agent assignment, and expected Task revision; records
@@ -203,6 +211,43 @@ becomes `expired`; a delivered, working, or otherwise accepted Run becomes
 `outcome_unknown` because the Runtime may have executed. Finalization uses its
 separate bounded reserve deadline.
 
+## Central Hosted Invocation Contract
+
+`RUN-015` adds a second durable execution transport without changing managed
+Delivery. An authorized Run whose target integration mode is `hosted` does not
+create or send a Bridge Delivery. It follows this boundary instead:
+
+1. validate the enabled Agent, explicit Room assignment, profile revision,
+   credential revision, Task/Discussion fences, deadline, and concurrency;
+2. persist one unique `prepared` invocation intent for the exact Run, including
+   only provider/model identity, frozen revisions, prompt digest, deadline, and
+   idempotency identity;
+3. commit `dispatching` before the Hosted Adapter may open the provider HTTPS
+   request;
+4. apply ordered bounded output and one final reply through the existing Run
+   event transaction boundary; and
+5. commit a terminal intent outcome with the Run, or reconcile every unfinished
+   post-dispatch intent to `outcome_unknown` on startup.
+
+The intent never stores credential plaintext or a duplicate prompt. The Run,
+Messages, frozen Context Manifest, and authorized context projections remain
+the content authorities. Exact dispatch retry before step 3 returns the same
+intent. There is no automatic dispatch retry after step 3, including timeout,
+connection loss, malformed stream, abort, Server restart, or response-loss
+ambiguity.
+
+Definite validation, TLS, or HTTP rejection before provider acceptance may
+fail the Run with a closed safe code. Raw URL, headers, response body, provider
+request ID, quota/account detail, prompt, credential, and stack trace never
+enter Run error detail. Provider reachability changes only Hosted Agent
+Presence; it cannot make Central unready.
+
+Ordinary Mention, exact reply handoff, and Discussion member planning all use
+this same target-mode dispatch after their existing authorization. Hosted text
+may trigger the existing exact-name handoff parser, but it cannot directly
+create a child Run or bypass Room policy. The first version has no formal
+Result-submission principal.
+
 ## Event Ordering
 
 Each accepted Run has a Bridge-generated monotonic `sequence`. The server
@@ -216,10 +261,11 @@ changing its state or appending a Room Message. `RUN-014` applies a reply throug
 one immediate transaction that advances the Run, inserts the event and existing
 handoff-routing intent, allocates the Room sequence, appends one Agent-authored
 Message linked to its trigger, and records the immutable reply-to-Message
-mapping. Managed Bridge, manual MCP and in-process Fake Runtime paths all use
-that repository boundary. Duplicate events do not create duplicate output or
-replies, and the first terminal state remains authoritative. A terminal Run
-rejects later output exactly as it rejects any other late event.
+mapping. Managed Bridge, manual MCP, in-process Fake Runtime, and Central Hosted
+Runtime paths all use that repository boundary. Duplicate events do not create
+duplicate output or replies, and the first terminal state remains
+authoritative. A terminal Run rejects later output exactly as it rejects any
+other late event.
 
 Authorized Room members may read persisted Run events after a sequence cursor
 to reconstruct provisional output and activity after refresh or reconnect.
@@ -232,6 +278,10 @@ The Bridge also stores emitted event envelopes in its durable inbox before
 network send. Reconnect replays these envelopes idempotently; a Bridge process
 restart converts any unfinished local execution to `outcome_unknown` before
 replay, so the central projection cannot remain falsely `working`.
+
+Hosted execution has no second durable inbox. Its SQLite invocation intent is
+the recovery fence; a Server restart never reconstructs provider output or
+replays a post-dispatch request.
 
 Before delivery, the server resolves each context sender's current display
 name and includes enabled peer Agents assigned to the Room. These names help a
@@ -322,6 +372,10 @@ resolves its own first-terminal race under the rules above.
 - Out-of-order events never regress state.
 - Offline delivery runs once after reconnect.
 - Cancellation and completion races are deterministic.
+- Hosted intent crash cuts issue at most one automatic provider call and
+  converge every unfinished post-dispatch Run to `outcome_unknown`.
+- Hosted output and reply use the existing sequence/projection transaction and
+  cannot create a Bridge Delivery or formal Result.
 - Handoff loop, depth, and unique-Agent limits are enforced.
 - Room policy rejects disabled handoffs, applies the configured depth, and
   exact reply parsing never routes fuzzy or ambiguous Agent names.
@@ -345,8 +399,10 @@ clarification behavior. `RUN-012` implements ADR-0022 attempt lineage, audited
 ambiguous-outcome acknowledgement, semantic retry, and frozen Context
 Manifests. The in-process harness is `QA-001`, recovery tasks are
 `DATA-003` and `QA-004`, and parallel Wave verification is `QA-010`.
+`RUN-015` implements the ADR-0026 Hosted invocation and recovery boundary.
 
 ## Dependencies
 
-Contracts, Team/Room, Registry, Bridge delivery, Persistence, and Security.
-Discussion Orchestration consumes Runs through this public boundary.
+Contracts, Team/Room, Registry, Bridge delivery, Runtime Adapters, Persistence,
+and Security. Discussion Orchestration consumes Runs through this public
+boundary.

@@ -16,6 +16,8 @@ release evidence.
 - Integration tests exercise SQLite, WebSocket, MCP, Bridge, and recovery seams.
 - E2E tests run public API-to-server-to-real Bridge process workflows.
 - Security tests prove unauthorized and unsafe operations are rejected.
+- Hosted-provider E2E uses a fixed local fake HTTPS endpoint and never requires
+  a paid credential or arbitrary Internet target.
 
 Every behavioral fix adds a focused regression. Protocol changes require
 cross-language compatibility tests. The deterministic FakeAdapter is the
@@ -233,6 +235,17 @@ cancel-all, Reviewer same-Wave contribution and finalizer preference,
 deterministic `wave_result` retry, participant-ordered context, and the three
 durable recovery cut points.
 
+ADR-0026 Hosted scenarios additionally cover an unconfigured Server, Owner-only
+setup, explicit Room assignment, encrypted credential create/rotate/revoke,
+content-free provider check, streaming/final reply, exact handoff, Discussion
+membership, timeout, rejection, redirect, malformed output, overflow,
+cancellation, and provider outage. Crash injection cuts before intent, after
+`dispatching`, during streaming, and before reply projection prove one automatic
+provider call at most and `outcome_unknown` after ambiguous dispatch. Negative
+tests reject arbitrary/private endpoints, leaked key/header/prompt/provider
+detail, tool calls, formal Result authority, Task completion, access mutation,
+and any Bridge Delivery for a Hosted Run.
+
 Transport-limit regressions service both sides of the WebSocket close handshake
 before asserting client termination. Waiting only for an upgraded HTTP request
 context makes cleanup depend on runner scheduling and can fail after the
@@ -316,6 +329,14 @@ processing begins use separate event names; none logs the raw payload. Metrics
 cover connection health, queue depth, delivery age, retries, Run outcomes, and
 event lag.
 
+Hosted observability adds only provider-preset/model-safe labels, configuration
+state, bounded check/call latency, closed outcome codes, active-call count, and
+Run identity. It never records API keys, Authorization headers, URLs beyond the
+code-defined preset identity, prompts, replies, provider request IDs, account or
+quota detail, ciphertext, nonce/tag, or raw response/error bodies. Provider
+failure degrades the owning Hosted Agent and increments its safe failure
+counter; it does not change `GET /api/health/ready`.
+
 `QA-010` evidence must distinguish one logical Wave from its committed member
 execution slots and from physical Runs that actually exist. It correlates
 `discussionId`, `waveId`, `turnId`, `runId`, and `orchestrationKey` and asserts
@@ -370,6 +391,7 @@ messages are never log fields.
 | Queue not draining | queue depth plus oldest delivery age rising | investigate routing/Bridge |
 | Delivery instability | delivery retry total rising | investigate ACK/network loss |
 | Runtime failures | `failed` or `outcome_unknown` Run totals rising | inspect trace metadata |
+| Hosted provider unavailable | Hosted Agent degraded and safe provider failure total rising | inspect provider reachability/key outside logs |
 | Active Run stalled | Run event lag rising | inspect Runtime and cancellation |
 | Request rejection burst | HTTP `4xx`/`5xx` counters rising | inspect auth/client/server errors |
 
@@ -379,6 +401,13 @@ A task is `DONE` only when its completion evidence in `docs/TASKS.md` exists.
 Release notes name migrations, compatibility changes, security impact, and the
 exact checks run. Evidence is tracked by `QA-001` through `QA-012`. Operations
 work is tracked by `OPS-001` through `OPS-005`.
+
+`QA-038` is the deterministic ADR-0026 admission gate. It records focused
+Server/Web/security/migration/recovery tests, fake-HTTPS E2E, unconfigured
+Compose/readiness compatibility, existing managed/manual/Fake behavior, full
+Node and documentation gates, and unchanged Bridge Go/race/vet/Desktop/package
+gates. It does not claim real-provider production acceptance or authorize a
+Release.
 
 The current security and exported-tree evidence is recorded in
 `docs/acceptance/qa-005-security-clean-room-audit.md`. Its PASS applies only to

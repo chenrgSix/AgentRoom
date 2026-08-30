@@ -11,10 +11,12 @@ Team membership, MCP authentication, device pairing, and policy requirements.
 
 ## Identity Model
 
-The binding is `Member -> Device -> Agent -> Runtime`. A Member may own several
-Devices; a Device publishes signed Agent identities; a Runtime Session acts only
-through the Agent selected for a Run. IDs are immutable and display names are
-never authorization inputs.
+The managed binding is `Member -> Device -> Agent -> Runtime`. A Member may own
+several Devices; a Device publishes signed Agent identities; a Runtime Session
+acts only through the Agent selected for a Run. ADR-0026 adds the separate
+`Team Owner -> Hosted Agent -> Central Runtime Profile` binding with no Device
+or local Runtime authority. IDs are immutable and display names are never
+authorization inputs.
 
 The central server is the MVP Team and Device trust authority. The implemented
 primary flow is an Owner-created, short-lived pairing session consumed by
@@ -40,7 +42,8 @@ to loopback. `trusted-team` mode disables `/api/bootstrap` and requires an
 HTTPS public origin plus an Owner recovery secret read from a
 permission-restricted file. The secret is at least 32 bytes, never appears in a
 URL, response, database, browser storage, or log, and is used only for initial
-setup or explicit Owner recovery.
+setup, explicit Owner recovery, or domain-separated wrapping of ADR-0026 Hosted
+provider credentials without persisting the recovery secret itself.
 
 Trusted Web sessions use a `Secure`, `HttpOnly`, `SameSite=Strict`, host-only
 Cookie, and trusted Web APIs reject legacy Web Bearer sessions. Mutations must
@@ -193,21 +196,72 @@ may recover a lost acceptance result because possession of that Device
 credential already authorizes managed Agent publication; a Web session alone
 cannot produce that proof.
 
+### Central Hosted Agent authority
+
+[ADR-0026](../adr/0026-add-optional-central-hosted-agents.md) permits only a
+Team Owner to create, configure, test, rotate, revoke, disable, or re-enable a
+Central Hosted Agent and its Runtime Profile. This is Central provider authority,
+not authority over a member Device. It does not use central Agent provisioning,
+a management code, Bridge pairing, MCP credentials, or a Device credential.
+
+The Owner explicitly selects initial Room access. Every provider test and Run
+revalidates Team, Agent, profile and credential revisions; normal Room/Task
+membership and orchestration rules independently gate the context that may
+leave Central. A fixed connection probe contains no Room, Message, Task, Agent,
+or user content. Provider failure cannot weaken authorization or Central
+readiness.
+
+Provider credentials are accepted only on write-only mutation requests and
+are encrypted before SQLite persistence. Authenticated reads return provider,
+model, revision, configured/revoked state, and safe test observation but never
+plaintext, ciphertext, nonce/tag, wrapping metadata, or a reversible mask.
+Trusted-team mode derives wrapping authority from the already loaded Owner
+recovery material using a Hosted-specific domain separator. Local loopback mode
+may keep database-scoped wrapping material in SQLite for restart portability;
+that protects ordinary projections from plaintext but is not represented as
+protection against full database theft. Neither mode adds a Hosted-specific key
+file, environment variable, Docker secret, or startup argument.
+
+Only code-defined provider presets with fixed HTTPS origins are valid in the
+first version. Arbitrary URLs, cross-origin redirects, URL credentials,
+plaintext HTTP, provider proxies, and tool endpoints are rejected before a
+credential-bearing request. Credential values, Authorization headers, prompts,
+response bodies, account/quota detail, and provider request IDs are excluded
+from logs, safe errors, audit detail, diagnostics, metrics, Web state, and
+backup reports.
+
+The Hosted Adapter receives no shell, filesystem, Workspace, Docker, desktop,
+local Runtime, or generic network port. Provider tool/approval requests fail
+closed. A Hosted Agent may author only the ordinary output/reply of its exact
+Run and handoff-shaped text subject to Server routing. The first version has no
+principal capable of proposing/reviewing a formal Result, completing a Task,
+acknowledging ambiguity, changing access, or calling Member-, Device-, or
+MCP-owned commands.
+
 ## Data Protection
 
 Room context, replies, handoff summaries, and logs may leave the owner machine
 only after scope checks and filtering of tokens, credentials, and obvious
 sensitive local paths. Audit events record decisions and identifiers without
-credentials or full sensitive payloads.
+credentials or full sensitive payloads. Hosted provider prompts and replies
+are subject to the same scope and redaction boundary; the profile's explicit
+Room assignments are the privacy admission fence.
 
 ## Verification and Tasks
 
 Negative tests cover replay, forged poll tokens, non-owner approval, cross-Team access, expired code,
 recovery-secret failure, invitation replay/expiry, cross-origin Cookie writes,
 revocation, unpublished Runtime launch, credential leakage, and attempts to
-bypass local policy. Work is tracked by `SEC-001` through `SEC-009`, with pairing
+bypass local policy. Work is tracked by `SEC-001` through `SEC-010`, with pairing
 transport under `BRG-002` and central Token transport under `BRG-025`, in
 `docs/TASKS.md`.
+
+`SEC-010` adds authenticated-encryption tamper/wrong-authority/rotation tests,
+Owner-only and cross-Team negatives, fixed-origin/redirect/SSRF rejection, and
+plaintext searches across API responses, browser projections, logs, errors,
+diagnostics, metrics, audits, and backups. It also proves the Hosted identity
+cannot enter Result, Task-completion, ambiguity-acknowledgement, Member, Device,
+or MCP authority paths.
 
 `CON-012` defines the additive ADR-0021 pairing-session contract. `SEC-008`
 implements its state machine in migration 0041 and the dedicated pairing

@@ -3,12 +3,14 @@
 ## Scope
 
 - Prefix: `ADP`
-- Planned location: `bridge/internal/runtime/`
-- Owns: Runtime discovery, process/session lifecycle, capability reporting
+- Planned locations: `bridge/internal/runtime/` and `apps/server/src/runtime/`
+- Owns: local Runtime discovery/process/session lifecycle and the bounded
+  Central-hosted model HTTP lifecycle
 
-Runtime Adapters translate the stable Bridge contract into a specific local
-agent runtime. The adapter boundary isolates Codex and CLI lifecycle changes
-from the Team protocol.
+Runtime Adapters translate one stable Run request into a specific execution
+backend. The adapter boundary isolates Codex and CLI lifecycle changes on a
+Bridge, and supported remote-model HTTP changes inside Central, from Team and
+Run state authority.
 
 ## Adapter Contract
 
@@ -20,9 +22,10 @@ Each adapter implements versioned operations for:
 - interrupting and disposing a session;
 - recovering observable state after Bridge restart.
 
-Capabilities declare `invocationMode: managed | manual` plus support for start,
-resume, streaming, interrupt, and handoff. Unsupported operations must be
-hidden upstream rather than emulated silently.
+Capabilities declare `invocationMode: managed | manual | hosted` plus support
+for start, resume, streaming, interrupt, and handoff. Unsupported operations
+must be hidden upstream rather than emulated silently. A `hosted` capability is
+Central-owned and never published in a Bridge hello or Agent publication.
 
 ## Initial Implementations
 
@@ -133,12 +136,53 @@ in-process MVP acceptance harness. It implements the same ordered request/event
 shape without claiming Runtime ownership; production adapters remain in the Go
 Bridge once its interface is available.
 
+## Central Hosted Model Adapter
+
+[ADR-0026](../adr/0026-add-optional-central-hosted-agents.md) and `ADP-018` add
+one production in-process adapter for an explicitly configured Hosted Agent.
+Unlike the Fake Adapter, it performs one real outbound HTTPS provider call.
+Unlike managed adapters, it never crosses the Bridge protocol or starts a
+local process.
+
+The adapter accepts only a versioned code-defined provider preset, fixed HTTPS
+origin, validated model identifier, frozen credential/profile version, bounded
+prompt, deadline, and cancellation signal. The initial implementation does not
+accept an arbitrary base URL, redirect to another origin, provider proxy,
+shell command, filesystem path, environment value, Workspace, Runtime session
+ID, or provider tool executor. Provider tool-call output and interactive
+approval requests fail closed instead of being rendered as assistant text.
+
+The provider connection test sends one fixed content-free probe and records
+only a safe status, code category, and time. Normal execution maps validated
+assistant text deltas into ordered `run.output_delta` events and one final
+assistant message into the existing reply boundary. The response, decoded
+stream, provisional output, and final reply each have independent byte limits;
+unknown fields, raw headers, raw error bodies, hidden reasoning, provider tool
+protocol, and credentials never become Run events.
+
+`RUN-015` persists the invocation intent and crosses to `dispatching` before
+this adapter may open a request. The adapter is not a replay authority. A
+Server restart, abort without a trustworthy provider outcome, or ambiguous
+stream after dispatch becomes `outcome_unknown`; no provider call is
+automatically repeated. A complete deterministic rejection may become a safe
+`failed` event with a closed code.
+
+The first version may answer ordinary Runs and participate through existing
+handoff/Discussion scheduling, but it cannot submit or review a formal Result,
+complete a Task, acknowledge ambiguity, or call Member-, Device-, or MCP-owned
+commands. Those are authorization limits, not missing prompt instructions.
+
 ## Process and Workspace Safety
 
 Adapters receive an owner-defined Runtime configuration, never an arbitrary
 server-provided shell string. They must isolate process groups, bound output,
 propagate cancellation, and clean up children. Existing Runtime command, file,
 network, and approval policies remain authoritative.
+
+The Hosted Adapter has no process group or Workspace. Its only network
+authority is the fixed provider HTTPS origin selected by the supported preset.
+It cannot inherit the Server host's filesystem, shell, Docker, desktop, or
+Bridge permissions; implementation code exposes none of those ports.
 
 On Unix-like systems each managed Runtime remains in its own process group. On
 Windows, `BRG-052` starts every Generic, structured Generic, Codex App Server,
@@ -266,9 +310,10 @@ process permissions remain owner-controlled.
 Shared contract tests must pass for every adapter. Runtime-specific suites cover
 startup, native session resume, streaming, activity, named context,
 cancellation, crash, recovery, process-tree teardown, and local permission
-inheritance. Work is tracked by `ADP-001` through `ADP-014` (completed),
+inheritance. Work is tracked by `ADP-001` through `ADP-017` (completed),
 `BRG-023`/`BRG-027`/`BRG-052`, and `RUN-009` in
-`docs/TASKS.md`.
+`docs/TASKS.md`. `ADP-018` implements the Central Hosted adapter without
+changing the production Go adapter boundary.
 
 The production Go boundary is `runtime.Adapter`: capability discovery plus one
 context-cancelable `Execute` method that emits ordered semantic status, output,
@@ -278,5 +323,7 @@ The pinned Codex App Server event subset and lifecycle limits are documented in
 
 ## Dependencies
 
-Contracts and the Bridge invocation boundary. Adapters never call Team services
+Contracts and the invocation boundary. Bridge adapters depend on Bridge; the
+Hosted adapter additionally depends on Security for credential resolution and
+Run Orchestration for its durable intent. Adapters never call Team services
 directly.

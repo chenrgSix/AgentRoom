@@ -8,7 +8,8 @@
 
 The server persistence layer owns durable Team, Room, explicit human and Agent
 Room participation, Message, Agent projection, Run, delivery, Discussion Wave,
-Agent Task, and audit records. SQLite is the MVP database for a single central
+Agent Task, Central Hosted Runtime Profile/credential envelope/invocation
+intent, and audit records. SQLite is the MVP database for a single central
 server instance.
 
 Migration 0042 adds the nullable, bounded `workspace_alias` Agent projection.
@@ -28,6 +29,14 @@ Runs receive deterministic attempt numbers and retain a missing manifest as a
 legacy `not_recorded` condition; no historical execution context is invented.
 New Runs capture their manifest after the existing context-fence trigger and
 before any managed Delivery can be emitted.
+
+Migration 0052 adds the ADR-0026 `hosted` Agent integration mode, versioned
+Hosted Runtime Profiles, authenticated provider-credential envelopes, safe
+connection-test observations, and one unique Hosted invocation intent per Run.
+It adds no local path, command, environment, Workspace, Docker, desktop,
+Bridge, provider-response body, plaintext credential, or duplicate prompt
+column. Existing Agents and Runs retain their exact integration and delivery
+semantics; no Hosted row is synthesized during migration.
 
 ## Storage Model
 
@@ -130,6 +139,32 @@ the next Wave's stable input anchor. It is deliberately written before the
 barrier-close transaction; a retry observes the same ID instead of appending a
 second anchor.
 
+### Central Hosted storage
+
+A Hosted Runtime Profile is Team-scoped, bound to exactly one immutable Hosted
+Agent identity, and revisioned across provider/model/limit changes. Its current
+credential reference identifies one immutable encrypted version; rotation
+creates a new version and revocation is retained rather than deleted. Agent and
+profile constraints reject a Device binding, managed Workspace projection, or
+conversion of an existing managed/manual Agent.
+
+The credential row stores authenticated ciphertext, nonce/tag, algorithm and
+key version, creation/revocation metadata, and a stable non-secret identity.
+Authenticated read repositories never return those storage fields to ordinary
+Agent/Profile DTOs. Trusted-team wrapping derives from existing recovery
+authority; local loopback wrapping material may live in a separately scoped
+SQLite row. Backups deliberately contain the envelope and required wrapping
+metadata so restore preserves configured Hosted Agents, but verification and
+operator output never decrypt or print the provider key.
+
+One Hosted invocation intent freezes Run, Agent, profile and credential
+versions, provider/model identifiers, prompt digest, deadline, and operation
+identity. A unique Run foreign key permits one automatic outbound attempt. The
+Run/Message/Context Manifest remain the prompt authorities, so the intent stores
+neither plaintext prompt nor provider response. Closed states distinguish
+`prepared`, `dispatching`, `streaming`, and terminal completion/failure/unknown
+for recovery; state never moves backward.
+
 ## Transaction Boundaries
 
 The Server composition root creates one `SqliteTransactionBoundary` for the
@@ -155,6 +190,14 @@ Agent Room Message and immutable `(run_id, reply_sequence, message_id)` mapping
 also commit together for managed, manual and in-process execution. Injected
 failure at either the Message or mapping insert rolls the Run sequence and all
 related rows back.
+
+For `RUN-015`, creation of a Hosted invocation intent and its `prepared` state
+commits before execution. The transition to `dispatching` commits before the
+first provider byte may leave Central. Applying output uses the existing
+contiguous Run-event transaction; applying the final reply uses the same
+`RUN-014` event/Room Message/projection transaction and closes the invocation
+intent consistently with the Run. Credential rotation or revocation never
+rewrites the version frozen by an existing intent.
 
 The separately idempotent `wave_result` Message is not part of that aggregate
 transaction. Its deterministic identity closes the crash window between Message
@@ -212,6 +255,14 @@ On startup, the server validates migrations and preserves queued deliveries and
 terminal outcomes. Bridge reconnect dispatches queued work, while Bridge
 restart replays durable events or reports an unfinished Runtime as
 `outcome_unknown`. Projection sequence numbers never move backward.
+
+Hosted startup recovery first completes any already-transactional terminal Run
+projection. A `prepared` intent that has never crossed the durable dispatch
+fence may be scheduled once. Any `dispatching` or later nonterminal intent is
+terminalized with its Run as `outcome_unknown`; startup never opens a provider
+request for it, reconstructs missing deltas, or invents a final reply. Repeated
+recovery is idempotent. The existing audited ambiguity acknowledgement is
+required before a different Run may retry that Task attempt.
 
 Discussion reconciliation covers three explicit cut points:
 
@@ -304,6 +355,10 @@ backups atomically without overwrite, streams restore hashes, stages a new
 database filename, removes only a rejected new target, and never changes the
 selected live database in place.
 
+Hosted profile, envelope, revocation, and invocation rows participate in that
+same online SQLite backup. Backup verification proves structural presence and
+referential integrity without decrypting a key or contacting a provider.
+
 Migration 0048 adds one current `device_bridge_observations` row per Device.
 It records only the authenticated connection epoch, canonical semantic Bridge
 version, and observation time. The original pairing-session version remains
@@ -323,7 +378,7 @@ committed-next-Wave cut points, and verifies deterministic-anchor retry.
 Persistence work is tracked by `DATA-001` through `DATA-006`, `TASK-007`
 through `TASK-009`, target Task/Result persistence by `TASK-012`/`TASK-013`, and
 Artifact storage by `ART-001`; local Bridge state ownership/durability by
-`BRG-052`; parallel recovery
+`BRG-052`; ADR-0026 Hosted storage and recovery by `DATA-007`; parallel recovery
 is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
 
 ## Dependencies

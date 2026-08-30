@@ -31,7 +31,7 @@ document and the task list in the same commit.
 | DISC | [Discussion Orchestration](discussion-orchestration.md) | Discussion, progress, budget, policy | `apps/server/src/discussion/` | CON, ROOM, RUN, ADP, DATA, SEC |
 | MCP | [MCP Server](mcp-server.md) | MCP auth and Team tools | `apps/server/` | CON, ROOM, TASK, RUN, SEC |
 | BRG | [Bridge](bridge.md) | Connection and local delivery state | `bridge/`, `apps/server/` | CON, REG, SEC |
-| ADP | [Runtime Adapters](runtime-adapters.md) | Runtime process and Team Session | `bridge/internal/runtime/` | CON, BRG |
+| ADP | [Runtime Adapters](runtime-adapters.md) | Local Runtime process/Team Session and bounded Central model HTTP execution | `bridge/internal/runtime/`, `apps/server/src/runtime/` | CON, BRG, DATA, SEC |
 | WEB | [Web UI](web-ui.md) | Browser presentation state | `apps/web/` | ROOM, REG, TASK, RUN, BRG, SEC |
 | DATA | [Persistence and Recovery](persistence-recovery.md) | Database and projection durability | `apps/server/` | CON |
 | SEC | [Security and Authentication](security-auth.md) | Identity, credentials, authorization | server and Bridge | CON |
@@ -47,7 +47,9 @@ CON
 ├── ROOM
 ├── REG
 └── BRG
-    └── ADP
+    └── ADP (managed local Runtime)
+
+DATA + SEC ── ADP (optional Central Hosted model)
 
 ROOM + REG + BRG + DATA
           ├── WSP
@@ -82,6 +84,11 @@ one place while allowing Auth, Team/Room, Registry, Message, Task, Discussion,
 Run, Bridge, MCP, and system routes to evolve behind their existing public
 contracts. Moving behavior between registrars does not change the state owner
 listed in the module map.
+
+ADR-0026 adds Hosted profile/security routes and an in-process model adapter
+behind this same composition root. It does not add a second Server process or
+give route registrars direct provider, credential, repository, timer, or
+recovery ownership.
 
 ## Standard Module Document
 
