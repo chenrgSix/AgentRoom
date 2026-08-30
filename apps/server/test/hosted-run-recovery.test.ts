@@ -4,9 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { backupDatabase } from "../src/data/backup.js";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
-import { HostedAgentRepository, hostedProvider } from
+import {
+  defaultHostedExecutionLimits,
+  HostedAgentRepository,
+  hostedProvider
+} from
   "../src/data/hosted-agent-repository.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
 import { SqliteTransactionBoundary } from
@@ -93,7 +98,10 @@ function providerResponse(text: string): Response {
   });
 }
 
-async function createPreparedFixture(label: string) {
+async function createPreparedFixture(
+  label: string,
+  options: { timeoutSeconds?: number } = {}
+) {
   const directory = await mkdtemp(path.join(os.tmpdir(), label));
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
@@ -139,6 +147,23 @@ async function createPreparedFixture(label: string) {
     roomIds: [room.roomId],
     now
   });
+  if (options.timeoutSeconds !== undefined) {
+    const profile = hostedAgents.createProfile({
+      agentId: agent.agentId,
+      teamId: created.team.teamId,
+      provider: hostedProvider,
+      model: agent.model,
+      credentialVersion: 1,
+      createdByMemberId: created.owner.memberId,
+      expectedRevision: agent.profileRevision,
+      executionLimits: {
+        ...defaultHostedExecutionLimits,
+        timeoutSeconds: options.timeoutSeconds
+      },
+      now
+    });
+    agent.profileRevision = profile.profileRevision;
+  }
   const messages = new MessageService(core, auth);
   const runs = new RunRepository(database, transactions);
   const tasks = new AgentTaskRepository(database);
@@ -276,10 +301,33 @@ async function waitForState(
 
 test("prepared Hosted intent runs exactly once after restart", async () => {
   const fixture = await createPreparedFixture("hosted-prepared-recovery-");
+  const originalIntent = fixture.invocations.getByRun(fixture.run.runId);
+  assert.ok(originalIntent);
+  const repeatedIntent = fixture.invocations.prepare({
+    runId: originalIntent.runId,
+    teamId: originalIntent.teamId,
+    agentId: originalIntent.agentId,
+    profileRevision: originalIntent.profileRevision,
+    credentialVersion: originalIntent.credentialVersion,
+    provider: originalIntent.provider,
+    model: originalIntent.model,
+    deadlineAt: originalIntent.deadlineAt,
+    promptSha256: originalIntent.promptSha256,
+    now
+  });
+  assert.equal(repeatedIntent.invocationId, originalIntent.invocationId);
+  assert.equal((fixture.database.prepare(`
+    SELECT count(*) AS count FROM hosted_invocation_intents WHERE run_id = ?
+  `).get(fixture.run.runId) as { count: number }).count, 1);
   fixture.database.close();
   let providerCalls = 0;
-  const restarted = restart(fixture.databasePath, () => later, (async () => {
+  let restarted!: ReturnType<typeof restart>;
+  restarted = restart(fixture.databasePath, () => later, (async () => {
     providerCalls += 1;
+    assert.equal(
+      restarted.invocations.getByRun(fixture.run.runId)?.state,
+      "dispatching"
+    );
     return providerResponse("Recovered once.");
   }) as typeof fetch);
   try {
@@ -296,9 +344,128 @@ test("prepared Hosted intent runs exactly once after restart", async () => {
         .some((message) => message.content === "Recovered once."),
       true
     );
+    assert.equal((restarted.database.prepare(`
+      SELECT count(*) AS count FROM hosted_invocation_intents WHERE run_id = ?
+    `).get(fixture.run.runId) as { count: number }).count, 1);
+    assert.equal((restarted.database.prepare(`
+      SELECT count(*) AS count FROM run_deliveries WHERE run_id = ?
+    `).get(fixture.run.runId) as { count: number }).count, 0);
+    assert.equal((restarted.database.prepare(`
+      SELECT count(*) AS count FROM task_results WHERE task_id = ?
+    `).get(fixture.run.taskId) as { count: number }).count, 0);
   } finally {
     await restarted.scheduler.shutdown();
     restarted.database.close();
+  }
+});
+
+test("Hosted execution timeout aborts after dispatch without replay", async () => {
+  const fixture = await createPreparedFixture(
+    "hosted-execution-timeout-",
+    { timeoutSeconds: 1 }
+  );
+  fixture.database.close();
+  let providerCalls = 0;
+  let abortObserved!: () => void;
+  const aborted = new Promise<void>((resolve) => {
+    abortObserved = resolve;
+  });
+  let abortGuard!: ReturnType<typeof setTimeout>;
+  const guard = new Promise<void>((_resolve, reject) => {
+    abortGuard = setTimeout(() => {
+      reject(new Error("Hosted execution timeout was not observed"));
+    }, 3_000);
+  });
+  let restarted!: ReturnType<typeof restart>;
+  restarted = restart(fixture.databasePath, () => later, (async (_input, init) => {
+    providerCalls += 1;
+    assert.equal(
+      restarted.invocations.getByRun(fixture.run.runId)?.state,
+      "dispatching"
+    );
+    return await new Promise<Response>((_resolve, reject) => {
+      const rejectAbort = () => {
+        abortObserved();
+        reject(new DOMException("Hosted timeout", "AbortError"));
+      };
+      if (init?.signal?.aborted) rejectAbort();
+      else init?.signal?.addEventListener("abort", rejectAbort, { once: true });
+    });
+  }) as typeof fetch);
+  try {
+    restarted.scheduler.recover();
+    await Promise.race([aborted, guard]);
+    clearTimeout(abortGuard);
+    await waitForState(restarted.runs, fixture.run.runId, "outcome_unknown");
+    await waitForIdle(restarted.scheduler);
+    assert.equal(providerCalls, 1);
+    assert.equal(
+      restarted.invocations.getByRun(fixture.run.runId)?.state,
+      "outcome_unknown"
+    );
+    assert.equal(
+      restarted.invocations.getByRun(fixture.run.runId)?.failureCode,
+      "HOSTED_RUN_DEADLINE_UNKNOWN"
+    );
+    const terminalEvent = restarted.runs.listEvents(fixture.run.runId, 0).at(-1);
+    assert.equal(terminalEvent?.event.type, "status");
+    assert.equal(
+      terminalEvent?.event.type === "status"
+        ? terminalEvent.event.error?.code
+        : undefined,
+      "HOSTED_RUN_DEADLINE_UNKNOWN"
+    );
+    assert.deepEqual(restarted.scheduler.recover().runnableRunIds, []);
+    assert.equal(providerCalls, 1);
+  } finally {
+    clearTimeout(abortGuard);
+    await restarted.scheduler.shutdown();
+    restarted.database.close();
+  }
+});
+
+test("online backup restores configured Hosted Run and prepared intent", async () => {
+  const fixture = await createPreparedFixture("hosted-online-backup-");
+  const sourceIntent = fixture.invocations.getByRun(fixture.run.runId);
+  assert.ok(sourceIntent);
+  const backupPath = path.join(
+    path.dirname(fixture.databasePath),
+    "backups",
+    "hosted-run.sqlite"
+  );
+  await backupDatabase(fixture.databasePath, backupPath);
+  fixture.database.close();
+
+  let providerCalls = 0;
+  const restored = restart(backupPath, () => later, (async () => {
+    providerCalls += 1;
+    return providerResponse("Recovered from online backup.");
+  }) as typeof fetch);
+  try {
+    const restoredRun = restored.runs.getRun(fixture.run.runId);
+    const restoredIntent = restored.invocations.getByRun(fixture.run.runId);
+    assert.equal(restoredRun?.state, "queued");
+    assert.equal(restoredIntent?.invocationId, sourceIntent.invocationId);
+    assert.equal(restoredIntent?.idempotencyKey, sourceIntent.idempotencyKey);
+    assert.equal(restoredIntent?.state, "prepared");
+
+    const recovery = restored.scheduler.recover();
+    assert.deepEqual(recovery.runnableRunIds, [fixture.run.runId]);
+    await waitForState(restored.runs, fixture.run.runId, "completed");
+    await waitForIdle(restored.scheduler);
+    assert.equal(providerCalls, 1);
+    assert.equal(
+      restored.invocations.getByRun(fixture.run.runId)?.state,
+      "completed"
+    );
+    assert.equal(
+      restored.core.listMessagesAfter(fixture.room.roomId, 0, 20)
+        .some((message) => message.content === "Recovered from online backup."),
+      true
+    );
+  } finally {
+    await restored.scheduler.shutdown();
+    restored.database.close();
   }
 });
 
