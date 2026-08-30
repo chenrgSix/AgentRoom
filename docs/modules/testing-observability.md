@@ -143,7 +143,10 @@ compilation are local gates. The Windows Job Object regression must also run on
 native Windows before `QA-036`; a successful cross-compile is only build
 evidence. The native job uses `-count=1` and verbose output so an exact run must
 execute the process tree rather than restore a cached Go test result; a workflow
-policy regression rejects removal of that boundary.
+policy regression rejects removal of that boundary. CI run `33292642155` on
+commit `ce7627a040d06d2aa4e16ebee535a8fdf3bcb5ca` explicitly executed and passed
+`TestConfigureWindowsRuntimeCommandSuppressesConsoleWindow` and
+`TestWindowsRuntimeJobTerminatesGrandchild` on native Windows.
 
 `RUN-014` fault injection rejects a mentioned Run insert after Message
 allocation and rejects both reply Message and reply-mapping inserts after event

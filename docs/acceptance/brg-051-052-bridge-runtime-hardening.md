@@ -95,10 +95,13 @@ executed on Windows.
 
 ## Remaining boundaries
 
-- `QA-036` must execute the Job Object process-tree regression on native
-  Windows without the Go test cache and rerun the clean-tree cross-platform
-  gate set. CI now requires `go test -count=1 ./... -run Windows -v`; a
-  successful exact-commit run remains the acceptance evidence.
-- Fresh `QA-002`, `QA-028`, `QA-030` and `BRG-046` two-machine evidence remains
-  a separate owner-authorized acceptance run.
+- Native Windows CI run `33292642155` on exact commit
+  `ce7627a040d06d2aa4e16ebee535a8fdf3bcb5ca` forced
+  `go test -count=1 ./... -run Windows -v` and explicitly passed both
+  `TestConfigureWindowsRuntimeCommandSuppressesConsoleWindow` and
+  `TestWindowsRuntimeJobTerminatesGrandchild`; the Job Object execution gate is
+  closed without relying on a restored Go test result.
+- Fresh `QA-002`, `QA-028`, and `QA-030` two-machine evidence remains a
+  separate owner-authorized acceptance run; `BRG-046` has its own native and
+  physical closure record.
 - Release creation, tagging and publication remain outside this task.
