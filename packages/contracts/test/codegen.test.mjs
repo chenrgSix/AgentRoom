@@ -58,5 +58,7 @@ test("contract generation is deterministic", async () => {
   assert.match(first.workGo, /type RunContextManifest struct/);
   assert.match(first.workTypescript, /export interface TaskProjection/);
   assert.match(first.workTypescript, /export interface WorkbenchQuery/);
+  assert.match(first.workTypescript, /search\?:\s+string;/);
+  assert.match(first.workGo, /Search\s+\*string\s+`json:"search,omitempty"`/);
   assert.match(first.workTypescript, /export interface WorkbenchPage/);
 });

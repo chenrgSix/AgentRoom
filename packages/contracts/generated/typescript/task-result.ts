@@ -425,6 +425,12 @@ export interface WorkbenchQuery {
   priority?:      Priority[];
   roomId?:        null | string;
   scope:          Scope;
+  /**
+   * Optional trimmed Task title search. Case-insensitive literal title substrings match;
+   * numeric or TASK-n text also matches the exact Team display number. Empty text is
+   * equivalent to omission.
+   */
+  search?:        string;
   updatedAfter?:  null | string;
   updatedBefore?: null | string;
 }

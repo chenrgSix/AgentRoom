@@ -365,8 +365,12 @@ type WorkbenchQuery struct {
 	Priority       []Priority         `json:"priority,omitempty"`
 	RoomID         *string            `json:"roomId"`
 	Scope          Scope              `json:"scope"`
-	UpdatedAfter   *time.Time         `json:"updatedAfter"`
-	UpdatedBefore  *time.Time         `json:"updatedBefore"`
+	// Optional trimmed Task title search. Case-insensitive literal title substrings match;
+	// numeric or TASK-n text also matches the exact Team display number. Empty text is
+	// equivalent to omission.
+	Search        *string    `json:"search,omitempty"`
+	UpdatedAfter  *time.Time `json:"updatedAfter"`
+	UpdatedBefore *time.Time `json:"updatedBefore"`
 }
 
 type WorkbenchPage struct {

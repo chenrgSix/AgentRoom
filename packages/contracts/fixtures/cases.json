@@ -2304,6 +2304,113 @@
       "valid": true
     },
     {
+      "name": "Workbench search accepts literal title text",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "search": "  Plan %_ ' OR 1=1 --  ",
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Workbench search accepts a Team display number",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "search": "TASK-42",
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Workbench search counts Unicode code points",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "search": "😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀",
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Workbench search accepts empty text as no filter",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "search": "",
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": true
+    },
+    {
+      "name": "Workbench search rejects more than 100 characters",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "search": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": false
+    },
+    {
+      "name": "Workbench search rejects numeric JSON instead of text",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "search": 42,
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": false
+    },
+    {
+      "name": "Workbench search rejects null instead of text",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "search": null,
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": false
+    },
+    {
+      "name": "Workbench search rejects an array of queries",
+      "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
+      "instance": {
+        "scope": "team",
+        "attention": [],
+        "lifecycleState": [],
+        "search": [
+          "Plan",
+          "Review"
+        ],
+        "limit": 50,
+        "cursor": null
+      },
+      "valid": false
+    },
+    {
       "name": "Workbench query rejects an unbounded page",
       "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
       "instance": {

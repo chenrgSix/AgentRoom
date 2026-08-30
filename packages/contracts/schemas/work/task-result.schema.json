@@ -581,6 +581,11 @@
       "required": ["scope", "attention", "lifecycleState", "limit", "cursor"],
       "properties": {
         "scope": { "enum": ["mine", "team"] },
+        "search": {
+          "type": "string",
+          "maxLength": 100,
+          "description": "Optional trimmed Task title search. Case-insensitive literal title substrings match; numeric or TASK-n text also matches the exact Team display number. Empty text is equivalent to omission."
+        },
         "attention": {
           "type": "array",
           "maxItems": 10,

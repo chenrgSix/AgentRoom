@@ -11,7 +11,7 @@ import type { ServerRouteContext } from "./route-context.js";
 
 const allowedKeys = new Set([
   "scope", "attention", "lifecycleState", "priority", "ownerMemberId",
-  "roomId", "agentId", "updatedAfter", "updatedBefore", "limit", "cursor"
+  "roomId", "agentId", "updatedAfter", "updatedBefore", "limit", "cursor", "search"
 ]);
 
 function scalar(value: unknown, label: string): string | undefined {
@@ -49,11 +49,13 @@ function queryInput(value: Record<string, unknown>): WorkbenchQuery {
   const limitText = scalar(value.limit, "limit");
   const limit = limitText === undefined ? 50 : Number(limitText);
   const cursor = scalar(value.cursor, "cursor") ?? null;
+  const search = scalar(value.search, "search")?.trim();
   if (cursor !== null && !/^[A-Za-z0-9_-]{8,512}$/u.test(cursor)) {
     throw new Error("Workbench cursor is invalid");
   }
   return {
     scope: scope as Scope,
+    ...(search === undefined ? {} : { search }),
     attention: list(value.attention, "attention") as AttentionElement[],
     lifecycleState: list(value.lifecycleState, "lifecycleState") as LifecycleState[],
     priority: list(value.priority, "priority") as Priority[],
@@ -69,6 +71,7 @@ function queryInput(value: Record<string, unknown>): WorkbenchQuery {
 
 export function registerWorkbenchRoutes({
   app,
+  auth,
   principal,
   workbench
 }: ServerRouteContext): void {
@@ -77,8 +80,11 @@ export function registerWorkbenchRoutes({
     Querystring: Record<string, unknown>;
   }>("/api/teams/:teamId/work-items", async (request, reply) => {
     noStore(reply);
+    const actor = principal(request);
+    // Authenticate the Team before parsing any filter, including search.
+    auth.requireTeamMember(actor, request.params.teamId);
     return workbench.list(
-      principal(request),
+      actor,
       request.params.teamId,
       queryInput(request.query)
     );

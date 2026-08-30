@@ -8,6 +8,7 @@ import type {
 } from "@convene-wire/contracts/task-result";
 
 import type { CoreRepository } from "../data/core-repository.js";
+import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
 import type { RunRecord, RunRepository } from "../run/run-repository.js";
 import type {
   AuthService,
@@ -62,7 +63,26 @@ function latestRun(runs: RunRecord[]): RunRecord | undefined {
   )[0];
 }
 
-function filterFingerprint(query: WorkbenchQuery): string {
+function normalizedSearch(value: unknown): string {
+  if (value === undefined) return "";
+  if (typeof value !== "string") {
+    throw new Error("Workbench search must be a string");
+  }
+  const search = value.trim();
+  if (exceedsUnicodeCodePointLimit(search, 100)) {
+    throw new Error("Workbench search must contain at most 100 characters");
+  }
+  return search.toLowerCase();
+}
+
+function searchedDisplayNumber(search: string): number | null {
+  const match = /^(?:task-)?([0-9]+)$/u.exec(search);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+function filterFingerprint(query: WorkbenchQuery, search: string): string {
   const normalized = {
     scope: query.scope,
     attention: query.attention.toSorted(),
@@ -72,7 +92,9 @@ function filterFingerprint(query: WorkbenchQuery): string {
     roomId: query.roomId ?? null,
     agentId: query.agentId ?? null,
     updatedAfter: query.updatedAfter ?? null,
-    updatedBefore: query.updatedBefore ?? null
+    updatedBefore: query.updatedBefore ?? null,
+    // Keep pre-search fingerprints valid for existing no-search callers.
+    ...(search ? { search } : {})
   };
   return createHash("sha256")
     .update(JSON.stringify(normalized))
@@ -120,7 +142,9 @@ export class WorkbenchService {
   ): WorkbenchPage {
     const member = this.auth.requireTeamMember(principal, teamId);
     this.validateQuery(query);
-    const fingerprint = filterFingerprint(query);
+    const search = normalizedSearch(query.search);
+    const displayNumber = searchedDisplayNumber(search);
+    const fingerprint = filterFingerprint(query, search);
     const cursor = query.cursor ? decodeCursor(query.cursor) : null;
     if (cursor && (
       cursor.teamId !== teamId || cursor.filterFingerprint !== fingerprint
@@ -158,6 +182,10 @@ export class WorkbenchService {
         !task.assignments.some(({ agentId }) => ownedAgentIds.has(agentId))) {
         return false;
       }
+      // Search only the already authorized projection; no SQL wildcard or
+      // expression semantics can broaden literal title matching.
+      if (search && !item.title.toLowerCase().includes(search) &&
+        item.taskDisplayNumber !== displayNumber) return false;
       if (query.attention.length > 0 && !query.attention.some((reason) =>
         item.attentionReasons.some((attention) => attention.reason === reason)
       )) return false;
