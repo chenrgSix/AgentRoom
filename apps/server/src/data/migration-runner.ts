@@ -6,6 +6,9 @@ import path from "node:path";
 import Database from "better-sqlite3";
 
 const migrationFilename = /^(?<version>[0-9]{4})_(?<name>[a-z0-9_]+)\.sql$/;
+const migrationDirectiveMarker = "-- convenewire:migration";
+const foreignKeysOffDirective =
+  `${migrationDirectiveMarker} foreign_keys=off`;
 
 interface AppliedMigration {
   checksum: string;
@@ -14,7 +17,15 @@ interface AppliedMigration {
 }
 
 interface Migration extends AppliedMigration {
+  foreignKeysOff: boolean;
   sql: string;
+}
+
+interface ForeignKeyViolation {
+  fkid: number;
+  parent: string;
+  rowid: number | null;
+  table: string;
 }
 
 export interface MigrationResult {
@@ -30,6 +41,27 @@ export const defaultMigrationsDirectory = fileURLToPath(
 
 function checksum(source: string): string {
   return createHash("sha256").update(source).digest("hex");
+}
+
+function requiresForeignKeysOff(source: string, filename: string): boolean {
+  const lines = source.split(/\r?\n/u);
+  const firstLine = lines[0] ?? "";
+  const directives = lines.filter((line) =>
+    line.trimStart().startsWith(migrationDirectiveMarker)
+  );
+  if (directives.length === 0) return false;
+  if (
+    directives.length !== 1 ||
+    firstLine !== foreignKeysOffDirective ||
+    directives[0] !== foreignKeysOffDirective
+  ) {
+    throw new Error(`Invalid migration directive: ${filename}`);
+  }
+  return true;
+}
+
+function foreignKeysEnabled(database: Database.Database): boolean {
+  return database.pragma("foreign_keys", { simple: true }) === 1;
 }
 
 async function loadMigrations(migrationsDirectory: string): Promise<Migration[]> {
@@ -62,6 +94,7 @@ async function loadMigrations(migrationsDirectory: string): Promise<Migration[]>
     const source = await readFile(path.join(migrationsDirectory, entry.name), "utf8");
     migrations.push({
       checksum: checksum(source),
+      foreignKeysOff: requiresForeignKeysOff(source, entry.name),
       name,
       sql: source,
       version
@@ -133,6 +166,16 @@ export async function migrateDatabase(
     `);
     const applyMigration = database.transaction((migration: Migration) => {
       database.exec(migration.sql);
+      if (migration.foreignKeysOff) {
+        const violations = database.pragma(
+          "foreign_key_check"
+        ) as ForeignKeyViolation[];
+        if (violations.length > 0) {
+          throw new Error(
+            `Migration ${migration.version} violates foreign key constraints`
+          );
+        }
+      }
       insertMigration.run({
         appliedAt: new Date().toISOString(),
         checksum: migration.checksum,
@@ -146,7 +189,31 @@ export async function migrateDatabase(
         continue;
       }
 
-      applyMigration.immediate(migration);
+      if (!migration.foreignKeysOff) {
+        applyMigration.immediate(migration);
+      } else {
+        if (database.inTransaction) {
+          throw new Error(
+            `Migration ${migration.version} cannot disable foreign keys in a transaction`
+          );
+        }
+        database.pragma("foreign_keys = OFF");
+        if (foreignKeysEnabled(database)) {
+          throw new Error(
+            `Migration ${migration.version} could not disable foreign keys`
+          );
+        }
+        try {
+          applyMigration.immediate(migration);
+        } finally {
+          database.pragma("foreign_keys = ON");
+          if (!foreignKeysEnabled(database)) {
+            throw new Error(
+              `Migration ${migration.version} could not restore foreign keys`
+            );
+          }
+        }
+      }
       appliedVersions.push(migration.version);
     }
 
