@@ -22,6 +22,18 @@ import {
 const ownerMetadataKey = "trusted_team_owner_user_id";
 const sessionDurationMilliseconds = 30 * 24 * 60 * 60 * 1_000;
 const invitationDurationMilliseconds = 24 * 60 * 60 * 1_000;
+const memberRecoveryDurationMilliseconds = 15 * 60 * 1_000;
+
+interface MemberRecoveryRow {
+  recovery_id: string;
+  team_id: string;
+  member_id: string;
+  user_id: string;
+  created_by_member_id: string;
+  expires_at: string;
+  consumed_at: string | null;
+  revoked_at: string | null;
+}
 
 interface InvitationRow {
   invitation_id: string;
@@ -43,6 +55,15 @@ export interface MemberInvitation {
   expiresAt: string;
   invitationId: string;
   teamId: string;
+}
+
+export interface IssuedMemberRecovery {
+  recoveryId: string;
+  teamId: string;
+  memberId: string;
+  displayName: string;
+  expiresAt: string;
+  token: string;
 }
 
 function hash(value: string): string {
@@ -282,6 +303,130 @@ export class TrustedWebAccessService {
         )
       };
     }).immediate();
+  }
+
+  public createMemberRecovery(
+    principal: WebPrincipal,
+    teamId: string,
+    memberId: string,
+    now: string
+  ): IssuedMemberRecovery {
+    return this.database.transaction(() => {
+      const actor = this.requireRecoveryOwner(principal, teamId);
+      const member = this.recoverableMember(teamId, memberId);
+      if (!member?.userId) {
+        throw new AuthorizationError("FORBIDDEN", "Member recovery unavailable");
+      }
+      const recoveryId = createOpaqueId("memberrecovery");
+      const token = randomBytes(32).toString("base64url");
+      const expiresAt = future(now, memberRecoveryDurationMilliseconds);
+      this.database.prepare(`
+        UPDATE web_member_recoveries SET revoked_at = ?
+        WHERE user_id = ? AND consumed_at IS NULL AND revoked_at IS NULL
+      `).run(now, member.userId);
+      this.database.prepare(`
+        INSERT INTO web_member_recoveries (
+          recovery_id, team_id, member_id, user_id, created_by_member_id,
+          token_hash, created_at, expires_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        recoveryId, teamId, memberId, member.userId, actor.memberId,
+        hash(token), now, expiresAt
+      );
+      return {
+        recoveryId, teamId, memberId, displayName: member.displayName,
+        expiresAt, token
+      };
+    }).immediate();
+  }
+
+  public revokeMemberRecovery(
+    principal: WebPrincipal,
+    teamId: string,
+    memberId: string,
+    recoveryId: string,
+    now: string
+  ): void {
+    this.database.transaction(() => {
+      this.requireRecoveryOwner(principal, teamId);
+      // The exact capability can still be revoked after target eligibility changes.
+      this.database.prepare(`
+        UPDATE web_member_recoveries SET revoked_at = ?
+        WHERE recovery_id = ? AND team_id = ? AND member_id = ?
+          AND consumed_at IS NULL AND revoked_at IS NULL
+      `).run(now, recoveryId, teamId, memberId);
+    }).immediate();
+  }
+
+  public claimMemberRecovery(token: string, now: string): {
+    member: MemberRecord;
+    session: IssuedCredential;
+    user: WebUserRecord;
+  } {
+    const invalid = () => new AuthorizationError(
+      "UNAUTHENTICATED", "Invalid or expired member recovery code"
+    );
+    return this.database.transaction(() => {
+      const recovery = this.database.prepare(`
+        SELECT recovery_id, team_id, member_id, user_id, created_by_member_id,
+               expires_at, consumed_at, revoked_at
+        FROM web_member_recoveries WHERE token_hash = ?
+      `).get(hash(token)) as MemberRecoveryRow | undefined;
+      const timestamp = Date.parse(now);
+      if (
+        !recovery || !Number.isFinite(timestamp) ||
+        recovery.consumed_at !== null || recovery.revoked_at !== null ||
+        !Number.isFinite(Date.parse(recovery.expires_at)) ||
+        Date.parse(recovery.expires_at) <= timestamp
+      ) throw invalid();
+
+      const issuer = this.repository.getMember(recovery.created_by_member_id);
+      const member = this.recoverableMember(recovery.team_id, recovery.member_id);
+      const user = member?.userId === recovery.user_id
+        ? this.repository.getUser(recovery.user_id)
+        : undefined;
+      if (
+        !member || !user || !issuer?.userId || issuer.role !== "owner" ||
+        issuer.teamId !== recovery.team_id
+      ) throw invalid();
+
+      const consumed = this.database.prepare(`
+        UPDATE web_member_recoveries SET consumed_at = ?
+        WHERE recovery_id = ? AND consumed_at IS NULL AND revoked_at IS NULL
+      `).run(now, recovery.recovery_id);
+      if (consumed.changes !== 1) throw invalid();
+      this.auth.revokeWebSessionsForUser(user.userId, now);
+      return {
+        member,
+        user,
+        session: this.auth.issueWebSession(
+          user.userId, now, future(now, sessionDurationMilliseconds)
+        )
+      };
+    }).immediate();
+  }
+
+  private requireRecoveryOwner(principal: WebPrincipal, teamId: string) {
+    const actor = this.auth.requireTeamMember(principal, teamId);
+    if (actor.role !== "owner") {
+      throw new AuthorizationError("FORBIDDEN", "Only a Team owner can recover members");
+    }
+    return actor;
+  }
+
+  private recoverableMember(teamId: string, memberId: string): MemberRecord | undefined {
+    const team = this.repository.getTeam(teamId);
+    const member = this.repository.getMember(memberId);
+    if (
+      !team || team.archivedAt || !member?.userId || member.teamId !== teamId ||
+      member.role !== "member" || member.userId === this.ownerUserId()
+    ) return undefined;
+    // Web sessions cover a whole User. A Team Owner cannot recover authority
+    // in another Team (including archived memberships) or any Owner identity.
+    const memberships = this.database.prepare(`
+      SELECT COUNT(*) AS count FROM team_members WHERE user_id = ?
+    `).get(member.userId) as { count: number };
+    return memberships.count === 1 ? member : undefined;
   }
 
   private ownerUserId(): string | undefined {

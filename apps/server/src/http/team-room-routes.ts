@@ -44,9 +44,13 @@ export function registerTeamRoomRoutes({
     request.raw.once("aborted", abort);
     reply.raw.once("close", abort);
     try {
-      return await teamChanges.wait(request.params.teamId, after, {
+      const changes = await teamChanges.wait(request.params.teamId, after, {
         signal: controller.signal
       });
+      // A recovery, logout or Team archive can revoke access while this
+      // request waits. Do not publish even change hints under stale authority.
+      auth.requireTeamMember(principal(request), request.params.teamId);
+      return changes;
     } finally {
       request.raw.off("aborted", abort);
       reply.raw.off("close", abort);

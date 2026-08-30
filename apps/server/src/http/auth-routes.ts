@@ -115,6 +115,21 @@ export function registerAuthRoutes({
         session: { expiresAt: result.session.expiresAt }
       };
     });
+    app.post("/api/auth/recover-member", async (request, reply) => {
+      noStore(reply);
+      limitAnonymous(request, "member-recovery-claim");
+      requireTrustedOrigin(request);
+      const body = bodyObject(request);
+      const result = trustedWeb.claimMemberRecovery(
+        requiredString(body.token, "token", 128), clock()
+      );
+      void reply.header("set-cookie", sessionCookie(result.session));
+      return {
+        member: result.member,
+        user: result.user,
+        session: { expiresAt: result.session.expiresAt }
+      };
+    });
   } else {
     app.post("/api/bootstrap", async (request) => {
       const body = bodyObject(request);

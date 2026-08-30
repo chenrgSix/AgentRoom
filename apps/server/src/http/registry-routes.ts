@@ -75,6 +75,28 @@ export function registerRegistryRoutes({
     async (request) => registry.listMembers(principal(request), request.params.teamId)
   );
   if (trustedWeb) {
+    app.post<{ Params: { teamId: string; memberId: string } }>(
+      "/api/teams/:teamId/members/:memberId/recovery",
+      async (request, reply) => {
+        noStore(reply);
+        return trustedWeb.createMemberRecovery(
+          principal(request), request.params.teamId, request.params.memberId, clock()
+        );
+      }
+    );
+    app.delete<{
+      Params: { teamId: string; memberId: string; recoveryId: string };
+    }>(
+      "/api/teams/:teamId/members/:memberId/recovery/:recoveryId",
+      async (request, reply) => {
+        noStore(reply);
+        trustedWeb.revokeMemberRecovery(
+          principal(request), request.params.teamId, request.params.memberId,
+          request.params.recoveryId, clock()
+        );
+        return { status: "revoked" };
+      }
+    );
     app.post<{ Params: { teamId: string } }>(
       "/api/teams/:teamId/member-invitations",
       async (request, reply) => {

@@ -56,6 +56,16 @@ the Member, consumes the invitation, and issues a Web session. Invitation
 tokens travel in a URL fragment so reverse proxies do not receive them in
 request logs.
 
+ADR-0027 existing-member recovery uses Owner-only
+`POST /api/teams/:teamId/members/:memberId/recovery` and `DELETE` on the
+same path. The response exposes a newly issued plaintext code only once.
+`POST /api/auth/recover-member` consumes it without creating a new identity.
+Migration 0055 stores only its hash, issuer, target and expiry; consumption
+atomically revokes prior Web sessions. The target must still be an ordinary
+single-Team member, never an Owner or installation Owner, and the Team and
+issuing Owner must remain eligible. Protected long polls reauthenticate the
+Web principal and current Team membership after waiting before returning data.
+
 Join requests expire after ten minutes. The database stores only hashes of the
 short code and poll token; the poll token is promoted to the Device credential
 only after owner approval. Claim retries return the same Device and do not
