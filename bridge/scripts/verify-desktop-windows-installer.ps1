@@ -305,7 +305,10 @@ finally {
     }
   }
   if (-not $inboxExisted -and (Test-Path -LiteralPath $inboxDirectory) -and
-      (Get-ChildItem -LiteralPath $inboxDirectory -Force).Count -eq 0) {
+      (@(Get-ChildItem `
+          -LiteralPath $inboxDirectory `
+          -Force `
+          -ErrorAction Stop)).Count -eq 0) {
     Remove-Item -LiteralPath $inboxDirectory -Force
   }
   if (Test-Path -LiteralPath $verificationRoot) {

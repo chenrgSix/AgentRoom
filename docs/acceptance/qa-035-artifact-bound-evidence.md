@@ -42,6 +42,11 @@ gate.
 - Main CI and the protected Release workflow obtain the prior stable installer
   independently. The candidate version is deliberately newer in CI so Inno
   Setup exercises an upgrade rather than a downgrade or same-package reentry.
+- Installer lifecycle cleanup materializes its directory enumeration before
+  counting entries under PowerShell `StrictMode`. An empty newly-created inbox
+  is removed, while a pre-existing or non-empty inbox remains owner state;
+  enumeration failure still stops the verifier instead of being treated as an
+  empty directory.
 
 ## Deterministic verification
 
@@ -57,6 +62,10 @@ gate.
 - Workflow policy tests own the previous-stable download and mandatory verifier
   argument shape. Native Windows execution remains hosted evidence, not a
   result inferred from these text checks.
+- Main CI run `33282676255` reached the native Windows install/upgrade verifier
+  but exposed a `StrictMode` cleanup failure when the fixture inbox became
+  empty. The array-materialization repair is local implementation evidence
+  only; a successful exact-commit native rerun remains required below.
 
 ## Remaining admission evidence
 
