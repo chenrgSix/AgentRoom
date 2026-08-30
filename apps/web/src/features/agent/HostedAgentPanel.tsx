@@ -135,6 +135,7 @@ export function HostedAgentPanel({
   );
   const activeScope = useRef<typeof scopeToken | null>(scopeToken);
   activeScope.current = scopeToken;
+  const loadedConfigurationScope = useRef<typeof scopeToken | null>(null);
 
   const activeRooms = rooms.filter(({ archivedAt }) => !archivedAt);
 
@@ -145,11 +146,15 @@ export function HostedAgentPanel({
   useEffect(() => {
     if (!currentMemberIsOwner) {
       setConfigurations([]);
+      loadedConfigurationScope.current = null;
       return;
     }
     let canceled = false;
-    setLoading(true);
-    setError(null);
+    const initialLoad = loadedConfigurationScope.current !== scopeToken;
+    if (initialLoad) {
+      setLoading(true);
+      setError(null);
+    }
     void jsonRequest<HostedAgentConfiguration[]>(
       `/api/teams/${teamId}/hosted-agents`,
       { cache: "no-store" },
@@ -157,10 +162,26 @@ export function HostedAgentPanel({
     ).then((next) => {
       if (canceled) return;
       const exactTeam = next.filter((item) => item.teamId === teamId);
-      setConfigurations(exactTeam);
-      setModelDrafts(Object.fromEntries(
-        exactTeam.map((item) => [item.agentId, item.model])
-      ));
+      if (initialLoad) {
+        setConfigurations(exactTeam);
+        setModelDrafts(Object.fromEntries(
+          exactTeam.map((item) => [item.agentId, item.model])
+        ));
+      } else {
+        const byId = new Map(exactTeam.map((item) => [item.agentId, item]));
+        setConfigurations((current) => current.map((configuration) => {
+          const refreshed = byId.get(configuration.agentId);
+          if (!refreshed) return configuration;
+          return {
+            ...configuration,
+            enabled: refreshed.enabled,
+            presence: refreshed.presence,
+            configurationLocked: refreshed.configurationLocked,
+            hasActiveWork: refreshed.hasActiveWork
+          };
+        }));
+      }
+      loadedConfigurationScope.current = scopeToken;
     }).catch(() => {
       if (!canceled) setError(t("hostedActionFailed"));
     }).finally(() => {
@@ -169,7 +190,7 @@ export function HostedAgentPanel({
     return () => {
       canceled = true;
     };
-  }, [currentMemberIsOwner, sessionToken, teamId]);
+  }, [agents, currentMemberIsOwner, scopeToken, sessionToken, teamId]);
 
   useEffect(() => {
     const byId = new Map(agents.map((agent) => [agent.agentId, agent]));
@@ -597,8 +618,7 @@ export function HostedAgentPanel({
             const testAction = `test:${configuration.agentId}`;
             const revokeAction = `revoke:${configuration.agentId}`;
             const enabledAction = `enabled:${configuration.agentId}`;
-            const profileLocked = configuration.enabled &&
-              configuration.presence === "busy";
+            const profileLocked = configuration.configurationLocked;
             return (
               <article className="hosted-profile-card" key={configuration.agentId}>
                 <header>

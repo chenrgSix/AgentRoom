@@ -79,6 +79,8 @@ export interface HostedAgentConfiguration {
   model: string;
   credentialConfigured: boolean;
   credentialRevoked: boolean;
+  configurationLocked: boolean;
+  hasActiveWork: boolean;
   latestTest: HostedProviderTestObservation | null;
   updatedAt: string;
 }

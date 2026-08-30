@@ -29,6 +29,164 @@ export interface HostedProviderProbe {
   }): Promise<HostedProviderProbeResult>;
 }
 
+export interface HostedProviderProbePolicy {
+  deadlineMilliseconds: number;
+  maximumConcurrency: number;
+}
+
+export interface HostedAgentConfigurationProjection
+  extends HostedAgentConfigurationRecord {
+  configurationLocked: boolean;
+  hasActiveWork: boolean;
+}
+
+const defaultHostedProviderProbePolicy: HostedProviderProbePolicy = {
+  deadlineMilliseconds: 15_000,
+  maximumConcurrency: 2
+};
+
+interface HostedProviderProbeWaiter {
+  onAbort: () => void;
+  reject: (error: Error) => void;
+  resolve: (release: () => void) => void;
+  signal: AbortSignal;
+}
+
+class HostedProviderProbeCoordinator {
+  readonly #policy: HostedProviderProbePolicy;
+  #active = 0;
+  #closed = false;
+  #operations = new Set<AbortController>();
+  #waiters: HostedProviderProbeWaiter[] = [];
+
+  public constructor(
+    private readonly probe: HostedProviderProbe,
+    policy: HostedProviderProbePolicy
+  ) {
+    if (
+      !Number.isSafeInteger(policy.deadlineMilliseconds) ||
+      policy.deadlineMilliseconds < 1 ||
+      policy.deadlineMilliseconds > 60_000 ||
+      !Number.isSafeInteger(policy.maximumConcurrency) ||
+      policy.maximumConcurrency < 1 ||
+      policy.maximumConcurrency > 32
+    ) {
+      throw new Error("Hosted provider probe policy is invalid");
+    }
+    this.#policy = { ...policy };
+  }
+
+  public async test(
+    input: {
+      provider: typeof hostedProvider;
+      model: string;
+      apiKey: string;
+    },
+    callerSignal?: AbortSignal
+  ): Promise<HostedProviderProbeResult> {
+    const operation = new AbortController();
+    this.#operations.add(operation);
+    let abortCode = "HOSTED_PROVIDER_PROBE_CANCELED";
+    const abort = (failureCode: string): void => {
+      if (operation.signal.aborted) return;
+      abortCode = failureCode;
+      operation.abort();
+    };
+    const onCallerAbort = (): void => abort("HOSTED_PROVIDER_PROBE_CANCELED");
+    if (this.#closed || callerSignal?.aborted) onCallerAbort();
+    else callerSignal?.addEventListener("abort", onCallerAbort, { once: true });
+    const deadline = setTimeout(
+      () => abort("HOSTED_PROVIDER_PROBE_TIMEOUT"),
+      this.#policy.deadlineMilliseconds
+    );
+
+    try {
+      const release = await this.acquire(operation.signal);
+      if (operation.signal.aborted) {
+        release();
+        return { status: "failed", failureCode: abortCode };
+      }
+      const aborted = new Promise<HostedProviderProbeResult>((resolve) => {
+        operation.signal.addEventListener("abort", () => resolve({
+          status: "failed",
+          failureCode: abortCode
+        }), { once: true });
+      });
+      // A transport that ignores cancellation must keep its slot until it
+      // settles, rather than allowing timed-out requests to accumulate work.
+      const probing = Promise.resolve().then(() => operation.signal.aborted
+        ? { status: "failed" as const, failureCode: abortCode }
+        : this.probe.test({ ...input, signal: operation.signal }))
+        .finally(release);
+      return await Promise.race([probing, aborted]);
+    } catch (error) {
+      if (operation.signal.aborted) {
+        return { status: "failed", failureCode: abortCode };
+      }
+      throw error;
+    } finally {
+      clearTimeout(deadline);
+      callerSignal?.removeEventListener("abort", onCallerAbort);
+      this.#operations.delete(operation);
+    }
+  }
+
+  public close(): void {
+    this.#closed = true;
+    for (const operation of this.#operations) operation.abort();
+  }
+
+  private acquire(signal: AbortSignal): Promise<() => void> {
+    if (signal.aborted) {
+      return Promise.reject(new Error("Hosted provider probe was canceled"));
+    }
+    if (this.#active < this.#policy.maximumConcurrency) {
+      this.#active += 1;
+      return Promise.resolve(this.releaseSlot());
+    }
+    return new Promise<() => void>((resolve, reject) => {
+      const waiter: HostedProviderProbeWaiter = {
+        onAbort: () => {
+          const index = this.#waiters.indexOf(waiter);
+          if (index >= 0) this.#waiters.splice(index, 1);
+          reject(new Error("Hosted provider probe was canceled"));
+        },
+        reject,
+        resolve,
+        signal
+      };
+      signal.addEventListener("abort", waiter.onAbort, { once: true });
+      this.#waiters.push(waiter);
+    });
+  }
+
+  private releaseSlot(): () => void {
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.#active -= 1;
+      this.drain();
+    };
+  }
+
+  private drain(): void {
+    while (
+      this.#active < this.#policy.maximumConcurrency &&
+      this.#waiters.length > 0
+    ) {
+      const waiter = this.#waiters.shift()!;
+      waiter.signal.removeEventListener("abort", waiter.onAbort);
+      if (waiter.signal.aborted) {
+        waiter.reject(new Error("Hosted provider probe was canceled"));
+        continue;
+      }
+      this.#active += 1;
+      waiter.resolve(this.releaseSlot());
+    }
+  }
+}
+
 export interface CreateHostedAgentInput {
   teamId: string;
   name: string;
@@ -38,6 +196,7 @@ export interface CreateHostedAgentInput {
   apiKey: string;
   roomIds: readonly string[];
   now: string;
+  signal?: AbortSignal;
 }
 
 export interface UpdateHostedAgentProfileInput {
@@ -46,6 +205,7 @@ export interface UpdateHostedAgentProfileInput {
   model: string;
   apiKey?: string;
   now: string;
+  signal?: AbortSignal;
 }
 
 function normalizedModel(value: string): string {
@@ -106,22 +266,32 @@ function requirePositiveRevision(value: number): number {
 }
 
 export class HostedAgentConfigurationService {
+  readonly #probes: HostedProviderProbeCoordinator;
+
   public constructor(
     private readonly repository: HostedAgentRepository,
     private readonly core: CoreRepository,
     private readonly agents: AgentService,
     private readonly auth: AuthService,
     private readonly transactions: SqliteTransactionBoundary,
-    private readonly probe: HostedProviderProbe,
-    private readonly onCredentialRevoked?: (agentId: string) => void
-  ) {}
+    probe: HostedProviderProbe,
+    private readonly onCredentialRevoked?: (agentId: string) => void,
+    probePolicy: HostedProviderProbePolicy = defaultHostedProviderProbePolicy
+  ) {
+    this.#probes = new HostedProviderProbeCoordinator(probe, probePolicy);
+  }
+
+  public shutdown(): void {
+    this.#probes.close();
+  }
 
   public list(
     principal: WebPrincipal,
     teamId: string
-  ): HostedAgentConfigurationRecord[] {
+  ): HostedAgentConfigurationProjection[] {
     this.requireOwner(principal, teamId);
-    return this.repository.listConfigurations(teamId);
+    return this.repository.listConfigurations(teamId)
+      .map((configuration) => this.projectConfiguration(configuration));
   }
 
   public async testConnection(
@@ -132,13 +302,17 @@ export class HostedAgentConfigurationService {
       model: string;
       apiKey: string;
       now: string;
+      signal?: AbortSignal;
     }
   ): Promise<HostedProviderTestObservation> {
     this.requireOwner(principal, input.teamId);
     const provider = validatedProvider(input.provider);
     const model = normalizedModel(input.model);
     const apiKey = validatedApiKey(input.apiKey);
-    const result = await this.safeProbe({ provider, model, apiKey });
+    const result = await this.safeProbe(
+      { provider, model, apiKey },
+      input.signal
+    );
     return this.repository.recordTestObservation({
       teamId: input.teamId,
       provider,
@@ -153,14 +327,17 @@ export class HostedAgentConfigurationService {
   public async create(
     principal: WebPrincipal,
     input: CreateHostedAgentInput
-  ): Promise<HostedAgentConfigurationRecord> {
+  ): Promise<HostedAgentConfigurationProjection> {
     const actor = this.requireOwner(principal, input.teamId);
     const provider = validatedProvider(input.provider);
     const model = normalizedModel(input.model);
     const apiKey = validatedApiKey(input.apiKey);
     const roomIds = validatedRoomIds(input.roomIds);
     this.requireRooms(input.teamId, roomIds);
-    const test = await this.safeProbe({ provider, model, apiKey });
+    const test = await this.safeProbe(
+      { provider, model, apiKey },
+      input.signal
+    );
     if (test.status !== "ready") {
       throw new Error("Hosted provider connection test failed");
     }
@@ -221,13 +398,14 @@ export class HostedAgentConfigurationService {
   public async testConfigured(
     principal: WebPrincipal,
     agentId: string,
-    now: string
+    now: string,
+    signal?: AbortSignal
   ): Promise<HostedProviderTestObservation> {
     const agent = this.requireHostedAgent(principal, agentId);
     const execution = this.repository.resolveExecutionProfile(agentId);
     let result: HostedProviderProbeResult;
     try {
-      result = await this.safeProbe(execution);
+      result = await this.safeProbe(execution, signal);
     } finally {
       execution.apiKey = "";
     }
@@ -242,12 +420,21 @@ export class HostedAgentConfigurationService {
       ...(result.failureCode ? { failureCode: result.failureCode } : {}),
       now
     });
-    if (agent.presence !== "busy") {
+    const currentAgent = this.core.getAgent(agentId);
+    const currentProfile = this.repository.getCurrentProfile(agentId);
+    if (
+      currentAgent &&
+      currentAgent.presence !== "busy" &&
+      currentProfile?.profileRevision === execution.profileRevision
+    ) {
       this.core.updateAgentPresence(
         agentId,
-        result.status === "ready" && this.repository.getAvailability(agentId) === "ready"
-          ? "ready"
-          : "degraded",
+        !currentAgent.enabled
+          ? "offline"
+          : result.status === "ready" &&
+              this.repository.getAvailability(agentId) === "ready"
+            ? "ready"
+            : "degraded",
         now
       );
     }
@@ -257,11 +444,8 @@ export class HostedAgentConfigurationService {
   public async updateProfile(
     principal: WebPrincipal,
     input: UpdateHostedAgentProfileInput
-  ): Promise<HostedAgentConfigurationRecord> {
+  ): Promise<HostedAgentConfigurationProjection> {
     const agent = this.requireHostedAgent(principal, input.agentId);
-    if (this.core.hasActiveWorkForAgent(agent.agentId)) {
-      throw new Error("Hosted Agent configuration is locked while work is active");
-    }
     const expectedProfileRevision = requirePositiveRevision(
       input.expectedProfileRevision
     );
@@ -270,6 +454,16 @@ export class HostedAgentConfigurationService {
     if (!currentProfile) {
       throw new Error("Hosted Agent Runtime Profile is unavailable");
     }
+    if (currentProfile.profileRevision !== expectedProfileRevision) {
+      throw new Error("Hosted Runtime Profile changed; reload and retry");
+    }
+    if (this.core.hasActiveWorkForAgent(agent.agentId)) {
+      throw new Error("Hosted Agent configuration is locked while work is active");
+    }
+    const credentialRevokedAtStart = this.configuration(
+      agent.teamId,
+      agent.agentId
+    ).credentialRevoked;
     const currentExecution = input.apiKey === undefined
       ? this.repository.resolveExecutionProfile(agent.agentId)
       : undefined;
@@ -281,25 +475,39 @@ export class HostedAgentConfigurationService {
         provider: currentProfile.provider,
         model,
         apiKey
-      });
+      }, input.signal);
       if (test.status !== "ready") {
         throw new Error("Hosted provider connection test failed");
       }
       this.transactions.immediate(() => {
-        const actor = this.requireOwner(principal, agent.teamId);
+        const latestAgent = this.requireHostedAgent(principal, agent.agentId);
+        const latestProfile = this.repository.getCurrentProfile(agent.agentId);
+        if (latestProfile?.profileRevision !== expectedProfileRevision) {
+          throw new Error("Hosted Runtime Profile changed; reload and retry");
+        }
+        if (this.core.hasActiveWorkForAgent(agent.agentId)) {
+          throw new Error(
+            "Hosted Agent configuration is locked while work is active"
+          );
+        }
+        if (this.configuration(latestAgent.teamId, agent.agentId)
+          .credentialRevoked !== credentialRevokedAtStart) {
+          throw new Error("Hosted Runtime Profile changed; reload and retry");
+        }
+        const actor = this.requireOwner(principal, latestAgent.teamId);
         const credentialVersion = input.apiKey === undefined
-          ? currentProfile.credentialVersion
+          ? latestProfile.credentialVersion
           : this.repository.createCredential({
               agentId: agent.agentId,
-              teamId: agent.teamId,
+              teamId: latestAgent.teamId,
               createdByMemberId: actor.memberId,
               apiKey,
               now: input.now
             }).credentialVersion;
         const profile = this.repository.createProfile({
           agentId: agent.agentId,
-          teamId: agent.teamId,
-          provider: currentProfile.provider,
+          teamId: latestAgent.teamId,
+          provider: latestProfile.provider,
           model,
           credentialVersion,
           createdByMemberId: actor.memberId,
@@ -336,7 +544,7 @@ export class HostedAgentConfigurationService {
     agentId: string,
     expectedProfileRevision: number,
     now: string
-  ): HostedAgentConfigurationRecord {
+  ): HostedAgentConfigurationProjection {
     const agent = this.requireHostedAgent(principal, agentId);
     const revoked = this.repository.revokeCurrentCredential(
       agentId,
@@ -402,20 +610,31 @@ export class HostedAgentConfigurationService {
   private configuration(
     teamId: string,
     agentId: string
-  ): HostedAgentConfigurationRecord {
+  ): HostedAgentConfigurationProjection {
     const result = this.repository.listConfigurations(teamId)
       .find((candidate) => candidate.agentId === agentId);
     if (!result) throw new Error(`Hosted Agent configuration not found: ${agentId}`);
-    return result;
+    return this.projectConfiguration(result);
+  }
+
+  private projectConfiguration(
+    configuration: HostedAgentConfigurationRecord
+  ): HostedAgentConfigurationProjection {
+    const hasActiveWork = this.core.hasActiveWorkForAgent(configuration.agentId);
+    return {
+      ...configuration,
+      configurationLocked: hasActiveWork,
+      hasActiveWork
+    };
   }
 
   private async safeProbe(input: {
     provider: typeof hostedProvider;
     model: string;
     apiKey: string;
-  }): Promise<HostedProviderProbeResult> {
+  }, signal?: AbortSignal): Promise<HostedProviderProbeResult> {
     try {
-      const result = await this.probe.test(input);
+      const result = await this.#probes.test(input, signal);
       if (result.status === "ready") return result;
       return {
         status: "failed",

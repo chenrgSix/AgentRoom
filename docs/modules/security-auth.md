@@ -211,6 +211,15 @@ leave Central. A fixed connection probe contains no Room, Message, Task, Agent,
 or user content. Provider failure cannot weaken authorization or Central
 readiness.
 
+All configuration probes share a Server-local limit of two in-flight provider
+requests and a 15-second deadline including queue time. Client disconnect and
+Server shutdown abort their transport. A transport that ignores cancellation
+keeps its capacity slot until settlement; timed-out callers cannot accumulate
+unbounded replacement calls. These bounds are built in, not deployment inputs.
+Profile mutation rejects a stale revision before probing and rechecks revision,
+active work and credential revocation inside the final SQLite transaction.
+Late configured-test results cannot overwrite a newer profile or a busy Agent.
+
 Provider credentials are accepted only on write-only mutation requests and
 are encrypted before SQLite persistence. Authenticated reads return provider,
 model, revision, configured/revoked state, and safe test observation but never

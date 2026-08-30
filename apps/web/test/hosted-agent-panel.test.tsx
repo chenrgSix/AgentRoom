@@ -100,6 +100,8 @@ function configuration(
     model: "gpt-5.4",
     credentialConfigured: true,
     credentialRevoked: false,
+    configurationLocked: false,
+    hasActiveWork: false,
     latestTest: observation(),
     updatedAt: "2026-08-30T02:00:00.000Z",
     ...overrides
@@ -544,9 +546,13 @@ test("configured tests reload authoritative Presence and synchronize the Agent r
   }
 });
 
-test("busy profiles visibly fence edits and rejected mutations reload stale revisions", async () => {
+test("queued work explicitly fences profile edits and stale mutations reload revisions", async () => {
   const dom = installDom();
-  let current = configuration({ presence: "busy" });
+  let current = configuration({
+    presence: "ready",
+    configurationLocked: true,
+    hasActiveWork: true
+  });
   let updateAttempted = false;
   globalThis.fetch = async (input, init = {}) => {
     const path = typeof input === "string" ? input : input.url;
@@ -581,7 +587,7 @@ test("busy profiles visibly fence edits and rejected mutations reload stale revi
       />
     );
     const page = within(dom.window.document.body);
-    await page.findByText(/Agent 正在执行 Run/u);
+    await page.findByText(/Agent 有排队中或执行中的工作/u);
     const modelInput = page.getByLabelText("模型", {
       selector: ".hosted-profile-form input"
     }) as HTMLInputElement;
@@ -609,6 +615,7 @@ test("busy profiles visibly fence edits and rejected mutations reload stale revi
         teamId={teamId}
       />
     );
+    await waitFor(() => assert.equal(modelInput.disabled, false));
     fireEvent.change(modelInput, { target: { value: "gpt-5.5" } });
     fireEvent.change(replacementKey, { target: { value: "sk-stale-secret" } });
     fireEvent.click(page.getByRole("button", { name: "保存配置" }));

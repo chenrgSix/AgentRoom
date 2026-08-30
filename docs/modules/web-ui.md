@@ -363,7 +363,10 @@ from managed, manual, and Fake and does not claim local Runtime availability.
 The setup state machine renders `unconfigured`, `testing`, `ready`, `degraded`,
 `revoked`, and `disabled` without converting provider reachability into Central
 health. Configuration and credential mutations remain revision-fenced and
-surface stale-state recovery. Active Runs visibly fence model/key changes.
+surface stale-state recovery. The explicit Server `configurationLocked` and
+`hasActiveWork` projection includes queued as well as executing work; Web does
+not infer this fence from Presence. Agent snapshot changes refresh the lock
+without discarding an unsaved model draft.
 Hosted Runs reuse normal Run cards, streaming output, terminal replies,
 handoffs, and Discussion progress. The first version renders no Hosted Result
 proposal, review, Task-completion, or ambiguity-acknowledgement control.

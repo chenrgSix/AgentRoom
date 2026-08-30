@@ -703,6 +703,9 @@ export async function createServerApp(
     }
   });
 
+  app.addHook("preClose", async () => {
+    hostedAgents.shutdown();
+  });
   app.addHook("onClose", async () => {
     if (discussionSweepTimer) clearInterval(discussionSweepTimer);
     if (cancellationSweepTimer) clearInterval(cancellationSweepTimer);

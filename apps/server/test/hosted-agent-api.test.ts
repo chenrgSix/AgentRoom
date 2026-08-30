@@ -253,6 +253,8 @@ test("Owner configures a Hosted Agent after startup and Mention runs without Bri
     assert.equal(created.provider, "openai_responses");
     assert.equal(created.presence, "ready");
     assert.equal(created.credentialConfigured, true);
+    assert.equal(created.configurationLocked, false);
+    assert.equal(created.hasActiveWork, false);
     assert.equal(JSON.stringify(created).includes(apiKey), false);
 
     const listed = await app.inject({
@@ -290,9 +292,16 @@ test("Owner configures a Hosted Agent after startup and Mention runs without Bri
       url: `/api/runs/${runId}/events`,
       headers: { authorization }
     });
-    assert.deepEqual(events.json().map((event: { event: { type: string } }) =>
-      event.event.type
+    const eventRecords = events.json() as Array<{
+      event: { type: string; content?: string };
+    }>;
+    const eventTypes = eventRecords.map(({ event }) => event.type);
+    assert.deepEqual(eventTypes.filter((type, index) =>
+      type !== "output" || eventTypes[index - 1] !== "output"
     ), ["status", "status", "output", "reply", "status"]);
+    assert.equal(eventRecords.flatMap(({ event }) =>
+      event.type === "output" ? [event.content ?? ""] : []
+    ).join(""), "Hosted response");
     const messages = await app.inject({
       method: "GET",
       url: `/api/rooms/${roomId}/messages?tail=true`,
@@ -807,7 +816,7 @@ test("Hosted authorization fences reject cross-Team, cross-Room, stale, and acti
     assert.equal(stale.statusCode, 409, stale.body);
     assert.equal(stale.json().error.code, "CONFLICT");
     assert.match(stale.json().error.message, /changed; reload and retry/u);
-    assert.equal(providerCall, 3);
+    assert.equal(providerCall, 2);
     const afterStale = await app.inject({
       method: "GET",
       url: `/api/teams/${teamId}/hosted-agents`,
@@ -1034,3 +1043,86 @@ test("Hosted provider credentials grant no Result, Task, Member, Device, or MCP 
     await app.close();
   }
 });
+
+for (const cancellation of ["client disconnect", "Server shutdown"] as const) {
+  test(`Hosted configuration probes abort HTTPS on ${cancellation}`, {
+    timeout: 5_000
+  }, async () => {
+    const directory = await mkdtemp(path.join(
+      os.tmpdir(),
+      "convene-wire-hosted-probe-cancel-"
+    ));
+    let markStarted!: () => void;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    let markAborted!: () => void;
+    const aborted = new Promise<void>((resolve) => {
+      markAborted = resolve;
+    });
+    const hostedFetch: typeof fetch = async (_input, init) => {
+      assert.ok(init?.signal);
+      markStarted();
+      return new Promise<Response>((_resolve, reject) => {
+        const rejectAbort = () => {
+          markAborted();
+          reject(new DOMException("Aborted", "AbortError"));
+        };
+        if (init.signal!.aborted) rejectAbort();
+        else init.signal!.addEventListener("abort", rejectAbort, { once: true });
+      });
+    };
+    const app = await createServerApp({
+      databasePath: path.join(directory, "server.sqlite"),
+      hostedFetch,
+      clock: () => now,
+      logger: false
+    });
+    const caller = new AbortController();
+    try {
+      await app.ready();
+      const { authorization, teamId } = await bootstrap(app);
+      const address = await app.listen({ port: 0, host: "127.0.0.1" });
+      const request = Promise.allSettled([fetch(
+        `${address}/api/teams/${teamId}/hosted-agent-tests`,
+        {
+          method: "POST",
+          headers: { authorization, "content-type": "application/json" },
+          body: JSON.stringify({
+            provider: "openai_responses",
+            model: "gpt-5.4-mini",
+            apiKey
+          }),
+          signal: caller.signal
+        }
+      )]);
+      await started;
+      const closing = cancellation === "Server shutdown"
+        ? app.close()
+        : undefined;
+      if (cancellation === "client disconnect") caller.abort();
+      await aborted;
+      const [settled] = await request;
+      if (cancellation === "client disconnect") {
+        assert.equal(settled?.status, "rejected");
+      } else {
+        assert.equal(settled?.status, "fulfilled");
+        if (settled?.status !== "fulfilled") {
+          throw new Error("Shutdown did not settle the probe response");
+        }
+        assert.equal(settled.value.status, 200);
+        assert.equal(settled.value.headers.get("cache-control"), "no-store");
+        const observation = await settled.value.json() as {
+          status: string;
+          failureCode: string;
+        };
+        assert.equal(observation.status, "failed");
+        assert.equal(observation.failureCode, "HOSTED_PROVIDER_PROBE_CANCELED");
+      }
+      await closing;
+    } finally {
+      caller.abort();
+      await app.close();
+    }
+  });
+}
