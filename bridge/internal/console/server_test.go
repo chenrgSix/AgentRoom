@@ -524,7 +524,9 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		`id="edit-reasoning-consent"`, `id="reasoning-consent-guidance"`,
 		`id="agent-discovery-status"`, `id="agent-discovery-help"`, `id="agent-install-link"`,
 		`id="device-pairing-link"`, `id="device-pairing-short-code"`,
-		`id="submit-device-pairing"`, `id="approval-title"`, `id="stop-for-pairing"`,
+		`id="submit-device-pairing"`, `id="use-pairing-link"`,
+		`id="pairing-link-modal-backdrop"`, `id="configured-pairing-link"`,
+		`id="continue-pairing-link"`, `id="approval-title"`, `id="stop-for-pairing"`,
 		`id="codex-session-guide"`, `id="codex-session-guide-title"`,
 		`id="close-codex-session-guide"`, `id="acknowledge-codex-session-guide"`,
 	} {
@@ -560,6 +562,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		!bytes.Contains(javascript, []byte(`pairingLinkFromHash(window.location.hash)`)) ||
 		!bytes.Contains(javascript, []byte(`elements["server-url"].value = pairingOriginFromLink(pendingPairingLink)`)) ||
 		!bytes.Contains(javascript, []byte(`elements["device-pairing-link"].addEventListener("input"`)) ||
+		!bytes.Contains(javascript, []byte(`elements["use-pairing-link"].addEventListener("click"`)) ||
+		!bytes.Contains(javascript, []byte(`configuredPairingEntryView(`)) ||
 		!bytes.Contains(javascript, []byte(`renderConfiguredPairingLaunch(state)`)) {
 		t.Fatal("Device pairing must remain one explicit local action with a closed metadata disclosure")
 	}

@@ -1,5 +1,6 @@
 import { pairingView } from "./pairing-view.mjs";
 import {
+  configuredPairingEntryView,
   configuredPairingLaunchView,
   pairingLinkFromHash,
   pairingOriginFromLink
@@ -23,7 +24,9 @@ const elements = Object.fromEntries([
   "fixed-management-code", "rotating-management-code-panel", "rotating-management-code",
   "rotating-management-code-expiry", "save-agent-provisioning", "agent-provisioning-result",
   "pairing-status", "pairing-binding", "pairing-guidance", "pairing-blocked", "pairing-backup",
-  "request-enrollment", "start-existing-pairing", "join-copy-result",
+  "use-pairing-link", "request-enrollment", "start-existing-pairing", "join-copy-result",
+  "pairing-link-modal-backdrop", "configured-pairing-link", "pairing-link-modal-error",
+  "close-pairing-link-modal", "cancel-pairing-link-modal", "continue-pairing-link",
   "pairing-modal-backdrop", "pairing-modal-title", "pairing-modal-guidance", "pairing-modal-retention",
   "pairing-modal-blocked", "close-pairing-modal", "cancel-pairing-modal", "stop-for-pairing",
   "confirm-reenrollment", "pairing-modal-error",
@@ -504,6 +507,7 @@ function render(state) {
   elements["request-enrollment"].classList.toggle("hidden", !pairing.showRequest);
   elements["request-enrollment"].textContent = pairing.requestLabel;
   elements["request-enrollment"].disabled = enrollmentActionRunning || !pairing.canRequest;
+  elements["use-pairing-link"].disabled = enrollmentActionRunning || Boolean(state.enrollment?.active);
   elements["start-existing-pairing"].classList.toggle("hidden", !state.paired);
   elements["start-existing-pairing"].disabled = !pairing.canStartExisting;
   const backup = state.enrollment?.backupConfigPath;
@@ -679,6 +683,43 @@ elements["join-code"].addEventListener("click", async () => {
     elements["join-copy-result"].textContent = "无法自动复制，请手动选择并复制上方审批码。";
   }
 });
+
+function renderPairingLinkEntry() {
+  const view = configuredPairingEntryView(
+    elements["configured-pairing-link"].value,
+    currentState
+  );
+  elements["pairing-link-modal-error"].textContent = view.error;
+  elements["pairing-link-modal-error"].classList.toggle("hidden", !view.error);
+  elements["continue-pairing-link"].disabled = !view.canContinue;
+  return view;
+}
+
+function closePairingLinkModal() {
+  elements["configured-pairing-link"].value = "";
+  elements["pairing-link-modal-error"].textContent = "";
+  elements["pairing-link-modal-error"].classList.add("hidden");
+  elements["continue-pairing-link"].disabled = true;
+  elements["pairing-link-modal-backdrop"].classList.add("hidden");
+}
+
+elements["use-pairing-link"].addEventListener("click", () => {
+  closePairingLinkModal();
+  elements["pairing-link-modal-backdrop"].classList.remove("hidden");
+  elements["configured-pairing-link"].focus();
+});
+elements["configured-pairing-link"].addEventListener("input", renderPairingLinkEntry);
+for (const id of ["close-pairing-link-modal", "cancel-pairing-link-modal"]) {
+  elements[id].addEventListener("click", closePairingLinkModal);
+}
+elements["continue-pairing-link"].addEventListener("click", () => {
+  const view = renderPairingLinkEntry();
+  if (!view.canContinue || !currentState?.configured) return;
+  pendingPairingLink = elements["configured-pairing-link"].value.trim();
+  closePairingLinkModal();
+  renderConfiguredPairingLaunch(currentState);
+});
+
 function closePairingModal() {
   if (enrollmentActionRunning) return;
   elements["pairing-modal-backdrop"].classList.add("hidden");
@@ -851,11 +892,17 @@ for (const id of ["close-codex-session-guide", "acknowledge-codex-session-guide"
 elements["agent-modal-backdrop"].addEventListener("click", (event) => {
   if (event.target === elements["agent-modal-backdrop"]) closeAgentModal();
 });
+elements["pairing-link-modal-backdrop"].addEventListener("click", (event) => {
+  if (event.target === elements["pairing-link-modal-backdrop"]) closePairingLinkModal();
+});
 elements["connection-modal-backdrop"].addEventListener("click", (event) => {
   if (event.target === elements["connection-modal-backdrop"]) closeConnectionModal();
 });
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape") closePairingModal();
+  if (event.key === "Escape" && !elements["pairing-link-modal-backdrop"].classList.contains("hidden")) {
+    closePairingLinkModal();
+  }
   if (event.key === "Escape" && !elements["agent-modal-backdrop"].classList.contains("hidden")) {
     closeAgentModal();
   }

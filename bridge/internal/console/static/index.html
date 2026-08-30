@@ -179,6 +179,7 @@
               <p id="pairing-binding" class="pairing-binding"></p>
               <p id="pairing-guidance" class="pairing-guidance"></p>
               <div class="actions">
+                <button class="secondary" id="use-pairing-link" type="button">使用配对链接</button>
                 <button class="secondary hidden" id="request-enrollment" type="button">申请审批码</button>
                 <button class="secondary hidden" id="start-existing-pairing" type="button">启动现有配对</button>
               </div>
@@ -313,6 +314,24 @@
         </div>
       </section>
     </form>
+
+    <div class="modal-backdrop hidden" id="pairing-link-modal-backdrop">
+      <section class="agent-modal" role="dialog" aria-modal="true" aria-labelledby="pairing-link-modal-title">
+        <div class="section-heading">
+          <div><p class="eyebrow">DEVICE PAIRING LINK</p><h2 id="pairing-link-modal-title">使用配对链接</h2></div>
+          <button class="icon-button" id="close-pairing-link-modal" type="button" aria-label="关闭">×</button>
+        </div>
+        <p class="pairing-guidance">粘贴 Central 生成的完整连接链接。客户端会从链接读取当前 Central 地址，但仍由本机后端独立校验完整链接。</p>
+        <label>Device 配对链接
+          <input id="configured-pairing-link" autocomplete="off" placeholder="convenewire://pair-device?…#claimSecret=…">
+        </label>
+        <p class="inline-error hidden" id="pairing-link-modal-error" role="alert"></p>
+        <div class="actions modal-actions">
+          <button class="secondary" id="cancel-pairing-link-modal" type="button">取消</button>
+          <button class="primary" id="continue-pairing-link" type="button" disabled>检查并继续</button>
+        </div>
+      </section>
+    </div>
 
     <div class="modal-backdrop hidden" id="pairing-modal-backdrop">
       <section class="agent-modal" role="dialog" aria-modal="true" aria-labelledby="pairing-modal-title">

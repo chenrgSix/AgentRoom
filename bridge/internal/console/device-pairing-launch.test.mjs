@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  configuredPairingEntryView,
   configuredPairingLaunchView,
   pairingLinkFromHash,
   pairingOriginFromLink
@@ -44,6 +45,41 @@ test("pairing origin prefill rejects ambiguous or unsafe link origins", () => {
     link.replace("&pairingSessionId=", "&origin=https%3A%2F%2Fother.example&pairingSessionId="),
     link.replace("&expiresAt=", "&unexpected=value&expiresAt=")
   ]) assert.equal(pairingOriginFromLink(candidate), "");
+});
+
+test("configured pairing entry accepts only a complete same-Central link", () => {
+  const state = {
+    configured: true,
+    serverUrl: "https://team.example",
+    enrollment: {active: false}
+  };
+  assert.deepEqual(configuredPairingEntryView(link, state), {
+    canContinue: true,
+    error: ""
+  });
+  assert.equal(configuredPairingEntryView("", state).canContinue, false);
+  assert.match(
+    configuredPairingEntryView("not a link", state).error,
+    /完整/
+  );
+  assert.match(
+    configuredPairingEntryView(link, {...state, serverUrl: "https://other.example"}).error,
+    /不属于当前 Central/
+  );
+});
+
+test("configured pairing entry remains closed outside an idle configured client", () => {
+  assert.deepEqual(configuredPairingEntryView(link, {configured: false}), {
+    canContinue: false,
+    error: ""
+  });
+  const active = configuredPairingEntryView(link, {
+    configured: true,
+    serverUrl: "https://team.example",
+    enrollment: {active: true}
+  });
+  assert.equal(active.canContinue, false);
+  assert.match(active.error, /正在进行/);
 });
 
 test("configured pairing launch requires an explicit idle same-Central confirmation", () => {

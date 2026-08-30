@@ -132,6 +132,17 @@ settings or carry the old Server Token elsewhere; changing Central remains a
 separate explicit connection/migration decision. Closing the confirmation
 discards the pending fragment proof from the WebView state.
 
+`BRG-053` makes OS protocol activation a convenience rather than the only
+discoverable configured-client path. **Settings → Pairing and recovery → Use
+pairing link** accepts one complete canonical link inside the local WebView,
+projects only its exact origin for a same-Central check, and then enters the
+existing `BRG-050` confirmation. Invalid, ambiguous, cross-Central or concurrent
+attempts cannot continue. A running idle Bridge still requires the explicit
+stop action, active Runs remain fenced, and the authenticated Go backend parses
+the complete link again before starting the isolated replacement transaction.
+Canceling either dialog clears the fragment proof; no credential, Runtime,
+Workspace or privacy setting is projected into or changed by this entry step.
+
 ## Local Configuration Console
 
 `convenewire-bridge console` starts the recommended client setup surface on
@@ -140,8 +151,9 @@ automatically runs an existing paired Bridge. `--no-open` supports headless
 environments. Static assets are embedded in the Go binary, so no Node.js
 process or separate UI service is required on the client.
 
-The Console can discover Codex and Pi, claim an Owner-created Device pairing
-session, show the matching verification phrase, start or stop the Bridge, edit the central
+The Console can discover Codex and Pi, accept an Owner-created Device pairing
+link during first setup or from the configured Settings page, claim its session,
+show the matching verification phrase, start or stop the Bridge, edit the central
 service URL and HTTPS trust in a connection-settings modal, add multiple Codex
 or Pi Agents, and edit one selected Agent in a modal. Connection editing mutates
 only the outbound endpoint fields and never rebuilds the Agent roster. Each

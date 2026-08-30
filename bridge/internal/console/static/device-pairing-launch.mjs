@@ -50,6 +50,35 @@ export function pairingOriginFromLink(link) {
   return origin.origin;
 }
 
+export function configuredPairingEntryView(link, state) {
+  if (!state?.configured) {
+    return {canContinue: false, error: ""};
+  }
+  if (state.enrollment?.active) {
+    return {
+      canContinue: false,
+      error: "已有 Device 配对正在进行，请先完成或取消当前配对。"
+    };
+  }
+  if (typeof link !== "string" || link.trim() === "") {
+    return {canContinue: false, error: ""};
+  }
+  const origin = pairingOriginFromLink(link);
+  if (!origin) {
+    return {
+      canContinue: false,
+      error: "请粘贴完整的 convenewire:// Device 配对链接。"
+    };
+  }
+  if (origin !== state.serverUrl) {
+    return {
+      canContinue: false,
+      error: "该配对链接不属于当前 Central；不会覆盖现有连接。"
+    };
+  }
+  return {canContinue: true, error: ""};
+}
+
 export function configuredPairingLaunchView(link, state) {
   const origin = pairingOriginFromLink(link);
   if (!origin || !state?.configured || state.enrollment?.active) {
