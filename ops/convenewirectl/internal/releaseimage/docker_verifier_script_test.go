@@ -18,6 +18,7 @@ type dockerVerifierScenario struct {
 	classicCaddy       bool
 	containerdServer   bool
 	containerdCaddy    bool
+	cleanupFails       bool
 	wantGeneration     string
 	wantErrorSubstring string
 }
@@ -47,6 +48,12 @@ func TestDockerVerifierSelectsOnlyCompleteRuntimeReferenceGeneration(t *testing.
 			name:          "classic config IDs are preferred when both generations resolve",
 			classicServer: true, classicCaddy: true,
 			containerdServer: true, containerdCaddy: true,
+			wantGeneration: "classic-config-digest",
+		},
+		{
+			name:          "cleanup failure does not overwrite a successful runtime gate",
+			classicServer: true, classicCaddy: true,
+			cleanupFails:   true,
 			wantGeneration: "classic-config-digest",
 		},
 		{
@@ -183,7 +190,37 @@ elif [[ "${1:-}" == "run" ]]; then
   if [[ "$*" == *'--detach'* ]]; then
     [[ "$*" == *"${FAKE_EXPECTED_SERVER_REFERENCE}"* ]]
     [[ "$*" != *"${FAKE_EXPECTED_CADDY_REFERENCE}"* ]]
+    runtime_data=
+    for argument in "$@"; do
+      case "${argument}" in
+        type=bind,src=*,dst=/data)
+          runtime_data=${argument#type=bind,src=}
+          runtime_data=${runtime_data%,dst=/data}
+          ;;
+      esac
+    done
+    [[ -n "${runtime_data}" ]]
+    mkdir -p "${runtime_data}/artifact-blobs/private"
+    printf 'container-owned fixture\n' > "${runtime_data}/artifact-blobs/private/blob"
+    chmod 000 "${runtime_data}/artifact-blobs"
     printf 'fixture-container\n'
+  elif [[ "$*" == *'dst=/cleanup'* ]]; then
+    [[ "$*" == *"${FAKE_EXPECTED_SERVER_REFERENCE} node -e"* ]]
+    cleanup_data=
+    for argument in "$@"; do
+      case "${argument}" in
+        type=bind,src=*,dst=/cleanup)
+          cleanup_data=${argument#type=bind,src=}
+          cleanup_data=${cleanup_data%,dst=/cleanup}
+          ;;
+      esac
+    done
+    [[ -n "${cleanup_data}" ]]
+    chmod -R u+rwX "${cleanup_data}"
+    rm -rf -- "${cleanup_data}/artifact-blobs"
+    if [[ "${FAKE_CLEANUP_FAIL}" == true ]]; then
+      exit 42
+    fi
   else
     [[ "$*" == *"${FAKE_EXPECTED_CADDY_REFERENCE} caddy version"* ]]
     [[ "$*" != *"${FAKE_EXPECTED_SERVER_REFERENCE}"* ]]
@@ -227,6 +264,7 @@ fi
 		"FAKE_CLASSIC_CADDY_AVAILABLE="+strconv.FormatBool(scenario.classicCaddy),
 		"FAKE_CONTAINERD_SERVER_AVAILABLE="+strconv.FormatBool(scenario.containerdServer),
 		"FAKE_CONTAINERD_CADDY_AVAILABLE="+strconv.FormatBool(scenario.containerdCaddy),
+		"FAKE_CLEANUP_FAIL="+strconv.FormatBool(scenario.cleanupFails),
 		"FAKE_EXPECTED_SERVER_REFERENCE="+expectedServerReference,
 		"FAKE_EXPECTED_CADDY_REFERENCE="+expectedCaddyReference,
 		"FAKE_EXPECTED_SERVER_IMAGE_ID="+expectedServerImageID,
@@ -262,6 +300,9 @@ fi
 	if !strings.Contains(string(output), scenario.wantGeneration+" execution") {
 		t.Fatalf("Docker verifier output omitted selected generation %q:\n%s", scenario.wantGeneration, output)
 	}
+	if scenario.cleanupFails && !strings.Contains(string(output), "could not completely remove") {
+		t.Fatalf("Docker verifier omitted the non-fatal cleanup warning:\n%s", output)
+	}
 	detachLine := dockerLogLine(log, "run --detach")
 	if !strings.Contains(detachLine, expectedServerReference) {
 		t.Fatalf("Server execution did not use selected reference %q:\n%s", expectedServerReference, log)
@@ -269,6 +310,17 @@ fi
 	caddyLine := dockerLogLine(log, "run --rm")
 	if !strings.Contains(caddyLine, expectedCaddyReference+" caddy version") {
 		t.Fatalf("Caddy execution did not use selected reference %q:\n%s", expectedCaddyReference, log)
+	}
+	cleanupLine := dockerLogLineContaining(log, "dst=/cleanup")
+	if !strings.Contains(cleanupLine, expectedServerReference+" node -e") {
+		t.Fatalf("runtime cleanup did not use the selected Server image as its unprivileged user:\n%s", log)
+	}
+	leftovers, err := filepath.Glob(filepath.Join(bundleDirectory, ".convenewire-runtime-gate.*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(leftovers) != 0 {
+		t.Fatalf("Docker verifier left runtime cleanup directories behind: %v", leftovers)
 	}
 
 	forbiddenReferences := []string{serverManifestReference, caddyManifestReference}
@@ -290,6 +342,15 @@ fi
 func dockerLogLine(log string, prefix string) string {
 	for _, line := range strings.Split(log, "\n") {
 		if strings.HasPrefix(line, prefix) {
+			return line
+		}
+	}
+	return ""
+}
+
+func dockerLogLineContaining(log string, fragment string) string {
+	for _, line := range strings.Split(log, "\n") {
+		if strings.Contains(line, fragment) {
 			return line
 		}
 	}

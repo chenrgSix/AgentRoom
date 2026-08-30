@@ -228,8 +228,33 @@ mkdir -m 0777 "${runtime_data}"
 printf '%064d\n' 0 > "${recovery_file}"
 chmod 0444 "${recovery_file}"
 cleanup_runtime() {
+  verifier_status=$?
+  trap - EXIT
+  set +e
   docker rm --force "${container_name}" >/dev/null 2>&1 || true
-  rm -rf -- "${runtime_root}"
+
+  # The production image runs as its unprivileged node user. Let that same
+  # identity remove files and private directories it created in the bind mount
+  # before the host removes the runner-owned outer directory. The helper is
+  # offline, cannot pull, has no capabilities, and can write only this mktemp
+  # data directory.
+  docker run --rm --pull=never --network none --read-only \
+    --cap-drop ALL --security-opt no-new-privileges:true \
+    --mount "type=bind,src=${runtime_data},dst=/cleanup" \
+    "${server_reference}" node -e \
+    'const fs=require("node:fs"),path=require("node:path");for(const name of fs.readdirSync("/cleanup"))fs.rmSync(path.join("/cleanup",name),{recursive:true,force:true});' \
+    >/dev/null 2>&1
+  image_cleanup_status=$?
+
+  rm -rf -- "${runtime_root}" >/dev/null 2>&1
+  host_cleanup_status=$?
+  if [[ "${image_cleanup_status}" -ne 0 || "${host_cleanup_status}" -ne 0 ]]; then
+    echo "Warning: Central runtime verifier could not completely remove ${runtime_root}" >&2
+  fi
+
+  # Cleanup is diagnostic hygiene, not a second runtime gate. Preserve the
+  # verifier result even if the runner cannot remove a temporary entry.
+  exit "${verifier_status}"
 }
 trap cleanup_runtime EXIT
 
