@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { CoreRepository } from "../src/data/core-repository.js";
+import { backupDatabase } from "../src/data/backup.js";
 import { openDatabase } from "../src/data/database.js";
 import {
   HostedAgentRepository,
@@ -191,6 +192,34 @@ test("Hosted Agent configuration is explicit, encrypted, revisioned, and recover
       "sk-restored-hosted-secret"
     );
     assert.equal(context.calls.length, 3);
+
+    const backupPath = path.join(
+      path.dirname(context.databasePath),
+      "backups",
+      "configured-hosted.sqlite"
+    );
+    await backupDatabase(context.databasePath, backupPath);
+    const backupBytes = await readFile(backupPath);
+    for (const plaintext of [
+      firstKey,
+      secondKey,
+      "sk-restored-hosted-secret"
+    ]) {
+      assert.equal(backupBytes.includes(Buffer.from(plaintext, "utf8")), false);
+    }
+    const restoredDatabase = openDatabase(backupPath);
+    try {
+      const restoredRepository = new HostedAgentRepository(
+        restoredDatabase,
+        { mode: "local_database" }
+      );
+      assert.equal(
+        restoredRepository.resolveExecutionProfile(created.agentId).apiKey,
+        "sk-restored-hosted-secret"
+      );
+    } finally {
+      restoredDatabase.close();
+    }
   } finally {
     context.database.close();
   }
