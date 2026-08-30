@@ -2,6 +2,7 @@ import type { WorkbenchPage } from "@convene-wire/contracts/task-result";
 import React from "react";
 
 import type { Locale } from "../../i18n.js";
+import type { TaskWorkDetailTab } from "./TaskWorkDetail.js";
 
 export type WorkbenchItem = WorkbenchPage["items"][number];
 
@@ -15,15 +16,45 @@ interface WorkWorkspaceProps {
   lifecycleState?: string;
   locale: Locale;
   memberNames: ReadonlyMap<string, string>;
+  onCreateTask?: () => void;
+  createTaskDisabled?: boolean;
+  onCopyLink?: () => void | Promise<void>;
+  onOpenAction?: (item: WorkbenchItem) => void;
   onOpenTask: (taskId: string, roomId: string) => void;
   onLoadMore?: () => void;
   onLifecycleStateChange?: (value: string) => void;
   onOwnerMemberIdChange?: (value: string) => void;
+  onSearchChange?: (value: string) => void;
   onRefresh: () => void;
   onScopeChange: (scope: "mine" | "team") => void;
   roomNames: ReadonlyMap<string, string>;
   ownerMemberId?: string;
+  search?: string;
   scope: "mine" | "team";
+}
+
+export interface WorkActionTarget {
+  view: "room" | "work";
+  roomId: string;
+  taskId: string;
+  tab?: TaskWorkDetailTab;
+  runId?: string;
+}
+
+/** Navigation intent only. Neither the projection nor this mapping grants command authority. */
+export function workActionTarget(item: WorkbenchItem): WorkActionTarget | null {
+  const location = { roomId: item.roomId, taskId: item.taskId };
+  const { reason, sourceId } = item.nextAction;
+  if (reason === "none") return null;
+  if (reason === "provide_input" || reason === "start_work") return { ...location, view: "room" };
+  if (reason === "review_result" || reason === "submit_result") return { ...location, view: "work", tab: "results" };
+  if (reason === "acknowledge_outcome") {
+    const runId = sourceId && /^run_[A-Za-z0-9_-]{8,128}$/u.test(sourceId)
+      ? sourceId
+      : item.latestRun?.runId;
+    return { ...location, view: "work", tab: "runs", ...(runId ? { runId } : {}) };
+  }
+  return { ...location, view: "work", tab: "overview" };
 }
 
 type GroupKey = "human" | "executing" | "review" | "blocked" | "completed" | "other";
@@ -100,6 +131,7 @@ function WorkCard({
   item,
   locale,
   memberNames,
+  onOpenAction,
   onOpenTask,
   roomNames
 }: {
@@ -107,6 +139,7 @@ function WorkCard({
   item: WorkbenchItem;
   locale: Locale;
   memberNames: ReadonlyMap<string, string>;
+  onOpenAction: WorkWorkspaceProps["onOpenAction"];
   onOpenTask: WorkWorkspaceProps["onOpenTask"];
   roomNames: ReadonlyMap<string, string>;
 }) {
@@ -164,7 +197,15 @@ function WorkCard({
         </div>
       </dl>
       <footer>
-        <span>{locale === "zh-CN" ? "下一步" : "Next"}: {label(item.nextAction.reason, locale)}</span>
+        {onOpenAction && workActionTarget(item) ? <button
+          aria-label={locale === "zh-CN"
+            ? `查看 TASK-${item.taskDisplayNumber} 的下一步：${label(item.nextAction.reason, locale)}`
+            : `Open next step for TASK-${item.taskDisplayNumber}: ${label(item.nextAction.reason, locale)}`}
+          className="work-inline-link work-next-action"
+          onClick={() => onOpenAction(item)}
+          type="button"
+        >{locale === "zh-CN" ? "前往下一步" : "Open next step"} · {label(item.nextAction.reason, locale)}</button>
+          : <span>{locale === "zh-CN" ? "下一步" : "Next"}: {label(item.nextAction.reason, locale)}</span>}
         {item.latestResultId && (
           <span>{locale === "zh-CN" ? "最新结果" : "Latest Result"}: {item.latestResultCurrent
             ? (locale === "zh-CN" ? "当前版本" : "Current")
@@ -185,14 +226,20 @@ export function WorkWorkspace({
   lifecycleState = "",
   locale,
   memberNames,
+  onCreateTask,
+  createTaskDisabled = false,
+  onCopyLink,
+  onOpenAction,
   onOpenTask,
   onLoadMore,
   onLifecycleStateChange,
   onOwnerMemberIdChange,
+  onSearchChange,
   onRefresh,
   onScopeChange,
   roomNames,
   ownerMemberId = "",
+  search = "",
   scope
 }: WorkWorkspaceProps) {
   const groups: Array<{ key: GroupKey; title: string }> = [
@@ -218,6 +265,7 @@ export function WorkWorkspace({
             : "Authorized Tasks, every attention reason, the latest Run/Result, and the next action."}</p>
         </div>
         <div className="work-toolbar">
+          {onCreateTask && <button className="work-inline-link work-create-task" disabled={createTaskDisabled} onClick={onCreateTask} type="button">{locale === "zh-CN" ? "新建任务" : "New Task"}</button>}
           <div aria-label={locale === "zh-CN" ? "工作范围" : "Work scope"} className="work-scope" role="group">
             <button aria-pressed={scope === "mine"} onClick={() => onScopeChange("mine")} type="button">{locale === "zh-CN" ? "我的" : "Mine"}</button>
             <button aria-pressed={scope === "team"} onClick={() => onScopeChange("team")} type="button">Team</button>
@@ -225,9 +273,18 @@ export function WorkWorkspace({
           <button className="work-refresh" disabled={loading} onClick={onRefresh} type="button">
             {loading ? (locale === "zh-CN" ? "刷新中…" : "Refreshing…") : (locale === "zh-CN" ? "刷新" : "Refresh")}
           </button>
+          {onCopyLink && <button className="work-inline-link" onClick={() => void onCopyLink()} type="button">{locale === "zh-CN" ? "复制当前链接" : "Copy current link"}</button>}
         </div>
       </header>
-      {(onLifecycleStateChange || onOwnerMemberIdChange) && <div className="work-filters" aria-label={locale === "zh-CN" ? "筛选工作" : "Filter work"}>
+      {(onLifecycleStateChange || onOwnerMemberIdChange || onSearchChange) && <div className="work-filters" aria-label={locale === "zh-CN" ? "筛选工作" : "Filter work"}>
+        {onSearchChange && <label className="work-search"><span id="work-search-label">{locale === "zh-CN" ? "搜索工作" : "Search work"}</span><input
+          aria-describedby="work-search-help"
+          aria-labelledby="work-search-label"
+          onChange={(event) => onSearchChange([...event.target.value].slice(0, 100).join(""))}
+          placeholder={locale === "zh-CN" ? "任务标题或 TASK-24" : "Task title or TASK-24"}
+          type="search"
+          value={search}
+        /><small id="work-search-help">{locale === "zh-CN" ? "最多 100 字符，仅搜索你有权查看的任务。" : "Up to 100 characters; searches only authorized Tasks."}</small></label>}
         {onLifecycleStateChange && <label>{locale === "zh-CN" ? "任务状态" : "Task state"}<select onChange={(event) => onLifecycleStateChange(event.target.value)} value={lifecycleState}>
           <option value="">{locale === "zh-CN" ? "全部状态" : "All states"}</option>
           {["draft", "ready", "active", "review", "completed", "canceled"].map((state) => <option key={state} value={state}>{label(state, locale)}</option>)}
@@ -236,14 +293,16 @@ export function WorkWorkspace({
           <option value="">{locale === "zh-CN" ? "全部负责人" : "All owners"}</option>
           {[...memberNames].map(([memberId, name]) => <option key={memberId} value={memberId}>{name}</option>)}
         </select></label>}
-        {(lifecycleState || ownerMemberId) && <button className="work-inline-link" onClick={() => { onLifecycleStateChange?.(""); onOwnerMemberIdChange?.(""); }} type="button">{locale === "zh-CN" ? "清除筛选" : "Clear filters"}</button>}
+        {(lifecycleState || ownerMemberId || search) && <button className="work-inline-link" onClick={() => { onLifecycleStateChange?.(""); onOwnerMemberIdChange?.(""); onSearchChange?.(""); }} type="button">{locale === "zh-CN" ? "清除筛选" : "Clear filters"}</button>}
       </div>}
       {error && <p className="work-error" role="alert">{error}</p>}
       {!loading && !error && items.length === 0 ? (
         <div className="work-empty">
           <span>✓</span>
           <strong>{locale === "zh-CN" ? "当前范围没有工作项" : "No work items in this scope"}</strong>
-          <p>{locale === "zh-CN" ? "可切换范围，或在 Room 中创建明确的 Task。" : "Change scope or create an explicit Task in a Room."}</p>
+          <p>{locale === "zh-CN"
+            ? (search ? "没有匹配的任务；可调整搜索词或清除筛选。" : onCreateTask ? "可切换范围，或使用“新建任务”在当前 Room 中创建 Task。" : "可切换范围，或在 Room 中创建明确的 Task。")
+            : (search ? "No matching Tasks; adjust your search or clear the filters." : onCreateTask ? "Change scope or use New Task to create work in the selected Room." : "Change scope or create an explicit Task in a Room.")}</p>
         </div>
       ) : (
         <div className="work-groups">
@@ -261,6 +320,7 @@ export function WorkWorkspace({
                       key={item.taskId}
                       locale={locale}
                       memberNames={memberNames}
+                      onOpenAction={onOpenAction}
                       onOpenTask={onOpenTask}
                       roomNames={roomNames}
                     />

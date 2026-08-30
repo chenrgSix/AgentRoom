@@ -8,10 +8,10 @@ import {
 } from "react";
 
 import type { BridgeJoinApproval } from "@convene-wire/contracts/bridge-messages";
+import type { LifecycleState } from "@convene-wire/contracts/task-result";
 
 import {
   activeRunStates,
-  advanceWebSessionGeneration,
   bridgeServerURL,
   captureWebSessionScope,
   HttpRequestError,
@@ -20,10 +20,11 @@ import {
   jsonRequest,
   loadRunOutputEvents,
   localBootstrap,
-  webSessionExpiredEvent
 } from "./api-client.js";
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
 import { AccessGate } from "./features/auth/AccessGate.js";
+import { useWebSession } from "./features/auth/useWebSession.js";
+import { useRoomSynchronization } from "./features/room/useRoomSynchronization.js";
 import { AgentSetupChoices, type AgentSetupTarget } from "./features/agent/AgentSetupChoices.js";
 import {
   AgentWorkspace,
@@ -35,6 +36,8 @@ import { useDiscussionController } from "./features/discussion/useDiscussionCont
 import { RoomTimeline } from "./features/room/RoomTimeline.js";
 import { RoomSettingsDialog } from "./features/room/RoomSettingsDialog.js";
 import { useRoomComposer } from "./features/room/useRoomComposer.js";
+import { clearComposerUserState } from "./features/room/composer-storage.js";
+import { useWorkspaceNavigation } from "./features/navigation/useWorkspaceNavigation.js";
 import { TeamMembersWorkspace } from "./features/team/TeamMembersWorkspace.js";
 import {
   ResourceLifecycleDialog,
@@ -46,15 +49,14 @@ import { MemoryCandidateReview } from "./features/task/MemoryCandidateReview.js"
 import { ArtifactPreviewPanel } from "./features/task/ArtifactPreviewPanel.js";
 import { TaskCreateDialog, TaskSelector } from "./features/task/TaskControls.js";
 import { parseTaskCriteria } from "./features/task/task-criteria.js";
-import { TaskWorkDetail } from "./features/work/TaskWorkDetail.js";
-import { WorkWorkspace } from "./features/work/WorkWorkspace.js";
+import { TaskWorkDetail, type TaskWorkDetailTab } from "./features/work/TaskWorkDetail.js";
+import { WorkWorkspace, workActionTarget } from "./features/work/WorkWorkspace.js";
 import { useWorkbench } from "./features/work/useWorkbench.js";
 import {
   type Agent,
   type AgentTask,
   type ArtifactPreview,
   type AuthenticatedUser,
-  type AuthGateState,
   type AuthMode,
   type AuthStatus,
   type ConnectionMode,
@@ -67,7 +69,6 @@ import {
   type Message,
   type Room,
   type RoomCollaborationPolicy,
-  type RoomMessagePage,
   type RoomParticipants,
   type RoomSettings,
   type Run,
@@ -75,18 +76,15 @@ import {
   type TaskArtifact,
   type TaskArtifactPage,
   type Team,
-  type TeamChangeCursor,
   type Theme,
   type WorkspaceView,
   defaultRoomCollaborationPolicy
 } from "./models.js";
 import { errorLabel } from "./presentation.js";
 import {
-  createSingleFlight,
   mergeRoomMessages,
   reduceRunActivities,
   reduceRunOutput,
-  teamChangeRefreshScope,
   type RunActivityProjection,
   type RunEventRecord,
   type RunOutputProjection
@@ -100,19 +98,6 @@ function collaborationPolicyFor(room: Room | null): RoomCollaborationPolicy {
   return room?.collaborationPolicy ?? defaultRoomCollaborationPolicy;
 }
 
-async function loadPendingMemoryCandidates(
-  roomId: string,
-  token?: string
-): Promise<MemoryCandidate[]> {
-  try {
-    return await jsonRequest<MemoryCandidate[]>(
-      `/api/rooms/${roomId}/memory-candidates`, {}, token
-    );
-  } catch {
-    // Candidate review is additive and must not block the Room timeline.
-    return [];
-  }
-}
 // Browser storage keys are installation state, not visible branding.
 const localeKey = "agent-room.locale";
 const themeKey = "agent-room.theme";
@@ -125,16 +110,16 @@ export function App() {
   const [locale, setLocale] = useState<Locale>(() =>
     localStorage.getItem(localeKey) === "en" ? "en" : "zh-CN"
   );
-  const [session, setSession] = useState<LocalSession | null>(null);
-  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
-  // Auth transitions must be visible to HTTP expiry events before React commits.
-  const sessionAuthorityRef = useRef<{ session: LocalSession | null; mode: AuthMode | null }>({ session: null, mode: null });
-  const [authState, setAuthState] = useState<AuthGateState>("loading");
+  const { session, authMode, authState, setAuthMode, setAuthState,
+    activate: activateWebSession, clear: clearAuthenticatedSession
+  } = useWebSession(resetAuthenticatedWorkspace);
   const [pendingInvitationToken, setPendingInvitationToken] = useState<string | null>(() =>
     invitationTokenFromFragment(window.location.hash)
   );
   const [teams, setTeams] = useState<Team[]>([]);
+  const [teamsLoaded, setTeamsLoaded] = useState(false);
   const [rooms, setRooms] = useState<Room[]>([]);
+  const [roomSettingsContext, setRoomSettingsContext] = useState<string | null>(null);
   const [roomParticipants, setRoomParticipants] = useState<RoomParticipants>({
     memberIds: [],
     agentIds: []
@@ -146,7 +131,6 @@ export function App() {
   const [olderMessageCursor, setOlderMessageCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
-  const [initializedRoomContext, setInitializedRoomContext] = useState<string | null>(null);
   const [runs, setRuns] = useState<Run[]>([]);
   const [runOutputs, setRunOutputs] = useState<
     Record<string, RunOutputProjection>
@@ -171,8 +155,11 @@ export function App() {
   const [selectedWorkTaskId, setSelectedWorkTaskId] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<WorkspaceView>("work");
   const [workScope, setWorkScope] = useState<"mine" | "team">("mine");
-  const [workLifecycleState, setWorkLifecycleState] = useState("");
+  const [workLifecycleState, setWorkLifecycleState] = useState<LifecycleState | "">("");
   const [workOwnerMemberId, setWorkOwnerMemberId] = useState("");
+  const [workSearch, setWorkSearch] = useState("");
+  const [selectedWorkTab, setSelectedWorkTab] = useState<TaskWorkDetailTab>("overview");
+  const [selectedWorkRunId, setSelectedWorkRunId] = useState<string | null>(null);
   const {
     items: workbenchItems,
     loading: workbenchLoading,
@@ -183,7 +170,7 @@ export function App() {
     loadMore: loadMoreWork
   } = useWorkbench({
     teamId: selectedTeamId, session, scope: workScope,
-    lifecycleState: workLifecycleState, ownerMemberId: workOwnerMemberId
+    lifecycleState: workLifecycleState, ownerMemberId: workOwnerMemberId, search: workSearch
   });
   const [connectionMode, setConnectionMode] = useState<ConnectionMode>("managed");
   const [agentSetupTarget, setAgentSetupTarget] = useState<AgentSetupTarget | null>(null);
@@ -232,15 +219,7 @@ export function App() {
   const reportError = (reason: unknown) => {
     if (!isStaleWebSessionError(reason)) setError(String(reason));
   };
-  const messageSyncRef = useRef<{
-    roomId: string;
-    cursor: string | null;
-    sequence: number;
-  } | null>(null);
   const diagnosticRequestsRef = useRef(new Set<string>());
-  const historyRequestRef = useRef(0);
-  const historyPendingRef = useRef(false);
-  const historyInitializedRef = useRef(false);
   const composerInputRef = useRef<HTMLTextAreaElement>(null);
   const roomContextRef = useRef("");
   roomContextRef.current = JSON.stringify([selectedTeamId, selectedRoomId, session?.userId, session?.token]);
@@ -248,15 +227,41 @@ export function App() {
   const runActivitySyncRef = useRef(new Map<string, RunActivityProjection>());
   const selectedTaskIdRef = useRef<string | null>(selectedTaskId);
   const pendingRoomTaskIdRef = useRef<string | null>(null);
+  const preferredRoomRef = useRef<{ teamId: string; roomId: string } | null>(null);
   selectedTaskIdRef.current = selectedTaskId;
 
-  const initializeRoomHistoryCursor = (page: RoomMessagePage): void => {
-    // null also means all history is loaded; never use the cursor as this flag.
-    // Recheck at commit time so concurrent tail refreshes cannot reset history.
-    if (historyInitializedRef.current) return;
-    historyInitializedRef.current = true;
-    setOlderMessageCursor(page.olderCursor ?? null);
-  };
+  const { navigate, copyLink, copyStatus, restoring: restoringNavigation } = useWorkspaceNavigation({
+    session, teams, ready: teamsLoaded, locale,
+    snapshot: {
+      teamId: selectedTeamId ?? undefined, roomId: selectedRoomId ?? undefined,
+      view: activeView, taskId: activeView === "room" ? selectedTaskId ?? undefined : undefined,
+      workTaskId: activeView === "work" ? selectedWorkTaskId ?? undefined : undefined,
+      tab: selectedWorkTaskId ? selectedWorkTab : undefined,
+      runId: selectedWorkTaskId ? selectedWorkRunId ?? undefined : undefined,
+      scope: workScope, lifecycleState: workLifecycleState || undefined,
+      ownerMemberId: workOwnerMemberId || undefined, search: workSearch || undefined
+    },
+    onRestore: (navigation) => {
+      const teamId = navigation.teamId ?? selectedTeamId;
+      const roomId = navigation.roomId ?? null;
+      if (teamId && roomId) preferredRoomRef.current = { teamId, roomId };
+      else preferredRoomRef.current = null;
+      const taskId = navigation.taskId ?? null;
+      if (taskId && roomId !== selectedRoomId) pendingRoomTaskIdRef.current = taskId;
+      else { pendingRoomTaskIdRef.current = null; if (taskId) setSelectedTaskId(taskId); }
+      setSelectedTeamId(teamId);
+      if (roomId) setSelectedRoomId(roomId);
+      setActiveView(navigation.view ?? (navigation.workTaskId ? "work" : navigation.taskId ? "room" : "work"));
+      setSelectedWorkTaskId(navigation.workTaskId ?? null);
+      setSelectedWorkTab(navigation.tab ?? "overview");
+      setSelectedWorkRunId(navigation.runId ?? null);
+      setWorkScope(navigation.scope ?? "mine");
+      setWorkLifecycleState(navigation.lifecycleState ?? "");
+      setWorkOwnerMemberId(navigation.ownerMemberId ?? "");
+      setWorkSearch(navigation.search ?? "");
+    },
+    onError: setError
+  });
 
   const commitRunOutputEvents = (
     roomRuns: Run[],
@@ -295,6 +300,51 @@ export function App() {
       [...nextActivities].filter(([, projection]) => projection.items.length > 0)
     ));
   };
+
+  const { refresh: refreshRoomState, loadOlder: loadOlderMessages } = useRoomSynchronization({
+    teamId: selectedTeamId, roomId: selectedRoomId, session,
+    onReset: () => {
+      setMessages([]); setRuns([]); setDiscussions([]); setTasks([]);
+      setRunOutputs({}); setRunActivities({});
+      runOutputSyncRef.current.clear(); runActivitySyncRef.current.clear();
+      setRoomParticipants({ memberIds: [], agentIds: [] });
+      setRoomSettingsContext(null);
+      setRunDiagnostics({}); diagnosticRequestsRef.current.clear();
+      setClarifications([]); setMemoryCandidates([]); setClarificationAnswers({});
+      setSelectedTaskId(null);
+      setOlderMessageCursor(null); setHistoryLoading(false); setHistoryError(null);
+    },
+    onMessages: (items) => setMessages((current) => mergeRoomMessages(current, items, Infinity)),
+    onHistory: ({ olderCursor, loading, error }) => {
+      setOlderMessageCursor(olderCursor); setHistoryLoading(loading); setHistoryError(error);
+    },
+    onSnapshot: (snapshot) => {
+      setRuns(snapshot.runs); setDiscussions(snapshot.discussions);
+      setTasks(snapshot.tasks); setMemoryCandidates(snapshot.memoryCandidates);
+      if (snapshot.outputs) commitRunOutputEvents(snapshot.runs, snapshot.outputs);
+      const pendingTaskId = pendingRoomTaskIdRef.current;
+      setSelectedTaskId((current) =>
+        pendingTaskId && snapshot.tasks.some(({ taskId }) => taskId === pendingTaskId)
+          ? pendingTaskId : snapshot.tasks.some(({ taskId }) => taskId === current)
+          ? current : snapshot.tasks.find(({ state }) => state !== "completed" && state !== "canceled")?.taskId
+            ?? snapshot.tasks[0]?.taskId ?? null);
+      pendingRoomTaskIdRef.current = null;
+      if (snapshot.registry) {
+        setAgents(snapshot.registry.agents); setMembers(snapshot.registry.members); setDevices(snapshot.registry.devices);
+      }
+      if (snapshot.settings) {
+        const settings = snapshot.settings;
+        setRoomSettingsContext(roomContextRef.current);
+        setRoomParticipants(settings.participants);
+        setRooms((current) => current.map((room) => room.roomId === settings.room.roomId ? settings.room : room));
+        retainMentionAgentIds(settings.participants.agentIds);
+      }
+    },
+    loadOutputs: (roomRuns) => loadRunOutputEvents(roomRuns, runOutputSyncRef.current, runActivitySyncRef.current, session?.token),
+    onEvents: (roomRuns, outputs) => { setRuns(roomRuns); commitRunOutputEvents(roomRuns, outputs); },
+    refreshWorkbench: refreshWorkbenchState,
+    onError: reportError
+  });
 
   const selectedTeam = useMemo(
     () => teams.find((team) => team.teamId === selectedTeamId) ?? null,
@@ -396,6 +446,8 @@ export function App() {
     mentionSearch,
     messageContent,
     pendingMessages: pendingRoomMessages,
+    persistenceStatus,
+    clearDraft,
     removeMention,
     retainMentionAgentIds,
     selectMention,
@@ -420,7 +472,9 @@ export function App() {
     onError: (next) => { if (isCurrentSession()) setError(next); },
     onRoomStateChanged: refreshRoomState,
     roomAgents,
+    roomAgentsReady: roomSettingsContext === roomContextRef.current,
     roomPolicy: selectedRoomPolicy,
+    selectedTeamId,
     selectedRoomId,
     selectedTaskId,
     session
@@ -471,6 +525,7 @@ export function App() {
   async function loadTeams(activeSession: LocalSession) {
     const next = await jsonRequest<Team[]>("/api/teams", {}, activeSession.token);
     setTeams(next);
+    setTeamsLoaded(true);
     setSelectedTeamId((current) =>
       next.some(({ teamId }) => teamId === current) ? current : next[0]?.teamId ?? null
     );
@@ -623,17 +678,8 @@ export function App() {
     mode: AuthMode,
     token?: string
   ) {
-    advanceWebSessionGeneration();
+    const next = activateWebSession(user, mode, token);
     setBusy(false);
-    const next: LocalSession = {
-      userId: user.userId,
-      displayName: user.displayName,
-      ...(token ? { token } : {})
-    };
-    sessionAuthorityRef.current = { session: next, mode };
-    setAuthMode(mode);
-    setSession(next);
-    setAuthState("authenticated");
     await loadTeams(next);
   }
 
@@ -760,16 +806,6 @@ export function App() {
     };
   }, []);
 
-  useEffect(() => {
-    const expire = () => {
-      if (!sessionAuthorityRef.current.session) return;
-      clearAuthenticatedSession();
-      setError(null);
-    };
-    window.addEventListener(webSessionExpiredEvent, expire);
-    return () => window.removeEventListener(webSessionExpiredEvent, expire);
-  }, []);
-
   useLayoutEffect(() => {
     setRooms([]);
     setMembers([]);
@@ -807,7 +843,9 @@ export function App() {
       setMembers(nextMembers);
       setDevices(nextDevices);
       setSelectedRoomId((current) =>
-        nextRooms.some((room) => room.roomId === current)
+        preferredRoomRef.current?.teamId === selectedTeamId && nextRooms.some((room) => room.roomId === preferredRoomRef.current?.roomId)
+          ? preferredRoomRef.current.roomId
+          : nextRooms.some((room) => room.roomId === current)
           ? current
           : nextRooms[0]?.roomId ?? null
       );
@@ -816,147 +854,8 @@ export function App() {
   }, [selectedTeamId, session]);
 
   useEffect(() => {
-    setWorkOwnerMemberId("");
-    setWorkLifecycleState("");
     setAgentSetupTarget(null);
   }, [selectedTeamId]);
-
-  useEffect(() => {
-    ++historyRequestRef.current;
-    setInitializedRoomContext(null);
-    historyPendingRef.current = false;
-    historyInitializedRef.current = false;
-    setOlderMessageCursor(null);
-    setHistoryLoading(false);
-    setHistoryError(null);
-    if (!session || !selectedRoomId) {
-      setMessages([]);
-      setRuns([]);
-      setRunOutputs({});
-      setRunActivities({});
-      runOutputSyncRef.current.clear();
-      runActivitySyncRef.current.clear();
-      setRoomParticipants({ memberIds: [], agentIds: [] });
-      setRunDiagnostics({});
-      diagnosticRequestsRef.current.clear();
-      setDiscussions([]);
-      setTasks([]);
-      setClarifications([]);
-      setMemoryCandidates([]);
-      setClarificationAnswers({});
-      setSelectedTaskId(null);
-      messageSyncRef.current = null;
-      return;
-    }
-    let stopped = false;
-    const context = roomContextRef.current;
-    messageSyncRef.current = {
-      roomId: selectedRoomId,
-      cursor: null,
-      sequence: 0
-    };
-    setMessages([]);
-    setRuns([]);
-    setRunOutputs({});
-    setRunActivities({});
-    runOutputSyncRef.current.clear();
-    runActivitySyncRef.current.clear();
-    setRoomParticipants({ memberIds: [], agentIds: [] });
-    setRunDiagnostics({});
-    diagnosticRequestsRef.current.clear();
-    setTasks([]);
-    setClarifications([]);
-    setMemoryCandidates([]);
-    setClarificationAnswers({});
-    setSelectedTaskId(null);
-    void Promise.all([
-      jsonRequest<RoomMessagePage>(
-        `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`,
-        {},
-        session.token
-      ),
-      jsonRequest<Run[]>(
-        `/api/rooms/${selectedRoomId}/runs`,
-        {},
-        session.token
-      ),
-      jsonRequest<DiscussionView[]>(
-        `/api/rooms/${selectedRoomId}/discussions`,
-        {},
-        session.token
-      ),
-      jsonRequest<RoomSettings>(
-        `/api/rooms/${selectedRoomId}/settings`,
-        {},
-        session.token
-      ),
-      jsonRequest<AgentTask[]>(
-        `/api/rooms/${selectedRoomId}/tasks`,
-        {},
-        session.token
-      ),
-      loadPendingMemoryCandidates(selectedRoomId, session.token)
-    ]).then(async ([
-      page,
-      nextRuns,
-      nextDiscussions,
-      nextSettings,
-      nextTasks,
-      nextMemoryCandidates
-    ]) => {
-      if (stopped || roomContextRef.current !== context) return;
-      const outputBatches = await loadRunOutputEvents(
-        nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
-        session.token
-      );
-      if (stopped || roomContextRef.current !== context) return;
-      // An action-triggered refresh may already have committed a newer tail
-      // and loaded history while this initial snapshot waited for Run output.
-      setMessages((current) => mergeRoomMessages(current, page.items, Infinity));
-      initializeRoomHistoryCursor(page);
-      const sequence = page.items.at(-1)?.sequence ?? 0;
-      const currentSync = messageSyncRef.current;
-      if (!currentSync || currentSync.roomId !== selectedRoomId || sequence >= currentSync.sequence) {
-        messageSyncRef.current = {
-          roomId: selectedRoomId,
-          cursor: page.syncCursor ?? currentSync?.cursor ?? null,
-          sequence
-        };
-      }
-      setRuns(nextRuns);
-      commitRunOutputEvents(nextRuns, outputBatches);
-      setDiscussions(nextDiscussions);
-      setTasks(nextTasks);
-      setMemoryCandidates(nextMemoryCandidates);
-      const pendingTaskId = pendingRoomTaskIdRef.current;
-      setSelectedTaskId((current) =>
-        pendingTaskId && nextTasks.some(({ taskId }) => taskId === pendingTaskId)
-          ? pendingTaskId
-          : nextTasks.some(({ taskId }) => taskId === current)
-          ? current
-          : nextTasks.find(({ state }) =>
-              state !== "completed" && state !== "canceled"
-            )?.taskId ?? nextTasks[0]?.taskId ?? null
-      );
-      pendingRoomTaskIdRef.current = null;
-      setRoomParticipants(nextSettings.participants);
-      setRooms((current) => current.map((room) =>
-        room.roomId === nextSettings.room.roomId ? nextSettings.room : room
-      ));
-      retainMentionAgentIds(nextSettings.participants.agentIds);
-      setInitializedRoomContext(context);
-    })
-      .catch((reason: unknown) => {
-        if (!stopped && roomContextRef.current === context) {
-          reportError(reason);
-          // Let the existing reconciliation loop recover a failed first read.
-          setInitializedRoomContext(context);
-        }
-      });
-    return () => {
-      stopped = true;
-    };
-  }, [selectedRoomId, selectedTeamId, session]);
 
   useEffect(() => {
     if (!session || !selectedTaskId) {
@@ -998,197 +897,8 @@ export function App() {
   }, [runs, selectedTaskId, session]);
 
   useEffect(() => {
-    if (!session || !selectedTeamId || !selectedRoomId ||
-      initializedRoomContext !== roomContextRef.current) return;
-    let stopped = false;
-    const context = roomContextRef.current;
-    const isCurrentRoom = () => !stopped && roomContextRef.current === context && isCurrentSession();
-    let activeController: AbortController | null = null;
-    let retryTimer: number | null = null;
-    const refresh = async (scope: "events" | "room" | "full") => {
-      try {
-        if (scope === "events") {
-          const nextRuns = await jsonRequest<Run[]>(
-            `/api/rooms/${selectedRoomId}/runs`, {}, session.token
-          );
-          const outputBatches = await loadRunOutputEvents(
-            nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
-            session.token
-          );
-          if (isCurrentRoom()) {
-            setRuns(nextRuns);
-            commitRunOutputEvents(nextRuns, outputBatches);
-          }
-          return;
-        }
-        const sync = messageSyncRef.current?.roomId === selectedRoomId
-          ? messageSyncRef.current
-          : null;
-        let cursor = sync?.cursor ?? null;
-        let sequence = sync?.sequence ?? 0;
-        let tailPage: RoomMessagePage | null = null;
-        const changedMessages: Message[] = [];
-        for (let pageNumber = 0; pageNumber < 10; pageNumber += 1) {
-          const messagePath = cursor
-            ? `/api/rooms/${selectedRoomId}/messages?limit=100&cursor=${encodeURIComponent(cursor)}`
-            : `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`;
-          const page = await jsonRequest<RoomMessagePage>(
-            messagePath, {}, session.token
-          );
-          if (pageNumber === 0 && !cursor) tailPage = page;
-          changedMessages.push(...page.items);
-          sequence = Math.max(sequence, page.items.at(-1)?.sequence ?? sequence);
-          cursor = page.nextCursor ?? page.syncCursor ?? cursor;
-          if (!page.nextCursor) break;
-        }
-        const [roomState, teamState] = await Promise.all([
-          Promise.all([
-            jsonRequest<Run[]>(
-              `/api/rooms/${selectedRoomId}/runs`, {}, session.token
-            ),
-            jsonRequest<DiscussionView[]>(
-              `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
-            ),
-            jsonRequest<AgentTask[]>(
-              `/api/rooms/${selectedRoomId}/tasks`, {}, session.token
-            ),
-            loadPendingMemoryCandidates(selectedRoomId, session.token)
-          ]),
-          scope === "full"
-            ? Promise.all([
-                jsonRequest<Agent[]>(
-                  `/api/teams/${selectedTeamId}/agents`, {}, session.token
-                ),
-                jsonRequest<Member[]>(
-                  `/api/teams/${selectedTeamId}/members`, {}, session.token
-                ),
-                jsonRequest<Device[]>(
-                  `/api/teams/${selectedTeamId}/devices`, {}, session.token
-                ),
-                jsonRequest<RoomSettings>(
-                  `/api/rooms/${selectedRoomId}/settings`, {}, session.token
-                )
-              ])
-            : Promise.resolve(null)
-        ]);
-        const [nextRuns, nextDiscussions, nextTasks, nextMemoryCandidates] = roomState;
-        const outputBatches = await loadRunOutputEvents(
-          nextRuns, runOutputSyncRef.current, runActivitySyncRef.current,
-          session.token
-        );
-        if (isCurrentRoom()) {
-          setMessages((current) => mergeRoomMessages(current, changedMessages, Infinity));
-          if (tailPage) initializeRoomHistoryCursor(tailPage);
-          const currentSync = messageSyncRef.current;
-          if (
-            !currentSync ||
-            currentSync.roomId !== selectedRoomId ||
-            sequence >= currentSync.sequence
-          ) {
-            messageSyncRef.current = {
-              roomId: selectedRoomId,
-              cursor,
-              sequence
-            };
-          }
-          setRuns(nextRuns);
-          commitRunOutputEvents(nextRuns, outputBatches);
-          setDiscussions(nextDiscussions);
-          setTasks(nextTasks);
-          setMemoryCandidates(nextMemoryCandidates);
-          setSelectedTaskId((current) =>
-            nextTasks.some(({ taskId }) => taskId === current)
-              ? current
-              : nextTasks.find(({ state }) =>
-                  state !== "completed" && state !== "canceled"
-                )?.taskId ?? nextTasks[0]?.taskId ?? null
-          );
-          if (teamState) {
-            const [nextAgents, nextMembers, nextDevices, nextSettings] = teamState;
-            setAgents(nextAgents);
-            setMembers(nextMembers);
-            setDevices(nextDevices);
-            setRoomParticipants(nextSettings.participants);
-            setRooms((current) => current.map((room) =>
-              room.roomId === nextSettings.room.roomId ? nextSettings.room : room
-            ));
-            retainMentionAgentIds(nextSettings.participants.agentIds);
-          }
-        }
-      } catch (reason) {
-        if (isCurrentRoom()) reportError(reason);
-      }
-    };
-    const refreshRoomSingleFlight = createSingleFlight(() => refresh("room"));
-    const refreshFullSingleFlight = createSingleFlight(() => refresh("full"));
-    const refreshEventsSingleFlight = createSingleFlight(() => refresh("events"));
-    const refreshWorkbenchSingleFlight = createSingleFlight(async () => {
-      if (!stopped) await refreshWorkbenchState();
-    });
-    const delay = (milliseconds: number) => new Promise<void>((resolve) => {
-      retryTimer = window.setTimeout(() => {
-        retryTimer = null;
-        resolve();
-      }, milliseconds);
-    });
-    const listen = async () => {
-      let cursor = 0;
-      while (!stopped) {
-        if (document.visibilityState === "hidden") {
-          await delay(1_000);
-          continue;
-        }
-        activeController = new AbortController();
-        try {
-          const change = await jsonRequest<TeamChangeCursor>(
-            `/api/teams/${selectedTeamId}/changes?after=${cursor}`,
-            { signal: activeController.signal },
-            session.token
-          );
-          cursor = change.cursor;
-          if (change.changed || change.reset) {
-            await refreshWorkbenchSingleFlight();
-            const refreshScope = teamChangeRefreshScope(change, selectedRoomId);
-            if (refreshScope === "full") {
-              await refreshFullSingleFlight();
-            } else if (refreshScope === "room") {
-              await refreshRoomSingleFlight();
-            } else if (refreshScope === "events") {
-              await refreshEventsSingleFlight();
-            }
-          } else {
-            await delay(250);
-          }
-        } catch (reason) {
-          if (stopped || activeController?.signal.aborted) return;
-          await refreshFullSingleFlight();
-          await delay(2_000);
-        }
-      }
-    };
-    const reconcileVisible = () => {
-      if (document.visibilityState === "hidden") {
-        activeController?.abort();
-      } else {
-        void refreshFullSingleFlight();
-      }
-    };
-    document.addEventListener("visibilitychange", reconcileVisible);
-    const fallbackTimer = window.setInterval(() => {
-      if (document.visibilityState !== "hidden") void refreshFullSingleFlight();
-    }, 30_000);
-    void listen();
-    return () => {
-      stopped = true;
-      activeController?.abort();
-      if (retryTimer !== null) window.clearTimeout(retryTimer);
-      window.clearInterval(fallbackTimer);
-      document.removeEventListener("visibilitychange", reconcileVisible);
-    };
-  }, [selectedRoomId, selectedTeamId, session, initializedRoomContext, refreshWorkbenchState]);
-
-  useEffect(() => {
     if (!session || !selectedRoomId) return;
+    const context = roomContextRef.current;
     const failedRuns = runs.filter(({ state }) =>
       ["failed", "expired", "outcome_unknown"].includes(state)
     );
@@ -1199,7 +909,7 @@ export function App() {
         run.runId,
         (path) => jsonRequest(path, {}, session.token)
       ).then((diagnostic) => {
-        if (messageSyncRef.current?.roomId === selectedRoomId) {
+        if (roomContextRef.current === context && isCurrentSession()) {
           setRunDiagnostics((current) => ({
             ...current,
             [run.runId]: diagnostic
@@ -1207,7 +917,7 @@ export function App() {
         }
       }).catch((reason: unknown) => {
         diagnosticRequestsRef.current.delete(run.runId);
-        if (messageSyncRef.current?.roomId === selectedRoomId) {
+        if (roomContextRef.current === context && isCurrentSession()) {
           reportError(reason);
         }
       });
@@ -1263,6 +973,8 @@ export function App() {
     ) return;
     setTaskBusy(true);
     setError(null);
+    const context = roomContextRef.current;
+    const originView = activeView;
     try {
       const task = await jsonRequest<AgentTask>(
         `/api/rooms/${selectedRoomId}/tasks`,
@@ -1272,12 +984,20 @@ export function App() {
         },
         session.token
       );
-      setTasks((current) => [...current, task]);
+      if (!isCurrentSession() || roomContextRef.current !== context) return;
+      // Reconcile the successful creation before exposing its selection. This
+      // also fences an older initial snapshot still waiting on Run output.
+      try { await refreshRoomState(); } catch (reason) { reportError(reason); }
+      if (!isCurrentSession() || roomContextRef.current !== context) return;
+      setTasks((current) => [...current.filter(({ taskId }) => taskId !== task.taskId), task]);
       setSelectedTaskId(task.taskId);
       setTaskTitle("");
       setTaskGoal("");
       setTaskCriteria("");
       setTaskDialogOpen(false);
+      if (originView === "work") openWorkbenchTask(task.taskId, selectedRoomId);
+      else navigate({ taskId: task.taskId, workTaskId: undefined, view: "room" });
+      void refreshWorkbenchState();
     } catch (reason) {
       reportError(reason);
     } finally {
@@ -1410,11 +1130,12 @@ export function App() {
     }
   }
 
-  function clearAuthenticatedSession() {
-    const authority = sessionAuthorityRef.current;
-    if (!authority.session) return;
-    sessionAuthorityRef.current = { session: null, mode: authority.mode };
-    advanceWebSessionGeneration();
+  function resetAuthenticatedWorkspace(previous: LocalSession) {
+    clearComposerUserState(previous.userId);
+    setError(null);
+    setTeamsLoaded(false);
+    preferredRoomRef.current = null;
+    pendingRoomTaskIdRef.current = null;
     setBusy(false);
     setTeamBusy(false);
     setTaskBusy(false);
@@ -1424,7 +1145,6 @@ export function App() {
     setMemoryCandidateBusyId(null);
     setArtifactPreviewBusyId(null);
     setArtifactPreviewError(null);
-    setSession(null);
     setTeams([]);
     setRooms([]);
     setMembers([]);
@@ -1436,13 +1156,17 @@ export function App() {
     setTasks([]);
     setArtifacts([]);
     setArtifactPreview(null);
-    setInitializedRoomContext(null);
     setSelectedTeamId(null);
     setSelectedRoomId(null);
     setSelectedWorkTaskId(null);
+    setSelectedWorkRunId(null);
+    setSelectedWorkTab("overview");
+    setWorkSearch("");
+    setWorkScope("mine");
+    setWorkLifecycleState("");
+    setWorkOwnerMemberId("");
     setMemberInvitation(null);
     setSetupOutput(null);
-    setAuthState(authority.mode === "local" ? "local_bootstrap" : "sign_in_required");
   }
 
   async function signOut() {
@@ -1586,100 +1310,16 @@ export function App() {
     }
   }
 
-  async function refreshRoomState() {
-    if (!session || !selectedRoomId) return;
-    const context = roomContextRef.current;
-    const [page, nextRuns, nextDiscussions, nextTasks, nextMemoryCandidates] = await Promise.all([
-      jsonRequest<RoomMessagePage>(
-        `/api/rooms/${selectedRoomId}/messages?limit=100&tail=true`, {}, session.token
-      ),
-      jsonRequest<Run[]>(
-        `/api/rooms/${selectedRoomId}/runs`, {}, session.token
-      ),
-      jsonRequest<DiscussionView[]>(
-        `/api/rooms/${selectedRoomId}/discussions`, {}, session.token
-      ),
-      jsonRequest<AgentTask[]>(
-        `/api/rooms/${selectedRoomId}/tasks`, {}, session.token
-      ),
-      loadPendingMemoryCandidates(selectedRoomId, session.token)
-    ]);
-    if (roomContextRef.current !== context) return;
-    setMessages((current) => mergeRoomMessages(current, page.items, Infinity));
-    initializeRoomHistoryCursor(page);
-    const sequence = page.items.at(-1)?.sequence ?? 0;
-    const currentSync = messageSyncRef.current;
-    if (
-      !currentSync ||
-      currentSync.roomId !== selectedRoomId ||
-      sequence >= currentSync.sequence
-    ) {
-      messageSyncRef.current = {
-        roomId: selectedRoomId,
-        cursor: page.syncCursor ?? currentSync?.cursor ?? null,
-        sequence
-      };
-    }
-    setRuns(nextRuns);
-    setDiscussions(nextDiscussions);
-    setTasks(nextTasks);
-    setMemoryCandidates(nextMemoryCandidates);
-    setSelectedTaskId((current) =>
-      nextTasks.some(({ taskId }) => taskId === current)
-        ? current
-        : nextTasks.find(({ state }) =>
-            state !== "completed" && state !== "canceled"
-          )?.taskId ?? nextTasks[0]?.taskId ?? null
-    );
-  }
-
-  async function loadOlderMessages() {
-    if (!session || !selectedRoomId || !olderMessageCursor || historyPendingRef.current) return;
-    const context = roomContextRef.current;
-    const requestId = ++historyRequestRef.current;
-    historyPendingRef.current = true;
-    setHistoryLoading(true);
-    setHistoryError(null);
-    try {
-      const page = await jsonRequest<RoomMessagePage>(
-        `/api/rooms/${selectedRoomId}/messages?limit=100&beforeCursor=${encodeURIComponent(olderMessageCursor)}`,
-        {},
-        session.token
-      );
-      if (roomContextRef.current !== context || requestId !== historyRequestRef.current) return;
-      // Keep the loaded window aligned with the Server's opaque older cursor.
-      // Implicitly trimming it would make subsequent pages silently skip history.
-      setMessages((current) => mergeRoomMessages(current, page.items, Infinity));
-      setOlderMessageCursor(page.olderCursor ?? null);
-    } catch (reason) {
-      if (!isStaleWebSessionError(reason) && roomContextRef.current === context && requestId === historyRequestRef.current) setHistoryError(String(reason));
-    } finally {
-      if (roomContextRef.current === context && requestId === historyRequestRef.current) {
-        historyPendingRef.current = false;
-        setHistoryLoading(false);
-      }
-    }
-  }
-
   function openWorkbenchTask(taskId: string, roomId: string) {
-    setSelectedRoomId(roomId);
-    setSelectedWorkTaskId(taskId);
-    setActiveView("work");
+    navigate({ roomId, workTaskId: taskId, taskId: undefined, view: "work", tab: "overview", runId: undefined });
   }
 
   function revealWork() {
-    setSelectedWorkTaskId(null);
-    setActiveView("work");
+    navigate({ workTaskId: undefined, taskId: undefined, tab: undefined, runId: undefined, view: "work" });
   }
 
   function openTaskInRoom(roomId: string, taskId: string) {
-    if (selectedRoomId === roomId) {
-      setSelectedTaskId(taskId);
-    } else {
-      pendingRoomTaskIdRef.current = taskId;
-      setSelectedRoomId(roomId);
-    }
-    setActiveView("room");
+    navigate({ roomId, taskId, workTaskId: undefined, tab: undefined, runId: undefined, view: "room" });
   }
 
   async function answerTaskClarification(
@@ -1793,7 +1433,7 @@ export function App() {
 
   function revealConnectionSetup() {
     setAgentSetupTarget(null);
-    setActiveView("agents");
+    navigate({ view: "agents", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined });
   }
 
   function chooseAgentSetup(target: AgentSetupTarget) {
@@ -1802,7 +1442,7 @@ export function App() {
       setConnectionMode("demo");
       if (!agentName.trim()) setAgentName(locale === "zh-CN" ? "体验助手" : "Demo Agent");
     } else if (target === "local") setConnectionMode("managed");
-    setActiveView("agents");
+    navigate({ view: "agents", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined });
   }
 
   async function openHostedRoom(roomId: string) {
@@ -1812,8 +1452,7 @@ export function App() {
       const settings = await jsonRequest<RoomSettings>(`/api/rooms/${roomId}/settings`, {}, session.token);
       if (roomContextRef.current !== context) return;
       if (selectedRoomId === roomId) setRoomParticipants(settings.participants);
-      setSelectedRoomId(roomId);
-      setActiveView("room");
+      navigate({ roomId, view: "room", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined });
     } catch (reason) {
       reportError(reason);
     }
@@ -1822,7 +1461,7 @@ export function App() {
   function revealTeamMembers() {
     setMemberInvitation(null);
     setInvitationCopied(false);
-    setActiveView("members");
+    navigate({ view: "members", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined });
   }
 
   if (authState !== "authenticated") {
@@ -1854,8 +1493,8 @@ export function App() {
               className={team.teamId === selectedTeamId ? "team-chip active" : "team-chip"}
               key={team.teamId}
               onClick={() => {
-                setSelectedWorkTaskId(null);
-                setSelectedTeamId(team.teamId);
+                navigate({ teamId: team.teamId, roomId: undefined, taskId: undefined, workTaskId: undefined,
+                  tab: undefined, runId: undefined, lifecycleState: undefined, ownerMemberId: undefined, search: undefined, view: "work" });
               }}
               title={team.name}
             >
@@ -1960,9 +1599,9 @@ export function App() {
             {selectedTeam && (
               <>
                 <button className={activeView === "work" ? "active" : ""} onClick={revealWork} type="button">{locale === "zh-CN" ? "工作" : "Work"}</button>
-                <button className={activeView === "room" ? "active" : ""} onClick={() => setActiveView("room")} type="button">{t("chat")}</button>
+                <button className={activeView === "room" ? "active" : ""} onClick={() => navigate({ view: "room", taskId: selectedTaskId ?? undefined, workTaskId: undefined, tab: undefined, runId: undefined })} type="button">{t("chat")}</button>
                 <button className={activeView === "members" ? "active" : ""} onClick={revealTeamMembers} type="button">{t("teamMembers")}</button>
-                <button className={activeView === "agents" ? "active" : ""} onClick={() => setActiveView("agents")} type="button">{t("agents")}</button>
+                <button className={activeView === "agents" ? "active" : ""} onClick={() => navigate({ view: "agents", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined })} type="button">{t("agents")}</button>
               </>
             )}
             <button aria-label={t("newTeamMobile")} onClick={() => setTeamDialogOpen(true)} type="button">＋</button>
@@ -2052,15 +1691,14 @@ export function App() {
               <>
                 <button
                   className={activeView === "room" ? "header-chat active" : "header-chat"}
-                  onClick={() => setActiveView("room")}
+                  onClick={() => navigate({ view: "room", taskId: selectedTaskId ?? undefined, workTaskId: undefined, tab: undefined, runId: undefined })}
                   type="button"
                 >⌁ <span>{t("chat")}</span></button>
                 <select
                   aria-label={t("selectRoom")}
                   className="header-room-select"
                   onChange={(event) => {
-                    setSelectedRoomId(event.target.value);
-                    setActiveView("room");
+                    navigate({ roomId: event.target.value, view: "room", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined });
                   }}
                   value={selectedRoomId ?? ""}
                 >
@@ -2108,6 +1746,8 @@ export function App() {
           </div>
         </header>
         {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
+        {restoringNavigation && <p className="navigation-status" role="status">{locale === "zh-CN" ? "正在验证并恢复工作位置…" : "Checking access and restoring your work…"}</p>}
+        {copyStatus && <p className="navigation-status" role="status">{copyStatus}</p>}
         {!selectedTeam ? (
           <section className="empty-stage onboarding-stage">
             <div className="orb"><span>✦</span></div>
@@ -2136,7 +1776,12 @@ export function App() {
             currentMember={currentMember}
             locale={locale}
             memberNames={memberNames}
-            onBack={() => setSelectedWorkTaskId(null)}
+            onBack={revealWork}
+            initialTab={selectedWorkTab}
+            initialRunId={selectedWorkRunId}
+            onTabChange={(tab) => navigate({ tab })}
+            onRunChange={(runId) => navigate({ runId })}
+            onCopyLink={copyLink}
             onChanged={() => void refreshWorkbenchState()}
             onOpenRoom={openTaskInRoom}
             onOpenTask={openWorkbenchTask}
@@ -2167,10 +1812,26 @@ export function App() {
             memberNames={memberNames}
             onOpenTask={openWorkbenchTask}
             onLoadMore={() => void loadMoreWork()}
-            onLifecycleStateChange={setWorkLifecycleState}
-            onOwnerMemberIdChange={setWorkOwnerMemberId}
+            onCreateTask={() => setTaskDialogOpen(true)}
+            createTaskDisabled={!selectedRoom || taskBusy}
+            onCopyLink={copyLink}
+            onOpenAction={(item) => {
+              const target = workActionTarget(item);
+              if (!target) return;
+              if (target.view === "room") openTaskInRoom(target.roomId, target.taskId);
+              else navigate({ roomId: target.roomId, workTaskId: target.taskId, taskId: undefined,
+                view: "work", tab: target.tab, runId: target.runId ?? undefined });
+            }}
+            search={workSearch}
+            onSearchChange={(search) => navigate({ search: search || undefined }, true)}
+            onLifecycleStateChange={(lifecycleState) => {
+              if (!lifecycleState || ["draft", "ready", "active", "review", "completed", "canceled"].includes(lifecycleState)) {
+                navigate({ lifecycleState: (lifecycleState || undefined) as LifecycleState | undefined });
+              }
+            }}
+            onOwnerMemberIdChange={(ownerMemberId) => navigate({ ownerMemberId: ownerMemberId || undefined })}
             onRefresh={() => void refreshWorkbenchState()}
-            onScopeChange={setWorkScope}
+            onScopeChange={(scope) => navigate({ scope })}
             roomNames={roomNames}
             scope={workScope}
           />
@@ -2371,7 +2032,7 @@ export function App() {
                 <TaskSelector
                   locale={locale}
                   onCreate={() => setTaskDialogOpen(true)}
-                  onSelect={setSelectedTaskId}
+                  onSelect={(taskId) => navigate({ taskId: taskId ?? undefined })}
                   selectedTask={selectedTask}
                   selectedTaskId={selectedTaskId}
                   tasks={tasks}
@@ -2494,9 +2155,15 @@ export function App() {
                   </label>
                   <span className="composer-preference-hint">
                     {locale === "zh-CN"
-                      ? "仅本浏览器 · 切换房间或任务时清空"
-                      : "This browser only · cleared on Room or Task change"}
+                      ? "仅本浏览器 · 不跨任务沿用；已有草稿独立恢复"
+                      : "This browser only · separate per Task; saved drafts restore independently"}
                   </span>
+                </div>
+                <div className="composer-persistence">
+                  <small role="status">{persistenceStatus.warning ?? (persistenceStatus.state === "saved"
+                    ? (locale === "zh-CN" ? "已保存在本标签页 · 24 小时内可恢复 · 不会自动重发" : "Saved in this tab · recoverable for 24 hours · never auto-sent")
+                    : "")}</small>
+                  {hasMessageText && <button onClick={clearDraft} type="button">{locale === "zh-CN" ? "清除草稿" : "Clear draft"}</button>}
                 </div>
               </div>
               <button

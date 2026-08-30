@@ -19,8 +19,10 @@ clarification surfaces. Shared HTTP behavior lives in `api-client.ts`, while
 browser projection types live in `models.ts`. The Room composer owns its draft,
 Mention selection, outbox retry, and multi-Agent submission state through
 `useRoomComposer`; Discussion selection, goal editing, and lifecycle commands
-are isolated in `useDiscussionController`. `App.tsx` remains the page-level
-coordinator for authoritative state reconciliation and shell composition;
+are isolated in `useDiscussionController`. `useWebSession` owns synchronous
+session authority and expiry; `useRoomSynchronization` owns Room lifetimes,
+snapshots, deltas, backward history and listener cleanup. `App.tsx` coordinates
+their authoritative projections and shell composition;
 feature controllers send user intents but do not derive or override
 Server-owned state machines independently.
 
@@ -70,6 +72,22 @@ bounded Server Task search and identity/context-scoped tab-local draft/outbox
 recovery. Session invalidation clears saved unsent work; storage failure is
 visible and never causes automatic replay. Shared session and Room controllers
 own lifecycle fences and synchronization, not Server domain decisions.
+
+Work creates a Task through the existing selected-Room API and opens its detail.
+Next-action shortcuts only select Room input, Results or the exact Run evidence;
+they never submit, approve, acknowledge or retry on behalf of the user.
+Search applies to the authorized Server projection, including unloaded pages,
+with trimmed case-insensitive literal title matching and exact numeric/`TASK-n`
+display-number matching. Search is bounded to 100 Unicode code points and resets
+the page window; changed filters invalidate old cursors and late responses.
+
+Navigation URLs allow only Team, Room, one current Task, view, detail tab/Run,
+Work scope/status/owner and search. External links and browser history resolve
+current Team/Room/Task access before selection; invalid or inaccessible targets
+fall back to Work with visible feedback. Linked Runs must belong to the loaded
+Task before evidence requests. Unknown fields, duplicate keys, malformed IDs,
+ambiguous Task combinations and queries over 2048 characters are rejected or
+discarded; copied links never contain credentials, drafts or recovery receipts.
 
 - Authenticated Team and Room shell.
 - Default Team Workbench with Mine/Team scope, authorized Task grouping, every
@@ -338,9 +356,10 @@ The composer previews exact matches before submission. Browser acceptance types
 an exact full name, a non-matching prefix, and `@all` without sending a Message;
 component coverage verifies the resulting single-Run and Discussion payloads.
 
-The composer offers a default-off **Keep last @ mentions** switch. Only its
-boolean preference is persisted in browser-local storage; Agent identities and
-message drafts are not. When enabled, an ordinary submission pre-fills the next
+The composer offers a default-off **Keep last @ mentions** switch. Its boolean
+preference is persisted in browser-local storage. Draft text and its resolved
+targets instead use the separate bounded tab-local storage described below.
+When enabled, an ordinary submission pre-fills the next
 draft with the resolved Agent names and stable-ID chips. Successful Discussion
 creation does the same, but a late response cannot overwrite a newer draft or
 another Room/Task. The retained tokens remain visible, editable, and removable;
@@ -350,8 +369,18 @@ accidentally submit another Run. An exact `@all` retains its concrete recipients
 not a dynamic expansion to future roster members. Existing multi-Agent policy,
 five-Agent limits, and active-Discussion guards still apply.
 
-Changing Room, Task, or signed-in identity clears the composer draft and its
-targets. Removed, disabled, or renamed retained Agents lose their old tokens
+Changing Room or Task saves and restores independent User/Team/Room/Task drafts;
+signed-out or expired identities clear their saved drafts and failed messages.
+The versioned `sessionStorage` envelope allows 20 contexts per User, 10 pending
+ordinary messages per context, 20,000 characters per message and 500,000 total
+serialized characters. Entries expire 24 hours after modification; storage
+failure or limits show a not-saved warning without blocking editing or sending.
+Clear Draft removes only the current draft, not its independent failed rows.
+Closing a tab or switching devices is not a durability guarantee. Malformed
+stored data is discarded; secrets and Discussion commands are never stored.
+Recovered pending messages become failed/uncertain and never auto-send.
+Explicit retry revalidates current Room recipients before using the original
+payload and client Message ID. Removed, disabled, or renamed retained Agents lose their old tokens
 rather than resolving them to a different identity. Presence alone does not
 clear a target: offline delivery keeps the existing queue semantics. Failed
 ordinary messages retain the original outbox payload and client Message ID;

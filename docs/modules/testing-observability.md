@@ -7,6 +7,12 @@ tab-local draft/outbox isolation and logout cleanup, URL/back-forward restoratio
 and shared session/Room controller regressions. Production-browser checks use
 synthetic fixtures and never invoke a paid provider or change an installation.
 
+[QA-042](../acceptance/qa-042-continuous-web-work.md) records the continuous-work
+verification. Regression fixtures include binary Workbench cursor ordering,
+strict URL identifiers and ambiguity rejection, storage faults and expiry,
+real logout/401 cleanup, and separate successful snapshot/Run/settings ordering
+when an initial Room read arrives after Task creation.
+
 ADR-0027 acceptance records first-use Central/local/demo selection, same-identity
 member recovery, explicit ambiguous Run recovery, criteria/evidence review and
 history pagination. Use isolated temporary data and deterministic providers;

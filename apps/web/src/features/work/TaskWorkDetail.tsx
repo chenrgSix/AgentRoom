@@ -25,7 +25,8 @@ import type {
 import { ArtifactPreviewPanel } from "../task/ArtifactPreviewPanel.js";
 import { RunRecoveryControls } from "./RunRecoveryControls.js";
 
-type Tab = "overview" | "runs" | "results" | "artifacts" | "discussion" | "audit";
+export const taskWorkDetailTabs = ["overview", "runs", "results", "artifacts", "discussion", "audit"] as const;
+export type TaskWorkDetailTab = typeof taskWorkDetailTabs[number];
 
 interface DetailedRun {
   runId: string;
@@ -88,9 +89,14 @@ interface TaskWorkDetailProps {
   agentNames: ReadonlyMap<string, string>;
   currentMember: Member | null;
   locale: Locale;
+  initialTab?: TaskWorkDetailTab;
+  initialRunId?: string | null;
   memberNames: ReadonlyMap<string, string>;
   onBack: () => void;
   onChanged: () => void;
+  onCopyLink?: () => void | Promise<void>;
+  onTabChange?: (tab: TaskWorkDetailTab) => void;
+  onRunChange?: (runId: string) => void;
   onOpenRoom: (roomId: string, taskId: string) => void;
   onOpenTask: (taskId: string, roomId: string) => void;
   refreshKey: string;
@@ -136,9 +142,14 @@ export function TaskWorkDetail({
   agentNames,
   currentMember,
   locale,
+  initialTab = "overview",
+  initialRunId = null,
   memberNames,
   onBack,
   onChanged,
+  onCopyLink,
+  onTabChange,
+  onRunChange,
   onOpenRoom,
   onOpenTask,
   refreshKey,
@@ -146,7 +157,8 @@ export function TaskWorkDetail({
   taskId,
   token
 }: TaskWorkDetailProps) {
-  const [tab, setTab] = useState<Tab>("overview");
+  const requestedTab = taskWorkDetailTabs.includes(initialTab) ? initialTab : "overview";
+  const [tab, setTab] = useState<TaskWorkDetailTab>(requestedTab);
   const [detail, setDetail] = useState<DetailState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +168,8 @@ export function TaskWorkDetail({
   const [completeTask, setCompleteTask] = useState<Record<string, boolean>>({});
   const [followUpTitles, setFollowUpTitles] = useState<Record<string, string>>({});
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const requestedRunId = useRef(initialRunId);
+  requestedRunId.current = initialRunId;
   const [runEvidence, setRunEvidence] = useState<RunEvidence | null>(null);
   const [evidenceReloadKey, setEvidenceReloadKey] = useState(0);
   const [artifactPreview, setArtifactPreview] = useState<ArtifactPreview | null>(null);
@@ -196,6 +210,27 @@ export function TaskWorkDetail({
     };
   }, []);
 
+  // Location changes are navigation intent; ordinary evidence refreshes do not
+  // overwrite a tab or Run the member selected while waiting for the response.
+  useEffect(() => { setTab(requestedTab); }, [requestedTab, taskId]);
+
+  useEffect(() => {
+    const runs = detail?.task.taskId === taskId ? detail.runs : [];
+    setSelectedRunId(initialRunId
+      ? runs.find(({ runId }) => runId === initialRunId)?.runId ?? null
+      : runs.at(-1)?.runId ?? null);
+  }, [initialRunId, taskId]);
+
+  function selectTab(next: TaskWorkDetailTab): void {
+    setTab(next);
+    if (next !== tab) onTabChange?.(next);
+  }
+
+  function selectRun(runId: string): void {
+    setSelectedRunId(runId);
+    if (runId !== selectedRunId) onRunChange?.(runId);
+  }
+
   const operationIdFor = (key: string): string => {
     const existing = operationIds.current.get(key);
     if (existing) return existing;
@@ -228,7 +263,9 @@ export function TaskWorkDetail({
       });
       setSelectedRunId((current) => runs.some(({ runId }) => runId === current)
         ? current
-        : runs.at(-1)?.runId ?? null);
+        : requestedRunId.current
+          ? runs.find(({ runId }) => runId === requestedRunId.current)?.runId ?? null
+          : runs.at(-1)?.runId ?? null);
     } catch (reason) {
       if (requestId === detailRequestId.current && isCurrentDetail() && !isStaleWebSessionError(reason)) setError(String(reason));
     } finally {
@@ -237,7 +274,6 @@ export function TaskWorkDetail({
   }, [isCurrentDetail, taskId, token]);
 
   useEffect(() => {
-    setTab("overview");
     setDetail(null);
     setSelectedRunId(null);
     setCommandError(null);
@@ -307,7 +343,7 @@ export function TaskWorkDetail({
   const satisfiedRequired = requiredCriteria.filter(({ criterionKey }) =>
     latestClaims.get(criterionKey)?.coverage === "satisfied"
   ).length;
-  const tabs = useMemo<Array<{ key: Tab; label: string }>>(() => [
+  const tabs = useMemo<Array<{ key: TaskWorkDetailTab; label: string }>>(() => [
     { key: "overview", label: text("概览", "Overview", locale) },
     { key: "runs", label: "Runs" },
     { key: "results", label: "Results" },
@@ -316,7 +352,7 @@ export function TaskWorkDetail({
     { key: "audit", label: "Audit" }
   ], [locale]);
 
-  function navigateTabs(event: KeyboardEvent<HTMLButtonElement>, key: Tab): void {
+  function navigateTabs(event: KeyboardEvent<HTMLButtonElement>, key: TaskWorkDetailTab): void {
     const index = tabs.findIndex((item) => item.key === key);
     let nextIndex: number | null = null;
     if (event.key === "ArrowRight") nextIndex = (index + 1) % tabs.length;
@@ -328,7 +364,7 @@ export function TaskWorkDetail({
     event.preventDefault();
     const next = tabs[nextIndex];
     if (!next) return;
-    setTab(next.key);
+    selectTab(next.key);
     document.getElementById(`work-tab-${next.key}`)?.focus();
   }
 
@@ -459,10 +495,13 @@ export function TaskWorkDetail({
           <h3>{task.title}</h3>
           <p>{task.goal}</p>
         </div>
-        <div className="work-detail-badges">
-          {task.isDefault && <span>{text("快速 Room 工作", "Quick Room work", locale)}</span>}
-          <span>{display(task.lifecycleState)}</span>
-          <span>{display(task.priority)}</span>
+        <div className="work-detail-actions">
+          <div className="work-detail-badges">
+            {task.isDefault && <span>{text("快速 Room 工作", "Quick Room work", locale)}</span>}
+            <span>{display(task.lifecycleState)}</span>
+            <span>{display(task.priority)}</span>
+          </div>
+          {onCopyLink && <button className="work-inline-link" onClick={() => void onCopyLink()} type="button">{text("复制当前链接", "Copy current link", locale)}</button>}
         </div>
       </header>
       <div aria-label={text("Task 详情导航", "Task detail navigation", locale)} className="work-tabs" role="tablist">
@@ -472,7 +511,7 @@ export function TaskWorkDetail({
             aria-selected={tab === item.key}
             id={`work-tab-${item.key}`}
             key={item.key}
-            onClick={() => setTab(item.key)}
+            onClick={() => selectTab(item.key)}
             onKeyDown={(event) => navigateTabs(event, item.key)}
             role="tab"
             tabIndex={tab === item.key ? 0 : -1}
@@ -533,7 +572,7 @@ export function TaskWorkDetail({
             <nav aria-label={text("运行尝试", "Run attempts", locale)} className="work-run-list">
               {detail.runs.length === 0 && <p>{text("尚无 Run", "No Runs yet", locale)}</p>}
               {detail.runs.map((run) => (
-                <button aria-pressed={selectedRunId === run.runId} key={run.runId} onClick={() => setSelectedRunId(run.runId)} type="button">
+                <button aria-pressed={selectedRunId === run.runId} key={run.runId} onClick={() => selectRun(run.runId)} type="button">
                   <strong>{text("尝试", "Attempt", locale)} {run.attemptNumber ?? "?"}</strong>
                   <span>{agentNames.get(run.targetAgentId) ?? text("未知 Agent", "Unknown Agent", locale)}</span>
                   <span>{display(run.state)}</span>
@@ -541,7 +580,9 @@ export function TaskWorkDetail({
               ))}
             </nav>
             <article className="work-run-detail">
-              {!selectedRun ? <p>{text("选择一个 Run", "Select a Run", locale)}</p> : <>
+              {!selectedRun ? <p>{initialRunId
+                ? text("此任务中没有可访问的指定 Run，请选择一次可用的尝试。", "The requested Run is not available in this Task. Select an available attempt.", locale)
+                : text("选择一个 Run", "Select a Run", locale)}</p> : <>
                 <h4>{text("冻结的运行尝试", "Frozen Run attempt", locale)}</h4>
                 <dl>
                   <div><dt>{text("状态", "State", locale)}</dt><dd>{display(selectedRun.state)}</dd></div>
@@ -554,7 +595,7 @@ export function TaskWorkDetail({
                 <p>{text("关联 Result", "Linked Results", locale)}: {linkedResults.length === 0
                   ? text("无", "None", locale)
                   : linkedResults.map((result) => `v${result.resultVersion} (${display(result.state)})`).join(", ")}</p>
-                {linkedResults.length > 0 && <button className="work-inline-link" onClick={() => setTab("results")} type="button">{text("查看关联 Result", "View linked Results", locale)}</button>}
+                {linkedResults.length > 0 && <button className="work-inline-link" onClick={() => selectTab("results")} type="button">{text("查看关联 Result", "View linked Results", locale)}</button>}
                 <RunRecoveryControls
                   canManage={canReview}
                   evidenceReady={currentEvidence?.status === "ready"}
@@ -565,7 +606,7 @@ export function TaskWorkDetail({
                     if (!isCurrentDetail()) return;
                     await loadDetail(false);
                     if (!isCurrentDetail()) return;
-                    if (newRunId) setSelectedRunId(newRunId);
+                    if (newRunId) selectRun(newRunId);
                     onChanged();
                   }}
                   run={selectedRun}
@@ -617,7 +658,7 @@ export function TaskWorkDetail({
                     {artifact ? <>
                       <span>{artifact.title} · r{artifact.artifactRevision}</span>
                       {artifact.contentMode === "snapshot_blob" ? <button className="work-inline-link" disabled={artifactPreviewBusyId !== null} onClick={() => { setEvidenceArtifactId(artifact.artifactId); setEvidenceResultId(result.resultId); void previewArtifact(artifact); }} type="button">{text("查看证据", "Inspect evidence", locale)}</button> : <small>{text("仅引用；没有可验证的内容快照。", "Reference only; no verifiable content snapshot.", locale)}</small>}
-                    </> : sourceRun ? <button className="work-inline-link" onClick={() => { setSelectedRunId(sourceRun.runId); setTab("runs"); }} type="button">{text("查看运行事件", "Inspect Run events", locale)} · #{source.sequence ?? "?"}</button> : <span>{display(source.kind)} · {sourceIdentity(source)}</span>}
+                    </> : sourceRun ? <button className="work-inline-link" onClick={() => { selectRun(sourceRun.runId); selectTab("runs"); }} type="button">{text("查看运行事件", "Inspect Run events", locale)} · #{source.sequence ?? "?"}</button> : <span>{display(source.kind)} · {sourceIdentity(source)}</span>}
                   </li>;
                 })}</ul>
                 {evidenceResultId === result.resultId && <ArtifactPreviewPanel

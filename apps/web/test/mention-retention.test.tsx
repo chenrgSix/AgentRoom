@@ -42,6 +42,12 @@ test("composer retains explicit recipients only with local opt-in", async (t) =>
   }), { headers: { "content-type": "application/json" } });
   let respond: () => Response | Promise<Response> = response;
   globalThis.fetch = async (input, init) => {
+    if (!init?.body) {
+      const value = String(input).endsWith("/settings")
+        ? { room: { roomId: "room_one", teamId: "team_one" }, participants: { agentIds: [builder.agentId, reviewer.agentId] } }
+        : [builder, reviewer];
+      return new Response(JSON.stringify(value), { headers: { "content-type": "application/json" } });
+    }
     requests.push({ path: String(input), body: JSON.parse(String(init?.body)) });
     return respond();
   };

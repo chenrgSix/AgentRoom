@@ -794,6 +794,10 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .composer-retain-mentions input { width: 14px; height: 14px; margin: 0; accent-color: #b4d878; cursor: pointer; }
 .composer-retain-mentions input:focus-visible { outline: 2px solid #b4d878; outline-offset: 3px; }
 .composer-preference-hint { color: #85937a; font-size: 10px; overflow-wrap: anywhere; }
+.composer-persistence { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; padding: 2px 4px; color: var(--text-muted); }
+.composer-persistence small { min-width: 0; overflow-wrap: anywhere; }
+.composer-persistence button { flex: 0 0 auto; padding: 4px 8px; font-size: 11px; }
+.navigation-status { margin: 0; padding: 10px 18px; font-size: 12px; overflow-wrap: anywhere; }
 .discussion-goal-editor { width: 100%; min-width: min(520px, 58vw); padding: 7px 8px; border: 1px solid #4b583c; border-radius: 8px; background: #171b14; color: #edf0e4; }
 .composer-send { min-width: 70px; min-height: 44px; padding: 10px 17px; border: 1px solid #78964a; border-radius: 13px; background: linear-gradient(145deg, #c7e978, #acd75f); color: #17200f; font-size: 12px; font-weight: 850; cursor: pointer; box-shadow: 0 8px 22px rgb(156 202 80 / 16%); }
 

@@ -40,12 +40,12 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
 
   const requests: RequestRecord[] = [];
   const team = {
-    teamId: "team_test",
+    teamId: "team_onboarding",
     name: "Platform Team",
     createdAt: "2026-08-23T00:00:00.000Z"
   };
   const secondTeam = {
-    teamId: "team_second",
+    teamId: "team_onboarding_second",
     name: "Research Team",
     createdAt: "2026-08-23T00:10:00.000Z"
   };
@@ -56,7 +56,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     maxAgentMentionDepth: 4
   };
   const room = {
-    roomId: "room_test",
+    roomId: "room_onboarding",
     teamId: team.teamId,
     name: "general",
     collaborationPolicy: roomPolicy,
@@ -64,7 +64,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     createdAt: "2026-08-23T00:01:00.000Z"
   };
   const roomTask = {
-    taskId: "task_default",
+    taskId: "task_onboarding_default",
     roomId: room.roomId,
     parentTaskId: null,
     title: "Room work",
@@ -76,7 +76,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   };
   const roomTasks = [roomTask];
   const member = {
-    memberId: "member_test",
+    memberId: "member_onboarding",
     teamId: team.teamId,
     userId: "user_test",
     displayName: "Local Owner",
@@ -154,14 +154,14 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
   let provisionRequest: Record<string, unknown> | null = null;
   let provisionReady = false;
   const discussionRuns = [{
-    runId: "run_review",
+    runId: "run_onboarding_review",
     taskId: roomTask.taskId,
     triggerMessageId: "message_wave_review",
     targetAgentId: agent.agentId,
     state: "completed" as const,
     updatedAt: "2026-08-23T00:04:01.000Z"
   }, {
-    runId: "run_builder",
+    runId: "run_onboarding_builder",
     taskId: roomTask.taskId,
     triggerMessageId: "message_wave_builder",
     targetAgentId: secondAgent.agentId,
@@ -199,7 +199,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       turnId: "turn_review",
       kind: "discussion",
       speakerAgentId: agent.agentId,
-      runId: "run_review",
+      runId: "run_onboarding_review",
       state: "completed",
       waveId: "wave_contribution_1",
       waveMemberOrdinal: 1,
@@ -208,7 +208,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       turnId: "turn_builder",
       kind: "discussion",
       speakerAgentId: secondAgent.agentId,
-      runId: "run_builder",
+      runId: "run_onboarding_builder",
       state: "working",
       waveId: "wave_contribution_1",
       waveMemberOrdinal: 2,
@@ -357,7 +357,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       const body = JSON.parse(String(init.body)) as { title: string; goal: string };
       const task = {
         ...roomTask,
-        taskId: "task_oauth",
+        taskId: "task_onboarding_oauth",
         title: body.title,
         goal: body.goal,
         isDefault: false,
@@ -375,7 +375,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     if (path.startsWith("/api/tasks/") && path.endsWith("/artifacts")) {
       return jsonResponse({ revision: 0, artifacts: [] });
     }
-    if (path.startsWith("/api/runs/run_builder/events?after=")) {
+    if (path.startsWith("/api/runs/run_onboarding_builder/events?after=")) {
       const after = Number.parseInt(path.split("after=")[1] ?? "0", 10);
       if (after === 0) {
         return jsonResponse([
@@ -498,7 +498,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       return jsonResponse([member]);
     }
     if (path === `/api/teams/${secondTeam.teamId}/members`) {
-      return jsonResponse([{ ...member, memberId: "member_second", teamId: secondTeam.teamId }]);
+      return jsonResponse([{ ...member, memberId: "member_onboarding_second", teamId: secondTeam.teamId }]);
     }
     if (/^\/api\/teams\/[^/]+\/work-items\?scope=mine&limit=100$/u.test(path)) {
       return jsonResponse({ items: [], nextCursor: null });
@@ -675,6 +675,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       null
     ));
     fireEvent.click(screen.getByTitle("Delivery Team"));
+    await screen.findByRole("region", { name: "工作台" });
+    fireEvent.click(screen.getAllByRole("button", { name: "对话" })[0]!);
     await screen.findByRole("heading", { name: "在房间中开始对话 #delivery" });
     await within(screen.getByRole("region", { name: "房间成员" })).findByText("Review Bot");
 
@@ -779,7 +781,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     fireEvent.click(within(taskDialog).getByRole("button", { name: "创建并切换" }));
     await waitFor(() => assert.equal(
       (screen.getByLabelText("当前任务") as HTMLSelectElement).value,
-      "task_oauth"
+      "task_onboarding_oauth"
     ));
     const createTaskRequest = requests.find((candidate) =>
       candidate.path === `/api/rooms/${room.roomId}/tasks` &&

@@ -258,7 +258,13 @@ test("a committed retry's late response cannot revoke a replacement local sessio
     const revoked = await server.inject({ method: "GET", url: "/api/auth/session", headers: { authorization: oldAuthorization } });
     assert.equal(revoked.statusCode, 401, "normal logout revoked the original Bearer token");
     fireEvent.click(reenter);
-    await page.findByRole("button", { name: `Open TASK-${created.taskDisplayNumber}` });
+    // The current Task/Runs URL restores only after the replacement session
+    // reauthorizes it; reentry itself must not replay the uncertain command.
+    await page.findByRole("heading", { name: created.title });
+    await waitFor(() => assert.equal(page.getByRole("tab", { name: "Runs" }).getAttribute("aria-selected"), "true"));
+    assert.equal(new URLSearchParams(dom.window.location.search).get("workTask"), created.taskId);
+    assert.equal(new URLSearchParams(dom.window.location.search).get("tab"), "runs");
+    assert.equal(writes.length, 1, "restoring the Task must not replay a recovery command");
     assert.notEqual(newAuthorization, oldAuthorization);
     const active = await server.inject({ method: "GET", url: "/api/auth/session", headers: { authorization: newAuthorization } });
     assert.equal(active.statusCode, 200);
@@ -269,10 +275,8 @@ test("a committed retry's late response cannot revoke a replacement local sessio
     assert.equal(page.queryByRole("button", { name: "Enter local workspace" }), null);
     assert.deepEqual(readRecoveryReceipt(scope, "retry"), receipt, "the exact uncertain command survives reauthentication");
 
-    fireEvent.click(page.getByRole("button", { name: `Open TASK-${created.taskDisplayNumber}` }));
-    await page.findByRole("heading", { name: created.title });
-    fireEvent.click(page.getByRole("tab", { name: "Runs" }));
-    fireEvent.click(page.getByRole("button", { name: /Attempt 1/u }));
+    assert.equal(writes.length, 1, "the old response must not issue another retry");
+    fireEvent.click(await page.findByRole("button", { name: /Attempt 1/u }));
     const replay = await page.findByRole("button", { name: "Check previous new attempt" });
     const replayAuthorization = page.getByRole("checkbox", { name: "I explicitly authorize one new execution attempt." });
     await waitFor(() => assert.equal((replayAuthorization as HTMLInputElement).disabled, false));

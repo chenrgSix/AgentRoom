@@ -10,6 +10,7 @@ interface WorkbenchOptions {
   scope: "mine" | "team";
   lifecycleState: string;
   ownerMemberId: string;
+  search?: string;
 }
 
 interface WorkbenchState {
@@ -31,10 +32,11 @@ function mergeItems(items: WorkbenchPage["items"]): WorkbenchPage["items"] {
 }
 
 /** Owns only the visible page window, never an independent Task projection. */
-export function useWorkbench({ teamId, session, scope, lifecycleState, ownerMemberId }: WorkbenchOptions) {
+export function useWorkbench({ teamId, session, scope, lifecycleState, ownerMemberId, search = "" }: WorkbenchOptions) {
   const userId = session?.userId ?? null;
   const token = session?.token;
-  const key = JSON.stringify([teamId, userId, token, scope, lifecycleState, ownerMemberId]);
+  const normalizedSearch = search.trim();
+  const key = JSON.stringify([teamId, userId, token, scope, lifecycleState, ownerMemberId, normalizedSearch]);
   const [state, setState] = useState<WorkbenchState>(() => emptyState(key));
   const stateRef = useRef(state);
   const keyRef = useRef(key);
@@ -47,9 +49,10 @@ export function useWorkbench({ teamId, session, scope, lifecycleState, ownerMemb
     const query = new URLSearchParams({ scope, limit: "100" });
     if (lifecycleState) query.set("lifecycleState", lifecycleState);
     if (ownerMemberId) query.set("ownerMemberId", ownerMemberId);
+    if (normalizedSearch) query.set("search", normalizedSearch);
     if (cursor) query.set("cursor", cursor);
     return `/api/teams/${teamId}/work-items?${query}`;
-  }, [teamId, scope, lifecycleState, ownerMemberId]);
+  }, [teamId, scope, lifecycleState, ownerMemberId, normalizedSearch]);
 
   const refresh = useCallback(async () => {
     // A live notification must not silently cancel the page the user requested.
@@ -62,6 +65,11 @@ export function useWorkbench({ teamId, session, scope, lifecycleState, ownerMemb
     if (!teamId || !userId) {
       requestRef.current.controller = null;
       setState(emptyState(key));
+      return;
+    }
+    if ([...normalizedSearch].length > 100) {
+      requestRef.current.controller = null;
+      setState({ ...emptyState(key), error: "Search must be at most 100 characters." });
       return;
     }
     const controller = new AbortController();
@@ -88,7 +96,7 @@ export function useWorkbench({ teamId, session, scope, lifecycleState, ownerMemb
     } finally {
       if (currentRequest()) requestRef.current.controller = null;
     }
-  }, [key, teamId, userId, token, pathFor]);
+  }, [key, teamId, userId, token, pathFor, normalizedSearch]);
 
   const loadMore = useCallback(async () => {
     const current = stateRef.current;

@@ -3,12 +3,13 @@ import {
   type FormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState
 } from "react";
 
-import { jsonRequest } from "../../api-client.js";
+import { captureWebSessionScope, isStaleWebSessionError, jsonRequest } from "../../api-client.js";
 import type { Locale } from "../../i18n.js";
 import {
   type Agent,
@@ -17,6 +18,7 @@ import {
   type MentionSearch,
   type Message,
   type RoomCollaborationPolicy,
+  type RoomSettings,
   type Run
 } from "../../models.js";
 import {
@@ -35,6 +37,36 @@ import {
   removeRetainedMentionTokens,
   writeKeepMentionsPreference
 } from "./mention-retention.js";
+import {
+  composerClearedEvent,
+  composerStorageLimits,
+  composerUserGeneration,
+  emptyComposerState,
+  loadComposerState,
+  saveComposerState,
+  validPendingMessage,
+  type ComposerScope,
+  type ComposerStoredState,
+  type ComposerStorageWarning
+} from "./composer-storage.js";
+
+export interface ComposerPersistenceStatus {
+  state: "saved" | "not_saved" | "empty";
+  warning: string | null;
+}
+
+function storageWarning(code: ComposerStorageWarning | null, locale: Locale): string | null {
+  if (!code) return null;
+  const zh = locale === "zh-CN";
+  if (code === "expired") return zh ? "超过 24 小时的草稿和失败消息已过期。" : "Drafts and failed messages older than 24 hours have expired.";
+  if (code === "invalid") return zh ? "无效的已存草稿已忽略；当前仍可编辑。" : "Invalid saved drafts were ignored; editing remains available.";
+  if (code === "limit") return zh ? "已达到本标签页的草稿存储上限，当前修改尚未保存。" : "This tab's draft storage limit was reached; current changes are not saved.";
+  return zh ? "本标签页存储不可用，当前修改尚未保存；请勿依赖刷新恢复。" : "This tab's storage is unavailable; current changes are not saved and may be lost on reload.";
+}
+
+type StateUpdate<T> = T | ((current: T) => T);
+const updatedValue = <T,>(current: T, update: StateUpdate<T>): T =>
+  typeof update === "function" ? (update as (current: T) => T)(current) : update;
 
 interface RoomComposerInput {
   activeDiscussion: DiscussionView | null;
@@ -45,7 +77,9 @@ interface RoomComposerInput {
   onError: (error: string | null) => void;
   onRoomStateChanged: () => Promise<void>;
   roomAgents: Agent[];
+  roomAgentsReady?: boolean;
   roomPolicy: RoomCollaborationPolicy;
+  selectedTeamId?: string | null;
   selectedRoomId: string | null;
   selectedTaskId: string | null;
   session: LocalSession | null;
@@ -61,22 +95,34 @@ export function useRoomComposer(input: RoomComposerInput) {
     onError,
     onRoomStateChanged,
     roomAgents,
+    roomAgentsReady = true,
     roomPolicy,
+    selectedTeamId,
     selectedRoomId,
     selectedTaskId,
     session
   } = input;
-  const [messageContent, setMessageContent] = useState("");
-  const [pendingMessages, setPendingMessages] = useState<PendingRoomMessage[]>([]);
-  const [mentionAgentIds, setMentionAgentIds] = useState<string[]>([]);
+  const isCurrentSession = captureWebSessionScope();
+  const scopeKey = JSON.stringify([session?.userId, selectedTeamId, selectedRoomId, selectedTaskId, session?.token]);
+  const storageScope: ComposerScope | null = session && selectedTeamId && selectedRoomId && selectedTaskId
+    ? { userId: session.userId, teamId: selectedTeamId, roomId: selectedRoomId, taskId: selectedTaskId }
+    : null;
+  const [composer, setComposer] = useState({ key: scopeKey, value: emptyComposerState() });
+  const composerRef = useRef(composer);
+  const value = composer.key === scopeKey ? composer.value : emptyComposerState();
+  const { content: messageContent, pendingMessages, mentionAgentIds } = value;
+  const [persistence, setPersistence] = useState<{
+    state: ComposerPersistenceStatus["state"]; warning: ComposerStorageWarning | null;
+  }>({ state: "empty", warning: null });
   const [mentionSearch, setMentionSearch] = useState<MentionSearch | null>(null);
   const [mentionOptionIndex, setMentionOptionIndex] = useState(0);
   const [busy, setBusy] = useState(false);
+  const busyRef = useRef(false);
+  const mountedRef = useRef(true);
   const [keepMentions, setKeepMentions] = useState(readKeepMentionsPreference);
   const keepMentionsRef = useRef(keepMentions);
-  const retainedAgentsRef = useRef<Agent[]>([]);
+  const retainedAgentsRef = useRef<Array<Pick<Agent, "agentId" | "name">>>([]);
   const draftRevisionRef = useRef(0);
-  const scopeKey = JSON.stringify([session?.userId, selectedRoomId, selectedTaskId]);
   const scopeRef = useRef({ key: scopeKey, revision: 0 });
   if (scopeRef.current.key !== scopeKey) {
     scopeRef.current = { key: scopeKey, revision: scopeRef.current.revision + 1 };
@@ -85,6 +131,78 @@ export function useRoomComposer(input: RoomComposerInput) {
   roomAgentsRef.current = roomAgents;
   const selectedRoomIdRef = useRef<string | null>(selectedRoomId);
   selectedRoomIdRef.current = selectedRoomId;
+
+  function updateComposer(update: (current: ComposerStoredState) => ComposerStoredState) {
+    if (!mountedRef.current || !isCurrentSession() || scopeRef.current.key !== scopeKey || composerRef.current.key !== scopeKey) return;
+    const next = update(composerRef.current.value);
+    if (next === composerRef.current.value) return;
+    next.retainedMentions = retainedAgentsRef.current
+      .filter(({ agentId }) => next.mentionAgentIds.includes(agentId))
+      .map(({ agentId, name }) => ({ agentId, name }));
+    const updated = { key: scopeKey, value: next };
+    composerRef.current = updated;
+    setComposer(updated);
+    if (storageScope) {
+      const result = saveComposerState(storageScope, next);
+      setPersistence({
+        state: result.saved ? (next.content || next.pendingMessages.length ? "saved" : "empty") : "not_saved",
+        warning: result.warning ?? null
+      });
+    }
+  }
+
+  const setMessageContent = (update: StateUpdate<string>) => updateComposer((current) => {
+    const content = updatedValue(current.content, update);
+    return content === current.content ? current : { ...current, content };
+  });
+  const setMentionAgentIds = (update: StateUpdate<string[]>) => updateComposer((current) => {
+    const mentionAgentIds = updatedValue(current.mentionAgentIds, update);
+    return mentionAgentIds === current.mentionAgentIds ? current : { ...current, mentionAgentIds };
+  });
+  const setPendingMessages = (update: StateUpdate<PendingRoomMessage[]>) => updateComposer((current) => ({
+    ...current, pendingMessages: updatedValue(current.pendingMessages, update)
+  }));
+
+  useLayoutEffect(() => {
+    const restored = storageScope ? loadComposerState(storageScope) : { state: emptyComposerState() };
+    const next = { key: scopeKey, value: restored.state };
+    composerRef.current = next;
+    retainedAgentsRef.current = restored.state.retainedMentions;
+    draftRevisionRef.current += 1;
+    busyRef.current = false;
+    setBusy(false);
+    setMentionSearch(null);
+    setMentionOptionIndex(0);
+    setComposer(next);
+    setPersistence({
+      state: restored.warning === "unavailable" ? "not_saved"
+        : restored.state.content || restored.state.pendingMessages.length ? "saved" : "empty",
+      warning: restored.warning ?? null
+    });
+  }, [scopeKey]);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const clear = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId: string; cleared: boolean }>).detail;
+      if (detail?.userId !== session?.userId) return;
+      scopeRef.current.revision += 1;
+      draftRevisionRef.current += 1;
+      retainedAgentsRef.current = [];
+      const next = { key: scopeKey, value: emptyComposerState() };
+      composerRef.current = next;
+      busyRef.current = false;
+      setBusy(false);
+      setComposer(next);
+      setMentionSearch(null);
+      setPersistence({ state: detail.cleared ? "empty" : "not_saved", warning: detail.cleared ? null : "unavailable" });
+    };
+    window.addEventListener(composerClearedEvent, clear);
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener(composerClearedEvent, clear);
+    };
+  }, [scopeKey]);
 
   const agentsById = useMemo(
     () => new Map(agents.map((agent) => [agent.agentId, agent])),
@@ -121,14 +239,7 @@ export function useRoomComposer(input: RoomComposerInput) {
   ).trim().length > 0;
 
   useEffect(() => {
-    setPendingMessages([]);
-  }, [selectedRoomId, session?.userId]);
-
-  useEffect(() => {
-    resetDraft();
-  }, [scopeKey]);
-
-  useEffect(() => {
+    if (!roomAgentsReady) return;
     const eligible = new Map(roomAgents
       .filter((agent) => agent.enabled !== false)
       .map((agent) => [agent.agentId, agent]));
@@ -139,11 +250,15 @@ export function useRoomComposer(input: RoomComposerInput) {
       const retained = current.filter((agentId) => eligible.has(agentId));
       return retained.length === current.length ? current : retained;
     });
-  }, [roomAgents]);
+  }, [roomAgents, roomAgentsReady]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (busy || !session || !selectedRoomId || !selectedTaskId || !hasMessageText) {
+    if (busyRef.current || !isCurrentSession() || !session || !selectedRoomId || !selectedTaskId || !hasMessageText) {
+      return;
+    }
+    if (messageContent.length > composerStorageLimits.text) {
+      onError(locale === "zh-CN" ? "消息最多 20,000 字符，请缩短后发送。" : "Messages are limited to 20,000 characters. Shorten this message before sending.");
       return;
     }
     const submittedScopeRevision = scopeRef.current.revision;
@@ -196,6 +311,10 @@ export function useRoomComposer(input: RoomComposerInput) {
     }
     onError(null);
     if (roomPolicy.allowDiscussion && resolvedMentionAgentIds.length >= 2) {
+      const generation = composerUserGeneration(session.userId);
+      const currentAction = () => mountedRef.current && isCurrentSession() && scopeRef.current.revision === submittedScopeRevision &&
+        composerUserGeneration(session.userId) === generation;
+      busyRef.current = true;
       setBusy(true);
       try {
         await jsonRequest<DiscussionView>(
@@ -212,15 +331,16 @@ export function useRoomComposer(input: RoomComposerInput) {
           },
           session.token
         );
+        if (!currentAction()) return;
         if (scopeRef.current.revision === submittedScopeRevision &&
           draftRevisionRef.current === submittedDraftRevision) {
           resetDraft(resolvedMentionAgentIds);
         }
         await onRoomStateChanged();
       } catch (reason) {
-        onError(String(reason));
+        if (currentAction() && !isStaleWebSessionError(reason)) onError(String(reason));
       } finally {
-        setBusy(false);
+        if (currentAction()) { busyRef.current = false; setBusy(false); }
       }
       return;
     }
@@ -237,17 +357,54 @@ export function useRoomComposer(input: RoomComposerInput) {
     };
     setPendingMessages((current) => queuePendingMessage(current, pending));
     resetDraft(resolvedMentionAgentIds);
-    await deliver(pending);
+    await sendPending(pending, false);
   }
 
   async function deliver(pending: PendingRoomMessage) {
-    if (!session) return;
+    if (!session || !selectedRoomId || !selectedTaskId || busyRef.current || !isCurrentSession()) return;
+    if (!roomAgentsReady) {
+      onError(locale === "zh-CN" ? "请等待当前房间权限加载完成后重试。" : "Wait for the current Room's access settings to load before retrying.");
+      return;
+    }
+    const known = composerRef.current.key === scopeKey
+      ? composerRef.current.value.pendingMessages.find((item) => item.clientMessageId === pending.clientMessageId)
+      : undefined;
+    if (!known || known.status !== "failed" || !validPendingMessage(pending, { roomId: selectedRoomId, taskId: selectedTaskId }) ||
+      JSON.stringify({ ...known, status: "failed" }) !== JSON.stringify({ ...pending, status: "failed" })) {
+      onError(locale === "zh-CN" ? "请回到原房间和任务重试原消息；不能改变它的发送身份或载荷。" : "Return to the original Room and Task to retry; the message identity and payload cannot be changed.");
+      return;
+    }
+    await sendPending(known, true);
+  }
+
+  async function sendPending(pending: PendingRoomMessage, retry: boolean) {
+    if (!session || busyRef.current) return;
+    const revision = scopeRef.current.revision;
+    const generation = composerUserGeneration(session.userId);
+    const currentAction = () => mountedRef.current && isCurrentSession() && scopeRef.current.revision === revision &&
+      scopeRef.current.key === scopeKey && composerUserGeneration(session.userId) === generation;
+    busyRef.current = true;
     setBusy(true);
     setPendingMessages((current) =>
       updatePendingMessage(current, pending.clientMessageId, "pending")
     );
     onError(null);
     try {
+      if (retry) {
+        const settings = await jsonRequest<RoomSettings>(`/api/rooms/${pending.roomId}/settings`, {}, session.token);
+        if (!currentAction()) return;
+        if (settings.room.roomId !== selectedRoomId || (selectedTeamId && settings.room.teamId !== selectedTeamId)) {
+          throw new Error(locale === "zh-CN" ? "原消息不属于当前 Team 和房间。" : "The original message does not belong to the current Team and Room.");
+        }
+        const currentAgents = await jsonRequest<Agent[]>(`/api/teams/${settings.room.teamId}/agents`, {}, session.token);
+        if (!currentAction()) return;
+        const allowed = new Set(currentAgents.filter((agent) => agent.enabled !== false &&
+          settings.participants.agentIds.includes(agent.agentId)).map(({ agentId }) => agentId));
+        if ((pending.mentionAgentIds ?? []).some((agentId) => !allowed.has(agentId))) {
+          throw new Error(locale === "zh-CN" ? "原消息的部分 Agent 已不可用或失去房间授权；请检查原消息，不能自动更换接收者。" : "An original Agent is unavailable or no longer authorized in this Room; recipients cannot be replaced automatically.");
+        }
+      }
+      if (!currentAction()) return;
       const result = await jsonRequest<{ message: Message; runs: Run[] }>(
         `/api/rooms/${pending.roomId}/messages`,
         {
@@ -265,6 +422,7 @@ export function useRoomComposer(input: RoomComposerInput) {
         },
         session.token
       );
+      if (!currentAction()) return;
       setPendingMessages((current) => current.filter(({ clientMessageId }) =>
         clientMessageId !== pending.clientMessageId
       ));
@@ -272,12 +430,13 @@ export function useRoomComposer(input: RoomComposerInput) {
         await onDelivered(result.message, result.runs);
       }
     } catch (reason) {
+      if (!currentAction() || isStaleWebSessionError(reason)) return;
       setPendingMessages((current) =>
         updatePendingMessage(current, pending.clientMessageId, "failed")
       );
       onError(String(reason));
     } finally {
-      setBusy(false);
+      if (currentAction()) { busyRef.current = false; setBusy(false); }
     }
   }
 
@@ -364,7 +523,7 @@ export function useRoomComposer(input: RoomComposerInput) {
     ));
   }
 
-  function discardRetainedMentions(removed: Agent[]) {
+  function discardRetainedMentions(removed: Array<Pick<Agent, "agentId" | "name">>) {
     if (removed.length === 0) return;
     draftRevisionRef.current += 1;
     const removedIds = new Set(removed.map(({ agentId }) => agentId));
@@ -436,6 +595,7 @@ export function useRoomComposer(input: RoomComposerInput) {
 
   return {
     busy,
+    clearDraft: () => resetDraft(),
     changeKeepMentions,
     deliver,
     directlyParsedAgents,
@@ -448,7 +608,8 @@ export function useRoomComposer(input: RoomComposerInput) {
     mentionOptions,
     mentionSearch,
     messageContent,
-    pendingMessages: pendingMessages.filter(({ roomId }) => roomId === selectedRoomId),
+    persistenceStatus: { state: persistence.state, warning: storageWarning(persistence.warning, locale) } satisfies ComposerPersistenceStatus,
+    pendingMessages: pendingMessages.filter(({ roomId, taskId }) => roomId === selectedRoomId && taskId === selectedTaskId),
     removeMention,
     retainMentionAgentIds,
     selectMention,

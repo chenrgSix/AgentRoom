@@ -188,13 +188,21 @@ test("a previous Owner's credential response cannot refill the next member's UI 
     await act(async () => { recovered = true; recovery.resolve(response({ user: nextUser })); await recovery.promise; });
     await page.findByTitle("Team Bravo");
     await waitFor(() => assert.equal((page.getByLabelText("选择房间") as HTMLSelectElement).value, roomB.roomId));
-    assert.ok(page.getByRole("region", { name: "智能体管理" }));
+    // The saved Agents URL belonged to Team Alpha. Reauthentication must
+    // authorize that intent before restoring it, then fall back to current Work.
+    assert.ok(await page.findByRole("region", { name: "工作台" }));
+    assert.equal(page.queryByRole("region", { name: "智能体管理" }), null);
+    assert.equal(page.getByRole("alert").textContent, "操作失败：链接中的团队不可用或你没有访问权限。");
+    const restoredLocation = new URLSearchParams(dom.window.location.search);
+    assert.equal(restoredLocation.get("team"), teamB.teamId);
+    assert.equal(restoredLocation.get("view"), "work");
+    assert.equal(restoredLocation.has("room"), false);
     assert.equal(page.queryByTitle("Team Alpha"), null);
     assert.equal(page.queryByText("Old Owner Private Agent"), null);
     assert.equal(dom.window.document.body.textContent?.includes(oldSecret), false);
     assert.equal(JSON.stringify(dom.window.localStorage).includes(oldSecret), false);
     assert.equal(JSON.stringify(dom.window.sessionStorage).includes(oldSecret), false);
-    assert.equal(page.queryByRole("alert"), null);
+    assert.equal(dom.window.document.body.textContent?.includes("previous Web session"), false);
   } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
 });
 
@@ -681,13 +689,11 @@ test("a late successful initial snapshot preserves history loaded after sending 
       const before = query.get("beforeCursor");
       if (before) {
         beforeCursors.push(before);
-        assert.equal(before, beforeCursors.length === 1
-          ? "opaque-delayed-history-102" : "opaque-delayed-history-2");
-        return response(beforeCursors.length === 1 ? {
-          items: Array.from({ length: 100 }, (_, index) => historyMessage(index + 2)),
-          nextCursor: null, olderCursor: "opaque-delayed-history-2", syncCursor: "opaque-delayed-live-101"
-        } : {
-          items: [historyMessage(1)], nextCursor: null, olderCursor: null, syncCursor: "opaque-delayed-live-1"
+        assert.equal(before, "opaque-delayed-history-101",
+          "sending must preserve the history boundary initialized by Task creation");
+        return response({
+          items: Array.from({ length: 100 }, (_, index) => historyMessage(index + 1)),
+          nextCursor: null, olderCursor: null, syncCursor: "opaque-delayed-live-100"
         });
       }
       const cursor = query.get("cursor");
@@ -724,16 +730,17 @@ test("a late successful initial snapshot preserves history loaded after sending 
     fireEvent.change(dialog.getByLabelText("任务目标"), { target: { value: task.goal } });
     fireEvent.click(dialog.getByRole("button", { name: "创建并切换" }));
     await waitFor(() => assert.equal((page.getByLabelText("当前任务") as HTMLSelectElement).value, task.taskId));
+    await page.findByText("Initial snapshot history 101");
+    assert.equal(tailReads, 2, "Task creation initializes history through its authoritative Room refresh");
     fireEvent.change(page.getByLabelText("消息"), { target: { value: sentMessage.content } });
     fireEvent.click(page.getByRole("button", { name: "发送", exact: true }));
-    await page.findByText("Initial snapshot history 102");
-    assert.equal(tailReads, 2, "sending refreshes the tail while the initial output read remains pending");
+    await page.findByText(sentMessage.content);
+    await waitFor(() => assert.equal(tailReads, 3, "sending refreshes the tail while the initial output read remains pending"));
+    assert.ok(page.getByText("Initial snapshot history 101"));
     assert.equal(changes, 0);
-    for (const sequence of [2, 1]) {
-      fireEvent.click(page.getByRole("button", { name: "加载更早的消息" }));
-      await page.findByText(`Initial snapshot history ${sequence}`);
-    }
-    assert.deepEqual(beforeCursors, ["opaque-delayed-history-102", "opaque-delayed-history-2"]);
+    fireEvent.click(page.getByRole("button", { name: "加载更早的消息" }));
+    await page.findByText("Initial snapshot history 1");
+    assert.deepEqual(beforeCursors, ["opaque-delayed-history-101"]);
     assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 201);
     assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
     await act(async () => {
@@ -754,6 +761,6 @@ test("a late successful initial snapshot preserves history loaded after sending 
     assert.deepEqual(forwardCursors, ["opaque-delayed-live-201"]);
     assert.equal(dom.window.document.querySelectorAll(".timeline [data-message-id]").length, 202);
     assert.equal(page.queryByRole("button", { name: "加载更早的消息" }), null);
-    assert.equal(tailReads, 2);
+    assert.equal(tailReads, 3);
   } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
 });

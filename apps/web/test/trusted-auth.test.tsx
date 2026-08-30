@@ -117,12 +117,12 @@ test("member invitation fragment is cleared before explicit claim", async () => 
   const dom = installDom(`https://team.example.com/#/join/${invitationToken}`);
   const requests: RequestRecord[] = [];
   const team = {
-    teamId: "team_trusted",
+    teamId: "team_trusted_auth",
     name: "Trusted Team",
     createdAt: "2026-08-23T00:00:00.000Z"
   };
   const member = {
-    memberId: "member_bob",
+    memberId: "member_trusted_bob",
     teamId: team.teamId,
     userId: "user_member12345678",
     displayName: "Bob",
@@ -190,12 +190,12 @@ test("Owner creates and copies a member invite, then signs out and recovers", as
   });
   const owner = { userId: "user_owner12345678", displayName: "Alice" };
   const team = {
-    teamId: "team_trusted",
+    teamId: "team_trusted_auth",
     name: "Trusted Team",
     createdAt: "2026-08-23T00:00:00.000Z"
   };
   const ownerMember = {
-    memberId: "member_owner",
+    memberId: "member_trusted_owner",
     teamId: team.teamId,
     userId: owner.userId,
     displayName: owner.displayName,

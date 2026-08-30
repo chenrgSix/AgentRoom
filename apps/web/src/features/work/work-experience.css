@@ -1,6 +1,15 @@
 .work-filters, .work-pagination { display: flex; align-items: end; flex-wrap: wrap; gap: 12px; }
 .work-filters label { display: grid; min-width: 150px; gap: 6px; color: #bac6ac; font-size: 12px; }
 .work-filters select { max-width: 240px; padding: 9px 11px; border: 1px solid #46523a; border-radius: 8px; background: #171d13; color: #e0e8d8; font: inherit; }
+.work-toolbar { flex-wrap: wrap; }
+.work-toolbar .work-create-task { background: #bfd27f; color: #1a2412; border-color: #bfd27f; }
+.work-filters .work-search { flex: 1 1 250px; min-width: 0; max-width: 420px; }
+.work-search input { box-sizing: border-box; min-width: 0; width: 100%; padding: 9px 11px; border: 1px solid #46523a; border-radius: 8px; background: #171d13; color: #e0e8d8; font: inherit; }
+.work-search small { font-size: 10px; color: #a3ae98; line-height: 1.4; }
+.work-card footer:has(.work-next-action) { flex-wrap: wrap; align-items: center; }
+.work-next-action { max-width: 100%; text-align: left; overflow-wrap: anywhere; white-space: normal; }
+.work-detail-actions { display: grid; justify-items: end; gap: 10px; min-width: 0; }
+.work-toolbar button:focus-visible, .work-next-action:focus-visible, .work-search input:focus-visible, .work-detail-actions button:focus-visible { outline: 2px solid #bfd27f; outline-offset: 3px; }
 .work-pagination { align-items: center; padding-top: 12px; color: #a3ae98; font-size: 12px; }
 .work-pagination p { margin: 0; }
 .work-inline-link:disabled { cursor: default; opacity: .5; }
@@ -19,10 +28,15 @@
 .task-criteria-templates button { padding: 7px 10px; border: 1px solid #46523a; border-radius: 7px; background: #20261c; color: #bfd27f; cursor: pointer; font: inherit; font-size: 12px; }
 :root[data-theme="light"] .work-filters label, :root[data-theme="light"] .work-pagination, :root[data-theme="light"] .task-delivery-options p, :root[data-theme="light"] .task-delivery-options small { color: #526443; }
 :root[data-theme="light"] .work-filters select, :root[data-theme="light"] .task-criteria-templates button { background: #f5f8ef; color: #354827; border-color: #bacba9; }
+:root[data-theme="light"] .work-search input { background: #f5f8ef; color: #354827; border-color: #bacba9; }
+:root[data-theme="light"] .work-search small { color: #526443; }
 :root[data-theme="light"] .task-delivery-options summary { color: #354827; }
 @media (max-width: 760px) {
   .work-filters { align-items: stretch; }
   .work-filters label { flex: 1 1 130px; min-width: 0; }
   .work-filters select { width: 100%; max-width: none; }
+  .work-filters .work-search { flex-basis: 100%; max-width: none; }
+  .work-toolbar { justify-content: flex-start; }
+  .work-detail-actions { justify-items: start; }
   .work-recovery .work-review-controls button { max-width: 100%; white-space: normal; }
 }

@@ -36,25 +36,25 @@ function installDom(): JSDOM {
 const owner = {
   createdAt: "2026-08-24T00:00:00.000Z",
   displayName: "Local Owner",
-  memberId: "member_owner",
+  memberId: "member_wave_owner",
   role: "owner",
-  teamId: "team_test",
+  teamId: "team_wave_test",
   userId: "user_owner"
 };
 const team = {
   createdAt: "2026-08-24T00:00:00.000Z",
   name: "Wave Team",
-  teamId: "team_test"
+  teamId: "team_wave_test"
 };
 const room = {
   createdAt: "2026-08-24T00:00:00.000Z",
   name: "general",
-  roomId: "room_test",
+  roomId: "room_wave_test",
   settingsRevision: 1,
   teamId: team.teamId
 };
 const task = {
-  taskId: "task_default",
+  taskId: "task_wave_default",
   roomId: room.roomId,
   parentTaskId: null,
   title: "Room work",
@@ -135,6 +135,12 @@ function installFixture(input: {
       });
     }
     if (path === `/api/rooms/${room.roomId}/runs`) return jsonResponse(input.runs);
+    // Failed Runs already load diagnostic events in App; these fixtures model
+    // their Wave terminal reason without an additional Runtime diagnostic.
+    if (method === "GET" && input.runs.some((run) => {
+      const runId = (run as { runId?: string }).runId;
+      return runId && (path === `/api/runs/${runId}/events` || path.startsWith(`/api/runs/${runId}/events?after=`));
+    })) return jsonResponse([]);
     if (path === `/api/rooms/${room.roomId}/tasks`) return jsonResponse([task]);
     if (path === `/api/tasks/${task.taskId}/clarifications`) {
       return jsonResponse(input.clarifications ?? []);
@@ -190,7 +196,7 @@ test("waiting Discussion keeps the just-closed partial Wave visible", async () =
     currentWave: 2,
     discussionState: "waiting_human",
     runs: [{
-      runId: "run_solver",
+      runId: "run_wave_solver",
       state: "completed",
       targetAgentId: agents[0]!.agentId,
       triggerMessageId: "message_wave_2",
@@ -204,7 +210,7 @@ test("waiting Discussion keeps the just-closed partial Wave visible", async () =
     }],
     turns: [{
       kind: "discussion",
-      runId: "run_solver",
+      runId: "run_wave_solver",
       speakerAgentId: agents[0]!.agentId,
       state: "completed",
       terminalReason: null,
@@ -343,7 +349,7 @@ test("Run status replaces duplicate Mention metadata in a Member message", async
       sequence: 1
     }],
     runs: [{
-      runId: "run_solver",
+      runId: "run_wave_solver",
       state: "completed",
       targetAgentId: agents[0]!.agentId,
       triggerMessageId: "message_prompt",
@@ -351,7 +357,7 @@ test("Run status replaces duplicate Mention metadata in a Member message", async
     }],
     turns: [{
       kind: "discussion",
-      runId: "run_solver",
+      runId: "run_wave_solver",
       speakerAgentId: agents[0]!.agentId,
       state: "completed",
       terminalReason: null,
