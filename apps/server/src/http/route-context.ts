@@ -40,6 +40,7 @@ import type {
   WebPrincipal
 } from "../security/auth-service.js";
 import type { BridgePairingService } from "../security/bridge-pairing-service.js";
+import type { ClientAccessService } from "../security/client-access-service.js";
 import type { DevicePairingSessionService } from
   "../security/device-pairing-session-service.js";
 import type { PrivateCARotationService } from
@@ -81,6 +82,7 @@ export interface ServerRouteContext {
   delivery: DeliveryService;
   deviceRevocation: DeviceRevocationService;
   devicePairingSessions: DevicePairingSessionService;
+  clientAccess: ClientAccessService;
   discussions: DiscussionOrchestrator;
   discussionRepository: DiscussionRepository;
   dispatchRun: (run: PersistedRun) => Promise<PersistedRun>;

@@ -169,8 +169,8 @@ export class CoreRepository {
     this.teamsAndRooms.createTeamWithOwner(team, owner);
   }
 
-  public createMember(member: MemberRecord): void {
-    this.teamsAndRooms.createMember(member);
+  public createMember(member: MemberRecord, roomIds?: string[]): void {
+    this.teamsAndRooms.createMember(member, roomIds);
   }
 
   public createRoom(room: RoomRecord): void {

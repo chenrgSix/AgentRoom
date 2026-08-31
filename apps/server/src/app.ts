@@ -26,6 +26,8 @@ import { openDatabase } from "./data/database.js";
 import { prepareDatabaseDirectory } from "./data/database-location.js";
 import { migrateDatabase } from "./data/migration-runner.js";
 import { SqliteTransactionBoundary } from "./data/sqlite-transaction-boundary.js";
+import { registerClientAccessRoutes } from "./http/client-access-routes.js";
+import { ClientAccessService } from "./security/client-access-service.js";
 import { registerAuthRoutes } from "./http/auth-routes.js";
 import { registerArtifactRoutes } from "./http/artifact-routes.js";
 import { registerBridgeSocketRoutes } from "./http/bridge-socket-routes.js";
@@ -252,11 +254,13 @@ export async function createServerApp(
   const messages = new MessageService(core, auth);
   const teamWait = new TeamWaitService(core, auth, teamChanges);
   const pairing = new BridgePairingService(database, core, auth);
+  const clientAccess = new ClientAccessService(database, core, auth);
   const devicePairingSessions = new DevicePairingSessionService(
     database,
     core,
     auth,
-    deploymentTrust
+    deploymentTrust,
+    clientAccess
   );
   const clock = options.clock ?? (() => new Date().toISOString());
   const runRepository = new RunRepository(
@@ -794,6 +798,7 @@ export async function createServerApp(
     delivery,
     deviceRevocation,
     devicePairingSessions,
+    clientAccess,
     discussions,
     discussionRepository,
     dispatchRun,
@@ -840,6 +845,7 @@ export async function createServerApp(
   registerBridgeSocketRoutes(routeContext);
   registerArtifactRoutes(routeContext);
   registerAuthRoutes(routeContext);
+  registerClientAccessRoutes(routeContext);
 
   registerTeamRoomRoutes(routeContext);
   registerTaskRoutes(routeContext);

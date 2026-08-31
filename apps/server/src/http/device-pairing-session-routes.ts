@@ -1,4 +1,5 @@
 import type {
+  DevicePairingMemberBinding,
   DevicePairingPrivateTrustDescriptor,
   Platform
 } from "@convene-wire/contracts/pairing-session";
@@ -103,6 +104,7 @@ function claimInput(body: Record<string, unknown>) {
       140
     ),
     pollSecret: requiredString(body.pollSecret, "pollSecret", 128),
+    ...(body.clientAccessSecret === undefined ? {} : { clientAccessSecret: requiredString(body.clientAccessSecret, "clientAccessSecret", 128) }),
     device: {
       displayName: requiredString(device.displayName, "displayName"),
       platform: requiredString(device.platform, "platform", 40) as Platform,
@@ -138,13 +140,14 @@ export function registerDevicePairingSessionRoutes({
     async (request, reply) => {
       noStore(reply);
       const body = bodyObject(request);
-      onlyKeys(body, ["operationId", "claimSecret"], "request");
+      onlyKeys(body, ["operationId", "claimSecret", "memberBinding"], "request");
       const result = devicePairingSessions.create(
         principal(request),
         request.params.teamId,
         {
           operationId: requiredString(body.operationId, "operationId", 140),
-          claimSecret: requiredString(body.claimSecret, "claimSecret", 128)
+          claimSecret: requiredString(body.claimSecret, "claimSecret", 128),
+          ...(body.memberBinding === undefined ? {} : { memberBinding: objectValue(body.memberBinding, "memberBinding") as unknown as DevicePairingMemberBinding })
         },
         clock()
       );
@@ -178,6 +181,7 @@ export function registerDevicePairingSessionRoutes({
         "claimSecret",
         "pairingAttemptId",
         "pollSecret",
+        "clientAccessSecret",
         "device",
         "trust"
       ], "request");

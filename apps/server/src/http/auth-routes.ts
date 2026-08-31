@@ -32,7 +32,7 @@ export function registerAuthRoutes({
       return {
         mode: webAuth.mode,
         state: "authenticated",
-        user: { ...user, canManageOwnerRecovery: trustedWeb?.isInstallationOwner(user.userId) ?? false },
+        user: { ...user, ...(actor.clientAccess ? { clientTeamId: actor.clientAccess.teamId } : {}), canManageOwnerRecovery: !actor.clientAccess && (trustedWeb?.isInstallationOwner(user.userId) ?? false) },
         session: { expiresAt: auth.getWebSessionExpiresAt(actor.sessionId) }
       };
     }
@@ -49,7 +49,7 @@ export function registerAuthRoutes({
       throw new AuthorizationError("UNAUTHENTICATED", "Session User not found");
     }
     return {
-      user: { ...user, canManageOwnerRecovery: trustedWeb?.isInstallationOwner(user.userId) ?? false },
+      user: { ...user, ...(actor.clientAccess ? { clientTeamId: actor.clientAccess.teamId } : {}), canManageOwnerRecovery: !actor.clientAccess && (trustedWeb?.isInstallationOwner(user.userId) ?? false) },
       session: { expiresAt: auth.getWebSessionExpiresAt(actor.sessionId) }
     };
   });

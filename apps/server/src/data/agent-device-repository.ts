@@ -139,6 +139,10 @@ export class AgentDeviceRepository {
         this.database.prepare(`
           INSERT INTO room_agent_participants (room_id, agent_id, added_at)
           SELECT room_id, @agentId, @createdAt FROM rooms WHERE team_id = @teamId
+            AND (NOT EXISTS (SELECT 1 FROM client_device_bindings WHERE device_id = @deviceId)
+              OR (archived_at IS NULL AND room_id IN (
+                SELECT value FROM client_device_bindings, json_each(initial_room_ids_json)
+                WHERE device_id = @deviceId)))
         `).run(agent);
         this.database.prepare(`
           UPDATE rooms SET settings_revision = settings_revision + 1

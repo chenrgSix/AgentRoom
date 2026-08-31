@@ -511,6 +511,7 @@ export class TrustedWebAccessService {
   }
 
   private requireInstallationOwner(principal: WebPrincipal): void {
+    this.auth.requireFullWebSession(principal);
     if (!this.isInstallationOwner(principal.userId)) {
       throw new AuthorizationError("FORBIDDEN", "Only the installation Owner can replace the recovery key");
     }

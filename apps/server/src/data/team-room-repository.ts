@@ -81,7 +81,7 @@ export class TeamRoomRepository {
     });
   }
 
-  public createMember(member: MemberRecord): void {
+  public createMember(member: MemberRecord, roomIds?: string[]): void {
     this.transactions.immediate(() => {
       this.database.prepare(`
         INSERT INTO team_members (
@@ -93,7 +93,8 @@ export class TeamRoomRepository {
       this.database.prepare(`
         INSERT INTO room_human_participants (room_id, member_id, added_at)
         SELECT room_id, @memberId, @createdAt FROM rooms WHERE team_id = @teamId
-      `).run(member);
+          AND (@roomIds IS NULL OR room_id IN (SELECT value FROM json_each(@roomIds)))
+      `).run({ ...member, roomIds: roomIds === undefined ? null : JSON.stringify(roomIds) });
       this.database.prepare(`
         UPDATE rooms SET settings_revision = settings_revision + 1
         WHERE team_id = @teamId

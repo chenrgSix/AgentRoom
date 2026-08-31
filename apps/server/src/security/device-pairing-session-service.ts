@@ -5,6 +5,7 @@ import {
 } from "node:crypto";
 
 import type {
+  DevicePairingMemberBinding,
   DevicePairingSessionApproveRequest,
   DevicePairingSessionCancelRequest,
   DevicePairingSessionClaimed,
@@ -26,6 +27,7 @@ import {
   type MemberPrincipal,
   type WebPrincipal
 } from "./auth-service.js";
+import { ClientAccessService, clientSecret } from "./client-access-service.js";
 import type { DeploymentTrustProvider } from "./deployment-trust.js";
 
 type PairingState =
@@ -41,6 +43,9 @@ type DecisionAction = "approve" | "reject" | "cancel";
 type DecisionExpectedState = "issued" | "claimed";
 
 interface PairingSessionRow {
+  member_binding_json: string | null;
+  client_access_secret_hash: string | null;
+  device_owner_member_id: string | null;
   pairing_session_id: string;
   team_id: string;
   owner_member_id: string;
@@ -76,6 +81,7 @@ interface PairingSessionRow {
 }
 
 export interface PairingClaimInput {
+  clientAccessSecret?: string;
   operationId: string;
   pairingAttemptId: string;
   pollSecret: string;
@@ -196,6 +202,7 @@ function normalizeClaim(input: PairingClaimInput): PairingClaimInput {
               input.device.supportsScopedPrivateTrust
           })
     },
+    ...(input.clientAccessSecret === undefined ? {} : { clientAccessSecret: clientSecret(input.clientAccessSecret) }),
     ...(input.trust === undefined ? {} : { trust: input.trust })
   };
 }
@@ -234,7 +241,8 @@ function verificationPhrase(
     input.device.platform,
     input.device.bridgeVersion,
     input.device.supportsScopedPrivateTrust ?? null,
-    rowTrust(row) ?? null
+    rowTrust(row) ?? null,
+    ...(row.member_binding_json ? [JSON.parse(row.member_binding_json), hash(input.clientAccessSecret!)] : [])
   ]));
   return `${phraseFirst[value[0]! % phraseFirst.length]}-${
     phraseSecond[value[1]! % phraseSecond.length]
@@ -288,7 +296,8 @@ export class DevicePairingSessionService {
     private readonly database: Database.Database,
     private readonly core: CoreRepository,
     private readonly auth: AuthService,
-    private readonly deploymentTrust: DeploymentTrustProvider = () => undefined
+    private readonly deploymentTrust: DeploymentTrustProvider = () => undefined,
+    private readonly clientAccess = new ClientAccessService(database, core, auth)
   ) {}
 
   public create(
@@ -306,12 +315,15 @@ export class DevicePairingSessionService {
     const claimSecret = requiredSecret(input.claimSecret, "claim proof");
     const claimSecretHash = hash(claimSecret);
     const trust = this.deploymentTrust();
+    const memberBinding = input.memberBinding === undefined ? undefined : this.clientAccess.binding(owner, input.memberBinding);
+    const memberBindingJson = memberBinding ? JSON.stringify(memberBinding) : null;
 
     return this.database.transaction((): DevicePairingSessionCreated => {
       const existing = this.findByCreateOperation(owner.memberId, operationId);
       if (existing) {
         if (
           existing.team_id !== teamId ||
+          existing.member_binding_json !== memberBindingJson ||
           !safeHashMatch(claimSecret, existing.claim_secret_hash) ||
           !sameTrust(rowTrust(existing), trust)
         ) {
@@ -334,8 +346,8 @@ export class DevicePairingSessionService {
               pairing_session_id, team_id, owner_member_id,
               create_operation_id, claim_secret_hash, short_code_hash, state,
               created_at, expires_at, trust_mode, trust_origin,
-              trust_installation_id, trust_epoch, trust_ca_sha256
-            ) VALUES (?, ?, ?, ?, ?, ?, 'issued', ?, ?, ?, ?, ?, ?, ?)
+              trust_installation_id, trust_epoch, trust_ca_sha256, member_binding_json
+            ) VALUES (?, ?, ?, ?, ?, ?, 'issued', ?, ?, ?, ?, ?, ?, ?, ?)
           `).run(
             pairingSessionId,
             teamId,
@@ -349,7 +361,8 @@ export class DevicePairingSessionService {
             trust?.origin ?? null,
             trust?.installationId ?? null,
             trust?.trustEpoch ?? null,
-            trust?.caCertificateSha256 ?? null
+            trust?.caCertificateSha256 ?? null,
+            memberBindingJson
           );
           return {
             pairingSessionId,
@@ -359,6 +372,7 @@ export class DevicePairingSessionService {
             shortCode,
             createdAt: now,
             expiresAt,
+            ...(memberBinding ? { memberBinding } : {}),
             ...(trust ? { trust } : {})
           };
         } catch (error) {
@@ -366,6 +380,7 @@ export class DevicePairingSessionService {
           if (raced) {
             if (
               raced.team_id !== teamId ||
+              raced.member_binding_json !== memberBindingJson ||
               !safeHashMatch(claimSecret, raced.claim_secret_hash) ||
               !sameTrust(rowTrust(raced), trust)
             ) {
@@ -564,6 +579,11 @@ export class DevicePairingSessionService {
       const found = locate();
       if (!found) throw invalidSession();
       const row = this.expire(found, now);
+      if (Boolean(row.member_binding_json) !== Boolean(input.clientAccessSecret) ||
+        (input.clientAccessSecret && (hash(input.clientAccessSecret) === pollSecretHash ||
+          hash(input.clientAccessSecret) === row.claim_secret_hash))) {
+        throw new Error("Member pairing requires an updated client with an independent human access proof");
+      }
       const expectedTrust = rowTrust(row);
       if (
         !sameTrust(expectedTrust, input.trust) ||
@@ -585,7 +605,7 @@ export class DevicePairingSessionService {
             poll_secret_hash = ?, device_display_name = ?,
             device_platform = ?, bridge_version = ?,
             device_supports_scoped_private_trust = ?,
-            verification_phrase = ?, claimed_at = ?
+            verification_phrase = ?, claimed_at = ?, client_access_secret_hash = ?
         WHERE pairing_session_id = ? AND state = 'issued' AND expires_at > ?
       `).run(
         input.pairingAttemptId,
@@ -599,6 +619,7 @@ export class DevicePairingSessionService {
           : Number(input.device.supportsScopedPrivateTrust),
         phrase,
         now,
+        input.clientAccessSecret ? hash(input.clientAccessSecret) : null,
         row.pairing_session_id,
         now
       );
@@ -705,10 +726,18 @@ export class DevicePairingSessionService {
     if (!row.poll_secret_hash || !row.device_display_name) {
       throw conflict("claimed proof is incomplete");
     }
+    const binding = row.member_binding_json ? JSON.parse(row.member_binding_json) as DevicePairingMemberBinding : undefined;
+    const issuer = this.core.getMember(row.owner_member_id);
+    if (binding && (!issuer?.userId || issuer.role !== "owner" || decidedByMemberId !== row.owner_member_id || !row.client_access_secret_hash)) {
+      throw new AuthorizationError("FORBIDDEN", "The pairing issuer must confirm member ownership");
+    }
+    const actualMember = binding ? this.clientAccess.approveBinding({
+      ...issuer!, userId: issuer!.userId!, sessionId: "pairing-approval"
+    }, binding, now) : undefined;
     const device: DeviceRecord = {
       deviceId: createOpaqueId("device"),
       teamId: row.team_id,
-      ownerMemberId: row.owner_member_id,
+      ownerMemberId: actualMember?.memberId ?? row.owner_member_id,
       name: row.device_display_name,
       status: "active",
       createdAt: now,
@@ -721,12 +750,17 @@ export class DevicePairingSessionService {
         credential_id, device_id, secret_hash, created_at, expires_at
       ) VALUES (?, ?, ?, ?, NULL)
     `).run(credentialId, device.deviceId, row.poll_secret_hash, now);
+    if (binding && actualMember) this.clientAccess.grant({
+      deviceId: device.deviceId, credentialId, member: actualMember,
+      issuedByMemberId: row.owner_member_id, secretHash: row.client_access_secret_hash!,
+      roomIds: binding.roomIds, now
+    });
     const updated = this.database.prepare(`
       UPDATE device_pairing_sessions
       SET state = 'approved', decision_operation_id = ?,
           decision_action = 'approve', decision_expected_state = ?,
           decided_by_member_id = ?, decided_at = ?, device_id = ?,
-          credential_id = ?
+          credential_id = ?, device_owner_member_id = ?
       WHERE pairing_session_id = ? AND state = 'claimed'
     `).run(
       operationId,
@@ -735,11 +769,13 @@ export class DevicePairingSessionService {
       now,
       device.deviceId,
       credentialId,
+      device.ownerMemberId,
       row.pairing_session_id
     );
     if (updated.changes !== 1) throw conflict("approval raced");
     return {
       ...row,
+      device_owner_member_id: device.ownerMemberId,
       state: "approved",
       decision_operation_id: operationId,
       decision_action: "approve",
@@ -770,6 +806,7 @@ export class DevicePairingSessionService {
     return row.claim_operation_id === input.operationId &&
       row.pairing_attempt_id === input.pairingAttemptId &&
       row.poll_secret_hash === pollSecretHash &&
+      row.client_access_secret_hash === (input.clientAccessSecret ? hash(input.clientAccessSecret) : null) &&
       row.device_display_name === input.device.displayName &&
       row.device_platform === input.device.platform &&
       row.bridge_version === input.device.bridgeVersion &&
@@ -792,6 +829,7 @@ export class DevicePairingSessionService {
       shortCode: derivedShortCode(row.pairing_session_id, claimSecret),
       createdAt: row.created_at,
       expiresAt: row.expires_at,
+      ...(row.member_binding_json ? { memberBinding: JSON.parse(row.member_binding_json) as DevicePairingMemberBinding } : {}),
       ...(rowTrust(row) ? { trust: rowTrust(row)! } : {})
     };
   }
@@ -822,7 +860,8 @@ export class DevicePairingSessionService {
       state: "consumed",
       deviceId: row.device_id,
       teamId: row.team_id,
-      ownerMemberId: row.owner_member_id,
+      ownerMemberId: row.device_owner_member_id ?? row.owner_member_id,
+      ...(row.member_binding_json ? { clientAccessEnabled: true as const } : {}),
       credentialSource: "poll_secret"
     };
   }
@@ -835,6 +874,7 @@ export class DevicePairingSessionService {
       teamId: row.team_id,
       ownerMemberId: row.owner_member_id,
       state: row.state,
+      ...(row.member_binding_json ? { memberBinding: JSON.parse(row.member_binding_json) as DevicePairingMemberBinding } : {}),
       createdAt: row.created_at,
       expiresAt: row.expires_at,
       ...(row.pairing_attempt_id

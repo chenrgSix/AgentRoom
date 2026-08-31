@@ -78,7 +78,8 @@ export class TeamRoomService {
   }
 
   public listTeams(principal: WebPrincipal, includeArchived = false): TeamRecord[] {
-    return this.repository.listTeamsForUser(principal.userId, includeArchived);
+    return this.repository.listTeamsForUser(principal.userId, includeArchived)
+      .filter((team) => !principal.clientAccess || team.teamId === principal.clientAccess.teamId);
   }
 
   public createRoom(

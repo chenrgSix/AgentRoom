@@ -2,6 +2,8 @@ import { createHash, randomBytes } from "node:crypto";
 
 import type Database from "better-sqlite3";
 
+import { clientAccessAuthority, type ClientAccessScope } from "./client-access-authority.js";
+
 import { createOpaqueId } from "../domain/identifiers.js";
 
 export type AuthorizationErrorCode = "FORBIDDEN" | "UNAUTHENTICATED";
@@ -17,6 +19,7 @@ export class AuthorizationError extends Error {
 }
 
 export interface WebPrincipal {
+  clientAccess?: ClientAccessScope;
   userId: string;
   sessionId: string;
 }
@@ -48,6 +51,8 @@ export interface IssuedCredential {
 }
 
 interface WebSessionRow {
+  grant_id: string | null;
+  client_access_required: 0 | 1;
   session_id: string;
   user_id: string;
   expires_at: string;
@@ -115,18 +120,24 @@ export class AuthService {
 
   public authenticateWebSession(secret: string, now: string): WebPrincipal {
     const row = this.database.prepare(`
-      SELECT session_id, user_id, expires_at
-      FROM web_sessions
-      WHERE token_hash = ? AND revoked_at IS NULL
+      SELECT s.session_id, s.user_id, s.expires_at, s.client_access_required, c.grant_id
+      FROM web_sessions s LEFT JOIN web_session_client_access c ON c.session_id = s.session_id
+      WHERE s.token_hash = ? AND s.revoked_at IS NULL
     `).get(hashSecret(secret)) as WebSessionRow | undefined;
     if (!row || isExpired(row.expires_at, now)) {
       throw new AuthorizationError("UNAUTHENTICATED", "Invalid web session");
+    }
+    const client = row.grant_id ? clientAccessAuthority(this.database, row.grant_id, now) : undefined;
+    if ((row.client_access_required === 1 || row.grant_id) && (!client || client.user_id !== row.user_id)) {
+      throw new AuthorizationError("UNAUTHENTICATED", "Client session access was revoked");
     }
     this.database.prepare(`
       UPDATE web_sessions SET last_seen_at = ?
       WHERE session_id = ? AND last_seen_at < ?
     `).run(now, row.session_id, activityWriteCutoff(now));
-    return { userId: row.user_id, sessionId: row.session_id };
+    return { userId: row.user_id, sessionId: row.session_id, ...(client ? { clientAccess: {
+      grantId: client.grant_id, memberId: client.member_id, teamId: client.team_id
+    } } : {}) };
   }
 
   public requireTeamMember(
@@ -143,14 +154,14 @@ export class AuthService {
     `).get(teamId, principal.userId, options.includeArchived ? 1 : 0) as
       | { member_id: string; role: MemberPrincipal["role"] }
       | undefined;
-    if (!row) {
+    if (!row || (principal.clientAccess && (principal.clientAccess.teamId !== teamId || principal.clientAccess.memberId !== row.member_id))) {
       throw new AuthorizationError("FORBIDDEN", "Team access denied");
     }
     return {
       ...principal,
       memberId: row.member_id,
       teamId,
-      role: row.role
+      role: principal.clientAccess ? "member" : row.role
     };
   }
 
@@ -173,15 +184,19 @@ export class AuthService {
           role: MemberPrincipal["role"];
         }
       | undefined;
-    if (!row) {
+    if (!row || (principal.clientAccess && (principal.clientAccess.teamId !== row.team_id || principal.clientAccess.memberId !== row.member_id))) {
       throw new AuthorizationError("FORBIDDEN", "Room access denied");
     }
     return {
       ...principal,
       memberId: row.member_id,
       teamId: row.team_id,
-      role: row.role
+      role: principal.clientAccess ? "member" : row.role
     };
+  }
+
+  public requireFullWebSession(principal: WebPrincipal): void {
+    if (principal.clientAccess) throw new AuthorizationError("FORBIDDEN", "This action requires a full Web login");
   }
 
   public revokeWebSession(sessionId: string, now: string): boolean {
@@ -284,6 +299,7 @@ export class AuthService {
     now: string,
     expiresAt: string | null = null
   ): IssuedCredential {
+    this.requireFullWebSession(principal);
     if (isExpired(expiresAt, now)) {
       throw new Error("MCP credential expiry must be in the future");
     }

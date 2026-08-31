@@ -60,7 +60,8 @@ export class MemberDeviceService {
     teamId: string
   ): MemberRecord[] {
     this.auth.requireTeamMember(principal, teamId);
-    return this.repository.listMembers(teamId);
+    return this.repository.listMembers(teamId).map((member) =>
+      principal.clientAccess?.memberId === member.memberId ? { ...member, role: "member" } : member);
   }
 
   public registerOwnDevice(
@@ -69,6 +70,7 @@ export class MemberDeviceService {
     name: string,
     now: string
   ): DeviceRecord {
+    this.auth.requireFullWebSession(principal);
     const member = this.auth.requireTeamMember(principal, teamId);
     const device: DeviceRecord = {
       deviceId: createOpaqueId("device"),

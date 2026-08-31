@@ -104,6 +104,7 @@ export class BridgePairingService {
     requestedDeviceName: string,
     now: string
   ): IssuedPairingInvite {
+    this.auth.requireFullWebSession(principal);
     const member = this.auth.requireTeamMember(principal, teamId);
     const normalizedName = deviceName(requestedDeviceName);
     const inviteId = createOpaqueId("invite");

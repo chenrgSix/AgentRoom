@@ -58,6 +58,7 @@ export function registerTeamRoomRoutes({
   });
   app.post("/api/teams", async (request) => {
     const actor = principal(request);
+    auth.requireFullWebSession(actor);
     const user = core.getUser(actor.userId);
     if (!user) {
       throw new AuthorizationError("UNAUTHENTICATED", "Session User not found");
