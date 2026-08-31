@@ -1231,22 +1231,11 @@ func (s *Service) updateAgent(response http.ResponseWriter, request *http.Reques
 	if previous.RuntimeKind == "generic" {
 		agent, err = editGenericRuntime(previous, input)
 	} else {
-		agent, err = buildRuntime(input)
+		agent, err = editPresetRuntime(previous, input)
 	}
 	if err != nil {
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
-	}
-	if agent.RuntimeKind == "codex" && previous.RuntimeKind == "codex" &&
-		input.CodexSessionConflictPolicy == "" {
-		agent.CodexSessionConflictPolicy = previous.ResolvedCodexSessionConflictPolicy()
-	}
-	if agent.RuntimeKind == "pi" && previous.RuntimeKind == "pi" &&
-		len(agent.Command) > 0 {
-		agent.Command = config.PiPresetCommand(
-			agent.Command[0],
-			config.PiLocalPolicyArguments(previous.Command, previous.PresetVersion)...,
-		)
 	}
 	candidate.Agents[selected] = agent
 	if err := candidate.Validate(); err != nil {
@@ -1620,6 +1609,10 @@ func editGenericRuntime(previous config.AgentConfig, input RuntimeInput) (config
 		input.Sandbox != "" || input.CodexSessionConflictPolicy != "" || input.CredentialEnvironmentVar != "" {
 		return config.AgentConfig{}, fmt.Errorf("Generic CLI Runtime settings are read-only; editing preserves the saved command and policies")
 	}
+	return editRuntimeMetadata(previous, input)
+}
+
+func editRuntimeMetadata(previous config.AgentConfig, input RuntimeInput) (config.AgentConfig, error) {
 	// Keep every owner-authored Runtime field, including arguments, environment
 	// policy and output protocol. A metadata edit must not construct a preset or
 	// require a currently discoverable executable (commands may use PATH).
@@ -1628,11 +1621,11 @@ func editGenericRuntime(previous config.AgentConfig, input RuntimeInput) (config
 	agent.Role = strings.TrimSpace(input.Role)
 	if input.Workspace != previous.Workspace {
 		if strings.TrimSpace(input.Workspace) == "" {
-			return config.AgentConfig{}, fmt.Errorf("Generic CLI workspace is required")
+			return config.AgentConfig{}, fmt.Errorf("Runtime workspace is required")
 		}
 		workspace, err := existingDirectory(input.Workspace)
 		if err != nil {
-			return config.AgentConfig{}, fmt.Errorf("Generic CLI workspace: %w", err)
+			return config.AgentConfig{}, fmt.Errorf("Runtime workspace: %w", err)
 		}
 		agent.Workspace = workspace
 	}
@@ -1680,15 +1673,7 @@ func (s *Service) applyConfigView(configuration config.Config) error {
 		}
 		credentialEnvironmentVar := ""
 		if kind == "pi" {
-			standard := map[string]struct{}{
-				"HOME": {}, "PATH": {}, "PI_CODING_AGENT_DIR": {}, "PI_TELEMETRY": {},
-			}
-			for _, name := range agent.EnvAllowlist {
-				if _, exists := standard[name]; !exists {
-					credentialEnvironmentVar = name
-					break
-				}
-			}
+			credentialEnvironmentVar = piCredentialEnvironment(agent.EnvAllowlist)
 		}
 		executableReady := executableAvailable(executablePath)
 		runtimeState := "unavailable"
