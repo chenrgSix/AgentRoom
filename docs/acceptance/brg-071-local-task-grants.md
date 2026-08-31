@@ -70,13 +70,19 @@ an ordinary random canary beside, not inside, its selected workspace.
 | Legacy `readOnly` policy, outside-file write | Nonzero exit with permission denial |
 | Named profile, inside-file write | Succeeded |
 | Named profile, outside canary read and outside-file write | Both succeeded, including the explicit-deny variant |
+| `config/read` for the explicit-deny profile | Returned the intended exact closed definition |
+| Probe without inherited `CODEX_SANDBOX` | Outside read and write still succeeded |
+| Canonical private canary under disjoint `/private/var/tmp` root | Outside read and write still succeeded |
 
 The named-profile path therefore has no successful boundary evidence here. Its
 exact cause is unresolved; this does not establish a general failure of every
 Codex execution path. The probe is not Agent Runtime, network isolation, native
 Windows/Linux or production admission acceptance. No failed probe is converted
-to a supported capability. BRG-071 retains enforced Runtime/profile work, actual
-no-start/escape tests, owner UI, in-flight cancellation and stopped-Run cleanup.
+to a supported capability. A new Bridge filesystem probe preserves this result
+as a fail-closed admission prerequisite, not a registration. See its separate
+[increment evidence](brg-071-codex-filesystem-probe.md). BRG-071 retains enforced
+Runtime/profile work, actual no-start/escape tests, owner UI, in-flight
+cancellation and stopped-Run cleanup.
 
 ## Validation Record
 
