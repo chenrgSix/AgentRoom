@@ -311,9 +311,9 @@ and workspace identities, prepared patch-input pins, captured time and selected
 required output slots before any HTTP request. The caller must still hold the
 current owner-local authorization and stopped-Run fence; this is not a new
 Runtime admission path. The local adapter publishes non-empty sealed patch,
-Markdown document and JSON test-report outputs. It rejects unsupported selected
-kinds or missing required slots instead of omitting them or fabricating
-commit/verifier content.
+Markdown document, JSON test-report and incremental Git commit-bundle outputs.
+It rejects unsupported selected kinds or missing required slots instead of
+omitting them or fabricating content or verifier observations.
 
 The private owner journal retains exact publication intent before network IO,
 then an exact checkpoint proposal before sealing, and finally the confirmed
@@ -363,10 +363,11 @@ uses a confirmed Server checkpoint in a new Go process and checks that newly
 published cumulative bytes reproduce the new actual candidate tree. A local
 retirement extension previews, deletes and replays through separate Go processes
 without mutating Server checkpoints or Run state. The report extension verifies
-three distinct canonical output slots, late uncollected report edits, resume and
-retirement without promoting report claims into Task acceptance. Production
-cleanup authority and UI, canonical commit-output transport and BRG-071/RUN-018 admission connection
-remain required product work.
+four distinct canonical output slots including commit, late uncollected report
+edits, resume and retirement without promoting report claims into acceptance.
+A separate Git consumer verifies actual canonical bundle bytes, commits and trees
+on both object formats without promoting a ref. Production cleanup authority and
+UI, and the BRG-071/RUN-018 admission connection remain required product work.
 
 ### Retained Commit Bundle Producer
 
@@ -387,11 +388,24 @@ replace Git object validation: actual SHA-1/SHA-256 consumer tests verify and
 unbundle into a separate prerequisite repository, then check commit, parent,
 tree and object integrity without moving consumer refs.
 
-This local API does not yet publish a canonical commit Artifact, import code into
-a governed downstream Run, grant Runtime access or authorize integration. Its
-retention receipt is local metadata, not a second wire contract. Canonical binary
-transport and its schema/storage compatibility gate remain part of REPO-004.
-See [producer evidence](../acceptance/repo-004-commit-bundle-producer.md).
+`PublishCaptured` now publishes these retained bytes only for an approved commit
+slot, through the existing capture-only Artifact channel using a slot-derived
+`.bundle` filename and `application/x-git-bundle`. Neither patch nor commit
+outputs accept a local path selector. A commit-only, no-code-delta capture is
+valid because the bundle still contains an actual candidate commit object.
+
+Canonical binding reads the candidate ID from the sealed envelope, rather than
+accepting a caller label. Checkpoint sealing requires the Artifact and envelope
+candidate to equal the checkpoint. Object formats must agree; without
+code-changing inputs, the prerequisite must be the approved base. With such
+inputs, the exact prepared prerequisite must be present and verified at the
+Git consumer; central envelope validation is not object verification.
+
+The local retention receipt remains private metadata, not a second wire contract.
+Publication does not import code into a governed downstream Run, grant Runtime
+access or authorize integration. See the historical
+[producer evidence](../acceptance/repo-004-commit-bundle-producer.md) and
+[canonical transport evidence](../acceptance/repo-004-commit-artifact-transport.md).
 
 ## Verification Receipts
 

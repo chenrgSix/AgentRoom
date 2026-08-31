@@ -36,9 +36,9 @@ export interface ArtifactPublicationRecord {
   agentId: string;
   workspaceRef: string;
   workspaceGeneration: string;
-  artifactType: "patch" | "test_result" | "document";
+  artifactType: "patch" | "test_result" | "document" | "commit";
   fileName: string;
-  mediaType: "text/x-diff" | "text/markdown" | "application/json";
+  mediaType: "text/x-diff" | "text/markdown" | "application/json" | "application/x-git-bundle";
   title: string;
   summary: string;
   declaredSize: number;

@@ -80,6 +80,7 @@ func (p *Preparer) captureOutputSources(ctx context.Context, input CapturePublic
 	}
 	var snapshot workSnapshot
 	var gitDir, format string
+	var sealed capturedSource
 	for _, output := range input.Outputs {
 		if kinds[output.SlotKey] == execution.Patch {
 			continue
@@ -89,6 +90,7 @@ func (p *Preparer) captureOutputSources(ctx context.Context, input CapturePublic
 			return nil, err
 		}
 		snapshot, format, gitDir = source.Snapshot, source.ObjectFormat, source.GitDirectory
+		sealed = source
 		break
 	}
 	outputs := make([]capturedOutput, 0, len(input.Outputs))
@@ -99,7 +101,15 @@ func (p *Preparer) captureOutputSources(ctx context.Context, input CapturePublic
 		}
 		source := artifact.Source{Bytes: patch, FileName: "output-" + digest(output.SlotKey) + ".patch", MediaType: "text/x-diff",
 			SHA256: captured.PatchDigest, WorkspaceRef: captured.WorkspaceRef, WorkspaceGeneration: captured.WorkspaceGeneration}
-		if kind != execution.Patch {
+		if kind == execution.Commit {
+			data, err := p.readCommitBundleLocked(ctx, captured, sealed)
+			if err != nil {
+				return nil, err
+			}
+			key := sha256.Sum256(data)
+			source.Bytes, source.SHA256 = data, hex.EncodeToString(key[:])
+			source.FileName, source.MediaType = "output-"+digest(output.SlotKey)+".bundle", "application/x-git-bundle"
+		} else if kind != execution.Patch {
 			extension, media, err := reportMedia(kind, output.Path)
 			if err != nil {
 				return nil, err

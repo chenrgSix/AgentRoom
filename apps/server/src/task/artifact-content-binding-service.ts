@@ -24,7 +24,8 @@ export class ArtifactContentBindingService {
     private readonly runs: RunRepository,
     private readonly core: CoreRepository,
     private readonly recordInputProvenance?: (principal: DevicePrincipal, artifact: TaskArtifactRecord, now: string) => void,
-    private readonly authorizeCapturePublication?: (principal: DevicePrincipal, publication: ArtifactPublicationRecord, now: string) => void
+    private readonly authorizeCapturePublication?: (principal: DevicePrincipal, publication: ArtifactPublicationRecord, now: string) => void,
+    private readonly readCommitCandidate?: (publication: ArtifactPublicationRecord) => string
   ) {}
 
   public bind(
@@ -71,6 +72,10 @@ export class ArtifactContentBindingService {
       ) {
         throw new Error("Artifact publication scope conflicts with canonical state");
       }
+      const commitSha = publication.artifactType === "commit" ? this.readCommitCandidate?.(publication) : null;
+      if (publication.artifactType === "commit" && (!commitSha || !/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(commitSha))) {
+        throw new Error("Commit Artifact binding requires its sealed candidate");
+      }
       const record: TaskArtifactRecord = {
         artifactId: createOpaqueId("artifact"),
         artifactRevision: 0,
@@ -80,7 +85,7 @@ export class ArtifactContentBindingService {
         workspaceRef: publication.workspaceRef,
         repository: null,
         path: publication.fileName,
-        commitSha: null,
+        commitSha: commitSha ?? null,
         branch: null,
         contentMode: "snapshot_blob",
         contentId: content.contentId,

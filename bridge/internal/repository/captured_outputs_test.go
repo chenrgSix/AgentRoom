@@ -153,7 +153,7 @@ func TestCapturedReportsPublishFrozenObjectsAndRetainResume(t *testing.T) {
 }
 
 func TestCapturedReportsRejectInvalidSelectionsBeforeTransport(t *testing.T) {
-	for _, change := range []string{"traversal", "absolute", "metadata", "wrong extension", "missing", "outside scope", "patch path", "unsupported commit", "missing required", "duplicate slot", "empty document", "invalid UTF8", "invalid JSON", "oversized"} {
+	for _, change := range []string{"traversal", "absolute", "metadata", "wrong extension", "missing", "outside scope", "patch path", "commit path", "missing required", "duplicate slot", "empty document", "invalid UTF8", "invalid JSON", "oversized"} {
 		t.Run(change, func(t *testing.T) {
 			document, report := "# Review\n", "{\"passed\":true}"
 			if change == "empty document" {
@@ -184,7 +184,7 @@ func TestCapturedReportsRejectInvalidSelectionsBeforeTransport(t *testing.T) {
 				input.Outputs[1].Path = "secrets/report.md"
 			case "patch path":
 				input.Outputs[0].Path = "tests/review.md"
-			case "unsupported commit":
+			case "commit path":
 				input.Manifest.Outputs[1].Kind = execution.Commit
 				resignManifest(t, &input.Manifest)
 				input.Operation.Action.Capture.ManifestDigest = input.Manifest.ManifestDigest

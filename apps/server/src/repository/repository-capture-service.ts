@@ -4,6 +4,7 @@ import type { GovernedExecutionManifest as Manifest, RepositoryOperationRequest 
 import { assertExecutionCommand, canonicalExecutionJSON, executionOperationDigest } from "@convene-wire/contracts/execution-validation";
 import type { ArtifactPublicationRecord, ArtifactPublicationRepository } from "../artifact/artifact-publication-repository.js";
 import type { LocalArtifactBlobStore } from "../artifact/local-artifact-blob-store.js";
+import { inspectCommitBundleEnvelope } from "../artifact/commit-bundle-envelope.js";
 import { ExecutionError } from "../execution/execution-error.js";
 import { AuthorizationError, type DevicePrincipal } from "../security/auth-service.js";
 import type { ArtifactRepository } from "../task/artifact-repository.js";
@@ -152,6 +153,15 @@ export class RepositoryCaptureService {
         content.teamId !== lease.teamId || content.sha256 !== pin.contentDigest || content.sizeBytes !== pin.byteLength ||
         !this.blobs.hasMatchingBlob(content.storageKey, pin.contentDigest, pin.byteLength)) {
         return fail("REPOSITORY_CHECKPOINT_OUTPUT_NOT_CANONICAL");
+      }
+      if (pin.kind === "commit") {
+        const bundle = inspectCommitBundleEnvelope(this.blobs.readVerified(content.storageKey, pin.contentDigest, pin.byteLength));
+        if (artifact.commitSha !== checkpoint.candidateCommit || bundle.candidateCommit !== checkpoint.candidateCommit ||
+          bundle.prerequisiteCommit.length !== checkpoint.baseCommit.length ||
+          (!manifest.inputs.some((input) => input.artifact.kind === "patch" || input.artifact.kind === "commit") &&
+            bundle.prerequisiteCommit !== checkpoint.baseCommit)) {
+          return fail("REPOSITORY_CHECKPOINT_COMMIT_MISMATCH");
+        }
       }
     }
     if (manifest.outputs.some((slot) => slot.required && !slots.has(slot.slotKey))) {

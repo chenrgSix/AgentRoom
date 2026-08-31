@@ -15,6 +15,7 @@ import {
   ArtifactPublicationRepository
 } from "./artifact-publication-repository.js";
 import { LocalArtifactBlobStore } from "./local-artifact-blob-store.js";
+import { inspectCommitBundleEnvelope } from "./commit-bundle-envelope.js";
 
 const maximumArtifactBytes = 4 << 20;
 const maximumChunkBytes = 256 << 10;
@@ -78,6 +79,7 @@ function expectedMediaType(
     case "patch": return "text/x-diff";
     case "document": return "text/markdown";
     case "test_result": return "application/json";
+    case "commit": return "application/x-git-bundle";
   }
 }
 
@@ -93,6 +95,7 @@ function validFileName(
   const lower = fileName.toLowerCase();
   if (artifactType === "patch") return lower.endsWith(".patch") || lower.endsWith(".diff");
   if (artifactType === "document") return lower.endsWith(".md") || lower.endsWith(".markdown");
+  if (artifactType === "commit") return lower.endsWith(".bundle");
   return lower.endsWith(".json");
 }
 
@@ -325,6 +328,16 @@ export class ArtifactPublicationService {
         throw new Error("Artifact publication digest does not match");
       }
     }
+    if (refreshed.artifactType === "commit") {
+      const bytes = this.blobs.readVerified(
+        this.blobs.existsRegular(refreshed.tempStorageKey) ? refreshed.tempStorageKey : storageKey,
+        refreshed.declaredSha256, refreshed.declaredSize
+      );
+      // Validate before any file move/removal. A capture transaction rolls back
+      // its DB state on rejection, so deleting the acknowledged upload here
+      // would leave a retained receiving record pointing at missing bytes.
+      inspectCommitBundleEnvelope(bytes);
+    }
     this.blobs.seal(
       refreshed.tempStorageKey,
       storageKey,
@@ -340,6 +353,19 @@ export class ArtifactPublicationService {
       sealedAt: now
     };
     return this.publications.seal(publicationId, content, now);
+  }
+
+  /** Internal canonical binding input; never accepts an Agent-supplied commit label. */
+  public commitCandidate(publication: ArtifactPublicationRecord): string {
+    const content = publication.contentId && this.publications.getContent(publication.contentId);
+    if (publication.artifactType !== "commit" || publication.mediaType !== "application/x-git-bundle" ||
+      !this.publications.usesCaptureLease(publication) || !content || content.teamId !== publication.teamId ||
+      content.sha256 !== publication.declaredSha256 || content.sizeBytes !== publication.declaredSize) {
+      throw new Error("Commit Artifact requires sealed capture content");
+    }
+    return inspectCommitBundleEnvelope(this.blobs.readVerified(
+      content.storageKey, content.sha256, content.sizeBytes
+    )).candidateCommit;
   }
 
   private requireWritable(

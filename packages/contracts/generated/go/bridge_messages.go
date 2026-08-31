@@ -1083,9 +1083,10 @@ const (
 type MediaType string
 
 const (
-	ApplicationJSON MediaType = "application/json"
-	TextMarkdown    MediaType = "text/markdown"
-	TextXDiff       MediaType = "text/x-diff"
+	ApplicationJSON       MediaType = "application/json"
+	ApplicationXGitBundle MediaType = "application/x-git-bundle"
+	TextMarkdown          MediaType = "text/markdown"
+	TextXDiff             MediaType = "text/x-diff"
 )
 
 type RelationType string

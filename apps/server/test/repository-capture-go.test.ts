@@ -13,6 +13,10 @@ import { executionOperationDigest } from "@convene-wire/contracts/execution-vali
 import { ArtifactPublicationRepository } from "../src/artifact/artifact-publication-repository.js";
 import { LocalArtifactBlobStore } from "../src/artifact/local-artifact-blob-store.js";
 import { ArtifactRepository } from "../src/task/artifact-repository.js";
+import { CoreRepository } from "../src/data/core-repository.js";
+import { ContextPlanner } from "../src/task/context-planner.js";
+import { AgentTaskRepository } from "../src/task/task-repository.js";
+import { inspectCommitBundleEnvelope } from "../src/artifact/commit-bundle-envelope.js";
 import { planIsolatedWorkspace } from "../src/workspace/isolated-workspace-lease-service.js";
 import { capability, workspaceFixture } from "./helpers/isolated-workspace-fixture.js";
 
@@ -83,7 +87,7 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       await mkdir(path.join(source, "src"), { recursive: true, mode: 0o700 });
       await mkdir(state, { recursive: true, mode: 0o700 });
       await writeFile(path.join(source, "src", "app.txt"), "base\n");
-      await git(source, "init", "--template=", "-b", "main", ".");
+      await git(source, "init", "--template=", `--object-format=${mode === "bound-restart" ? "sha256" : "sha1"}`, "-b", "main", ".");
       await git(source, "add", "--all");
       await git(source, "commit", "-m", "approved fixture base");
       const baseCommit = await git(source, "rev-parse", "HEAD");
@@ -93,6 +97,7 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         configurePlan: (definition) => {
           for (const node of definition.nodes) {
             if (node.repository) node.repository.baseCommit = baseCommit;
+            node.outputs.push({ slotKey: "commit", kind: "commit", required: true });
             if (mode === "lost-responses") node.outputs.push(
               { slotKey: "document", kind: "document", required: true },
               { slotKey: "report", kind: "test_result", required: true }
@@ -191,7 +196,7 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       dropBind = false;
       const second = await runCapture(binary, { ...input, CaptureDigest: first.CaptureDigest, ExpectError: false }, t.signal);
       assert.equal(second.Error, "");
-      assert.equal(artifactPosts(), mode === "bound-restart" ? 2 : outputCount, "unexpected publication intent retry");
+      assert.equal(artifactPosts(), mode === "bound-restart" ? outputCount + 1 : outputCount, "unexpected publication intent retry");
       assert.equal(second.Checkpoint.candidateCommit, first.CandidateCommit);
       assert.equal(second.Checkpoint.candidateTree, first.CandidateTree);
       const stored = await f.ok("GET", `/api/bridge/repository-captures/${operation.operationId}/checkpoint`, undefined, authorization);
@@ -202,12 +207,49 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       assert.ok(pin.artifactRevision > 0);
       const content = new ArtifactPublicationRepository(f.database).getContent(artifact.contentId!)!;
       const dbPath = (f.database.pragma("database_list") as Array<{ file: string }>)[0]!.file;
+      const verifyCommitOutput = async (checkpoint: RepositoryCheckpoint, suffix: string) => {
+        const pin = checkpoint.outputs.find((output) => output.artifact.kind === "commit")!.artifact;
+        const artifact = new ArtifactRepository(f.database).get(pin.artifactId)!;
+        const content = new ArtifactPublicationRepository(f.database).getContent(artifact.contentId!)!;
+        const bytes = new LocalArtifactBlobStore(path.join(path.dirname(dbPath), "artifact-blobs"))
+          .readVerified(content.storageKey, pin.contentDigest, pin.byteLength);
+        assert.equal(artifact.commitSha, checkpoint.candidateCommit);
+        assert.equal(artifact.contentMediaType, "application/x-git-bundle");
+        assert.deepEqual(inspectCommitBundleEnvelope(bytes), {
+          objectFormat: baseCommit.length === 40 ? "sha1" : "sha256",
+          prerequisiteCommit: baseCommit, candidateCommit: checkpoint.candidateCommit
+        });
+        const consumer = path.join(directory, mode, `${suffix}-commit-consumer`);
+        const bundleFile = path.join(directory, mode, `${suffix}.bundle`);
+        await writeFile(bundleFile, bytes);
+        await git(directory, "clone", "--no-local", "--", source, consumer);
+        const refs = await git(consumer, "show-ref");
+        await git(consumer, "bundle", "verify", bundleFile);
+        await git(consumer, "bundle", "unbundle", bundleFile);
+        await git(consumer, "fsck", "--strict", "--no-reflogs", checkpoint.candidateCommit);
+        assert.equal(await git(consumer, "rev-parse", `${checkpoint.candidateCommit}^{tree}`), checkpoint.candidateTree);
+        assert.equal(await git(consumer, "rev-parse", `${checkpoint.candidateCommit}^`), baseCommit);
+        assert.equal(await git(consumer, "show", `${checkpoint.candidateCommit}:src/app.txt`), "implemented through real capture");
+        assert.equal(await git(consumer, "show-ref"), refs, "reading commit content promoted a ref");
+        assert.equal(await git(consumer, "status", "--porcelain"), "");
+      };
+      await verifyCommitOutput(second.Checkpoint, "published");
+      const core = new CoreRepository(f.database);
+      const trigger = f.database.prepare("SELECT trigger_message_id FROM runs WHERE run_id = ?").get(f.manifest.scope.runId) as { trigger_message_id: string };
+      const message = core.getMessage(trigger.trigger_message_id)!;
+      const legacy = new ContextPlanner(f.database, core, new AgentTaskRepository(f.database)).plan({
+        roomId: f.roomId, taskId: f.task.taskId, triggerMessageId: message.messageId, throughSequence: message.sequence
+      }, now);
+      const commitRef = legacy.contextPlan.resultEvidence!.artifactRefs.find((entry) => entry.type === "commit")!;
+      assert.ok(commitRef);
+      assert.equal(commitRef.commitSha, second.Checkpoint.candidateCommit);
+      assert.equal(commitRef.content, undefined, "legacy Run received an unsupported binary descriptor");
       const patch = new LocalArtifactBlobStore(path.join(path.dirname(dbPath), "artifact-blobs"))
         .readVerified(content.storageKey, pin.contentDigest, pin.byteLength);
       assert.match(patch.toString(), /\+implemented through real capture/u);
       assert.doesNotMatch(patch.toString(), /later uncollected/u);
       if (mode === "lost-responses") {
-        for (const output of second.Checkpoint.outputs.filter((output) => output.artifact.kind !== "patch")) {
+        for (const output of second.Checkpoint.outputs.filter((output) => ["document", "test_result"].includes(output.artifact.kind))) {
           const reportArtifact = new ArtifactRepository(f.database).get(output.artifact.artifactId)!;
           const reportContent = new ArtifactPublicationRepository(f.database).getContent(reportArtifact.contentId!)!;
           const bytes = new LocalArtifactBlobStore(path.join(path.dirname(dbPath), "artifact-blobs"))
@@ -279,6 +321,7 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
           ResumeOperation: preparation, ResumeCheckpoint: second.Checkpoint, ExpectError: false };
         const resumed = await runCapture(binary, resumeInput, t.signal);
         assert.equal(resumed.PreparedTree, second.Checkpoint.candidateTree);
+        await verifyCommitOutput(resumed.Checkpoint, "resumed");
         assert.notEqual(resumed.WorkPath, first.WorkPath);
         assert.equal(await readFile(path.join(resumed.WorkPath, "src", "app.txt"), "utf8"), "implemented through real capture\n");
         assert.equal(await readFile(path.join(first.WorkPath, "src", "app.txt"), "utf8"), "later uncollected edit\n");
@@ -324,6 +367,7 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         cleanup.expectedPreviewDigest = preview.CleanupPreview.digest;
         const retired = await runCapture(binary, cleanupInput, t.signal);
         assert.ok(retired.CleanupReceipt);
+        await verifyCommitOutput(resumed.Checkpoint, "retired");
         assert.equal(retired.CleanupReceipt.removedWorktree, resumed.WorkPath);
         assert.equal(retired.CleanupReceipt.removedBranch, preview.CleanupPreview.branch);
         assert.equal(retired.CleanupReceipt.checkpointId, resumed.Checkpoint.checkpointId);

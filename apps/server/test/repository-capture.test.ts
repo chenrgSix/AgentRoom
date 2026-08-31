@@ -14,6 +14,7 @@ import { planIsolatedWorkspace } from "../src/workspace/isolated-workspace-lease
 import { openDatabase } from "../src/data/database.js";
 import { now } from "./helpers/execution-plan-fixture.js";
 import { workspaceFixture, capability } from "./helpers/isolated-workspace-fixture.js";
+import { syntheticCommitBundle } from "./helpers/commit-bundle-fixture.js";
 
 const bytes = Buffer.from("diff --git a/src/a b/src/a\n--- a/src/a\n+++ b/src/a\n@@ -1 +1 @@\n-old\n+new\n");
 const sha = (value: Buffer) => createHash("sha256").update(value).digest("hex");
@@ -28,8 +29,10 @@ function hashRequest(value: RepositoryOperationRequest) {
   return value;
 }
 
-async function captureFixture(t: TestContext) {
-  const f = await workspaceFixture(t), initial = f.reserve();
+async function captureFixture(t: TestContext, commitOutput = false) {
+  const f = await workspaceFixture(t, false, { configurePlan: (definition) => {
+    if (commitOutput) for (const node of definition.nodes) node.outputs.push({ slotKey: "commit", kind: "commit", required: true });
+  } }), initial = f.reserve();
   f.freeze();
   const authorization = `Bearer ${f.credential.secret}`;
   const socket = await f.app.injectWS("/ws/bridge", { headers: { authorization, host: "127.0.0.1" } });
@@ -91,6 +94,70 @@ async function captureFixture(t: TestContext) {
   });
   return { ...f, initial, initialRunState, request, lease, http, deviceOK: ok, prepare, upload, publish, checkpoint, makeService, blobRoot, dbPath };
 }
+
+test("commit transport rejects malformed bytes and binds only the checkpoint's exact candidate", async (t) => {
+  const f = await captureFixture(t, true), patch = await f.publish();
+  // This fixture proves envelope and authority validation only. Real packed
+  // objects are generated and consumed in repository-capture-go.test.ts.
+  const content = syntheticCommitBundle("sha1", f.manifest.repository.baseCommit);
+  const prepareCommit = (id: string, source = content) => f.deviceOK("POST", "/api/bridge/artifact-publications", {
+    leaseId: f.lease.leaseId, runId: f.manifest.scope.runId, agentId: f.agent.agentId,
+    workspaceRef: f.lease.workspaceRef, workspaceGeneration: f.lease.workspaceGeneration,
+    idempotencyKey: `idem_commit_${id}`, artifactType: "commit", fileName: "candidate.bundle",
+    mediaType: "application/x-git-bundle", title: "Commit transport fixture", summary: "Envelope only, not verified Git objects",
+    sizeBytes: source.length, sha256: sha(source)
+  });
+  const malformed = Buffer.from(content); malformed[malformed.length - 1]! ^= 1;
+  const invalid = await prepareCommit("malformed0001", malformed);
+  await f.deviceOK("POST", `/api/bridge/artifact-publications/${invalid.publicationId}/chunks`, {
+    offset: 0, chunkBase64: malformed.toString("base64"), chunkSha256: sha(malformed)
+  });
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const rejected = await f.http("POST", `/api/bridge/artifact-publications/${invalid.publicationId}/seal`);
+    assert.notEqual(rejected.statusCode, 200);
+    assert.match(rejected.body, /Commit bundle envelope is invalid/u);
+  }
+  assert.equal(new ArtifactPublicationRepository(f.database).get(invalid.publicationId)!.contentId, null);
+  const publication = await prepareCommit("valid0001");
+  await f.upload(publication.publicationId, content);
+  const bound = await f.deviceOK("POST", `/api/bridge/artifact-publications/${publication.publicationId}/bind`);
+  assert.equal(bound.artifact.commitSha, "c".repeat(40));
+  const preview = await f.http("GET", `/api/tasks/${f.task.taskId}/artifacts/${bound.artifact.artifactId}/preview`, undefined, f.authorization);
+  assert.notEqual(preview.statusCode, 200);
+  assert.match(preview.body, /no previewable snapshot/u);
+  assert.deepEqual(await f.deviceOK("POST", `/api/bridge/artifact-publications/${publication.publicationId}/bind`), bound);
+  const checkpoint = f.checkpoint(patch);
+  checkpoint.outputs.push({ slotKey: "commit", artifact: { artifactId: bound.artifact.artifactId,
+    artifactRevision: bound.artifact.artifactRevision, kind: "commit", byteLength: content.length, contentDigest: sha(content) } });
+  rehash(checkpoint);
+  const changed = rehash({ ...checkpoint, candidateCommit: "e".repeat(40) });
+  const rejected = await f.http("POST", "/api/bridge/repository-checkpoints", changed);
+  assert.equal(rejected.statusCode, 409);
+  assert.match(rejected.body, /COMMIT_MISMATCH/u);
+  assert.deepEqual(await f.deviceOK("POST", "/api/bridge/repository-checkpoints", checkpoint), checkpoint);
+  assert.equal(new RunRepository(f.database).getRun(f.manifest.scope.runId)!.state, f.initialRunState);
+});
+
+test("commit checkpoint cannot substitute a different prepared prerequisite", async (t) => {
+  const f = await captureFixture(t, true), patch = await f.publish();
+  const content = syntheticCommitBundle("sha1", "f".repeat(40));
+  const publication = await f.deviceOK("POST", "/api/bridge/artifact-publications", {
+    leaseId: f.lease.leaseId, runId: f.manifest.scope.runId, agentId: f.agent.agentId,
+    workspaceRef: f.lease.workspaceRef, workspaceGeneration: f.lease.workspaceGeneration,
+    idempotencyKey: "idem_commit_wrongbase0001", artifactType: "commit", fileName: "candidate.bundle",
+    mediaType: "application/x-git-bundle", title: "Wrong prerequisite", summary: "Must not satisfy the checkpoint",
+    sizeBytes: content.length, sha256: sha(content)
+  });
+  await f.upload(publication.publicationId, content);
+  const { artifact } = await f.deviceOK("POST", `/api/bridge/artifact-publications/${publication.publicationId}/bind`);
+  const checkpoint = f.checkpoint(patch);
+  checkpoint.outputs.push({ slotKey: "commit", artifact: { artifactId: artifact.artifactId, artifactRevision: artifact.artifactRevision,
+    kind: "commit", byteLength: content.length, contentDigest: sha(content) } });
+  const rejected = await f.http("POST", "/api/bridge/repository-checkpoints", rehash(checkpoint));
+  assert.equal(rejected.statusCode, 409);
+  assert.match(rejected.body, /COMMIT_MISMATCH/u);
+  assert.equal((f.database.prepare("SELECT count(*) AS n FROM repository_checkpoints").get() as { n: number }).n, 0);
+});
 
 test("capture publishes real canonical content and an immutable checkpoint through authenticated HTTP", async (t) => {
   const f = await captureFixture(t), artifact = await f.publish(), checkpoint = f.checkpoint(artifact);

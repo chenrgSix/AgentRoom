@@ -22,7 +22,7 @@ import type {
   TaskArtifact,
   TaskArtifactPage
 } from "../../models.js";
-import { ArtifactPreviewPanel } from "../task/ArtifactPreviewPanel.js";
+import { ArtifactPreviewPanel, canPreviewArtifact } from "../task/ArtifactPreviewPanel.js";
 import { RunRecoveryControls } from "./RunRecoveryControls.js";
 
 export const taskWorkDetailTabs = ["overview", "runs", "results", "artifacts", "discussion", "audit"] as const;
@@ -657,7 +657,9 @@ export function TaskWorkDetail({
                   return <li key={source.evidenceRefId}>
                     {artifact ? <>
                       <span>{artifact.title} · r{artifact.artifactRevision}</span>
-                      {artifact.contentMode === "snapshot_blob" ? <button className="work-inline-link" disabled={artifactPreviewBusyId !== null} onClick={() => { setEvidenceArtifactId(artifact.artifactId); setEvidenceResultId(result.resultId); void previewArtifact(artifact); }} type="button">{text("查看证据", "Inspect evidence", locale)}</button> : <small>{text("仅引用；没有可验证的内容快照。", "Reference only; no verifiable content snapshot.", locale)}</small>}
+                      {canPreviewArtifact(artifact) ? <button className="work-inline-link" disabled={artifactPreviewBusyId !== null} onClick={() => { setEvidenceArtifactId(artifact.artifactId); setEvidenceResultId(result.resultId); void previewArtifact(artifact); }} type="button">{text("查看证据", "Inspect evidence", locale)}</button> : <small>{artifact.contentMode === "snapshot_blob"
+                        ? text("二进制成果；请通过已授权的仓库流程检查代码。", "Binary Artifact; inspect code through the authorized repository workflow.", locale)
+                        : text("仅引用；没有可验证的内容快照。", "Reference only; no verifiable content snapshot.", locale)}</small>}
                     </> : sourceRun ? <button className="work-inline-link" onClick={() => { selectRun(sourceRun.runId); selectTab("runs"); }} type="button">{text("查看运行事件", "Inspect Run events", locale)} · #{source.sequence ?? "?"}</button> : <span>{display(source.kind)} · {sourceIdentity(source)}</span>}
                   </li>;
                 })}</ul>

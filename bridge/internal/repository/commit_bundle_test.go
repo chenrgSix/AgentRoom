@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	"convenewire.dev/bridge/internal/artifact"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 func commitBundleFixture(t *testing.T, format string, inputs, unchanged bool) (*fixture, PreparedWorkspace, CapturedRepository) {
@@ -157,6 +158,37 @@ func TestCapturedCommitBundleNoCodeDelta(t *testing.T) {
 			pack := bundle[len(commitBundleHeader(format, ready.outputBase(), captured.CandidateCommit)):]
 			if binary.BigEndian.Uint32(pack[8:12]) != 1 {
 				t.Fatal("unchanged tree was retransmitted")
+			}
+		})
+	}
+}
+
+func TestCapturedCommitOnlyPublicationAcceptsNoCodeDelta(t *testing.T) {
+	for _, format := range []string{"sha1", "sha256"} {
+		t.Run(format, func(t *testing.T) {
+			f, _, captured, publication := reportSeed(t, format, "# Review\n", "{}", func(f *fixture, manifest *execution.GovernedExecutionManifest) {
+				f.write(t, "src/app.txt", "implemented with reports\n")
+				f.write(t, "tests/review.md", "# Review\n")
+				f.write(t, "tests/results.json", "{}")
+				f.git(t, f.sourcePath, "add", "--all")
+				f.git(t, f.sourcePath, "commit", "-m", "unchanged commit-output fixture")
+				manifest.Outputs = []execution.GovernedExecutionManifestOutput{{SlotKey: "commit", Kind: execution.Commit, Required: true}}
+			})
+			if captured.PatchBytes != 0 {
+				t.Fatal("fixture unexpectedly changed code")
+			}
+			publication.Outputs = []CaptureOutputDescription{{SlotKey: "commit", Title: "Candidate", Summary: "Captured commit, not acceptance"}}
+			transport := &reportTransport{sources: map[string]artifact.Source{}}
+			checkpoint, err := f.preparer.PublishCaptured(context.Background(), publication, transport)
+			if err != nil {
+				t.Fatal(err)
+			}
+			source := transport.sources["commit"]
+			bundle, err := f.preparer.ReadCapturedCommitBundle(context.Background(), captured.OperationID, captured.Digest)
+			if err != nil || len(checkpoint.Outputs) != 1 || checkpoint.Outputs[0].Artifact.Kind != execution.Commit ||
+				source.MediaType != "application/x-git-bundle" || !bytes.Equal(source.Bytes, bundle) ||
+				checkpoint.Outputs[0].Artifact.ContentDigest != source.SHA256 {
+				t.Fatal("commit-only publication lost its exact sealed bytes", err)
 			}
 		})
 	}

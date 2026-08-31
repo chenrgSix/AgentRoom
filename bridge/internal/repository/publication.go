@@ -14,7 +14,7 @@ import (
 )
 
 // CaptureOutputDescription selects one approved output. Path selects a captured
-// report locally; patch outputs have no path. It never identifies a live file.
+// report locally; patch/commit outputs have no path. It never identifies a live file.
 type CaptureOutputDescription struct {
 	SlotKey string `json:"slotKey"`
 	Title   string `json:"title"`
@@ -132,7 +132,7 @@ func validateCaptureOutputs(input CapturePublication) error {
 			strings.TrimSpace(output.Summary) == "" || len(output.Summary) > 4000 {
 			return ErrInvalid
 		}
-		if slot.Kind == execution.Patch {
+		if slot.Kind == execution.Patch || slot.Kind == execution.Commit {
 			if output.Path != "" {
 				return ErrInvalid
 			}

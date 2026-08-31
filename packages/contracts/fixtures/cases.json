@@ -2682,6 +2682,261 @@
         "ticket": "short"
       },
       "valid": false
+    },
+    {
+      "name": "commit bundle: valid full SHA-1 snapshot",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "commit",
+        "relations": [
+          {
+            "relationId": "relation_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "type": "derives_from",
+            "targetArtifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W5"
+          }
+        ],
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "candidate.bundle",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/x-git-bundle",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/candidate.bundle"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z",
+        "commitSha": "cccccccccccccccccccccccccccccccccccccccc"
+      },
+      "valid": true
+    },
+    {
+      "name": "commit bundle: valid full SHA-256 snapshot",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "commit",
+        "relations": [
+          {
+            "relationId": "relation_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "type": "derives_from",
+            "targetArtifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W5"
+          }
+        ],
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "candidate.bundle",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/x-git-bundle",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/candidate.bundle"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z",
+        "commitSha": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "valid": true
+    },
+    {
+      "name": "commit bundle: reject missing commit",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "commit",
+        "relations": [
+          {
+            "relationId": "relation_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "type": "derives_from",
+            "targetArtifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W5"
+          }
+        ],
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "candidate.bundle",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/x-git-bundle",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/candidate.bundle"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z"
+      },
+      "valid": false
+    },
+    {
+      "name": "commit bundle: reject short commit",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "commit",
+        "relations": [
+          {
+            "relationId": "relation_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "type": "derives_from",
+            "targetArtifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W5"
+          }
+        ],
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "candidate.bundle",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/x-git-bundle",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/candidate.bundle"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z",
+        "commitSha": "ccccccc"
+      },
+      "valid": false
+    },
+    {
+      "name": "commit bundle: reject wrong media",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "commit",
+        "relations": [
+          {
+            "relationId": "relation_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "type": "derives_from",
+            "targetArtifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W5"
+          }
+        ],
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "candidate.bundle",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/json",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/candidate.bundle"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z",
+        "commitSha": "cccccccccccccccccccccccccccccccccccccccc"
+      },
+      "valid": false
+    },
+    {
+      "name": "commit bundle: reject patch with bundle",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "patch",
+        "relations": [
+          {
+            "relationId": "relation_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "type": "derives_from",
+            "targetArtifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W5"
+          }
+        ],
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "candidate.bundle",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/x-git-bundle",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/candidate.bundle"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z",
+        "commitSha": "cccccccccccccccccccccccccccccccccccccccc"
+      },
+      "valid": false
+    },
+    {
+      "name": "commit bundle: reject unknown media",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "commit",
+        "relations": [
+          {
+            "relationId": "relation_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "type": "derives_from",
+            "targetArtifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W5"
+          }
+        ],
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "candidate.bundle",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/octet-stream",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/candidate.bundle"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z",
+        "commitSha": "cccccccccccccccccccccccccccccccccccccccc"
+      },
+      "valid": false
+    },
+    {
+      "name": "commit bundle: reject wrong object width",
+      "schemaId": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/artifactRef",
+      "instance": {
+        "artifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "artifactRevision": 2,
+        "type": "commit",
+        "relations": [
+          {
+            "relationId": "relation_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "type": "derives_from",
+            "targetArtifactId": "artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W5"
+          }
+        ],
+        "workspaceRef": "workspace_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "candidate.bundle",
+        "content": {
+          "contentId": "content_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+          "sizeBytes": 1024,
+          "mediaType": "application/x-git-bundle",
+          "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "logicalAlias": "artifact://artifact_01K4Z6J7Y8N9P0Q1R2S3T4V5W6/candidate.bundle"
+        },
+        "title": "Verified change",
+        "summary": "Pinned immutable bytes for independent review.",
+        "sourceRunId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdByAgentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "createdAt": "2026-08-22T10:00:03Z",
+        "commitSha": "ccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "valid": false
     }
   ]
 }

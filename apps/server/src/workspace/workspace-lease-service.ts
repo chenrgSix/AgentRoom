@@ -221,6 +221,9 @@ export class WorkspaceLeaseService {
     input: Pick<ArtifactPublicationRecord, "runId" | "agentId" | "workspaceRef" | "workspaceGeneration" | "artifactType">,
     now: string): WorkspaceLeaseView {
     const lease = this.getForDevice(principal, leaseId, now);
+    if (input.artifactType === "commit" && lease.mode !== "read_capture") {
+      throw new Error("Commit Artifact publication requires a capture lease");
+    }
     if (lease.mode === "read_source") return this.requireActiveReadSource(principal, leaseId, input, now);
     if (lease.state !== "active" || lease.runId !== input.runId || lease.agentId !== input.agentId ||
       lease.workspaceRef !== input.workspaceRef || lease.workspaceGeneration !== input.workspaceGeneration || !this.authorizeCapture) {

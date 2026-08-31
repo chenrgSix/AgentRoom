@@ -684,7 +684,7 @@ export interface PinnedArtifactContent {
   sizeBytes:    number;
 }
 
-export type MediaType = "text/x-diff" | "text/markdown" | "application/json";
+export type MediaType = "text/x-diff" | "text/markdown" | "application/json" | "application/x-git-bundle";
 
 /**
  * Immutable lineage from the containing source Artifact to older Task evidence.

@@ -528,7 +528,9 @@ export class ContextPlanner {
   }
 
   private contextArtifact(artifact: TaskArtifactRecord): ContextArtifactRef {
-    const content = artifact.contentMode === "snapshot_blob"
+    // Legacy Run delivery remains text-only. Governed commit inputs use the
+    // separately authorized execution-input channel, never implicit Git import.
+    const content = artifact.contentMode === "snapshot_blob" && artifact.type !== "commit"
       ? this.pinnedArtifactContent(artifact)
       : undefined;
     return {
@@ -568,6 +570,7 @@ export class ContextPlanner {
   ): NonNullable<ContextArtifactRef["content"]> {
     if (
       !artifact.contentId || !artifact.path || !artifact.contentMediaType ||
+      artifact.contentMediaType === "application/x-git-bundle" ||
       !artifact.contentSha256 || artifact.contentSizeBytes === null ||
       !/^[A-Za-z0-9][A-Za-z0-9._-]{0,254}$/u.test(artifact.path)
     ) {

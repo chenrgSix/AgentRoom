@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { copyFile, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -203,7 +203,7 @@ test("capture lease migration preserves populated legacy publications, blobs and
     const oldLease = database.prepare("SELECT * FROM workspace_leases").get();
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
-    assert.deepEqual(migrated.appliedVersions, [62]);
+    assert.deepEqual(migrated.appliedVersions, [62, 63]);
     database = openDatabase(f.databasePath);
     assert.deepEqual(tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all()), before);
     assert.deepEqual(database.prepare("SELECT * FROM workspace_leases").get(), { ...oldLease!, capture_operation_id: null });
@@ -216,6 +216,86 @@ test("capture lease migration preserves populated legacy publications, blobs and
     assert.throws(() => database.exec("DELETE FROM workspace_leases"), /retained/u);
   } finally {
     if (database.open) database.close();
+    await rm(path.dirname(f.databasePath), { recursive: true, force: true });
+  }
+});
+
+test("commit migration preserves populated canonical lineage and rolls back a failed rebuild", async () => {
+  const f = await createFixture(62);
+  let database = f.database;
+  try {
+    const binder = new ArtifactContentBindingService(f.transactions, new ArtifactRepository(database),
+      f.publications, f.taskRepository, f.runRepository, f.core);
+    let previous: string | undefined;
+    for (const [kind, media, name] of [
+      ["patch", "text/x-diff", "old.patch"], ["document", "text/markdown", "old.md"],
+      ["test_result", "application/json", "old.json"]
+    ] as const) {
+      const source = Buffer.from(kind === "test_result" ? "{}" : "Retained legacy bytes\n");
+      const input = { ...prepareInput(f, source, `idem_commit_migration_${kind}`),
+        artifactType: kind, mediaType: media, fileName: name,
+        relations: previous ? [{ type: "derives_from" as const, targetArtifactId: previous }] : [] };
+      const publication = f.service.prepare(f.principal, input, now);
+      f.service.appendChunk(f.principal, publication.publicationId, 0, source, chunkSha256(source), now);
+      f.service.seal(f.principal, publication.publicationId, now);
+      previous = binder.bind(f.principal, publication.publicationId, now).artifact.artifactId;
+    }
+    const pendingSource = Buffer.from("Pending upload\n");
+    f.service.prepare(f.principal, prepareInput(f, pendingSource, "idem_commit_migration_pending"), now);
+    const tables = ["artifact_publications", "artifact_contents", "task_artifact_refs", "task_artifact_relations", "agent_tasks", "runs"];
+    const snapshot = () => tables.map((table) => database.prepare(`SELECT * FROM ${table} ORDER BY rowid`).all());
+    const before = snapshot();
+    const objects = () => database.prepare("SELECT type, name, tbl_name, sql FROM sqlite_master WHERE sql IS NOT NULL ORDER BY type,name").all() as
+      Array<{ type: string; name: string; tbl_name: string; sql: string }>;
+    const beforeObjects = objects();
+    database.close();
+    const migrationDir = path.join(path.dirname(f.databasePath), "migrations");
+    const migrationName = "0063_commit_artifact_bundles.sql";
+    const migration = await readFile(path.join(defaultMigrationsDirectory, migrationName), "utf8");
+    await writeFile(path.join(migrationDir, migrationName), migration + "\nSELECT deliberately_missing_commit_migration_function();\n");
+    await assert.rejects(migrateDatabase(f.databasePath, migrationDir), /deliberately_missing/u);
+    database = openDatabase(f.databasePath);
+    assert.deepEqual(snapshot(), before);
+    assert.deepEqual(objects(), beforeObjects, "failed migration changed schema or retained triggers");
+    assert.deepEqual(database.pragma("foreign_key_check"), []);
+    database.close();
+    const result = await migrateDatabase(f.databasePath);
+    assert.deepEqual(result.appliedVersions, [63]);
+    database = openDatabase(f.databasePath);
+    assert.deepEqual(snapshot(), before);
+    assert.deepEqual(objects().map(({ type, name, tbl_name }) => ({ type, name, tbl_name })),
+      beforeObjects.map(({ type, name, tbl_name }) => ({ type, name, tbl_name })));
+    assert.equal(database.pragma("foreign_keys", { simple: true }), 1);
+    assert.deepEqual(database.pragma("foreign_key_check"), []);
+    for (const [table, reason] of [["task_artifact_refs", /immutable/u], ["artifact_publications", /retained evidence/u]] as const) {
+      assert.throws(() => database.exec(`DELETE FROM ${table}`), reason);
+    }
+    assert.throws(() => database.exec("UPDATE task_artifact_refs SET title = 'changed'"), /immutable/u);
+    for (const row of before[1] as Array<{ storage_key: string; sha256: string; size_bytes: number }>) {
+      assert.equal(f.blobs.hasMatchingBlob(row.storage_key, row.sha256, row.size_bytes), true);
+    }
+    const repeated = await migrateDatabase(f.databasePath);
+    assert.deepEqual(repeated.appliedVersions, []);
+  } finally {
+    if (database.open) database.close();
+    await rm(path.dirname(f.databasePath), { recursive: true, force: true });
+  }
+});
+
+test("ordinary source leases cannot publish commit bundles through service or SQL", async () => {
+  const f = await createFixture();
+  try {
+    const source = Buffer.from("not a commit bundle");
+    const input = { ...prepareInput(f, source, "idem_commit_read_source0001"),
+      artifactType: "commit" as const, fileName: "candidate.bundle", mediaType: "application/x-git-bundle" as const };
+    assert.throws(() => f.service.prepare(f.principal, input, now), /capture lease/u);
+    const ordinary = f.service.prepare(f.principal, prepareInput(f, source, "idem_commit_sql_base0001"), now);
+    assert.throws(() => f.publications.create({ ...ordinary, publicationId: "publication_commit_bypass0001",
+      idempotencyKey: "idem_commit_sql_bypass0001", artifactType: "commit", mediaType: "application/x-git-bundle",
+      fileName: "candidate.bundle" }), /lease scope/u);
+    assert.equal(f.publications.get("publication_commit_bypass0001"), undefined);
+  } finally {
+    f.database.close();
     await rm(path.dirname(f.databasePath), { recursive: true, force: true });
   }
 });

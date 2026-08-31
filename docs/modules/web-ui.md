@@ -298,8 +298,11 @@ The clarification read reconciles deadline and scope before rendering, so a
 canceled or expired record disappears from the answer surface and retains its
 durable resolution reason for history.
 
-The selected Task also loads its canonical Artifact page. Only
-`snapshot_blob` records offer preview. An on-demand Member-authorized endpoint
+The selected Task also loads its canonical Artifact page. Only text-bearing
+Patch, Markdown and JSON `snapshot_blob` records offer preview. Binary commit
+bundles remain visible as size/digest/type metadata, with no preview, execution
+or Git-import button; Result evidence uses the same boundary. An on-demand
+Member-authorized endpoint
 re-resolves the canonical content identity, checks Team scope and the sealed
 size/SHA-256, requires valid UTF-8, and returns at most 200,000 characters with
 an explicit truncation bit. Its JSON response is `no-store` and `nosniff` and

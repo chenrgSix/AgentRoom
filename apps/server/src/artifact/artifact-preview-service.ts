@@ -76,6 +76,7 @@ export class ArtifactPreviewService {
       !artifact.contentId ||
       artifact.contentSizeBytes === null ||
       !artifact.contentMediaType ||
+      artifact.contentMediaType === "application/x-git-bundle" ||
       !artifact.contentSha256 ||
       !["patch", "document", "test_result"].includes(artifact.type)
     ) {

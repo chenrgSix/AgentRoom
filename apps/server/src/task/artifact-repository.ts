@@ -35,6 +35,7 @@ export interface TaskArtifactRecord {
     | "text/x-diff"
     | "text/markdown"
     | "application/json"
+    | "application/x-git-bundle"
     | null;
   contentSha256: string | null;
   title: string;

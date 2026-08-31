@@ -23,6 +23,13 @@ func testWorkspace(t *testing.T) string {
 	return root
 }
 
+func TestCommitCannotUseOrdinaryWorkspaceSource(t *testing.T) {
+	if _, err := PlanSource(t.TempDir(), "candidate.bundle", "commit"); err == nil ||
+		!strings.Contains(err.Error(), "sealed repository capture") {
+		t.Fatal("ordinary source API admitted a commit bundle", err)
+	}
+}
+
 func TestCaptureReturnsStablePathFreeSnapshot(t *testing.T) {
 	root := testWorkspace(t)
 	if err := os.Mkdir(filepath.Join(root, "results"), 0o700); err != nil {

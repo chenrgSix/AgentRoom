@@ -9,7 +9,7 @@ is a separate locally granted Repository operation, never a staging side effect.
 
 - Prefix: `ART`
 - Implementation: `apps/server/src/artifact/`, `apps/server/src/http/artifact-routes.ts`,
-  `bridge/internal/artifact/`, and migrations 0036-0038 and 0062
+  `bridge/internal/artifact/`, and migrations 0036-0038 and 0062-0063
 - Owns: Blob uploads, sealed content, content retention, authenticated transfer,
   and materialization receipts
 
@@ -138,6 +138,29 @@ not a result.
 
 ## Delivery and Materialization
 
+Commit snapshots use the existing canonical publication identity with
+`application/x-git-bundle` and a `.bundle` name, bounded to 4 MiB. Only an approved
+`read_capture` lease may publish them; ordinary file-source APIs reject commit
+uploads in both Bridge and Server, and SQL independently enforces capture scope.
+Before sealing, the Server checks the closed Git bundle v3 envelope and pack
+checksum. Malformed bytes cause no file move or deletion: the retained upload
+remains under existing expiry/quota rules, matching the rolled-back DB state.
+Binding derives the full candidate commit from the sealed bytes. These checks
+do not attest Git objects, test results, a safe tree or human acceptance.
+
+Migration 0063 rebuilds only the publication and Artifact-reference tables,
+retaining their rows, indexes, immutable/scope/lineage triggers and inbound
+foreign keys. A populated legacy graph and an injected rebuild failure verify
+forward migration and transaction rollback. Reference-only commit identifiers
+retain their existing compatibility; binary commit snapshots require full IDs.
+
+The wire schema can represent the new binary descriptor, but ordinary Context
+Planner/Run delivery stays text-only: a commit appears as attributed reference
+metadata without a downloadable content descriptor. The existing ordinary
+download allowlist is unchanged. Governed cross-Task reads require explicit
+execution input binding; applying imported objects remains Repository authority,
+not a side effect of receipt or staging. No unsupported capability is advertised.
+
 A durable Run payload pins Artifact ID/revision plus content ID, media type,
 size, and digest. The authenticated target Device downloads only content named
 by its pending or accepted delivery. The implemented content endpoint resolves
@@ -154,7 +177,7 @@ Workspace file is created or replaced.
 
 For `WEB-040`, an authenticated Room Member may request a preview only through
 the canonical Task Artifact identity. The Server rechecks the bound content
-row and sealed bytes, rejects cross-Team or reference-only records, accepts
+row and sealed bytes, rejects cross-Team, binary or reference-only records, accepts
 only valid UTF-8, and returns a `no-store`, `nosniff`, 200,000-character JSON
 projection without storage or Workspace paths. This is a separate human read
 authority; it neither weakens Device/Run delivery authorization nor marks the
@@ -185,10 +208,11 @@ execution.
 
 ## Initial Bounds
 
-The first slice supports Patch, Markdown document, and JSON test result content
-up to 4 MiB. Chunks are ordered and bounded. Images, arbitrary files, archives,
-directories, repositories, executables, HTML execution, and Workspace apply are
-deferred.
+The original text slice supports Patch, Markdown document and JSON test result
+content up to 4 MiB. Governed capture also supports a closed incremental Git
+bundle, not arbitrary archives or whole-repository uploads. Chunks remain ordered
+and bounded. Images, arbitrary files, directories, executables, HTML execution
+and implicit Workspace apply remain excluded.
 
 ## Security and Verification
 

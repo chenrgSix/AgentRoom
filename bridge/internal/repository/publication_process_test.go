@@ -152,7 +152,7 @@ func TestCapturePublicationHTTPProcess(t *testing.T) {
 	for _, output := range input.Manifest.Outputs {
 		description := CaptureOutputDescription{SlotKey: output.SlotKey, Title: title, Summary: "Actual Git bytes; not independent verification"}
 		switch output.Kind {
-		case execution.Patch:
+		case execution.Patch, execution.Commit:
 		case execution.Document:
 			description.Path = "src/review.md"
 		case execution.TestResult:

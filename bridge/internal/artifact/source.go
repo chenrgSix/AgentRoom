@@ -40,6 +40,9 @@ type SourcePlan struct {
 }
 
 func PlanSource(root, relativePath, artifactType string) (SourcePlan, error) {
+	if artifactType == "commit" {
+		return SourcePlan{}, fmt.Errorf("Commit Artifact requires a sealed repository capture")
+	}
 	if strings.TrimSpace(relativePath) != relativePath || relativePath == "" ||
 		filepath.IsAbs(relativePath) || strings.Contains(relativePath, "\\") {
 		return SourcePlan{}, fmt.Errorf("Artifact file must be a clean Workspace-relative path")
@@ -260,8 +263,12 @@ func mediaTypeFor(artifactType, fileName string) (string, error) {
 		if strings.HasSuffix(lower, ".json") {
 			return "application/json", nil
 		}
+	case "commit":
+		if strings.HasSuffix(lower, ".bundle") {
+			return "application/x-git-bundle", nil
+		}
 	default:
-		return "", fmt.Errorf("Artifact type must be patch, document, or test_result")
+		return "", fmt.Errorf("Unsupported Artifact type")
 	}
 	return "", fmt.Errorf("Artifact file extension does not match type %s", artifactType)
 }

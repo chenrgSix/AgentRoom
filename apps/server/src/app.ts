@@ -323,7 +323,8 @@ export async function createServerApp(
     runRepository,
     core,
     (principal, artifact, now) => executionInputs.recordArtifactInputs(principal, artifact, now),
-    (principal, publication, now) => workspaceLeases.requireCurrentCapturePublication(principal, publication, now)
+    (principal, publication, now) => workspaceLeases.requireCurrentCapturePublication(principal, publication, now),
+    (publication) => artifactPublications.commitCandidate(publication)
   );
   const taskArtifacts = new TaskArtifactService(
     artifactRepository,

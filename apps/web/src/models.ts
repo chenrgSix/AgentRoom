@@ -261,7 +261,7 @@ export interface TaskArtifact {
   title: string;
   summary: string;
   contentMode: "reference_only" | "snapshot_blob";
-  contentMediaType: ArtifactMediaType | null;
+  contentMediaType: ArtifactMediaType | "application/x-git-bundle" | null;
   contentSizeBytes: number | null;
   contentSha256: string | null;
   createdAt: string;

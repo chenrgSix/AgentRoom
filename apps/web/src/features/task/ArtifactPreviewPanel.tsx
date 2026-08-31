@@ -18,6 +18,12 @@ function compactDigest(digest: string | null): string {
   return digest ? `${digest.slice(0, 10)}…${digest.slice(-8)}` : "";
 }
 
+export function canPreviewArtifact(artifact: TaskArtifact): boolean {
+  return artifact.contentMode === "snapshot_blob" &&
+    ["patch", "document", "test_result"].includes(artifact.type) &&
+    artifact.contentMediaType !== null && artifact.contentMediaType !== "application/x-git-bundle";
+}
+
 function formatBytes(size: number | null): string {
   if (size === null) return "";
   if (size < 1024) return `${size} B`;
@@ -73,7 +79,7 @@ export function ArtifactPreviewPanel({
               <span>{formatBytes(artifact.contentSizeBytes)}</span>
               <code>{compactDigest(artifact.contentSha256)}</code>
             </div>
-            <button
+            {canPreviewArtifact(artifact) ? <button
               disabled={busyId !== null}
               onClick={() => void onPreview(artifact)}
               type="button"
@@ -81,7 +87,9 @@ export function ArtifactPreviewPanel({
               {busyId === artifact.artifactId
                 ? (locale === "zh-CN" ? "校验中…" : "Verifying…")
                 : (locale === "zh-CN" ? "安全预览" : "Safe preview")}
-            </button>
+            </button> : <small>{locale === "zh-CN"
+              ? "二进制成果仅展示元数据，不进行文本预览、执行或 Git 导入。"
+              : "Binary Artifact metadata only; no text preview, execution or Git import."}</small>}
           </article>
         ))}
       </div>

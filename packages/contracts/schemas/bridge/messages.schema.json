@@ -1358,6 +1358,19 @@
                     }
                   }
                 }
+              },
+              {
+                "required": ["commitSha"],
+                "properties": {
+                  "type": { "const": "commit" },
+                  "commitSha": { "type": "string", "pattern": "^(?:[0-9a-f]{40}|[0-9a-f]{64})$" },
+                  "content": {
+                    "type": "object",
+                    "properties": {
+                      "mediaType": { "const": "application/x-git-bundle" }
+                    }
+                  }
+                }
               }
             ]
           }
@@ -1466,7 +1479,8 @@
           "enum": [
             "text/x-diff",
             "text/markdown",
-            "application/json"
+            "application/json",
+            "application/x-git-bundle"
           ]
         },
         "sha256": {
@@ -1509,7 +1523,8 @@
           "enum": [
             "text/x-diff",
             "text/markdown",
-            "application/json"
+            "application/json",
+            "application/x-git-bundle"
           ]
         },
         "sha256": {

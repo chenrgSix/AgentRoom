@@ -4,6 +4,10 @@ Date: 2026-09-01. Scope: local capture-owned Git bundle production and real Git
 consumer verification. This increment does not complete REPO-004 or the governed
 software-team lifecycle. Delivery status remains solely in TASKS.
 
+This is the historical local-producer boundary at `03b8441`. The subsequent
+[canonical transport increment](repo-004-commit-artifact-transport.md) extends it
+without turning local primitive evidence into production Runtime acceptance.
+
 ## Implemented Boundary
 
 `ReadCapturedCommitBundle` validates the existing capture, intent, prepared

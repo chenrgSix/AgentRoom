@@ -802,6 +802,34 @@ test("members without Task ownership cannot acknowledge or retry a Run", async (
   }
 });
 
+test("Result commit evidence does not request a binary text preview", async () => {
+  const dom = installDom(), fallback = baseFetch();
+  let previewCalls = 0;
+  globalThis.fetch = async (input) => {
+    if (String(input).endsWith("/preview")) previewCalls++;
+    const response = await fallback(input);
+    if (!String(input).endsWith("/artifacts")) return response;
+    const body = await response.json();
+    body.artifacts = body.artifacts.map((artifact: Record<string, unknown>) => ({
+      ...artifact, type: "commit", contentMediaType: "application/x-git-bundle"
+    }));
+    return json(body);
+  };
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  try {
+    render(<TaskWorkDetail {...detailProps()} />);
+    const page = within(dom.window.document.body);
+    await page.findByRole("heading", { name: task.title });
+    fireEvent.click(page.getByRole("tab", { name: "Results" }));
+    assert.ok(page.getByText(/Binary Artifact; inspect code/u));
+    assert.equal(page.queryByRole("button", { name: "Inspect evidence" }), null);
+    fireEvent.click(page.getByRole("tab", { name: "Artifacts" }));
+    assert.ok(page.getByText(/Binary Artifact metadata only/u));
+    assert.equal(page.queryByRole("button", { name: "Safe preview" }), null);
+    assert.equal(previewCalls, 0);
+  } finally { cleanup(); dom.window.close(); }
+});
+
 test("Result evidence opens the authorized verified Artifact as text and rejects mismatched previews", async () => {
   const dom = installDom();
   const fallback = baseFetch();

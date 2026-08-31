@@ -81,7 +81,7 @@ test("Artifact snapshots render verified Patch, Markdown, and JSON as untrusted 
           type: artifact.type as ArtifactPreview["type"],
           title: artifact.title,
           summary: artifact.summary,
-          mediaType: artifact.contentMediaType!,
+          mediaType: mediaByType[artifact.type],
           sha256: artifact.contentSha256!,
           sizeBytes: artifact.contentSizeBytes!,
           integrity: "verified",
@@ -125,4 +125,21 @@ test("Artifact snapshots render verified Patch, Markdown, and JSON as untrusted 
     cleanup();
     dom.window.close();
   }
+});
+
+test("binary commit snapshots show metadata without text-preview or execution controls", async () => {
+  const dom = installDom();
+  const { cleanup, render, within } = await import("@testing-library/react");
+  let previews = 0;
+  try {
+    render(<ArtifactPreviewPanel artifacts={[{ ...artifacts[0]!, type: "commit", title: "Captured commit",
+      contentMediaType: "application/x-git-bundle" }]} busyId={null} error={null} locale="en"
+      onClose={() => {}} onPreview={() => { previews++; }} preview={null} />);
+    const page = within(dom.window.document.body);
+    assert.ok(page.getByText("Captured commit"));
+    assert.ok(page.getByText(/Binary Artifact metadata only/u));
+    assert.equal(page.queryByRole("button", { name: "Safe preview" }), null);
+    assert.equal(page.queryByRole("region", { name: "Artifact content preview" }), null);
+    assert.equal(previews, 0);
+  } finally { cleanup(); dom.window.close(); }
 });
