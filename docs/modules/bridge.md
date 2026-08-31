@@ -163,9 +163,52 @@ private outside root and resolves safe environment values. It requires the live
 probe to reproduce the registered executable/profile/platform and both boundary
 names, removes the outside fixture, then resolves the record again before
 returning. It persists no workspace or fresh evidence. The primitive is not yet
-wired to production delivery; a durable start-intent/no-duplicate journal and
-current grant/Run/generation transaction remain mandatory before no-start can be
+wired to production delivery; production must join it to the durable
+start-intent/no-duplicate journal below and one current
+grant/Run/generation/prepared-identity transaction before no-start can be
 opened.
+
+## Durable Runtime Possible-Start Fence
+
+The internal `RuntimeFenceStore` is the next BRG-071 prerequisite. It does not
+accept a path, command or ad hoc permission. `NewRuntimeAdmissionSpec` first
+validates the generated manifest and both of its canonical digests, then joins
+its exact Plan/Task/Run/Device/grant/repository/lease/profile pins to one
+`PreparedWorkspace` and one unrevoked `RuntimeProfileView`. Preparation must
+match the Run, isolated-worktree reference, generation and base commit. The
+retained specification replaces the raw filesystem identity with a digest and
+omits the worktree path, Git path, branch, command and environment.
+
+`Claim` appends an owner-namespaced version-1 record only while the workspace,
+grant and deadline are current. Exact replay returns the original record, while
+another Run cannot reuse the same workspace generation, preparation operation
+or prepared physical identity. A changed same-Run input conflicts. The store
+uses the existing Bridge owner lock, private pinned directories, canonical
+strict reads, exclusive fsynced writes and bounded inventory. This claim is
+still not startup authority.
+
+`Start` requires the caller's expected admission digest and a mandatory
+current-authority callback. Production wiring must make that callback recheck
+the authenticated current Run and dispatch generation, cancellation, current
+local Task grant, exact prepared physical identity and exact Runtime profile
+through the physical re-probe. The callback cannot start a process or perform
+another irreversible effect and may run on competing requests. After a
+successful callback the store checks time and immutable state again, durably
+appends version-2 start-intent, and returns `invoke=true` only to the writer of
+that first record. Every `starting` or `stopped` replay returns `invoke=false`
+without calling the callback. Therefore the persisted `starting` state means
+the Runtime may have started, including a crash after the append but before the
+caller invokes it; recovery never guesses that it is safe to invoke again.
+
+`Stop` appends one exact version-3 closed local outcome bound to both admission
+and start digests. It does not create a Task Result, verification receipt or
+completion decision. `RecoverUnknown` converts unresolved possible-start
+records to `outcome_unknown` only after its future production caller has fenced
+or terminated any surviving process; claim-only records remain claim-only.
+That explicit surviving-process cleanup, inbox/cancellation integration,
+current-authority callback, capability advertisement and real Runtime evidence
+remain open. The production governed no-start rejection is unchanged. See the
+[possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 
 ## Codex Local Boundary Probe
 
