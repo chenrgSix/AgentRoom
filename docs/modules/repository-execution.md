@@ -103,6 +103,53 @@ worktree lifecycle, verifies identity again and retains an audit tombstone.
 No recursive workspace-root cleanup or automatic deletion of user changes is
 permitted. Tests use temporary directories and register cleanup immediately.
 
+### Local Pinned Preparation
+
+`bridge/internal/repository.Preparer` is an owner-local Git primitive, not a
+second wire model or a Runtime admission service. Its local-only `Source`,
+`Preparation` and `PreparedWorkspace` values contain paths and must never be
+published as central metadata. The later Bridge admission adapter must validate
+the authoritative execution request, current local grant and exact selected
+input bindings before invoking it, and must retain the existing durable Run
+start fence afterward. A preparation receipt never establishes that an Agent
+started, a Result was accepted or a repository checkpoint was published.
+
+Source inspection requires an explicit owner-selected exact repository root
+inside allowed roots, including its Git metadata. Physical directory identities
+and the resolved Git/common-directory and object format are rechecked; moving
+HEAD is allowed, replacing or retargeting the binding is not. Alternate object
+stores are unsupported and rejected. A dedicated private owner directory keeps
+exclusive process ownership and immutable operation/Run/workspace claims.
+
+Each attempt imports only its approved full SHA-1/SHA-256 commit and tree/blob
+closure into an independent bare store, with that exact commit as a shallow
+boundary. It creates an owned `codex/` branch and linked worktree there, never
+in the source repository. It neither imports ancestor history nor inherits
+source/global configuration, remotes, hooks or external filters. Owned attributes
+materialize canonical blob bytes without encoding, EOL or ident conversions;
+this is an explicit snapshot policy, not an assertion that arbitrary custom
+checkout filters are supported. Gitlinks remain unpopulated and symlinks remain
+links; unsupported platform materialization fails rather than changing their
+meaning.
+
+Ordered patch inputs are digest-checked before mutation. Binary literal and
+delta output expansion is bounded before Git application; the resulting tree
+is checked again against entry, byte and portable-path limits. Local defaults
+are 128 MiB logical snapshot/patch-expansion budgets, 100,000 tree entries and
+60 seconds per Git command. These bound individual operations, not a total
+on-disk quota across retained attempts. Missing objects never trigger a fetch.
+
+Preparation seals an immutable candidate before checkout and a local receipt
+after actual file hashes, modes, branch, tree and Git linking identities agree.
+It does not trust status/index flags or ignore rules to prove clean contents.
+Exact replay can finish a sealed candidate or recover a lost preparation
+receipt; dirty, replaced or partially unsealed attempts are retained and fail
+closed. It never resets an existing directory or retries a possibly running
+Agent. Journal files are synced and atomically installed without replacement;
+Windows flushes owned read-only Git files with write-capable handles and restores
+their attributes. Native Windows and power-loss durability need their own
+platform evidence; cross-compilation does not establish either.
+
 ## Verification Receipts
 
 Verification is a system-owned operation on an exact candidate, not an Agent's
