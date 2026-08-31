@@ -348,45 +348,45 @@ func (p *Preparer) buildCapture(ctx context.Context, prepared preparationIntent,
 	return candidate, nil
 }
 
-func (p *Preparer) finishCapture(ctx context.Context, prepared preparationIntent, ready PreparedWorkspace, intent captureIntent, candidate captureCandidate) (CapturedRepository, error) {
+func (p *Preparer) verifyCaptureCandidate(ctx context.Context, prepared preparationIntent, ready PreparedWorkspace, intent captureIntent, candidate captureCandidate) error {
 	root := p.capturePath(intent.Request.OperationID)
 	gitDir := filepath.Join(root, "git")
 	if err := checkOwnedGitMetadata(gitDir, max(4096, p.git.limits.Entries*4)); err != nil {
-		return CapturedRepository{}, err
+		return err
 	}
 	for path, expected := range map[string]string{root: candidate.DirectoryIdentity, gitDir: candidate.GitIdentity} {
 		actual, err := directoryIdentity(path)
 		if err != nil || actual != expected {
-			return CapturedRepository{}, ErrChanged
+			return ErrChanged
 		}
 	}
 	config, err := readRegular(filepath.Join(gitDir, "config"), 64<<10)
 	if err != nil || digest(string(config)) != candidate.ConfigDigest {
-		return CapturedRepository{}, ErrChanged
+		return ErrChanged
 	}
 	attributes, err := readRegular(filepath.Join(gitDir, "info", "attributes"), 4096)
 	if err != nil || string(attributes) != exactCheckoutAttributes {
-		return CapturedRepository{}, ErrChanged
+		return ErrChanged
 	}
 	shallow, err := readRegular(filepath.Join(gitDir, "shallow"), 4096)
 	if err != nil || string(shallow) != ready.outputBase()+"\n" {
-		return CapturedRepository{}, ErrChanged
+		return ErrChanged
 	}
 	if _, err := os.Lstat(filepath.Join(gitDir, "info", "grafts")); !errors.Is(err, os.ErrNotExist) {
-		return CapturedRepository{}, ErrChanged
+		return ErrChanged
 	}
 	if candidate.IntentDigest != digest(intent) || !validObject(candidate.Commit, prepared.Source.ObjectFormat) || !validObject(candidate.Tree, prepared.Source.ObjectFormat) {
-		return CapturedRepository{}, ErrChanged
+		return ErrChanged
 	}
 	source := Source{Root: gitDir, GitDirectory: gitDir, CommonDirectory: gitDir, ObjectFormat: prepared.Source.ObjectFormat,
 		RootIdentity: candidate.GitIdentity, GitIdentity: candidate.GitIdentity, CommonIdentity: candidate.GitIdentity}
 	_, tree, err := p.git.objectList(ctx, source, candidate.Commit)
 	if err != nil || tree != candidate.Tree {
-		return CapturedRepository{}, ErrChanged
+		return ErrChanged
 	}
 	entries, err := p.git.entries(ctx, gitDir, candidate.Tree, prepared.Source.ObjectFormat)
 	if err != nil {
-		return CapturedRepository{}, err
+		return err
 	}
 	actualFiles := map[string]treeEntry{}
 	for _, entry := range entries {
@@ -395,17 +395,26 @@ func (p *Preparer) finishCapture(ctx context.Context, prepared preparationIntent
 		}
 	}
 	if len(actualFiles) != len(intent.Snapshot.Files) {
-		return CapturedRepository{}, ErrChanged
+		return ErrChanged
 	}
 	for _, file := range intent.Snapshot.Files {
 		actual := actualFiles[file.Path]
 		if actual.id != file.Object || actual.mode != file.Mode {
-			return CapturedRepository{}, ErrChanged
+			return ErrChanged
 		}
 	}
 	if _, err := p.git.run(ctx, gitDir, nil, 16<<10, "fsck", "--full", "--strict", "--no-reflogs"); err != nil {
-		return CapturedRepository{}, ErrChanged
+		return ErrChanged
 	}
+	return nil
+}
+
+func (p *Preparer) finishCapture(ctx context.Context, prepared preparationIntent, ready PreparedWorkspace, intent captureIntent, candidate captureCandidate) (CapturedRepository, error) {
+	if err := p.verifyCaptureCandidate(ctx, prepared, ready, intent, candidate); err != nil {
+		return CapturedRepository{}, err
+	}
+	root := p.capturePath(intent.Request.OperationID)
+	gitDir := filepath.Join(root, "git")
 	patch, err := p.git.run(ctx, gitDir, nil, maximumCapturedPatch, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-renames", ready.outputBase(), candidate.Commit, "--")
 	if err != nil {
 		return CapturedRepository{}, err

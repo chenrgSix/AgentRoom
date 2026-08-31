@@ -399,8 +399,10 @@ func (p *Preparer) createCandidate(ctx context.Context, intent preparationIntent
 	outputBase := ""
 	if resume != nil {
 		outputBase = commit
-		if _, err := p.git.run(ctx, gitDir, bytes.NewReader(resume.patch), 16<<10, "apply", "--cached", "--whitespace=nowarn"); err != nil {
-			return preparedCandidate{}, err
+		if len(resume.patch) != 0 {
+			if _, err := p.git.run(ctx, gitDir, bytes.NewReader(resume.patch), 16<<10, "apply", "--cached", "--whitespace=nowarn"); err != nil {
+				return preparedCandidate{}, err
+			}
 		}
 		tree, err = p.git.text(ctx, gitDir, "write-tree")
 		if err != nil || tree != resume.pin.CandidateTree {

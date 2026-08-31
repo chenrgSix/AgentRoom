@@ -32,9 +32,19 @@ func (p *Preparer) confirmedCapture(ctx context.Context, checkpoint execution.Re
 	}
 	var err error
 	captured, err = p.publicationCapture(publication)
-	if err != nil || !checkpointMatchesCapture(checkpoint, publication, captured) {
-		return publication, captured, nil, ErrChanged
+	if err != nil {
+		return publication, captured, nil, err
+	}
+	if err := validateCaptureOutputs(publication); err != nil {
+		return publication, captured, nil, err
 	}
 	patch, err := p.readCapturedPatchLocked(ctx, checkpoint.OperationID, captured.Digest)
-	return publication, captured, patch, err
+	if err != nil {
+		return publication, captured, nil, err
+	}
+	outputs, err := p.captureOutputSources(ctx, publication, captured, patch)
+	if err != nil || !checkpointMatchesCapture(checkpoint, publication, captured, outputs) {
+		return publication, captured, nil, ErrChanged
+	}
+	return publication, captured, patch, nil
 }

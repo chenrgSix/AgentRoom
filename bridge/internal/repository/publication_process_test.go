@@ -117,6 +117,20 @@ func TestCapturePublicationHTTPProcess(t *testing.T) {
 		if err := os.WriteFile(filepath.Join(ready.Path, "src", name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
+		for _, output := range manifest.Outputs {
+			var name, content string
+			switch output.Kind {
+			case execution.Document:
+				name, content = "review.md", "# Captured review\nSupplied fixture notes, not an approval.\n"
+			case execution.TestResult:
+				name, content = "results.json", "{\"claimedPassed\":true,\"fixture\":true}\n"
+			default:
+				continue
+			}
+			if err := os.WriteFile(filepath.Join(ready.Path, "src", name), []byte(content), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
 		captured, err = p.Capture(ctx, CaptureRequest{OperationID: input.Operation.OperationID,
 			WorkspaceRef: ready.WorkspaceRef, PreparedDigest: ready.IntentDigest,
 			ExpectedGeneration: ready.Generation, ManifestDigest: manifest.ManifestDigest})
@@ -130,21 +144,28 @@ func TestCapturePublicationHTTPProcess(t *testing.T) {
 		}
 		workPath = filepath.Join(p.attemptPath(captured.WorkspaceRef), "work")
 	}
-	slot := ""
-	for _, output := range input.Manifest.Outputs {
-		if output.Kind == execution.Patch {
-			slot = output.SlotKey
-			break
-		}
-	}
 	title := "Captured implementation"
 	if input.Title != "" {
 		title = input.Title
 	}
+	outputs := []CaptureOutputDescription{}
+	for _, output := range input.Manifest.Outputs {
+		description := CaptureOutputDescription{SlotKey: output.SlotKey, Title: title, Summary: "Actual Git bytes; not independent verification"}
+		switch output.Kind {
+		case execution.Patch:
+		case execution.Document:
+			description.Path = "src/review.md"
+		case execution.TestResult:
+			description.Path = "src/results.json"
+		default:
+			t.Fatal("unsupported fixture output")
+		}
+		outputs = append(outputs, description)
+	}
 	client := artifact.NewClient(config.Config{ServerURL: input.ServerURL}, pairing.Credential{Token: input.Token})
 	checkpoint, err := p.PublishCaptured(ctx, CapturePublication{CaptureDigest: input.CaptureDigest,
 		Manifest: input.Manifest, Operation: input.Operation,
-		Outputs: []CaptureOutputDescription{{SlotKey: slot, Title: title, Summary: "Actual Git bytes; not independent verification"}}}, client)
+		Outputs: outputs}, client)
 	if (err != nil) != input.ExpectError {
 		t.Fatalf("publication error: %v (expected=%v)", err, input.ExpectError)
 	}

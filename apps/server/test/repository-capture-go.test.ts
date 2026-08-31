@@ -91,7 +91,13 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       const f = await workspaceFixture(t, false, {
         now, clock: () => new Date().toISOString(),
         configurePlan: (definition) => {
-          for (const node of definition.nodes) { if (node.repository) node.repository.baseCommit = baseCommit; }
+          for (const node of definition.nodes) {
+            if (node.repository) node.repository.baseCommit = baseCommit;
+            if (mode === "lost-responses") node.outputs.push(
+              { slotKey: "document", kind: "document", required: true },
+              { slotKey: "report", kind: "test_result", required: true }
+            );
+          }
         }
       });
       const lease = f.reserve();
@@ -107,6 +113,10 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       const [frame] = await ready;
       assert.equal(JSON.parse(String(frame)).type, "run.requested");
       const initialRun = f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(f.manifest.scope.runId);
+      const initialTask = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
+      assert.ok(["ready", "active", "review"].includes(initialTask.lifecycleState));
+      assert.equal(initialTask.completionResultId, null);
+      const outputCount = f.manifest.outputs.length;
       const serverURL = await f.app.listen({ host: "127.0.0.1", port: 0 });
       const operation: RepositoryOperationRequest = {
         version: 1, operationId: "op_real_capture0001", requestDigest: "",
@@ -166,23 +176,27 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         ExpectError: mode !== "lost-responses" };
       const first = await runCapture(binary, input, t.signal);
       const artifactPosts = () => counts.get("POST /api/bridge/artifact-publications") ?? 0;
-      assert.equal(artifactPosts(), 1);
+      assert.equal(artifactPosts(), mode === "bound-restart" ? 1 : outputCount);
       if (input.ExpectError) assert.match(first.Error, /outcome is unknown/u);
       else assert.equal(first.Error, "");
       assert.equal((f.database.prepare("SELECT count(*) AS n FROM repository_checkpoints").get() as { n: number }).n,
         mode === "bound-restart" || mode === "uncommitted-restart" ? 0 : 1);
       // Late/uncollected edits must not change a sealed candidate on restart.
       await writeFile(path.join(first.WorkPath, "src", "app.txt"), "later uncollected edit\n");
+      if (mode === "lost-responses") {
+        await writeFile(path.join(first.WorkPath, "src", "review.md"), "later uncollected review\n");
+        await writeFile(path.join(first.WorkPath, "src", "results.json"), "later invalid JSON\n");
+      }
       blockLookup = false;
       dropBind = false;
       const second = await runCapture(binary, { ...input, CaptureDigest: first.CaptureDigest, ExpectError: false }, t.signal);
       assert.equal(second.Error, "");
-      assert.equal(artifactPosts(), mode === "bound-restart" ? 2 : 1, "unexpected publication intent retry");
+      assert.equal(artifactPosts(), mode === "bound-restart" ? 2 : outputCount, "unexpected publication intent retry");
       assert.equal(second.Checkpoint.candidateCommit, first.CandidateCommit);
       assert.equal(second.Checkpoint.candidateTree, first.CandidateTree);
       const stored = await f.ok("GET", `/api/bridge/repository-captures/${operation.operationId}/checkpoint`, undefined, authorization);
       assert.deepEqual(second.Checkpoint, stored);
-      const pin = second.Checkpoint.outputs[0]!.artifact;
+      const pin = second.Checkpoint.outputs.find((output) => output.artifact.kind === "patch")!.artifact;
       const artifact = new ArtifactRepository(f.database).get(pin.artifactId)!;
       assert.equal(pin.artifactRevision, artifact.artifactRevision);
       assert.ok(pin.artifactRevision > 0);
@@ -192,6 +206,21 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         .readVerified(content.storageKey, pin.contentDigest, pin.byteLength);
       assert.match(patch.toString(), /\+implemented through real capture/u);
       assert.doesNotMatch(patch.toString(), /later uncollected/u);
+      if (mode === "lost-responses") {
+        for (const output of second.Checkpoint.outputs.filter((output) => output.artifact.kind !== "patch")) {
+          const reportArtifact = new ArtifactRepository(f.database).get(output.artifact.artifactId)!;
+          const reportContent = new ArtifactPublicationRepository(f.database).getContent(reportArtifact.contentId!)!;
+          const bytes = new LocalArtifactBlobStore(path.join(path.dirname(dbPath), "artifact-blobs"))
+            .readVerified(reportContent.storageKey, output.artifact.contentDigest, output.artifact.byteLength);
+          assert.equal(reportArtifact.type, output.artifact.kind);
+          assert.equal(bytes.toString(), output.artifact.kind === "document"
+            ? "# Captured review\nSupplied fixture notes, not an approval.\n"
+            : '{"claimedPassed":true,"fixture":true}\n');
+        }
+        const taskAfterReports = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
+        assert.equal(taskAfterReports.lifecycleState, initialTask.lifecycleState);
+        assert.equal(taskAfterReports.completionResultId, initialTask.completionResultId);
+      }
       const verification = path.join(directory, mode, "roundtrip");
       await git(directory, "clone", "--no-local", "--", source, verification);
       const patchPath = path.join(directory, mode, "returned.patch");
@@ -209,10 +238,10 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       assert.deepEqual([...counts], callsBeforeReplay, "changed replay intent reached HTTP");
       assert.equal(leakedPath, false);
       assert.ok(![...counts.keys()].some((key) => key.includes("read-source") || key.includes("source-snapshots")));
-      assert.equal([...counts].filter(([key]) => key.endsWith("/chunks")).reduce((sum, [, count]) => sum + count, 0), 1);
+      assert.equal([...counts].filter(([key]) => key.endsWith("/chunks")).reduce((sum, [, count]) => sum + count, 0), outputCount);
       assert.deepEqual(f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(f.manifest.scope.runId), initialRun);
       for (const table of ["repository_checkpoints", "repository_checkpoint_outputs", "task_artifact_refs", "artifact_publications"]) {
-        assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, 1);
+        assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, table === "repository_checkpoints" ? 1 : outputCount);
       }
 
       if (mode === "lost-responses") {
@@ -253,7 +282,7 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         assert.notEqual(resumed.WorkPath, first.WorkPath);
         assert.equal(await readFile(path.join(resumed.WorkPath, "src", "app.txt"), "utf8"), "implemented through real capture\n");
         assert.equal(await readFile(path.join(first.WorkPath, "src", "app.txt"), "utf8"), "later uncollected edit\n");
-        const resumedPin = resumed.Checkpoint.outputs[0]!.artifact;
+        const resumedPin = resumed.Checkpoint.outputs.find((output) => output.artifact.kind === "patch")!.artifact;
         assert.notEqual(resumedPin.artifactId, pin.artifactId);
         const resumedArtifact = new ArtifactRepository(f.database).get(resumedPin.artifactId)!;
         assert.equal(resumedArtifact.sourceRunId, next.scope.runId);
@@ -279,7 +308,7 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         assert.equal(await git(source, "status", "--porcelain"), "");
         assert.equal(leakedPath, false);
         for (const table of ["repository_checkpoints", "repository_checkpoint_outputs", "task_artifact_refs", "artifact_publications"]) {
-          assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, 2);
+          assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, table === "repository_checkpoints" ? 2 : 2 * outputCount);
         }
         assert.equal((f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(next.scope.runId) as { state: string }).state, "queued");
         // Owner-local retirement consumes the real canonical checkpoint but
@@ -307,7 +336,7 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         assert.equal(await git(source, "status", "--porcelain"), "");
         assert.deepEqual(await f.ok("GET", `/api/bridge/repository-captures/${resumedOperation.operationId}/checkpoint`, undefined, authorization), resumed.Checkpoint);
         for (const table of ["repository_checkpoints", "repository_checkpoint_outputs", "task_artifact_refs", "artifact_publications"]) {
-          assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, 2);
+          assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, table === "repository_checkpoints" ? 2 : 2 * outputCount);
         }
         assert.equal((f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(next.scope.runId) as { state: string }).state, "queued");
       }

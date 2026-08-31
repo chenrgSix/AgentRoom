@@ -310,9 +310,10 @@ manifest and capture operation. It verifies canonical digests, scope, repository
 and workspace identities, prepared patch-input pins, captured time and selected
 required output slots before any HTTP request. The caller must still hold the
 current owner-local authorization and stopped-Run fence; this is not a new
-Runtime admission path. The current local adapter publishes non-empty sealed
-patch outputs. It rejects unsupported selected kinds or missing required slots
-instead of omitting them or fabricating commit/verifier content.
+Runtime admission path. The local adapter publishes non-empty sealed patch,
+Markdown document and JSON test-report outputs. It rejects unsupported selected
+kinds or missing required slots instead of omitting them or fabricating
+commit/verifier content.
 
 The private owner journal retains exact publication intent before network IO,
 then an exact checkpoint proposal before sealing, and finally the confirmed
@@ -331,6 +332,29 @@ generation, digest or receipt fails without rebinding historical output.
 The source checkout, captured worktree and later uncollected changes stay
 untouched; publication does not authorize their cleanup.
 
+Document and test-report selectors are local, portable repository-relative paths
+inside the frozen allowed output scope; forbidden prefixes win. They address
+only regular blobs in the sealed candidate, not live Workspace files or arbitrary
+local paths. Before any HTTP operation, every selected output is checked against
+capture intent, physical store identity, Git configuration/object integrity,
+candidate tree and snapshot inventory. Individual report blobs also verify their
+Git object hash, SHA-256 content digest and 1-byte through 4-MiB transport bound.
+Documents require UTF-8 `.md`/`.markdown`; reports require UTF-8 valid `.json`.
+Wire filenames derive from slot identities, not the local report selector.
+
+Report JSON is supplied content only, including any purported pass/verification
+field it contains. It never creates a VerificationReceipt, accepts a Result or
+completes a Task. Selected paths are pinned in local publication intent, even
+when two paths contain identical bytes. The optional selector is omitted for
+patch outputs so existing patch-only journal encoding and digests stay unchanged.
+
+A report-only capture may have no code delta when no patch output is selected;
+a required empty patch is still rejected rather than published as an empty
+Artifact. Such a confirmed checkpoint can resume under a new attempt: its empty
+patch has the exact empty SHA-256 digest, application is a no-op, and the rebuilt
+tree must still equal the selected checkpoint. Both reports and patches remain
+available after exact worktree retirement because their sealed store is retained.
+
 The actual Go/HTTP/Git integration fixture verifies canonical uploaded bytes
 against the captured tree through response loss and separate-process restart.
 It supplies synthetic future-admission/connection metadata and fixture code
@@ -338,8 +362,10 @@ changes, not an Agent Runtime or local grant implementation. Its resume extensio
 uses a confirmed Server checkpoint in a new Go process and checks that newly
 published cumulative bytes reproduce the new actual candidate tree. A local
 retirement extension previews, deletes and replays through separate Go processes
-without mutating Server checkpoints or Run state. Production cleanup authority
-and UI, remaining output producers and the BRG-071/RUN-018 admission connection
+without mutating Server checkpoints or Run state. The report extension verifies
+three distinct canonical output slots, late uncollected report edits, resume and
+retirement without promoting report claims into Task acceptance. Production
+cleanup authority and UI, the commit-output producer and BRG-071/RUN-018 admission connection
 remain required product work.
 
 ## Verification Receipts

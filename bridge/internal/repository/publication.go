@@ -13,16 +13,18 @@ import (
 	wire "convenewire.dev/contracts/generated/go/runtime"
 )
 
-// CaptureOutputDescription selects one approved output. This adapter publishes
-// the actual sealed Git patch; it does not fabricate test or verifier results.
+// CaptureOutputDescription selects one approved output. Path selects a captured
+// report locally; patch outputs have no path. It never identifies a live file.
 type CaptureOutputDescription struct {
 	SlotKey string `json:"slotKey"`
 	Title   string `json:"title"`
 	Summary string `json:"summary"`
+	Path    string `json:"path,omitempty"`
 }
 
 // CapturePublication is a local durable intent. Shared wire shapes are reused;
-// no source path, arbitrary file or replacement scope is accepted here.
+// report selectors resolve only inside the sealed candidate and frozen scope,
+// never to an arbitrary live file, absolute source path or replacement policy.
 type CapturePublication struct {
 	CaptureDigest string                               `json:"captureDigest"`
 	Manifest      execution.GovernedExecutionManifest  `json:"manifest"`
@@ -125,10 +127,17 @@ func validateCaptureOutputs(input CapturePublication) error {
 	selected := map[string]bool{}
 	for _, output := range input.Outputs {
 		slot, exists := approved[output.SlotKey]
-		if !exists || selected[output.SlotKey] || slot.Kind != execution.Patch ||
+		if !exists || selected[output.SlotKey] ||
 			strings.TrimSpace(output.Title) == "" || len(output.Title) > 160 ||
 			strings.TrimSpace(output.Summary) == "" || len(output.Summary) > 4000 {
 			return ErrInvalid
+		}
+		if slot.Kind == execution.Patch {
+			if output.Path != "" {
+				return ErrInvalid
+			}
+		} else if _, _, err := reportMedia(slot.Kind, output.Path); err != nil {
+			return err
 		}
 		selected[output.SlotKey] = true
 	}
@@ -176,10 +185,11 @@ func (p *Preparer) PublishCaptured(ctx context.Context, input CapturePublication
 	if err != nil {
 		return execution.RepositoryCheckpoint{}, err
 	}
-	if len(patch) == 0 {
-		return execution.RepositoryCheckpoint{}, ErrInvalid
-	}
 	captured, err := p.publicationCapture(input)
+	if err != nil {
+		return execution.RepositoryCheckpoint{}, err
+	}
+	outputs, err := p.captureOutputSources(ctx, input, captured, patch)
 	if err != nil {
 		return execution.RepositoryCheckpoint{}, err
 	}
@@ -193,7 +203,7 @@ func (p *Preparer) PublishCaptured(ctx context.Context, input CapturePublication
 	if proposalErr != nil && !errors.Is(proposalErr, os.ErrNotExist) {
 		return proposal, proposalErr
 	}
-	if proposalErr == nil && (!validCheckpoint(proposal) || !checkpointMatchesCapture(proposal, input, captured)) {
+	if proposalErr == nil && (!validCheckpoint(proposal) || !checkpointMatchesCapture(proposal, input, captured, outputs)) {
 		return execution.RepositoryCheckpoint{}, ErrChanged
 	}
 	receiptPath := p.claimPath("checkpoint", operationID)
@@ -228,24 +238,24 @@ func (p *Preparer) PublishCaptured(ctx context.Context, input CapturePublication
 			WorkspaceGeneration: captured.WorkspaceGeneration, Outputs: []execution.RepositoryCheckpointOutput{},
 			CapturedAt: captured.CapturedAt.UTC().Format(time.RFC3339Nano)}
 		seenArtifacts := map[string]bool{}
-		for _, output := range input.Outputs {
+		for index, output := range input.Outputs {
+			selected := outputs[index]
 			if err := p.checkOwner(); err != nil {
 				return receipt, err
 			}
 			result, err := transport.PublishCapture(ctx, artifact.CapturePublishInput{
 				Manifest: input.Manifest, Operation: input.Operation, SlotKey: output.SlotKey, Title: output.Title, Summary: output.Summary,
-				Source: artifact.Source{Bytes: patch, FileName: "output-" + digest(output.SlotKey) + ".patch", MediaType: "text/x-diff",
-					SHA256: captured.PatchDigest, WorkspaceRef: captured.WorkspaceRef, WorkspaceGeneration: captured.WorkspaceGeneration}})
+				Source: selected.source})
 			if err != nil {
 				return receipt, err
 			}
-			if result.SHA256 != captured.PatchDigest || result.Revision < 1 || result.ContentID == "" || seenArtifacts[result.ArtifactID] {
+			if result.SHA256 != selected.source.SHA256 || result.Revision < 1 || result.ContentID == "" || seenArtifacts[result.ArtifactID] {
 				return receipt, ErrChanged
 			}
 			seenArtifacts[result.ArtifactID] = true
 			proposal.Outputs = append(proposal.Outputs, execution.RepositoryCheckpointOutput{SlotKey: output.SlotKey,
-				Artifact: execution.OutputArtifact{ArtifactID: result.ArtifactID, ArtifactRevision: result.Revision, Kind: execution.Patch,
-					ContentDigest: captured.PatchDigest, ByteLength: captured.PatchBytes}})
+				Artifact: execution.OutputArtifact{ArtifactID: result.ArtifactID, ArtifactRevision: result.Revision, Kind: selected.kind,
+					ContentDigest: selected.source.SHA256, ByteLength: int64(len(selected.source.Bytes))}})
 		}
 		proposal.Digest, err = checkpointDigest(proposal)
 		if err != nil || !validCheckpoint(proposal) {
@@ -271,19 +281,20 @@ func (p *Preparer) PublishCaptured(ctx context.Context, input CapturePublication
 	return receipt, nil
 }
 
-func checkpointMatchesCapture(checkpoint execution.RepositoryCheckpoint, input CapturePublication, captured CapturedRepository) bool {
+func checkpointMatchesCapture(checkpoint execution.RepositoryCheckpoint, input CapturePublication, captured CapturedRepository, outputs []capturedOutput) bool {
 	if checkpoint.CheckpointID != "checkpoint_"+digest([]string{captured.OperationID, input.CaptureDigest}) ||
 		checkpoint.OperationID != captured.OperationID || checkpoint.Scope != execution.RepositoryCheckpointScope(input.Manifest.Scope) ||
 		checkpoint.RepositoryID != captured.RepositoryID || checkpoint.BindingID != captured.BindingID ||
 		checkpoint.BaseCommit != captured.BaseCommit || checkpoint.CandidateCommit != captured.CandidateCommit || checkpoint.CandidateTree != captured.CandidateTree ||
 		checkpoint.InputDigest != input.Manifest.InputDigest || checkpoint.WorkspaceRef != captured.WorkspaceRef ||
 		checkpoint.WorkspaceGeneration != captured.WorkspaceGeneration || checkpoint.CapturedAt != captured.CapturedAt.UTC().Format(time.RFC3339Nano) ||
-		len(checkpoint.Outputs) != len(input.Outputs) {
+		len(checkpoint.Outputs) != len(input.Outputs) || len(outputs) != len(input.Outputs) {
 		return false
 	}
 	for index, output := range checkpoint.Outputs {
-		if output.SlotKey != input.Outputs[index].SlotKey || output.Artifact.Kind != execution.Patch ||
-			output.Artifact.ContentDigest != captured.PatchDigest || output.Artifact.ByteLength != captured.PatchBytes {
+		selected := outputs[index]
+		if output.SlotKey != selected.slotKey || output.Artifact.Kind != selected.kind ||
+			output.Artifact.ContentDigest != selected.source.SHA256 || output.Artifact.ByteLength != int64(len(selected.source.Bytes)) {
 			return false
 		}
 	}

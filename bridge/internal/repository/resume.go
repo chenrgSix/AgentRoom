@@ -2,6 +2,8 @@ package repository
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"time"
 
@@ -37,12 +39,14 @@ func validPreparationVersion(intent preparationIntent) bool {
 		return false
 	}
 	pin := intent.Resume
+	empty := sha256.Sum256(nil)
 	return sha256ID.MatchString(pin.RequestDigest) && sha256ID.MatchString(pin.CheckpointDigest) &&
 		sha256ID.MatchString(pin.CaptureDigest) && sha256ID.MatchString(pin.PatchDigest) &&
 		localID.MatchString(pin.CheckpointID) && localID.MatchString(pin.CaptureOperationID) &&
 		localID.MatchString(pin.SourceRunID) && localID.MatchString(pin.SourceWorkspaceRef) &&
 		pin.SourceRunID != intent.RunID && pin.SourceWorkspaceRef != intent.WorkspaceRef &&
-		validObject(pin.CandidateTree, intent.Source.ObjectFormat) && pin.PatchBytes > 0 && pin.PatchBytes <= maximumCapturedPatch
+		validObject(pin.CandidateTree, intent.Source.ObjectFormat) && pin.PatchBytes >= 0 && pin.PatchBytes <= maximumCapturedPatch &&
+		(pin.PatchBytes != 0 || pin.PatchDigest == hex.EncodeToString(empty[:]))
 }
 
 func (resume *checkpointResume) checkInputs(inputs []PatchInput, limit int64) error {
@@ -53,6 +57,9 @@ func (resume *checkpointResume) checkInputs(inputs []PatchInput, limit int64) er
 			return err
 		}
 		used += expansion
+	}
+	if len(resume.patch) == 0 {
+		return nil
 	}
 	_, err := patchExpansionBound(resume.patch, limit-used)
 	return err
@@ -238,9 +245,6 @@ func (p *Preparer) PrepareFromCheckpoint(ctx context.Context, source Source, ope
 	issued, _ := time.Parse(time.RFC3339Nano, manifest.Workspace.IssuedAt)
 	if issued.Before(captured.CapturedAt) {
 		return PreparedWorkspace{}, ErrConflict
-	}
-	if len(patch) == 0 {
-		return PreparedWorkspace{}, ErrInvalid
 	}
 	provided := []inputPin{}
 	for _, input := range inputs {
