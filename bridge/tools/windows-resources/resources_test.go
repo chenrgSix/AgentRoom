@@ -66,6 +66,12 @@ func TestGeneratedResourcesAreDeterministicAndIconOnly(t *testing.T) {
 	}
 }
 
+func TestCheckedInResourcesMatchCanonicalRender(t *testing.T) {
+	if err := run("../../..", "check", ""); err != nil {
+		t.Fatalf("canonical icon resources differ (use the pinned rasterx gcflags): %v", err)
+	}
+}
+
 func TestICOHasAllSizesDIBCompatibilityAndCorrectStraightAlpha(t *testing.T) {
 	source := productSVG(t)
 	artifacts, _, err := generateArtifacts(source)

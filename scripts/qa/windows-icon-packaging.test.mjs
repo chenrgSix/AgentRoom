@@ -4,9 +4,11 @@ import test from "node:test";
 
 const root = new URL("../../", import.meta.url);
 const read = (path) => readFile(new URL(path, root), "utf8");
+const canonicalArithmetic = "-gcflags=github.com/srwiley/rasterx=-d=fmahash=qn";
 
 test("Windows packaging validates generated icons before build and actual icons before archiving", async () => {
   const source = await read("bridge/scripts/package-desktop-windows.ps1");
+  assert.ok(source.includes(`"run", "${canonicalArithmetic}", "."`));
   const ordered = [
     "Invoke-WindowsResourceCheck -Mode check",
     "& go @buildArguments",
@@ -62,6 +64,8 @@ for (const workflow of ["ci.yml", "release-bridge.yml"]) {
     const source = await read(`.github/workflows/${workflow}`);
     const windows = source.slice(source.indexOf("  desktop-windows:"));
     assert.ok(windows.includes("working-directory: bridge/tools/windows-resources"));
+    const iconStep = windows.slice(windows.indexOf("      - name: Test and check Windows product icon resources")).split("\n      - name:")[0];
+    assert.ok(iconStep.includes(`GOFLAGS: ${canonicalArithmetic}`));
     assert.ok(windows.includes("go test ./..."));
     assert.ok(windows.includes("go vet ./..."));
     assert.match(windows, /go run \. -root [^\n]+ -mode check/u);
@@ -69,3 +73,11 @@ for (const workflow of ["ci.yml", "release-bridge.yml"]) {
     assert.ok(windows.includes("./scripts/test-windows-silent-prerequisite.ps1"));
   });
 }
+
+test("CI also compares canonical icon bytes on arm64", async () => {
+  const source = await read(".github/workflows/ci.yml");
+  const mac = source.slice(source.indexOf("  desktop-macos:"), source.indexOf("  desktop-windows:"));
+  assert.ok(mac.includes("Verify canonical Windows icons on arm64"));
+  assert.ok(mac.includes(`GOFLAGS: ${canonicalArithmetic}`));
+  assert.ok(mac.includes('go run . -root "$GITHUB_WORKSPACE" -mode check'));
+});

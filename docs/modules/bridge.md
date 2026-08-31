@@ -720,7 +720,13 @@ Wails. Both identifiers share the same image payloads. The
 installer, shortcuts, protocol registration, window and tray use the same mark.
 The generated PNG, ICO and architecture-specific resource object are checked
 against their SVG source by the isolated `bridge/tools/windows-resources`
-module. Packaging verifies the actual executable's icon resource tree and
+module. Its pinned Go 1.26.7 build disables fused multiply-add only in rasterx
+with `-gcflags=github.com/srwiley/rasterx=-d=fmahash=qn`; otherwise arm64 fusion
+can round an SVG path differently from amd64 before fixed-point conversion.
+The checked-in byte comparison runs on both architectures. This compiler
+setting is build-tool-only, must be reverified when changing Go/rasterx, and
+does not apply to the shipped Bridge. Packaging verifies the actual executable's
+icon resource tree and
 rejects missing, corrupt or different icons before distribution. Native Windows
 checks additionally extract the installer and installed executable icons and
 verify shortcut icon targets. These presentation resources do not alter the

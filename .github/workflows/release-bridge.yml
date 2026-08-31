@@ -401,6 +401,8 @@ jobs:
       - name: Test and check Windows product icon resources
         working-directory: bridge/tools/windows-resources
         shell: pwsh
+        env:
+          GOFLAGS: -gcflags=github.com/srwiley/rasterx=-d=fmahash=qn
         run: |
           go test ./...
           if ($LASTEXITCODE -ne 0) { throw "Windows resource tool tests failed" }

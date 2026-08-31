@@ -151,6 +151,15 @@ jobs:
           go vet -tags desktop ./cmd/convenewire-bridge-desktop
           go build -tags desktop ./cmd/convenewire-bridge-desktop
 
+      - name: Verify canonical Windows icons on arm64
+        working-directory: bridge/tools/windows-resources
+        env:
+          GOFLAGS: -gcflags=github.com/srwiley/rasterx=-d=fmahash=qn
+        run: |
+          go test ./...
+          go vet ./...
+          go run . -root "$GITHUB_WORKSPACE" -mode check
+
   desktop-windows:
     name: Desktop Windows
     runs-on: windows-latest
@@ -171,6 +180,8 @@ jobs:
       - name: Test and check Windows product icon resources
         working-directory: bridge/tools/windows-resources
         shell: pwsh
+        env:
+          GOFLAGS: -gcflags=github.com/srwiley/rasterx=-d=fmahash=qn
         run: |
           go test ./...
           if ($LASTEXITCODE -ne 0) { throw "Windows resource tool tests failed" }

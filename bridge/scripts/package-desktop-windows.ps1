@@ -26,7 +26,8 @@ function Invoke-WindowsResourceCheck {
   }
   Push-Location (Join-Path $bridgeRoot "tools\windows-resources")
   try {
-    $arguments = @("run", ".", "-root", $repositoryRoot, "-mode", $Mode)
+    # Match the isolated tool's canonical arithmetic on arm64 and amd64.
+    $arguments = @("run", "-gcflags=github.com/srwiley/rasterx=-d=fmahash=qn", ".", "-root", $repositoryRoot, "-mode", $Mode)
     if ($Mode -eq "verify") { $arguments += @("-exe", $resolvedExecutable) }
     & go @arguments
     if ($LASTEXITCODE -ne 0) { throw "Windows product icon resource $Mode failed" }
