@@ -1282,6 +1282,11 @@ export async function generateContractTypes(packageRoot) {
   const bridgeCodegen = createBridgeCodegenSchemas(bridgeSchema);
   const pairingCodegen = createDefinitionCodegenSchemas(pairingSchema, [
     ["DevicePairingSessionCreated", "created"],
+    ["DevicePairingMemberBinding", "memberBinding"],
+    ["ClientEntryRequest", "clientEntryRequest"],
+    ["ClientEntryTicket", "clientEntryTicket"],
+    ["ClientEntryClaim", "clientEntryClaim"],
+    ["ClientEntryIdentity", "clientEntryIdentity"],
     ["DevicePairingSessionCreateRequest", "createRequest"],
     ["DevicePairingSessionOwnerProjection", "ownerProjection"],
     ["DevicePairingSessionClaimRequest", "claimRequest"],

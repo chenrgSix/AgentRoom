@@ -1980,7 +1980,9 @@
           "workspaceAlias": "convenewire"
         },
         "included": {
-          "messageIds": ["msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"],
+          "messageIds": [
+            "msg_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
+          ],
           "artifactIds": [],
           "memoryIds": [],
           "parentRunIds": [],
@@ -1995,7 +1997,12 @@
           "handoff": "unsupported",
           "maxDurationSeconds": 3600
         },
-        "omittedCategories": ["local_paths", "environment_values", "provider_credentials", "provider_session_ids"],
+        "omittedCategories": [
+          "local_paths",
+          "environment_values",
+          "provider_credentials",
+          "provider_session_ids"
+        ],
         "recordedAt": "2026-08-28T10:00:00Z"
       },
       "valid": true
@@ -2034,7 +2041,9 @@
           "handoff": "unsupported",
           "maxDurationSeconds": 3600
         },
-        "omittedCategories": ["local_paths"],
+        "omittedCategories": [
+          "local_paths"
+        ],
         "recordedAt": "2026-08-28T10:00:00Z",
         "workspacePath": "/Users/operator/private-workspace"
       },
@@ -2074,7 +2083,9 @@
           "handoff": "unsupported",
           "maxDurationSeconds": 3600
         },
-        "omittedCategories": ["provider_credentials"],
+        "omittedCategories": [
+          "provider_credentials"
+        ],
         "recordedAt": "2026-08-28T10:00:00Z",
         "providerCredential": "secret"
       },
@@ -2107,7 +2118,9 @@
             "criterionKey": "criterion_acceptance01",
             "coverage": "satisfied",
             "explanation": "The artifact contains the focused evidence.",
-            "evidenceRefIds": ["evidence_artifact01"]
+            "evidenceRefIds": [
+              "evidence_artifact01"
+            ]
           }
         ]
       },
@@ -2126,7 +2139,9 @@
         "outcome": "partial",
         "summary": "The Run completed with one open question.",
         "risks": [],
-        "openQuestions": ["Owner confirmation remains."],
+        "openQuestions": [
+          "Owner confirmation remains."
+        ],
         "nextActions": [
           {
             "nextActionKey": "next_confirmowner01",
@@ -2290,9 +2305,18 @@
       "schemaId": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/workbenchQuery",
       "instance": {
         "scope": "mine",
-        "attention": ["needs_approval", "outcome_unknown"],
-        "lifecycleState": ["active", "review"],
-        "priority": ["high", "urgent"],
+        "attention": [
+          "needs_approval",
+          "outcome_unknown"
+        ],
+        "lifecycleState": [
+          "active",
+          "review"
+        ],
+        "priority": [
+          "high",
+          "urgent"
+        ],
         "ownerMemberId": "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
         "roomId": "room_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
         "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
@@ -2444,6 +2468,218 @@
         "completionPolicy": "owner_confirmed",
         "isDefault": false,
         "taskId": "task_client_chosen_identity"
+      },
+      "valid": false
+    },
+    {
+      "name": "client owner existing member",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/memberBinding",
+      "instance": {
+        "memberId": "member_12345678",
+        "roomIds": [
+          "room_12345678"
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "client owner new member",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/memberBinding",
+      "instance": {
+        "displayName": "Bob",
+        "roomIds": []
+      },
+      "valid": true
+    },
+    {
+      "name": "client owner ambiguous member",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/memberBinding",
+      "instance": {
+        "memberId": "member_12345678",
+        "displayName": "Bob",
+        "roomIds": []
+      },
+      "valid": false
+    },
+    {
+      "name": "client owner missing member",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/memberBinding",
+      "instance": {
+        "roomIds": []
+      },
+      "valid": false
+    },
+    {
+      "name": "client owner duplicate rooms",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/memberBinding",
+      "instance": {
+        "displayName": "Bob",
+        "roomIds": [
+          "room_12345678",
+          "room_12345678"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "client owner unbounded rooms",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/memberBinding",
+      "instance": {
+        "displayName": "Bob",
+        "roomIds": [
+          "room_00000000",
+          "room_00000001",
+          "room_00000002",
+          "room_00000003",
+          "room_00000004",
+          "room_00000005",
+          "room_00000006",
+          "room_00000007",
+          "room_00000008",
+          "room_00000009",
+          "room_00000010",
+          "room_00000011",
+          "room_00000012",
+          "room_00000013",
+          "room_00000014",
+          "room_00000015",
+          "room_00000016",
+          "room_00000017",
+          "room_00000018",
+          "room_00000019",
+          "room_00000020",
+          "room_00000021",
+          "room_00000022",
+          "room_00000023",
+          "room_00000024",
+          "room_00000025",
+          "room_00000026",
+          "room_00000027",
+          "room_00000028",
+          "room_00000029",
+          "room_00000030",
+          "room_00000031",
+          "room_00000032",
+          "room_00000033",
+          "room_00000034",
+          "room_00000035",
+          "room_00000036",
+          "room_00000037",
+          "room_00000038",
+          "room_00000039",
+          "room_00000040",
+          "room_00000041",
+          "room_00000042",
+          "room_00000043",
+          "room_00000044",
+          "room_00000045",
+          "room_00000046",
+          "room_00000047",
+          "room_00000048",
+          "room_00000049",
+          "room_00000050",
+          "room_00000051",
+          "room_00000052",
+          "room_00000053",
+          "room_00000054",
+          "room_00000055",
+          "room_00000056",
+          "room_00000057",
+          "room_00000058",
+          "room_00000059",
+          "room_00000060",
+          "room_00000061",
+          "room_00000062",
+          "room_00000063",
+          "room_00000064",
+          "room_00000065",
+          "room_00000066",
+          "room_00000067",
+          "room_00000068",
+          "room_00000069",
+          "room_00000070",
+          "room_00000071",
+          "room_00000072",
+          "room_00000073",
+          "room_00000074",
+          "room_00000075",
+          "room_00000076",
+          "room_00000077",
+          "room_00000078",
+          "room_00000079",
+          "room_00000080",
+          "room_00000081",
+          "room_00000082",
+          "room_00000083",
+          "room_00000084",
+          "room_00000085",
+          "room_00000086",
+          "room_00000087",
+          "room_00000088",
+          "room_00000089",
+          "room_00000090",
+          "room_00000091",
+          "room_00000092",
+          "room_00000093",
+          "room_00000094",
+          "room_00000095",
+          "room_00000096",
+          "room_00000097",
+          "room_00000098",
+          "room_00000099",
+          "room_00000100"
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "client owner client entry",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/clientEntryRequest",
+      "instance": {
+        "clientAccessSecret": "sssssssssssssssssssssssssssssssssssssssssss",
+        "roomId": "room_12345678"
+      },
+      "valid": true
+    },
+    {
+      "name": "client owner client entry device token only",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/clientEntryRequest",
+      "instance": {
+        "deviceToken": "sssssssssssssssssssssssssssssssssssssssssss"
+      },
+      "valid": false
+    },
+    {
+      "name": "client owner client entry redirect injection",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/clientEntryRequest",
+      "instance": {
+        "clientAccessSecret": "sssssssssssssssssssssssssssssssssssssssssss",
+        "redirectUrl": "https://evil.example"
+      },
+      "valid": false
+    },
+    {
+      "name": "client owner client ticket",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/clientEntryTicket",
+      "instance": {
+        "ticket": "ttttttttttttttttttttttttttttttttttttttttttt",
+        "expiresAt": "2026-08-31T12:00:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "client owner client claim",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/clientEntryClaim",
+      "instance": {
+        "ticket": "ttttttttttttttttttttttttttttttttttttttttttt"
+      },
+      "valid": true
+    },
+    {
+      "name": "client owner short client proof",
+      "schemaId": "https://agentroom.dev/schemas/bridge/pairing-session.schema.json#/$defs/clientEntryClaim",
+      "instance": {
+        "ticket": "short"
       },
       "valid": false
     }

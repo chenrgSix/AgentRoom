@@ -10,15 +10,22 @@ type DevicePairingSessionCreated struct {
 	CreatedAt time.Time `json:"createdAt"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt        time.Time                        `json:"expiresAt"`
-	OwnerMemberID    string                           `json:"ownerMemberId"`
-	PairingSessionID string                           `json:"pairingSessionId"`
-	ShortCode        string                           `json:"shortCode"`
-	State            DevicePairingSessionCreatedState `json:"state"`
-	TeamID           string                           `json:"teamId"`
+	ExpiresAt        time.Time                                              `json:"expiresAt"`
+	MemberBinding    *DevicePairingSessionCreatedDevicePairingMemberBinding `json:"memberBinding,omitempty"`
+	OwnerMemberID    string                                                 `json:"ownerMemberId"`
+	PairingSessionID string                                                 `json:"pairingSessionId"`
+	ShortCode        string                                                 `json:"shortCode"`
+	State            DevicePairingSessionCreatedState                       `json:"state"`
+	TeamID           string                                                 `json:"teamId"`
 	// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
 	// separately and accepted only when its canonical DER digest matches.
 	Trust *DevicePairingSessionCreatedTrust `json:"trust,omitempty"`
+}
+
+type DevicePairingSessionCreatedDevicePairingMemberBinding struct {
+	DisplayName *string  `json:"displayName,omitempty"`
+	MemberID    *string  `json:"memberId,omitempty"`
+	RoomIDS     []string `json:"roomIds"`
 }
 
 // Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
@@ -31,11 +38,54 @@ type DevicePairingSessionCreatedTrust struct {
 	TrustEpoch          int64  `json:"trustEpoch"`
 }
 
+type DevicePairingMemberBinding struct {
+	DisplayName *string  `json:"displayName,omitempty"`
+	MemberID    *string  `json:"memberId,omitempty"`
+	RoomIDS     []string `json:"roomIds"`
+}
+
+type ClientEntryRequest struct {
+	ClientAccessSecret string  `json:"clientAccessSecret"`
+	RoomID             *string `json:"roomId,omitempty"`
+}
+
+type ClientEntryTicket struct {
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt time.Time `json:"expiresAt"`
+	Ticket    string    `json:"ticket"`
+}
+
+type ClientEntryClaim struct {
+	Ticket string `json:"ticket"`
+}
+
+type ClientEntryIdentity struct {
+	DisplayName string            `json:"displayName"`
+	MemberID    string            `json:"memberId"`
+	RoomID      *string           `json:"roomId,omitempty"`
+	Rooms       []ClientEntryRoom `json:"rooms"`
+	TeamID      string            `json:"teamId"`
+	TeamName    string            `json:"teamName"`
+}
+
+type ClientEntryRoom struct {
+	Name   string `json:"name"`
+	RoomID string `json:"roomId"`
+}
+
 // The authenticated Owner client generates claimSecret and resends the same secret with
 // operationId after response loss; the Server stores only its hash and never echoes it.
 type DevicePairingSessionCreateRequest struct {
-	ClaimSecret string `json:"claimSecret"`
-	OperationID string `json:"operationId"`
+	ClaimSecret   string                                                       `json:"claimSecret"`
+	MemberBinding *DevicePairingSessionCreateRequestDevicePairingMemberBinding `json:"memberBinding,omitempty"`
+	OperationID   string                                                       `json:"operationId"`
+}
+
+type DevicePairingSessionCreateRequestDevicePairingMemberBinding struct {
+	DisplayName *string  `json:"displayName,omitempty"`
+	MemberID    *string  `json:"memberId,omitempty"`
+	RoomIDS     []string `json:"roomIds"`
 }
 
 type DevicePairingSessionOwnerProjection struct {
@@ -55,12 +105,13 @@ type DevicePairingSessionOwnerProjection struct {
 	DeviceID  *string                                    `json:"deviceId,omitempty"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt        time.Time                                `json:"expiresAt"`
-	OwnerMemberID    string                                   `json:"ownerMemberId"`
-	PairingAttemptID *string                                  `json:"pairingAttemptId,omitempty"`
-	PairingSessionID string                                   `json:"pairingSessionId"`
-	State            DevicePairingSessionOwnerProjectionState `json:"state"`
-	TeamID           string                                   `json:"teamId"`
+	ExpiresAt        time.Time                                                      `json:"expiresAt"`
+	MemberBinding    *DevicePairingSessionOwnerProjectionDevicePairingMemberBinding `json:"memberBinding,omitempty"`
+	OwnerMemberID    string                                                         `json:"ownerMemberId"`
+	PairingAttemptID *string                                                        `json:"pairingAttemptId,omitempty"`
+	PairingSessionID string                                                         `json:"pairingSessionId"`
+	State            DevicePairingSessionOwnerProjectionState                       `json:"state"`
+	TeamID           string                                                         `json:"teamId"`
 	// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
 	// separately and accepted only when its canonical DER digest matches.
 	Trust              *DevicePairingSessionOwnerProjectionTrust `json:"trust,omitempty"`
@@ -74,6 +125,12 @@ type DevicePairingSessionOwnerProjectionDevice struct {
 	SupportsScopedPrivateTrust *bool    `json:"supportsScopedPrivateTrust,omitempty"`
 }
 
+type DevicePairingSessionOwnerProjectionDevicePairingMemberBinding struct {
+	DisplayName *string  `json:"displayName,omitempty"`
+	MemberID    *string  `json:"memberId,omitempty"`
+	RoomIDS     []string `json:"roomIds"`
+}
+
 // Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
 // separately and accepted only when its canonical DER digest matches.
 type DevicePairingSessionOwnerProjectionTrust struct {
@@ -85,13 +142,14 @@ type DevicePairingSessionOwnerProjectionTrust struct {
 }
 
 type DevicePairingSessionClaimRequest struct {
-	ClaimSecret      *string                                `json:"claimSecret,omitempty"`
-	Device           DevicePairingSessionClaimRequestDevice `json:"device"`
-	OperationID      string                                 `json:"operationId"`
-	PairingAttemptID string                                 `json:"pairingAttemptId"`
-	PairingSessionID *string                                `json:"pairingSessionId,omitempty"`
-	PollSecret       string                                 `json:"pollSecret"`
-	ShortCode        *string                                `json:"shortCode,omitempty"`
+	ClaimSecret        *string                                `json:"claimSecret,omitempty"`
+	ClientAccessSecret *string                                `json:"clientAccessSecret,omitempty"`
+	Device             DevicePairingSessionClaimRequestDevice `json:"device"`
+	OperationID        string                                 `json:"operationId"`
+	PairingAttemptID   string                                 `json:"pairingAttemptId"`
+	PairingSessionID   *string                                `json:"pairingSessionId,omitempty"`
+	PollSecret         string                                 `json:"pollSecret"`
+	ShortCode          *string                                `json:"shortCode,omitempty"`
 	// Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
 	// separately and accepted only when its canonical DER digest matches.
 	Trust *DevicePairingSessionClaimRequestTrust `json:"trust,omitempty"`
@@ -136,16 +194,17 @@ type DevicePairingSessionPollRequest struct {
 type DevicePairingSessionPollProjection struct {
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt          *time.Time                              `json:"expiresAt,omitempty"`
-	PairingAttemptID   string                                  `json:"pairingAttemptId"`
-	PairingSessionID   string                                  `json:"pairingSessionId"`
-	RetryAfterMS       *int64                                  `json:"retryAfterMs,omitempty"`
-	State              DevicePairingSessionPollProjectionState `json:"state"`
-	VerificationPhrase *string                                 `json:"verificationPhrase,omitempty"`
-	CredentialSource   *CredentialSource                       `json:"credentialSource,omitempty"`
-	DeviceID           *string                                 `json:"deviceId,omitempty"`
-	OwnerMemberID      *string                                 `json:"ownerMemberId,omitempty"`
-	TeamID             *string                                 `json:"teamId,omitempty"`
+	ExpiresAt           *time.Time                              `json:"expiresAt,omitempty"`
+	PairingAttemptID    string                                  `json:"pairingAttemptId"`
+	PairingSessionID    string                                  `json:"pairingSessionId"`
+	RetryAfterMS        *int64                                  `json:"retryAfterMs,omitempty"`
+	State               DevicePairingSessionPollProjectionState `json:"state"`
+	VerificationPhrase  *string                                 `json:"verificationPhrase,omitempty"`
+	ClientAccessEnabled *bool                                   `json:"clientAccessEnabled,omitempty"`
+	CredentialSource    *CredentialSource                       `json:"credentialSource,omitempty"`
+	DeviceID            *string                                 `json:"deviceId,omitempty"`
+	OwnerMemberID       *string                                 `json:"ownerMemberId,omitempty"`
+	TeamID              *string                                 `json:"teamId,omitempty"`
 }
 
 type DevicePairingSessionApproveRequest struct {

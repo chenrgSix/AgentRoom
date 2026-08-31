@@ -185,6 +185,9 @@
         },
         "claimSecret": {
           "$ref": "#/$defs/highEntropySecret"
+        },
+        "memberBinding": {
+          "$ref": "#/$defs/memberBinding"
         }
       }
     },
@@ -225,6 +228,9 @@
         },
         "trust": {
           "$ref": "#/$defs/privateTrustDescriptor"
+        },
+        "memberBinding": {
+          "$ref": "#/$defs/memberBinding"
         }
       }
     },
@@ -282,6 +288,9 @@
         },
         "trust": {
           "$ref": "#/$defs/privateTrustDescriptor"
+        },
+        "memberBinding": {
+          "$ref": "#/$defs/memberBinding"
         }
       },
       "allOf": [
@@ -417,6 +426,9 @@
         },
         "trust": {
           "$ref": "#/$defs/privateTrustDescriptor"
+        },
+        "clientAccessSecret": {
+          "$ref": "#/$defs/highEntropySecret"
         }
       },
       "oneOf": [
@@ -602,6 +614,9 @@
         },
         "credentialSource": {
           "const": "poll_secret"
+        },
+        "clientAccessEnabled": {
+          "const": true
         }
       }
     },
@@ -711,6 +726,171 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 280
+        }
+      }
+    },
+    "memberBinding": {
+      "title": "Device Pairing Member Binding",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "roomIds"
+      ],
+      "properties": {
+        "memberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "roomIds": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+          }
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "memberId": {}
+          },
+          "required": [
+            "memberId"
+          ],
+          "not": {
+            "properties": {
+              "displayName": {}
+            },
+            "required": [
+              "displayName"
+            ]
+          }
+        },
+        {
+          "properties": {
+            "displayName": {}
+          },
+          "required": [
+            "displayName"
+          ],
+          "not": {
+            "properties": {
+              "memberId": {}
+            },
+            "required": [
+              "memberId"
+            ]
+          }
+        }
+      ]
+    },
+    "clientEntryRequest": {
+      "title": "Client Entry Request",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "clientAccessSecret"
+      ],
+      "properties": {
+        "clientAccessSecret": {
+          "$ref": "#/$defs/highEntropySecret"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        }
+      }
+    },
+    "clientEntryTicket": {
+      "title": "Client Entry Ticket",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticket",
+        "expiresAt"
+      ],
+      "properties": {
+        "ticket": {
+          "$ref": "#/$defs/highEntropySecret"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "clientEntryClaim": {
+      "title": "Client Entry Claim",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticket"
+      ],
+      "properties": {
+        "ticket": {
+          "$ref": "#/$defs/highEntropySecret"
+        }
+      }
+    },
+    "clientEntryRoom": {
+      "title": "Client Entry Room",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "roomId",
+        "name"
+      ],
+      "properties": {
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        }
+      }
+    },
+    "clientEntryIdentity": {
+      "title": "Client Entry Identity",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "teamId",
+        "teamName",
+        "memberId",
+        "displayName",
+        "rooms"
+      ],
+      "properties": {
+        "teamId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/teamId"
+        },
+        "teamName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "memberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "rooms": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/clientEntryRoom"
+          }
         }
       }
     }

@@ -11,6 +11,7 @@ export interface DevicePairingSessionCreated {
    * most nanosecond precision.
    */
   expiresAt:        string;
+  memberBinding?:   DevicePairingSessionCreatedDevicePairingMemberBinding;
   ownerMemberId:    string;
   pairingSessionId: string;
   shortCode:        string;
@@ -21,6 +22,12 @@ export interface DevicePairingSessionCreated {
    * separately and accepted only when its canonical DER digest matches.
    */
   trust?: DevicePairingSessionCreatedTrust;
+}
+
+export interface DevicePairingSessionCreatedDevicePairingMemberBinding {
+  displayName?: string;
+  memberId?:    string;
+  roomIds:      string[];
 }
 
 export type DevicePairingSessionCreatedState = "issued";
@@ -39,13 +46,58 @@ export interface DevicePairingSessionCreatedTrust {
 
 export type Mode = "private_scoped_ca";
 
+export interface DevicePairingMemberBinding {
+  displayName?: string;
+  memberId?:    string;
+  roomIds:      string[];
+}
+
+export interface ClientEntryRequest {
+  clientAccessSecret: string;
+  roomId?:            string;
+}
+
+export interface ClientEntryTicket {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  ticket:    string;
+}
+
+export interface ClientEntryClaim {
+  ticket: string;
+}
+
+export interface ClientEntryIdentity {
+  displayName: string;
+  memberId:    string;
+  roomId?:     string;
+  rooms:       ClientEntryRoom[];
+  teamId:      string;
+  teamName:    string;
+}
+
+export interface ClientEntryRoom {
+  name:   string;
+  roomId: string;
+}
+
 /**
  * The authenticated Owner client generates claimSecret and resends the same secret with
  * operationId after response loss; the Server stores only its hash and never echoes it.
  */
 export interface DevicePairingSessionCreateRequest {
-  claimSecret: string;
-  operationId: string;
+  claimSecret:    string;
+  memberBinding?: DevicePairingSessionCreateRequestDevicePairingMemberBinding;
+  operationId:    string;
+}
+
+export interface DevicePairingSessionCreateRequestDevicePairingMemberBinding {
+  displayName?: string;
+  memberId?:    string;
+  roomIds:      string[];
 }
 
 export interface DevicePairingSessionOwnerProjection {
@@ -76,6 +128,7 @@ export interface DevicePairingSessionOwnerProjection {
    * most nanosecond precision.
    */
   expiresAt:         string;
+  memberBinding?:    DevicePairingSessionOwnerProjectionDevicePairingMemberBinding;
   ownerMemberId:     string;
   pairingAttemptId?: string;
   pairingSessionId:  string;
@@ -98,6 +151,12 @@ export interface DevicePairingSessionOwnerProjectionDevice {
 
 export type Platform = "darwin-amd64" | "darwin-arm64" | "linux-amd64" | "linux-arm64" | "windows-amd64" | "windows-arm64";
 
+export interface DevicePairingSessionOwnerProjectionDevicePairingMemberBinding {
+  displayName?: string;
+  memberId?:    string;
+  roomIds:      string[];
+}
+
 export type DevicePairingSessionOwnerProjectionState = "issued" | "claimed" | "approved" | "consumed" | "rejected" | "canceled" | "expired";
 
 /**
@@ -113,13 +172,14 @@ export interface DevicePairingSessionOwnerProjectionTrust {
 }
 
 export interface DevicePairingSessionClaimRequest {
-  claimSecret?:      string;
-  device:            DevicePairingSessionClaimRequestDevice;
-  operationId:       string;
-  pairingAttemptId:  string;
-  pairingSessionId?: string;
-  pollSecret:        string;
-  shortCode?:        string;
+  claimSecret?:        string;
+  clientAccessSecret?: string;
+  device:              DevicePairingSessionClaimRequestDevice;
+  operationId:         string;
+  pairingAttemptId:    string;
+  pairingSessionId?:   string;
+  pollSecret:          string;
+  shortCode?:          string;
   /**
    * Public bootstrap metadata for one exact Central origin. The CA certificate is fetched
    * separately and accepted only when its canonical DER digest matches.
@@ -176,16 +236,17 @@ export interface DevicePairingSessionPollProjection {
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
    */
-  expiresAt?:          string;
-  pairingAttemptId:    string;
-  pairingSessionId:    string;
-  retryAfterMs?:       number;
-  state:               DevicePairingSessionPollProjectionState;
-  verificationPhrase?: string;
-  credentialSource?:   CredentialSource;
-  deviceId?:           string;
-  ownerMemberId?:      string;
-  teamId?:             string;
+  expiresAt?:           string;
+  pairingAttemptId:     string;
+  pairingSessionId:     string;
+  retryAfterMs?:        number;
+  state:                DevicePairingSessionPollProjectionState;
+  verificationPhrase?:  string;
+  clientAccessEnabled?: boolean;
+  credentialSource?:    CredentialSource;
+  deviceId?:            string;
+  ownerMemberId?:       string;
+  teamId?:              string;
 }
 
 export type CredentialSource = "poll_secret";

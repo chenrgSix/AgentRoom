@@ -518,8 +518,8 @@ Release is included.
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
 | GOV-023 | DONE | Define client owner identity, Room defaults and scoped human entry | SEC-012, BRG-069, WEB-061 | Accepted ADR-0035, seven owning modules, 271-file Markdown lint and whitespace checks pass |
-| CON-019 | PLANNED | Define additive member pairing and client entry payloads | GOV-023, CON-012 | Generated TypeScript/Go types, schema positive/negative fixtures and interop checks |
-| SEC-013 | PLANNED | Bind approved client owners and issue scoped human entry | CON-019, SEC-012 | Transactional binding, separate-key tickets, capped sessions, replay/revocation/scope negatives and legacy compatibility |
+| CON-019 | DONE | Define additive member pairing and client entry payloads | GOV-023, CON-012 | Deterministic TypeScript/Go generation, 145 shared fixtures (12 new identity/entry cases), Node tests, strict types and Go schema validation pass |
+| SEC-013 | ACTIVE | Bind approved client owners and issue scoped human entry | CON-019, SEC-012 | Transactional binding, separate-key tickets, capped sessions, replay/revocation/scope negatives and legacy compatibility |
 | ROOM-008 | PLANNED | Limit member-aware onboarding to selected Rooms and default Agent owners into explicit invitations | SEC-013, ROOM-007 | Initial roster boundaries, explicit removal and republication regressions |
 | BRG-070 | PLANNED | Open authorized Team and Room entry from the local client | SEC-013, BRG-069 | Separate credential storage, Console authorization, re-pair/switch fencing, Go/UI tests and native compilation |
 | WEB-062 | PLANNED | Present member-aware pairing and safe client browser entry | SEC-013, ROOM-008, WEB-061 | Real identity/session navigation regressions, scoped ownership controls and isolated browser acceptance |
