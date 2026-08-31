@@ -292,8 +292,13 @@ port 80 exists solely for certificate issuance and an exact-origin redirect.
 `secret-init` should show `Exited (0)`, while `agentroom` and `caddy` should be
 running. Open the configured HTTPS origin, enter an Owner
 display name, and paste the recovery **file contents**, not its path. Keep that
-file offline-capable for later Owner recovery; members join through short-lived,
-one-time invitation links.
+file offline-capable: it protects Hosted credentials even after you replace the
+login key. Builds implementing ADR-0032 expose **恢复密钥** in the authenticated
+installation Owner's header. Save the newly generated key before confirming;
+it replaces login recovery only, without changing Docker configuration or
+Agent credentials. Released v0.4.2 predates this setting. Members join through
+short-lived, one-time invitation links. See [Owner recovery](docs/deployment.md#owner-login-recovery)
+if both the saved key and Owner sessions are lost.
 
 Use `docker compose logs --tail=100 secret-init agentroom caddy` when startup
 fails. Run `./scripts/compose-backup.sh` for a verified online backup and copy

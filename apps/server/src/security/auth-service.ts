@@ -205,6 +205,13 @@ export class AuthService {
     `).get(sessionId) as { expires_at: string } | undefined)?.expires_at;
   }
 
+  public revokeOtherWebSessionsForUser(userId: string, retainedSessionId: string, now: string): number {
+    return this.database.prepare(`
+      UPDATE web_sessions SET revoked_at = ?
+      WHERE user_id = ? AND session_id != ? AND revoked_at IS NULL
+    `).run(now, userId, retainedSessionId).changes;
+  }
+
   public issueDeviceCredential(
     deviceId: string,
     now: string,

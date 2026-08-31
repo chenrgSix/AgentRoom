@@ -492,7 +492,7 @@ Implementation is sequential; native-platform evidence remains explicit.
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
-| SEC-012 | ACTIVE | Replace the Owner login recovery key without rotating Hosted encryption | SEC-010, SEC-011, WEB-055 | ADR-0032; pending hash-only migration, exact-Owner/Origin/revision/session security tests, restart and Hosted preservation, transient Web recovery settings and build/UI verification |
+| SEC-012 | DONE | Replace the Owner login recovery key without rotating Hosted encryption | SEC-010, SEC-011, WEB-055 | [acceptance evidence](acceptance/sec-012-owner-recovery-key.md): 6 Server/7 Web focused tests, real App/Fastify replace/logout/recover, 706 full-suite tests, 6 deterministic E2Es, builds/contracts/docs and 1280/720/390 px browser checks prove hash-only revisioned replacement, exact-Owner/Origin/session fences, response-loss retry, restart/backup/Hosted preservation and executable offline recovery; no live key rotation or deployment |
 
 ## Deferred Beyond MVP
 

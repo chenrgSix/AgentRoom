@@ -752,6 +752,7 @@ export async function createServerApp(
     const statusCode = message.includes("UNIQUE constraint failed") ||
       message.startsWith("Device pairing conflict:") ||
       message === "Room settings changed; reload and retry" ||
+      message === "Owner recovery key changed; reload and retry" ||
       message === "Hosted Runtime Profile changed; reload and retry" ||
       message === "Hosted Agent configuration is locked while work is active" ||
       message.startsWith("Agent provisioning conflict:") ||

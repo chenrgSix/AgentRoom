@@ -23,6 +23,7 @@ import {
 } from "./api-client.js";
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
 import { AccessGate } from "./features/auth/AccessGate.js";
+import { OwnerRecoverySettings } from "./features/auth/OwnerRecoverySettings.js";
 import { useWebSession } from "./features/auth/useWebSession.js";
 import { useRoomSynchronization } from "./features/room/useRoomSynchronization.js";
 import { AgentSetupChoices, type AgentSetupTarget } from "./features/agent/AgentSetupChoices.js";
@@ -1735,6 +1736,9 @@ export function App() {
             <button className="header-sign-out" disabled={busy} onClick={() => void signOut()} type="button">
               {t("signOut")}
             </button>
+            {authMode === "trusted-team" && session?.canManageOwnerRecovery && (
+              <OwnerRecoverySettings key={session.userId} locale={locale} />
+            )}
             {selectedTeam && (
               <div className="agent-summary">
                 <span className={`presence-dot ${readyAgents === 0 ? "offline" : ""}`} />

@@ -120,8 +120,54 @@ paste the filename, put the secret in a URL, or send it to a member.
 
 Successful setup opens the Team UI and creates the authenticated Owner Cookie.
 Keep the host secret permission-restricted and copy it to secure offline-capable
-storage: it is also the explicit Owner recovery credential. Team members should
+storage: it is initially the Owner login recovery credential and remains the
+Hosted credential wrapping root. Team members should
 join only through Owner-created 24-hour, one-time invitation links.
+
+## Owner Login Recovery
+
+Builds implementing ADR-0032 (after v0.4.2) allow the signed-in installation
+Owner to open **恢复密钥** in the header, generate a new recovery key, save it
+privately and confirm replacement. A forgotten old key is not required while
+that Owner session is valid. The new key invalidates old remote Owner login
+and signs out other Owner Web sessions, but preserves the requesting session,
+ordinary member sessions, paired Devices and Hosted provider keys.
+
+The database stores only a verifier. The new key cannot be displayed again
+after the dialog closes. If confirmation fails, keep the saved candidate and
+retry the same operation; do not assume that a missing response means failure.
+No login-key replacement requires changing the Compose configuration or
+`secrets/owner_recovery_token`. **Do not replace or delete the original file**:
+Hosted credentials still require it after a restart or database restore.
+
+If there are no Owner sessions and the saved login key is lost, this is an
+offline operator action, not an unauthenticated Web feature:
+
+1. Stop Central using that installation's recorded Compose project/configuration.
+   Identify its exact SQLite database and the original permission-restricted
+   deployment secret. Verify a backup of both before changing anything.
+2. In that database, verify migration 0056 exists and
+   `system_metadata.trusted_team_owner_user_id` identifies the intended Owner.
+   Run the following transaction with SQLite's `.bail on` enabled:
+
+   ```sql
+   BEGIN IMMEDIATE;
+   DELETE FROM web_owner_recovery_credentials WHERE singleton = 1;
+   UPDATE web_sessions
+   SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+   WHERE revoked_at IS NULL AND user_id = (
+     SELECT value FROM system_metadata
+     WHERE key = 'trusted_team_owner_user_id'
+   );
+   COMMIT;
+   ```
+
+3. Restart the same installation. Its original deployment-file contents now
+   recover the Owner again; log in and explicitly generate/save a replacement.
+
+This does not recover a lost Hosted wrapping root. Database snapshots restore
+the login verifier they contained, so retain the corresponding privately saved
+key. Do not downgrade a rotated installation to a binary predating this feature.
 
 ## TLS and Bridge Trust
 

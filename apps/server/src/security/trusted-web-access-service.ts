@@ -24,6 +24,12 @@ const sessionDurationMilliseconds = 30 * 24 * 60 * 60 * 1_000;
 const invitationDurationMilliseconds = 24 * 60 * 60 * 1_000;
 const memberRecoveryDurationMilliseconds = 15 * 60 * 1_000;
 
+interface OwnerRecoveryRow {
+  token_hash: string;
+  revision: number;
+  updated_at: string;
+}
+
 interface MemberRecoveryRow {
   recovery_id: string;
   team_id: string;
@@ -101,6 +107,59 @@ export class TrustedWebAccessService {
 
   public status(): "setup_required" | "sign_in_required" {
     return this.ownerUserId() ? "sign_in_required" : "setup_required";
+  }
+
+  public isInstallationOwner(userId: string): boolean {
+    return userId === this.ownerUserId();
+  }
+
+  public ownerRecoverySettings(principal: WebPrincipal) {
+    this.requireInstallationOwner(principal);
+    const row = this.ownerRecoveryRow();
+    return { revision: row?.revision ?? 0, updatedAt: row?.updated_at ?? null };
+  }
+
+  public replaceOwnerRecovery(
+    principal: WebPrincipal,
+    candidate: string,
+    expectedRevision: number,
+    now: string
+  ) {
+    // Browser-generated 256-bit material, not a human password. Never echo it.
+    this.requireInstallationOwner(principal);
+    if (!/^[0-9a-f]{64}$/u.test(candidate)) {
+      throw new Error("New Owner recovery key must be a 256-bit hexadecimal key");
+    }
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0 ||
+      expectedRevision >= Number.MAX_SAFE_INTEGER) {
+      throw new Error("expectedRevision must be a non-negative safe integer");
+    }
+    return this.database.transaction(() => {
+      this.requireInstallationOwner(principal);
+      const row = this.ownerRecoveryRow();
+      const candidateHash = hash(candidate);
+      // Response-loss retry must not revoke sessions issued after the commit.
+      if (row?.revision === expectedRevision + 1 &&
+        timingSafeEqual(Buffer.from(row.token_hash, "hex"), Buffer.from(candidateHash, "hex"))) {
+        return { revision: row.revision, updatedAt: row.updated_at };
+      }
+      if ((row?.revision ?? 0) !== expectedRevision) {
+        throw new Error("Owner recovery key changed; reload and retry");
+      }
+      const currentHash = row ? Buffer.from(row.token_hash, "hex") : this.expectedRecoveryHash;
+      if (timingSafeEqual(currentHash, Buffer.from(candidateHash, "hex"))) {
+        throw new Error("New Owner recovery key must differ from the current key");
+      }
+      this.database.prepare(`
+        INSERT INTO web_owner_recovery_credentials (singleton, token_hash, revision, updated_at)
+        VALUES (1, ?, ?, ?)
+        ON CONFLICT(singleton) DO UPDATE SET
+          token_hash = excluded.token_hash, revision = excluded.revision,
+          updated_at = excluded.updated_at
+      `).run(candidateHash, expectedRevision + 1, now);
+      this.auth.revokeOtherWebSessionsForUser(principal.userId, principal.sessionId, now);
+      return { revision: expectedRevision + 1, updatedAt: now };
+    }).immediate();
   }
 
   public setup(
@@ -437,8 +496,23 @@ export class TrustedWebAccessService {
 
   private requireRecoveryToken(candidate: string): void {
     const actual = createHash("sha256").update(candidate).digest();
-    if (!timingSafeEqual(actual, this.expectedRecoveryHash)) {
+    const row = this.ownerRecoveryRow();
+    const expected = row ? Buffer.from(row.token_hash, "hex") : this.expectedRecoveryHash;
+    if (!timingSafeEqual(actual, expected)) {
       throw new AuthorizationError("UNAUTHENTICATED", "Invalid recovery token");
+    }
+  }
+
+  private ownerRecoveryRow(): OwnerRecoveryRow | undefined {
+    return this.database.prepare(`
+      SELECT token_hash, revision, updated_at FROM web_owner_recovery_credentials
+      WHERE singleton = 1
+    `).get() as OwnerRecoveryRow | undefined;
+  }
+
+  private requireInstallationOwner(principal: WebPrincipal): void {
+    if (!this.isInstallationOwner(principal.userId)) {
+      throw new AuthorizationError("FORBIDDEN", "Only the installation Owner can replace the recovery key");
     }
   }
 }

@@ -325,6 +325,7 @@ export interface LocalSession {
   userId: string;
   displayName: string;
   token?: string;
+  canManageOwnerRecovery?: boolean;
 }
 
 export type AuthMode = "local" | "trusted-team";
@@ -340,6 +341,7 @@ export interface AuthenticatedUser {
   userId: string;
   displayName: string;
   createdAt?: string;
+  canManageOwnerRecovery?: boolean;
 }
 
 export type AuthStatus = {

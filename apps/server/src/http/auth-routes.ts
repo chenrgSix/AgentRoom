@@ -32,7 +32,7 @@ export function registerAuthRoutes({
       return {
         mode: webAuth.mode,
         state: "authenticated",
-        user,
+        user: { ...user, canManageOwnerRecovery: trustedWeb?.isInstallationOwner(user.userId) ?? false },
         session: { expiresAt: auth.getWebSessionExpiresAt(actor.sessionId) }
       };
     }
@@ -49,7 +49,7 @@ export function registerAuthRoutes({
       throw new AuthorizationError("UNAUTHENTICATED", "Session User not found");
     }
     return {
-      user,
+      user: { ...user, canManageOwnerRecovery: trustedWeb?.isInstallationOwner(user.userId) ?? false },
       session: { expiresAt: auth.getWebSessionExpiresAt(actor.sessionId) }
     };
   });
@@ -77,7 +77,7 @@ export function registerAuthRoutes({
       noStore(reply);
       void reply.header("set-cookie", sessionCookie(result.session));
       return {
-        user: result.user,
+        user: { ...result.user, canManageOwnerRecovery: trustedWeb.isInstallationOwner(result.user.userId) },
         session: { expiresAt: result.session.expiresAt }
       };
     };
@@ -98,6 +98,20 @@ export function registerAuthRoutes({
         reply,
         trustedWeb.recover(recoveryToken(request), clock())
       );
+    });
+    app.get("/api/auth/owner-recovery", async (request, reply) => {
+      noStore(reply);
+      return trustedWeb.ownerRecoverySettings(principal(request));
+    });
+    app.put("/api/auth/owner-recovery", async (request, reply) => {
+      noStore(reply);
+      requireTrustedOrigin(request);
+      const actor = principal(request);
+      const body = bodyObject(request);
+      if (typeof body.expectedRevision !== "number") {
+        throw new Error("expectedRevision must be a number");
+      }
+      return trustedWeb.replaceOwnerRecovery(actor, recoveryToken(request), body.expectedRevision, clock());
     });
     app.post("/api/auth/member-invitations/claim", async (request, reply) => {
       limitAnonymous(request, "member-invitation-claim");

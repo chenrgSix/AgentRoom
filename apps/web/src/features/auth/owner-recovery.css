@@ -1,0 +1,12 @@
+.owner-recovery-trigger { padding: 7px 10px; border: 1px solid #46513a; border-radius: 8px; background: transparent; color: inherit; cursor: pointer; }
+.owner-recovery-dialog { display: flex; flex-direction: column; gap: 16px; }
+.owner-recovery-dialog .modal-heading { margin: 0; }
+.owner-recovery-dialog .access-form { min-width: 0; margin: 0; }
+.owner-recovery-dialog input:not([type="checkbox"]) { width: 100%; min-width: 0; font-family: monospace; }
+.owner-recovery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.owner-recovery-dialog > p { font-size: 13px; }
+.owner-recovery-dialog button { min-height: 36px; padding: 8px 12px; border: 1px solid #576343; border-radius: 8px; background: #293321; color: #e3edce; cursor: pointer; }
+.owner-recovery-dialog .modal-heading button { min-width: 36px; padding: 4px 8px; }
+.owner-recovery-dialog button:disabled { opacity: .5; cursor: not-allowed; }
+.owner-recovery-dialog p[role] { font-size: 13px; line-height: 1.6; }
+:root[data-theme="light"] .owner-recovery-dialog button { background: #e5eddc; color: #344322; border-color: #becab4; }
