@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { ExecutionPlanService } from "../execution/execution-plan-service.js";
 
 import type { ArtifactPublicationService } from
   "../artifact/artifact-publication-service.js";
@@ -88,6 +89,7 @@ export interface ServerRouteContext {
   dispatchRun: (run: PersistedRun) => Promise<PersistedRun>;
   dispatchDiscussionRuns: (runs: PersistedRun[]) => Promise<void>;
   executor: InProcessRunExecutor;
+  executionPlans: ExecutionPlanService;
   fakeAdapters: Map<string, FakeRuntimeAdapter>;
   handoffs: HandoffService;
   hostedAgents: HostedAgentConfigurationService;

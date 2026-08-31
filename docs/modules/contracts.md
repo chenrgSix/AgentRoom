@@ -23,6 +23,12 @@ Run, or Discussion author instead of attributing Agent work to a human Owner.
 Caller mutation envelopes do not accept an author or approval-capability field;
 the owning service derives authority from its authenticated principal.
 
+Plan/revision history pages and decision-source archive responses also use the
+shared execution schema. A source archive carries a bounded canonical JSON
+string and SHA-256, not an executable command or copied Result acceptance.
+Its source identity/revision and closed envelope are cross-language contracts;
+the Server freezes and verifies the source under current Room authorization.
+
 Plan sets are sorted before digesting; arrays with order semantics remain
 ordered. `.` means the whole repository in an explicit output scope; other
 prefixes are normalized relative components without traversal, Git metadata or

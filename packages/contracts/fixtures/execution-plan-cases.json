@@ -2,6 +2,41 @@
   "fixtureVersion": "1.0",
   "cases": [
     {
+      "name": "execution: valid frozen source archive",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/decisionSourceSnapshot",
+      "instance": {
+        "source": { "evidenceRefId": "evidence_archive0001", "kind": "message", "messageId": "msg_archive0000001" },
+        "revision": 2,
+        "digest": "09242adab541d2585d4914786816606dfe21d7d5000193fa9a9296c46b7cf8fe",
+        "snapshotJson": "{\"content\":\"Evidence\",\"revision\":2}"
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: frozen source archive rejects permission fields",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/decisionSourceSnapshot",
+      "instance": {
+        "source": { "evidenceRefId": "evidence_archive0001", "kind": "message", "messageId": "msg_archive0000001" },
+        "revision": 2,
+        "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "snapshotJson": "{}",
+        "workspacePath": "/private/owner"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: valid empty plan page",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planPage",
+      "instance": { "plans": [], "nextAfterPlanId": null },
+      "valid": true
+    },
+    {
+      "name": "execution: valid empty revision page",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revisionPage",
+      "instance": { "revisions": [], "nextAfterRevision": null },
+      "valid": true
+    },
+    {
       "name": "execution: valid Unicode relative path",
       "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/pathPrefix",
       "instance": "src/认证/验证😀.ts",

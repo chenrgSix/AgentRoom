@@ -1348,6 +1348,9 @@ export async function generateContractTypes(packageRoot) {
   ]);
   const executionCodegen = createDefinitionCodegenSchemas(executionSchema, [
     ["ExecutionPlanProjection", "planProjection"],
+    ["ExecutionDecisionSourceSnapshot", "decisionSourceSnapshot"],
+    ["ExecutionPlanPage", "planPage"],
+    ["ExecutionPlanRevisionPage", "revisionPage"],
     ["ExecutionDecisionRecord", "decisionRecord"],
     ["ExecutionDecisionContent", "decisionContent"],
     ["ExecutionPlanDefinition", "planDefinition"],

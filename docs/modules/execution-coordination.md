@@ -1,7 +1,7 @@
 # Execution Coordination Module
 
 - Prefix: `EXEC`
-- Planned implementation: `apps/server/src/execution/`
+- Implementation directory: `apps/server/src/execution/`
 - Owns: immutable decisions/plans, approvals, dependency/input bindings,
   dispatch intents and derived graph progress
 - Governing decision: [ADR-0036](../adr/0036-add-governed-software-team-execution.md)
@@ -154,6 +154,64 @@ Agent tools are `team.propose_plan`, `team.get_plan`, and
 Run and current Room access. They cannot directly approve plans, accept Results,
 acknowledge ambiguity, expand budgets, grant local permissions or merge code.
 Decision finalization is a typed proposal adapter, not a prose parser.
+
+### Draft History Surface and Source Pins
+
+Human draft create/revise commands require the current root Task Owner or Team
+Owner and current Room membership. The plan's `ownerMemberId` preserves the
+Owner at creation; a later root ownership transfer does not let that historical
+Owner retain mutation authority. Agent and Discussion entry points must supply
+server-verified attribution through their separately governed adapters, never
+an `author` field in a human request. Root Tasks are top-level and non-default.
+Multiple alternative drafts may coexist; they confer no execution authority.
+
+| HTTP operation | Resource |
+| --- | --- |
+| POST human proposal | `/api/tasks/:taskId/execution-plans` |
+| GET Room drafts/plans | `/api/rooms/:roomId/execution-plans` |
+| GET exact current projection | `/api/execution-plans/:planId` |
+| POST append a draft revision | `/api/execution-plans/:planId/revisions` |
+| GET immutable revision history | `/api/execution-plans/:planId/revisions` |
+| GET immutable decision | `/api/execution-decisions/:decisionId` |
+| GET frozen decision-source records | `/api/execution-decisions/:decisionId/sources` |
+
+Listing uses a binary `afterPlanId` cursor; revision history uses an integer
+`afterRevision`. Both return a next cursor or null and accept limits 1–50
+(default 20). Start a fresh listing on a Room change notification. Every route,
+including authorization errors, uses `no-store`. Mutation bodies are at most
+512 KiB and use the shared closed command schema. Conflict codes distinguish
+operation, root, node and source revision conflicts without echoing input or
+SQLite diagnostics. Trusted Web mutations retain the existing Origin check.
+
+`sourceRevisions` is one-to-one with the decision's evidence IDs. Its revision
+means the following existing authoritative value, not a new cross-source clock:
+
+| Source kind | Pinned revision and frozen content |
+| --- | --- |
+| Message | immutable Room sequence and the exact Message content/identity |
+| Run event | exact `(runId, sequence)` event; sequence is also the revision |
+| Artifact | immutable `artifactRevision`, descriptive metadata and content pins; no bytes or local path expansion |
+| Memory | current lifecycle `revision` and its content/state snapshot |
+| Discussion | aggregate `version` and policy/progress/state snapshot |
+| Result | immutable `resultVersion`, proposal content, sources and claims; no mutable review/acceptance copied |
+
+All sources must exist in the same Room; decision context may refer to another
+Task in that Room without granting an Agent cross-Task delivery. Snapshot bytes
+are bounded (512 KiB per source, 2 MiB total), hashed and stored atomically with
+the proposal. The closed shared response carries `snapshotJson` as canonical JSON
+archive text and its SHA-256, not an executable or permission-shaped object.
+Once the proposal references its decision, its source set is
+sealed against additions as well as edits/deletes. Mutable source changes do
+not rewrite old snapshots. Fresh writes require current source pins, whereas
+an exact operation replay returns the original receipt after checking current
+authority. Subsequent approval/admission must still recheck current authority
+and selected inputs; history is not an authorization cache.
+
+Draft repository/grant/profile IDs express requirements only. Persistence does
+not claim those local capabilities exist, compile Tasks, dispatch Runs, stage
+content, accept Results or execute repository operations. External input
+declarations must name an accepted same-Room Result's exact same-Task snapshot
+Artifact and content digest, but no input delivery grant is issued here.
 
 ## Autonomy Policy
 

@@ -21,6 +21,9 @@ func TestExecutionGeneratedTypesPreserveWireFixtures(t *testing.T) {
 		t.Fatal(err)
 	}
 	constructors := map[string]func() any{
+		"execution: valid frozen source archive":     func() any { return &execution.ExecutionDecisionSourceSnapshot{} },
+		"execution: valid empty plan page":           func() any { return &execution.ExecutionPlanPage{} },
+		"execution: valid empty revision page":       func() any { return &execution.ExecutionPlanRevisionPage{} },
 		"execution: valid immutable decision record": func() any { return &execution.ExecutionDecisionRecord{} },
 		"execution: valid full plan":                 func() any { return &execution.ExecutionPlanDefinition{} },
 		"execution: valid human proposal":            func() any { return &execution.ExecutionPlanProposalCommand{} },

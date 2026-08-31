@@ -53,6 +53,11 @@ import { registerRunRoutes } from "./http/run-routes.js";
 import { registerResultRoutes } from "./http/result-routes.js";
 import { registerSystemRoutes } from "./http/system-routes.js";
 import { registerTaskRoutes } from "./http/task-routes.js";
+import { registerExecutionPlanRoutes } from "./http/execution-plan-routes.js";
+import { ExecutionError } from "./execution/execution-error.js";
+import { ExecutionPlanRepository } from "./execution/execution-plan-repository.js";
+import { ExecutionSourceRepository } from "./execution/execution-source-repository.js";
+import { ExecutionPlanService } from "./execution/execution-plan-service.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
@@ -365,6 +370,18 @@ export async function createServerApp(
     runRepository
   );
   const resultRepository = new ResultRepository(database);
+  const executionPlans = new ExecutionPlanService(
+    transactions,
+    new ExecutionPlanRepository(database),
+    new ExecutionSourceRepository(database),
+    taskRepository,
+    core,
+    auth,
+    (roomId) => {
+      const room = core.getRoom(roomId);
+      if (room) teamChanges.notify(room.teamId, { kind: "room", roomId });
+    }
+  );
   const results = new ResultService(
     database,
     resultRepository,
@@ -706,6 +723,8 @@ export async function createServerApp(
       }
       const repositoryPublishesTimeline =
         request.routeOptions.url === "/api/rooms/:roomId/messages" ||
+        request.routeOptions.url === "/api/tasks/:taskId/execution-plans" ||
+        request.routeOptions.url?.startsWith("/api/execution-plans/") === true ||
         request.routeOptions.url?.startsWith("/api/runs/:runId/") === true;
       if (changedTeamId && !repositoryPublishesTimeline) {
         teamChanges.notify(changedTeamId);
@@ -724,6 +743,12 @@ export async function createServerApp(
     database.close();
   });
   app.setErrorHandler((error, request, reply) => {
+    if (error instanceof ExecutionError) {
+      void reply.code(error.statusCode).send({
+        error: { code: error.code, message: error.message }
+      });
+      return;
+    }
     if (error instanceof AnonymousRateLimitError) {
       app.log.warn({
         event: "http.request.rate_limited",
@@ -804,6 +829,7 @@ export async function createServerApp(
     dispatchRun,
     dispatchDiscussionRuns,
     executor,
+    executionPlans,
     fakeAdapters,
     handoffs,
     hostedAgents,
@@ -849,6 +875,7 @@ export async function createServerApp(
 
   registerTeamRoomRoutes(routeContext);
   registerTaskRoutes(routeContext);
+  registerExecutionPlanRoutes(routeContext);
   registerResultRoutes(routeContext);
   registerWorkbenchRoutes(routeContext);
   registerRegistryRoutes(routeContext);

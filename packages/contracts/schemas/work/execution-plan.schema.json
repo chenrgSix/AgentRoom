@@ -124,6 +124,53 @@
         }
       ]
     },
+    "decisionSourceSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "revision", "digest", "snapshotJson"],
+      "properties": {
+        "source": { "$ref": "#/$defs/source" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "snapshotJson": {
+          "description": "Bounded canonical JSON evidence archive, not an executable object or an authorization receipt. Its SHA-256 must equal digest.",
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 524288
+        }
+      }
+    },
+    "decisionSourcePage": {
+      "type": "array",
+      "maxItems": 100,
+      "items": { "$ref": "#/$defs/decisionSourceSnapshot" }
+    },
+    "planPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plans", "nextAfterPlanId"],
+      "properties": {
+        "plans": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/planProjection" }
+        },
+        "nextAfterPlanId": { "oneOf": [{ "$ref": "#/$defs/planId" }, { "type": "null" }] }
+      }
+    },
+    "revisionPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["revisions", "nextAfterRevision"],
+      "properties": {
+        "revisions": {
+          "type": "array",
+          "maxItems": 50,
+          "items": { "$ref": "#/$defs/planRevision" }
+        },
+        "nextAfterRevision": { "oneOf": [{ "$ref": "#/$defs/revision" }, { "type": "null" }] }
+      }
+    },
     "decisionContent": {
       "type": "object",
       "additionalProperties": false,
