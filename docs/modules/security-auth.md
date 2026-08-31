@@ -45,6 +45,21 @@ URL, response, database, browser storage, or log, and is used only for initial
 setup, explicit Owner recovery, or domain-separated wrapping of ADR-0026 Hosted
 provider credentials without persisting the recovery secret itself.
 
+[ADR-0032](../adr/0032-separate-owner-login-recovery-from-hosted-root.md)
+allows the installation Owner's current trusted Web session to replace the
+login recovery key through GET/PUT `/api/auth/owner-recovery`. Other Team Owners
+cannot do this. PUT accepts a browser-generated 256-bit hex key in the existing
+recovery header plus `expectedRevision` in the body; it atomically stores only
+its SHA-256 verifier and revokes other Owner Web sessions. The requesting
+session survives, and exact-operation retries do not repeat revocation. Stale
+replacements conflict. Authenticated User projections expose only the boolean
+`canManageOwnerRecovery`, never credential material or the verifier.
+
+After replacement the original deployment key no longer authenticates remote
+Owner recovery, but remains the unchanged Hosted wrapping root. Neither that
+file nor provider envelopes are rewritten. A lost key and lost sessions require
+an offline operator recovery, never an anonymous reset endpoint.
+
 Trusted Web sessions use a `Secure`, `HttpOnly`, `SameSite=Strict`, host-only
 Cookie, and trusted Web APIs reject legacy Web Bearer sessions. Mutations must
 carry the configured same-origin `Origin`; Bridge and MCP Bearer authentication

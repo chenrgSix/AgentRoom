@@ -488,6 +488,12 @@ Implementation is sequential; native-platform evidence remains explicit.
 | QA-050 | DONE | Dispatch native activation fixture control messages independently | BRG-056, BRG-063 | CI 33355476410 and Release 33355702399 pass native pairing/wake/legacy, receiver rejection and 50-ms unresponsive-window checks after fixture pause dispatch precedes WM_COPYDATA; 33 policy tests and Windows cross-build pass, timeout diagnostics identify the awaited event, and production activation code is unchanged |
 | SITE-002 | DONE | Align public version copy with v0.4.2 stable | SITE-001, QA-047 | README/home/guide now identify verified v0.4.2 without changing hosting/design or HTTP-only/provider/backup boundaries; 15 static tests/build and 245-file docs lint pass; Pages 33356999313 publishes 9b51a05 and nine public files match its exact built bytes, including version metadata and current stable links |
 
+## Owner Login Recovery Settings
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| SEC-012 | ACTIVE | Replace the Owner login recovery key without rotating Hosted encryption | SEC-010, SEC-011, WEB-055 | ADR-0032; pending hash-only migration, exact-Owner/Origin/revision/session security tests, restart and Hosted preservation, transient Web recovery settings and build/UI verification |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

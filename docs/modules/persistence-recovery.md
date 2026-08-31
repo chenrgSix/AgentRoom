@@ -50,6 +50,14 @@ remain immutable. Recovery never creates a replacement User or Member.
 
 ## Storage Model
 
+Migration 0056 adds `web_owner_recovery_credentials`, a singleton hash-only
+login verifier with revision and update time (ADR-0032). No row means legacy
+deployment-file login; replacement and other-Owner-session revocation share
+one immediate transaction. Backups preserve the verifier version and never
+contain its plaintext key. Hosted roots/envelopes remain unchanged. Restore
+requires the login key corresponding to the restored snapshot; reverting to a
+pre-0056 binary after rotation is not a supported credential-security rollback.
+
 Repositories expose domain operations rather than raw SQL to other modules.
 Schema migrations are ordered, transactional where SQLite permits, and tested
 against both an empty database and the previous supported version.
