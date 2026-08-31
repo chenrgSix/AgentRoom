@@ -28,6 +28,21 @@ test("Windows installer and shortcuts select the same product icon without ownin
   assert.match(source, /Name: "desktopicon";[^\n]*Flags: unchecked/u);
 });
 
+test("missing-WebView2 warning is suppressible and the native regression cannot alter real registration", async () => {
+  const installer = await read("bridge/desktop/windows/installer.iss");
+  assert.match(installer, /SuppressibleMsgBox\(ExpandConstant\('\{cm:WebView2Missing\}'\), mbInformation, MB_OK, IDOK\)/u);
+  assert.doesNotMatch(installer, /\bMsgBox\(/u);
+  const regression = await read("bridge/scripts/test-windows-silent-prerequisite.ps1");
+  assert.ok(regression.includes("begin Result := False; end;"));
+  assert.ok(regression.includes('"/SILENT", "/VERYSILENT"'));
+  assert.ok(regression.includes('"/SUPPRESSMSGBOXES"'));
+  assert.ok(regression.includes("$process.WaitForExit($timeout)"));
+  assert.ok(regression.includes("$process.Kill($true)"));
+  assert.ok(regression.includes("CreateAppDir=no"));
+  assert.ok(regression.includes("Uninstallable=no"));
+  assert.doesNotMatch(regression, /\[(?:Registry|Files|Run|Icons)\]/u);
+});
+
 test("Native icon inspection cannot use a system fallback or only check shortcut existence", async () => {
   const inspector = await read("bridge/scripts/windows-desktop-icons.ps1");
   assert.ok(inspector.includes('EntryPoint = "ExtractIconExW"'));
@@ -51,5 +66,6 @@ for (const workflow of ["ci.yml", "release-bridge.yml"]) {
     assert.ok(windows.includes("go vet ./..."));
     assert.match(windows, /go run \. -root [^\n]+ -mode check/u);
     assert.ok(windows.includes("./scripts/test-windows-desktop-icons.ps1"));
+    assert.ok(windows.includes("./scripts/test-windows-silent-prerequisite.ps1"));
   });
 }

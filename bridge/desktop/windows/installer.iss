@@ -120,5 +120,5 @@ function InitializeSetup: Boolean;
 begin
   Result := True;
   if not WebView2RuntimeInstalled then
-    MsgBox(ExpandConstant('{cm:WebView2Missing}'), mbInformation, MB_OK);
+    SuppressibleMsgBox(ExpandConstant('{cm:WebView2Missing}'), mbInformation, MB_OK, IDOK);
 end;

@@ -416,6 +416,7 @@ jobs:
           ./scripts/test-windows-release-semver.ps1
           ./scripts/test-windows-desktop-icons.ps1
           ./scripts/test-windows-workflow-failures.ps1
+          ./scripts/test-windows-silent-prerequisite.ps1
           go test -tags desktop ./cmd/convenewire-bridge-desktop
           if ($LASTEXITCODE -ne 0) { throw "Windows desktop tests failed" }
           go vet -tags desktop ./cmd/convenewire-bridge-desktop
