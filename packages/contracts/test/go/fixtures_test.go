@@ -78,13 +78,21 @@ func loadCompiler(t *testing.T, root string) *jsonschema.Compiler {
 
 func TestGoldenFixturesMatchJSONSchema(t *testing.T) {
 	root := packageRoot(t)
-	source, err := os.ReadFile(filepath.Join(root, "fixtures", "cases.json"))
-	if err != nil {
-		t.Fatalf("read fixtures: %v", err)
-	}
 	var suite fixtureSuite
-	if err := json.Unmarshal(source, &suite); err != nil {
-		t.Fatalf("decode fixtures: %v", err)
+	for _, name := range []string{"cases.json", "execution-plan-cases.json"} {
+		source, err := os.ReadFile(filepath.Join(root, "fixtures", name))
+		if err != nil {
+			t.Fatalf("read fixtures: %v", err)
+		}
+		var part fixtureSuite
+		if err := json.Unmarshal(source, &part); err != nil {
+			t.Fatalf("decode fixtures: %v", err)
+		}
+		if part.FixtureVersion != "1.0" || len(part.Cases) == 0 {
+			t.Fatalf("invalid fixture suite %s", name)
+		}
+		suite.FixtureVersion = part.FixtureVersion
+		suite.Cases = append(suite.Cases, part.Cases...)
 	}
 	if suite.FixtureVersion == "" || len(suite.Cases) == 0 {
 		t.Fatal("fixture suite must have a version and cases")

@@ -16,7 +16,7 @@ test("the checked-in contract package is internally consistent", async () => {
 
   assert.deepEqual(result, {
     catalogVersion: "0.1.0",
-    schemaCount: 9
+    schemaCount: 10
   });
 });
 
@@ -36,7 +36,8 @@ test("every wire integer is bounded to the interoperable safe range", async () =
   const schemaPaths = [
     "../schemas/bridge/messages.schema.json",
     "../schemas/bridge/pairing-session.schema.json",
-    "../schemas/work/task-result.schema.json"
+    "../schemas/work/task-result.schema.json",
+    "../schemas/work/execution-plan.schema.json"
   ];
   const integerLocations = [];
   const inspect = (value, location) => {
@@ -73,10 +74,10 @@ test("positive and negative golden fixtures match their schemas", async () => {
   const result = await validateContractFixtures(packageRoot);
 
   assert.deepEqual(result, {
-    fixtureCount: 145,
+    fixtureCount: 185,
     fixtureVersion: "1.0",
-    invalidCount: 84,
-    validCount: 61
+    invalidCount: 112,
+    validCount: 73
   });
 });
 

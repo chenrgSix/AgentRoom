@@ -1,0 +1,1031 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/work/execution-plan.schema.json",
+  "title": "ConveneWire Governed Execution Plan Contracts",
+  "description": "Closed structural contracts only. Graph topology, referenced state, approval, local permission and verification provenance require domain validation.",
+  "$ref": "#/$defs/proposalCommand",
+  "$defs": {
+    "revision": {
+      "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/revision"
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "planId": {
+      "type": "string",
+      "pattern": "^plan_[A-Za-z0-9_-]{8,128}$"
+    },
+    "proposalId": {
+      "type": "string",
+      "pattern": "^proposal_[A-Za-z0-9_-]{8,128}$"
+    },
+    "decisionId": {
+      "type": "string",
+      "pattern": "^decision_[A-Za-z0-9_-]{8,128}$"
+    },
+    "repositoryId": {
+      "type": "string",
+      "pattern": "^repo_[A-Za-z0-9_-]{8,128}$"
+    },
+    "bindingId": {
+      "type": "string",
+      "pattern": "^repobind_[A-Za-z0-9_-]{8,128}$"
+    },
+    "grantId": {
+      "type": "string",
+      "pattern": "^grant_[A-Za-z0-9_-]{8,128}$"
+    },
+    "profileId": {
+      "type": "string",
+      "pattern": "^profile_[A-Za-z0-9_-]{8,128}$"
+    },
+    "stableKey": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+    },
+    "gitObjectId": {
+      "type": "string",
+      "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+    },
+    "pathPrefix": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "^[^/\\\\\\x00-\\x1f\\x7f:*?\"<>|]+(/[^/\\\\\\x00-\\x1f\\x7f:*?\"<>|]+)*$"
+    },
+    "decisionQuestion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "questionKey",
+        "text",
+        "required"
+      ],
+      "properties": {
+        "questionKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "decisionItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemKey",
+        "statement"
+      ],
+      "properties": {
+        "itemKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "statement": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "resultSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceRefId",
+        "kind",
+        "resultId"
+      ],
+      "properties": {
+        "evidenceRefId": {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/evidenceRefId"
+        },
+        "kind": {
+          "const": "result"
+        },
+        "resultId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/resultId"
+        }
+      }
+    },
+    "source": {
+      "oneOf": [
+        {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/evidenceReference"
+        },
+        {
+          "$ref": "#/$defs/resultSource"
+        }
+      ]
+    },
+    "decisionContent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "summary",
+        "items",
+        "unresolvedQuestions",
+        "sources",
+        "sourceRevisions"
+      ],
+      "properties": {
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "items": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/decisionItem"
+          }
+        },
+        "unresolvedQuestions": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/decisionQuestion"
+          }
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        },
+        "sourceRevisions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/sourceRevision"
+          }
+        }
+      }
+    },
+    "newTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "title",
+        "goal",
+        "ownerMemberId",
+        "criteria"
+      ],
+      "properties": {
+        "mode": {
+          "const": "new"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "ownerMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "criteria": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/criterion"
+          }
+        }
+      }
+    },
+    "existingTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "taskId",
+        "expectedTaskRevision",
+        "definitionRevision",
+        "criteriaRevision"
+      ],
+      "properties": {
+        "mode": {
+          "const": "existing"
+        },
+        "taskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "expectedTaskRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "definitionRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "criteriaRevision": {
+          "$ref": "#/$defs/revision"
+        }
+      }
+    },
+    "nodeTask": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/newTask"
+        },
+        {
+          "$ref": "#/$defs/existingTask"
+        }
+      ]
+    },
+    "repositoryInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryId",
+        "bindingId",
+        "baseCommit",
+        "grantId",
+        "grantRevision",
+        "runtimeProfileId",
+        "runtimeProfileDigest"
+      ],
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "bindingId": {
+          "$ref": "#/$defs/bindingId"
+        },
+        "baseCommit": {
+          "$ref": "#/$defs/gitObjectId"
+        },
+        "grantId": {
+          "$ref": "#/$defs/grantId"
+        },
+        "grantRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "runtimeProfileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "runtimeProfileDigest": {
+          "$ref": "#/$defs/digest"
+        }
+      }
+    },
+    "scopePolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "access",
+        "allowedPaths",
+        "forbiddenPaths",
+        "requirePreventivePathEnforcement"
+      ],
+      "properties": {
+        "access": {
+          "enum": [
+            "read_only",
+            "isolated_write"
+          ]
+        },
+        "allowedPaths": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/pathPrefix"
+          }
+        },
+        "forbiddenPaths": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/pathPrefix"
+          }
+        },
+        "requirePreventivePathEnforcement": {
+          "type": "boolean"
+        }
+      }
+    },
+    "verificationProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profileId",
+        "revision",
+        "digest",
+        "required"
+      ],
+      "properties": {
+        "profileId": {
+          "$ref": "#/$defs/profileId"
+        },
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "artifactKind": {
+      "enum": [
+        "patch",
+        "commit",
+        "document",
+        "test_result"
+      ]
+    },
+    "artifactSlot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "slotKey",
+        "kind",
+        "required"
+      ],
+      "properties": {
+        "slotKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "kind": {
+          "$ref": "#/$defs/artifactKind"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "planNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeKey",
+        "kind",
+        "required",
+        "task",
+        "agentId",
+        "repository",
+        "scope",
+        "budget",
+        "verificationProfiles",
+        "inputs",
+        "outputs"
+      ],
+      "properties": {
+        "nodeKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "kind": {
+          "enum": [
+            "implementation",
+            "review",
+            "verification"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "task": {
+          "$ref": "#/$defs/nodeTask"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "repository": {
+          "$ref": "#/$defs/repositoryInput"
+        },
+        "scope": {
+          "$ref": "#/$defs/scopePolicy"
+        },
+        "budget": {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/budgetPolicy"
+        },
+        "verificationProfiles": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/verificationProfile"
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/artifactSlot"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/artifactSlot"
+          }
+        }
+      }
+    },
+    "edgeBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outputSlot",
+        "inputSlot"
+      ],
+      "properties": {
+        "outputSlot": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "inputSlot": {
+          "$ref": "#/$defs/stableKey"
+        }
+      }
+    },
+    "planEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edgeKey",
+        "fromNodeKey",
+        "toNodeKey",
+        "gate",
+        "bindings"
+      ],
+      "properties": {
+        "edgeKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "fromNodeKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "toNodeKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "gate": {
+          "enum": [
+            "accepted_result",
+            "verified_output",
+            "integrated_commit"
+          ]
+        },
+        "bindings": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/edgeBinding"
+          }
+        }
+      }
+    },
+    "externalInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeKey",
+        "inputSlot",
+        "sourceTaskId",
+        "sourceResultId",
+        "artifactId",
+        "artifactRevision",
+        "contentDigest",
+        "kind"
+      ],
+      "properties": {
+        "nodeKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "inputSlot": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "sourceTaskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "sourceResultId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/resultId"
+        },
+        "artifactId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
+        },
+        "artifactRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "contentDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "kind": {
+          "$ref": "#/$defs/artifactKind"
+        }
+      }
+    },
+    "planPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "maxConcurrency",
+        "budget",
+        "integration",
+        "requireHumanIntegrationApproval",
+        "integrationTargets"
+      ],
+      "properties": {
+        "maxConcurrency": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "budget": {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/budgetPolicy"
+        },
+        "integration": {
+          "enum": [
+            "reviewed_candidate",
+            "local_integration",
+            "remote_pr"
+          ]
+        },
+        "requireHumanIntegrationApproval": {
+          "const": true
+        },
+        "integrationTargets": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/integrationTarget"
+          }
+        }
+      }
+    },
+    "planDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "rootTaskId",
+        "title",
+        "decision",
+        "nodes",
+        "edges",
+        "externalInputs",
+        "policy"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0"
+        },
+        "rootTaskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "decision": {
+          "$ref": "#/$defs/decisionContent"
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/planNode"
+          }
+        },
+        "edges": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/planEdge"
+          }
+        },
+        "externalInputs": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 128,
+          "items": {
+            "$ref": "#/$defs/externalInput"
+          }
+        },
+        "policy": {
+          "$ref": "#/$defs/planPolicy"
+        }
+      }
+    },
+    "proposalCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedRootTaskRevision",
+        "definition"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedRootTaskRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "definition": {
+          "$ref": "#/$defs/planDefinition"
+        }
+      }
+    },
+    "revisionCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedRevision",
+        "expectedRootTaskRevision",
+        "definition"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "expectedRootTaskRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "definition": {
+          "$ref": "#/$defs/planDefinition"
+        }
+      }
+    },
+    "approvalCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedRevision",
+        "expectedDigest",
+        "expectedRootTaskRevision",
+        "decision",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "expectedDigest": {
+          "$ref": "#/$defs/digest"
+        },
+        "expectedRootTaskRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "decision": {
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "controlCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedControlRevision",
+        "action",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedControlRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "action": {
+          "enum": [
+            "pause",
+            "resume",
+            "cancel"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "compiledTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeKey",
+        "taskId",
+        "definitionRevision",
+        "criteriaRevision",
+        "taskRevision"
+      ],
+      "properties": {
+        "nodeKey": {
+          "$ref": "#/$defs/stableKey"
+        },
+        "taskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "definitionRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "criteriaRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "taskRevision": {
+          "$ref": "#/$defs/revision"
+        }
+      }
+    },
+    "planRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planId",
+        "revision",
+        "digest",
+        "definition",
+        "createdAt",
+        "author",
+        "decisionId",
+        "proposalId"
+      ],
+      "properties": {
+        "planId": {
+          "$ref": "#/$defs/planId"
+        },
+        "revision": {
+          "$ref": "#/$defs/revision"
+        },
+        "digest": {
+          "$ref": "#/$defs/digest"
+        },
+        "definition": {
+          "$ref": "#/$defs/planDefinition"
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "author": {
+          "$ref": "#/$defs/planAuthor"
+        },
+        "decisionId": {
+          "$ref": "#/$defs/decisionId"
+        },
+        "proposalId": {
+          "$ref": "#/$defs/proposalId"
+        }
+      }
+    },
+    "planProjection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planId",
+        "roomId",
+        "rootTaskId",
+        "ownerMemberId",
+        "controlRevision",
+        "state",
+        "current",
+        "compiledTasks",
+        "createdAt",
+        "updatedAt"
+      ],
+      "properties": {
+        "planId": {
+          "$ref": "#/$defs/planId"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "rootTaskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "ownerMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "controlRevision": {
+          "$ref": "#/$defs/revision"
+        },
+        "state": {
+          "enum": [
+            "draft",
+            "approved",
+            "running",
+            "paused",
+            "review",
+            "completed",
+            "canceled"
+          ]
+        },
+        "current": {
+          "$ref": "#/$defs/planRevision"
+        },
+        "compiledTasks": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/compiledTask"
+          }
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "updatedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "agentProposalCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "command"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "command": {
+          "$ref": "#/$defs/proposalCommand"
+        }
+      }
+    },
+    "integrationTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repositoryId",
+        "targetRef",
+        "expectedCommit"
+      ],
+      "properties": {
+        "repositoryId": {
+          "$ref": "#/$defs/repositoryId"
+        },
+        "targetRef": {
+          "type": "string",
+          "minLength": 12,
+          "maxLength": 255,
+          "pattern": "^refs/heads/[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "expectedCommit": {
+          "$ref": "#/$defs/gitObjectId"
+        }
+      }
+    },
+    "sourceRevision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceRefId",
+        "revision"
+      ],
+      "properties": {
+        "evidenceRefId": {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/evidenceRefId"
+        },
+        "revision": {
+          "$ref": "#/$defs/revision"
+        }
+      }
+    },
+    "planAuthor": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "memberId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "member"
+            },
+            "memberId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "agentId",
+            "runId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "agent"
+            },
+            "agentId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+            },
+            "runId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "kind",
+            "discussionId"
+          ],
+          "properties": {
+            "kind": {
+              "const": "discussion"
+            },
+            "discussionId": {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/discussionId"
+            }
+          }
+        }
+      ]
+    },
+    "decisionRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisionId",
+        "rootTaskId",
+        "roomId",
+        "content",
+        "author",
+        "supersedesDecisionId",
+        "createdAt"
+      ],
+      "properties": {
+        "decisionId": {
+          "$ref": "#/$defs/decisionId"
+        },
+        "rootTaskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "content": {
+          "$ref": "#/$defs/decisionContent"
+        },
+        "author": {
+          "$ref": "#/$defs/planAuthor"
+        },
+        "supersedesDecisionId": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/decisionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    }
+  }
+}

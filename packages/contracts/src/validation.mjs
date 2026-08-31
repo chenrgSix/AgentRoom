@@ -146,8 +146,20 @@ export async function validateContractPackage(packageRoot) {
 
 export async function validateContractFixtures(packageRoot) {
   const { validator } = await loadContractPackage(packageRoot);
-  const fixturePath = path.join(packageRoot, "fixtures", "cases.json");
-  const fixtureSuite = await readJson(fixturePath);
+  const fixturePaths = ["cases.json", "execution-plan-cases.json"].map((name) =>
+    path.join(packageRoot, "fixtures", name)
+  );
+  const suites = await Promise.all(fixturePaths.map(readJson));
+  for (const [index, suite] of suites.entries()) {
+    if (suite?.fixtureVersion !== "1.0" || !Array.isArray(suite.cases)) {
+      throw new Error(`${fixturePaths[index]} must contain fixtureVersion 1.0 and cases`);
+    }
+  }
+  const fixturePath = fixturePaths.join(", ");
+  const fixtureSuite = {
+    fixtureVersion: "1.0",
+    cases: suites.flatMap((suite) => suite.cases)
+  };
 
   if (
     typeof fixtureSuite.fixtureVersion !== "string" ||

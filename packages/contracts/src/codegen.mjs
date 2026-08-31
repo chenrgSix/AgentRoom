@@ -18,6 +18,8 @@ const PAIRING_SCHEMA_ID =
   "https://agentroom.dev/schemas/bridge/pairing-session.schema.json";
 const WORK_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/task-result.schema.json";
+const EXECUTION_SCHEMA_ID =
+  "https://agentroom.dev/schemas/work/execution-plan.schema.json";
 
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
@@ -211,7 +213,11 @@ function formatGo(source) {
     });
   }
   if (result.status !== 0) {
-    throw new Error(`gofmt failed: ${result.stderr.trim()}`);
+    const errorLine = Number(result.stderr.match(/:(\d+):\d+:/u)?.[1]);
+    const context = Number.isInteger(errorLine)
+      ? source.split("\n").slice(Math.max(0, errorLine - 3), errorLine + 3).join("\n")
+      : "";
+    throw new Error(`gofmt failed: ${result.stderr.trim()}\n${context}`);
   }
   return result.stdout;
 }
@@ -377,6 +383,24 @@ function renderBridgeStandaloneValidator(schema) {
   const validate = validator.compile(schema);
 
   return `${standaloneCode(validator, validate).trimEnd()}\n`;
+}
+
+function renderExecutionValidators(schemas) {
+  const validator = new Ajv2020({
+    code: { optimize: 2, source: true },
+    strict: true,
+    ownProperties: true
+  });
+  addFormats(validator);
+  for (const schema of schemas.values()) validator.addSchema(schema);
+  return `${standaloneCode(validator, {
+    planDefinition: `${EXECUTION_SCHEMA_ID}#/$defs/planDefinition`,
+    proposalCommand: `${EXECUTION_SCHEMA_ID}#/$defs/proposalCommand`,
+    revisionCommand: `${EXECUTION_SCHEMA_ID}#/$defs/revisionCommand`,
+    approvalCommand: `${EXECUTION_SCHEMA_ID}#/$defs/approvalCommand`,
+    controlCommand: `${EXECUTION_SCHEMA_ID}#/$defs/controlCommand`,
+    decisionContent: `${EXECUTION_SCHEMA_ID}#/$defs/decisionContent`
+  }).trimEnd()}\n`;
 }
 
 function renderBridgeRuntimeModule(canonicalPropertyTrees) {
@@ -1268,6 +1292,7 @@ export async function generateContractTypes(packageRoot) {
   const bridgeSchema = schemas.get(BRIDGE_SCHEMA_ID);
   const pairingSchema = schemas.get(PAIRING_SCHEMA_ID);
   const workSchema = schemas.get(WORK_SCHEMA_ID);
+  const executionSchema = schemas.get(EXECUTION_SCHEMA_ID);
 
   if (!bridgeSchema) {
     throw new Error(`Missing code generation schema: ${BRIDGE_SCHEMA_ID}`);
@@ -1277,6 +1302,9 @@ export async function generateContractTypes(packageRoot) {
   }
   if (!workSchema) {
     throw new Error(`Missing code generation schema: ${WORK_SCHEMA_ID}`);
+  }
+  if (!executionSchema) {
+    throw new Error(`Missing code generation schema: ${EXECUTION_SCHEMA_ID}`);
   }
 
   const bridgeCodegen = createBridgeCodegenSchemas(bridgeSchema);
@@ -1318,6 +1346,18 @@ export async function generateContractTypes(packageRoot) {
     ["LegacyTaskMapping", "legacyTaskMapping"],
     ["ChildTaskFromResultCommand", "childTaskFromResultCommand"]
   ]);
+  const executionCodegen = createDefinitionCodegenSchemas(executionSchema, [
+    ["ExecutionPlanProjection", "planProjection"],
+    ["ExecutionDecisionRecord", "decisionRecord"],
+    ["ExecutionDecisionContent", "decisionContent"],
+    ["ExecutionPlanDefinition", "planDefinition"],
+    ["ExecutionPlanProposalCommand", "proposalCommand"],
+    ["ExecutionPlanRevisionCommand", "revisionCommand"],
+    ["ExecutionPlanApprovalCommand", "approvalCommand"],
+    ["ExecutionPlanControlCommand", "controlCommand"],
+    ["ExecutionPlanRevision", "planRevision"],
+    ["ExecutionAgentPlanProposalCommand", "agentProposalCommand"]
+  ]);
   const bridgeSchemas = bridgeCodegen.types.map((entry) => ({
     ...entry,
     sourceSchema: bridgeSchema
@@ -1340,6 +1380,12 @@ export async function generateContractTypes(packageRoot) {
       schema: dereference(schema, sourceSchema, schemas)
     })
   );
+  const bundledExecutionSchemas = executionCodegen.map(
+    ({ name, schema, sourceSchema }) => ({
+      name,
+      schema: dereference(schema, sourceSchema, schemas)
+    })
+  );
   const bundledBridgeSchema = removeNestedSchemaIdentities(
     dereference(bridgeSchema, bridgeSchema, schemas)
   );
@@ -1353,7 +1399,9 @@ export async function generateContractTypes(packageRoot) {
     renderedPairingTypeScript,
     renderedPairingGo,
     renderedWorkTypeScript,
-    renderedWorkGo
+    renderedWorkGo,
+    renderedExecutionTypeScript,
+    renderedExecutionGo
   ] = await Promise.all([
     render(
       bundledBridgeSchemas.map(({ name, schema }) => ({
@@ -1399,6 +1447,18 @@ export async function generateContractTypes(packageRoot) {
     render(bundledWorkSchemas, "go", {
       "just-types-and-package": "true",
       package: "workcontracts"
+    }),
+    render(
+      bundledExecutionSchemas.map(({ name, schema }) => ({
+        name,
+        schema: preserveTypeScriptWireStrings(schema)
+      })),
+      "typescript",
+      { "just-types": "true", "prefer-unions": "true" }
+    ),
+    render(bundledExecutionSchemas, "go", {
+      "just-types-and-package": "true",
+      package: "executioncontracts"
     })
   ]);
 
@@ -1427,8 +1487,17 @@ export async function generateContractTypes(packageRoot) {
   const workGo = formatGo(
     "// Code generated from JSON Schema; DO NOT EDIT.\n\n" + renderedWorkGo
   );
+  const executionTypescript =
+    "// Code generated from JSON Schema; DO NOT EDIT.\n\n" +
+    formatTypeScript(renderedExecutionTypeScript).trimEnd() + "\n";
+  const executionGo = formatGo(
+    "// Code generated from JSON Schema; DO NOT EDIT.\n\n" + renderedExecutionGo
+  );
 
   return {
+    executionTypescript,
+    executionGo,
+    executionValidators: renderExecutionValidators(schemas),
     bridgeRuntimeDeclaration: renderBridgeRuntimeDeclaration(),
     bridgeRuntimeModule: renderBridgeRuntimeModule(
       bridgeCanonicalPropertyTrees

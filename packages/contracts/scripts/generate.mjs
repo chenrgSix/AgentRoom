@@ -13,9 +13,22 @@ await Promise.all([
   mkdir(path.join(generatedRoot, "runtime"), { recursive: true }),
   mkdir(path.join(generatedRoot, "go", "pairing"), { recursive: true }),
   mkdir(path.join(generatedRoot, "go", "runtime"), { recursive: true }),
+  mkdir(path.join(generatedRoot, "go", "execution"), { recursive: true }),
   mkdir(path.join(generatedRoot, "go", "work"), { recursive: true })
 ]);
 await Promise.all([
+  writeFile(
+    path.join(generatedRoot, "typescript", "execution-plan.ts"),
+    output.executionTypescript
+  ),
+  writeFile(
+    path.join(generatedRoot, "go", "execution", "execution_plan.go"),
+    output.executionGo
+  ),
+  writeFile(
+    path.join(generatedRoot, "runtime", "execution-plan-validator.cjs"),
+    output.executionValidators
+  ),
   writeFile(
     path.join(generatedRoot, "runtime", "bridge-validator.cjs"),
     output.bridgeStandaloneValidator

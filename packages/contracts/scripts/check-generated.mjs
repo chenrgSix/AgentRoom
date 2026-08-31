@@ -8,6 +8,15 @@ const packageRoot = fileURLToPath(new URL("../", import.meta.url));
 const generatedRoot = path.join(packageRoot, "generated");
 const expected = await generateContractTypes(packageRoot);
 const actual = {
+  executionTypescript: await readFile(
+    path.join(generatedRoot, "typescript", "execution-plan.ts"), "utf8"
+  ),
+  executionGo: await readFile(
+    path.join(generatedRoot, "go", "execution", "execution_plan.go"), "utf8"
+  ),
+  executionValidators: await readFile(
+    path.join(generatedRoot, "runtime", "execution-plan-validator.cjs"), "utf8"
+  ),
   bridgeRuntimeDeclaration: await readFile(
     path.join(generatedRoot, "runtime", "bridge-validator.d.ts"),
     "utf8"
@@ -55,6 +64,9 @@ const actual = {
 };
 
 for (const output of [
+  "executionTypescript",
+  "executionGo",
+  "executionValidators",
   "bridgeRuntimeDeclaration",
   "bridgeRuntimeModule",
   "bridgeSchema",

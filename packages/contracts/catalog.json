@@ -45,6 +45,11 @@
       "id": "https://agentroom.dev/schemas/work/task-result.schema.json",
       "kind": "work",
       "path": "schemas/work/task-result.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/work/execution-plan.schema.json",
+      "kind": "work",
+      "path": "schemas/work/execution-plan.schema.json"
     }
   ]
 }

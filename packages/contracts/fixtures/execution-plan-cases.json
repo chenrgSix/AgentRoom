@@ -1,0 +1,1234 @@
+{
+  "fixtureVersion": "1.0",
+  "cases": [
+    {
+      "name": "execution: valid Unicode relative path",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/pathPrefix",
+      "instance": "src/认证/验证😀.ts",
+      "valid": true
+    },
+    {
+      "name": "execution: reject NUL in relative path",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/pathPrefix",
+      "instance": "src/\u0000auth",
+      "valid": false
+    },
+    {
+      "name": "execution: reject DEL in relative path",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/pathPrefix",
+      "instance": "src/auth",
+      "valid": false
+    },
+    {
+      "name": "execution: valid full plan",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planDefinition",
+      "instance": {
+        "schemaVersion": "1.0",
+        "rootTaskId": "task_00000001",
+        "title": "Implement and review a verified change",
+        "decision": {
+          "summary": "Use the existing work model.",
+          "items": [
+            {
+              "itemKey": "architecture",
+              "statement": "Keep Task, Run and Result ownership."
+            }
+          ],
+          "unresolvedQuestions": [],
+          "sources": [
+            {
+              "evidenceRefId": "evidence_00000001",
+              "kind": "discussion",
+              "discussionId": "discussion_00000001"
+            }
+          ],
+          "sourceRevisions": [
+            {
+              "evidenceRefId": "evidence_00000001",
+              "revision": 1
+            }
+          ]
+        },
+        "nodes": [
+          {
+            "nodeKey": "Build",
+            "kind": "implementation",
+            "required": true,
+            "task": {
+              "mode": "new",
+              "title": "Task Build",
+              "goal": "Deliver Build",
+              "ownerMemberId": "member_00000001",
+              "criteria": [
+                {
+                  "criterionKey": "criterion_00000001",
+                  "description": "Deliver the approved change with verification.",
+                  "required": true,
+                  "ordinal": 1
+                }
+              ]
+            },
+            "agentId": "agent_00000001",
+            "repository": {
+              "repositoryId": "repo_00000001",
+              "bindingId": "repobind_00000001",
+              "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "grantId": "grant_00000001",
+              "grantRevision": 1,
+              "runtimeProfileId": "profile_00000001",
+              "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "scope": {
+              "access": "isolated_write",
+              "allowedPaths": [
+                "src",
+                "tests"
+              ],
+              "forbiddenPaths": [
+                "secrets"
+              ],
+              "requirePreventivePathEnforcement": false
+            },
+            "budget": {
+              "maxRunAttempts": 3,
+              "maxExecutionDurationSeconds": 1800
+            },
+            "verificationProfiles": [
+              {
+                "profileId": "profile_00000002",
+                "revision": 1,
+                "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "required": true
+              }
+            ],
+            "inputs": [],
+            "outputs": [
+              {
+                "slotKey": "output",
+                "kind": "patch",
+                "required": true
+              }
+            ]
+          },
+          {
+            "nodeKey": "Review",
+            "kind": "review",
+            "required": true,
+            "task": {
+              "mode": "new",
+              "title": "Task Review",
+              "goal": "Deliver Review",
+              "ownerMemberId": "member_00000001",
+              "criteria": [
+                {
+                  "criterionKey": "criterion_00000001",
+                  "description": "Deliver the approved change with verification.",
+                  "required": true,
+                  "ordinal": 1
+                }
+              ]
+            },
+            "agentId": "agent_00000002",
+            "repository": {
+              "repositoryId": "repo_00000001",
+              "bindingId": "repobind_00000001",
+              "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "grantId": "grant_00000001",
+              "grantRevision": 1,
+              "runtimeProfileId": "profile_00000001",
+              "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "scope": {
+              "access": "read_only",
+              "allowedPaths": [],
+              "forbiddenPaths": [
+                "secrets"
+              ],
+              "requirePreventivePathEnforcement": false
+            },
+            "budget": {
+              "maxRunAttempts": 3,
+              "maxExecutionDurationSeconds": 1800
+            },
+            "verificationProfiles": [
+              {
+                "profileId": "profile_00000002",
+                "revision": 1,
+                "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                "required": true
+              }
+            ],
+            "inputs": [
+              {
+                "slotKey": "patch",
+                "kind": "patch",
+                "required": true
+              }
+            ],
+            "outputs": [
+              {
+                "slotKey": "output",
+                "kind": "document",
+                "required": true
+              }
+            ]
+          }
+        ],
+        "edges": [
+          {
+            "edgeKey": "build_review",
+            "fromNodeKey": "Build",
+            "toNodeKey": "Review",
+            "gate": "verified_output",
+            "bindings": [
+              {
+                "outputSlot": "output",
+                "inputSlot": "patch"
+              }
+            ]
+          }
+        ],
+        "externalInputs": [],
+        "policy": {
+          "maxConcurrency": 2,
+          "budget": {
+            "maxRunAttempts": 6,
+            "maxExecutionDurationSeconds": 3600
+          },
+          "integration": "reviewed_candidate",
+          "requireHumanIntegrationApproval": true,
+          "integrationTargets": []
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid human proposal",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/proposalCommand",
+      "instance": {
+        "operationId": "op_00000001",
+        "expectedRootTaskRevision": 1,
+        "definition": {
+          "schemaVersion": "1.0",
+          "rootTaskId": "task_00000001",
+          "title": "Implement and review a verified change",
+          "decision": {
+            "summary": "Use the existing work model.",
+            "items": [
+              {
+                "itemKey": "architecture",
+                "statement": "Keep Task, Run and Result ownership."
+              }
+            ],
+            "unresolvedQuestions": [],
+            "sources": [
+              {
+                "evidenceRefId": "evidence_00000001",
+                "kind": "discussion",
+                "discussionId": "discussion_00000001"
+              }
+            ],
+            "sourceRevisions": [
+              {
+                "evidenceRefId": "evidence_00000001",
+                "revision": 1
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "nodeKey": "Build",
+              "kind": "implementation",
+              "required": true,
+              "task": {
+                "mode": "new",
+                "title": "Task Build",
+                "goal": "Deliver Build",
+                "ownerMemberId": "member_00000001",
+                "criteria": [
+                  {
+                    "criterionKey": "criterion_00000001",
+                    "description": "Deliver the approved change with verification.",
+                    "required": true,
+                    "ordinal": 1
+                  }
+                ]
+              },
+              "agentId": "agent_00000001",
+              "repository": {
+                "repositoryId": "repo_00000001",
+                "bindingId": "repobind_00000001",
+                "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "grantId": "grant_00000001",
+                "grantRevision": 1,
+                "runtimeProfileId": "profile_00000001",
+                "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              "scope": {
+                "access": "isolated_write",
+                "allowedPaths": [
+                  "src",
+                  "tests"
+                ],
+                "forbiddenPaths": [
+                  "secrets"
+                ],
+                "requirePreventivePathEnforcement": false
+              },
+              "budget": {
+                "maxRunAttempts": 3,
+                "maxExecutionDurationSeconds": 1800
+              },
+              "verificationProfiles": [
+                {
+                  "profileId": "profile_00000002",
+                  "revision": 1,
+                  "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "required": true
+                }
+              ],
+              "inputs": [],
+              "outputs": [
+                {
+                  "slotKey": "output",
+                  "kind": "patch",
+                  "required": true
+                }
+              ]
+            },
+            {
+              "nodeKey": "Review",
+              "kind": "review",
+              "required": true,
+              "task": {
+                "mode": "new",
+                "title": "Task Review",
+                "goal": "Deliver Review",
+                "ownerMemberId": "member_00000001",
+                "criteria": [
+                  {
+                    "criterionKey": "criterion_00000001",
+                    "description": "Deliver the approved change with verification.",
+                    "required": true,
+                    "ordinal": 1
+                  }
+                ]
+              },
+              "agentId": "agent_00000002",
+              "repository": {
+                "repositoryId": "repo_00000001",
+                "bindingId": "repobind_00000001",
+                "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "grantId": "grant_00000001",
+                "grantRevision": 1,
+                "runtimeProfileId": "profile_00000001",
+                "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              "scope": {
+                "access": "read_only",
+                "allowedPaths": [],
+                "forbiddenPaths": [
+                  "secrets"
+                ],
+                "requirePreventivePathEnforcement": false
+              },
+              "budget": {
+                "maxRunAttempts": 3,
+                "maxExecutionDurationSeconds": 1800
+              },
+              "verificationProfiles": [
+                {
+                  "profileId": "profile_00000002",
+                  "revision": 1,
+                  "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "required": true
+                }
+              ],
+              "inputs": [
+                {
+                  "slotKey": "patch",
+                  "kind": "patch",
+                  "required": true
+                }
+              ],
+              "outputs": [
+                {
+                  "slotKey": "output",
+                  "kind": "document",
+                  "required": true
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "edgeKey": "build_review",
+              "fromNodeKey": "Build",
+              "toNodeKey": "Review",
+              "gate": "verified_output",
+              "bindings": [
+                {
+                  "outputSlot": "output",
+                  "inputSlot": "patch"
+                }
+              ]
+            }
+          ],
+          "externalInputs": [],
+          "policy": {
+            "maxConcurrency": 2,
+            "budget": {
+              "maxRunAttempts": 6,
+              "maxExecutionDurationSeconds": 3600
+            },
+            "integration": "reviewed_candidate",
+            "requireHumanIntegrationApproval": true,
+            "integrationTargets": []
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid exact approval",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/approvalCommand",
+      "instance": {
+        "operationId": "op_00000002",
+        "expectedRevision": 1,
+        "expectedDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "expectedRootTaskRevision": 1,
+        "decision": "approved",
+        "reason": "Reviewed the exact plan."
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid control command",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/controlCommand",
+      "instance": {
+        "operationId": "op_00000003",
+        "expectedControlRevision": 1,
+        "action": "pause",
+        "reason": "Inspect execution."
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid revision command",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revisionCommand",
+      "instance": {
+        "operationId": "op_00000001",
+        "expectedRootTaskRevision": 1,
+        "definition": {
+          "schemaVersion": "1.0",
+          "rootTaskId": "task_00000001",
+          "title": "Implement and review a verified change",
+          "decision": {
+            "summary": "Use the existing work model.",
+            "items": [
+              {
+                "itemKey": "architecture",
+                "statement": "Keep Task, Run and Result ownership."
+              }
+            ],
+            "unresolvedQuestions": [],
+            "sources": [
+              {
+                "evidenceRefId": "evidence_00000001",
+                "kind": "discussion",
+                "discussionId": "discussion_00000001"
+              }
+            ],
+            "sourceRevisions": [
+              {
+                "evidenceRefId": "evidence_00000001",
+                "revision": 1
+              }
+            ]
+          },
+          "nodes": [
+            {
+              "nodeKey": "Build",
+              "kind": "implementation",
+              "required": true,
+              "task": {
+                "mode": "new",
+                "title": "Task Build",
+                "goal": "Deliver Build",
+                "ownerMemberId": "member_00000001",
+                "criteria": [
+                  {
+                    "criterionKey": "criterion_00000001",
+                    "description": "Deliver the approved change with verification.",
+                    "required": true,
+                    "ordinal": 1
+                  }
+                ]
+              },
+              "agentId": "agent_00000001",
+              "repository": {
+                "repositoryId": "repo_00000001",
+                "bindingId": "repobind_00000001",
+                "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "grantId": "grant_00000001",
+                "grantRevision": 1,
+                "runtimeProfileId": "profile_00000001",
+                "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              "scope": {
+                "access": "isolated_write",
+                "allowedPaths": [
+                  "src",
+                  "tests"
+                ],
+                "forbiddenPaths": [
+                  "secrets"
+                ],
+                "requirePreventivePathEnforcement": false
+              },
+              "budget": {
+                "maxRunAttempts": 3,
+                "maxExecutionDurationSeconds": 1800
+              },
+              "verificationProfiles": [
+                {
+                  "profileId": "profile_00000002",
+                  "revision": 1,
+                  "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "required": true
+                }
+              ],
+              "inputs": [],
+              "outputs": [
+                {
+                  "slotKey": "output",
+                  "kind": "patch",
+                  "required": true
+                }
+              ]
+            },
+            {
+              "nodeKey": "Review",
+              "kind": "review",
+              "required": true,
+              "task": {
+                "mode": "new",
+                "title": "Task Review",
+                "goal": "Deliver Review",
+                "ownerMemberId": "member_00000001",
+                "criteria": [
+                  {
+                    "criterionKey": "criterion_00000001",
+                    "description": "Deliver the approved change with verification.",
+                    "required": true,
+                    "ordinal": 1
+                  }
+                ]
+              },
+              "agentId": "agent_00000002",
+              "repository": {
+                "repositoryId": "repo_00000001",
+                "bindingId": "repobind_00000001",
+                "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "grantId": "grant_00000001",
+                "grantRevision": 1,
+                "runtimeProfileId": "profile_00000001",
+                "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+              },
+              "scope": {
+                "access": "read_only",
+                "allowedPaths": [],
+                "forbiddenPaths": [
+                  "secrets"
+                ],
+                "requirePreventivePathEnforcement": false
+              },
+              "budget": {
+                "maxRunAttempts": 3,
+                "maxExecutionDurationSeconds": 1800
+              },
+              "verificationProfiles": [
+                {
+                  "profileId": "profile_00000002",
+                  "revision": 1,
+                  "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                  "required": true
+                }
+              ],
+              "inputs": [
+                {
+                  "slotKey": "patch",
+                  "kind": "patch",
+                  "required": true
+                }
+              ],
+              "outputs": [
+                {
+                  "slotKey": "output",
+                  "kind": "document",
+                  "required": true
+                }
+              ]
+            }
+          ],
+          "edges": [
+            {
+              "edgeKey": "build_review",
+              "fromNodeKey": "Build",
+              "toNodeKey": "Review",
+              "gate": "verified_output",
+              "bindings": [
+                {
+                  "outputSlot": "output",
+                  "inputSlot": "patch"
+                }
+              ]
+            }
+          ],
+          "externalInputs": [],
+          "policy": {
+            "maxConcurrency": 2,
+            "budget": {
+              "maxRunAttempts": 6,
+              "maxExecutionDurationSeconds": 3600
+            },
+            "integration": "reviewed_candidate",
+            "requireHumanIntegrationApproval": true,
+            "integrationTargets": []
+          }
+        },
+        "expectedRevision": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid attributed decision",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/decisionContent",
+      "instance": {
+        "summary": "Use the existing work model.",
+        "items": [
+          {
+            "itemKey": "architecture",
+            "statement": "Keep Task, Run and Result ownership."
+          }
+        ],
+        "unresolvedQuestions": [],
+        "sources": [
+          {
+            "evidenceRefId": "evidence_00000001",
+            "kind": "discussion",
+            "discussionId": "discussion_00000001"
+          }
+        ],
+        "sourceRevisions": [
+          {
+            "evidenceRefId": "evidence_00000001",
+            "revision": 1
+          }
+        ]
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid scoped Agent proposal",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/agentProposalCommand",
+      "instance": {
+        "runId": "run_00000001",
+        "command": {
+          "operationId": "op_00000001",
+          "expectedRootTaskRevision": 1,
+          "definition": {
+            "schemaVersion": "1.0",
+            "rootTaskId": "task_00000001",
+            "title": "Implement and review a verified change",
+            "decision": {
+              "summary": "Use the existing work model.",
+              "items": [
+                {
+                  "itemKey": "architecture",
+                  "statement": "Keep Task, Run and Result ownership."
+                }
+              ],
+              "unresolvedQuestions": [],
+              "sources": [
+                {
+                  "evidenceRefId": "evidence_00000001",
+                  "kind": "discussion",
+                  "discussionId": "discussion_00000001"
+                }
+              ],
+              "sourceRevisions": [
+                {
+                  "evidenceRefId": "evidence_00000001",
+                  "revision": 1
+                }
+              ]
+            },
+            "nodes": [
+              {
+                "nodeKey": "Build",
+                "kind": "implementation",
+                "required": true,
+                "task": {
+                  "mode": "new",
+                  "title": "Task Build",
+                  "goal": "Deliver Build",
+                  "ownerMemberId": "member_00000001",
+                  "criteria": [
+                    {
+                      "criterionKey": "criterion_00000001",
+                      "description": "Deliver the approved change with verification.",
+                      "required": true,
+                      "ordinal": 1
+                    }
+                  ]
+                },
+                "agentId": "agent_00000001",
+                "repository": {
+                  "repositoryId": "repo_00000001",
+                  "bindingId": "repobind_00000001",
+                  "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "grantId": "grant_00000001",
+                  "grantRevision": 1,
+                  "runtimeProfileId": "profile_00000001",
+                  "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                },
+                "scope": {
+                  "access": "isolated_write",
+                  "allowedPaths": [
+                    "src",
+                    "tests"
+                  ],
+                  "forbiddenPaths": [
+                    "secrets"
+                  ],
+                  "requirePreventivePathEnforcement": false
+                },
+                "budget": {
+                  "maxRunAttempts": 3,
+                  "maxExecutionDurationSeconds": 1800
+                },
+                "verificationProfiles": [
+                  {
+                    "profileId": "profile_00000002",
+                    "revision": 1,
+                    "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                    "required": true
+                  }
+                ],
+                "inputs": [],
+                "outputs": [
+                  {
+                    "slotKey": "output",
+                    "kind": "patch",
+                    "required": true
+                  }
+                ]
+              },
+              {
+                "nodeKey": "Review",
+                "kind": "review",
+                "required": true,
+                "task": {
+                  "mode": "new",
+                  "title": "Task Review",
+                  "goal": "Deliver Review",
+                  "ownerMemberId": "member_00000001",
+                  "criteria": [
+                    {
+                      "criterionKey": "criterion_00000001",
+                      "description": "Deliver the approved change with verification.",
+                      "required": true,
+                      "ordinal": 1
+                    }
+                  ]
+                },
+                "agentId": "agent_00000002",
+                "repository": {
+                  "repositoryId": "repo_00000001",
+                  "bindingId": "repobind_00000001",
+                  "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                  "grantId": "grant_00000001",
+                  "grantRevision": 1,
+                  "runtimeProfileId": "profile_00000001",
+                  "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+                },
+                "scope": {
+                  "access": "read_only",
+                  "allowedPaths": [],
+                  "forbiddenPaths": [
+                    "secrets"
+                  ],
+                  "requirePreventivePathEnforcement": false
+                },
+                "budget": {
+                  "maxRunAttempts": 3,
+                  "maxExecutionDurationSeconds": 1800
+                },
+                "verificationProfiles": [
+                  {
+                    "profileId": "profile_00000002",
+                    "revision": 1,
+                    "digest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+                    "required": true
+                  }
+                ],
+                "inputs": [
+                  {
+                    "slotKey": "patch",
+                    "kind": "patch",
+                    "required": true
+                  }
+                ],
+                "outputs": [
+                  {
+                    "slotKey": "output",
+                    "kind": "document",
+                    "required": true
+                  }
+                ]
+              }
+            ],
+            "edges": [
+              {
+                "edgeKey": "build_review",
+                "fromNodeKey": "Build",
+                "toNodeKey": "Review",
+                "gate": "verified_output",
+                "bindings": [
+                  {
+                    "outputSlot": "output",
+                    "inputSlot": "patch"
+                  }
+                ]
+              }
+            ],
+            "externalInputs": [],
+            "policy": {
+              "maxConcurrency": 2,
+              "budget": {
+                "maxRunAttempts": 6,
+                "maxExecutionDurationSeconds": 3600
+              },
+              "integration": "reviewed_candidate",
+              "requireHumanIntegrationApproval": true,
+              "integrationTargets": []
+            }
+          }
+        }
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid existing Task pin",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/existingTask",
+      "instance": {
+        "mode": "existing",
+        "taskId": "task_00000002",
+        "expectedTaskRevision": 3,
+        "definitionRevision": 2,
+        "criteriaRevision": 1
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid exact external input",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/externalInput",
+      "instance": {
+        "nodeKey": "Review",
+        "inputSlot": "patch",
+        "sourceTaskId": "task_00000002",
+        "sourceResultId": "result_00000001",
+        "artifactId": "artifact_00000001",
+        "artifactRevision": 1,
+        "contentDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "kind": "patch"
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid integration target",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/integrationTarget",
+      "instance": {
+        "repositoryId": "repo_00000001",
+        "targetRef": "refs/heads/main",
+        "expectedCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: no Agent-controlled approval actor",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/approvalCommand",
+      "instance": {
+        "operationId": "op_00000002",
+        "expectedRevision": 1,
+        "expectedDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "expectedRootTaskRevision": 1,
+        "decision": "approved",
+        "reason": "Reviewed the exact plan.",
+        "actorMemberId": "member_00000002"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: approval requires digest",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/approvalCommand",
+      "instance": {
+        "operationId": "op_00000002",
+        "expectedRevision": 1,
+        "expectedRootTaskRevision": 1,
+        "decision": "approved",
+        "reason": "Reviewed the exact plan."
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: approval rejects uppercase digest",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/approvalCommand",
+      "instance": {
+        "operationId": "op_00000002",
+        "expectedRevision": 1,
+        "expectedDigest": "DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD",
+        "expectedRootTaskRevision": 1,
+        "decision": "approved",
+        "reason": "Reviewed the exact plan."
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: approval rejects unsafe revision",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/approvalCommand",
+      "instance": {
+        "operationId": "op_00000002",
+        "expectedRevision": 9007199254740992,
+        "expectedDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "expectedRootTaskRevision": 1,
+        "decision": "approved",
+        "reason": "Reviewed the exact plan."
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject execution state as approval",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/approvalCommand",
+      "instance": {
+        "operationId": "op_00000002",
+        "expectedRevision": 1,
+        "expectedDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "expectedRootTaskRevision": 1,
+        "decision": "executing",
+        "reason": "Reviewed the exact plan."
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject runtime resume command",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/controlCommand",
+      "instance": {
+        "operationId": "op_00000003",
+        "expectedControlRevision": 1,
+        "action": "resume_runtime",
+        "reason": "Inspect execution."
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: no shell command in repository binding",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryInput",
+      "instance": {
+        "repositoryId": "repo_00000001",
+        "bindingId": "repobind_00000001",
+        "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantId": "grant_00000001",
+        "grantRevision": 1,
+        "runtimeProfileId": "profile_00000001",
+        "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "command": "echo unsafe"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: no absolute local root in binding",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryInput",
+      "instance": {
+        "repositoryId": "repo_00000001",
+        "bindingId": "repobind_00000001",
+        "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantId": "grant_00000001",
+        "grantRevision": 1,
+        "runtimeProfileId": "profile_00000001",
+        "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "path": "/private/repository"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: no credential in binding",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryInput",
+      "instance": {
+        "repositoryId": "repo_00000001",
+        "bindingId": "repobind_00000001",
+        "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantId": "grant_00000001",
+        "grantRevision": 1,
+        "runtimeProfileId": "profile_00000001",
+        "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "token": "not-a-real-secret"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject symbolic base branch",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryInput",
+      "instance": {
+        "repositoryId": "repo_00000001",
+        "bindingId": "repobind_00000001",
+        "baseCommit": "main",
+        "grantId": "grant_00000001",
+        "grantRevision": 1,
+        "runtimeProfileId": "profile_00000001",
+        "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject shortened commit",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryInput",
+      "instance": {
+        "repositoryId": "repo_00000001",
+        "bindingId": "repobind_00000001",
+        "baseCommit": "abc1234",
+        "grantId": "grant_00000001",
+        "grantRevision": 1,
+        "runtimeProfileId": "profile_00000001",
+        "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: logical repository cannot be binding identity",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryInput",
+      "instance": {
+        "repositoryId": "repobind_00000001",
+        "bindingId": "repobind_00000001",
+        "baseCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "grantId": "grant_00000001",
+        "grantRevision": 1,
+        "runtimeProfileId": "profile_00000001",
+        "runtimeProfileDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject shared writer mode",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/scopePolicy",
+      "instance": {
+        "access": "shared_write",
+        "allowedPaths": [
+          "src",
+          "tests"
+        ],
+        "forbiddenPaths": [
+          "secrets"
+        ],
+        "requirePreventivePathEnforcement": false
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject absolute scope path",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/pathPrefix",
+      "instance": "/tmp/repo",
+      "valid": false
+    },
+    {
+      "name": "execution: reject drive scope path",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/pathPrefix",
+      "instance": "C:/repo",
+      "valid": false
+    },
+    {
+      "name": "execution: reject backslash path",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/pathPrefix",
+      "instance": "src\\auth",
+      "valid": false
+    },
+    {
+      "name": "execution: reject wildcard scope",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/pathPrefix",
+      "instance": "src/**",
+      "valid": false
+    },
+    {
+      "name": "execution: reject unknown dependency condition",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planEdge",
+      "instance": {
+        "edgeKey": "build_review",
+        "fromNodeKey": "Build",
+        "toNodeKey": "Review",
+        "gate": "run_completed",
+        "bindings": [
+          {
+            "outputSlot": "output",
+            "inputSlot": "patch"
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject excessive concurrency",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planPolicy",
+      "instance": {
+        "maxConcurrency": 9,
+        "budget": {
+          "maxRunAttempts": 6,
+          "maxExecutionDurationSeconds": 3600
+        },
+        "integration": "reviewed_candidate",
+        "requireHumanIntegrationApproval": true,
+        "integrationTargets": []
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject removal of merge approval",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planPolicy",
+      "instance": {
+        "maxConcurrency": 2,
+        "budget": {
+          "maxRunAttempts": 6,
+          "maxExecutionDurationSeconds": 3600
+        },
+        "integration": "reviewed_candidate",
+        "requireHumanIntegrationApproval": false,
+        "integrationTargets": []
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject synthetic verifier source",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/decisionContent",
+      "instance": {
+        "summary": "Use the existing work model.",
+        "items": [
+          {
+            "itemKey": "architecture",
+            "statement": "Keep Task, Run and Result ownership."
+          }
+        ],
+        "unresolvedQuestions": [],
+        "sources": [
+          {
+            "evidenceRefId": "evidence_00000001",
+            "kind": "verified",
+            "status": "passed"
+          }
+        ],
+        "sourceRevisions": [
+          {
+            "evidenceRefId": "evidence_00000001",
+            "revision": 1
+          }
+        ]
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: reject empty task criteria",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/newTask",
+      "instance": {
+        "mode": "new",
+        "title": "Task Build",
+        "goal": "Deliver Build",
+        "ownerMemberId": "member_00000001",
+        "criteria": []
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: existing Task requires criteria pin",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/existingTask",
+      "instance": {
+        "mode": "existing",
+        "taskId": "task_00000002",
+        "expectedTaskRevision": 1,
+        "definitionRevision": 1
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: input requires full content digest",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/externalInput",
+      "instance": {
+        "nodeKey": "Review",
+        "inputSlot": "patch",
+        "sourceTaskId": "task_00000002",
+        "sourceResultId": "result_00000001",
+        "artifactId": "artifact_00000001",
+        "artifactRevision": 1,
+        "contentDigest": "abcd",
+        "kind": "patch"
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: valid immutable decision record",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/decisionRecord",
+      "instance": {
+        "decisionId": "decision_00000001",
+        "rootTaskId": "task_00000001",
+        "roomId": "room_00000001",
+        "content": {
+          "summary": "Use the existing work model.",
+          "items": [
+            {
+              "itemKey": "architecture",
+              "statement": "Keep Task, Run and Result ownership."
+            }
+          ],
+          "unresolvedQuestions": [],
+          "sources": [
+            {
+              "evidenceRefId": "evidence_00000001",
+              "kind": "discussion",
+              "discussionId": "discussion_00000001"
+            }
+          ],
+          "sourceRevisions": [
+            {
+              "evidenceRefId": "evidence_00000001",
+              "revision": 1
+            }
+          ]
+        },
+        "author": {
+          "kind": "member",
+          "memberId": "member_00000001"
+        },
+        "supersedesDecisionId": null,
+        "createdAt": "2026-08-31T10:00:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: reject authority in plan author",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planAuthor",
+      "instance": {
+        "kind": "agent",
+        "agentId": "agent_00000001",
+        "runId": "run_00000001",
+        "canApprove": true
+      },
+      "valid": false
+    },
+    {
+      "name": "execution: decision source requires exact revision",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/sourceRevision",
+      "instance": {
+        "evidenceRefId": "evidence_00000001"
+      },
+      "valid": false
+    }
+  ]
+}

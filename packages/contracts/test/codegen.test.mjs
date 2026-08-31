@@ -61,4 +61,10 @@ test("contract generation is deterministic", async () => {
   assert.match(first.workTypescript, /search\?:\s+string;/);
   assert.match(first.workGo, /Search\s+\*string\s+`json:"search,omitempty"`/);
   assert.match(first.workTypescript, /export interface WorkbenchPage/);
+  assert.match(first.executionTypescript, /export interface ExecutionPlanDefinition/);
+  assert.match(first.executionTypescript, /export interface ExecutionPlanApprovalCommand/);
+  assert.match(first.executionTypescript, /createdAt:\s+string;/);
+  assert.match(first.executionGo, /package executioncontracts/);
+  assert.match(first.executionGo, /type ExecutionPlanDefinition struct/);
+  assert.match(first.executionValidators, /exports\.planDefinition/);
 });

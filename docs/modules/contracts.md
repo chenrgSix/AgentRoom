@@ -7,6 +7,28 @@ generated TypeScript and Go. Structural validity does not prove graph topology,
 referential integrity, authorization, local capability or evidence truth.
 Old Bridge compatibility never allows silent downgrade of governed coding.
 
+`CON-020` adds `work/execution-plan.schema.json`, generated execution types and
+an Ajv standalone validator. The shared Execution validation port rejects
+non-JSON/ill-formed Unicode input, limits input to 512 KiB, 30,000 visited values
+and depth 24, validates closed shapes, and separately validates graph semantics.
+It returns a detached normalized plan, SHA-256 digest, binary-key topological
+order and unresolved required-question blockers. Repository bindings, exact
+bases, required verification, target refs, slot producers and criteria are
+validated structurally/relationally; database authorization and real local
+capability remain later runtime gates. Source prose is never an approval.
+
+Decision source references carry a one-to-one exact revision pin. Persisted
+Decision records and plan revisions expose the actual member, assigned Agent
+Run, or Discussion author instead of attributing Agent work to a human Owner.
+Caller mutation envelopes do not accept an author or approval-capability field;
+the owning service derives authority from its authenticated principal.
+
+Plan sets are sorted before digesting; arrays with order semantics remain
+ordered. `.` means the whole repository in an explicit output scope; other
+prefixes are normalized relative components without traversal, Git metadata or
+wildcards. Forbidden prefixes win, and scope validation does not claim OS
+enforcement. Plan policy pins integration targets separately from local bindings.
+
 [ADR-0028](../adr/0028-preserve-continuous-web-work.md) adds optional bounded
 `search` to Workbench queries. It matches authorized Task titles or exact Team
 display numbers and binds pagination to normalized search. Existing callers
