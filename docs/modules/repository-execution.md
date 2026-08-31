@@ -150,6 +150,55 @@ Windows flushes owned read-only Git files with write-capable handles and restore
 their attributes. Native Windows and power-loss durability need their own
 platform evidence; cross-compilation does not establish either.
 
+### Frozen Output Scope and Local Capture
+
+Preparation journal version 2 also pins the generated `ManifestScopePolicy`.
+Read-only means no output changes, allowed prefixes are separator-aware, and
+forbidden prefixes always win. Invalid or fully forbidden write scopes fail
+before preparation. Version-1 local observations cannot acquire an implicit
+write scope; they remain historical and cannot enter capture through the new
+API. No production Bridge advertised the earlier primitive as an execution
+capability.
+
+`Capture` accepts recorded operation/workspace identities and exact prepared,
+generation and manifest digests, never a new path policy. Its caller must hold
+the existing Bridge stopped-attempt fence and current local authorization;
+capture does not invent another authoritative Run state or prove process death
+from a clean filesystem. The original source, Agent branch, index and worktree
+remain unchanged.
+
+Actual files are read through a rooted filesystem and observed twice with
+head/index consistency checks. The prepared candidate, including exact upstream
+inputs, is the output-scope baseline, not the original repository commit alone.
+Tracked, untracked and ignored files are all considered. Generated build state
+must be placed in locally approved attempt scratch or explicitly handled by its
+owner before capture; mutable ignore rules cannot conceal out-of-scope writes.
+Renames are checked as deletion plus addition so both endpoints need authority.
+Changes to symlinks/gitlinks and unresolved index stages are rejected. Existing
+unchanged symlinks/gitlinks remain part of the pinned snapshot. Owned Git
+metadata rejects symlinks, special files, redirected intermediate directories
+and changed configuration/shallow/graft boundaries before Git reads it. Windows
+uses index modes for executable metadata rather than claiming POSIX mode support.
+
+Capture creates a separate immutable Git store from bounded, verified bytes,
+checks its objects and exact inventory, and generates a full-index binary patch.
+Its current patch ceiling is 4 MiB, matching canonical Artifact transport;
+larger output is retained as an unpublished candidate, never truncated or
+silently promoted. Temporary blob copies are deleted by exact enumerated names
+only after the independent object store is flushed. Local inventories are
+bounded to 32 MiB and never become wire manifests.
+
+The sealed local `CapturedRepository` record survives restart and exact
+response-loss replay without observing later uncollected edits. A final receipt
+can be regenerated only from its immutable intent/candidate and matching output
+bytes. A generation cannot acquire a different capture identity. A partially
+unsealed capture remains inspectable and cannot be blindly rerun with different
+bytes. This record has no canonical Artifact IDs and is not a
+`RepositoryCheckpoint`, verifier receipt, completion decision or cleanup grant.
+Formal checkpoint publication must use actually accepted canonical content
+receipts; the legacy `read_source` publisher cannot impersonate an isolated
+workspace lease.
+
 ## Verification Receipts
 
 Verification is a system-owned operation on an exact candidate, not an Agent's

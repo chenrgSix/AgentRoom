@@ -13,6 +13,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 type fixture struct {
@@ -93,7 +95,8 @@ func (f *fixture) write(t *testing.T, name, value string) {
 func request(base, suffix string) Preparation {
 	return Preparation{OperationID: "operation_" + suffix, RunID: "run_" + suffix, RepositoryID: "repository_fixture",
 		BindingID: "binding_fixture", WorkspaceRef: "workspace_" + suffix, Generation: strings.Repeat("a", 64),
-		ManifestDigest: strings.Repeat("b", 64), BaseCommit: base}
+		ManifestDigest: strings.Repeat("b", 64), BaseCommit: base,
+		ScopePolicy: execution.ManifestScopePolicy{Access: execution.IsolatedWrite, AllowedPaths: []string{"."}, ForbiddenPaths: []string{}}}
 }
 
 func patch(old, next, id string) PatchInput {

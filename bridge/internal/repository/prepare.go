@@ -18,6 +18,7 @@ import (
 
 	"convenewire.dev/bridge/internal/durablefs"
 	"convenewire.dev/bridge/internal/ownership"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 // PatchInput is a locally fetched, already-authorized exact input. Its bytes
@@ -43,6 +44,7 @@ type Preparation struct {
 	ManifestDigest string
 	BaseCommit     string
 	Inputs         []PatchInput
+	ScopePolicy    execution.ManifestScopePolicy
 }
 
 type inputPin struct {
@@ -51,17 +53,18 @@ type inputPin struct {
 	Bytes     int    `json:"bytes"`
 }
 type preparationIntent struct {
-	Version        int        `json:"version"`
-	OperationID    string     `json:"operationId"`
-	RunID          string     `json:"runId"`
-	RepositoryID   string     `json:"repositoryId"`
-	BindingID      string     `json:"bindingId"`
-	WorkspaceRef   string     `json:"workspaceRef"`
-	Generation     string     `json:"generation"`
-	ManifestDigest string     `json:"manifestDigest"`
-	BaseCommit     string     `json:"baseCommit"`
-	Source         Source     `json:"source"`
-	Inputs         []inputPin `json:"inputs"`
+	Version        int                           `json:"version"`
+	OperationID    string                        `json:"operationId"`
+	RunID          string                        `json:"runId"`
+	RepositoryID   string                        `json:"repositoryId"`
+	BindingID      string                        `json:"bindingId"`
+	WorkspaceRef   string                        `json:"workspaceRef"`
+	Generation     string                        `json:"generation"`
+	ManifestDigest string                        `json:"manifestDigest"`
+	BaseCommit     string                        `json:"baseCommit"`
+	Source         Source                        `json:"source"`
+	Inputs         []inputPin                    `json:"inputs"`
+	ScopePolicy    execution.ManifestScopePolicy `json:"scopePolicy"`
 }
 
 type preparedCandidate struct {
@@ -122,7 +125,7 @@ func NewPreparer(stateRoot, gitExecutable string, limits Limits) (*Preparer, err
 		return nil, err
 	}
 	for _, entry := range entries {
-		if entry.Name() != ".bridge-owner.lock" && entry.Name() != "claims" && entry.Name() != "attempts" {
+		if entry.Name() != ".bridge-owner.lock" && entry.Name() != "claims" && entry.Name() != "attempts" && entry.Name() != "captures" {
 			return nil, ErrInvalid
 		}
 	}
@@ -130,7 +133,7 @@ func NewPreparer(stateRoot, gitExecutable string, limits Limits) (*Preparer, err
 	if err != nil {
 		return nil, err
 	}
-	for _, name := range []string{"claims", "attempts"} {
+	for _, name := range []string{"claims", "attempts", "captures"} {
 		path := filepath.Join(root, name)
 		if err := os.Mkdir(path, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 			owner.Release()
@@ -146,7 +149,7 @@ func NewPreparer(stateRoot, gitExecutable string, limits Limits) (*Preparer, err
 		return nil, err
 	}
 	directories := map[string]string{}
-	for _, path := range []string{root, filepath.Join(root, "claims"), filepath.Join(root, "attempts")} {
+	for _, path := range []string{root, filepath.Join(root, "claims"), filepath.Join(root, "attempts"), filepath.Join(root, "captures")} {
 		id, err := directoryIdentity(path)
 		if err != nil {
 			owner.Release()
@@ -180,9 +183,13 @@ func (p *Preparer) intent(source Source, request Preparation) (preparationIntent
 		!validObject(request.BaseCommit, source.ObjectFormat) || len(request.Inputs) > 32 {
 		return preparationIntent{}, ErrInvalid
 	}
-	intent := preparationIntent{Version: 1, OperationID: request.OperationID, RunID: request.RunID, RepositoryID: request.RepositoryID,
+	policy, err := freezeScopePolicy(request.ScopePolicy)
+	if err != nil {
+		return preparationIntent{}, err
+	}
+	intent := preparationIntent{Version: 2, OperationID: request.OperationID, RunID: request.RunID, RepositoryID: request.RepositoryID,
 		BindingID: request.BindingID, WorkspaceRef: request.WorkspaceRef, Generation: request.Generation,
-		ManifestDigest: request.ManifestDigest, BaseCommit: request.BaseCommit, Source: source, Inputs: []inputPin{}}
+		ManifestDigest: request.ManifestDigest, BaseCommit: request.BaseCommit, Source: source, Inputs: []inputPin{}, ScopePolicy: policy}
 	seen := map[string]bool{}
 	var inputBytes int64
 	for _, input := range request.Inputs {
@@ -237,14 +244,8 @@ func (p *Preparer) attemptPath(workspaceRef string) string {
 func (p *Preparer) Prepare(ctx context.Context, source Source, request Preparation) (PreparedWorkspace, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.closed {
-		return PreparedWorkspace{}, ErrInvalid
-	}
-	for path, expected := range p.directories {
-		actual, err := directoryIdentity(path)
-		if err != nil || actual != expected {
-			return PreparedWorkspace{}, ErrChanged
-		}
+	if err := p.checkOwner(); err != nil {
+		return PreparedWorkspace{}, err
 	}
 	if err := ctx.Err(); err != nil {
 		return PreparedWorkspace{}, err
@@ -422,6 +423,9 @@ func (p *Preparer) readCandidate(workspaceRef, key string) (preparedCandidate, e
 
 func (p *Preparer) checkCandidate(intent preparationIntent, candidate preparedCandidate) error {
 	attempt := p.attemptPath(intent.WorkspaceRef)
+	if err := checkOwnedGitMetadata(filepath.Join(attempt, "git"), max(4096, p.git.limits.Entries*4)); err != nil {
+		return err
+	}
 	for path, expected := range map[string]string{attempt: candidate.AttemptIdentity, filepath.Join(attempt, "git"): candidate.GitIdentity} {
 		actual, err := directoryIdentity(path)
 		if err != nil || actual != expected {
@@ -436,10 +440,14 @@ func (p *Preparer) checkCandidate(intent preparationIntent, candidate preparedCa
 	if err != nil || string(attributes) != exactCheckoutAttributes {
 		return ErrChanged
 	}
-	for _, name := range []string{"config.worktree", "objects/info/alternates", "objects/info/http-alternates"} {
+	for _, name := range []string{"config.worktree", "info/grafts", "objects/info/alternates", "objects/info/http-alternates"} {
 		if _, err := os.Lstat(filepath.Join(attempt, "git", name)); !errors.Is(err, os.ErrNotExist) {
 			return ErrChanged
 		}
+	}
+	shallow, err := readRegular(filepath.Join(attempt, "git", "shallow"), 4096)
+	if err != nil || string(shallow) != intent.BaseCommit+"\n" {
+		return ErrChanged
 	}
 	if !validObject(candidate.Commit, intent.Source.ObjectFormat) || !validObject(candidate.Tree, intent.Source.ObjectFormat) {
 		return ErrChanged
@@ -457,28 +465,8 @@ func (p *Preparer) verifyWorkspace(ctx context.Context, intent preparationIntent
 	if err != nil {
 		return PreparedWorkspace{}, err
 	}
-	// Inspect local linking files before asking Git to read any workspace config.
-	link, err := readRegular(filepath.Join(work, ".git"), 16<<10)
-	if err != nil {
-		return PreparedWorkspace{}, ErrChanged
-	}
-	linked := filepath.FromSlash(strings.TrimSuffix(strings.TrimPrefix(string(link), "gitdir: "), "\n"))
-	if !strings.HasPrefix(string(link), "gitdir: ") || !contained(filepath.Join(gitDir, "worktrees"), linked) || filepath.Clean(linked) != linked {
-		return PreparedWorkspace{}, ErrChanged
-	}
-	if _, err := directoryIdentity(linked); err != nil {
-		return PreparedWorkspace{}, ErrChanged
-	}
-	back, err := readRegular(filepath.Join(linked, "gitdir"), 16<<10)
-	if err != nil || filepath.FromSlash(strings.TrimSuffix(string(back), "\n")) != filepath.Join(work, ".git") {
-		return PreparedWorkspace{}, ErrChanged
-	}
-	common, err := readRegular(filepath.Join(linked, "commondir"), 16<<10)
-	if err != nil || filepath.Clean(filepath.Join(linked, strings.TrimSpace(string(common)))) != gitDir {
-		return PreparedWorkspace{}, ErrChanged
-	}
-	if _, err := os.Lstat(filepath.Join(linked, "config.worktree")); !errors.Is(err, os.ErrNotExist) {
-		return PreparedWorkspace{}, ErrChanged
+	if err := checkWorktreeLinks(work, gitDir); err != nil {
+		return PreparedWorkspace{}, err
 	}
 	for _, check := range []struct {
 		args     []string
@@ -541,7 +529,11 @@ func readRegular(path string, limit int64) ([]byte, error) {
 }
 
 func readJSON(path string, value any) error {
-	raw, err := readRegular(path, 1<<20)
+	return readJSONSized(path, value, 1<<20)
+}
+
+func readJSONSized(path string, value any, limit int64) error {
+	raw, err := readRegular(path, limit)
 	if err != nil {
 		return err
 	}
@@ -561,7 +553,10 @@ func ensureExactJSON(path string, value any) error {
 	if err != nil {
 		return err
 	}
-	if existing, err := readRegular(path, 1<<20); err == nil {
+	if len(raw) > 32<<20 {
+		return ErrLimit
+	}
+	if existing, err := readRegular(path, 32<<20); err == nil {
 		if !bytes.Equal(raw, existing) {
 			return ErrConflict
 		}
