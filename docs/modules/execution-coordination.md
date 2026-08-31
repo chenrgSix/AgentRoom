@@ -22,7 +22,7 @@ Requirement IDs identify behavior, not delivery status. Only TASKS records state
 | EX-01 | Decisions and proposals are immutable, attributed and non-executing | EXEC-001, DISC-010; exact source and malformed-output tests |
 | EX-02 | Complete versioned DAG validation and atomic child-Task compilation | CON-020, EXEC-001, EXEC-002; cycle/duplicate/rollback/reopen tests |
 | EX-03 | Exact-version human approval fences scope, definitions and authority | EXEC-002; stale/foreign/changed-payload response-loss tests |
-| EX-04 | Dependencies bind exact upstream outputs and authorized cross-Task inputs | EXEC-003; two-Task/two-Bridge transfer and foreign-scope negatives |
+| EX-04 | Dependencies bind exact upstream outputs and authorized cross-Task inputs | EXEC-006 foundation plus EXEC-003, RUN-018, VER-001 and REPO-002; two-Task/two-Bridge transfer and foreign-scope negatives |
 | EX-05 | One dispatch intent creates one ordinary Run under all admission gates | EXEC-004, RUN-018; concurrent schedulers, offline/reconnect and crash cuts |
 | EX-06 | Coding uses explicit local grants and isolated workspaces before startup | WSP-003, BRG-071, REPO-001; actual Git and denied-runtime execution tests |
 | EX-07 | Verifier receipts are independent from Agent claims and pin exact code | VER-001; actual command plus forgery/profile/tree mismatch tests |
@@ -33,6 +33,22 @@ Requirement IDs identify behavior, not delivery status. Only TASKS records state
 | EX-12 | Focused/quorum discussions preserve frozen evidence and actual Run outcomes | DISC-011, DISC-012; permutation/restart/late-result/role tests |
 | EX-13 | Existing Rooms, default Tasks, ordinary Runs and human Result review remain intact | QA-052, QA-053, QA-054; full regression plus legacy-route bypass negatives |
 | EX-14 | Final scope and completion evidence match the accepted design | QA-055; requirement-by-requirement direction audit |
+
+### Foundation and Closure Ordering
+
+The accepted-result admission port is an independently testable prerequisite
+owned by EXEC-006: atomic input freezing, exact manifests, current authorization,
+sealed content reads and destination Artifact provenance. RUN-018 may connect
+that port to ordinary Run Delivery without waiting for all graph gate producers.
+Unavailable `verified_output` and `integrated_commit` gates remain explicit
+errors; accepted Results cannot stand in for their independent proofs.
+
+EXEC-003 retains the full EX-04 outcome after VER-001 and REPO-002 expose their
+immutable receipt lookups: gate-specific bindings and actual authorized
+two-Bridge materialization through RUN-018. QA-053 depends on that complete
+outcome. This ordering breaks the implicit scheduler/integration/input cycle;
+it does not mark the full dependency feature complete at the foundation gate,
+weaken any approval, or permit dispatch with missing required inputs.
 
 ## Aggregates and Identities
 

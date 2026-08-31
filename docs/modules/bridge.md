@@ -16,6 +16,12 @@ runtime admission. The Server keeps capabilities scoped to the current
 authenticated connection epoch and does not send governed Runs to legacy or
 observing-only connections. Capability metadata is not local authorization.
 
+BRG-071 consumes the REPO-004 local primitives and owns the production local
+binding/grant and cleanup adapters, including the owner-visible exact preview
+and the existing stopped-Run fence. REPO-001 verifies that complete lifecycle
+after RUN-018 connects ordinary Delivery; it is not an implementation prerequisite
+of BRG-071. Foundation acceptance never enables a public governed capability.
+
 ## Scope
 
 - Prefix: `BRG`

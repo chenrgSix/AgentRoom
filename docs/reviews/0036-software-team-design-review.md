@@ -30,6 +30,35 @@ starting point, not evidence that the new features are already delivered.
 | R10: Phase 1 runs writers before Phase 2 isolation | parallel writes and uncollectable changes | isolation/grants precede governed Run dispatch; all three increments remain required for final closure |
 | R11: code review pipelines are added to Discussion | execution and deliberation become one state machine again | code pipelines stay in Task DAG; Discussion efficiency changes are read-only and optional |
 | R12: schema/tests alone are treated as product acceptance | hidden process/browser/side-effect gaps | real temporary Git, actual Go Bridge, verifier commands, fault injection, Web flows and final requirement audit |
+| R13: foundational API tasks also require their downstream integration acceptance | implicit execution-input/integration and repository/admission dependency cycles, even if the listed dependency graph is acyclic | explicit EXEC-006 and REPO-004 foundation tasks; original EXEC-003/REPO-001 retain complete acceptance after real downstream adapters; QA-052/QA-053 require those closures |
+
+### R13 Implementation-Order Review
+
+On 2026-09-01, reviewed current source and task evidence at `6f842e8`:
+
+- EXEC-003's accepted-result port exists, but its complete gate resolvers need
+  VER-001/REPO-002. REPO-002 needs EXEC-004, which needs RUN-018; requiring all of
+  EXEC-003 before RUN-018 makes those completion conditions circular.
+- REPO-001's local Git/checkpoint primitives exist, but its owner-visible
+  production cleanup/admission connection needs BRG-071/RUN-018. Requiring that
+  entire lifecycle before BRG-071 produces the same problem.
+- EXEC-006 isolates the accepted-result foundation acceptance. RUN-018 can
+  integrate it while unsupported independent gates continue to fail closed.
+  EXEC-003 still requires the real independent resolvers and two-Bridge flow.
+- REPO-004 isolates local Git/output primitive acceptance, including remaining
+  producers. BRG-071 owns actual local grant/enforcement/cleanup setup; RUN-018
+  owns Delivery connection. REPO-001 still requires the full production-wired
+  lifecycle and is explicitly required by QA-052. QA-053 also requires EXEC-003.
+
+The split changes implementation prerequisites, not product scope or authority.
+Original task IDs and historical evidence remain; no incomplete requirement is
+removed or relabeled DONE. The scoped software-team graph has 29 unique tasks,
+15 known completed external prerequisites and no cycle. Both foundation tasks'
+direct prerequisites are complete. The check treats older completed prerequisites
+as external boundaries rather than parsing deferred prose as dependency edges.
+303-file Markdown lint and whitespace checks pass for the owning-document
+updates. Runtime, browser and final direction gates remain
+mandatory; this review is not their acceptance.
 
 ## Important Starting-Point Corrections
 

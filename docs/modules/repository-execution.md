@@ -409,8 +409,21 @@ live external execution is reported separately and is never implied by mocks.
 
 ## Verification and Commands
 
-`REPO-001` covers real temporary Git preparation/capture/cleanup;
-`BRG-071` covers local policy and runtime enforcement; `VER-001` runs actual
+`REPO-004` covers real temporary Git preparation, capture, approved output
+production, checkpoint resume and exact cleanup primitives. The earlier
+REPO-001-named evidence files remain valid historical evidence for those
+primitives and are not renamed. Producing approved Artifact content, including a
+`test_result` report, does not produce an independent verification receipt;
+that separate authority remains VER-001 and is not a hidden prerequisite of the
+local content producer. `BRG-071` connects owner binding/grant setup,
+runtime enforcement and owner-visible cleanup to the existing stopped-Run
+authority. `RUN-018` connects those capabilities to ordinary frozen Run Delivery.
+`REPO-001` retains the full owner-local lifecycle acceptance using these actual
+production adapters, and is a prerequisite of QA-052 rather than of its own
+BRG-071 implementation. Local fixtures alone cannot satisfy that closure.
+
+`VER-001` depends on the local primitives and actual local enforcement, not the
+later lifecycle acceptance; it runs actual
 bounded commands with pass/fail/timeout and forged-receipt negatives;
 `REPO-002` exercises overlapping branches, conflicts and target CAS;
 `REPO-003` validates authenticated provider IO and ambiguous external effects.
