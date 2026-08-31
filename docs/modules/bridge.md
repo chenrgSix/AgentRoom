@@ -179,6 +179,15 @@ match the Run, isolated-worktree reference, generation and base commit. The
 retained specification replaces the raw filesystem identity with a digest and
 omits the worktree path, Git path, branch, command and environment.
 
+The delivery and repository schemas generate different Go types for the same
+execution value. `DecodeGovernedManifest` therefore performs the conversion
+only after schema and canonical digest validation, and joins it to the outer
+delivery Run/Room/Task/Agent/deadline plus the frozen Context Manifest's
+Run/Task revisions, Agent/Device target, version and record time. The current
+local path accepts only a Codex target because BRG-071 has no other physical
+Runtime profile implementation. An internally valid manifest attached to a
+different delivery fails before local admission or inbox acceptance.
+
 `Claim` appends an owner-namespaced version-1 record only while the workspace,
 grant and deadline are current. Exact replay returns the original record, while
 another Run cannot reuse the same workspace generation, preparation operation

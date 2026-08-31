@@ -29,6 +29,11 @@ permission to retry.
   manifest and canonical manifest/input digests. It retains exact Plan control,
   Task definition/criteria, Run, dispatch generation, Device, grant,
   repository, isolated workspace lease, Runtime profile and prepared Git pins.
+- `DecodeGovernedManifest` separately validates the delivery representation and
+  joins it to the outer Run/Room/Task/Agent/deadline and frozen Context Manifest
+  version, revisions, target Agent/Device and record time before conversion to
+  the repository representation. Cross-delivery substitution fails before any
+  durable local admission state.
 - The prepared Run, workspace reference/generation and base commit must match
   the manifest. The profile must be unrevoked and match its Agent and exact
   manifest ID/digest. SHA-1 and SHA-256 prepared object identities remain
@@ -57,11 +62,12 @@ permission to retry.
 
 ## Focused verification
 
-The focused suite covers exact prerequisite joins and drift, path-free durable
-claims, expiry, immutable replay/collision, callback denial, concurrent start,
-post-callback expiry, exact stop/reopen, ambiguous recovery, orphan stage and
-directory replacement. It passes normally and under Go's race detector; Go vet
-also passes for the admission package.
+The focused suite covers exact outer-delivery joins, manifest digest drift,
+exact prerequisite joins and drift, path-free durable claims, expiry, immutable
+replay/collision, callback denial, concurrent start, post-callback expiry, exact
+stop/reopen, ambiguous recovery, orphan stage and directory replacement. It
+passes normally and under Go's race detector; Go vet also passes for the
+admission package.
 
 The completion commit additionally records full Bridge regression, native and
 cross-platform compilation, deterministic compatibility E2E, documentation
