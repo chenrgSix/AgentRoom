@@ -264,6 +264,59 @@ test("Room deep link keeps the requested non-default Task after the initial Room
   f.assertNoCommands();
 });
 
+test("management returns to the exact Work Task, tab and filters without a domain command", async (t) => {
+  const f = await fixture(t);
+  f.setUrl(f.navigation({ workTaskId: f.firstTask.taskId, tab: "results", scope: "team", search: "Navigation" }));
+  f.render(<App />);
+  await f.expectTab(f.firstTask, "Results");
+  f.fireEvent.click(f.page.getByRole("button", { name: "Management", exact: true }));
+  await f.page.findByRole("searchbox", { name: "Search Agents" });
+  assert.equal(f.page.queryByRole("combobox", { name: "Select Room" }), null);
+  assert.equal(f.page.queryByRole("textbox", { name: "Message", exact: true }), null);
+  for (const name of ["Devices", "Team & members", "Account & security"]) {
+    f.fireEvent.click(f.page.getByRole("button", { name, exact: true }));
+  }
+  f.fireEvent.click(f.page.getByRole("button", { name: "Collaboration", exact: true }));
+  await f.expectTab(f.firstTask, "Results");
+  assert.equal(f.query().get("scope"), "team");
+  assert.equal(f.query().get("search"), "Navigation");
+  assert.equal(f.query().get("room"), f.targetRoom.roomId);
+  assert.equal(f.query().get("workTask"), f.firstTask.taskId);
+  f.assertNoCommands();
+});
+
+test("a Team switch in management cannot restore the previous Team's Task", async (t) => {
+  const f = await fixture(t);
+  f.setUrl(f.navigation({ workTaskId: f.firstTask.taskId, tab: "results" }));
+  f.render(<App />);
+  await f.expectTab(f.firstTask, "Results");
+  f.fireEvent.click(f.page.getByRole("button", { name: "Management", exact: true }));
+  f.fireEvent.change(f.page.getByRole("combobox", { name: "Select Team" }), { target: { value: f.otherTeam.teamId } });
+  await f.waitFor(() => assert.equal(f.query().get("team"), f.otherTeam.teamId));
+  f.fireEvent.click(f.page.getByRole("button", { name: "Collaboration", exact: true }));
+  await f.page.findByRole("region", { name: "Work" });
+  assert.equal(f.query().has("workTask"), false);
+  assert.equal(f.query().get("team"), f.otherTeam.teamId);
+  assert.equal(f.page.queryByRole("heading", { name: f.firstTask.title }), null);
+  f.assertNoCommands();
+});
+
+test("history traverses management destinations and restores the authorized Work location", async (t) => {
+  const f = await fixture(t);
+  f.setUrl(f.navigation({ workTaskId: f.firstTask.taskId, tab: "artifacts" }));
+  f.render(<App />);
+  await f.expectTab(f.firstTask, "Artifacts");
+  f.fireEvent.click(f.page.getByRole("button", { name: "Management", exact: true }));
+  f.fireEvent.click(f.page.getByRole("button", { name: "Devices", exact: true }));
+  await f.traverse("back");
+  await f.page.findByRole("searchbox", { name: "Search Agents" });
+  await f.traverse("back");
+  await f.expectTab(f.firstTask, "Artifacts");
+  await f.traverse("forward");
+  await f.page.findByRole("searchbox", { name: "Search Agents" });
+  f.assertNoCommands();
+});
+
 for (const destination of ["Team", "Room"] as const) {
   test(`a late authorized URL Task read cannot restore an old location after a ${destination} switch`, async (t) => {
     const f = await fixture(t);
@@ -273,7 +326,7 @@ for (const destination of ["Team", "Room"] as const) {
     await f.waitFor(() => assert.equal(held.captured, true));
     const selector = await f.page.findByRole("combobox", { name: "Select Room" });
     const roomId = destination === "Team" ? f.otherTeamRoom.roomId : f.thirdRoom.roomId;
-    if (destination === "Team") f.fireEvent.click(f.page.getByTitle(f.otherTeam.name));
+    if (destination === "Team") f.fireEvent.change(f.page.getByRole("combobox", { name: "Select Team" }), { target: { value: f.otherTeam.teamId } });
     else f.fireEvent.change(selector, { target: { value: roomId } });
     await f.waitFor(() => assert.equal((f.page.getByRole("combobox", { name: "Select Room" }) as HTMLSelectElement).value, roomId));
     const currentUrl = f.dom.window.location.href;
@@ -294,7 +347,7 @@ for (const destination of ["Team", "Room"] as const) {
     await f.waitFor(() => assert.equal(held.captured, true));
     await f.waitFor(() => assert.equal((f.page.getByRole("combobox", { name: "Select Room" }) as HTMLSelectElement).value, f.targetRoom.roomId));
     const roomId = destination === "Team" ? f.otherTeamRoom.roomId : f.thirdRoom.roomId;
-    if (destination === "Team") f.fireEvent.click(f.page.getByTitle(f.otherTeam.name));
+    if (destination === "Team") f.fireEvent.change(f.page.getByRole("combobox", { name: "Select Team" }), { target: { value: f.otherTeam.teamId } });
     else f.fireEvent.change(f.page.getByRole("combobox", { name: "Select Room" }), { target: { value: roomId } });
     await f.waitFor(() => assert.equal((f.page.getByRole("combobox", { name: "Select Room" }) as HTMLSelectElement).value, roomId));
     const currentUrl = f.dom.window.location.href;

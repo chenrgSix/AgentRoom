@@ -1,0 +1,151 @@
+.product-shell {
+  --shell-panel: #131816;
+  --shell-border: #2d3630;
+  --shell-muted: #9ca99f;
+  --shell-hover: #202922;
+  --shell-active: #2b3823;
+  --shell-ink: #e8f0e5;
+  --shell-accent: #d2ec9b;
+  grid-template-columns: 248px minmax(0, 1fr);
+  height: 100dvh;
+  min-height: 0;
+}
+.product-sidebar { display: flex; flex-direction: column; min-width: 0; min-height: 0; gap: 22px; padding: 24px 16px 16px; overflow-y: auto; border-right: 1px solid var(--shell-border); background: var(--shell-panel); }
+.product-brand { display: flex; align-items: center; gap: 12px; color: var(--shell-ink); font-size: 16px; letter-spacing: -.035em; }
+.product-brand .brand-mark { width: 34px; height: 34px; border-radius: 10px; color: #d2ec9b; font-size: 9px; }
+.product-team-picker { display: flex; gap: 6px; }
+.product-sidebar button, .product-sidebar select { cursor: pointer; }
+.product-team-picker select, .product-room-picker { min-width: 0; width: 100%; padding: 10px; border: 1px solid var(--shell-border); border-radius: 9px; background: transparent; color: var(--shell-ink); font-size: 13px; }
+.product-team-picker > button, .product-section-heading > button { flex: none; min-width: 32px; border: 0; border-radius: 7px; background: transparent; color: var(--shell-muted); }
+.product-area-switch { display: flex; gap: 4px; padding: 4px; border: 1px solid var(--shell-border); border-radius: 11px; }
+.product-area-switch button { flex: 1; min-height: 35px; padding: 6px; border: 0; border-radius: 7px; background: transparent; color: var(--shell-muted); font-size: 12px; font-weight: 650; }
+.product-area-switch [aria-current] { background: var(--shell-hover); color: var(--shell-accent); box-shadow: 0 1px 4px #0002; }
+.product-destinations, .product-room-list { display: grid; gap: 4px; }
+.product-destinations button, .product-room-list button { display: flex; align-items: center; gap: 10px; min-width: 0; width: 100%; min-height: 40px; overflow: hidden; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; color: var(--shell-muted); font-size: 13px; font-weight: 500; text-align: left; text-overflow: ellipsis; }
+.product-destinations button > span, .product-room-list button > span { width: 16px; flex-shrink: 0; text-align: center; opacity: .7; }
+.product-sidebar button:disabled { cursor: not-allowed; opacity: .4; }
+.product-sidebar button:hover:not(:disabled) { background: var(--shell-hover); color: var(--shell-ink); }
+.product-destinations button[aria-current], .product-room-list button[aria-current] { background: var(--shell-active); color: var(--shell-accent); }
+.product-collaboration-nav { display: grid; gap: 26px; }
+.product-section-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; padding-left: 12px; color: var(--shell-muted); font-size: 10px; letter-spacing: .1em; }
+.product-section-heading button { font-size: 20px; }
+.product-room-list { max-height: 30vh; overflow-y: auto; }
+.product-room-list p { padding: 0 12px; color: var(--shell-muted); font-size: 12px; }
+.product-room-picker { display: none; }
+.product-sidebar-note { margin: auto 8px 0; padding-top: 24px; color: var(--shell-muted); font-size: 11px; line-height: 1.7; }
+.product-participants { border-top: 1px solid var(--shell-border); padding-top: 16px; }
+.product-participants > summary { display: flex; justify-content: space-between; padding: 8px; color: var(--shell-muted); font-size: 12px; cursor: pointer; }
+.product-participants .participant-panel { border: 0; }
+.product-participants .participant-heading { padding: 12px 8px; }
+.product-participants .participant-list { padding: 0 4px; }
+.product-participants .participant-heading strong, .product-participants .participant-kind { display: none; }
+.product-shell .workspace-header { flex-shrink: 0; min-height: 86px; padding: 20px 32px; }
+.product-shell .workspace-header h2 { font-size: 23px; }
+.product-shell .workspace-controls { flex: 0 1 auto; }
+.product-shell .workspace-controls button { cursor: pointer; }
+.header-account { width: 32px; height: 32px; padding: 0; border: 1px solid var(--shell-border); border-radius: 50%; background: var(--shell-active); color: var(--shell-accent); font-size: 12px; }
+.product-shell .agent-summary { display: none; }
+.product-shell .management-workspace { width: min(1140px, 100%); align-self: center; flex: 1; padding: 32px; overflow-y: auto; }
+.product-shell .management-intro { margin-bottom: 4px; }
+.product-shell .management-intro p { max-width: 68ch; color: var(--shell-muted); font-size: 13px; line-height: 1.7; }
+.inventory-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.inventory-toolbar input, .inventory-toolbar select { min-width: 0; max-width: 100%; padding: 10px 12px; border: 1px solid var(--shell-border); border-radius: 9px; background: var(--shell-panel); color: var(--shell-ink); font-size: 13px; }
+.inventory-toolbar input { flex: 1; min-width: 180px; max-width: 360px; }
+.inventory-toolbar > span, .inventory-help { color: var(--shell-muted); font-size: 12px; line-height: 1.6; }
+.product-shell .device-grid { grid-template-columns: minmax(0, 1fr); }
+.product-shell .device-card { padding: 20px; gap: 16px; }
+.device-identity { flex: 1; min-width: 0; }
+.device-identity strong { overflow-wrap: anywhere; }
+.device-identity details { margin-top: 8px; color: var(--shell-muted); font-size: 11px; }
+.device-identity summary { cursor: pointer; }
+.device-identity code { display: block; margin-top: 7px; overflow-wrap: anywhere; }
+.management-page-actions { display: flex; justify-content: flex-end; flex-shrink: 0; padding: 20px 32px 0; }
+.management-page-actions button, .account-preference button { padding: 8px 12px; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-panel); font-size: 12px; cursor: pointer; }
+.product-shell .account-workspace { width: min(860px, 100%); }
+.product-shell .member-management-grid { grid-template-columns: minmax(0, 1fr); }
+.member-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.member-actions > button { cursor: pointer; padding: 9px 14px; border: 1px solid var(--shell-border); border-radius: 8px; background: var(--shell-panel); font-size: 12px; }
+.agent-inventory { display: grid; gap: 10px; align-content: start; }
+.agent-inventory-row { display: flex; align-items: center; gap: 20px; padding: 20px; border: 1px solid var(--shell-border); border-radius: 12px; background: var(--shell-panel); }
+.agent-inventory-row.disabled { opacity: .68; }
+.agent-inventory-name { min-width: 0; flex: 1; }
+.agent-inventory-name h3 { margin: 0 0 5px; font-size: 14px; overflow-wrap: anywhere; }
+.agent-inventory-name p { margin: 0; font-size: 12px; color: var(--shell-muted); overflow-wrap: anywhere; }
+.agent-inventory-row > button { flex: none; padding: 8px 12px; border: 1px solid var(--shell-border); border-radius: 7px; background: transparent; font-size: 12px; cursor: pointer; }
+.setup-back, .setup-secondary { margin: 0 0 18px; padding: 8px 0; border: 0; background: transparent; color: inherit; cursor: pointer; font-size: 12px; }
+.setup-secondary { margin: 16px 0 0; text-decoration: underline; text-underline-offset: 4px; }
+.local-setup-options, .agent-detail { display: grid; gap: 16px; }
+.local-setup-options p, .agent-detail p { margin: 0; font-size: 13px; line-height: 1.7; }
+.local-setup-options > button, .agent-detail > button { justify-self: start; padding: 10px 14px; border: 1px solid #46503e; border-radius: 8px; background: transparent; cursor: pointer; }
+.account-workspace .control-panel { padding: 24px; }
+.account-workspace h3 { margin: 0 0 20px; font-size: 16px; }
+.account-workspace p { color: var(--shell-muted); font-size: 13px; line-height: 1.7; }
+.account-facts { margin: 0; }
+.account-facts > div, .account-preference { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 12px 0; font-size: 13px; }
+.account-facts dt { color: var(--shell-muted); }
+.account-facts dd { margin: 0; overflow-wrap: anywhere; }
+.product-dialog-backdrop { padding: 24px; }
+.product-dialog { display: block; width: min(800px, 100%); max-width: 100%; max-height: calc(100dvh - 48px); overflow-y: auto; padding: 24px; }
+.product-dialog-heading { display: flex; justify-content: space-between; align-items: center; gap: 20px; margin-bottom: 24px; }
+.product-dialog-heading h2 { margin: 0; font-size: 20px; }
+.product-dialog-heading > button { width: 34px; height: 34px; flex-shrink: 0; border: 1px solid #46503e; border-radius: 9px; background: transparent; font-size: 22px; cursor: pointer; }
+.product-dialog .control-panel { padding: 0; border: 0; background: transparent; }
+.product-dialog .agent-setup-choices { grid-template-columns: minmax(0, 1fr); }
+.product-dialog .agent-setup-choice { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 20px; }
+.product-dialog .agent-setup-number { display: none; }
+.product-dialog .agent-setup-choice h4, .product-dialog .agent-setup-choice p, .product-dialog .agent-setup-choice small { grid-column: 1; margin: 0; }
+.product-dialog .agent-setup-choice button { grid-column: 2; grid-row: 1 / span 3; align-self: center; margin: 0; }
+.product-room-form { display: grid; gap: 14px; }
+.product-room-form input { min-width: 0; padding: 10px; border: 1px solid #46503e; border-radius: 8px; background: transparent; color: inherit; }
+.product-room-form button { justify-self: end; padding: 10px 18px; border: 0; border-radius: 8px; background: #c7e574; color: #192410; cursor: pointer; }
+:root[data-theme="light"] .product-shell { --shell-panel: #f4f6f1; --shell-border: #dbe1d5; --shell-muted: #5c695c; --shell-hover: #e9eee2; --shell-active: #e3edcf; --shell-ink: #263126; --shell-accent: #3d5618; }
+:root[data-theme="light"] .product-brand .brand-mark { color: #3d5618; background: #e3edcf; border-color: #c4cfae; }
+@media (max-width: 1050px) {
+  .product-shell { grid-template-columns: 216px minmax(0, 1fr); }
+  .product-shell .workspace-header { padding: 18px 22px; }
+  .product-shell .management-workspace { padding: 24px; }
+}
+@media (max-width: 760px) {
+  .product-shell { display: flex; flex-direction: column; }
+  .product-sidebar { flex: none; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; padding: 12px 16px; border-right: 0; border-bottom: 1px solid var(--shell-border); overflow: visible; }
+  .product-brand { display: none; }
+  .product-team-picker { grid-column: 1; grid-row: 1; }
+  .product-area-switch { grid-column: 2; grid-row: 1; }
+  .product-team-picker select { padding: 6px; font-size: 12px; }
+  .product-area-switch button { font-size: 11px; min-height: 30px; }
+  .product-destinations { display: flex; gap: 4px; }
+  .product-sidebar > .product-destinations { grid-column: 1 / -1; flex-wrap: wrap; }
+  .product-destinations button { width: auto; flex: 1; justify-content: center; min-height: 36px; padding: 8px; font-size: 11px; white-space: nowrap; }
+  .product-destinations button > span { display: none; }
+  .product-collaboration-nav { grid-column: 1 / -1; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  .product-collaboration-nav > nav { flex: none; }
+  .product-rooms { display: flex; flex: 1; gap: 6px; min-width: 0; }
+  .product-section-heading { order: 1; margin: 0; padding: 0; }
+  .product-section-heading > span, .product-room-list, .product-sidebar-note, .product-participants { display: none; }
+  .product-room-picker { display: block; padding: 8px; font-size: 12px; }
+  .product-shell > .workspace { flex: 1; min-height: 0; }
+  .product-shell .workspace-header { min-height: 66px; padding: 12px 16px; gap: 8px; }
+  .product-shell .workspace-header h2 { font-size: 18px; }
+  .product-shell .workspace-header .eyebrow { display: none; }
+  .product-shell .workspace-heading { flex: 1; min-width: 0 !important; }
+  .product-shell .workspace-controls { width: auto; flex: none; gap: 6px; }
+  .product-shell .header-locale, .product-shell .header-theme { display: none; }
+  .product-shell .header-sign-out { font-size: 11px; padding: 8px; }
+  .product-shell .management-workspace { padding: 20px 16px; }
+  .product-shell .management-intro { flex-direction: column; align-items: flex-start; }
+  .product-shell .device-card { flex-wrap: wrap; padding: 16px; gap: 12px; }
+  .product-shell .device-icon { display: none; }
+  .agent-inventory-row { flex-wrap: wrap; gap: 12px; padding: 16px; }
+  .agent-inventory-name { flex-basis: calc(100% - 64px); }
+  .agent-inventory-row .integration-badge { max-width: 100%; font-size: 10px; }
+  .agent-inventory-row > button { margin-left: auto; }
+  .device-identity { flex-basis: 100%; }
+  .management-page-actions { padding: 16px 16px 0; }
+  .product-dialog-backdrop { padding: 12px; }
+  .product-dialog { padding: 18px; max-height: calc(100dvh - 24px); }
+  .product-dialog .agent-setup-choice { display: flex; gap: 10px; }
+  .product-dialog .agent-setup-choice button { align-self: stretch; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .product-shell *, .product-dialog * { scroll-behavior: auto; }
+}

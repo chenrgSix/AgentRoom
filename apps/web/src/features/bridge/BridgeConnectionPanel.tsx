@@ -5,6 +5,7 @@ import { type Locale, type TranslationKey, translate } from "../../i18n.js";
 import type { ConnectionMode } from "../../models.js";
 
 interface BridgeConnectionPanelProps {
+  showMethodTabs?: boolean;
   busy: boolean;
   connectionMode: ConnectionMode;
   deviceName: string;
@@ -41,7 +42,8 @@ export function BridgeConnectionPanel({
   onDeviceNameChange,
   onJoinCodeChange,
   onManualAgentNameChange,
-  setupOutput
+  setupOutput,
+  showMethodTabs = true
 }: BridgeConnectionPanelProps) {
   const t = (key: TranslationKey) => translate(locale, key);
   const serverURL = bridgeServerURL();
@@ -51,11 +53,11 @@ export function BridgeConnectionPanel({
       <div className="panel-header">
         <div><p className="eyebrow">{t("connectionCenter")}</p><h3 id="connection-center-title">{t("addAgent")}</h3></div>
       </div>
-      <div className="connection-tabs" role="tablist" aria-label={t("connectionMethods")}>
+      {showMethodTabs && <div className="connection-tabs" role="tablist" aria-label={t("connectionMethods")}>
         <button aria-selected={connectionMode === "managed"} onClick={() => onConnectionModeChange("managed")} role="tab" type="button">{t("managedCodex")}</button>
         <button aria-selected={connectionMode === "mcp"} onClick={() => onConnectionModeChange("mcp")} role="tab" type="button">{t("mcpClient")}</button>
         <button aria-selected={connectionMode === "demo"} onClick={() => onConnectionModeChange("demo")} role="tab" type="button">{t("demoAgent")}</button>
-      </div>
+      </div>}
 
       {connectionMode === "managed" && (
         <div className="connection-content" role="tabpanel">

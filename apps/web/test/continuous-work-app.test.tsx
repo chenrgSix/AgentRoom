@@ -142,6 +142,26 @@ test("Room drafts survive Task switches and a remounted App without sending", as
   assert.equal(loadComposerState(f.scopeFor(f.firstTask.taskId)).state.content, "First Task's unsent draft");
 });
 
+test("a management visit preserves the selected Room Task and unsent draft without sending", async (t) => {
+  const f = await fixture(t);
+  f.render(<App />);
+  await f.page.findByRole("button", { name: `Open TASK-${f.firstTask.taskDisplayNumber}` });
+  const editor = await f.openRoomTask(f.firstTask);
+  f.fireEvent.change(editor, { target: { value: "Continue after configuring the team" } });
+  await f.page.findByText(/Saved in this tab/u);
+  f.fireEvent.click(f.page.getByRole("button", { name: "Management", exact: true }));
+  for (const name of ["Devices", "Team & members", "Account & security"]) {
+    f.fireEvent.click(f.page.getByRole("button", { name, exact: true }));
+    assert.equal(f.page.queryByRole("textbox", { name: "Message", exact: true }), null);
+  }
+  f.fireEvent.click(f.page.getByRole("button", { name: "Collaboration", exact: true }));
+  const restored = await f.page.findByRole("textbox", { name: "Message", exact: true }) as HTMLTextAreaElement;
+  assert.equal(restored.value, "Continue after configuring the team");
+  assert.equal((f.page.getByRole("combobox", { name: "Current Task" }) as HTMLSelectElement).value, f.firstTask.taskId);
+  assert.equal(loadComposerState(f.scopeFor(f.firstTask.taskId)).state.content, restored.value);
+  assert.equal(f.requests.some(({ method, url }) => method === "POST" && /\/(?:messages|discussions)$/u.test(url)), false);
+});
+
 for (const exit of ["logout", "session expiry"] as const) {
   test(`${exit} clears App drafts and failed messages before local reauthentication`, async (t) => {
     const f = await fixture(t);

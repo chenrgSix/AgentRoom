@@ -16,6 +16,7 @@ import type {
 } from "../../models.js";
 
 interface HostedAgentPanelProps {
+  presentation?: { kind: "create" } | { kind: "profile"; agentId: string };
   agents: Agent[];
   currentMemberIsOwner: boolean;
   locale: Locale;
@@ -136,6 +137,7 @@ export function HostedAgentPanel({
   locale,
   onAgentChanged,
   onOpenRoom,
+  presentation,
   rooms,
   sessionToken,
   teamId
@@ -155,9 +157,16 @@ export function HostedAgentPanel({
   const [selectedRoomIds, setSelectedRoomIds] = useState<string[]>([]);
   const [modelDrafts, setModelDrafts] = useState<Record<string, string>>({});
   const [profileApiKeys, setProfileApiKeys] = useState<Record<string, string>>({});
+  const [createdAgentId, setCreatedAgentId] = useState<string | null>(null);
+  const presentationKind = presentation?.kind;
+  const profileAgentId = presentation?.kind === "profile" ? presentation.agentId : null;
+  const shownAgentId = profileAgentId ?? createdAgentId;
+  const showCreate = presentationKind !== "profile" && !createdAgentId;
+  const panelTitle = presentation && !showCreate
+    ? (locale === "zh-CN" ? "Agent 配置" : "Agent configuration") : t("hostedAgentConfig");
   const scopeToken = useMemo(
-    () => ({ currentMemberIsOwner, sessionToken, teamId }),
-    [currentMemberIsOwner, sessionToken, teamId]
+    () => ({ currentMemberIsOwner, sessionToken, teamId, presentationKind, profileAgentId }),
+    [currentMemberIsOwner, sessionToken, teamId, presentationKind, profileAgentId]
   );
   const activeScope = useRef<typeof scopeToken | null>(scopeToken);
   activeScope.current = scopeToken;
@@ -174,6 +183,7 @@ export function HostedAgentPanel({
 
   useEffect(() => {
     setApiKey("");
+    setCreatedAgentId(null);
     setProfileApiKeys({});
     setConnectionTest(null);
     setName("");
@@ -362,6 +372,7 @@ export function HostedAgentPanel({
       );
       if (!scopeIsActive(actionScope)) return;
       replaceConfiguration(created, actionScope);
+      if (presentationKind === "create") setCreatedAgentId(created.agentId);
       setName("");
       setRole("");
       setModel("");
@@ -563,14 +574,14 @@ export function HostedAgentPanel({
       <div className="panel-header hosted-agent-heading">
         <div>
           <p className="eyebrow">{t("hostedAgents")}</p>
-          <h3 id="hosted-agent-panel-title">{t("hostedAgentConfig")}</h3>
+          <h3 id="hosted-agent-panel-title">{panelTitle}</h3>
         </div>
         <span>Owner</span>
       </div>
       <p className="hosted-agent-intro">{t("hostedAgentConfigHelp")}</p>
       <p className="hosted-agent-boundary"><strong>{t("hostedRemoteOnly")}</strong></p>
 
-      <form className="hosted-create-form" onSubmit={(event) => void createHostedAgent(event)}>
+      {showCreate && <form className="hosted-create-form" onSubmit={(event) => void createHostedAgent(event)}>
         <div className="hosted-create-fields">
           <label>
             {t("hostedAgentName")}
@@ -669,18 +680,18 @@ export function HostedAgentPanel({
             <TestObservation locale={locale} observation={connectionTest} />
           </div>
         )}
-      </form>
+      </form>}
 
       {error && <p className="hosted-feedback error" role="alert">{error}</p>}
       {notice && <p className="hosted-feedback success" role="status">{notice}</p>}
 
-      {loading ? (
+      {presentationKind === "create" && !createdAgentId ? null : loading ? (
         <p className="hosted-agent-empty">{t("hostedLoading")}</p>
       ) : configurations.length === 0 ? (
         <p className="hosted-agent-empty">{t("hostedEmpty")}</p>
       ) : (
         <div className="hosted-profile-list">
-          {configurations.map((configuration) => {
+          {configurations.filter((configuration) => !presentation || configuration.agentId === shownAgentId).map((configuration) => {
             const profileAction = `profile:${configuration.agentId}`;
             const testAction = `test:${configuration.agentId}`;
             const revokeAction = `revoke:${configuration.agentId}`;

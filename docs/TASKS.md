@@ -507,7 +507,7 @@ client change, live deployment or Release. Dependencies below are already DONE.
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
-| WEB-061 | ACTIVE | Separate Collaboration and Management with contextual navigation and on-demand setup | WEB-051, WEB-058, WEB-059, WEB-060, SEC-012 | Required: focused navigation, context/draft, permission and configuration regressions; full tests/build/docs checks; isolated production-browser desktop/720/390 and keyboard/theme/locale evidence, with explicit provider/deployment exclusions |
+| WEB-061 | ACTIVE | Separate Collaboration and Management with contextual navigation and on-demand setup | WEB-051, WEB-058, WEB-059, WEB-060, SEC-012 | Implemented two-area shell, separate inventories, on-demand scoped setup, account settings and context return; 243 Web tests pass before final response-race additions. Completion still requires full regressions/build/docs and recorded isolated desktop/720/390 browser evidence, with explicit provider/deployment exclusions |
 
 ## Deferred Beyond MVP
 

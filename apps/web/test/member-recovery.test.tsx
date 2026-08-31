@@ -102,6 +102,8 @@ test("only a trusted Owner can explicitly issue, privately copy and revoke a mem
   try {
     const view = render(workspace());
     const page = within(dom.window.document.body);
+    assert.equal(page.queryByRole("heading", { name: "帮助成员重新登录" }), null);
+    fireEvent.click(page.getByRole("button", { name: "恢复成员访问" }));
     assert.ok(page.getByRole("heading", { name: "帮助成员重新登录" }));
     const select = page.getByLabelText("需要恢复的成员");
     assert.equal(within(select).queryByRole("option", { name: "Alice" }), null);
@@ -144,6 +146,7 @@ test("member recovery drops late issue responses after changing target or Team",
   try {
     const view = render(workspace());
     const page = within(dom.window.document.body);
+    fireEvent.click(page.getByRole("button", { name: "恢复成员访问" }));
     fireEvent.change(page.getByLabelText("需要恢复的成员"), { target: { value: bob.memberId } });
     fireEvent.click(page.getByRole("checkbox"));
     fireEvent.click(page.getByRole("button", { name: "生成 15 分钟恢复码" }));
@@ -173,6 +176,7 @@ test("member recovery explains issuance failures without rendering server payloa
   try {
     render(workspace());
     const page = within(dom.window.document.body);
+    fireEvent.click(page.getByRole("button", { name: "恢复成员访问" }));
     fireEvent.change(page.getByLabelText("需要恢复的成员"), { target: { value: bob.memberId } });
     fireEvent.click(page.getByRole("checkbox"));
     fireEvent.click(page.getByRole("button", { name: "生成 15 分钟恢复码" }));
@@ -227,6 +231,7 @@ test("expired recovery codes disappear from the member management page", async (
   try {
     render(workspace());
     const page = within(dom.window.document.body);
+    fireEvent.click(page.getByRole("button", { name: "恢复成员访问" }));
     fireEvent.change(page.getByLabelText("需要恢复的成员"), { target: { value: bob.memberId } });
     fireEvent.click(page.getByRole("checkbox"));
     fireEvent.click(page.getByRole("button", { name: "生成 15 分钟恢复码" }));

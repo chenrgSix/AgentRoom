@@ -581,8 +581,6 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
 
     fireEvent.change(roomInput, { target: { value: "general" } });
     fireEvent.click(screen.getByRole("button", { name: "创建房间" }));
-    await screen.findByRole("region", { name: "工作台" });
-    fireEvent.click(screen.getAllByRole("button", { name: "对话" })[0]!);
     await screen.findByRole("heading", { name: "在房间中开始对话 #general" });
     fireEvent.click(screen.getByRole("button", { name: "新建 Team" }));
     const teamDialog = screen.getByRole("dialog", { name: "新建 Team" });
@@ -592,24 +590,28 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     fireEvent.click(within(teamDialog).getByRole("button", { name: "创建 Team" }));
     await screen.findByRole("heading", { name: "创建一个对话房间" });
     await waitFor(() => assert.equal(screen.queryByRole("dialog", { name: "新建 Team" }), null));
-    assert.ok(screen.getByTitle(secondTeam.name).classList.contains("active"));
-    fireEvent.click(screen.getByTitle(team.name));
+    assert.equal((screen.getByRole("combobox", { name: "选择团队" }) as HTMLSelectElement).value, secondTeam.teamId);
+    fireEvent.change(screen.getByRole("combobox", { name: "选择团队" }), { target: { value: team.teamId } });
     fireEvent.click((await screen.findAllByRole("button", { name: "对话" }))[0]!);
     await screen.findByRole("heading", { name: "在房间中开始对话 #general" });
     assert.equal(screen.queryByLabelText("新建假智能体名称"), null);
     assert.equal(screen.queryByLabelText("新 Team 名称"), null);
+    fireEvent.click(screen.getByText("房间成员", { selector: ".product-participants > summary" }));
     const participants = screen.getByRole("region", { name: "房间成员" });
     await within(participants).findByText("Local Owner");
     within(participants).getByText("Team 所有者");
     const roomSidebar = participants.closest("aside");
     assert.ok(roomSidebar);
-    assert.equal(within(roomSidebar).queryByRole("navigation"), null);
+    assert.ok(within(roomSidebar).getByRole("navigation", { name: "协作导航" }));
+    assert.equal(within(roomSidebar).queryByRole("navigation", { name: "管理导航" }), null);
     assert.equal(within(roomSidebar).queryByRole("contentinfo"), null);
     assert.equal(within(roomSidebar).queryByLabelText("新房间名称"), null);
     assert.equal((screen.getByLabelText("选择房间") as HTMLSelectElement).value, room.roomId);
-    screen.getByLabelText("新房间名称");
+    assert.equal(screen.queryByLabelText("新房间名称"), null);
     assert.equal(screen.queryByRole("combobox", { name: "提及智能体" }), null);
 
+    fireEvent.click(screen.getByRole("button", { name: "管理", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "团队与成员" }));
     fireEvent.click(screen.getByRole("button", { name: "资源生命周期" }));
     const lifecycleDialog = await screen.findByRole("dialog", { name: "管理 Team 与房间" });
     const lifecycleTeamName = within(lifecycleDialog).getByLabelText("Team 名称");
@@ -632,6 +634,7 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       screen.queryByRole("dialog", { name: "管理 Team 与房间" }),
       null
     ));
+    fireEvent.click(screen.getByRole("button", { name: "协作", exact: true }));
     await screen.findByRole("heading", { name: "# delivery" });
 
     fireEvent.click(screen.getByRole("button", { name: "房间操作" }));
@@ -656,6 +659,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     );
     assert.ok(shortcutArchiveRequest);
 
+    fireEvent.click(screen.getByRole("button", { name: "管理", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "团队与成员" }));
     fireEvent.click(screen.getByRole("button", { name: "资源生命周期" }));
     const reopenedLifecycleDialog = await screen.findByRole("dialog", { name: "管理 Team 与房间" });
     const restoreRoom = await within(reopenedLifecycleDialog).findByRole("button", { name: "恢复房间" });
@@ -674,10 +679,13 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       screen.queryByRole("dialog", { name: "管理 Team 与房间" }),
       null
     ));
-    fireEvent.click(screen.getByTitle("Delivery Team"));
+    fireEvent.change(screen.getByRole("combobox", { name: "选择团队" }), { target: { value: team.teamId } });
+    fireEvent.click(screen.getByRole("button", { name: "协作", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "工作", exact: true }));
     await screen.findByRole("region", { name: "工作台" });
     fireEvent.click(screen.getAllByRole("button", { name: "对话" })[0]!);
     await screen.findByRole("heading", { name: "在房间中开始对话 #delivery" });
+    fireEvent.click(screen.getByText("房间成员", { selector: ".product-participants > summary" }));
     await within(screen.getByRole("region", { name: "房间成员" })).findByText("Review Bot");
 
     const messageInput = screen.getByLabelText("消息") as HTMLTextAreaElement;
@@ -689,12 +697,12 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     screen.getByRole("button", { name: "移除提及 Review Bot（Team 成员）" });
     fireEvent.change(messageInput, { target: { value: "请" } });
     assert.equal(screen.queryByRole("button", { name: "移除提及 Review Bot（Team 成员）" }), null);
-    fireEvent.click(screen.getByRole("button", { name: "智能体管理" }));
-
-    await screen.findByRole("heading", { name: "智能体与设备" });
-    screen.getByRole("heading", { name: "Team 智能体" });
-    screen.getByText("托管本地 Codex");
-    screen.getByText(/这不是智能体名称/u);
+    fireEvent.click(screen.getByRole("button", { name: "管理", exact: true }));
+    await screen.findByRole("heading", { name: "智能体", exact: true });
+    assert.equal(screen.queryByRole("heading", { name: "从我的 Bridge 创建 Agent" }), null);
+    fireEvent.click(screen.getByRole("button", { name: "新增智能体" }));
+    fireEvent.click(screen.getByRole("button", { name: "连接本机 Agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "从我的在线客户端模板创建" }));
     await screen.findByRole("heading", { name: "从我的 Bridge 创建 Agent" });
     assert.equal(
       (screen.getByLabelText("我的在线 Bridge") as HTMLSelectElement).value,
@@ -735,17 +743,24 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     provisionReady = true;
     fireEvent.click(screen.getByRole("button", { name: "刷新状态" }));
     await screen.findByText("已就绪", { selector: ".status-badge" });
-    const reviewCard = screen.getByRole("heading", { name: "Review Bot" }).closest("article");
+    fireEvent.click(screen.getByRole("button", { name: "关闭", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "查看 Review Bot" }));
+    const reviewCard = screen.getByRole("dialog", { name: "Review Bot" });
     assert.ok(reviewCard);
     fireEvent.click(within(reviewCard).getByRole("button", { name: "停用" }));
     const enableReview = await within(reviewCard).findByRole("button", { name: "重新启用" });
     fireEvent.click(enableReview);
     await within(reviewCard).findByRole("button", { name: "停用" });
 
-    fireEvent.click(screen.getByRole("tab", { name: "演示智能体" }));
+    fireEvent.click(screen.getByRole("button", { name: "关闭", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "新增智能体" }));
+    fireEvent.click(screen.getByRole("button", { name: "先体验演示" }));
     screen.getByText("仅用于模拟");
     screen.getByText(/不会调用 Codex 或其他模型/u);
-    fireEvent.click(screen.getByRole("tab", { name: "托管 Codex" }));
+    fireEvent.click(screen.getByRole("button", { name: "← 其他接入方式" }));
+    fireEvent.click(screen.getByRole("button", { name: "连接本机 Agent" }));
+    fireEvent.click(screen.getByRole("button", { name: "高级：命令行与旧版接入" }));
+    screen.getByText("托管本地 Codex");
 
     const joinCode = screen.getByLabelText("Bridge 审批码");
     fireEvent.change(joinCode, { target: { value: "ABCD-1234" } });
@@ -759,8 +774,10 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
       assert.deepEqual(JSON.parse(request?.body ?? "{}"), { code: "ABCD-1234" });
     });
 
+    fireEvent.click(screen.getByRole("button", { name: "关闭", exact: true }));
+    fireEvent.click(screen.getByRole("button", { name: "设备", exact: true }));
     fireEvent.click(screen.getByRole("button", { name: "撤销" }));
-    await screen.findByRole("button", { name: "已撤销" });
+    await screen.findByText("已撤销", { selector: ".status-badge" });
     const revokeRequest = requests.find((candidate) =>
       candidate.path === `/api/teams/${team.teamId}/devices/${device.deviceId}` &&
       candidate.method === "DELETE"
@@ -769,7 +786,8 @@ test("Chinese-first onboarding persists locale and reaches Bridge approval", asy
     assert.equal(revokeRequest.body, undefined);
     assert.equal(new Headers(revokeRequest.headers).has("content-type"), false);
 
-    fireEvent.click(screen.getByRole("button", { name: "对话" }));
+    fireEvent.click(screen.getByRole("button", { name: "协作", exact: true }));
+    fireEvent.click(screen.getByText("房间成员", { selector: ".product-participants > summary" }));
     fireEvent.click(screen.getByRole("button", { name: "+ 新任务" }));
     const taskDialog = await screen.findByRole("dialog", { name: "创建长期任务" });
     fireEvent.change(within(taskDialog).getByLabelText("任务名称"), {

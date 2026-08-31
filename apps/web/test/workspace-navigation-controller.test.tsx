@@ -119,6 +119,30 @@ test("initial URL waits for session readiness and restores only Server-authorize
   assert.equal(new URL(env.dom.window.location.href).searchParams.get("search"), "Ship");
 });
 
+test("account settings restore without a Team and never request Team data", async (t) => {
+  const env = await environment(t, "?view=security");
+  const hook = env.render({ teams: [], snapshot: {} });
+  await env.settle();
+  assert.deepEqual(env.restored, [{ view: "security" }]);
+  assert.deepEqual(env.requests, []);
+  assert.deepEqual(env.errors, []);
+  assert.equal(hook.result.current.restoring, false);
+});
+
+for (const view of ["devices", "security", "agents", "members"] as const) {
+  test(`${view} links still validate an explicitly selected Team and Room`, async (t) => {
+    const env = await environment(t, `?view=${view}&team=${teamB.teamId}&room=${roomB.roomId}`);
+    env.render();
+    await env.settle();
+    assert.equal(env.restored.at(-1)?.view, view);
+    assert.equal(env.restored.at(-1)?.roomId, roomB.roomId);
+    assert.deepEqual(env.requests.map(({ path }) => path), [`/api/teams/${teamB.teamId}/rooms`]);
+    await env.pop(`?view=${view}&team=team_not_accessible`);
+    assert.deepEqual(env.restored.at(-1), fallback);
+    assert.equal(env.errors.length, 1);
+  });
+}
+
 for (const [key, task, view] of [["workTask", taskB, "work"], ["task", taskA2, "room"]] as const) {
   test(`legacy ${key}-only links infer Team and Room from the authorized Task`, async (t) => {
     const env = await environment(t, `?${key}=${task.taskId}`);

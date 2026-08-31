@@ -18,7 +18,13 @@ export interface WorkspaceNavigation {
   search?: string | undefined;
 }
 
-const views: Record<WorkspaceView, true> = { work: true, room: true, agents: true, members: true };
+const views: Record<WorkspaceView, true> = {
+  work: true, room: true, agents: true, devices: true, members: true, security: true
+};
+
+export function isManagementView(view: WorkspaceView): boolean {
+  return view !== "work" && view !== "room";
+}
 const tabs: Record<TaskWorkDetailTab, true> = {
   overview: true, runs: true, results: true, artifacts: true, discussion: true, audit: true
 };

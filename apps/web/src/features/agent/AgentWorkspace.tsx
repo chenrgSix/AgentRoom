@@ -1,7 +1,7 @@
-import React, { type FormEvent, useEffect, useRef, useState } from "react";
+import React, { type FormEvent, useEffect, useState } from "react";
 
 import { BridgeConnectionPanel } from "../bridge/BridgeConnectionPanel.js";
-import { DevicePairingPanel } from "../device/DevicePairingPanel.js";
+import { PanelDialog } from "../navigation/PanelDialog.js";
 import { AgentProvisioningPanel } from "./AgentProvisioningPanel.js";
 import { AgentSetupChoices, type AgentSetupTarget } from "./AgentSetupChoices.js";
 import { HostedAgentPanel } from "./HostedAgentPanel.js";
@@ -131,7 +131,6 @@ export function AgentPolicySummary({
 }
 
 interface AgentWorkspaceProps {
-  activeDevices: number;
   agentName: string;
   agents: Agent[];
   busy: boolean;
@@ -143,7 +142,6 @@ interface AgentWorkspaceProps {
   joinCode: string;
   lifecycleBusy: boolean;
   locale: Locale;
-  managedAgents: number;
   manualAgentName: string;
   readyAgents: number;
   rooms: Room[];
@@ -161,238 +159,117 @@ interface AgentWorkspaceProps {
   onJoinCodeChange: (value: string) => void;
   onManualAgentNameChange: (value: string) => void;
   onAgentChanged: (agent: Agent) => void;
-  onSetupTargetChange?: (target: AgentSetupTarget) => void;
+  onSetupClosed: () => void;
+  onDevices: () => void;
   onOpenHostedRoom?: (roomId: string) => void;
-  onRevokeDevice: (device: Device) => void | Promise<void>;
   onSetAgentEnabled: (agent: Agent, enabled: boolean) => void | Promise<void>;
 }
 
-export function AgentWorkspace({
-  activeDevices,
-  agentName,
-  agents,
-  busy,
-  connectionMode,
-  currentMemberIsOwner,
-  currentMemberId,
-  devices,
-  deviceName,
-  joinCode,
-  lifecycleBusy,
-  locale,
-  managedAgents,
-  manualAgentName,
-  onAgentNameChange,
-  onApproveBridgeJoin,
-  onConnectionModeChange,
-  onCreateBridgeInvite,
-  onCreateFakeAgent,
-  onCreateManualAgent,
-  onDeviceNameChange,
-  onJoinCodeChange,
-  onManualAgentNameChange,
-  onAgentChanged,
-  onSetupTargetChange,
-  onOpenHostedRoom,
-  onRevokeDevice,
-  onSetAgentEnabled,
-  readyAgents,
-  rooms,
-  sessionToken,
-  setupOutput,
-  setupTarget,
-  teamId
-}: AgentWorkspaceProps) {
+type SetupFlow = AgentSetupTarget | "choose" | "mcp" | "template" | "legacy";
+
+export function AgentWorkspace(props: AgentWorkspaceProps) {
+  const { agents, busy, currentMemberIsOwner, currentMemberId, devices, lifecycleBusy, locale,
+    onAgentChanged, onOpenHostedRoom, onSetAgentEnabled, readyAgents, rooms, sessionToken, setupTarget, teamId } = props;
   const t = (key: TranslationKey) => translate(locale, key);
-  const [selectedTarget, setSelectedTarget] = useState<AgentSetupTarget | null>(null);
-  const hostedTarget = useRef<HTMLDivElement>(null);
-  const localTarget = useRef<HTMLDivElement>(null);
-  const demoTarget = useRef<HTMLDivElement>(null);
-  const activeTarget = setupTarget ?? selectedTarget;
-
-  const focusTarget = (target: AgentSetupTarget): void => {
-    const destination = target === "hosted" ? hostedTarget.current
-      : target === "local" ? localTarget.current : demoTarget.current;
-    destination?.focus({ preventScroll: true });
-    destination?.scrollIntoView?.({ block: "start", behavior: "auto" });
-  };
-
-  useEffect(() => {
-    if (activeTarget) focusTarget(activeTarget);
-  }, [activeTarget]);
-
-  const selectSetup = (target: AgentSetupTarget): void => {
+  const zh = locale === "zh-CN";
+  const [flow, setFlow] = useState<SetupFlow | null>(setupTarget ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [status, setStatus] = useState("all");
+  const [kind, setKind] = useState("all");
+  const selectedAgent = agents.find((agent) => agent.agentId === selectedId);
+  const visible = agents.filter((agent) => {
+    const term = search.trim().toLocaleLowerCase();
+    return (!term || `${agent.name} ${agent.role}`.toLocaleLowerCase().includes(term)) &&
+      (kind === "all" || agent.integrationMode === kind) &&
+      (status === "all" || (status === "disabled" ? agent.enabled === false :
+        agent.enabled !== false && (status === "ready" ? agent.presence === "ready" : agent.presence !== "ready")));
+  });
+  useEffect(() => { if (setupTarget) setFlow(setupTarget); }, [setupTarget]);
+  const close = () => { setFlow(null); setSelectedId(null); props.onSetupClosed(); };
+  const selectSetup = (target: SetupFlow) => {
     if (target === "hosted" && !currentMemberIsOwner) return;
-    if (target !== "hosted") {
-      onConnectionModeChange(target === "demo" ? "demo" : "managed");
+    props.onSetupClosed();
+    setFlow(target);
+    if (target === "demo" || target === "mcp" || target === "legacy") {
+      props.onConnectionModeChange(target === "legacy" ? "managed" : target);
     }
-    setSelectedTarget(target);
-    onSetupTargetChange?.(target);
-    focusTarget(target);
   };
 
   return (
-    <section className="management-workspace" aria-label={t("agentManagement")}>
+    <section className="management-workspace agent-workspace" aria-label={t("agentManagement")}>
       <div className="management-intro">
-        <div>
-          <p className="eyebrow">{t("teamControlPlane")}</p>
-          <h3>{t("manageRuntimes")}</h3>
-          <p>{t("manageDescription")}</p>
-        </div>
-        <button className="primary-action" onClick={() => selectSetup(currentMemberIsOwner ? "hosted" : "local")} type="button">
-          {t("connectAgent")}
-        </button>
+        <div><p>{zh ? "让合适的智能体加入协作。运行方式与权限，在配置时按需查看。" : "Bring the right Agents into your work. Inspect runtime capabilities and permissions when configuring."}</p></div>
+        <button className="primary-action" onClick={() => selectSetup("choose")} type="button">{zh ? "新增智能体" : "Add an Agent"}</button>
       </div>
-
-      <AgentSetupChoices
-        currentMemberIsOwner={currentMemberIsOwner}
-        locale={locale}
-        onSelect={selectSetup}
-      />
-
-      <div className="metric-grid" aria-label={t("agentStatusSummary")}>
-        <article className="metric-card"><strong>{agents.length}</strong><span>{t("totalAgents")}</span></article>
-        <article className="metric-card"><strong>{readyAgents}</strong><span>{t("readyNow")}</span></article>
-        <article className="metric-card"><strong>{managedAgents}</strong><span>{t("managedBridgeCount")}</span></article>
-        <article className="metric-card"><strong>{activeDevices}</strong><span>{t("activeDevices")}</span></article>
+      <div className="inventory-toolbar">
+        <input aria-label={zh ? "搜索智能体" : "Search Agents"} placeholder={zh ? "搜索名称或角色" : "Search name or role"} type="search" value={search} onChange={(event) => setSearch(event.target.value)} />
+        <select aria-label={zh ? "智能体状态" : "Agent status"} value={status} onChange={(event) => setStatus(event.target.value)}>
+          <option value="all">{zh ? "全部状态" : "All states"}</option><option value="ready">{zh ? "就绪" : "Ready"}</option><option value="other">{zh ? "未就绪" : "Not ready"}</option><option value="disabled">{zh ? "已停用" : "Disabled"}</option>
+        </select>
+        <select aria-label={zh ? "接入类型" : "Integration type"} value={kind} onChange={(event) => setKind(event.target.value)}>
+          <option value="all">{zh ? "全部类型" : "All types"}</option>
+          {(["hosted", "managed", "manual", "fake"] as const).map((mode) => <option key={mode} value={mode}>{integrationLabel(mode, locale)}</option>)}
+        </select>
       </div>
-
-      <div className="management-grid">
-        <section className="control-panel agent-library" aria-labelledby="agent-library-title">
-          <div className="panel-header">
-            <div><p className="eyebrow">{t("agentLibrary")}</p><h3 id="agent-library-title">{t("teamAgents")}</h3></div>
-            <span>{locale === "zh-CN" ? `已注册 ${agents.length} 个` : `${agents.length} ${t("registered")}`}</span>
-          </div>
-          {agents.length === 0 ? (
-            <div className="panel-empty">
-              <span>✦</span>
-              <strong>{t("noAgents")}</strong>
-              <p>{t("noAgentsHelp")}</p>
-            </div>
-          ) : (
-            <div className="agent-card-grid">
-              {agents.map((agent) => (
-                <article className={`agent-card ${agent.enabled === false ? "disabled" : ""}`} key={agent.agentId}>
-                  <div className="agent-card-top">
-                    <span className="agent-avatar">{agent.name.slice(0, 2).toUpperCase()}</span>
-                    <span className={`status-badge ${agent.enabled === false ? "offline" : agent.presence}`}>
-                      <span className={`presence-dot ${agent.enabled === false ? "offline" : agent.presence}`} />
-                      {agent.enabled === false
-                        ? (locale === "zh-CN" ? "已停用" : "Disabled")
-                        : presenceLabel(agent.presence, locale)}
-                    </span>
-                  </div>
-                  <div className="agent-card-copy">
-                    <h4>{agent.name}</h4>
-                    <p>{roleLabel(agent.role, locale)}</p>
-                  </div>
-                  <span className={`integration-badge ${agent.integrationMode}`}>
-                    {integrationLabel(agent.integrationMode, locale)}
-                  </span>
-                  {agent.integrationMode !== "hosted" && (
-                    <AgentPolicySummary locale={locale} policy={agent.runtimePolicy} />
-                  )}
-                  <small>{presenceHelp(agent, locale)}</small>
-                  {currentMemberIsOwner && (
-                    <button
-                      className="agent-enable-action"
-                      disabled={lifecycleBusy}
-                      onClick={() => void onSetAgentEnabled(agent, agent.enabled === false)}
-                      type="button"
-                    >
-                      {agent.enabled === false
-                        ? (locale === "zh-CN" ? "重新启用" : "Enable")
-                        : (locale === "zh-CN" ? "停用" : "Disable")}
-                    </button>
-                  )}
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-
-        <div className="agent-setup-destination" ref={demoTarget} tabIndex={-1}>
-          <BridgeConnectionPanel
-            agentName={agentName}
-            busy={busy}
-            connectionMode={connectionMode}
-            deviceName={deviceName}
-            joinCode={joinCode}
-            locale={locale}
-            manualAgentName={manualAgentName}
-            onAgentNameChange={onAgentNameChange}
-            onApproveBridgeJoin={onApproveBridgeJoin}
-            onConnectionModeChange={onConnectionModeChange}
-            onCreateBridgeInvite={onCreateBridgeInvite}
-            onCreateFakeAgent={onCreateFakeAgent}
-            onCreateManualAgent={onCreateManualAgent}
-            onDeviceNameChange={onDeviceNameChange}
-            onJoinCodeChange={onJoinCodeChange}
-            onManualAgentNameChange={onManualAgentNameChange}
-            setupOutput={setupOutput}
-          />
-        </div>
-      </div>
-
-      {currentMemberIsOwner && (
-        <div className="agent-setup-destination" ref={hostedTarget} tabIndex={-1}>
-          <HostedAgentPanel
-            agents={agents}
-            currentMemberIsOwner={currentMemberIsOwner}
-            key={teamId}
-            locale={locale}
-            onAgentChanged={onAgentChanged}
-            onOpenRoom={onOpenHostedRoom}
-            rooms={rooms}
-            sessionToken={sessionToken}
-            teamId={teamId}
-          />
-        </div>
-      )}
-
-      <div className="agent-setup-destination" ref={localTarget} tabIndex={-1}>
-        {currentMemberIsOwner ? (
-          <DevicePairingPanel
-            currentMemberIsOwner={currentMemberIsOwner}
-            currentMemberId={currentMemberId}
-            locale={locale}
-            sessionToken={sessionToken}
-            teamId={teamId}
-          />
-        ) : (
-          <p className="agent-setup-member-help">{t("setupLocalMemberHelp")}</p>
-        )}
-      </div>
-
-      <AgentProvisioningPanel
-        agents={agents}
-        currentMemberId={currentMemberId}
-        devices={devices}
-        locale={locale}
-        sessionToken={sessionToken}
-        teamId={teamId}
-      />
-
-      <section className="control-panel device-panel" aria-labelledby="device-panel-title">
-        <div className="panel-header">
-          <div><p className="eyebrow">{t("trustedDevices")}</p><h3 id="device-panel-title">{t("bridgeDevices")}</h3></div>
-          <span>{locale === "zh-CN" ? `${activeDevices} 台活跃` : `${activeDevices} active`}</span>
-        </div>
-        {devices.length === 0 ? (
-          <p className="device-empty">{t("noDevices")}</p>
-        ) : (
-          <div className="device-grid">
-            {devices.map((device) => (
-              <article className="device-card" key={device.deviceId}>
-                <span className="device-icon">▣</span>
-                <div><strong>{device.name}</strong><small>{device.deviceId}</small></div>
-                <span className={`status-badge ${device.status}`}>{presenceLabel(device.status, locale)}</span>
-                <button disabled={device.status !== "active"} onClick={() => void onRevokeDevice(device)} type="button">{device.status === "active" ? t("revoke") : t("revoked")}</button>
-              </article>
-            ))}
-          </div>
-        )}
-      </section>
+      <p className="inventory-help" role="status">{zh ? `${agents.length} 个智能体 · ${readyAgents} 个就绪 · 显示 ${visible.length} 个` : `${agents.length} Agents · ${readyAgents} ready · ${visible.length} shown`}</p>
+      {visible.length === 0 ? <div className="panel-empty">
+        <strong>{agents.length ? (zh ? "没有匹配的智能体" : "No matching Agents") : t("noAgents")}</strong>
+        <p>{agents.length ? (zh ? "试试其他搜索词或筛选条件。" : "Try a different search or filter.") : (zh ? "可以直接连接模型 API，也可以接入自己电脑上的客户端。" : "Connect a model API directly, or bring a client running on your computer.")}</p>
+      </div> : <div className="agent-inventory">
+        {visible.map((agent) => <article className={`agent-inventory-row ${agent.enabled === false ? "disabled" : ""}`} key={agent.agentId}>
+          <span className="agent-avatar" aria-hidden="true">{agent.name.slice(0, 1).toUpperCase()}</span>
+          <div className="agent-inventory-name"><h3>{agent.name}</h3><p>{roleLabel(agent.role, locale)}</p></div>
+          <span className={`integration-badge ${agent.integrationMode}`}>{integrationLabel(agent.integrationMode, locale)}</span>
+          <span className={`status-badge ${agent.enabled === false ? "offline" : agent.presence}`}><span className={`presence-dot ${agent.enabled === false ? "offline" : agent.presence}`} />
+            {agent.enabled === false ? (zh ? "已停用" : "Disabled") : presenceLabel(agent.presence, locale)}
+          </span>
+          <button aria-label={zh ? `查看 ${agent.name}` : `View ${agent.name}`} onClick={() => setSelectedId(agent.agentId)} type="button">{zh ? "查看" : "View"}<span aria-hidden="true"> →</span></button>
+        </article>)}
+      </div>}
+      {selectedAgent && <PanelDialog title={selectedAgent.name} locale={locale} onClose={close}>
+        {selectedAgent.integrationMode === "hosted" && currentMemberIsOwner ? (
+          <HostedAgentPanel agents={agents} currentMemberIsOwner locale={locale} onAgentChanged={onAgentChanged}
+            onOpenRoom={onOpenHostedRoom} rooms={rooms} sessionToken={sessionToken} teamId={teamId}
+            presentation={{ kind: "profile", agentId: selectedAgent.agentId }} />
+        ) : <div className="agent-detail">
+          <p>{roleLabel(selectedAgent.role, locale)} · {integrationLabel(selectedAgent.integrationMode, locale)}</p>
+          <p>{presenceHelp(selectedAgent, locale)}</p>
+          {selectedAgent.integrationMode !== "hosted" && <AgentPolicySummary locale={locale} policy={selectedAgent.runtimePolicy} />}
+          {selectedAgent.integrationMode === "managed" && <>
+            <p>{zh ? "名称、命令、工作区和模型凭据由本机客户端配置，不会在中央服务覆盖。" : "Names, commands, Workspaces and model credentials are configured in the local client, never overwritten here."}</p>
+            <button onClick={props.onDevices} type="button">{zh ? "查看设备" : "View Devices"}</button>
+          </>}
+          {currentMemberIsOwner && <button disabled={lifecycleBusy} onClick={() => void onSetAgentEnabled(selectedAgent, selectedAgent.enabled === false)} type="button">
+            {selectedAgent.enabled === false ? (zh ? "重新启用" : "Enable") : (zh ? "停用" : "Disable")}
+          </button>}
+        </div>}
+      </PanelDialog>}
+      {flow && <PanelDialog title={flow === "hosted" ? t("setupHostedTitle") : flow === "local" ? t("setupLocalTitle") :
+        flow === "template" ? (zh ? "从本机模板创建" : "Create from a local template") : (zh ? "新增智能体" : "Add an Agent")} locale={locale} onClose={close}>
+        {flow !== "choose" && <button className="setup-back" onClick={() => selectSetup("choose")} type="button">{zh ? "← 其他接入方式" : "← Other setup options"}</button>}
+        {flow === "choose" && <>
+          <AgentSetupChoices currentMemberIsOwner={currentMemberIsOwner} locale={locale} onSelect={selectSetup} />
+          <button className="setup-secondary" onClick={() => selectSetup("mcp")} type="button">{zh ? "接入 MCP 客户端" : "Connect an MCP client"}</button>
+        </>}
+        {flow === "hosted" && currentMemberIsOwner && <HostedAgentPanel
+          agents={agents} currentMemberIsOwner locale={locale} onAgentChanged={onAgentChanged} onOpenRoom={onOpenHostedRoom}
+          rooms={rooms} sessionToken={sessionToken} teamId={teamId} presentation={{ kind: "create" }} />}
+        {flow === "local" && <div className="local-setup-options">
+          <p>{t("setupLocalDescription")}</p><p>{t("setupLocalBoundary")}</p>
+          <button onClick={props.onDevices} type="button">{zh ? "前往设备管理与配对" : "Manage and pair Devices"}</button>
+          <button onClick={() => selectSetup("template")} type="button">{zh ? "从我的在线客户端模板创建" : "Create from my online client template"}</button>
+          {currentMemberIsOwner ? <button className="setup-secondary" onClick={() => selectSetup("legacy")} type="button">{zh ? "高级：命令行与旧版接入" : "Advanced: CLI and legacy enrollment"}</button> : <p>{t("setupLocalMemberHelp")}</p>}
+        </div>}
+        {flow === "template" && <AgentProvisioningPanel agents={agents} currentMemberId={currentMemberId} devices={devices} locale={locale} sessionToken={sessionToken} teamId={teamId} />}
+        {(flow === "demo" || flow === "mcp" || flow === "legacy") && <BridgeConnectionPanel
+          agentName={props.agentName} busy={busy} connectionMode={props.connectionMode} deviceName={props.deviceName} joinCode={props.joinCode}
+          locale={locale} manualAgentName={props.manualAgentName} onAgentNameChange={props.onAgentNameChange}
+          onApproveBridgeJoin={props.onApproveBridgeJoin} onConnectionModeChange={props.onConnectionModeChange}
+          onCreateBridgeInvite={props.onCreateBridgeInvite} onCreateFakeAgent={props.onCreateFakeAgent} onCreateManualAgent={props.onCreateManualAgent}
+          onDeviceNameChange={props.onDeviceNameChange} onJoinCodeChange={props.onJoinCodeChange} onManualAgentNameChange={props.onManualAgentNameChange}
+          setupOutput={props.setupOutput} showMethodTabs={false} />}
+      </PanelDialog>}
     </section>
   );
 }

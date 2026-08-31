@@ -90,7 +90,7 @@ async function assertSnapshotSelection(sendBeforeInitial: boolean) {
     render(<App />);
     const page = within(dom.window.document.body);
     await waitFor(() => assert.equal(outputReads, 1));
-    fireEvent.click(page.getByRole("button", { name: "⌁ 对话", exact: true }));
+    fireEvent.click(page.getByRole("button", { name: "对话", exact: true }));
     fireEvent.click(page.getByRole("button", { name: "+ 新任务" }));
     const dialog = within(await page.findByRole("dialog", { name: "创建长期任务" }));
     fireEvent.change(dialog.getByLabelText("任务名称"), { target: { value: createdTask.title } });

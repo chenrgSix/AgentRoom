@@ -1,4 +1,4 @@
-import type { FormEvent } from "react";
+import { type FormEvent, useState } from "react";
 
 import { type Locale, type TranslationKey, translate } from "../../i18n.js";
 import type {
@@ -8,6 +8,7 @@ import type {
   Team
 } from "../../models.js";
 import { MemberRecoveryPanel } from "./MemberRecoveryPanel.js";
+import { PanelDialog } from "../navigation/PanelDialog.js";
 
 interface TeamMembersWorkspaceProps {
   authMode: AuthMode | null;
@@ -23,6 +24,7 @@ interface TeamMembersWorkspaceProps {
   onCopyInvitation: () => void | Promise<void>;
   onCreateInvitation: (event: FormEvent) => void | Promise<void>;
   onMemberInviteNameChange: (value: string) => void;
+  onDismissInvitation?: () => void;
 }
 
 export function TeamMembersWorkspace({
@@ -36,20 +38,24 @@ export function TeamMembersWorkspace({
   onCopyInvitation,
   onCreateInvitation,
   onMemberInviteNameChange,
+  onDismissInvitation,
   selectedTeam,
   sessionUserId,
   teamBusy
 }: TeamMembersWorkspaceProps) {
   const t = (key: TranslationKey) => translate(locale, key);
+  const [action, setAction] = useState<"invite" | "recover" | null>(null);
 
   return (
     <section className="management-workspace member-workspace" aria-label={t("teamMembers")}>
       <div className="management-intro">
         <div>
-          <p className="eyebrow">{t("teamAccess")}</p>
-          <h3>{t("manageTeamMembers")}</h3>
           <p>{t("membersDescription")}</p>
         </div>
+        {authMode === "trusted-team" && currentMember?.role === "owner" && <div className="member-actions">
+          <button className="primary-action" onClick={() => setAction("invite")} type="button">{t("inviteMember")}</button>
+          <button onClick={() => setAction("recover")} type="button">{locale === "zh-CN" ? "恢复成员访问" : "Recover member access"}</button>
+        </div>}
       </div>
 
       <div className="member-management-grid">
@@ -72,6 +78,7 @@ export function TeamMembersWorkspace({
           </div>
         </section>
 
+        {action === "invite" && authMode === "trusted-team" && currentMember?.role === "owner" && <PanelDialog title={t("inviteMember")} locale={locale} onClose={() => { setAction(null); onDismissInvitation?.(); }}>
         <section className="control-panel member-invitation-panel" aria-labelledby="member-invitation-title">
           <div className="panel-header">
             <div><p className="eyebrow">{t("privateInvitation")}</p><h3 id="member-invitation-title">{t("inviteMember")}</h3></div>
@@ -112,13 +119,16 @@ export function TeamMembersWorkspace({
             </>
           )}
         </section>
-        {authMode === "trusted-team" && currentMember?.role === "owner" && (
+        </PanelDialog>}
+        {action === "recover" && authMode === "trusted-team" && currentMember?.role === "owner" && (
+          <PanelDialog title={locale === "zh-CN" ? "恢复成员访问" : "Recover member access"} locale={locale} onClose={() => setAction(null)}>
           <MemberRecoveryPanel
             key={`${selectedTeam.teamId}:${currentMember.memberId}`}
             locale={locale}
             members={members}
             teamId={selectedTeam.teamId}
           />
+          </PanelDialog>
         )}
       </div>
     </section>

@@ -126,11 +126,11 @@ test("a previous user's late Team list cannot replace the recovered member's Tea
     await page.findByRole("heading", { name: "回到你的 Team" });
     fireEvent.change(page.getByLabelText("一次性成员恢复码"), { target: { value: "new-bravo-member-code" } });
     fireEvent.click(page.getByRole("button", { name: "恢复原成员身份" }));
-    await page.findByTitle("Team Bravo");
+    await page.findByRole("option", { name: "Team Bravo" });
     await waitFor(() => assert.equal((page.getByLabelText("选择房间") as HTMLSelectElement).value, roomB.roomId));
     await act(async () => { previousTeams.resolve(response([teamA])); await previousTeams.promise; });
-    assert.ok(page.getByTitle("Team Bravo"));
-    assert.equal(page.queryByTitle("Team Alpha"), null);
+    assert.ok(page.getByRole("option", { name: "Team Bravo" }));
+    assert.equal(page.queryByRole("option", { name: "Team Alpha" }), null);
     assert.equal((page.getByLabelText("选择房间") as HTMLSelectElement).value, roomB.roomId);
     assert.equal(page.queryByRole("alert"), null);
     assert.equal(dom.window.document.body.textContent?.includes("previous Web session"), false);
@@ -163,9 +163,10 @@ test("a previous Owner's credential response cannot refill the next member's UI 
   try {
     render(<App />);
     const page = within(dom.window.document.body);
-    await page.findByTitle("Team Alpha");
-    fireEvent.click(page.getAllByRole("button", { name: "智能体管理", exact: true })[0]!);
-    fireEvent.click(await page.findByRole("tab", { name: "MCP 客户端" }));
+    await page.findByRole("option", { name: "Team Alpha" });
+    fireEvent.click(page.getByRole("button", { name: "管理", exact: true }));
+    fireEvent.click(page.getByRole("button", { name: "新增智能体" }));
+    fireEvent.click(page.getByRole("button", { name: "接入 MCP 客户端" }));
     fireEvent.change(page.getByLabelText("MCP 智能体名称"), { target: { value: "Old Owner Private Agent" } });
     fireEvent.click(page.getByRole("button", { name: "创建 MCP 凭据" }));
     await waitFor(() => assert.equal(credentialCalls, 1));
@@ -186,7 +187,7 @@ test("a previous Owner's credential response cannot refill the next member's UI 
     assert.equal((within(page.getByRole("form", { name: "成员重新登录" })).getByRole("button", { name: "正在验证…" }) as HTMLButtonElement).disabled, true);
     assert.equal(page.queryByRole("alert"), null);
     await act(async () => { recovered = true; recovery.resolve(response({ user: nextUser })); await recovery.promise; });
-    await page.findByTitle("Team Bravo");
+    await page.findByRole("option", { name: "Team Bravo" });
     await waitFor(() => assert.equal((page.getByLabelText("选择房间") as HTMLSelectElement).value, roomB.roomId));
     // The saved Agents URL belonged to Team Alpha. Reauthentication must
     // authorize that intent before restoring it, then fall back to current Work.
@@ -197,7 +198,7 @@ test("a previous Owner's credential response cannot refill the next member's UI 
     assert.equal(restoredLocation.get("team"), teamB.teamId);
     assert.equal(restoredLocation.get("view"), "work");
     assert.equal(restoredLocation.has("room"), false);
-    assert.equal(page.queryByTitle("Team Alpha"), null);
+    assert.equal(page.queryByRole("option", { name: "Team Alpha" }), null);
     assert.equal(page.queryByText("Old Owner Private Agent"), null);
     assert.equal(dom.window.document.body.textContent?.includes(oldSecret), false);
     assert.equal(JSON.stringify(dom.window.localStorage).includes(oldSecret), false);
@@ -226,11 +227,12 @@ test("a late Team registry batch cannot overwrite a newly selected Team", async 
   try {
     render(<App />);
     const page = within(dom.window.document.body);
-    const bravo = await page.findByTitle("Team Bravo");
+    await page.findByRole("option", { name: "Team Bravo" });
     await waitFor(() => assert.ok(paths.includes(`/api/teams/${teamA.teamId}/devices`)));
-    fireEvent.click(bravo);
+    fireEvent.change(page.getByRole("combobox", { name: "选择团队" }), { target: { value: teamB.teamId } });
     await waitFor(() => assert.equal((page.getByLabelText("选择房间") as HTMLSelectElement).value, roomB.roomId));
-    fireEvent.click(page.getAllByRole("button", { name: "Team 成员", exact: true })[0]!);
+    fireEvent.click(page.getByRole("button", { name: "管理", exact: true }));
+    fireEvent.click(page.getByRole("button", { name: "团队与成员", exact: true }));
     await page.findAllByText("Bravo Member");
     await act(async () => {
       for (const [suffix, wait] of pending) {
@@ -238,13 +240,54 @@ test("a late Team registry batch cannot overwrite a newly selected Team", async 
       }
       await Promise.all([...pending.values()].map((wait) => wait.promise));
     });
-    assert.equal((page.getByLabelText("选择房间") as HTMLSelectElement).value, roomB.roomId);
-    assert.match(page.getByTitle("Team Bravo").className, /active/u);
+    assert.equal(new URLSearchParams(dom.window.location.search).get("room"), roomB.roomId);
+    assert.equal((page.getByRole("combobox", { name: "选择团队" }) as HTMLSelectElement).value, teamB.teamId);
     assert.equal(page.queryByText("Alpha Member"), null);
     assert.ok(page.getAllByText("Bravo Member").length > 0);
     assert.equal(paths.some((path) => path.startsWith(`/api/rooms/${roomA.roomId}/`)), false);
   } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
 });
+
+for (const exit of ["close", "Team switch"] as const) {
+  test(`a late MCP credential cannot reappear after setup ${exit}`, async () => {
+    const dom = installDom();
+    const originalFetch = globalThis.fetch;
+    const credential = deferred<Response>();
+    let submitted = false;
+    globalThis.fetch = async (input, init = {}) => {
+      const path = String(input);
+      if (path === `/api/teams/${teamA.teamId}/manual-agents`) { submitted = true; return credential.promise; }
+      if (path.includes("/changes?")) return pendingChange(init.signal);
+      const result = commonResponse(path, [teamA, teamB], [roomA, roomB]);
+      if (result) return result;
+      throw new Error(`Unexpected request: ${path}`);
+    };
+    const { act, cleanup, fireEvent, render, waitFor, within } = await import("@testing-library/react");
+    try {
+      render(<App />);
+      const page = within(dom.window.document.body);
+      await page.findByRole("option", { name: "Team Alpha" });
+      fireEvent.click(page.getByRole("button", { name: "管理", exact: true }));
+      fireEvent.click(page.getByRole("button", { name: "新增智能体" }));
+      fireEvent.click(page.getByRole("button", { name: "接入 MCP 客户端" }));
+      fireEvent.change(page.getByLabelText("MCP 智能体名称"), { target: { value: "Pending MCP Agent" } });
+      fireEvent.click(page.getByRole("button", { name: "创建 MCP 凭据" }));
+      await waitFor(() => assert.equal(submitted, true));
+      fireEvent.click(page.getByRole("button", { name: "关闭", exact: true }));
+      if (exit === "Team switch") fireEvent.change(page.getByRole("combobox", { name: "选择团队" }), { target: { value: teamB.teamId } });
+      await act(async () => {
+        credential.resolve(response({ agent: { agentId: "agent_retired_setup", name: "Pending MCP Agent", role: "MCP participant", integrationMode: "manual", presence: "manual" }, credential: { token: "retired-mcp-secret" } }));
+        await credential.promise;
+      });
+      fireEvent.click(page.getByRole("button", { name: "新增智能体" }));
+      fireEvent.click(page.getByRole("button", { name: "接入 MCP 客户端" }));
+      assert.equal(dom.window.document.body.textContent?.includes("retired-mcp-secret"), false);
+      assert.equal(JSON.stringify(dom.window.sessionStorage).includes("retired-mcp-secret"), false);
+      assert.equal(JSON.stringify(dom.window.localStorage).includes("retired-mcp-secret"), false);
+      assert.equal(page.queryByText("Pending MCP Agent"), null);
+    } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
+  });
+}
 
 test("Room change listening waits for initial Run output and then advances the initial snapshot", async () => {
   const dom = installDom(true);
@@ -291,7 +334,7 @@ test("Room change listening waits for initial Run output and then advances the i
     const page = within(dom.window.document.body);
     await waitFor(() => assert.equal(outputCalls, 1));
     assert.equal(changeCalls, 0);
-    fireEvent.click(page.getByRole("button", { name: "⌁ 对话", exact: true }));
+    fireEvent.click(page.getByRole("button", { name: "对话", exact: true }));
     assert.equal(page.queryByText("New live message after initialization"), null);
     await act(async () => { output.resolve(response([])); await output.promise; });
     await page.findByText("Initial snapshot message");
@@ -335,7 +378,7 @@ test("a late history page from the previous Room never enters the new Room", asy
   try {
     render(<App />);
     const page = within(dom.window.document.body);
-    fireEvent.click(await page.findByRole("button", { name: "⌁ 对话", exact: true }));
+    fireEvent.click(await page.findByRole("button", { name: "对话", exact: true }));
     await page.findByText("Current Alpha message");
     fireEvent.click(page.getByRole("button", { name: "加载更早的消息" }));
     await waitFor(() => assert.equal(historyCalls, 1));
@@ -408,7 +451,7 @@ test("six bounded history pages remain intact after a live message without skipp
   try {
     render(<App />);
     const page = within(dom.window.document.body);
-    fireEvent.click(await page.findByRole("button", { name: "⌁ 对话", exact: true }));
+    fireEvent.click(await page.findByRole("button", { name: "对话", exact: true }));
     await page.findByText("History message 501");
     await waitFor(() => assert.equal(changes, 1));
     for (const first of [401, 301, 201, 101, 1]) {
@@ -495,7 +538,7 @@ test("reconciliation restores the older cursor after a failed first Room snapsho
   try {
     render(<App />);
     const page = within(dom.window.document.body);
-    fireEvent.click(await page.findByRole("button", { name: "⌁ 对话", exact: true }));
+    fireEvent.click(await page.findByRole("button", { name: "对话", exact: true }));
     await page.findByText("Recovered history 101");
     await waitFor(() => assert.equal(changes, 2));
     assert.equal(tailReads, 2, "a new tail snapshot must recover the failed initial batch");
@@ -585,7 +628,7 @@ test("a concurrent late tail cannot replace the recovery cursor while an older p
   try {
     render(<App />);
     const page = within(dom.window.document.body);
-    fireEvent.click(await page.findByRole("button", { name: "⌁ 对话", exact: true }));
+    fireEvent.click(await page.findByRole("button", { name: "对话", exact: true }));
     await waitFor(() => assert.equal(tailReads, 2));
     // Room and full refreshes have separate single-flight scopes. Let a
     // visibility refresh restore history before the slower Room read commits.
@@ -723,7 +766,7 @@ test("a late successful initial snapshot preserves history loaded after sending 
     render(<App />);
     const page = within(dom.window.document.body);
     await waitFor(() => assert.equal(outputReads, 1));
-    fireEvent.click(page.getByRole("button", { name: "⌁ 对话", exact: true }));
+    fireEvent.click(page.getByRole("button", { name: "对话", exact: true }));
     fireEvent.click(page.getByRole("button", { name: "+ 新任务" }));
     const dialog = within(await page.findByRole("dialog", { name: "创建长期任务" }));
     fireEvent.change(dialog.getByLabelText("任务名称"), { target: { value: task.title } });

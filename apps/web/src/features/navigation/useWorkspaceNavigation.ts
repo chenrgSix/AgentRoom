@@ -46,6 +46,12 @@ export function useWorkspaceNavigation(options: Options) {
       try {
         if (parsed.error) throw new Error(label(parsed.error, "This link contains invalid navigation parameters."));
         const navigation = parsed.navigation!;
+        // Account settings belong to the authenticated identity, not a Team.
+        if (navigation.view === "security" && !navigation.teamId && !navigation.roomId) {
+          current.current.onRestore(navigation);
+          window.history.replaceState(null, "", `${window.location.pathname}${workspaceNavigationUrl(navigation)}`);
+          return;
+        }
         const read = <T,>(path: string) => jsonRequest<T>(path, { signal: controller.signal }, session.token);
         const taskId = navigation.workTaskId ?? navigation.taskId;
         const task = taskId ? await read<TaskProjection>(`/api/tasks/${taskId}`) : null;

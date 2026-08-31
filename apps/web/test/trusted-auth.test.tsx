@@ -248,8 +248,9 @@ test("Owner creates and copies a member invite, then signs out and recovers", as
     render(<App />);
     const page = within(dom.window.document.body);
     await page.findByRole("heading", { name: "创建一个对话房间" });
-    fireEvent.click(page.getAllByRole("button", { name: "Team 成员" })[0]!);
-    await page.findByRole("heading", { name: "管理 Team 的成员访问" });
+    fireEvent.click(page.getByRole("button", { name: "管理", exact: true }));
+    fireEvent.click(page.getByRole("button", { name: "团队与成员" }));
+    fireEvent.click(page.getByRole("button", { name: "邀请 Team 成员" }));
     fireEvent.change(page.getByLabelText("成员显示名称"), { target: { value: "Bob" } });
     fireEvent.click(page.getByRole("button", { name: "创建 24 小时邀请" }));
     const link = await page.findByLabelText("成员邀请链接") as HTMLInputElement;
@@ -265,6 +266,7 @@ test("Owner creates and copies a member invite, then signs out and recovers", as
     await page.findByRole("button", { name: "已复制" });
     assert.equal(copiedText, claimUrl);
 
+    fireEvent.click(page.getByRole("button", { name: "关闭", exact: true }));
     fireEvent.click(page.getAllByRole("button", { name: "退出登录" })[0]!);
     await page.findByRole("heading", { name: "恢复 Owner 会话" });
     const logoutRequest = requests.find(({ path, method }) =>
@@ -284,7 +286,7 @@ test("Owner creates and copies a member invite, then signs out and recovers", as
       );
     });
     assert.equal(recovery.value, "");
-    await page.findByRole("heading", { name: "管理 Team 的成员访问" });
+    await page.findByRole("heading", { name: "团队与成员" });
   } finally {
     cleanup();
     dom.window.close();

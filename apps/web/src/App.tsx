@@ -23,7 +23,11 @@ import {
 } from "./api-client.js";
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
 import { AccessGate } from "./features/auth/AccessGate.js";
-import { OwnerRecoverySettings } from "./features/auth/OwnerRecoverySettings.js";
+import { AccountWorkspace } from "./features/auth/AccountWorkspace.js";
+import { DeviceWorkspace } from "./features/device/DeviceWorkspace.js";
+import { WorkspaceSidebar } from "./features/navigation/WorkspaceSidebar.js";
+import { PanelDialog } from "./features/navigation/PanelDialog.js";
+import { isManagementView, type WorkspaceNavigation } from "./features/navigation/workspace-navigation.js";
 import { useWebSession } from "./features/auth/useWebSession.js";
 import { useRoomSynchronization } from "./features/room/useRoomSynchronization.js";
 import { AgentSetupChoices, type AgentSetupTarget } from "./features/agent/AgentSetupChoices.js";
@@ -231,17 +235,32 @@ export function App() {
   const preferredRoomRef = useRef<{ teamId: string; roomId: string } | null>(null);
   selectedTaskIdRef.current = selectedTaskId;
 
+  const [roomCreateOpen, setRoomCreateOpen] = useState(false);
+  const setupContext = useRef({});
+  function clearSetupPresentation() {
+    setupContext.current = {};
+    setSetupOutput(null);
+    setJoinCode("");
+    setMemberInvitation(null);
+    setInvitationCopied(false);
+  }
+  useLayoutEffect(clearSetupPresentation, [activeView, selectedTeamId, session]);
+  const managing = isManagementView(activeView);
+  const navigationSnapshot: WorkspaceNavigation = {
+    teamId: selectedTeamId ?? undefined, roomId: selectedRoomId ?? undefined,
+    view: activeView, taskId: activeView === "room" ? selectedTaskId ?? undefined : undefined,
+    workTaskId: activeView === "work" ? selectedWorkTaskId ?? undefined : undefined,
+    tab: activeView === "work" && selectedWorkTaskId ? selectedWorkTab : undefined,
+    runId: activeView === "work" && selectedWorkTaskId ? selectedWorkRunId ?? undefined : undefined,
+    scope: workScope, lifecycleState: workLifecycleState || undefined,
+    ownerMemberId: workOwnerMemberId || undefined, search: workSearch || undefined
+  };
+  const collaborationLocation = useRef<{ session: LocalSession; location: WorkspaceNavigation } | null>(null);
+  if (session && !managing) collaborationLocation.current = { session, location: navigationSnapshot };
+
   const { navigate, copyLink, copyStatus, restoring: restoringNavigation } = useWorkspaceNavigation({
     session, teams, ready: teamsLoaded, locale,
-    snapshot: {
-      teamId: selectedTeamId ?? undefined, roomId: selectedRoomId ?? undefined,
-      view: activeView, taskId: activeView === "room" ? selectedTaskId ?? undefined : undefined,
-      workTaskId: activeView === "work" ? selectedWorkTaskId ?? undefined : undefined,
-      tab: selectedWorkTaskId ? selectedWorkTab : undefined,
-      runId: selectedWorkTaskId ? selectedWorkRunId ?? undefined : undefined,
-      scope: workScope, lifecycleState: workLifecycleState || undefined,
-      ownerMemberId: workOwnerMemberId || undefined, search: workSearch || undefined
-    },
+    snapshot: navigationSnapshot,
     onRestore: (navigation) => {
       const teamId = navigation.teamId ?? selectedTeamId;
       const roomId = navigation.roomId ?? null;
@@ -395,12 +414,10 @@ export function App() {
     const visible = new Set(roomParticipants.agentIds);
     return agents.filter(({ agentId }) => visible.has(agentId));
   }, [agents, roomParticipants.agentIds]);
-  const readyAgents = agents.filter((agent) => agent.presence === "ready").length;
+  const readyAgents = agents.filter((agent) => agent.enabled !== false && agent.presence === "ready").length;
   const readyRoomAgents = roomAgents.filter((agent) => agent.enabled !== false && agent.presence === "ready");
   const hasRealRoomReply = messages.some((message) => message.senderType === "agent" &&
     agents.some((agent) => agent.agentId === message.senderId && agent.integrationMode !== "fake"));
-  const managedAgents = agents.filter((agent) => agent.integrationMode === "managed").length;
-  const activeDevices = devices.filter((device) => device.status === "active").length;
   const currentMember = members.find((member) => member.userId === session?.userId) ?? null;
   const lifecycleTeam = lifecycleTeams.find(({ teamId }) =>
     teamId === lifecycleTeamId
@@ -856,6 +873,16 @@ export function App() {
 
   useEffect(() => {
     setAgentSetupTarget(null);
+    setSetupOutput(null);
+    setJoinCode("");
+    setAgentName("");
+    setManualAgentName("");
+    setDeviceName("");
+    setMemberInviteName("");
+    setRoomName("");
+    setMemberInvitation(null);
+    setInvitationCopied(false);
+    setRoomCreateOpen(false);
   }, [selectedTeamId]);
 
   useEffect(() => {
@@ -949,6 +976,7 @@ export function App() {
   async function createRoom(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedTeamId || !roomName.trim()) return;
+    const context = setupContext.current;
     setTeamBusy(true);
     setError(null);
     try {
@@ -957,9 +985,11 @@ export function App() {
         { method: "POST", body: JSON.stringify({ name: roomName }) },
         session.token
       );
+      if (context !== setupContext.current) return;
       setRoomName("");
       setRooms((current) => [...current, room]);
-      setSelectedRoomId(room.roomId);
+      setRoomCreateOpen(false);
+      navigate({ roomId: room.roomId, view: "room", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined });
     } catch (reason) {
       reportError(reason);
     } finally {
@@ -1099,6 +1129,7 @@ export function App() {
       currentMember?.role !== "owner" ||
       !memberInviteName.trim()
     ) return;
+    const context = setupContext.current;
     setTeamBusy(true);
     setError(null);
     try {
@@ -1110,11 +1141,12 @@ export function App() {
         },
         session.token
       );
+      if (context !== setupContext.current) return;
       setMemberInviteName("");
       setMemberInvitation(invitation);
       setInvitationCopied(false);
     } catch (reason) {
-      reportError(reason);
+      if (context === setupContext.current) reportError(reason);
     } finally {
       if (isCurrentSession()) setTeamBusy(false);
     }
@@ -1122,16 +1154,19 @@ export function App() {
 
   async function copyMemberInvitation() {
     if (!memberInvitation) return;
+    const context = setupContext.current;
     try {
       await navigator.clipboard.writeText(memberInvitation.claimUrl);
-      if (!isCurrentSession()) return;
+      if (!isCurrentSession() || context !== setupContext.current) return;
       setInvitationCopied(true);
     } catch (reason) {
-      if (isCurrentSession()) reportError(reason);
+      if (isCurrentSession() && context === setupContext.current) reportError(reason);
     }
   }
 
   function resetAuthenticatedWorkspace(previous: LocalSession) {
+    collaborationLocation.current = null;
+    setupContext.current = {};
     clearComposerUserState(previous.userId);
     setError(null);
     setTeamsLoaded(false);
@@ -1192,6 +1227,7 @@ export function App() {
   async function createFakeAgent(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedTeamId || !agentName.trim()) return;
+    const context = setupContext.current;
     setBusy(true);
     setError(null);
     try {
@@ -1203,10 +1239,11 @@ export function App() {
         },
         session.token
       );
+      if (context !== setupContext.current) return;
       setAgentName("");
       setAgents((current) => [...current, agent]);
     } catch (reason) {
-      reportError(reason);
+      if (context === setupContext.current) reportError(reason);
     } finally {
       if (isCurrentSession()) setBusy(false);
     }
@@ -1215,6 +1252,7 @@ export function App() {
   async function createManualAgent(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedTeamId || !manualAgentName.trim()) return;
+    const context = setupContext.current;
     setBusy(true);
     setError(null);
     try {
@@ -1225,6 +1263,7 @@ export function App() {
         method: "POST",
         body: JSON.stringify({ name: manualAgentName, role: "MCP participant" })
       }, session.token);
+      if (context !== setupContext.current) return;
       setAgents((current) => [...current, result.agent]);
       setManualAgentName("");
       setSetupOutput([
@@ -1232,7 +1271,7 @@ export function App() {
         `codex mcp add convene-wire --url ${window.location.origin}/mcp --bearer-token-env-var CONVENE_WIRE_MCP_TOKEN`
       ].join("\n"));
     } catch (reason) {
-      reportError(reason);
+      if (context === setupContext.current) reportError(reason);
     } finally {
       if (isCurrentSession()) setBusy(false);
     }
@@ -1241,6 +1280,7 @@ export function App() {
   async function createBridgeInvite(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedTeamId || !deviceName.trim()) return;
+    const context = setupContext.current;
     setBusy(true);
     setError(null);
     try {
@@ -1252,6 +1292,7 @@ export function App() {
         method: "POST",
         body: JSON.stringify({ deviceName })
       }, session.token);
+      if (context !== setupContext.current) return;
       setDeviceName("");
       setSetupOutput([
         locale === "zh-CN"
@@ -1260,7 +1301,7 @@ export function App() {
         `convenewire-bridge pair --config bridge.json --code '${invite.code}'`
       ].join("\n"));
     } catch (reason) {
-      reportError(reason);
+      if (context === setupContext.current) reportError(reason);
     } finally {
       if (isCurrentSession()) setBusy(false);
     }
@@ -1269,6 +1310,7 @@ export function App() {
   async function approveBridgeJoin(event: FormEvent) {
     event.preventDefault();
     if (!session || !selectedTeamId || !joinCode.trim()) return;
+    const context = setupContext.current;
     setBusy(true);
     setError(null);
     try {
@@ -1280,6 +1322,7 @@ export function App() {
         },
         session.token
       );
+      if (context !== setupContext.current) return;
       setJoinCode("");
       setSetupOutput(
         locale === "zh-CN"
@@ -1288,7 +1331,7 @@ export function App() {
             "The client will finish registration and come online automatically."
       );
     } catch (reason) {
-      reportError(reason);
+      if (context === setupContext.current) reportError(reason);
     } finally {
       if (isCurrentSession()) setBusy(false);
     }
@@ -1434,7 +1477,26 @@ export function App() {
 
   function revealConnectionSetup() {
     setAgentSetupTarget(null);
+    setSetupOutput(null);
     navigate({ view: "agents", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined });
+  }
+
+  function returnToCollaboration() {
+    if (!managing) return;
+    const remembered = collaborationLocation.current;
+    if (remembered?.session === session && remembered.location.teamId === selectedTeamId) {
+      navigate(remembered.location);
+    } else revealWork();
+  }
+
+  function selectWorkspaceView(view: WorkspaceView) {
+    if (view === "work") { revealWork(); return; }
+    if (view === "agents") { revealConnectionSetup(); return; }
+    if (view === "members") { revealTeamMembers(); return; }
+    setAgentSetupTarget(null);
+    setSetupOutput(null);
+    navigate({ view, taskId: view === "room" ? selectedTaskId ?? undefined : undefined,
+      workTaskId: undefined, tab: undefined, runId: undefined });
   }
 
   function chooseAgentSetup(target: AgentSetupTarget) {
@@ -1485,73 +1547,16 @@ export function App() {
   }
 
   return (
-    <div className="app-shell">
-      <aside className="team-rail" aria-label={t("teamSpace")}>
-        <div className="brand-mark" aria-label="ConveneWire">CW</div>
-        <div className="team-list">
-          {teams.map((team) => (
-            <button
-              className={team.teamId === selectedTeamId ? "team-chip active" : "team-chip"}
-              key={team.teamId}
-              onClick={() => {
-                navigate({ teamId: team.teamId, roomId: undefined, taskId: undefined, workTaskId: undefined,
-                  tab: undefined, runId: undefined, lifecycleState: undefined, ownerMemberId: undefined, search: undefined, view: "work" });
-              }}
-              title={team.name}
-            >
-              {team.name.slice(0, 2).toUpperCase()}
-            </button>
-          ))}
-          <button
-            aria-label={t("newTeam")}
-            className="team-add"
-            onClick={() => setTeamDialogOpen(true)}
-            title={t("newTeam")}
-            type="button"
-          >+</button>
-        </div>
-        {selectedTeam && (
-          <div className="rail-actions">
-            <button
-              aria-label={locale === "zh-CN" ? "工作台" : "Work"}
-              className={activeView === "work" ? "rail-manage active" : "rail-manage"}
-              onClick={revealWork}
-              title={locale === "zh-CN" ? "工作台" : "Work"}
-              type="button"
-            >▦</button>
-            {currentMember?.role === "owner" && (
-              <button
-                aria-label={locale === "zh-CN" ? "资源生命周期" : "Resource lifecycle"}
-                className="rail-manage"
-                onClick={() => void openLifecycleDialog()}
-                title={locale === "zh-CN" ? "重命名、归档或恢复资源" : "Rename, archive, or restore resources"}
-                type="button"
-              >⚙</button>
-            )}
-            <button
-              aria-label={t("teamMembers")}
-              className={activeView === "members" ? "rail-manage active" : "rail-manage"}
-              onClick={revealTeamMembers}
-              title={t("teamMembers")}
-              type="button"
-            >♙</button>
-            <button
-              aria-label={t("agentManagement")}
-              className={activeView === "agents" ? "rail-manage active" : "rail-manage"}
-              onClick={revealConnectionSetup}
-              title={t("agentManagement")}
-              type="button"
-            >✦</button>
-          </div>
-        )}
-      </aside>
-
-      <aside className="room-sidebar">
-        <header>
-          <p className="eyebrow">{t("teamSpace")}</p>
-          <h1>{selectedTeam?.name ?? "ConveneWire"}</h1>
-        </header>
+    <div className={`app-shell product-shell ${managing ? "management-area" : "collaboration-area"}`}>
+      <WorkspaceSidebar activeView={activeView} locale={locale} teams={teams} teamId={selectedTeamId} rooms={rooms} roomId={selectedRoomId}
+        onTeam={(teamId) => navigate({ teamId, roomId: undefined, taskId: undefined, workTaskId: undefined,
+          tab: undefined, runId: undefined, lifecycleState: undefined, ownerMemberId: undefined, search: undefined, view: managing ? activeView : "work" })}
+        onNewTeam={() => setTeamDialogOpen(true)} onNewRoom={() => setRoomCreateOpen(true)}
+        onRoom={(roomId) => navigate({ roomId, view: "room", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined })}
+        onView={selectWorkspaceView} onCollaboration={returnToCollaboration}>
         {selectedTeam && selectedRoom && (
+          <details className="product-participants">
+            <summary>{t("roomParticipants")} <span>{roomMembers.length + roomAgents.length}</span></summary>
           <section className="participant-panel" aria-label={t("roomParticipants")}>
             <div className="participant-heading">
               <div><strong>{t("roomParticipants")}</strong><small>#{selectedRoom.name}</small></div>
@@ -1590,49 +1595,28 @@ export function App() {
               )}
             </div>
           </section>
+          </details>
         )}
-      </aside>
+      </WorkspaceSidebar>
 
       <main className="workspace">
-        <nav className="mobile-nav" aria-label={t("workspace")}>
-          <strong>{selectedTeam?.name ?? "ConveneWire"}</strong>
-          <div>
-            {selectedTeam && (
-              <>
-                <button className={activeView === "work" ? "active" : ""} onClick={revealWork} type="button">{locale === "zh-CN" ? "工作" : "Work"}</button>
-                <button className={activeView === "room" ? "active" : ""} onClick={() => navigate({ view: "room", taskId: selectedTaskId ?? undefined, workTaskId: undefined, tab: undefined, runId: undefined })} type="button">{t("chat")}</button>
-                <button className={activeView === "members" ? "active" : ""} onClick={revealTeamMembers} type="button">{t("teamMembers")}</button>
-                <button className={activeView === "agents" ? "active" : ""} onClick={() => navigate({ view: "agents", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined })} type="button">{t("agents")}</button>
-              </>
-            )}
-            <button aria-label={t("newTeamMobile")} onClick={() => setTeamDialogOpen(true)} type="button">＋</button>
-            <button aria-label={locale === "zh-CN" ? "移动端界面语言" : "Mobile interface language"} onClick={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")} type="button">{locale === "zh-CN" ? "EN" : "中"}</button>
-            <button
-              aria-label={locale === "zh-CN" ? "移动端主题" : "Mobile theme"}
-              onClick={() => setTheme((current) => current === "dark" ? "light" : "dark")}
-              title={theme === "dark" ? t("switchToLight") : t("switchToDark")}
-              type="button"
-            >{theme === "dark" ? "☀" : "☾"}</button>
-            <button className="mobile-sign-out" disabled={busy} onClick={() => void signOut()} type="button">{t("signOut")}</button>
-          </div>
-        </nav>
         <header className="workspace-header">
           <div className="workspace-heading">
             <div className="workspace-heading-copy">
               <p className="eyebrow">
-                {activeView === "work" && selectedTeam
-                  ? (locale === "zh-CN" ? "工作" : "WORK")
-                  : activeView === "agents" && selectedTeam
-                  ? t("controlPlane")
-                  : activeView === "members" && selectedTeam ? t("teamAccess") : t("room")}
+                {managing ? (locale === "zh-CN" ? "管理" : "MANAGEMENT") : (locale === "zh-CN" ? "协作" : "COLLABORATION")}
               </p>
               <h2>
                 {activeView === "work" && selectedTeam
                   ? (locale === "zh-CN" ? "团队工作台" : "Team Workbench")
                   : activeView === "agents" && selectedTeam
-                  ? t("agentsDevices")
+                  ? t("agents")
+                  : activeView === "devices" && selectedTeam
+                    ? (locale === "zh-CN" ? "设备" : "Devices")
+                  : activeView === "security"
+                    ? (locale === "zh-CN" ? "账户与安全" : "Account & security")
                   : activeView === "members" && selectedTeam
-                    ? t("teamMembers")
+                    ? (locale === "zh-CN" ? "团队与成员" : "Team & members")
                   : selectedRoom ? `# ${selectedRoom.name}` : t("chooseRoom")}
               </h2>
             </div>
@@ -1681,44 +1665,9 @@ export function App() {
             )}
           </div>
           <div className="workspace-controls">
-            {selectedTeam && (
-              <button
-                className={activeView === "work" ? "header-chat active" : "header-chat"}
-                onClick={revealWork}
-                type="button"
-              >▦ <span>{locale === "zh-CN" ? "工作" : "Work"}</span></button>
-            )}
-            {selectedTeam && selectedRoom && (
-              <>
-                <button
-                  className={activeView === "room" ? "header-chat active" : "header-chat"}
-                  onClick={() => navigate({ view: "room", taskId: selectedTaskId ?? undefined, workTaskId: undefined, tab: undefined, runId: undefined })}
-                  type="button"
-                >⌁ <span>{t("chat")}</span></button>
-                <select
-                  aria-label={t("selectRoom")}
-                  className="header-room-select"
-                  onChange={(event) => {
-                    navigate({ roomId: event.target.value, view: "room", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined });
-                  }}
-                  value={selectedRoomId ?? ""}
-                >
-                  {rooms.map((room) => (
-                    <option key={room.roomId} value={room.roomId}># {room.name}</option>
-                  ))}
-                </select>
-                <form className="header-room-create" onSubmit={createRoom}>
-                  <input
-                    aria-label={t("newRoomName")}
-                    onChange={(event) => setRoomName(event.target.value)}
-                    placeholder={t("addRoom")}
-                    required
-                    value={roomName}
-                  />
-                  <button aria-label={t("createRoom")} disabled={teamBusy} title={t("createRoom")}>+</button>
-                </form>
-              </>
-            )}
+            <button className="header-account" onClick={() => selectWorkspaceView("security")} type="button" aria-label={locale === "zh-CN" ? "打开账户与安全" : "Open account & security"}>
+              {session?.displayName.slice(0, 1).toUpperCase()}
+            </button>
             <button
               aria-label={t("language")}
               className="header-locale"
@@ -1736,10 +1685,7 @@ export function App() {
             <button className="header-sign-out" disabled={busy} onClick={() => void signOut()} type="button">
               {t("signOut")}
             </button>
-            {authMode === "trusted-team" && session?.canManageOwnerRecovery && (
-              <OwnerRecoverySettings key={session.userId} locale={locale} />
-            )}
-            {selectedTeam && (
+            {selectedTeam && !managing && (
               <div className="agent-summary">
                 <span className={`presence-dot ${readyAgents === 0 ? "offline" : ""}`} />
                 {locale === "zh-CN"
@@ -1752,7 +1698,11 @@ export function App() {
         {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
         {restoringNavigation && <p className="navigation-status" role="status">{locale === "zh-CN" ? "正在验证并恢复工作位置…" : "Checking access and restoring your work…"}</p>}
         {copyStatus && <p className="navigation-status" role="status">{copyStatus}</p>}
-        {!selectedTeam ? (
+        {activeView === "security" && session ? (
+          <AccountWorkspace session={session} authMode={authMode} locale={locale} theme={theme}
+            onLocale={() => setLocale((current) => current === "zh-CN" ? "en" : "zh-CN")}
+            onTheme={() => setTheme((current) => current === "dark" ? "light" : "dark")} />
+        ) : !selectedTeam ? (
           <section className="empty-stage onboarding-stage">
             <div className="orb"><span>✦</span></div>
             <p className="eyebrow">{locale === "zh-CN" ? "第 1 步，共 3 步" : "STEP 1 OF 3"}</p>
@@ -1841,7 +1791,11 @@ export function App() {
           />
           </div>
         ) : activeView === "members" ? (
+          <>
+          {currentMember?.role === "owner" && <div className="management-page-actions"><button onClick={() => void openLifecycleDialog()} type="button">{locale === "zh-CN" ? "资源生命周期" : "Resource lifecycle"}</button></div>}
           <TeamMembersWorkspace
+            key={selectedTeam.teamId}
+            onDismissInvitation={clearSetupPresentation}
             authMode={authMode}
             currentMember={currentMember}
             invitationCopied={invitationCopied}
@@ -1856,9 +1810,14 @@ export function App() {
             sessionUserId={session?.userId ?? null}
             teamBusy={teamBusy}
           />
+          </>
+        ) : activeView === "devices" ? (
+          <DeviceWorkspace key={`${selectedTeam.teamId}:${session?.userId}`} agents={agents} devices={devices}
+            locale={locale} currentMemberIsOwner={currentMember?.role === "owner"} currentMemberId={currentMember?.memberId ?? null}
+            sessionToken={session?.token} teamId={selectedTeam.teamId} onRevokeDevice={revokeDevice} />
         ) : activeView === "agents" ? (
           <AgentWorkspace
-            activeDevices={activeDevices}
+            key={`${selectedTeam.teamId}:${session?.userId}`}
             agentName={agentName}
             agents={agents}
             busy={busy}
@@ -1870,7 +1829,6 @@ export function App() {
             joinCode={joinCode}
             lifecycleBusy={lifecycleBusy}
             locale={locale}
-            managedAgents={managedAgents}
             manualAgentName={manualAgentName}
             onAgentNameChange={setAgentName}
             onApproveBridgeJoin={approveBridgeJoin}
@@ -1881,7 +1839,8 @@ export function App() {
             onDeviceNameChange={setDeviceName}
             onJoinCodeChange={setJoinCode}
             onManualAgentNameChange={setManualAgentName}
-            onSetupTargetChange={chooseAgentSetup}
+            onSetupClosed={() => { setAgentSetupTarget(null); clearSetupPresentation(); }}
+            onDevices={() => selectWorkspaceView("devices")}
             onOpenHostedRoom={(roomId) => void openHostedRoom(roomId)}
             onAgentChanged={(updated) => setAgents((current) => {
               const exists = current.some(({ agentId }) => agentId === updated.agentId);
@@ -1889,7 +1848,6 @@ export function App() {
                 ? current.map((agent) => agent.agentId === updated.agentId ? updated : agent)
                 : [...current, updated];
             })}
-            onRevokeDevice={revokeDevice}
             onSetAgentEnabled={setAgentEnabled}
             readyAgents={readyAgents}
             rooms={rooms}
@@ -2182,6 +2140,13 @@ export function App() {
           </div>
         )}
       </main>
+      {roomCreateOpen && selectedTeam && <PanelDialog title={t("createRoom")} locale={locale} onClose={() => { setRoomCreateOpen(false); clearSetupPresentation(); }}>
+        <form className="product-room-form" onSubmit={createRoom}>
+          <label htmlFor="new-room-name">{t("newRoomName")}</label>
+          <input autoComplete="off" id="new-room-name" onChange={(event) => setRoomName(event.target.value)} required value={roomName} />
+          <button disabled={teamBusy} type="submit">{teamBusy ? t("creating") : t("createRoom")}</button>
+        </form>
+      </PanelDialog>}
       {taskDialogOpen && selectedRoom && (
         <TaskCreateDialog
           busy={taskBusy}
