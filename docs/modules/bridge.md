@@ -687,6 +687,10 @@ custom and HTTP(S) pairing link forms as the Go validator, with bounds that
 allow the complete encoded nested fragment. Native prerequisite dialogs remain
 suppressible in unattended installation. Packaging resolves output paths once,
 and macOS metadata and compiler deployment targets share the supported minimum.
+The pinned Go 1.26 desktop build requires macOS 12.0 or later. Bundle metadata
+is the packaging target source; CGO and the final external linker receive that
+target, and packaging rejects a Mach-O whose platform/minimum differs. A
+toolchain upgrade must re-evaluate the supported minimum, not just the plist.
 Native test exit codes must fail CI/Release immediately.
 
 The tray exposes status, open, start, stop, and quit actions. Configuration,

@@ -40,6 +40,11 @@ fi
 # Resolve against the caller once, before either the build or ZIP changes cwd.
 mkdir -p "${output_dir}"
 output_dir=$(CDPATH= cd -- "${output_dir}" && pwd -P)
+minimum_macos=$(plutil -extract LSMinimumSystemVersion raw -o - "${bridge_root}/desktop/darwin/Info.plist")
+if [[ ! "${minimum_macos}" =~ ^[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid macOS minimum version in bundle metadata" >&2
+  exit 1
+fi
 
 package="convenewire-bridge-desktop_${version}_darwin_${goarch}"
 staging="${output_dir}/${package}"
@@ -59,13 +64,26 @@ sed "s/__VERSION__/${bundle_version}/g" \
 
 (
   cd "${bridge_root}"
+  MACOSX_DEPLOYMENT_TARGET="${minimum_macos}" \
+  CGO_CFLAGS="${CGO_CFLAGS:--O2 -g} -mmacosx-version-min=${minimum_macos}" \
+  CGO_CXXFLAGS="${CGO_CXXFLAGS:--O2 -g} -mmacosx-version-min=${minimum_macos}" \
+  CGO_LDFLAGS="${CGO_LDFLAGS:--O2 -g} -mmacosx-version-min=${minimum_macos}" \
   CGO_ENABLED=1 GOOS=darwin GOARCH="${goarch}" go build \
     -tags desktop,production \
     -trimpath \
-    -ldflags="-s -w -X main.version=${release_tag} -X main.sourceCommit=${source_commit}" \
+    -ldflags="-s -w -X main.version=${release_tag} -X main.sourceCommit=${source_commit} -extldflags=-mmacosx-version-min=${minimum_macos}" \
     -o "${binary}" \
     ./cmd/convenewire-bridge-desktop
 )
+# A dependency can override CGO linker flags. Verify the emitted Mach-O, not
+# just the plist or environment, before any archive can be distributed.
+build_target=$(xcrun vtool -show-build "${binary}")
+compiled_minimum=$(awk '$1 == "minos" { print $2 }' <<< "${build_target}")
+compiled_platform=$(awk '$1 == "platform" { print $2 }' <<< "${build_target}")
+if [[ "${compiled_minimum}" != "${minimum_macos}" || "${compiled_platform}" != "MACOS" ]]; then
+  echo "Desktop Mach-O target does not match macOS ${minimum_macos}: ${build_target}" >&2
+  exit 1
+fi
 if ! strings "${binary}" | grep -F "${source_commit}" >/dev/null; then
   echo "Built desktop Bridge omits the exact source commit ${source_commit}" >&2
   exit 1

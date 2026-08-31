@@ -21,6 +21,9 @@ if [ "$1" = env ]; then
   if [ "$2" = GOHOSTOS ]; then echo darwin; else echo arm64; fi
   exit 0
 fi
+case "$*" in *-extldflags=-mmacosx-version-min=12.0*) ;; *) exit 41 ;; esac
+[ "$MACOSX_DEPLOYMENT_TARGET" = 12.0 ] || exit 42
+case "$CGO_CFLAGS $CGO_CXXFLAGS $CGO_LDFLAGS" in *-mmacosx-version-min=12.0*) ;; *) exit 43 ;; esac
 while [ "$#" -gt 0 ]; do
   if [ "$1" = -o ]; then shift; target="$1"; break; fi
   shift
@@ -28,7 +31,8 @@ done
 printf '#!/bin/sh\n# %s\necho %s\n' "$CW_PATH_TEST_COMMIT" "$RELEASE_TAG" > "$target"
 chmod +x "$target"
 `, { mode: 0o700 });
-    await writeFile(path.join(bin, "plutil"), "#!/bin/sh\nexit 0\n", { mode: 0o700 });
+    await writeFile(path.join(bin, "plutil"), "#!/bin/sh\nif [ \"$1\" = -extract ]; then echo 12.0; fi\n", { mode: 0o700 });
+    await writeFile(path.join(bin, "xcrun"), '#!/bin/sh\necho "platform MACOS"\necho "minos ${CW_PATH_TEST_MINIMUM:-12.0}"\n', { mode: 0o700 });
     const commit = execFileSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).trim();
     const packageName = "convenewire-bridge-desktop_0.0.0-path-test_darwin_arm64";
     for (const [index, directory] of ["dist", "nested output/dist space", path.join(fixture, "absolute output")].entries()) {
@@ -46,8 +50,20 @@ chmod +x "$target"
       assert.ok(entries.includes(`${packageName}/ConveneWire Bridge.app/Contents/MacOS/convenewire-bridge-desktop`));
       assert.match(await readFile(path.join(expected, packageName, "ConveneWire Bridge.app/Contents/MacOS/convenewire-bridge-desktop"), "utf8"), new RegExp(commit, "u"));
       assert.throws(() => execFileSync("bash", [darwinScript], { cwd, env, stdio: "pipe" }), /output already exists/u);
+      for (const wrongMinimum of ["11.0", "26.0"]) {
+        assert.throws(() => execFileSync("bash", [darwinScript], { cwd, stdio: "pipe",
+          env: { ...env, OUTPUT_DIR: `${directory}-${wrongMinimum}`, CW_PATH_TEST_MINIMUM: wrongMinimum }
+        }), /Mach-O target does not match macOS 12.0/u);
+      }
     }
   } finally { await rm(fixture, { recursive: true, force: true }); }
+});
+
+test("macOS advertised minimum follows the pinned Go 1.26 supported floor", async () => {
+  const plist = await readFile(path.join(root, "bridge/desktop/darwin/Info.plist"), "utf8");
+  const module = await readFile(path.join(root, "bridge/go.mod"), "utf8");
+  assert.match(module, /^go 1\.26\.\d+$/mu, "re-evaluate macOS support when the Go toolchain changes");
+  assert.match(plist, /<key>LSMinimumSystemVersion<\/key>\s*<string>12\.0<\/string>/u);
 });
 
 test("Windows CI and Release execute production-expression output-path regressions", async () => {

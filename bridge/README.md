@@ -9,6 +9,7 @@ for headless environments and diagnostics.
 
 End users download the archive matching their operating system and CPU from
 [GitHub Releases](https://github.com/chenrgSix/ConveneWire/releases). macOS users
+need macOS 12 Monterey or newer with the pinned Go 1.26 desktop build, and
 should choose `convenewire-bridge-desktop_*_darwin_arm64.zip` on Apple Silicon or
 `convenewire-bridge-desktop_*_darwin_amd64.zip` on an Intel Mac. Extract it, move
 **ConveneWire Bridge.app** to `/Applications`, and open it. Go, Node.js, and a
