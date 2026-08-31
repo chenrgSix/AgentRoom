@@ -1176,7 +1176,7 @@ func (s *Service) addAgent(response http.ResponseWriter, request *http.Request) 
 		writeError(response, http.StatusBadRequest, err.Error())
 		return
 	}
-	identities, err := identity.LoadOrCreate(candidate.DataDir, candidate.Agents)
+	agentID, err := identity.AllocateNew(candidate.DataDir, s.configuration.Agents, agent.Name)
 	if err != nil {
 		writeError(response, http.StatusInternalServerError, publicError(err))
 		return
@@ -1185,7 +1185,7 @@ func (s *Service) addAgent(response http.ResponseWriter, request *http.Request) 
 		writeError(response, http.StatusInternalServerError, publicError(err))
 		return
 	}
-	writeJSON(response, http.StatusCreated, s.agentViewLocked(identities[agent.Name]))
+	writeJSON(response, http.StatusCreated, s.agentViewLocked(agentID))
 }
 
 func (s *Service) updateAgent(response http.ResponseWriter, request *http.Request) {

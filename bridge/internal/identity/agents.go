@@ -28,11 +28,17 @@ func LoadOrCreate(dataDir string, agents []config.AgentConfig) (map[string]strin
 		return nil, err
 	}
 	changed := false
+	active := make(map[string]string, len(agents))
 	for _, agent := range agents {
 		if identities[agent.Name] == "" {
 			identities[agent.Name] = newID("agent")
 			changed = true
 		}
+		id := identities[agent.Name]
+		if name, exists := active[id]; exists {
+			return nil, fmt.Errorf("configured Agents %q and %q share an identity; repair the ambiguous roster before starting", name, agent.Name)
+		}
+		active[id] = agent.Name
 	}
 	if changed {
 		if err := save(path, identities); err != nil {
@@ -42,8 +48,37 @@ func LoadOrCreate(dataDir string, agents []config.AgentConfig) (map[string]strin
 	return identities, nil
 }
 
+// AllocateNew reserves an identity for explicit creation, not roster recovery.
+// A former name may point at another currently configured Agent. Replacing only
+// that inactive alias keeps the renamed Agent stable. A failed config save may
+// retry this reservation without rotating it. The Console owns serialization.
+func AllocateNew(dataDir string, current []config.AgentConfig, name string) (string, error) {
+	identities, err := LoadOrCreate(dataDir, current)
+	if err != nil {
+		return "", err
+	}
+	reserved := identities[name]
+	for _, agent := range current {
+		if agent.Name == name {
+			return "", fmt.Errorf("Agent name %q is already configured", name)
+		}
+		if identities[agent.Name] == reserved {
+			reserved = ""
+		}
+	}
+	if reserved != "" {
+		return reserved, nil
+	}
+	id := newID("agent")
+	identities[name] = id
+	if err := save(filepath.Join(dataDir, filename), identities); err != nil {
+		return "", err
+	}
+	return id, nil
+}
+
 // BindName associates a configured display name with an existing immutable
-// Agent identity. The old name may remain as a harmless alias so a failed
+// Agent identity. The old name remains a recovery alias so a failed
 // configuration replacement cannot orphan the original identity.
 func BindName(dataDir, name, agentID string) error {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
