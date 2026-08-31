@@ -17,6 +17,8 @@ await Promise.all([
   mkdir(path.join(generatedRoot, "go", "work"), { recursive: true })
 ]);
 await Promise.all([
+  writeFile(path.join(generatedRoot, "go", "runtime", "execution-schema.json"), output.goExecutionSchema),
+  writeFile(path.join(generatedRoot, "go", "runtime", "execution.go"), output.goExecutionRuntime),
   writeFile(
     path.join(generatedRoot, "typescript", "execution-plan.ts"),
     output.executionTypescript

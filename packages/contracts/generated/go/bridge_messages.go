@@ -289,7 +289,7 @@ type Criterion struct {
 type Execution struct {
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	Deadline             time.Time             `json:"deadline"`
+	Deadline             string                `json:"deadline"`
 	Grant                Grant                 `json:"grant"`
 	InputDigest          string                `json:"inputDigest"`
 	Inputs               []Input               `json:"inputs"`
@@ -307,9 +307,9 @@ type Grant struct {
 	Digest string `json:"digest"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt time.Time `json:"expiresAt"`
-	GrantID   string    `json:"grantId"`
-	Revision  int64     `json:"revision"`
+	ExpiresAt string `json:"expiresAt"`
+	GrantID   string `json:"grantId"`
+	Revision  int64  `json:"revision"`
 }
 
 type Input struct {
@@ -322,25 +322,25 @@ type Input struct {
 	EdgeKey             *string  `json:"edgeKey"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt       time.Time `json:"expiresAt"`
-	Gate            Gate      `json:"gate"`
-	GateDigest      string    `json:"gateDigest"`
-	GateOperationID string    `json:"gateOperationId"`
-	InputSlot       string    `json:"inputSlot"`
+	ExpiresAt       string `json:"expiresAt"`
+	Gate            Gate   `json:"gate"`
+	GateDigest      string `json:"gateDigest"`
+	GateOperationID string `json:"gateOperationId"`
+	InputSlot       string `json:"inputSlot"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	IssuedAt                 time.Time `json:"issuedAt"`
-	PlanID                   string    `json:"planId"`
-	PlanRevision             int64     `json:"planRevision"`
-	RepositoryID             *string   `json:"repositoryId"`
-	SourceCommit             *string   `json:"sourceCommit"`
-	SourceCriteriaRevision   int64     `json:"sourceCriteriaRevision"`
-	SourceDefinitionRevision int64     `json:"sourceDefinitionRevision"`
-	SourceOutputSlot         string    `json:"sourceOutputSlot"`
-	SourceResultID           *string   `json:"sourceResultId"`
-	SourceResultVersion      *int64    `json:"sourceResultVersion"`
-	SourceTaskID             string    `json:"sourceTaskId"`
-	SourceTree               *string   `json:"sourceTree"`
+	IssuedAt                 string  `json:"issuedAt"`
+	PlanID                   string  `json:"planId"`
+	PlanRevision             int64   `json:"planRevision"`
+	RepositoryID             *string `json:"repositoryId"`
+	SourceCommit             *string `json:"sourceCommit"`
+	SourceCriteriaRevision   int64   `json:"sourceCriteriaRevision"`
+	SourceDefinitionRevision int64   `json:"sourceDefinitionRevision"`
+	SourceOutputSlot         string  `json:"sourceOutputSlot"`
+	SourceResultID           *string `json:"sourceResultId"`
+	SourceResultVersion      *int64  `json:"sourceResultVersion"`
+	SourceTaskID             string  `json:"sourceTaskId"`
+	SourceTree               *string `json:"sourceTree"`
 }
 
 type Artifact struct {
@@ -402,14 +402,14 @@ type VerificationProfile struct {
 type Workspace struct {
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt time.Time `json:"expiresAt"`
+	ExpiresAt string `json:"expiresAt"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	IssuedAt            time.Time `json:"issuedAt"`
-	LeaseID             string    `json:"leaseId"`
-	Mode                Mode      `json:"mode"`
-	WorkspaceGeneration string    `json:"workspaceGeneration"`
-	WorkspaceRef        string    `json:"workspaceRef"`
+	IssuedAt            string `json:"issuedAt"`
+	LeaseID             string `json:"leaseId"`
+	Mode                Mode   `json:"mode"`
+	WorkspaceGeneration string `json:"workspaceGeneration"`
+	WorkspaceRef        string `json:"workspaceRef"`
 }
 
 type Included struct {

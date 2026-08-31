@@ -256,6 +256,16 @@ function preserveTypeScriptWireStrings(value) {
   );
 }
 
+// Execution digests bind the exact UTC string, including fractional precision.
+// Keep the legacy Bridge timestamps unchanged outside the execution subtree.
+function preserveGoExecutionWireStrings(value) {
+  if (Array.isArray(value)) return value.map(preserveGoExecutionWireStrings);
+  if (value === null || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [key,
+    key === "execution" ? preserveTypeScriptWireStrings(child) : preserveGoExecutionWireStrings(child)
+  ]));
+}
+
 function removeNestedSchemaIdentities(value, isRoot = true) {
   if (Array.isArray(value)) {
     return value.map((item) => removeNestedSchemaIdentities(item, false));
@@ -1462,7 +1472,7 @@ export async function generateContractTypes(packageRoot) {
         "prefer-unions": "true"
       }
     ),
-    render(bundledBridgeSchemas, "go", {
+    render(bundledBridgeSchemas.map(({ name, schema }) => ({ name, schema: preserveGoExecutionWireStrings(schema) })), "go", {
       "just-types-and-package": "true",
       package: "contracts"
     }),
@@ -1504,7 +1514,7 @@ export async function generateContractTypes(packageRoot) {
       "typescript",
       { "just-types": "true", "prefer-unions": "true" }
     ),
-    render(bundledExecutionSchemas, "go", {
+    render(bundledExecutionSchemas.map(({ name, schema }) => ({ name, schema: preserveTypeScriptWireStrings(schema) })), "go", {
       "just-types-and-package": "true",
       package: "executioncontracts"
     })
@@ -1543,6 +1553,17 @@ export async function generateContractTypes(packageRoot) {
   );
 
   return {
+    goExecutionSchema: `${JSON.stringify({
+      $schema: "https://json-schema.org/draft/2020-12/schema",
+      $id: "https://agentroom.dev/schemas/runtime/go-execution.json",
+      $defs: Object.fromEntries(Object.entries({
+        executionManifest: "manifest", executionInputBinding: "inputBinding", executionCapability: "capability",
+        repositoryBinding: "bindingSummary", executionGrant: "grantSummary", repositoryOperation: "operationRequest",
+        repositoryReceipt: "operationReceipt", executionCheckpoint: "checkpoint", verificationReceipt: "verificationReceipt"
+      }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
+        dereference(executionRuntimeSchema.$defs[definition], executionRuntimeSchema, schemas), false)]))
+    }, null, 2)}\n`,
+    goExecutionRuntime: formatGo(await readFile(path.join(packageRoot, "src/go-execution-runtime.go.template"), "utf8")),
     executionTypescript,
     executionGo,
     executionValidators: renderExecutionValidators(schemas),

@@ -16,6 +16,31 @@ Required nullable pins remain explicit through generated Go round trips. The
 six closed operation variants use `{ kind, [kind]: payload }` so fields required
 by one operation cannot leak into another during typed serialization.
 
+Execution timestamps are exact wire strings in the generated Go execution
+types and nested Bridge execution manifest. Converting them to `time.Time`
+would normalize fractional precision and change an approved digest. Ordinary
+Bridge timestamps outside that subtree retain their existing Go types; the
+authoritative UTC format validation and JSON shapes are unchanged.
+
+The generated Go runtime embeds the nine standalone execution-runtime schemas
+and exposes `ValidateExecutionCommand`, `ValidateAndNormalizeExecutionCommand`,
+`CanonicalExecutionJSON` and `ExecutionDigest`. Raw validation precedes typed
+decoding, rejecting duplicate or case-aliased properties, invalid Unicode,
+unknown schema kinds and lossy/unsafe numeric values. Normalization emits
+integral JSON numbers for Go integer fields while preserving exact strings.
+Canonical SHA-256 input matches the Server's UTF-16 property ordering, JSON
+escaping and safe-integer encoding. Neither hashing nor schema validation
+proves a supplied digest, authorization, operation outcome or evidence truth.
+
+Go raw and canonical output are each bounded to 512 KiB, with the execution
+depth-24/30,000-visited-value bound. The shared Bridge pre-parser additionally
+limits raw values to 8,192, numbers to 4,096, numeric lexemes to 256 bytes and
+exponent magnitude to 512. These conservative raw-decoding limits apply before
+big-integer normalization; numeric expansion must still fit the canonical byte
+limit. Shared Node/Go digest fixtures include fractional UTC strings and an
+actual schema-valid frozen manifest round trip. This codec is a prerequisite
+for the Bridge publication adapter, not evidence that governed Runs can start.
+
 Manifests pin plan approval/control revision, Task definition/criteria, Run,
 Agent/Device, local binding/base, grant, workspace generation, ordered inputs,
 scope, outputs, verifier profiles and deadline. Input bindings distinguish an
