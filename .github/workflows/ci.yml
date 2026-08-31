@@ -208,9 +208,13 @@ jobs:
           }
           ./scripts/test-windows-release-semver.ps1
           ./scripts/test-windows-desktop-icons.ps1
+          ./scripts/test-windows-workflow-failures.ps1
           go test -count=1 ./... -run Windows -v
+          if ($LASTEXITCODE -ne 0) { throw "Windows process tests failed" }
           go test -tags desktop ./cmd/convenewire-bridge-desktop
+          if ($LASTEXITCODE -ne 0) { throw "Windows desktop tests failed" }
           go vet -tags desktop ./cmd/convenewire-bridge-desktop
+          if ($LASTEXITCODE -ne 0) { throw "Windows desktop vet failed" }
           ./scripts/package-desktop-windows.ps1 `
             -ReleaseTag v999.0.0-ci `
             -SourceRef $env:GITHUB_SHA `

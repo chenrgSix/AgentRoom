@@ -84,6 +84,21 @@ export function verifyCIWorkflowSource(source) {
     !source.includes("go test ./... -run Windows"),
     "native Windows process regressions must not use the cacheable command"
   );
+  verifyWindowsNativeFailures(source);
+}
+
+export function verifyWindowsNativeFailures(source) {
+  const windows = requireJob(jobBlocks(source), "desktop-windows");
+  const commands = [...windows.matchAll(/^          go (?:test|vet|run) [^\n]+\n([^\n]*)/gmu)];
+  invariant(commands.length >= 5, "Windows native checks must remain present");
+  for (const command of commands) {
+    invariant(
+      /^          if \(\$LASTEXITCODE -ne 0\) \{ throw "[^"\n]+" \}$/u.test(command[1]),
+      "every Windows native check must immediately throw on a nonzero exit"
+    );
+  }
+  invariant(windows.includes("./scripts/test-windows-workflow-failures.ps1"),
+    "Windows must execute native failure injection");
 }
 
 export function verifyCentralImageDockerGateSource(source) {
@@ -289,6 +304,7 @@ function assertBefore(block, earlier, later, scope) {
 }
 
 export function verifyReleaseWorkflowSource(source) {
+  verifyWindowsNativeFailures(source);
   const jobs = jobBlocks(source);
   const validate = requireJob(jobs, "validate-release");
   const repository = requireJob(jobs, "repository-gates");

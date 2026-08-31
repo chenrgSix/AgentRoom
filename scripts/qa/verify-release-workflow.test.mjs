@@ -62,6 +62,19 @@ test("native Windows process-tree regressions cannot reuse the Go test cache", (
   );
 });
 
+test("each Windows native exit guard is mandatory, immediate and terminating", () => {
+  for (const [source, verify] of [[ciWorkflow, verifyCIWorkflowSource], [workflow, verifyReleaseWorkflowSource]]) {
+    const windows = /  desktop-windows:\n[\s\S]*?(?=\n  [a-z0-9-]+:|$)/u.exec(source)[0];
+    const guards = [...windows.matchAll(/(          go (?:test|vet|run) [^\n]+\n)(          if \(\$LASTEXITCODE -ne 0\) \{ throw "[^"\n]+" \})/gu)];
+    assert.ok(guards.length >= 5);
+    for (const [whole, command, guard] of guards) {
+      for (const replacement of [command, command + guard.replace("throw", "Write-Output"), command + "          go version\n" + guard]) {
+        assert.throws(() => verify(source.replace(whole, replacement)), /must immediately throw/u);
+      }
+    }
+  }
+});
+
 test("backup durability cannot add a host Node runtime dependency", () => {
   const withHostNode = composeBackup.replace(
     /^sync$/mu,
