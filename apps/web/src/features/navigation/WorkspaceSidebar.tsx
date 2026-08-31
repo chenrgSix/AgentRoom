@@ -4,6 +4,7 @@ import type { Room, Team, WorkspaceView } from "../../models.js";
 import { isManagementView } from "./workspace-navigation.js";
 
 interface Props {
+  canCreateTeam?: boolean;
   activeView: WorkspaceView;
   locale: Locale;
   teams: Team[];
@@ -37,7 +38,7 @@ export function WorkspaceSidebar(props: Props) {
           {!teamId && <option value="">{zh ? "选择团队" : "Select Team"}</option>}
           {teams.map((team) => <option value={team.teamId} key={team.teamId}>{team.name}</option>)}
         </select>
-        <button aria-label={translate(locale, "newTeam")} title={translate(locale, "newTeam")} onClick={props.onNewTeam} type="button">＋</button>
+        {props.canCreateTeam !== false && <button aria-label={translate(locale, "newTeam")} title={translate(locale, "newTeam")} onClick={props.onNewTeam} type="button">＋</button>}
       </div>
       <nav className="product-area-switch" aria-label={zh ? "产品区域" : "Product area"}>
         <button aria-current={!managing ? "page" : undefined} onClick={props.onCollaboration} type="button">{zh ? "协作" : "Collaboration"}</button>

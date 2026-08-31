@@ -119,11 +119,12 @@ export function RoomSettingsDialog({
           </fieldset>
           <fieldset className="participant-editor-group">
             <legend>{t("teamAgents")} · {locale === "zh-CN" ? "单独启用" : "Per-Agent access"}</legend>
+            <p>{locale === "zh-CN" ? "添加 Agent 时默认同时勾选它的主人。只邀请 Agent 时，可在上方取消该成员；移除 Agent 不会自动移除成员。" : "Adding an Agent also selects its owner by default. Deselect that person above for Agent-only access. Removing an Agent does not remove its owner."}</p>
             <div className="participant-editor-list">
               {agents.map((agent) => (
                 <label key={agent.agentId}>
-                  <input checked={participantAgentIds.includes(agent.agentId)} disabled={agent.enabled === false} onChange={() => onToggleAgent(agent.agentId)} type="checkbox" />
-                  <span><strong>{agent.name}</strong><small>{roleLabel(agent.role, locale)}</small></span>
+                  <input aria-label={`${agent.name} · ${roleLabel(agent.role, locale)}`} checked={participantAgentIds.includes(agent.agentId)} disabled={agent.enabled === false} onChange={() => onToggleAgent(agent.agentId)} type="checkbox" />
+                  <span><strong>{agent.name}</strong><small>{roleLabel(agent.role, locale)} · {members.find((member) => member.memberId === agent.ownerMemberId)?.displayName ?? ""}</small></span>
                 </label>
               ))}
             </div>

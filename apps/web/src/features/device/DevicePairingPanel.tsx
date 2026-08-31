@@ -1,4 +1,5 @@
 import type {
+  DevicePairingMemberBinding,
   DevicePairingSessionCreated,
   DevicePairingSessionCreatedTrust,
   DevicePairingSessionOwnerProjection,
@@ -7,6 +8,7 @@ import type {
 import React, { useEffect, useMemo, useRef, useState } from "react";
 
 import { bridgeServerURL, jsonRequest } from "../../api-client.js";
+import type { Member, Room } from "../../models.js";
 import type { Locale } from "../../i18n.js";
 
 type PairingAction = "approve" | "reject" | "cancel";
@@ -19,6 +21,7 @@ interface PendingDecision {
 }
 
 interface StoredPairingAttempt {
+  memberBinding?: DevicePairingMemberBinding;
   version: 1;
   claimSecret: string;
   createOperationId: string;
@@ -31,6 +34,9 @@ interface StoredPairingAttempt {
 }
 
 interface DevicePairingPanelProps {
+  members?: Member[] | undefined;
+  rooms?: Room[] | undefined;
+  initialRoomId?: string | null | undefined;
   currentMemberIsOwner: boolean;
   currentMemberId: string | null;
   locale: Locale;
@@ -156,6 +162,8 @@ function readStoredAttempt(
         new URL(bridgeServerURL()).origin
       );
     }
+    if (candidate.memberBinding !== undefined) candidate.memberBinding = safeMemberBinding(candidate.memberBinding)!;
+    if (candidate.created && !sameBinding(candidate.created.memberBinding, candidate.memberBinding)) return null;
     if (candidate.projection !== undefined) {
       if (!candidate.created) {
         globalThis.sessionStorage.removeItem(key);
@@ -167,7 +175,8 @@ function readStoredAttempt(
         candidate.created.pairingSessionId,
         memberId,
         new URL(bridgeServerURL()).origin,
-        candidate.created.trust
+        candidate.created.trust,
+        candidate.created.memberBinding
       );
     }
     if (candidate.projection && terminalStates.has(candidate.projection.state)) {
@@ -203,6 +212,23 @@ function forgetAttempt(teamId: string, memberId: string): void {
   }
 }
 
+function safeMemberBinding(value: DevicePairingMemberBinding | undefined): DevicePairingMemberBinding | undefined {
+  if (value === undefined) return undefined;
+  if (!value || typeof value !== "object" || Object.keys(value).some((key) => !["memberId", "displayName", "roomIds"].includes(key)) ||
+    (value.memberId === undefined) === (value.displayName === undefined) || !Array.isArray(value.roomIds) ||
+    value.roomIds.length > 100 || new Set(value.roomIds).size !== value.roomIds.length ||
+    value.roomIds.some((id) => typeof id !== "string" || !/^room_[A-Za-z0-9_-]{8,128}$/u.test(id)) ||
+    (value.memberId !== undefined && !/^member_[A-Za-z0-9_-]{8,128}$/u.test(value.memberId)) ||
+    (value.displayName !== undefined && (typeof value.displayName !== "string" || !value.displayName.trim() || value.displayName.length > 80))) {
+    throw new Error("Device pairing member binding is invalid");
+  }
+  return { ...(value.memberId ? { memberId: value.memberId } : { displayName: value.displayName!.trim() }), roomIds: [...value.roomIds].sort() };
+}
+
+function sameBinding(left: DevicePairingMemberBinding | undefined, right: DevicePairingMemberBinding | undefined): boolean {
+  return JSON.stringify(safeMemberBinding(left) ?? null) === JSON.stringify(safeMemberBinding(right) ?? null);
+}
+
 function safeCreated(
   value: DevicePairingSessionCreated,
   teamId: string,
@@ -222,6 +248,7 @@ function safeCreated(
     throw new Error("Device pairing creation response is invalid");
   }
   const trust = safeTrust(value.trust, expectedOrigin);
+  const memberBinding = safeMemberBinding(value.memberBinding);
   return {
     createdAt: value.createdAt,
     expiresAt: value.expiresAt,
@@ -230,6 +257,7 @@ function safeCreated(
     shortCode: value.shortCode,
     state: value.state,
     teamId: value.teamId,
+    ...(memberBinding === undefined ? {} : { memberBinding }),
     ...(trust === undefined ? {} : { trust })
   };
 }
@@ -240,7 +268,8 @@ function safeProjection(
   pairingSessionId: string,
   memberId: string,
   expectedOrigin: string,
-  expectedTrust: DevicePairingSessionCreatedTrust | undefined
+  expectedTrust: DevicePairingSessionCreatedTrust | undefined,
+  expectedBinding?: DevicePairingMemberBinding
 ): DevicePairingSessionOwnerProjection {
   if (
     value.teamId !== teamId ||
@@ -261,6 +290,8 @@ function safeProjection(
     throw new Error("Device pairing status response is invalid");
   }
   const trust = safeTrust(value.trust, expectedOrigin);
+  const memberBinding = safeMemberBinding(value.memberBinding);
+  if (!sameBinding(memberBinding, expectedBinding)) throw new Error("Device pairing status changed member ownership");
   if (!sameTrust(trust, expectedTrust)) {
     throw new Error("Device pairing status changed its trust descriptor");
   }
@@ -274,6 +305,7 @@ function safeProjection(
     pairingSessionId: value.pairingSessionId,
     state: value.state,
     teamId: value.teamId,
+    ...(memberBinding === undefined ? {} : { memberBinding }),
     ...(value.claimedAt === undefined ? {} : { claimedAt: value.claimedAt }),
     ...(value.consumedAt === undefined ? {} : { consumedAt: value.consumedAt }),
     ...(value.decidedAt === undefined ? {} : { decidedAt: value.decidedAt }),
@@ -311,6 +343,7 @@ export function buildDevicePairingLink(
     expiresAt: created.expiresAt
   });
   const fragment = new URLSearchParams({ claimSecret });
+  if (created.memberBinding) fragment.set("memberAccess", "1");
   if (trust) {
     fragment.set("trustMode", trust.mode);
     fragment.set("trustOrigin", trust.origin);
@@ -344,12 +377,17 @@ function actionLabel(action: PairingAction, locale: Locale): string {
 }
 
 export function DevicePairingPanel({
+  members, rooms = [], initialRoomId,
   currentMemberIsOwner,
   currentMemberId,
   locale,
   sessionToken,
   teamId
 }: DevicePairingPanelProps) {
+  const [connectMember, setConnectMember] = useState(members !== undefined);
+  const [selectedMember, setSelectedMember] = useState(currentMemberId ?? "new");
+  const [newMemberName, setNewMemberName] = useState("");
+  const [initialRooms, setInitialRooms] = useState<string[]>(initialRoomId ? [initialRoomId] : []);
   const [storedAttempt, setAttempt] = useState<StoredPairingAttempt | null>(() =>
     currentMemberId ? readStoredAttempt(teamId, currentMemberId) : null
   );
@@ -398,7 +436,11 @@ export function DevicePairingPanel({
       createOperationId: createPairingOperationId(),
       ownerMemberId: currentMemberId,
       startedAt: new Date().toISOString(),
-      teamId
+      teamId,
+      ...(connectMember ? { memberBinding: safeMemberBinding({
+        ...(selectedMember === "new" ? { displayName: newMemberName.trim() } : { memberId: selectedMember }),
+        roomIds: initialRooms
+      })! } : {})
     };
     setTerminalProjection(null);
     commitAttempt(pending);
@@ -411,7 +453,8 @@ export function DevicePairingPanel({
           method: "POST",
           body: JSON.stringify({
             operationId: pending.createOperationId,
-            claimSecret: pending.claimSecret
+            claimSecret: pending.claimSecret,
+            ...(pending.memberBinding ? { memberBinding: pending.memberBinding } : {})
           })
         },
         sessionToken
@@ -423,6 +466,7 @@ export function DevicePairingPanel({
         currentMemberId,
         new URL(bridgeServerURL()).origin
       );
+      if (!sameBinding(created.memberBinding, pending.memberBinding)) throw new Error("Device pairing creation changed member ownership");
       commitAttempt({
         ...pending,
         created,
@@ -432,6 +476,7 @@ export function DevicePairingPanel({
           ownerMemberId: created.ownerMemberId,
           pairingSessionId: created.pairingSessionId,
           state: "issued",
+          ...(created.memberBinding ? { memberBinding: created.memberBinding } : {}),
           teamId: created.teamId,
           ...(created.trust === undefined ? {} : { trust: created.trust })
         }
@@ -461,7 +506,8 @@ export function DevicePairingPanel({
       source.created.pairingSessionId,
       currentMemberId,
       new URL(bridgeServerURL()).origin,
-      source.created.trust
+      source.created.trust,
+      source.created.memberBinding
     );
   }
 
@@ -534,7 +580,8 @@ export function DevicePairingPanel({
         attempt.created.pairingSessionId,
         currentMemberId,
         new URL(bridgeServerURL()).origin,
-        attempt.created.trust
+        attempt.created.trust,
+        attempt.created.memberBinding
       );
       if (scopeRef.current !== requestScope) return;
       const { decision: completedDecision, ...withoutDecision } = pending;
@@ -618,6 +665,10 @@ export function DevicePairingPanel({
     setError(null);
     setPhraseConfirmed(false);
     setRejectionReason("");
+    setConnectMember(members !== undefined);
+    setSelectedMember(currentMemberId ?? "new");
+    setNewMemberName("");
+    setInitialRooms(initialRoomId ? [initialRoomId] : []);
   }, [currentMemberId, currentMemberIsOwner, teamId]);
 
   if (!currentMemberIsOwner || !currentMemberId) return null;
@@ -674,9 +725,33 @@ export function DevicePairingPanel({
         </div>
       )}
 
+      {members && !attempt && !terminalProjection && <fieldset className="pairing-member-fields">
+        <legend>{zh ? "客户端主人与成员入口" : "Client owner and Team entry"}</legend>
+        <label className="pairing-confirmation"><input type="checkbox" checked={connectMember} onChange={(event) => setConnectMember(event.target.checked)} />
+          {zh ? "同时确认成员归属并启用客户端入口" : "Confirm member ownership and enable client entry"}</label>
+        {connectMember ? <>
+          <label>{zh ? "这台设备属于" : "This Device belongs to"}
+            <select aria-label={zh ? "客户端主人" : "Client owner"} value={selectedMember} onChange={(event) => setSelectedMember(event.target.value)}>
+              <option value={currentMemberId}>{zh ? "我本人" : "Myself"}</option>
+              {members.filter((member) => member.role !== "owner").map((member) => <option key={member.memberId} value={member.memberId}>{member.displayName}</option>)}
+              <option value="new">{zh ? "邀请一位新成员" : "Invite a new member"}</option>
+            </select>
+          </label>
+          {selectedMember === "new" && <label>{zh ? "成员姓名" : "Member name"}<input aria-label={zh ? "成员姓名" : "Member name"} maxLength={80} value={newMemberName} onChange={(event) => setNewMemberName(event.target.value)} /></label>}
+          <p>{zh ? "选择主人和本机新 Agent 初始加入的房间。未选中的已有房间不会自动开放。" : "Choose the initial Rooms for this person and new Agents on this Device. Other existing Rooms are not granted."}</p>
+          <div className="pairing-room-choices">{rooms.slice(0, 100).map((room) => <label key={room.roomId} className="pairing-confirmation">
+            <input type="checkbox" checked={initialRooms.includes(room.roomId)} onChange={(event) => setInitialRooms((current) => event.target.checked ? [...current, room.roomId] : current.filter((id) => id !== room.roomId))} />#{room.name}
+          </label>)}</div>
+          <small>{zh ? "已有成员保留其原有房间权限。客户端入口仅提供普通成员权限，不开放管理员操作；需使用更新后的客户端和完整链接。" : "Existing members retain their Room access. Client entry grants ordinary-member authority only; use an updated client and the complete link."}</small>
+        </> : <p>{zh ? "仅配对设备，归属于当前管理员；不为客户端启用人的 Team 登录。" : "Device-only pairing belongs to the current administrator and does not enable human Team login."}</p>}
+      </fieldset>}
+      {(attempt?.memberBinding ?? projection?.memberBinding) && <p className="pairing-owner-summary">
+        {zh ? "确认主人：" : "Confirm owner: "}{(attempt?.memberBinding ?? projection?.memberBinding)?.displayName ?? members?.find((m) => m.memberId === (attempt?.memberBinding ?? projection?.memberBinding)?.memberId)?.displayName ?? (attempt?.memberBinding ?? projection?.memberBinding)?.memberId}
+        {zh ? " · 客户端可进入已授权房间（普通成员权限）" : " · Client entry to authorized Rooms (member authority)"}
+      </p>}
       {!attempt?.created && !terminalProjection && (
         <div className="device-pairing-start">
-          <button disabled={busy} onClick={() => void createSession()} type="button">
+          <button disabled={busy || (!attempt && connectMember && selectedMember === "new" && !newMemberName.trim())} onClick={() => void createSession()} type="button">
             {busy
               ? (zh ? "正在创建…" : "Creating…")
               : attempt
@@ -720,7 +795,7 @@ export function DevicePairingPanel({
                 {copied ? (zh ? "已复制" : "Copied") : (zh ? "复制" : "Copy")}
               </button>
             </div>
-            {activeTrust
+            {attempt.created.memberBinding ? <span className="pairing-or">{zh ? "成员接入请使用完整链接或二维码；旧客户端不会自动获得人的权限。" : "Use the complete link or QR for member entry. Older clients do not gain human access."}</span> : activeTrust
               ? <span className="pairing-or">
                   {zh
                     ? "私有 CA 首次配对不提供短码入口；短码不能证明服务器身份。"

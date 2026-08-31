@@ -42,6 +42,37 @@ These capabilities are included in the v0.4.2 stable packages. Read the
 [upgrade and verification notes](docs/releases/v0.4.2.md) and back up Central
 before upgrading. Website publication is not an application Release.
 
+Current unreleased source also includes
+[client owner collaboration entry](docs/adr/0035-connect-client-owners-to-team-collaboration.md).
+Use an updated Central, Web and Bridge together; v0.4.2 packages do not include
+this flow.
+
+## Client Owner Entry
+
+In **设备 → 配对新设备**, keep **同时确认成员归属并启用客户端入口**
+selected. Choose the actual client owner: yourself, an existing ordinary Team
+member, or a new member. Select the initial Rooms, share the complete pairing
+link, then approve the matching verification phrase. Approval binds both the
+person and Device; another Device can reuse the same member identity.
+
+The paired client offers **进入 Team** and **选择房间 → 打开房间**. The browser
+shows the member identity and destination before confirmation. This entry has
+ordinary-member authority in that Team, even when the client owner is a Team
+Owner. Full administrator login remains separate. Browser certificate trust
+is still required when Central uses a private CA.
+
+Adding an Agent in Room settings also selects its owner by default. Uncheck
+that person for Agent-only access. Removing the person remains effective after
+Agent reconnects; removing an Agent does not automatically remove the person.
+Existing members keep their previously granted Rooms.
+
+Existing Device credentials are never converted into human login credentials.
+For an old client, update it and have the administrator confirm the actual
+owner through a new member pairing link. The configured client uses its
+explicit re-pairing flow, preserving local Runtime/Workspace configuration and
+historical Device attribution. A stale, used or revoked entry requires a fresh
+click from the client; it is never automatically replayed.
+
 ## Technology Baseline
 
 | Component | Choice |

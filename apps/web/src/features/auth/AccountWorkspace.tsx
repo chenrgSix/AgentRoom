@@ -12,7 +12,7 @@ export function AccountWorkspace({ session, authMode, locale, theme, onLocale, o
       <h3>{zh ? "当前账户" : "Your account"}</h3>
       <dl className="account-facts">
         <div><dt>{zh ? "身份" : "Identity"}</dt><dd>{session.displayName}</dd></div>
-        <div><dt>{zh ? "登录方式" : "Access mode"}</dt><dd>{authMode === "trusted-team" ? (zh ? "可信团队" : "Trusted Team") : (zh ? "本机模式" : "Local mode")}</dd></div>
+        <div><dt>{zh ? "登录方式" : "Access mode"}</dt><dd>{session.clientTeamId ? (zh ? "客户端成员入口（普通成员权限）" : "Client entry (member authority)") : authMode === "trusted-team" ? (zh ? "可信团队" : "Trusted Team") : (zh ? "本机模式" : "Local mode")}</dd></div>
       </dl>
     </section>
     <section className="control-panel">

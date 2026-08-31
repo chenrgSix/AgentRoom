@@ -14,6 +14,7 @@ export function useWebSession(onInvalidated: (previous: LocalSession) => void) {
   const activate = useCallback((user: AuthenticatedUser, mode: AuthMode, token?: string): LocalSession => {
     advanceWebSessionGeneration();
     const next = { userId: user.userId, displayName: user.displayName,
+      ...(user.clientTeamId ? { clientTeamId: user.clientTeamId } : {}),
       ...(user.canManageOwnerRecovery === true ? { canManageOwnerRecovery: true } : {}),
       ...(token ? { token } : {}) };
     authority.current = { session: next, mode };

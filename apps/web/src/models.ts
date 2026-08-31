@@ -322,6 +322,7 @@ export interface MemoryCandidate {
 }
 
 export interface LocalSession {
+  clientTeamId?: string;
   userId: string;
   displayName: string;
   token?: string;
@@ -338,6 +339,7 @@ export type AuthGateState =
   | "authenticated";
 
 export interface AuthenticatedUser {
+  clientTeamId?: string;
   userId: string;
   displayName: string;
   createdAt?: string;

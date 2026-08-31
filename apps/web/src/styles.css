@@ -1262,3 +1262,11 @@ button:disabled { cursor: not-allowed; opacity: .45; }
   .provisioning-request-list { grid-template-columns: 1fr; }
   .hosted-profile-list { grid-template-columns: minmax(0, 1fr); }
 }
+
+.pairing-member-fields { display: grid; gap: 12px; min-width: 0; border: 1px solid #3c4432; border-radius: 12px; padding: 16px; }
+.pairing-member-fields > label:not(.pairing-confirmation) { display: grid; gap: 6px; }
+.pairing-member-fields input:not([type="checkbox"]), .pairing-member-fields select { width: 100%; min-width: 0; }
+.pairing-room-choices { max-height: 180px; overflow-y: auto; display: grid; gap: 8px; }
+.pairing-owner-summary { overflow-wrap: anywhere; }
+.client-entry-identity { font-size: 1.15rem; overflow-wrap: anywhere; }
+.client-entry-shell .secondary-action { margin-top: 12px; width: 100%; }

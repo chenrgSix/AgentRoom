@@ -48,6 +48,7 @@ function projection(
     pairingSessionId,
     state,
     teamId,
+    ...(source.memberBinding ? { memberBinding: source.memberBinding } : {}),
     ...(source.trust === undefined ? {} : { trust: source.trust }),
     ...(state === "claimed" || state === "approved" || state === "consumed"
       ? {
@@ -121,6 +122,44 @@ test("pairing link keeps the browser proof in the fragment", () => {
   assert.equal(parsed.searchParams.get("expiresAt"), created.expiresAt);
   assert.equal(parsed.hash, "#claimSecret=secret_abcdefghijklmnopqrstuvwxyz0123456789");
   assert.equal(createPairingOperationId("12345678-abcd"), "op_12345678-abcd");
+});
+
+test("member pairing freezes the actual person and explicit Rooms into its recoverable intent", async () => {
+  const dom = installDom();
+  const originalFetch = globalThis.fetch;
+  const binding = { displayName: "Bob", roomIds: ["room_selected123"] };
+  const memberCreated = { ...created, memberBinding: binding };
+  let requestBody: Record<string, unknown> | undefined;
+  globalThis.fetch = async (input, init = {}) => {
+    if ((init.method ?? "GET") === "POST" && pathOf(input).endsWith("/device-pairing-sessions")) {
+      requestBody = JSON.parse(String(init.body)) as Record<string, unknown>;
+      return jsonResponse(memberCreated);
+    }
+    return jsonResponse(projection("issued", memberCreated));
+  };
+  const { cleanup, render, within, fireEvent } = await import("@testing-library/react");
+  try {
+    render(<DevicePairingPanel currentMemberIsOwner currentMemberId={created.ownerMemberId} locale="zh-CN" teamId={teamId}
+      members={[{ memberId: created.ownerMemberId, teamId, createdAt: created.createdAt, userId: "user_owner123", displayName: "Alice", role: "owner" }]}
+      rooms={[{ roomId: "room_selected123", teamId, name: "Selected", settingsRevision: 1, createdAt: created.createdAt },
+        { roomId: "room_private123", teamId, name: "Private", settingsRevision: 1, createdAt: created.createdAt }]}
+      initialRoomId="room_selected123" />);
+    const page = within(dom.window.document.body);
+    assert.equal((page.getByRole("checkbox", { name: /同时确认成员归属/u }) as HTMLInputElement).checked, true);
+    fireEvent.change(page.getByLabelText("客户端主人"), { target: { value: "new" } });
+    assert.equal((page.getByRole("button", { name: "创建设备配对" }) as HTMLButtonElement).disabled, true);
+    fireEvent.change(page.getByLabelText("成员姓名"), { target: { value: "Bob" } });
+    fireEvent.click(page.getByRole("button", { name: "创建设备配对" }));
+    await page.findByLabelText("一次性配对链接");
+    assert.deepEqual(requestBody?.memberBinding, binding);
+    assert.equal(page.queryByText(created.shortCode), null);
+    const link = new URL((page.getByLabelText("一次性配对链接") as HTMLInputElement).value);
+    assert.equal(new URLSearchParams(link.hash.slice(1)).get("memberAccess"), "1");
+    assert.match(page.getByText(/确认主人：/u).textContent ?? "", /Bob/u);
+    assert.equal(page.queryByLabelText("客户端主人"), null);
+    const stored = Array.from({ length: sessionStorage.length }, (_, index) => sessionStorage.getItem(sessionStorage.key(index)!)).find((value) => value?.includes("memberBinding"));
+    assert.ok(stored?.includes('"displayName":"Bob"'));
+  } finally { cleanup(); globalThis.fetch = originalFetch; dom.window.close(); }
 });
 
 test("private pairing link preserves only the exact trust descriptor in its fragment", () => {

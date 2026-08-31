@@ -22,6 +22,7 @@ import {
   localBootstrap,
 } from "./api-client.js";
 import { type Locale, type TranslationKey, translate } from "./i18n.js";
+import { ClientEntryGate, clientEntryFromFragment, type ClientEntrySession } from "./features/auth/ClientEntryGate.js";
 import { AccessGate } from "./features/auth/AccessGate.js";
 import { AccountWorkspace } from "./features/auth/AccountWorkspace.js";
 import { DeviceWorkspace } from "./features/device/DeviceWorkspace.js";
@@ -108,6 +109,21 @@ const localeKey = "agent-room.locale";
 const themeKey = "agent-room.theme";
 
 export function App() {
+  const [entryTicket, setEntryTicket] = useState<string | null>(() => clientEntryFromFragment(window.location.hash));
+  const [clientEntrySession, setClientEntrySession] = useState<ClientEntrySession | null>(null);
+  useEffect(() => {
+    if (entryTicket !== null) window.history.replaceState(window.history.state, "", window.location.pathname);
+  }, []);
+  if (entryTicket !== null) return <ClientEntryGate ticket={entryTicket} onCancel={() => setEntryTicket(null)} onEntered={(result) => {
+    const params = new URLSearchParams({ team: result.identity.teamId, view: result.identity.roomId ? "room" : "work" });
+    if (result.identity.roomId) params.set("room", result.identity.roomId);
+    window.history.replaceState(null, "", `${window.location.pathname}?${params}`);
+    setClientEntrySession(result); setEntryTicket(null);
+  }} />;
+  return <WorkspaceApp clientEntrySession={clientEntrySession} />;
+}
+
+function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntrySession | null }) {
   const isCurrentSession = captureWebSessionScope();
   const [theme, setTheme] = useState<Theme>(() =>
     localStorage.getItem(themeKey) === "light" ? "light" : "dark"
@@ -795,6 +811,11 @@ export function App() {
 
   useEffect(() => {
     let stopped = false;
+    if (clientEntrySession) {
+      void activateSession(clientEntrySession.user, clientEntrySession.mode, clientEntrySession.session.token)
+        .catch((reason: unknown) => { if (!stopped) reportError(reason); });
+      return () => { stopped = true; };
+    }
     void jsonRequest<AuthStatus>("/api/auth/status")
       .then(async (status) => {
         if (stopped) return;
@@ -1551,7 +1572,7 @@ export function App() {
       <WorkspaceSidebar activeView={activeView} locale={locale} teams={teams} teamId={selectedTeamId} rooms={rooms} roomId={selectedRoomId}
         onTeam={(teamId) => navigate({ teamId, roomId: undefined, taskId: undefined, workTaskId: undefined,
           tab: undefined, runId: undefined, lifecycleState: undefined, ownerMemberId: undefined, search: undefined, view: managing ? activeView : "work" })}
-        onNewTeam={() => setTeamDialogOpen(true)} onNewRoom={() => setRoomCreateOpen(true)}
+        canCreateTeam={!session?.clientTeamId} onNewTeam={() => setTeamDialogOpen(true)} onNewRoom={() => setRoomCreateOpen(true)}
         onRoom={(roomId) => navigate({ roomId, view: "room", taskId: undefined, workTaskId: undefined, tab: undefined, runId: undefined })}
         onView={selectWorkspaceView} onCollaboration={returnToCollaboration}>
         {selectedTeam && selectedRoom && (
@@ -1813,7 +1834,7 @@ export function App() {
           />
           </>
         ) : activeView === "devices" ? (
-          <DeviceWorkspace key={`${selectedTeam.teamId}:${session?.userId}`} agents={agents} devices={devices}
+          <DeviceWorkspace key={`${selectedTeam.teamId}:${session?.userId}`} agents={agents} devices={devices} members={members} rooms={rooms} initialRoomId={selectedRoomId}
             locale={locale} currentMemberIsOwner={currentMember?.role === "owner"} currentMemberId={currentMember?.memberId ?? null}
             sessionToken={session?.token} teamId={selectedTeam.teamId} onRevokeDevice={revokeDevice} />
         ) : activeView === "agents" ? (
@@ -2212,11 +2233,15 @@ export function App() {
           onClose={() => setParticipantDialogOpen(false)}
           onPolicyChange={setRoomPolicyDraft}
           onSubmit={saveRoomParticipants}
-          onToggleAgent={(agentId) => setParticipantAgentIds((current) =>
-            current.includes(agentId)
-              ? current.filter((currentAgentId) => currentAgentId !== agentId)
-              : [...current, agentId]
-          )}
+          onToggleAgent={(agentId) => {
+            const adding = !participantAgentIds.includes(agentId);
+            const owner = agents.find((agent) => agent.agentId === agentId)?.ownerMemberId;
+            if (adding && owner && members.some((member) => member.memberId === owner)) {
+              setParticipantMemberIds((current) => current.includes(owner) ? current : [...current, owner]);
+            }
+            setParticipantAgentIds((current) => current.includes(agentId)
+              ? current.filter((id) => id !== agentId) : [...current, agentId]);
+          }}
           onToggleMember={(memberId) => setParticipantMemberIds((current) =>
             current.includes(memberId)
               ? current.filter((currentMemberId) => currentMemberId !== memberId)

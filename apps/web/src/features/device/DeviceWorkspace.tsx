@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { type Locale, translate } from "../../i18n.js";
-import type { Agent, Device } from "../../models.js";
+import type { Agent, Device, Member, Room } from "../../models.js";
 import { DevicePairingPanel } from "./DevicePairingPanel.js";
 import { PanelDialog } from "../navigation/PanelDialog.js";
 
-export function DeviceWorkspace({ agents, devices, locale, currentMemberId, currentMemberIsOwner, sessionToken, teamId, onRevokeDevice }: {
+export function DeviceWorkspace({ members, rooms, initialRoomId, agents, devices, locale, currentMemberId, currentMemberIsOwner, sessionToken, teamId, onRevokeDevice }: {
+  members?: Member[]; rooms?: Room[]; initialRoomId?: string | null;
   agents: Agent[]; devices: Device[]; locale: Locale; currentMemberId: string | null;
   currentMemberIsOwner: boolean; sessionToken: string | undefined; teamId: string;
   onRevokeDevice: (device: Device) => void | Promise<void>;
@@ -35,7 +36,7 @@ export function DeviceWorkspace({ agents, devices, locale, currentMemberId, curr
       </div>
     )}
     {pairing && currentMemberIsOwner && <PanelDialog title={zh ? "配对新设备" : "Pair a Device"} locale={locale} onClose={() => setPairing(false)}>
-      <DevicePairingPanel currentMemberIsOwner currentMemberId={currentMemberId} locale={locale} sessionToken={sessionToken} teamId={teamId} />
+      <DevicePairingPanel members={members} rooms={rooms} initialRoomId={initialRoomId} currentMemberIsOwner currentMemberId={currentMemberId} locale={locale} sessionToken={sessionToken} teamId={teamId} />
     </PanelDialog>}
   </section>;
 }
