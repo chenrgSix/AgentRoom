@@ -7,6 +7,14 @@ contracts. Direct Messages, handoffs, retries, Discussions and manual paths must
 not bypass an active plan's gates. Unsupported Bridges reject governed work
 without degrading it to a prompt-only ordinary Run.
 
+The additive wire carrier is `contextManifest.execution`, defined by CON-021.
+It freezes one exact version-1 manifest rather than duplicating execution fields
+beside the existing context snapshot. Capability-aware transport rejection and
+Bridge no-start prerequisites are present before the scheduler is enabled;
+they do not implement frozen-input creation or execution admission. RUN-018 and
+EXEC-004 own that integration and must preserve ordinary Run identity, inbox
+deduplication, cancellation and explicit unknown-outcome retry.
+
 - Prefix: `RUN`
 - Planned location: `apps/server/`
 - Owns: Run lifecycle, durable delivery, status sequencing, cancellation,

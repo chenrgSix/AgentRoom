@@ -13,7 +13,7 @@ export interface ExecutionPlanProjection {
   planId:        string;
   roomId:        string;
   rootTaskId:    string;
-  state:         State;
+  state:         ExecutionPlanProjectionState;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -186,7 +186,7 @@ export type Access = "read_only" | "isolated_write";
 export interface PurpleTask {
   criteria?:             [PurpleCriterion, ...PurpleCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         PurpleSourceAction;
   title?:                string;
@@ -203,7 +203,7 @@ export interface PurpleCriterion {
   required:     boolean;
 }
 
-export type Mode = "new" | "existing";
+export type TaskMode = "new" | "existing";
 
 export interface PurpleSourceAction {
   nextActionKey: string;
@@ -240,7 +240,7 @@ export interface PurpleIntegrationTarget {
 
 export type SchemaVersion = "1.0";
 
-export type State = "draft" | "approved" | "running" | "paused" | "review" | "completed" | "canceled";
+export type ExecutionPlanProjectionState = "draft" | "approved" | "running" | "paused" | "review" | "completed" | "canceled";
 
 export interface ExecutionDecisionSourceSnapshot {
   digest:   string;
@@ -283,7 +283,7 @@ export interface PlanElement {
   planId:        string;
   roomId:        string;
   rootTaskId:    string;
-  state:         State;
+  state:         ExecutionPlanProjectionState;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -444,7 +444,7 @@ export interface FluffyScope {
 export interface FluffyTask {
   criteria?:             [FluffyCriterion, ...FluffyCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         FluffySourceAction;
   title?:                string;
@@ -642,7 +642,7 @@ export interface TentacledScope {
 export interface TentacledTask {
   criteria?:             [TentacledCriterion, ...TentacledCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         TentacledSourceAction;
   title?:                string;
@@ -906,7 +906,7 @@ export interface StickyScope {
 export interface StickyTask {
   criteria?:             [StickyCriterion, ...StickyCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         StickySourceAction;
   title?:                string;
@@ -1082,7 +1082,7 @@ export interface IndigoScope {
 export interface IndigoTask {
   criteria?:             [IndigoCriterion, ...IndigoCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         IndigoSourceAction;
   title?:                string;
@@ -1259,7 +1259,7 @@ export interface IndecentScope {
 export interface IndecentTask {
   criteria?:             [IndecentCriterion, ...IndecentCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         IndecentSourceAction;
   title?:                string;
@@ -1388,7 +1388,7 @@ export interface ExecutionPlanApprovalReceiptPlan {
   planId:        string;
   roomId:        string;
   rootTaskId:    string;
-  state:         State;
+  state:         ExecutionPlanProjectionState;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -1549,7 +1549,7 @@ export interface HilariousScope {
 export interface HilariousTask {
   criteria?:             [HilariousCriterion, ...HilariousCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         HilariousSourceAction;
   title?:                string;
@@ -1629,13 +1629,13 @@ export interface StickyCompiledTask {
 }
 
 export interface ExecutionPlanControlCommand {
-  action:                  Action;
+  action:                  ActionEnum;
   expectedControlRevision: number;
   operationId:             string;
   reason:                  string;
 }
 
-export type Action = "pause" | "resume" | "cancel";
+export type ActionEnum = "pause" | "resume" | "cancel";
 
 export interface ExecutionPlanRevision {
   author: ExecutionPlanRevisionAuthor;
@@ -1782,7 +1782,7 @@ export interface AmbitiousScope {
 export interface AmbitiousTask {
   criteria?:             [AmbitiousCriterion, ...AmbitiousCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         AmbitiousSourceAction;
   title?:                string;
@@ -1963,7 +1963,7 @@ export interface CunningScope {
 export interface CunningTask {
   criteria?:             [CunningCriterion, ...CunningCriterion[]];
   goal?:                 string;
-  mode:                  Mode;
+  mode:                  TaskMode;
   ownerMemberId?:        string;
   sourceAction?:         CunningSourceAction;
   title?:                string;
@@ -2009,4 +2009,725 @@ export interface CunningIntegrationTarget {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
+}
+
+export interface GovernedExecutionManifest {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:             string;
+  grant:                GovernedExecutionManifestGrant;
+  inputDigest:          string;
+  inputs:               GovernedExecutionManifestInput[];
+  manifestDigest:       string;
+  outputs:              [GovernedExecutionManifestOutput, ...GovernedExecutionManifestOutput[]];
+  repository:           GovernedExecutionManifestRepository;
+  scope:                GovernedExecutionManifestScope;
+  scopePolicy:          GovernedExecutionManifestScopePolicy;
+  verificationProfiles: GovernedExecutionManifestVerificationProfile[];
+  version:              number;
+  workspace:            GovernedExecutionManifestWorkspace;
+}
+
+export interface GovernedExecutionManifestGrant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface GovernedExecutionManifestInput {
+  artifact:            PurpleArtifact;
+  bindingId:           string;
+  destinationAgentId:  string;
+  destinationDeviceId: string;
+  destinationRunId:    string;
+  destinationTaskId:   string;
+  edgeKey:             null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt:       string;
+  gate:            Gate;
+  gateDigest:      string;
+  gateOperationId: string;
+  inputSlot:       string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:                 string;
+  planId:                   string;
+  planRevision:             number;
+  repositoryId:             null | string;
+  sourceCommit:             null | string;
+  sourceCriteriaRevision:   number;
+  sourceDefinitionRevision: number;
+  sourceOutputSlot:         string;
+  sourceResultId:           null | string;
+  sourceResultVersion:      number | null;
+  sourceTaskId:             string;
+  sourceTree:               null | string;
+}
+
+export interface PurpleArtifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+}
+
+export interface GovernedExecutionManifestOutput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface GovernedExecutionManifestRepository {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface GovernedExecutionManifestScope {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface GovernedExecutionManifestScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface GovernedExecutionManifestVerificationProfile {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface GovernedExecutionManifestWorkspace {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:            string;
+  leaseId:             string;
+  mode:                WorkspaceMode;
+  workspaceGeneration: string;
+  workspaceRef:        string;
+}
+
+export type WorkspaceMode = "isolated_worktree";
+
+export interface ExecutionInputBinding {
+  artifact:            ExecutionInputBindingArtifact;
+  bindingId:           string;
+  destinationAgentId:  string;
+  destinationDeviceId: string;
+  destinationRunId:    string;
+  destinationTaskId:   string;
+  edgeKey:             null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt:       string;
+  gate:            Gate;
+  gateDigest:      string;
+  gateOperationId: string;
+  inputSlot:       string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:                 string;
+  planId:                   string;
+  planRevision:             number;
+  repositoryId:             null | string;
+  sourceCommit:             null | string;
+  sourceCriteriaRevision:   number;
+  sourceDefinitionRevision: number;
+  sourceOutputSlot:         string;
+  sourceResultId:           null | string;
+  sourceResultVersion:      number | null;
+  sourceTaskId:             string;
+  sourceTree:               null | string;
+}
+
+export interface ExecutionInputBindingArtifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+}
+
+export interface GovernedExecutionCapability {
+  operations:                [KindElement, ...KindElement[]];
+  preventivePathEnforcement: boolean;
+  version:                   number;
+  workspaceBoundary:         WorkspaceBoundary;
+}
+
+export type KindElement = "prepare" | "capture" | "verify" | "integrate" | "publish" | "observe";
+
+export type WorkspaceBoundary = "enforced";
+
+export interface RepositoryBindingSummary {
+  bindingId:      string;
+  capability:     Capability;
+  deviceId:       string;
+  observedCommit: string;
+  repositoryId:   string;
+  revision:       number;
+  runtimeProfile: RepositoryBindingSummaryRuntimeProfile;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  updatedAt:            string;
+  verificationProfiles: RepositoryBindingSummaryVerificationProfile[];
+  workspaceGeneration:  string;
+  workspaceRef:         string;
+}
+
+export interface Capability {
+  operations:                [KindElement, ...KindElement[]];
+  preventivePathEnforcement: boolean;
+  version:                   number;
+  workspaceBoundary:         WorkspaceBoundary;
+}
+
+export interface RepositoryBindingSummaryRuntimeProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface RepositoryBindingSummaryVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface ExecutionGrantSummary {
+  agentId:            string;
+  bindingId:          string;
+  deviceId:           string;
+  grant:              ExecutionGrantSummaryGrant;
+  integrationTargets: ExecutionGrantSummaryIntegrationTarget[];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:             string;
+  nodeKey:              string;
+  operations:           [KindElement, ...KindElement[]];
+  planId:               string;
+  repositoryId:         string;
+  revokedAt:            null | string;
+  runtimeProfile:       ExecutionGrantSummaryRuntimeProfile;
+  scopePolicy:          ExecutionGrantSummaryScopePolicy;
+  verificationProfiles: ExecutionGrantSummaryVerificationProfile[];
+}
+
+export interface ExecutionGrantSummaryGrant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface ExecutionGrantSummaryIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface ExecutionGrantSummaryRuntimeProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface ExecutionGrantSummaryScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface ExecutionGrantSummaryVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface RepositoryOperationRequest {
+  action:    ActionClass;
+  bindingId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:           string;
+  deviceId:           string;
+  execution:          RepositoryOperationRequestExecution | null;
+  expectedGeneration: string;
+  grant:              RepositoryOperationRequestGrant;
+  operationId:        string;
+  plan:               RepositoryOperationRequestPlan;
+  repositoryId:       string;
+  requestDigest:      string;
+  version:            number;
+}
+
+export interface ActionClass {
+  kind:       KindElement;
+  prepare?:   Prepare;
+  capture?:   Capture;
+  verify?:    Verify;
+  integrate?: Integrate;
+  publish?:   Publish;
+  observe?:   Observe;
+}
+
+export interface Capture {
+  manifestDigest: string;
+}
+
+export interface Integrate {
+  candidateCommit:                string;
+  candidateTree:                  string;
+  inputDigest:                    string;
+  integrationApprovalOperationId: string;
+  target:                         IntegrateTarget;
+  verificationIds:                [string, ...string[]];
+}
+
+export interface IntegrateTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface Observe {
+  candidateCommit:     string;
+  checkKeys:           string[];
+  providerBindingId:   string;
+  providerOperationId: null | string;
+}
+
+export interface Prepare {
+  manifest:           Manifest;
+  resumeCheckpointId: null | string;
+}
+
+export interface Manifest {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:             string;
+  grant:                ManifestGrant;
+  inputDigest:          string;
+  inputs:               ManifestInput[];
+  manifestDigest:       string;
+  outputs:              [ManifestOutput, ...ManifestOutput[]];
+  repository:           ManifestRepository;
+  scope:                ManifestScope;
+  scopePolicy:          ManifestScopePolicy;
+  verificationProfiles: ManifestVerificationProfile[];
+  version:              number;
+  workspace:            ManifestWorkspace;
+}
+
+export interface ManifestGrant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface ManifestInput {
+  artifact:            FluffyArtifact;
+  bindingId:           string;
+  destinationAgentId:  string;
+  destinationDeviceId: string;
+  destinationRunId:    string;
+  destinationTaskId:   string;
+  edgeKey:             null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt:       string;
+  gate:            Gate;
+  gateDigest:      string;
+  gateOperationId: string;
+  inputSlot:       string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:                 string;
+  planId:                   string;
+  planRevision:             number;
+  repositoryId:             null | string;
+  sourceCommit:             null | string;
+  sourceCriteriaRevision:   number;
+  sourceDefinitionRevision: number;
+  sourceOutputSlot:         string;
+  sourceResultId:           null | string;
+  sourceResultVersion:      number | null;
+  sourceTaskId:             string;
+  sourceTree:               null | string;
+}
+
+export interface FluffyArtifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+}
+
+export interface ManifestOutput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface ManifestRepository {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface ManifestScope {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface ManifestScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface ManifestVerificationProfile {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface ManifestWorkspace {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:            string;
+  leaseId:             string;
+  mode:                WorkspaceMode;
+  workspaceGeneration: string;
+  workspaceRef:        string;
+}
+
+export interface Publish {
+  candidateCommit:        string;
+  integrationOperationId: string;
+  mode:                   PublishMode;
+  providerBindingId:      string;
+  target:                 PublishTarget;
+}
+
+export type PublishMode = "push" | "pull_request";
+
+export interface PublishTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface Verify {
+  candidateCommit: string;
+  candidateTree:   string;
+  inputDigest:     string;
+  profile:         VerifyProfile;
+}
+
+export interface VerifyProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface RepositoryOperationRequestExecution {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface RepositoryOperationRequestGrant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface RepositoryOperationRequestPlan {
+  approvalOperationId: string;
+  digest:              string;
+  planId:              string;
+  revision:            number;
+  roomId:              string;
+  rootTaskId:          string;
+}
+
+export interface RepositoryOperationReceipt {
+  bindingId:             string;
+  candidateCommit:       null | string;
+  candidateTree:         null | string;
+  checkpointId:          null | string;
+  deviceId:              string;
+  errorCode:             null | string;
+  kind:                  KindElement;
+  observedGeneration:    null | string;
+  operationId:           string;
+  providerObservationId: null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt:     string;
+  repositoryId:   string;
+  requestDigest:  string;
+  state:          RepositoryOperationReceiptState;
+  target:         RepositoryOperationReceiptTarget | null;
+  verificationId: null | string;
+  version:        number;
+}
+
+export type RepositoryOperationReceiptState = "prepared" | "succeeded" | "failed" | "canceled" | "outcome_unknown";
+
+export interface RepositoryOperationReceiptTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface RepositoryCheckpoint {
+  baseCommit:      string;
+  bindingId:       string;
+  candidateCommit: string;
+  candidateTree:   string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  capturedAt:          string;
+  checkpointId:        string;
+  digest:              string;
+  inputDigest:         string;
+  operationId:         string;
+  outputs:             RepositoryCheckpointOutput[];
+  repositoryId:        string;
+  scope:               RepositoryCheckpointScope;
+  workspaceGeneration: string;
+  workspaceRef:        string;
+}
+
+export interface RepositoryCheckpointOutput {
+  artifact: OutputArtifact;
+  slotKey:  string;
+}
+
+export interface OutputArtifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+}
+
+export interface RepositoryCheckpointScope {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface VerificationReceipt {
+  authority:            Authority;
+  bindingId:            null | string;
+  candidateCommit:      string;
+  candidateTree:        string;
+  durationMilliseconds: number;
+  execution:            VerificationReceiptExecution | null;
+  exitCode:             number | null;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  finishedAt:             string;
+  inputDigest:            string;
+  integrationOperationId: null | string;
+  logArtifact:            LogArtifact | null;
+  operationId:            string;
+  outcome:                Outcome;
+  plan:                   VerificationReceiptPlan;
+  profile:                VerificationReceiptProfile;
+  repositoryId:           string;
+  requestDigest:          string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  startedAt:      string;
+  verificationId: string;
+  version:        number;
+}
+
+export interface Authority {
+  deviceId?:          string;
+  kind:               AuthorityKind;
+  attempt?:           number;
+  checkKey?:          string;
+  providerBindingId?: string;
+}
+
+export type AuthorityKind = "bridge" | "ci";
+
+export interface VerificationReceiptExecution {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface LogArtifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+}
+
+export type Outcome = "passed" | "failed" | "timed_out" | "canceled" | "outcome_unknown";
+
+export interface VerificationReceiptPlan {
+  approvalOperationId: string;
+  digest:              string;
+  planId:              string;
+  revision:            number;
+  roomId:              string;
+  rootTaskId:          string;
+}
+
+export interface VerificationReceiptProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
 }

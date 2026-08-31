@@ -591,6 +591,9 @@
         "supportsHandoff"
       ],
       "properties": {
+        "governedExecution": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/capability"
+        },
         "invocationMode": {
           "enum": [
             "managed",
@@ -638,6 +641,7 @@
             ]
           },
           "then": {
+            "not": { "properties": { "governedExecution": {} }, "required": ["governedExecution"] },
             "properties": {
               "supportsStart": {
                 "const": false
@@ -671,6 +675,9 @@
         "supportedProtocolVersions"
       ],
       "properties": {
+        "governedExecution": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/capability"
+        },
         "deviceId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
         },

@@ -120,7 +120,7 @@ func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
 				Revision: 5, DeliveryKind: &deliveryKind,
 				FromRevision: &fromRevision, ThroughRevision: &throughRevision,
 				ArtifactRefs: []contracts.ArtifactReference{{
-					ArtifactID: "artifact_commit_12345678", Type: contracts.Commit,
+					ArtifactID: "artifact_commit_12345678", Type: contracts.TypeCommit,
 					Title: "OAuth migration", Summary: "Focused tests passed.",
 					CommitSHA: &commitSHA, ArtifactRevision: &artifactRevision,
 					Relations: []contracts.ArtifactRelationReference{{

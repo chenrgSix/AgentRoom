@@ -29,7 +29,7 @@ func materializationRunMessage(runID string, agentID string) contracts.RunReques
 		ResultEvidence: &contracts.TaskResultEvidence{
 			ArtifactRefs: []contracts.ArtifactReference{{
 				ArtifactID: receipt.ArtifactID,
-				Type:       contracts.Patch,
+				Type:       contracts.TypePatch,
 				Content: &contracts.PinnedArtifactContent{
 					ContentID: receipt.ContentID, LogicalAlias: receipt.LogicalAlias,
 					MediaType: receipt.MediaType, Sha256: receipt.Sha256,

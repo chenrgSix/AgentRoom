@@ -137,6 +137,7 @@ type RunContextManifest struct {
 	Criteria           []RunContextManifestCriterion `json:"criteria"`
 	CriteriaRevision   int64                         `json:"criteriaRevision"`
 	DefinitionRevision int64                         `json:"definitionRevision"`
+	Execution          *Execution                    `json:"execution,omitempty"`
 	Goal               string                        `json:"goal"`
 	Included           Included                      `json:"included"`
 	ManifestVersion    ManifestVersion               `json:"manifestVersion"`
@@ -156,6 +157,132 @@ type RunContextManifestCriterion struct {
 	Description  string `json:"description"`
 	Ordinal      int64  `json:"ordinal"`
 	Required     bool   `json:"required"`
+}
+
+type Execution struct {
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline             time.Time             `json:"deadline"`
+	Grant                Grant                 `json:"grant"`
+	InputDigest          string                `json:"inputDigest"`
+	Inputs               []Input               `json:"inputs"`
+	ManifestDigest       string                `json:"manifestDigest"`
+	Outputs              []Output              `json:"outputs"`
+	Repository           Repository            `json:"repository"`
+	Scope                ScopeClass            `json:"scope"`
+	ScopePolicy          ScopePolicy           `json:"scopePolicy"`
+	VerificationProfiles []VerificationProfile `json:"verificationProfiles"`
+	Version              int64                 `json:"version"`
+	Workspace            Workspace             `json:"workspace"`
+}
+
+type Grant struct {
+	Digest string `json:"digest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt time.Time `json:"expiresAt"`
+	GrantID   string    `json:"grantId"`
+	Revision  int64     `json:"revision"`
+}
+
+type Input struct {
+	Artifact            ArtifactClass `json:"artifact"`
+	BindingID           string        `json:"bindingId"`
+	DestinationAgentID  string        `json:"destinationAgentId"`
+	DestinationDeviceID string        `json:"destinationDeviceId"`
+	DestinationRunID    string        `json:"destinationRunId"`
+	DestinationTaskID   string        `json:"destinationTaskId"`
+	EdgeKey             *string       `json:"edgeKey"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt       time.Time `json:"expiresAt"`
+	Gate            Gate      `json:"gate"`
+	GateDigest      string    `json:"gateDigest"`
+	GateOperationID string    `json:"gateOperationId"`
+	InputSlot       string    `json:"inputSlot"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt                 time.Time `json:"issuedAt"`
+	PlanID                   string    `json:"planId"`
+	PlanRevision             int64     `json:"planRevision"`
+	RepositoryID             *string   `json:"repositoryId"`
+	SourceCommit             *string   `json:"sourceCommit"`
+	SourceCriteriaRevision   int64     `json:"sourceCriteriaRevision"`
+	SourceDefinitionRevision int64     `json:"sourceDefinitionRevision"`
+	SourceOutputSlot         string    `json:"sourceOutputSlot"`
+	SourceResultID           *string   `json:"sourceResultId"`
+	SourceResultVersion      *int64    `json:"sourceResultVersion"`
+	SourceTaskID             string    `json:"sourceTaskId"`
+	SourceTree               *string   `json:"sourceTree"`
+}
+
+type ArtifactClass struct {
+	ArtifactID       string       `json:"artifactId"`
+	ArtifactRevision int64        `json:"artifactRevision"`
+	ByteLength       int64        `json:"byteLength"`
+	ContentDigest    string       `json:"contentDigest"`
+	Kind             ArtifactKind `json:"kind"`
+}
+
+type Output struct {
+	Kind     ArtifactKind `json:"kind"`
+	Required bool         `json:"required"`
+	SlotKey  string       `json:"slotKey"`
+}
+
+type Repository struct {
+	BaseCommit           string `json:"baseCommit"`
+	BindingID            string `json:"bindingId"`
+	GrantID              string `json:"grantId"`
+	GrantRevision        int64  `json:"grantRevision"`
+	RepositoryID         string `json:"repositoryId"`
+	RuntimeProfileDigest string `json:"runtimeProfileDigest"`
+	RuntimeProfileID     string `json:"runtimeProfileId"`
+}
+
+type ScopeClass struct {
+	AgentID             string `json:"agentId"`
+	ApprovalOperationID string `json:"approvalOperationId"`
+	CriteriaRevision    int64  `json:"criteriaRevision"`
+	DefinitionRevision  int64  `json:"definitionRevision"`
+	DeviceID            string `json:"deviceId"`
+	DispatchGeneration  int64  `json:"dispatchGeneration"`
+	NodeKey             string `json:"nodeKey"`
+	PlanControlRevision int64  `json:"planControlRevision"`
+	PlanDigest          string `json:"planDigest"`
+	PlanID              string `json:"planId"`
+	PlanRevision        int64  `json:"planRevision"`
+	RoomID              string `json:"roomId"`
+	RunID               string `json:"runId"`
+	TaskID              string `json:"taskId"`
+	TaskRevision        int64  `json:"taskRevision"`
+}
+
+type ScopePolicy struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type VerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Required  bool   `json:"required"`
+	Revision  int64  `json:"revision"`
+}
+
+type Workspace struct {
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt time.Time `json:"expiresAt"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt            time.Time `json:"issuedAt"`
+	LeaseID             string    `json:"leaseId"`
+	Mode                Mode      `json:"mode"`
+	WorkspaceGeneration string    `json:"workspaceGeneration"`
+	WorkspaceRef        string    `json:"workspaceRef"`
 }
 
 type Included struct {
@@ -364,7 +491,7 @@ type WorkbenchQuery struct {
 	OwnerMemberID  *string            `json:"ownerMemberId"`
 	Priority       []Priority         `json:"priority,omitempty"`
 	RoomID         *string            `json:"roomId"`
-	Scope          Scope              `json:"scope"`
+	Scope          ScopeEnum          `json:"scope"`
 	// Optional trimmed Task title search. Case-insensitive literal title substrings match;
 	// numeric or TASK-n text also matches the exact Team display number. Empty text is
 	// equivalent to omission.
@@ -565,6 +692,36 @@ const (
 	StateWorking        RunAttemptProjectionState = "working"
 )
 
+type ArtifactKind string
+
+const (
+	Commit     ArtifactKind = "commit"
+	Document   ArtifactKind = "document"
+	Patch      ArtifactKind = "patch"
+	TestResult ArtifactKind = "test_result"
+)
+
+type Gate string
+
+const (
+	AcceptedResult   Gate = "accepted_result"
+	IntegratedCommit Gate = "integrated_commit"
+	VerifiedOutput   Gate = "verified_output"
+)
+
+type Access string
+
+const (
+	IsolatedWrite Access = "isolated_write"
+	ReadOnly      Access = "read_only"
+)
+
+type Mode string
+
+const (
+	IsolatedWorktree Mode = "isolated_worktree"
+)
+
 type ManifestVersion string
 
 const (
@@ -589,7 +746,7 @@ type FilesystemAccess string
 const (
 	FilesystemAccessLocalPolicy FilesystemAccess = "local-policy"
 	FilesystemAccessNotRecorded FilesystemAccess = "not_recorded"
-	ReadOnly                    FilesystemAccess = "read-only"
+	FilesystemAccessReadOnly    FilesystemAccess = "read-only"
 	WorkspaceWrite              FilesystemAccess = "workspace-write"
 )
 
@@ -680,11 +837,11 @@ const (
 	Superseded    ResultProjectionState = "superseded"
 )
 
-type Scope string
+type ScopeEnum string
 
 const (
-	Mine Scope = "mine"
-	Team Scope = "team"
+	Mine ScopeEnum = "mine"
+	Team ScopeEnum = "team"
 )
 
 type LegacyState string

@@ -12,7 +12,10 @@ export function canonicalExecutionJSON(value: unknown): string;
 export function executionOperationDigest(value: unknown): string;
 export function assertExecutionCommand(
   kind: "planDefinition" | "proposalCommand" | "revisionCommand" |
-    "approvalCommand" | "controlCommand" | "decisionContent",
+    "approvalCommand" | "controlCommand" | "decisionContent" |
+    "executionManifest" | "executionInputBinding" | "executionCapability" |
+    "repositoryBinding" | "executionGrant" | "repositoryOperation" |
+    "repositoryReceipt" | "executionCheckpoint" | "verificationReceipt",
   value: unknown
 ): void;
 export function validateExecutionDecision(value: unknown): ExecutionDecisionContent;

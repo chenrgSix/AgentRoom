@@ -268,6 +268,7 @@
       "additionalProperties": false,
       "required": ["manifestVersion", "runId", "taskId", "taskRevision", "definitionRevision", "criteriaRevision", "goal", "criteria", "target", "included", "permissions", "omittedCategories", "recordedAt"],
       "properties": {
+        "execution": { "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/manifest" },
         "manifestVersion": { "const": "1.0" },
         "runId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId" },
         "taskId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId" },

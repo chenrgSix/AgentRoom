@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -76,6 +76,50 @@ function envelope(type: string, payload: Record<string, unknown>): object {
 function send(socket: BridgeSocket, value: object): void {
   socket.send(JSON.stringify(value));
 }
+
+test("execution capability handshake rejects unknown and ambiguous declarations without replacing a live epoch", { timeout: 30_000 }, async (t) => {
+  const fixture = await createFixture();
+  t.after(async () => {
+    await closeFixture(fixture);
+    await rm(path.dirname(fixture.databasePath), { recursive: true, force: true });
+  });
+  const capability = {
+    version: 1, workspaceBoundary: "enforced", preventivePathEnforcement: false,
+    operations: ["prepare", "capture", "verify"]
+  };
+  const hello = (governedExecution: unknown) => envelope("bridge.hello", {
+    bridgeVersion: "0.4.0", connectionEpoch: 2, deviceId: fixture.deviceId,
+    supportedProtocolVersions: ["1.0"], governedExecution
+  });
+  const open = () => fixture.app.injectWS("/ws/bridge", {
+    headers: { authorization: `Bearer ${fixture.deviceToken}`, host: "127.0.0.1" }
+  });
+  for (const raw of [
+    JSON.stringify(hello({ ...capability, version: 2 })),
+    JSON.stringify(hello({ ...capability, workspaceBoundary: "prompt_only" })),
+    JSON.stringify(hello(capability)).replace('"version":1', '"version":1,"version":1'),
+    JSON.stringify(hello(capability)).replace('"version":1', '"version":1,"ver\\u0073ion":1')
+  ]) {
+    const rejected = await open();
+    const closed = nextClose(rejected);
+    rejected.send(raw);
+    assert.deepEqual(await closed, { code: 4_008, reason: "Bridge message rejected: invalid_envelope" });
+    assert.equal(fixture.socket.readyState, 1, "invalid capability replaced the live Bridge");
+  }
+  const capable = await open();
+  const superseded = nextClose(fixture.socket);
+  send(capable, hello(capability));
+  assert.equal((await superseded).code, 4_001);
+  assert.equal(capable.readyState, 1);
+  const legacy = await open();
+  const downgraded = nextClose(capable);
+  send(legacy, envelope("bridge.hello", {
+    bridgeVersion: "0.4.0", connectionEpoch: 3, deviceId: fixture.deviceId,
+    supportedProtocolVersions: ["1.0"]
+  }));
+  assert.equal((await downgraded).code, 4_001);
+  assert.equal(legacy.readyState, 1, "ordinary legacy Bridge compatibility was removed");
+});
 
 async function sendAndFlush(socket: BridgeSocket, value: object): Promise<void> {
   await new Promise<void>((resolve, reject) => {

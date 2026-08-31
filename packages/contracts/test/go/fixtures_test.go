@@ -79,7 +79,7 @@ func loadCompiler(t *testing.T, root string) *jsonschema.Compiler {
 func TestGoldenFixturesMatchJSONSchema(t *testing.T) {
 	root := packageRoot(t)
 	var suite fixtureSuite
-	for _, name := range []string{"cases.json", "execution-plan-cases.json"} {
+	for _, name := range []string{"cases.json", "execution-plan-cases.json", "execution-runtime-cases.json"} {
 		source, err := os.ReadFile(filepath.Join(root, "fixtures", name))
 		if err != nil {
 			t.Fatalf("read fixtures: %v", err)

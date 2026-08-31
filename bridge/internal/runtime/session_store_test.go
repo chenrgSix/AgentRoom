@@ -144,7 +144,7 @@ func TestTaskSessionContextKeepsOnlyUnconsumedMemoryRevisions(t *testing.T) {
 				Revision: 2, DeliveryKind: &deliveryKind,
 				FromRevision: &fromRevision, ThroughRevision: &throughRevision,
 				ArtifactRefs: []contracts.ArtifactReference{{
-					ArtifactID: "artifact_delta_12345678", Type: contracts.Commit,
+					ArtifactID: "artifact_delta_12345678", Type: contracts.TypeCommit,
 					Title: "Delta", Summary: "Verify the commit",
 				}},
 			},
@@ -177,7 +177,7 @@ func TestTaskSessionContextRejectsResultEvidenceCursorGap(t *testing.T) {
 				Revision: 6, DeliveryKind: &deliveryKind,
 				FromRevision: &fromRevision, ThroughRevision: &throughRevision,
 				ArtifactRefs: []contracts.ArtifactReference{{
-					ArtifactID: "artifact_gap_12345678", Type: contracts.Commit,
+					ArtifactID: "artifact_gap_12345678", Type: contracts.TypeCommit,
 					Title: "Gap", Summary: "Must not consume a discontinuous page",
 				}},
 			},

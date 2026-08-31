@@ -18,6 +18,10 @@ type PrepareRunFunc func(
 ) ([]contracts.VerifiedArtifactMaterializationReceipt, error)
 type PreparationFailedFunc func(context.Context, Record, Sender, error) error
 
+// No current Bridge advertises governed execution. This prerequisite must be
+// replaced by actual local grant/preparation admission, never a silent fallback.
+var ErrGovernedExecutionUnsupported = errors.New("governed execution requires a supported local admission implementation")
+
 type Handler struct {
 	Inbox              *Inbox
 	Gate               *AgentExecutionGate
@@ -32,6 +36,9 @@ type Handler struct {
 }
 
 func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessage, send Sender) error {
+	if message.Payload.ContextManifest != nil && message.Payload.ContextManifest.Execution != nil {
+		return ErrGovernedExecutionUnsupported
+	}
 	now := time.Now().UTC()
 	if h.Now != nil {
 		now = h.Now().UTC()

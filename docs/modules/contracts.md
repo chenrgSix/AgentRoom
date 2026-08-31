@@ -7,6 +7,36 @@ generated TypeScript and Go. Structural validity does not prove graph topology,
 referential integrity, authorization, local capability or evidence truth.
 Old Bridge compatibility never allows silent downgrade of governed coding.
 
+`CON-021` adds version-1 `work/execution-runtime.schema.json`: the governed Run
+manifest, exact input binding, capability, repository binding, local grant
+summary, repository operation/request receipt, checkpoint and verifier receipt.
+The existing Run Context Manifest carries the single optional `execution`
+snapshot; delivery does not introduce a second copy or a new Agent Run model.
+Required nullable pins remain explicit through generated Go round trips. The
+six closed operation variants use `{ kind, [kind]: payload }` so fields required
+by one operation cannot leak into another during typed serialization.
+
+Manifests pin plan approval/control revision, Task definition/criteria, Run,
+Agent/Device, local binding/base, grant, workspace generation, ordered inputs,
+scope, outputs, verifier profiles and deadline. Input bindings distinguish an
+accepted Result, verified output and integrated commit without copying source
+acceptance. Verifier receipts identify an enrolled Bridge or configured CI,
+never an Agent claim. These are bounded structural contracts: domain services
+must still validate all fingerprints, expiry, source/destination authorization,
+grant enforcement, operation ownership and actual observations. Valid JSON does
+not establish any of those facts or enable execution.
+
+An optional `governedExecution` declaration in authenticated `bridge.hello` and
+managed Agent capabilities names version 1, enforced workspace isolation,
+preventive path enforcement and exact supported operations. Manual capability
+declarations cannot opt into governed execution. Current-epoch metadata is
+copied, and transport requires both prepare and capture before sending a
+governed Run; an observing-only Bridge is insufficient. Future admission must
+add the exact Agent/runtime/grant checks. Unknown versions or capability shapes
+are rejected before replacing an existing connection. Missing declarations
+preserve ordinary work, never a fallback for governed work. Production Bridges
+do not advertise this capability until the local implementation is available.
+
 `CON-020` adds `work/execution-plan.schema.json`, generated execution types and
 an Ajv standalone validator. The shared Execution validation port rejects
 non-JSON/ill-formed Unicode input, limits input to 512 KiB, 30,000 visited values
@@ -152,7 +182,11 @@ materializing JSON, generated TypeScript and Go admission gates enforce depth
 64, 8,192 value nodes, 4,096 numbers, a 256-character numeric token and an
 absolute exponent bound of 512. Frames are text-only strict UTF-8, and the same
 raw lexical gate rejects lone, reversed or mismatched Unicode surrogate escapes
-before either runtime can replace or retain a language-specific value. The
+before either runtime can replace or retain a language-specific value. It also
+rejects duplicate decoded object keys, including escaped/astral equivalents and
+keys in opaque extensions, before first/last-wins parsing can hide ambiguity.
+Identical keys in different objects remain valid. This tightens ambiguous raw
+frames, not the shape of any unambiguous ordinary protocol-1.0 message. The
 generator then applies a deterministic Ajv
 standalone validator for TypeScript and a dereferenced embedded schema plus one
 startup-compiled validator for Go. The Server decodes each raw Bridge frame

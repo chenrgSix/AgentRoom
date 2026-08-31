@@ -12,32 +12,51 @@ import (
 
 func TestExecutionGeneratedTypesPreserveWireFixtures(t *testing.T) {
 	root := packageRoot(t)
-	source, err := os.ReadFile(filepath.Join(root, "fixtures", "execution-plan-cases.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
 	var suite fixtureSuite
-	if err := json.Unmarshal(source, &suite); err != nil {
-		t.Fatal(err)
+	for _, name := range []string{"execution-plan-cases.json", "execution-runtime-cases.json"} {
+		source, err := os.ReadFile(filepath.Join(root, "fixtures", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var part fixtureSuite
+		if err := json.Unmarshal(source, &part); err != nil {
+			t.Fatal(err)
+		}
+		suite.Cases = append(suite.Cases, part.Cases...)
 	}
 	constructors := map[string]func() any{
-		"execution: valid source-action plan":        func() any { return &execution.ExecutionPlanDefinition{} },
-		"execution: valid approval record":           func() any { return &execution.ExecutionPlanApprovalRecord{} },
-		"execution: valid rejection record":          func() any { return &execution.ExecutionPlanApprovalRecord{} },
-		"execution: valid approval receipt":          func() any { return &execution.ExecutionPlanApprovalReceipt{} },
-		"execution: valid approval page":             func() any { return &execution.ExecutionPlanApprovalPage{} },
-		"execution: valid empty approval page":       func() any { return &execution.ExecutionPlanApprovalPage{} },
-		"execution: valid frozen source archive":     func() any { return &execution.ExecutionDecisionSourceSnapshot{} },
-		"execution: valid empty plan page":           func() any { return &execution.ExecutionPlanPage{} },
-		"execution: valid empty revision page":       func() any { return &execution.ExecutionPlanRevisionPage{} },
-		"execution: valid immutable decision record": func() any { return &execution.ExecutionDecisionRecord{} },
-		"execution: valid full plan":                 func() any { return &execution.ExecutionPlanDefinition{} },
-		"execution: valid human proposal":            func() any { return &execution.ExecutionPlanProposalCommand{} },
-		"execution: valid exact approval":            func() any { return &execution.ExecutionPlanApprovalCommand{} },
-		"execution: valid control command":           func() any { return &execution.ExecutionPlanControlCommand{} },
-		"execution: valid revision command":          func() any { return &execution.ExecutionPlanRevisionCommand{} },
-		"execution: valid attributed decision":       func() any { return &execution.ExecutionDecisionContent{} },
-		"execution: valid scoped Agent proposal":     func() any { return &execution.ExecutionAgentPlanProposalCommand{} },
+		"execution runtime: valid manifest":             func() any { return &execution.GovernedExecutionManifest{} },
+		"execution runtime: valid input binding":        func() any { return &execution.ExecutionInputBinding{} },
+		"execution runtime: valid capability":           func() any { return &execution.GovernedExecutionCapability{} },
+		"execution runtime: valid grant summary":        func() any { return &execution.ExecutionGrantSummary{} },
+		"execution runtime: valid repository binding":   func() any { return &execution.RepositoryBindingSummary{} },
+		"execution runtime: valid checkpoint":           func() any { return &execution.RepositoryCheckpoint{} },
+		"execution runtime: valid prepare operation":    func() any { return &execution.RepositoryOperationRequest{} },
+		"execution runtime: valid capture operation":    func() any { return &execution.RepositoryOperationRequest{} },
+		"execution runtime: valid verify operation":     func() any { return &execution.RepositoryOperationRequest{} },
+		"execution runtime: valid integrate operation":  func() any { return &execution.RepositoryOperationRequest{} },
+		"execution runtime: valid publish operation":    func() any { return &execution.RepositoryOperationRequest{} },
+		"execution runtime: valid observe operation":    func() any { return &execution.RepositoryOperationRequest{} },
+		"execution runtime: valid prepared receipt":     func() any { return &execution.RepositoryOperationReceipt{} },
+		"execution runtime: valid verification receipt": func() any { return &execution.VerificationReceipt{} },
+		"execution runtime: valid CI receipt":           func() any { return &execution.VerificationReceipt{} },
+		"execution: valid source-action plan":           func() any { return &execution.ExecutionPlanDefinition{} },
+		"execution: valid approval record":              func() any { return &execution.ExecutionPlanApprovalRecord{} },
+		"execution: valid rejection record":             func() any { return &execution.ExecutionPlanApprovalRecord{} },
+		"execution: valid approval receipt":             func() any { return &execution.ExecutionPlanApprovalReceipt{} },
+		"execution: valid approval page":                func() any { return &execution.ExecutionPlanApprovalPage{} },
+		"execution: valid empty approval page":          func() any { return &execution.ExecutionPlanApprovalPage{} },
+		"execution: valid frozen source archive":        func() any { return &execution.ExecutionDecisionSourceSnapshot{} },
+		"execution: valid empty plan page":              func() any { return &execution.ExecutionPlanPage{} },
+		"execution: valid empty revision page":          func() any { return &execution.ExecutionPlanRevisionPage{} },
+		"execution: valid immutable decision record":    func() any { return &execution.ExecutionDecisionRecord{} },
+		"execution: valid full plan":                    func() any { return &execution.ExecutionPlanDefinition{} },
+		"execution: valid human proposal":               func() any { return &execution.ExecutionPlanProposalCommand{} },
+		"execution: valid exact approval":               func() any { return &execution.ExecutionPlanApprovalCommand{} },
+		"execution: valid control command":              func() any { return &execution.ExecutionPlanControlCommand{} },
+		"execution: valid revision command":             func() any { return &execution.ExecutionPlanRevisionCommand{} },
+		"execution: valid attributed decision":          func() any { return &execution.ExecutionDecisionContent{} },
+		"execution: valid scoped Agent proposal":        func() any { return &execution.ExecutionAgentPlanProposalCommand{} },
 	}
 	checked := 0
 	for _, fixture := range suite.Cases {

@@ -146,7 +146,7 @@ func TestCodexAdapterResumesStoredTaskAgentThread(t *testing.T) {
 			Revision: 6, DeliveryKind: &deliveryKind,
 			FromRevision: &fromRevision, ThroughRevision: &throughRevision,
 			ArtifactRefs: []contracts.ArtifactReference{{
-				ArtifactID: "artifact_codex_cursor_12345678", Type: contracts.Commit,
+				ArtifactID: "artifact_codex_cursor_12345678", Type: contracts.TypeCommit,
 				Title: "accepted evidence", Summary: "continue after revision five",
 			}},
 		},

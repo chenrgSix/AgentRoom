@@ -19,7 +19,7 @@ func artifactAliasFixture() (contracts.RunRequestedPayload, VerifiedArtifactAlia
 			ResultEvidence: &contracts.TaskResultEvidence{
 				ArtifactRefs: []contracts.ArtifactReference{{
 					ArtifactID: "artifact_runtime_alias_12345678",
-					Type:       contracts.Patch, Content: &content,
+					Type:       contracts.TypePatch, Content: &content,
 				}},
 			},
 		},

@@ -165,6 +165,7 @@ export interface RunContextManifest {
   criteria:           RunContextManifestCriterion[];
   criteriaRevision:   number;
   definitionRevision: number;
+  execution?:         Execution;
   goal:               string;
   included:           Included;
   manifestVersion:    ManifestVersion;
@@ -187,6 +188,152 @@ export interface RunContextManifestCriterion {
   ordinal:      number;
   required:     boolean;
 }
+
+export interface Execution {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:             string;
+  grant:                Grant;
+  inputDigest:          string;
+  inputs:               Input[];
+  manifestDigest:       string;
+  outputs:              [Output, ...Output[]];
+  repository:           Repository;
+  scope:                ScopeClass;
+  scopePolicy:          ScopePolicy;
+  verificationProfiles: VerificationProfile[];
+  version:              number;
+  workspace:            Workspace;
+}
+
+export interface Grant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface Input {
+  artifact:            Artifact;
+  bindingId:           string;
+  destinationAgentId:  string;
+  destinationDeviceId: string;
+  destinationRunId:    string;
+  destinationTaskId:   string;
+  edgeKey:             null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt:       string;
+  gate:            Gate;
+  gateDigest:      string;
+  gateOperationId: string;
+  inputSlot:       string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:                 string;
+  planId:                   string;
+  planRevision:             number;
+  repositoryId:             null | string;
+  sourceCommit:             null | string;
+  sourceCriteriaRevision:   number;
+  sourceDefinitionRevision: number;
+  sourceOutputSlot:         string;
+  sourceResultId:           null | string;
+  sourceResultVersion:      number | null;
+  sourceTaskId:             string;
+  sourceTree:               null | string;
+}
+
+export interface Artifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ArtifactKind;
+}
+
+export type ArtifactKind = "patch" | "commit" | "document" | "test_result";
+
+export type Gate = "accepted_result" | "verified_output" | "integrated_commit";
+
+export interface Output {
+  kind:     ArtifactKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface Repository {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface ScopeClass {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface ScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export type Access = "read_only" | "isolated_write";
+
+export interface VerificationProfile {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface Workspace {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:            string;
+  leaseId:             string;
+  mode:                Mode;
+  workspaceGeneration: string;
+  workspaceRef:        string;
+}
+
+export type Mode = "isolated_worktree";
 
 export interface Included {
   artifactIds:         string[];
@@ -424,7 +571,7 @@ export interface WorkbenchQuery {
   ownerMemberId?: null | string;
   priority?:      Priority[];
   roomId?:        null | string;
-  scope:          Scope;
+  scope:          ScopeEnum;
   /**
    * Optional trimmed Task title search. Case-insensitive literal title substrings match;
    * numeric or TASK-n text also matches the exact Team display number. Empty text is
@@ -435,7 +582,7 @@ export interface WorkbenchQuery {
   updatedBefore?: null | string;
 }
 
-export type Scope = "mine" | "team";
+export type ScopeEnum = "mine" | "team";
 
 export interface WorkbenchPage {
   items:      Item[];

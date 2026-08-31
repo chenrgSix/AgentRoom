@@ -146,7 +146,7 @@ export async function validateContractPackage(packageRoot) {
 
 export async function validateContractFixtures(packageRoot) {
   const { validator } = await loadContractPackage(packageRoot);
-  const fixturePaths = ["cases.json", "execution-plan-cases.json"].map((name) =>
+  const fixturePaths = ["cases.json", "execution-plan-cases.json", "execution-runtime-cases.json"].map((name) =>
     path.join(packageRoot, "fixtures", name)
   );
   const suites = await Promise.all(fixturePaths.map(readJson));

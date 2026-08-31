@@ -154,7 +154,7 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 			ResultEvidence: &contracts.TaskResultEvidence{
 				Revision: 5,
 				ArtifactRefs: []contracts.ArtifactReference{{
-					ArtifactID: "artifact_pi_12345678", Type: contracts.Commit,
+					ArtifactID: "artifact_pi_12345678", Type: contracts.TypeCommit,
 					Title: "Pi result", Summary: "Verify locally", Content: &content,
 				}},
 			},
@@ -250,7 +250,7 @@ func TestPiAdapterUsesPersistentTaskAgentSession(t *testing.T) {
 			Revision: 6, DeliveryKind: &deliveryKind,
 			FromRevision: &fromRevision, ThroughRevision: &throughRevision,
 			ArtifactRefs: []contracts.ArtifactReference{{
-				ArtifactID: artifactAlias.ArtifactID, Type: contracts.Commit,
+				ArtifactID: artifactAlias.ArtifactID, Type: contracts.TypeCommit,
 				Content: &content,
 			}},
 		},

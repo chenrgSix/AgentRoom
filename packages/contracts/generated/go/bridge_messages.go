@@ -70,7 +70,8 @@ type BridgeHelloPayload struct {
 	DeviceID        string `json:"deviceId"`
 	// SHA-256 of the running Bridge executable computed at process startup. Omitted together
 	// with sourceCommit by legacy and development Bridges.
-	ExecutableSha256 *string `json:"executableSha256,omitempty"`
+	ExecutableSha256  *string                   `json:"executableSha256,omitempty"`
+	GovernedExecution *PayloadGovernedExecution `json:"governedExecution,omitempty"`
 	// Exact lowercase source commit injected into a packaged Bridge. Omitted together with
 	// executableSha256 by legacy and development Bridges.
 	SourceCommit              *string  `json:"sourceCommit,omitempty"`
@@ -78,6 +79,13 @@ type BridgeHelloPayload struct {
 	// Whether this connection can authorize and apply central Agent provisioning requests.
 	// Omission means unsupported.
 	SupportsAgentProvisioning *bool `json:"supportsAgentProvisioning,omitempty"`
+}
+
+type PayloadGovernedExecution struct {
+	Operations                []Operation       `json:"operations"`
+	PreventivePathEnforcement bool              `json:"preventivePathEnforcement"`
+	Version                   int64             `json:"version"`
+	WorkspaceBoundary         WorkspaceBoundary `json:"workspaceBoundary"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -127,16 +135,24 @@ type AgentPublishPayload struct {
 }
 
 type Capabilities struct {
-	InvocationMode                  InvocationMode `json:"invocationMode"`
-	SupportsArtifactMaterialization *bool          `json:"supportsArtifactMaterialization,omitempty"`
-	SupportsArtifactPublication     *bool          `json:"supportsArtifactPublication,omitempty"`
-	SupportsHandoff                 bool           `json:"supportsHandoff"`
-	SupportsInterrupt               bool           `json:"supportsInterrupt"`
-	SupportsResume                  bool           `json:"supportsResume"`
-	SupportsRoomContextCoverage     *bool          `json:"supportsRoomContextCoverage,omitempty"`
-	SupportsStart                   bool           `json:"supportsStart"`
-	SupportsStreaming               bool           `json:"supportsStreaming"`
-	SupportsWorkspaceLeases         *bool          `json:"supportsWorkspaceLeases,omitempty"`
+	GovernedExecution               *CapabilitiesGovernedExecution `json:"governedExecution,omitempty"`
+	InvocationMode                  InvocationMode                 `json:"invocationMode"`
+	SupportsArtifactMaterialization *bool                          `json:"supportsArtifactMaterialization,omitempty"`
+	SupportsArtifactPublication     *bool                          `json:"supportsArtifactPublication,omitempty"`
+	SupportsHandoff                 bool                           `json:"supportsHandoff"`
+	SupportsInterrupt               bool                           `json:"supportsInterrupt"`
+	SupportsResume                  bool                           `json:"supportsResume"`
+	SupportsRoomContextCoverage     *bool                          `json:"supportsRoomContextCoverage,omitempty"`
+	SupportsStart                   bool                           `json:"supportsStart"`
+	SupportsStreaming               bool                           `json:"supportsStreaming"`
+	SupportsWorkspaceLeases         *bool                          `json:"supportsWorkspaceLeases,omitempty"`
+}
+
+type CapabilitiesGovernedExecution struct {
+	Operations                []Operation       `json:"operations"`
+	PreventivePathEnforcement bool              `json:"preventivePathEnforcement"`
+	Version                   int64             `json:"version"`
+	WorkspaceBoundary         WorkspaceBoundary `json:"workspaceBoundary"`
 }
 
 type RuntimePolicy struct {
@@ -248,6 +264,7 @@ type ContextManifest struct {
 	Criteria           []Criterion       `json:"criteria"`
 	CriteriaRevision   int64             `json:"criteriaRevision"`
 	DefinitionRevision int64             `json:"definitionRevision"`
+	Execution          *Execution        `json:"execution,omitempty"`
 	Goal               string            `json:"goal"`
 	Included           Included          `json:"included"`
 	ManifestVersion    ManifestVersion   `json:"manifestVersion"`
@@ -267,6 +284,132 @@ type Criterion struct {
 	Description  string `json:"description"`
 	Ordinal      int64  `json:"ordinal"`
 	Required     bool   `json:"required"`
+}
+
+type Execution struct {
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline             time.Time             `json:"deadline"`
+	Grant                Grant                 `json:"grant"`
+	InputDigest          string                `json:"inputDigest"`
+	Inputs               []Input               `json:"inputs"`
+	ManifestDigest       string                `json:"manifestDigest"`
+	Outputs              []Output              `json:"outputs"`
+	Repository           Repository            `json:"repository"`
+	Scope                ScopeClass            `json:"scope"`
+	ScopePolicy          ScopePolicy           `json:"scopePolicy"`
+	VerificationProfiles []VerificationProfile `json:"verificationProfiles"`
+	Version              int64                 `json:"version"`
+	Workspace            Workspace             `json:"workspace"`
+}
+
+type Grant struct {
+	Digest string `json:"digest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt time.Time `json:"expiresAt"`
+	GrantID   string    `json:"grantId"`
+	Revision  int64     `json:"revision"`
+}
+
+type Input struct {
+	Artifact            Artifact `json:"artifact"`
+	BindingID           string   `json:"bindingId"`
+	DestinationAgentID  string   `json:"destinationAgentId"`
+	DestinationDeviceID string   `json:"destinationDeviceId"`
+	DestinationRunID    string   `json:"destinationRunId"`
+	DestinationTaskID   string   `json:"destinationTaskId"`
+	EdgeKey             *string  `json:"edgeKey"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt       time.Time `json:"expiresAt"`
+	Gate            Gate      `json:"gate"`
+	GateDigest      string    `json:"gateDigest"`
+	GateOperationID string    `json:"gateOperationId"`
+	InputSlot       string    `json:"inputSlot"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt                 time.Time `json:"issuedAt"`
+	PlanID                   string    `json:"planId"`
+	PlanRevision             int64     `json:"planRevision"`
+	RepositoryID             *string   `json:"repositoryId"`
+	SourceCommit             *string   `json:"sourceCommit"`
+	SourceCriteriaRevision   int64     `json:"sourceCriteriaRevision"`
+	SourceDefinitionRevision int64     `json:"sourceDefinitionRevision"`
+	SourceOutputSlot         string    `json:"sourceOutputSlot"`
+	SourceResultID           *string   `json:"sourceResultId"`
+	SourceResultVersion      *int64    `json:"sourceResultVersion"`
+	SourceTaskID             string    `json:"sourceTaskId"`
+	SourceTree               *string   `json:"sourceTree"`
+}
+
+type Artifact struct {
+	ArtifactID       string `json:"artifactId"`
+	ArtifactRevision int64  `json:"artifactRevision"`
+	ByteLength       int64  `json:"byteLength"`
+	ContentDigest    string `json:"contentDigest"`
+	Kind             Kind   `json:"kind"`
+}
+
+type Output struct {
+	Kind     Kind   `json:"kind"`
+	Required bool   `json:"required"`
+	SlotKey  string `json:"slotKey"`
+}
+
+type Repository struct {
+	BaseCommit           string `json:"baseCommit"`
+	BindingID            string `json:"bindingId"`
+	GrantID              string `json:"grantId"`
+	GrantRevision        int64  `json:"grantRevision"`
+	RepositoryID         string `json:"repositoryId"`
+	RuntimeProfileDigest string `json:"runtimeProfileDigest"`
+	RuntimeProfileID     string `json:"runtimeProfileId"`
+}
+
+type ScopeClass struct {
+	AgentID             string `json:"agentId"`
+	ApprovalOperationID string `json:"approvalOperationId"`
+	CriteriaRevision    int64  `json:"criteriaRevision"`
+	DefinitionRevision  int64  `json:"definitionRevision"`
+	DeviceID            string `json:"deviceId"`
+	DispatchGeneration  int64  `json:"dispatchGeneration"`
+	NodeKey             string `json:"nodeKey"`
+	PlanControlRevision int64  `json:"planControlRevision"`
+	PlanDigest          string `json:"planDigest"`
+	PlanID              string `json:"planId"`
+	PlanRevision        int64  `json:"planRevision"`
+	RoomID              string `json:"roomId"`
+	RunID               string `json:"runId"`
+	TaskID              string `json:"taskId"`
+	TaskRevision        int64  `json:"taskRevision"`
+}
+
+type ScopePolicy struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type VerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Required  bool   `json:"required"`
+	Revision  int64  `json:"revision"`
+}
+
+type Workspace struct {
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt time.Time `json:"expiresAt"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt            time.Time `json:"issuedAt"`
+	LeaseID             string    `json:"leaseId"`
+	Mode                Mode      `json:"mode"`
+	WorkspaceGeneration string    `json:"workspaceGeneration"`
+	WorkspaceRef        string    `json:"workspaceRef"`
 }
 
 type Included struct {
@@ -465,7 +608,7 @@ type LogicalSessionRequest struct {
 	ContextCursor  int64        `json:"contextCursor"`
 	ResumePolicy   ResumePolicy `json:"resumePolicy"`
 	RuntimeScopeID *string      `json:"runtimeScopeId,omitempty"`
-	Scope          Scope        `json:"scope"`
+	Scope          ScopeEnum    `json:"scope"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -535,9 +678,9 @@ type RunStatusPayload struct {
 }
 
 type TaskClarificationRequest struct {
-	Choices  []string `json:"choices,omitempty"`
-	Kind     Scope    `json:"kind"`
-	Question string   `json:"question"`
+	Choices  []string  `json:"choices,omitempty"`
+	Kind     ScopeEnum `json:"kind"`
+	Question string    `json:"question"`
 }
 
 // Stable, client-safe error returned at a protocol boundary.
@@ -732,6 +875,23 @@ const (
 	RunOutputDelta RunOutputDeltaMessageType = "run.output_delta"
 )
 
+type Operation string
+
+const (
+	Capture   Operation = "capture"
+	Integrate Operation = "integrate"
+	Observe   Operation = "observe"
+	Prepare   Operation = "prepare"
+	Publish   Operation = "publish"
+	Verify    Operation = "verify"
+)
+
+type WorkspaceBoundary string
+
+const (
+	Enforced WorkspaceBoundary = "enforced"
+)
+
 type BridgeHelloMessageType string
 
 const (
@@ -809,6 +969,36 @@ type AgentProvisionResultMessageType string
 
 const (
 	AgentProvisionResult AgentProvisionResultMessageType = "agent.provision.result"
+)
+
+type Kind string
+
+const (
+	KindCommit     Kind = "commit"
+	KindDocument   Kind = "document"
+	KindPatch      Kind = "patch"
+	KindTestResult Kind = "test_result"
+)
+
+type Gate string
+
+const (
+	AcceptedResult   Gate = "accepted_result"
+	IntegratedCommit Gate = "integrated_commit"
+	VerifiedOutput   Gate = "verified_output"
+)
+
+type Access string
+
+const (
+	IsolatedWrite Access = "isolated_write"
+	ReadOnly      Access = "read_only"
+)
+
+type Mode string
+
+const (
+	IsolatedWorktree Mode = "isolated_worktree"
 )
 
 type ManifestVersion string
@@ -909,12 +1099,12 @@ const (
 type ArtifactReferenceType string
 
 const (
-	Branch     ArtifactReferenceType = "branch"
-	Commit     ArtifactReferenceType = "commit"
-	Document   ArtifactReferenceType = "document"
-	File       ArtifactReferenceType = "file"
-	Patch      ArtifactReferenceType = "patch"
-	TestResult ArtifactReferenceType = "test_result"
+	Branch         ArtifactReferenceType = "branch"
+	File           ArtifactReferenceType = "file"
+	TypeCommit     ArtifactReferenceType = "commit"
+	TypeDocument   ArtifactReferenceType = "document"
+	TypePatch      ArtifactReferenceType = "patch"
+	TypeTestResult ArtifactReferenceType = "test_result"
 )
 
 type DeliveryKind string
@@ -945,10 +1135,10 @@ const (
 	StartNew      ResumePolicy = "start_new"
 )
 
-type Scope string
+type ScopeEnum string
 
 const (
-	Task Scope = "task"
+	Task ScopeEnum = "task"
 )
 
 type RunRequestedMessageType string

@@ -10,6 +10,29 @@ import {
 const bridgeSchemaId =
   "https://agentroom.dev/schemas/bridge/messages.schema.json";
 
+test("governed execution wire fixtures use the actual runtime decoder without unknown-field fallback", async () => {
+  const suite = JSON.parse(await readFile(new URL("../fixtures/execution-runtime-cases.json", import.meta.url), "utf8"));
+  for (const entry of suite.cases.filter((entry) => entry.schemaId === bridgeSchemaId)) {
+    assert.equal(validateBridgeMessage(entry.instance), entry.valid, entry.name);
+    assert.equal(decodeBridgeMessage(JSON.stringify(entry.instance)) !== undefined, entry.valid, entry.name);
+    if (entry.valid) assert.deepEqual(decodeBridgeMessage(JSON.stringify(entry.instance)), entry.instance, entry.name);
+  }
+  const manifest = suite.cases.find((entry) => entry.name === "execution runtime: valid governed wire delivery").instance;
+  const raw = JSON.stringify(manifest);
+  for (const [before, after] of [
+    ['"dispatchGeneration":1', '"dispatchGeneration":1,"dispatchGeneration":2'],
+    ['"dispatchGeneration":1', '"dispatchGeneration":1,"dispatch\\u0047eneration":2'],
+    ['"dispatchGeneration":1', '"DispatchGeneration":1'],
+    ['"manifestDigest":', '"ManifestDigest":'],
+    ['"grant":{', '"grant":{"command":"arbitrary",'],
+    ['"planRevision":1', '"planRevision":9007199254740992']
+  ]) {
+    const invalid = raw.replace(before, after);
+    assert.notEqual(invalid, raw, `mutation target missing: ${before}`);
+    assert.equal(decodeBridgeMessage(invalid) === undefined, true, after);
+  }
+});
+
 function runReply(content = "Completed.") {
   return {
     protocolVersion: "1.0",

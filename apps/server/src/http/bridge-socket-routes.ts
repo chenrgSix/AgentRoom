@@ -214,7 +214,8 @@ export function registerBridgeSocketRoutes({
             socket,
             {
               supportsAgentProvisioning:
-                message.payload.supportsAgentProvisioning === true
+                message.payload.supportsAgentProvisioning === true,
+              governedExecution: message.payload.governedExecution
             }
           )) {
             socket.close(4_009, "Stale Bridge connection epoch");

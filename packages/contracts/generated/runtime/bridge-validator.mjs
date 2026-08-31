@@ -59,6 +59,20 @@ const canonicalPropertyTrees = {
       "type": {},
       "payload": {
         "p": {
+          "governedExecution": {
+            "p": {
+              "version": {
+                "n": true,
+                "l": "1",
+                "u": "1"
+              },
+              "workspaceBoundary": {},
+              "preventivePathEnforcement": {},
+              "operations": {
+                "i": {}
+              }
+            }
+          },
           "deviceId": {},
           "connectionEpoch": {
             "n": true,
@@ -110,6 +124,20 @@ const canonicalPropertyTrees = {
           "role": {},
           "capabilities": {
             "p": {
+              "governedExecution": {
+                "p": {
+                  "version": {
+                    "n": true,
+                    "l": "1",
+                    "u": "1"
+                  },
+                  "workspaceBoundary": {},
+                  "preventivePathEnforcement": {},
+                  "operations": {
+                    "i": {}
+                  }
+                }
+              },
               "invocationMode": {},
               "supportsStart": {},
               "supportsResume": {},
@@ -513,6 +541,195 @@ const canonicalPropertyTrees = {
           },
           "contextManifest": {
             "p": {
+              "execution": {
+                "p": {
+                  "version": {
+                    "n": true,
+                    "l": "1",
+                    "u": "1"
+                  },
+                  "scope": {
+                    "p": {
+                      "planId": {},
+                      "planRevision": {
+                        "n": true,
+                        "l": "1",
+                        "u": "9007199254740991"
+                      },
+                      "planDigest": {},
+                      "approvalOperationId": {},
+                      "planControlRevision": {
+                        "n": true,
+                        "l": "1",
+                        "u": "9007199254740991"
+                      },
+                      "nodeKey": {},
+                      "dispatchGeneration": {
+                        "n": true,
+                        "l": "1",
+                        "u": "9007199254740991"
+                      },
+                      "roomId": {},
+                      "taskId": {},
+                      "taskRevision": {
+                        "n": true,
+                        "l": "1",
+                        "u": "9007199254740991"
+                      },
+                      "definitionRevision": {
+                        "n": true,
+                        "l": "1",
+                        "u": "9007199254740991"
+                      },
+                      "criteriaRevision": {
+                        "n": true,
+                        "l": "1",
+                        "u": "9007199254740991"
+                      },
+                      "runId": {},
+                      "agentId": {},
+                      "deviceId": {}
+                    }
+                  },
+                  "repository": {
+                    "p": {
+                      "repositoryId": {},
+                      "bindingId": {},
+                      "baseCommit": {},
+                      "grantId": {},
+                      "grantRevision": {
+                        "n": true,
+                        "l": "1",
+                        "u": "9007199254740991"
+                      },
+                      "runtimeProfileId": {},
+                      "runtimeProfileDigest": {}
+                    }
+                  },
+                  "grant": {
+                    "p": {
+                      "grantId": {},
+                      "revision": {
+                        "n": true,
+                        "l": "1",
+                        "u": "9007199254740991"
+                      },
+                      "digest": {},
+                      "expiresAt": {}
+                    }
+                  },
+                  "workspace": {
+                    "p": {
+                      "leaseId": {},
+                      "workspaceRef": {},
+                      "workspaceGeneration": {},
+                      "mode": {},
+                      "issuedAt": {},
+                      "expiresAt": {}
+                    }
+                  },
+                  "inputs": {
+                    "i": {
+                      "p": {
+                        "bindingId": {},
+                        "planId": {},
+                        "planRevision": {
+                          "n": true,
+                          "l": "1",
+                          "u": "9007199254740991"
+                        },
+                        "edgeKey": {},
+                        "gate": {},
+                        "gateOperationId": {},
+                        "gateDigest": {},
+                        "sourceTaskId": {},
+                        "sourceDefinitionRevision": {
+                          "n": true,
+                          "l": "1",
+                          "u": "9007199254740991"
+                        },
+                        "sourceCriteriaRevision": {
+                          "n": true,
+                          "l": "1",
+                          "u": "9007199254740991"
+                        },
+                        "sourceResultId": {},
+                        "sourceResultVersion": {
+                          "n": true,
+                          "l": "1",
+                          "u": "9007199254740991"
+                        },
+                        "sourceOutputSlot": {},
+                        "artifact": {
+                          "p": {
+                            "artifactId": {},
+                            "artifactRevision": {
+                              "n": true,
+                              "l": "1",
+                              "u": "9007199254740991"
+                            },
+                            "contentDigest": {},
+                            "byteLength": {
+                              "n": true,
+                              "l": "0",
+                              "u": "67108864"
+                            },
+                            "kind": {}
+                          }
+                        },
+                        "repositoryId": {},
+                        "sourceCommit": {},
+                        "sourceTree": {},
+                        "destinationTaskId": {},
+                        "destinationRunId": {},
+                        "destinationAgentId": {},
+                        "destinationDeviceId": {},
+                        "inputSlot": {},
+                        "issuedAt": {},
+                        "expiresAt": {}
+                      }
+                    }
+                  },
+                  "inputDigest": {},
+                  "scopePolicy": {
+                    "p": {
+                      "access": {},
+                      "allowedPaths": {
+                        "i": {}
+                      },
+                      "forbiddenPaths": {
+                        "i": {}
+                      },
+                      "requirePreventivePathEnforcement": {}
+                    }
+                  },
+                  "verificationProfiles": {
+                    "i": {
+                      "p": {
+                        "profileId": {},
+                        "revision": {
+                          "n": true,
+                          "l": "1",
+                          "u": "9007199254740991"
+                        },
+                        "digest": {},
+                        "required": {}
+                      }
+                    }
+                  },
+                  "outputs": {
+                    "i": {
+                      "p": {
+                        "slotKey": {},
+                        "kind": {},
+                        "required": {}
+                      }
+                    }
+                  },
+                  "deadline": {},
+                  "manifestDigest": {}
+                }
+              },
               "manifestVersion": {},
               "runId": {},
               "taskId": {},
@@ -1138,8 +1355,15 @@ function scanJSONResourceBounds(text) {
         index += 1;
         return;
       }
+      const keys = new Set();
       while (true) {
+        const keyStart = index;
         consumeString();
+        // Compare decoded names so escaped aliases cannot hide duplicate grants
+        // or generations from another JSON consumer's first/last-wins parser.
+        const key = JSON.parse(text.slice(keyStart, index));
+        if (keys.has(key)) rejectLexicalAdmission();
+        keys.add(key);
         skipWhitespace();
         if (text.charCodeAt(index) !== 58) malformed();
         index += 1;

@@ -2,6 +2,54 @@
   "version": "1.0",
   "cases": [
     {
+      "name": "duplicate root type is rejected even when identical",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_raw_duplicate_000001\",\"timestamp\":\"2026-08-31T00:00:00Z\",\"type\":\"run.reply\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_raw_duplicate_000001\",\"traceId\":\"trace_raw_duplicate_000001\",\"agentId\":\"agent_raw_duplicate_000001\",\"sequence\":1,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "duplicate nested sequence is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_raw_duplicate_000001\",\"timestamp\":\"2026-08-31T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_raw_duplicate_000001\",\"traceId\":\"trace_raw_duplicate_000001\",\"agentId\":\"agent_raw_duplicate_000001\",\"sequence\":1,\"sequence\":2,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "escaped duplicate property is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_raw_duplicate_000001\",\"timestamp\":\"2026-08-31T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_raw_duplicate_000001\",\"traceId\":\"trace_raw_duplicate_000001\",\"agentId\":\"agent_raw_duplicate_000001\",\"sequence\":1,\"sequen\\u0063e\":2,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "duplicate object payload is rejected",
+      "messageType": "run.reply",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_raw_duplicate_000001\",\"timestamp\":\"2026-08-31T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{},\"payload\":{\"runId\":\"run_raw_duplicate_000001\",\"traceId\":\"trace_raw_duplicate_000001\",\"agentId\":\"agent_raw_duplicate_000001\",\"sequence\":1,\"content\":\"ok\"}}"
+    },
+    {
+      "name": "duplicate opaque extension property is rejected",
+      "messageType": "run.status",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_raw_duplicate_000001\",\"timestamp\":\"2026-08-31T00:00:00Z\",\"type\":\"run.status\",\"payload\":{\"runId\":\"run_raw_duplicate_000001\",\"traceId\":\"trace_raw_duplicate_000001\",\"agentId\":\"agent_raw_duplicate_000001\",\"sequence\":1,\"status\":\"failed\",\"error\":{\"code\":\"RUNTIME_FAILED\",\"message\":\"failed\",\"retryable\":false,\"details\":{\"slot\":1,\"slot\":2}}}}"
+    },
+    {
+      "name": "escaped astral duplicate in opaque extension is rejected",
+      "messageType": "run.status",
+      "valid": false,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_raw_duplicate_000001\",\"timestamp\":\"2026-08-31T00:00:00Z\",\"type\":\"run.status\",\"payload\":{\"runId\":\"run_raw_duplicate_000001\",\"traceId\":\"trace_raw_duplicate_000001\",\"agentId\":\"agent_raw_duplicate_000001\",\"sequence\":1,\"status\":\"failed\",\"error\":{\"code\":\"RUNTIME_FAILED\",\"message\":\"failed\",\"retryable\":false,\"details\":{\"😀\":1,\"\\ud83d\\ude00\":2}}}}"
+    },
+    {
+      "name": "same key in distinct objects remains valid",
+      "messageType": "run.status",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_raw_duplicate_000001\",\"timestamp\":\"2026-08-31T00:00:00Z\",\"type\":\"run.status\",\"payload\":{\"runId\":\"run_raw_duplicate_000001\",\"traceId\":\"trace_raw_duplicate_000001\",\"agentId\":\"agent_raw_duplicate_000001\",\"sequence\":1,\"status\":\"failed\",\"error\":{\"code\":\"RUNTIME_FAILED\",\"message\":\"failed\",\"retryable\":false,\"details\":{\"slot\":1,\"nested\":[{\"slot\":2},{\"slot\":3}]}}}}"
+    },
+    {
+      "name": "unique escaped canonical property remains valid",
+      "messageType": "run.reply",
+      "valid": true,
+      "raw": "{\"protocolVersion\":\"1.0\",\"messageId\":\"msg_raw_duplicate_000001\",\"timestamp\":\"2026-08-31T00:00:00Z\",\"type\":\"run.reply\",\"payload\":{\"runId\":\"run_raw_duplicate_000001\",\"traceId\":\"trace_raw_duplicate_000001\",\"agentId\":\"agent_raw_duplicate_000001\",\"sequen\\u0063e\":1,\"content\":\"ok\"}}"
+    },
+    {
       "name": "declared integer accepts exponent notation",
       "messageType": "run.reply",
       "valid": true,

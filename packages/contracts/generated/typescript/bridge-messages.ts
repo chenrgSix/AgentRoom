@@ -93,7 +93,8 @@ export interface BridgeHelloPayload {
    * SHA-256 of the running Bridge executable computed at process startup. Omitted together
    * with sourceCommit by legacy and development Bridges.
    */
-  executableSha256?: string;
+  executableSha256?:  string;
+  governedExecution?: PayloadGovernedExecution;
   /**
    * Exact lowercase source commit injected into a packaged Bridge. Omitted together with
    * executableSha256 by legacy and development Bridges.
@@ -107,6 +108,17 @@ export interface BridgeHelloPayload {
   supportsAgentProvisioning?: boolean;
   [property: string]: unknown;
 }
+
+export interface PayloadGovernedExecution {
+  operations:                [Operation, ...Operation[]];
+  preventivePathEnforcement: boolean;
+  version:                   number;
+  workspaceBoundary:         WorkspaceBoundary;
+}
+
+export type Operation = "prepare" | "capture" | "verify" | "integrate" | "publish" | "observe";
+
+export type WorkspaceBoundary = "enforced";
 
 export type BridgeHelloMessageType = "bridge.hello";
 
@@ -175,6 +187,7 @@ export interface AgentPublishPayload {
 }
 
 export interface Capabilities {
+  governedExecution?:               CapabilitiesGovernedExecution;
   invocationMode:                   InvocationMode;
   supportsArtifactMaterialization?: boolean;
   supportsArtifactPublication?:     boolean;
@@ -186,6 +199,13 @@ export interface Capabilities {
   supportsStreaming:                boolean;
   supportsWorkspaceLeases?:         boolean;
   [property: string]: unknown;
+}
+
+export interface CapabilitiesGovernedExecution {
+  operations:                [Operation, ...Operation[]];
+  preventivePathEnforcement: boolean;
+  version:                   number;
+  workspaceBoundary:         WorkspaceBoundary;
 }
 
 export type InvocationMode = "managed" | "manual";
@@ -345,6 +365,7 @@ export interface ContextManifest {
   criteria:           Criterion[];
   criteriaRevision:   number;
   definitionRevision: number;
+  execution?:         Execution;
   goal:               string;
   included:           Included;
   manifestVersion:    ManifestVersion;
@@ -367,6 +388,152 @@ export interface Criterion {
   ordinal:      number;
   required:     boolean;
 }
+
+export interface Execution {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:             string;
+  grant:                Grant;
+  inputDigest:          string;
+  inputs:               Input[];
+  manifestDigest:       string;
+  outputs:              [Output, ...Output[]];
+  repository:           Repository;
+  scope:                ScopeClass;
+  scopePolicy:          ScopePolicy;
+  verificationProfiles: VerificationProfile[];
+  version:              number;
+  workspace:            Workspace;
+}
+
+export interface Grant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface Input {
+  artifact:            Artifact;
+  bindingId:           string;
+  destinationAgentId:  string;
+  destinationDeviceId: string;
+  destinationRunId:    string;
+  destinationTaskId:   string;
+  edgeKey:             null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt:       string;
+  gate:            Gate;
+  gateDigest:      string;
+  gateOperationId: string;
+  inputSlot:       string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:                 string;
+  planId:                   string;
+  planRevision:             number;
+  repositoryId:             null | string;
+  sourceCommit:             null | string;
+  sourceCriteriaRevision:   number;
+  sourceDefinitionRevision: number;
+  sourceOutputSlot:         string;
+  sourceResultId:           null | string;
+  sourceResultVersion:      number | null;
+  sourceTaskId:             string;
+  sourceTree:               null | string;
+}
+
+export interface Artifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             Kind;
+}
+
+export type Kind = "patch" | "commit" | "document" | "test_result";
+
+export type Gate = "accepted_result" | "verified_output" | "integrated_commit";
+
+export interface Output {
+  kind:     Kind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface Repository {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface ScopeClass {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface ScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export type Access = "read_only" | "isolated_write";
+
+export interface VerificationProfile {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface Workspace {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:            string;
+  leaseId:             string;
+  mode:                Mode;
+  workspaceGeneration: string;
+  workspaceRef:        string;
+}
+
+export type Mode = "isolated_worktree";
 
 export interface Included {
   artifactIds:         string[];
@@ -608,12 +775,12 @@ export interface LogicalSessionRequest {
   contextCursor:   number;
   resumePolicy:    ResumePolicy;
   runtimeScopeId?: string;
-  scope:           Scope;
+  scope:           ScopeEnum;
 }
 
 export type ResumePolicy = "resume_or_start" | "start_new";
 
-export type Scope = "task";
+export type ScopeEnum = "task";
 
 export type RunRequestedMessageType = "run.requested";
 
@@ -711,7 +878,7 @@ export interface RunStatusPayload {
 
 export interface TaskClarificationRequest {
   choices?: [string, string, ...string[]];
-  kind:     Scope;
+  kind:     ScopeEnum;
   question: string;
 }
 

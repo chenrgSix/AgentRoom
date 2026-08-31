@@ -20,6 +20,8 @@ const WORK_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/task-result.schema.json";
 const EXECUTION_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/execution-plan.schema.json";
+const EXECUTION_RUNTIME_SCHEMA_ID =
+  "https://agentroom.dev/schemas/work/execution-runtime.schema.json";
 
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
@@ -399,7 +401,16 @@ function renderExecutionValidators(schemas) {
     revisionCommand: `${EXECUTION_SCHEMA_ID}#/$defs/revisionCommand`,
     approvalCommand: `${EXECUTION_SCHEMA_ID}#/$defs/approvalCommand`,
     controlCommand: `${EXECUTION_SCHEMA_ID}#/$defs/controlCommand`,
-    decisionContent: `${EXECUTION_SCHEMA_ID}#/$defs/decisionContent`
+    decisionContent: `${EXECUTION_SCHEMA_ID}#/$defs/decisionContent`,
+    executionManifest: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/manifest`,
+    executionInputBinding: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/inputBinding`,
+    executionCapability: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/capability`,
+    repositoryBinding: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/bindingSummary`,
+    executionGrant: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/grantSummary`,
+    repositoryOperation: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/operationRequest`,
+    repositoryReceipt: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/operationReceipt`,
+    executionCheckpoint: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/checkpoint`,
+    verificationReceipt: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/verificationReceipt`
   }).trimEnd()}\n`;
 }
 
@@ -707,8 +718,15 @@ function scanJSONResourceBounds(text) {
         index += 1;
         return;
       }
+      const keys = new Set();
       while (true) {
+        const keyStart = index;
         consumeString();
+        // Compare decoded names so escaped aliases cannot hide duplicate grants
+        // or generations from another JSON consumer's first/last-wins parser.
+        const key = JSON.parse(text.slice(keyStart, index));
+        if (keys.has(key)) rejectLexicalAdmission();
+        keys.add(key);
         skipWhitespace();
         if (text.charCodeAt(index) !== 58) malformed();
         index += 1;
@@ -1025,6 +1043,7 @@ func bridgeJSONWithinResourceBounds(source []byte) bool {
 	type jsonContainerState struct {
 		Object bool
 		ExpectingKey bool
+		Keys map[string]struct{}
 	}
 	decoder := json.NewDecoder(bytes.NewReader(source))
 	decoder.UseNumber()
@@ -1058,9 +1077,17 @@ func bridgeJSONWithinResourceBounds(source []byte) bool {
 		} else {
 			parent := &containers[len(containers)-1]
 			if parent.Object && parent.ExpectingKey {
-				if _, ok := token.(string); !ok {
+				key, ok := token.(string)
+				if !ok {
 					return false
 				}
+				if _, duplicate := parent.Keys[key]; duplicate {
+					return false
+				}
+				if parent.Keys == nil {
+					parent.Keys = make(map[string]struct{})
+				}
+				parent.Keys[key] = struct{}{}
 				parent.ExpectingKey = false
 				continue
 			}
@@ -1293,6 +1320,7 @@ export async function generateContractTypes(packageRoot) {
   const pairingSchema = schemas.get(PAIRING_SCHEMA_ID);
   const workSchema = schemas.get(WORK_SCHEMA_ID);
   const executionSchema = schemas.get(EXECUTION_SCHEMA_ID);
+  const executionRuntimeSchema = schemas.get(EXECUTION_RUNTIME_SCHEMA_ID);
 
   if (!bridgeSchema) {
     throw new Error(`Missing code generation schema: ${BRIDGE_SCHEMA_ID}`);
@@ -1305,6 +1333,9 @@ export async function generateContractTypes(packageRoot) {
   }
   if (!executionSchema) {
     throw new Error(`Missing code generation schema: ${EXECUTION_SCHEMA_ID}`);
+  }
+  if (!executionRuntimeSchema) {
+    throw new Error(`Missing code generation schema: ${EXECUTION_RUNTIME_SCHEMA_ID}`);
   }
 
   const bridgeCodegen = createBridgeCodegenSchemas(bridgeSchema);
@@ -1364,6 +1395,17 @@ export async function generateContractTypes(packageRoot) {
     ["ExecutionPlanRevision", "planRevision"],
     ["ExecutionAgentPlanProposalCommand", "agentProposalCommand"]
   ]);
+  executionCodegen.push(...createDefinitionCodegenSchemas(executionRuntimeSchema, [
+    ["GovernedExecutionManifest", "manifest"],
+    ["ExecutionInputBinding", "inputBinding"],
+    ["GovernedExecutionCapability", "capability"],
+    ["RepositoryBindingSummary", "bindingSummary"],
+    ["ExecutionGrantSummary", "grantSummary"],
+    ["RepositoryOperationRequest", "operationRequest"],
+    ["RepositoryOperationReceipt", "operationReceipt"],
+    ["RepositoryCheckpoint", "checkpoint"],
+    ["VerificationReceipt", "verificationReceipt"]
+  ]));
   const bridgeSchemas = bridgeCodegen.types.map((entry) => ({
     ...entry,
     sourceSchema: bridgeSchema

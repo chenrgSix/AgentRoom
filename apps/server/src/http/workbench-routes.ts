@@ -2,7 +2,6 @@ import type {
   AttentionElement,
   LifecycleState,
   Priority,
-  Scope,
   WorkbenchQuery
 } from "@convene-wire/contracts/task-result";
 
@@ -54,7 +53,7 @@ function queryInput(value: Record<string, unknown>): WorkbenchQuery {
     throw new Error("Workbench cursor is invalid");
   }
   return {
-    scope: scope as Scope,
+    scope: scope as WorkbenchQuery["scope"],
     ...(search === undefined ? {} : { search }),
     attention: list(value.attention, "attention") as AttentionElement[],
     lifecycleState: list(value.lifecycleState, "lifecycleState") as LifecycleState[],

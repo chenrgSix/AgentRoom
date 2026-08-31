@@ -27,6 +27,9 @@ type RuntimeExecutor struct {
 }
 
 func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender) error {
+	if record.Request.ContextManifest != nil && record.Request.ContextManifest.Execution != nil {
+		return ErrGovernedExecutionUnsupported
+	}
 	var artifacts []bridgeruntime.VerifiedArtifactAlias
 	var artifactErr error
 	if e.ResolveArtifacts != nil {

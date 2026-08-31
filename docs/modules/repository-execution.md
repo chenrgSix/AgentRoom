@@ -31,6 +31,14 @@ operations additionally require the exact binding and its owner-local grant.
 
 ## Operation Contract
 
+CON-021 defines the shared version-1 wire shapes in
+`work/execution-runtime.schema.json`. A request has a closed discriminated
+`action`: `{ kind: "prepare", prepare: { ... } }`, and equivalently for capture,
+verify, integrate, publish and observe. Operation-specific nullable values stay
+inside that operation's payload, preserving exact generated Go serialization.
+Wire validity is separate from local admission and journal transitions; the
+schema does not create a repository binding, grant, verifier or side effect.
+
 Closed operations are prepare, capture, verify, integrate, publish and observe.
 Each has an immutable operation ID, normalized request digest, plan/node/Run
 scope where applicable, repository identity, expected object IDs and generation,

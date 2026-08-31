@@ -7,6 +7,15 @@ credentials and enforcement local; Central receives bounded capabilities and
 exact operation receipts. Repository preparation, verification and cleanup use
 durable operation ownership and never add a second Runtime-start path.
 
+`CON-021` adds the generated version-1 execution wire types but deliberately
+does not advertise governed execution from the production Bridge. A governed
+Context Manifest is rejected before inbox acceptance and again at direct
+Runtime execution; it cannot fall back to an ordinary prompt. BRG-071/RUN-018
+must replace this prerequisite with actual owner-local grant, preparation and
+runtime admission. The Server keeps capabilities scoped to the current
+authenticated connection epoch and does not send governed Runs to legacy or
+observing-only connections. Capability metadata is not local authorization.
+
 ## Scope
 
 - Prefix: `BRG`

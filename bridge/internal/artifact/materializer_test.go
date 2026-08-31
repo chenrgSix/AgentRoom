@@ -99,7 +99,7 @@ func (d *downloadServer) request() contracts.RunRequestedPayload {
 		ContextPlan: &contracts.RuntimeContextPlan{
 			ResultEvidence: &contracts.TaskResultEvidence{
 				ArtifactRefs: []contracts.ArtifactReference{{
-					ArtifactID: d.artifactID, Type: contracts.Patch,
+					ArtifactID: d.artifactID, Type: contracts.TypePatch,
 					Content: &contracts.PinnedArtifactContent{
 						ContentID: d.contentID, LogicalAlias: d.alias,
 						MediaType: contracts.TextXDiff, Sha256: d.sha256,

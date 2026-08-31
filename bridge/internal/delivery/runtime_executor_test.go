@@ -40,7 +40,7 @@ func runtimeArtifactFixture() (contracts.RunRequestedPayload, bridgeruntime.Veri
 			ResultEvidence: &contracts.TaskResultEvidence{
 				ArtifactRefs: []contracts.ArtifactReference{{
 					ArtifactID: "artifact_executor_alias_12345678",
-					Type:       contracts.Patch, Content: &content,
+					Type:       contracts.TypePatch, Content: &content,
 				}},
 			},
 		},
