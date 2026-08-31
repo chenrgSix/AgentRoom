@@ -81,3 +81,12 @@ test("CI also compares canonical icon bytes on arm64", async () => {
   assert.ok(mac.includes(`GOFLAGS: ${canonicalArithmetic}`));
   assert.ok(mac.includes('go run . -root "$GITHUB_WORKSPACE" -mode check'));
 });
+
+test("native exit injection copies the exact child's result, not an ambient exit code", async () => {
+  const source = await read("bridge/scripts/test-windows-workflow-failures.ps1");
+  assert.ok(source.includes("$process.WaitForExit(10000)"));
+  assert.ok(source.includes("$process.ExitCode -ne $script:injectedExit"));
+  assert.ok(source.includes("Set-Variable -Name LASTEXITCODE -Value $process.ExitCode -Scope 1"));
+  assert.ok(source.includes("$stubInvocations -ne 1"));
+  assert.doesNotMatch(source, /Set-Variable[^\n]+-Value \$LASTEXITCODE/u);
+});

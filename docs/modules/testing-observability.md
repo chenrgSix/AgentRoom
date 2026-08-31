@@ -453,6 +453,12 @@ handler-completion barrier: the durable fence must remain until the sender
 returns successfully. The tests retain bounded waits, callback-error checks,
 durable identity/state assertions, and failure-path context cancellation.
 
+Native Windows workflow failure injection reads each real child process's
+`ExitCode` explicitly, rather than inheriting a caller-scoped `LASTEXITCODE`.
+Every production guard must execute the stub once, reject exit 23 and accept
+exit 0; bounded child waits and originating exceptions keep fixture failures
+distinct from the production command guards being tested.
+
 `QA-038` is the deterministic ADR-0026 admission gate. It records focused
 Server/Web/security/migration/recovery tests, fake-HTTPS E2E, unconfigured
 Compose/readiness compatibility, existing managed/manual/Fake behavior, full

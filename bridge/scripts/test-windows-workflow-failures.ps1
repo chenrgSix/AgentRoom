@@ -13,8 +13,25 @@ $checked = 0
 function go {
   # Never run real Go or package anything in this failure-injection test.
   $script:stubInvocations++
-  & $nativeShell -NoProfile -NonInteractive -Command "exit $script:injectedExit"
-  Set-Variable -Name LASTEXITCODE -Value $LASTEXITCODE -Scope 1
+  # Read this child's exit code, not a shadowed LASTEXITCODE left by the prior
+  # injection in the caller's scope (Windows can otherwise reuse exit 23).
+  $startInfo = [System.Diagnostics.ProcessStartInfo]::new($nativeShell)
+  $startInfo.UseShellExecute = $false
+  foreach ($argument in @("-NoProfile", "-NonInteractive", "-Command", "exit $script:injectedExit")) {
+    $startInfo.ArgumentList.Add($argument)
+  }
+  $process = [System.Diagnostics.Process]::Start($startInfo)
+  try {
+    if (-not $process.WaitForExit(10000)) {
+      $process.Kill($true)
+      throw "Native exit injection timed out"
+    }
+    if ($process.ExitCode -ne $script:injectedExit) {
+      throw "Native child returned an unexpected exit code"
+    }
+    Set-Variable -Name LASTEXITCODE -Value $process.ExitCode -Scope 1
+  }
+  finally { $process.Dispose() }
 }
 
 foreach ($name in @("ci.yml", "release-bridge.yml")) {
