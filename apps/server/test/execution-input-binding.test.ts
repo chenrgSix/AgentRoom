@@ -29,7 +29,7 @@ const wire = JSON.parse(await readFile(new URL(
   "../../../packages/contracts/fixtures/execution-runtime-cases.json", import.meta.url
 ), "utf8")).cases.find((entry: { name: string }) => entry.name === "execution runtime: valid governed wire delivery").instance.payload;
 
-async function inputFixture(t: TestContext, options: { verifiedGate?: boolean; twoInputs?: boolean; external?: boolean; captureOutput?: boolean } = {}) {
+async function inputFixture(t: TestContext, options: { gate?: "verified_output" | "integrated_commit"; twoInputs?: boolean; external?: boolean; captureOutput?: boolean } = {}) {
   const f = await fixture(t);
   const { database } = f;
   const core = new CoreRepository(database), auth = new AuthService(database);
@@ -108,7 +108,13 @@ async function inputFixture(t: TestContext, options: { verifiedGate?: boolean; t
     node.task = { mode: "existing", taskId: tasks[index].taskId, expectedTaskRevision: tasks[index].taskRevision,
       definitionRevision: tasks[index].definitionRevision, criteriaRevision: tasks[index].criteriaRevision };
   }
-  command.definition.edges[0]!.gate = options.verifiedGate ? "verified_output" : "accepted_result";
+  command.definition.edges[0]!.gate = options.gate ?? "accepted_result";
+  if (options.gate === "integrated_commit") {
+    const repository = command.definition.nodes[0]!.repository!;
+    command.definition.policy.integration = "local_integration";
+    command.definition.policy.integrationTargets = [{ repositoryId: repository.repositoryId,
+      targetRef: "refs/heads/main", expectedCommit: repository.baseCommit }];
+  }
   if (options.twoInputs) {
     command.definition.nodes[1]!.inputs.push({ slotKey: "second", kind: "patch", required: true });
     command.definition.edges[0]!.bindings.push({ outputSlot: "output", inputSlot: "second" });
@@ -273,11 +279,14 @@ test("input selection rejects missing, duplicate, foreign and stale pins without
   assert.deepEqual(f.freeze(), original);
 });
 
-test("accepted Results cannot substitute for independent verified-output gates", async (t) => {
-  const f = await inputFixture(t, { verifiedGate: true });
-  assert.throws(() => f.freeze(), /EXECUTION_INPUT_GATE_UNAVAILABLE/u);
-  assert.equal(f.count(), 0);
-});
+for (const gate of ["verified_output", "integrated_commit"] as const) {
+  test(`accepted Results cannot substitute for independent ${gate} gates`, async (t) => {
+    const f = await inputFixture(t, { gate });
+    assert.equal(f.plan.current.definition.edges[0]!.gate, gate);
+    assert.throws(() => f.freeze(), /EXECUTION_INPUT_GATE_UNAVAILABLE/u);
+    assert.equal(f.count(), 0);
+  });
+}
 
 test("approved external inputs pin the exact Result and sealed content without inheriting its acceptance", async (t) => {
   const f = await inputFixture(t, { external: true });
@@ -400,6 +409,38 @@ test("terminal Runs and removed Room participants lose input access while histor
   assert.equal((await f.request("GET", f.contentUrl(bindings[0]!.bindingId), undefined, f.destination.authorization)).statusCode, 403);
   assert.equal(f.count(), 1);
 });
+
+for (const change of ["definition", "criteria"] as const) {
+  test(`paused input reads retain exact history but reject changed source ${change}`, async (t) => {
+    const f = await inputFixture(t);
+    const bindings = f.freeze();
+    f.deliver(bindings);
+    const read = () => f.request("GET", f.contentUrl(bindings[0]!.bindingId), undefined, f.destination.authorization);
+    assert.equal((await read()).statusCode, 200);
+    const source = await f.ok("GET", `/api/tasks/${f.tasks[0].taskId}`);
+    const paused = await f.ok("POST", `/api/tasks/${source.taskId}/control`, {
+      operationId: "op_input_pause_source0001", expectedTaskRevision: source.taskRevision,
+      schedulingState: "paused"
+    });
+    assert.equal((await f.ok("GET", `/api/execution-plans/${f.plan.planId}`)).state, "paused");
+    assert.equal((await read()).statusCode, 200, "scheduling pause does not revoke an unchanged in-flight input");
+    assert.throws(() => f.freeze(), /EXECUTION_INPUT_PLAN_STALE/u);
+    const changed = await f.ok("PUT", `/api/tasks/${source.taskId}/definition`, {
+      operationId: "op_input_source_drift0001", expectedTaskRevision: paused.taskRevision,
+      title: source.title, goal: change === "definition" ? "Changed accepted source goal" : source.goal,
+      ownerMemberId: source.ownerMemberId, completionPolicy: source.completionPolicy,
+      priority: source.priority, dueAt: source.dueAt, assignments: source.assignments,
+      budgetPolicy: source.budgetPolicy,
+      criteria: change === "criteria" ? source.criteria.map((criterion: { description: string }) =>
+        ({ ...criterion, description: `${criterion.description} with a new requirement` })) : source.criteria
+    });
+    assert.equal(changed.definitionRevision, source.definitionRevision + 1);
+    assert.equal(changed.criteriaRevision, source.criteriaRevision + (change === "criteria" ? 1 : 0));
+    assert.equal((await read()).statusCode, 403, "historical acceptance cannot authorize changed source definitions");
+    assert.equal(f.count(), 1);
+    assert.deepEqual(f.inputRepository.get(bindings[0]!.bindingId)!.binding, bindings[0]);
+  });
+}
 
 for (const scope of ["room", "team"] as const) {
   test(`archived ${scope} scope prevents both input admission and further content reads`, async (t) => {

@@ -50,6 +50,12 @@ outcome. This ordering breaks the implicit scheduler/integration/input cycle;
 it does not mark the full dependency feature complete at the foundation gate,
 weaken any approval, or permit dispatch with missing required inputs.
 
+The [foundation audit](../acceptance/exec-006-input-foundation.md) maps the
+accepted-result port to current transaction, authorization, sealed-content and
+provenance evidence, including both unavailable independent gates and source
+drift after scheduling pause. Its real HTTP/SQLite fixtures do not stand in for
+the actual RUN-018/EXEC-003 delivery and materialization gates.
+
 ## Aggregates and Identities
 
 | Record | Minimum identity and frozen content |
