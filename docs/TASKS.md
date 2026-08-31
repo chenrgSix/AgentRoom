@@ -509,6 +509,22 @@ client change, live deployment or Release. Dependencies below are already DONE.
 | --- | --- | --- | --- | --- |
 | WEB-061 | DONE | Separate Collaboration and Management with contextual navigation and on-demand setup | WEB-051, WEB-058, WEB-059, WEB-060, SEC-012 | [acceptance evidence](acceptance/web-061-product-navigation.md): 728 full-suite tests including 246 Web tests, 6 deterministic E2Es, build/schema/docs checks and isolated 1280/720/390 browser screenshots prove separate inventories, on-demand scoped setup, account access, Task/tab/filter/draft return, permission and late-response fences, contained dialogs and localized errors; actual synthetic HTTP Hosted creation/reply and pairing cancellation verified; no client change, live-provider acceptance, deployment or Release |
 
+## Client Owner Collaboration Entry
+
+ADR-0035 binds real human membership during explicit Device pairing and keeps
+human login authority separate from Runtime credentials. No deployment or
+Release is included.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-023 | DONE | Define client owner identity, Room defaults and scoped human entry | SEC-012, BRG-069, WEB-061 | Accepted ADR-0035, seven owning modules, 271-file Markdown lint and whitespace checks pass |
+| CON-019 | PLANNED | Define additive member pairing and client entry payloads | GOV-023, CON-012 | Generated TypeScript/Go types, schema positive/negative fixtures and interop checks |
+| SEC-013 | PLANNED | Bind approved client owners and issue scoped human entry | CON-019, SEC-012 | Transactional binding, separate-key tickets, capped sessions, replay/revocation/scope negatives and legacy compatibility |
+| ROOM-008 | PLANNED | Limit member-aware onboarding to selected Rooms and default Agent owners into explicit invitations | SEC-013, ROOM-007 | Initial roster boundaries, explicit removal and republication regressions |
+| BRG-070 | PLANNED | Open authorized Team and Room entry from the local client | SEC-013, BRG-069 | Separate credential storage, Console authorization, re-pair/switch fencing, Go/UI tests and native compilation |
+| WEB-062 | PLANNED | Present member-aware pairing and safe client browser entry | SEC-013, ROOM-008, WEB-061 | Real identity/session navigation regressions, scoped ownership controls and isolated browser acceptance |
+| QA-051 | PLANNED | Verify client owner collaboration closure | CON-019, SEC-013, ROOM-008, BRG-070, WEB-062 | Full relevant suites, cross-process entry, builds/contracts/docs and bounded browser evidence |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

@@ -686,3 +686,7 @@ full-refresh compatibility fallback.
 
 Team/Room, Task Collaboration, Registry, Run Orchestration, Runtime Adapters,
 Bridge pairing APIs, and Security.
+
+## Client owner collaboration entry
+
+ADR-0035 adds explicit self/existing/new-member Device pairing with initial Room selection, owner-default human selection when adding an Agent to a Room, and an identity-confirmed client entry screen. The screen clears fragment proofs immediately and never silently replaces browser identity. Client sessions expose only their authorized Team and ordinary-member authority; navigation still resolves current Room access.

@@ -179,3 +179,7 @@ unredacted Bridge content.
 ## Dependencies
 
 Contracts, Persistence, Security, and Registry Agent lookup.
+
+## Member-aware Room defaults
+
+ADR-0035 member-aware onboarding explicitly selects initial Rooms. New members do not inherit unrelated existing Rooms. Adding an Agent through Room settings preselects its human owner, with an explicit opt-out; the exact submitted roster remains authoritative. Reconnect, ordinary reads and republication never restore a removed human.

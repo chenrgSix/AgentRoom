@@ -174,3 +174,7 @@ provider-execution failure.
 
 Contracts, Persistence, and Security. Bridge heartbeats are inputs, not registry
 state authority.
+
+## Member-aware Device ownership
+
+ADR-0035 separates the pairing issuer from the Device owner. Explicit approval binds an existing member or atomically creates one ordinary member; multiple Devices can reuse that immutable membership. New Agents from member-aware Devices receive only the approved initial Room defaults. Existing Device/Agent attribution is not silently rewritten.

@@ -1012,3 +1012,7 @@ recorded in `docs/acceptance/qa-033-v0.4.0.md`.
 ## Dependencies
 
 Contracts, Registry publication, Security pairing, and Runtime Adapters.
+
+## Client owner collaboration entry
+
+ADR-0035 adds explicit Team/Room entry to the authenticated local Console. Its independent human-access key lives in a separate owner-only file and never enters Runtime inputs, Device credential serialization, diagnostics or status. Entry uses a one-use fragment ticket and does not bypass browser TLS. Existing ownership is confirmed through deliberate re-pairing; canceled or superseded pairing and Central switching cannot carry human grants across identities.

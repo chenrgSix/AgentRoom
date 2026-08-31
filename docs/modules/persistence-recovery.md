@@ -423,3 +423,7 @@ is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
 ## Dependencies
 
 Contracts for persisted versions and domain modules for transaction invariants.
+
+## Client owner access persistence
+
+ADR-0035 adds optional pairing binding metadata, independent hashed client grants, hashed short-lived tickets, Device initial Room defaults and derived Web session lineage. Approval and ticket consumption use immediate SQLite transactions. Migration creates no grants for existing Devices; restart must preserve consumed-ticket and revoked-grant state without retaining secret plaintext.

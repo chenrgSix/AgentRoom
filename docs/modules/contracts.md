@@ -414,3 +414,7 @@ traces, or internal database errors.
 ## Dependencies
 
 None. Every other module consumes these contracts.
+
+## Client owner entry contracts
+
+ADR-0035 adds optional member binding, initial Room selection and an independent client-access proof to Device pairing, plus bounded client entry request/projection payloads. New member-aware links require an updated client; old links retain Device-only behavior. JSON Schema remains the cross-language authority and generated types must agree in Go and TypeScript.

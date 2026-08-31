@@ -391,3 +391,7 @@ isolation and owner-controlled environment allowlists.
 ## Dependencies
 
 Contracts. Every transport and domain service depends on Security decisions.
+
+## Client owner collaboration entry
+
+Security owns ADR-0035 member-aware pairing, independent client access grants, 60-second single-use browser tickets and Team-scoped Web sessions capped at ordinary-member authority. Device-only credentials cannot impersonate a human. Existing Devices receive no grants automatically; explicit re-pairing confirms real ownership. Grant, Device, credential, membership and Team eligibility are revalidated on every derived session authentication. Account recovery and durable credential issuance remain outside these sessions.
