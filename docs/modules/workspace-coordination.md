@@ -4,11 +4,11 @@
 write/worktree milestone. It requires explicit owner-local repository bindings
 and grants, unique isolated attempts, actual runtime enforcement capability and
 generation fencing before governed coding starts. A central lease remains
-coordination, never an OS permission. Current source-read behavior below stays
-unchanged until that milestone has its own implementation evidence.
+coordination, never an OS permission. Source-read and isolated-attempt leases
+have separate modes and admission rules; neither silently upgrades the other.
 
 - Prefix: `WSP`
-- Implementation: `apps/server/src/workspace/`, migrations 0035 and 0042, and
+- Implementation: `apps/server/src/workspace/`, migrations 0035, 0042 and 0061, and
   `bridge/internal/workspace/`
 - Owns: opaque Workspace identity, generation snapshots, and Run-scoped access
   leases
@@ -74,9 +74,47 @@ across a double-read capture, and sends only a basename plus immutable byte
 metadata downstream.
 
 For a future Workspace apply operation, `write_apply` uses compare-and-set
-against the current generation. `isolated_worktree` names a Bridge-created
-worktree bound to one Task and Run. These write modes are not prerequisites for
-Bridge-owned Artifact staging.
+against the current generation. `isolated_worktree` identifies one isolated
+attempt whose actual worktree is created by the Bridge Repository adapter.
+Neither mode is a prerequisite for ordinary Bridge-owned Artifact staging.
+
+## Isolated Attempt Coordination
+
+`IsolatedWorkspaceLeaseService` is an internal Run-admission and authenticated
+Repository-operation port. Migration 0061 preserves a unique reservation per
+Run and per plan revision/node/dispatch generation. Deterministic path-free
+lease/workspace identities are distinct from an Agent's configured source root.
+Every new attempt receives a distinct identity, including after expiry or
+revocation. Old identities are never reassigned to another writer.
+
+Reservation requires a caller-owned transaction so the scheduler can create the
+Run, reserve its workspace and freeze the manifest atomically. It validates the
+complete manifest and digest, exact approved repository/scope/output/profile
+pins, current plan/Task/Room/Team/Device/Agent authority, Task assignments, grant
+snapshot expiry, Run deadline and current Bridge connection capability.
+An advertised workspace boundary does not satisfy a preventive per-path
+requirement. Unsupported or stale capabilities fail before reservation. The
+lease is usable only after the canonical Run manifest is frozen and matches it.
+
+The initial reservation remains immutable. Generation advances, revocation and
+release are append-only operations with exact actor/payload replay identities,
+monotonic revisions and expected-generation compare-and-set. Concurrent
+processes cannot both advance the same revision. Returning to an earlier
+generation is forbidden, including returning to the initial generation; this
+prevents a stale operation from matching after an intervening change.
+
+Fresh use rechecks current scope, the frozen manifest, capability and expiry.
+Closing a lease only reduces coordination authority and is irreversible. It
+does not mark a Run terminal, acknowledge `outcome_unknown`, free scheduler
+capacity, attest that a process stopped, or authorize filesystem cleanup.
+Historical Repository receipts remain owned by Repository Execution; a delayed
+receipt is not permission to start a new operation under an expired lease.
+
+These internal ports expose no Agent-controlled shell, path, public lease mint
+or generation-write endpoint. Local repository enrollment, grant authentication,
+actual worktree creation, runtime enforcement and cleanup stay with REPO-001,
+BRG-071 and RUN-018. The current production Bridge still cannot advertise or
+start governed coding merely because this coordination layer exists.
 
 ## Failure and Recovery
 
@@ -105,10 +143,12 @@ are rejected locally. Logs expose only lease and opaque scope IDs.
 
 `WSP-001` implements the first `read_source` lease. `WSP-002` productizes the
 Bridge-owned Workspace binding and path-free central projection required by
-ADR-0021 without changing lease authority. Write and
-worktree modes remain contract-reserved until a later Scheduler milestone.
+ADR-0021 without changing lease authority. `WSP-003` owns isolated-attempt
+reservation and generation/lifecycle coordination. Actual local operations and
+their hookup to existing Run delivery are separate Repository/Bridge/Run tasks.
 
 ## Dependencies
 
-Contracts, Registry, Persistence, and Security. Task and Run application
-services must authorize their aggregate scope before requesting a lease.
+Contracts, Registry, Persistence, Security and exact Execution Plan approval.
+Task and Run application services must authorize their aggregate scope before
+requesting a lease; local enforcement remains the Bridge's responsibility.
