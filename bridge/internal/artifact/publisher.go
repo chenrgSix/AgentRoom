@@ -79,8 +79,9 @@ type sealView struct {
 type bindView struct {
 	Revision int64 `json:"revision"`
 	Artifact struct {
-		ArtifactID string  `json:"artifactId"`
-		ContentID  *string `json:"contentId"`
+		ArtifactID       string  `json:"artifactId"`
+		ArtifactRevision int64   `json:"artifactRevision"`
+		ContentID        *string `json:"contentId"`
 	} `json:"artifact"`
 }
 
@@ -88,6 +89,15 @@ type outcomeUnknownError struct{ cause error }
 
 func (e outcomeUnknownError) Error() string {
 	return "Artifact publication outcome is unknown: " + e.cause.Error()
+}
+
+type apiError struct {
+	status        int
+	code, message string
+}
+
+func (e apiError) Error() string {
+	return fmt.Sprintf("Artifact API rejected request with status %d: %s", e.status, e.message)
 }
 
 func NewClient(cfg config.Config, credential pairing.Credential) *Client {
@@ -144,6 +154,15 @@ func (c *Client) Publish(
 	if err := validateSource(source, input.ArtifactType); err != nil {
 		return PublishResult{}, err
 	}
+	return c.publishSource(ctx, input, source, relations, lease.LeaseID, "")
+}
+
+// publishSource uploads already captured immutable bytes. Legacy callers obtain
+// read_source first; repository callers must obtain their exact read_capture
+// lease instead. Neither path refreshes or substitutes the other's workspace.
+func (c *Client) publishSource(ctx context.Context, input PublishInput, source Source,
+	relations []PublishRelation, leaseID, namespace string,
+) (PublishResult, error) {
 	publicationKey := idempotencyKey(
 		"publication", input.RunID, input.AgentID,
 		source.WorkspaceRef, source.WorkspaceGeneration,
@@ -151,8 +170,11 @@ func (c *Client) Publish(
 		input.Title, input.Summary,
 		publishRelationsIdentity(relations),
 	)
+	if namespace != "" {
+		publicationKey = idempotencyKey("capture", namespace, publicationKey)
+	}
 	prepareRequest := map[string]any{
-		"leaseId": lease.LeaseID, "runId": input.RunID,
+		"leaseId": leaseID, "runId": input.RunID,
 		"agentId":             input.AgentID,
 		"workspaceRef":        source.WorkspaceRef,
 		"workspaceGeneration": source.WorkspaceGeneration,
@@ -249,16 +271,11 @@ func (c *Client) Publish(
 			contentID = valueOrEmpty(publication.ContentID)
 		}
 	}
-	if publication.State == "bound" && publication.ArtifactID != nil {
-		return PublishResult{
-			PublicationID: publication.PublicationID,
-			ArtifactID:    *publication.ArtifactID,
-			ContentID:     contentID,
-			SHA256:        source.SHA256,
-		}, nil
+	if (publication.State != "sealed" && publication.State != "bound") || contentID == "" {
+		return PublishResult{}, fmt.Errorf("Artifact publication has no sealed content")
 	}
 	var bound bindView
-	err = c.request(
+	err := c.request(
 		ctx, http.MethodPost,
 		"/api/bridge/artifact-publications/"+publication.PublicationID+"/bind",
 		map[string]any{}, &bound,
@@ -266,16 +283,21 @@ func (c *Client) Publish(
 	if err != nil && isOutcomeUnknown(err) {
 		if statusErr := c.status(ctx, publication.PublicationID, &publication); statusErr == nil &&
 			publication.State == "bound" && publication.ArtifactID != nil {
-			return PublishResult{
-				PublicationID: publication.PublicationID,
-				ArtifactID:    *publication.ArtifactID,
-				ContentID:     valueOrEmpty(publication.ContentID),
-				SHA256:        source.SHA256,
-			}, nil
+			// The status projection has no canonical Artifact revision. Exact bind
+			// replay reads the already committed receipt, rather than inventing 0.
+			err = c.request(ctx, http.MethodPost,
+				"/api/bridge/artifact-publications/"+publication.PublicationID+"/bind",
+				map[string]any{}, &bound)
 		}
 	}
 	if err != nil {
 		return PublishResult{}, err
+	}
+	if !validPublicationArtifactID(bound.Artifact.ArtifactID) || bound.Revision < 1 ||
+		bound.Revision > 9007199254740991 || bound.Artifact.ArtifactRevision != bound.Revision ||
+		valueOrEmpty(bound.Artifact.ContentID) != contentID ||
+		(publication.ArtifactID != nil && *publication.ArtifactID != bound.Artifact.ArtifactID) {
+		return PublishResult{}, fmt.Errorf("Artifact bind receipt is inconsistent")
 	}
 	return PublishResult{
 		PublicationID: publication.PublicationID,
@@ -460,6 +482,7 @@ func (c *Client) request(
 		var rejected struct {
 			Error struct {
 				Message string `json:"message"`
+				Code    string `json:"code"`
 			} `json:"error"`
 		}
 		_ = json.Unmarshal(source, &rejected)
@@ -467,7 +490,7 @@ func (c *Client) request(
 		if message == "" {
 			message = http.StatusText(response.StatusCode)
 		}
-		return fmt.Errorf("Artifact API rejected request with status %d: %s", response.StatusCode, message)
+		return apiError{status: response.StatusCode, code: rejected.Error.Code, message: message}
 	}
 	if output == nil {
 		return nil
@@ -505,7 +528,7 @@ func validateSource(source Source, artifactType string) error {
 		len(source.WorkspaceRef) != len("workspace_")+64 ||
 		!validLowerHex(strings.TrimPrefix(source.WorkspaceRef, "workspace_"), 64) ||
 		!validLowerHex(source.WorkspaceGeneration, 64) ||
-		strings.ContainsAny(source.FileName, "/\\") {
+		!safeFileName(source.FileName) {
 		return fmt.Errorf("Artifact source snapshot is invalid")
 	}
 	mediaType, err := mediaTypeFor(artifactType, source.FileName)

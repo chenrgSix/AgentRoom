@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import type { TestContext } from "node:test";
-import type { GovernedExecutionManifest } from "@convene-wire/contracts/execution-plan";
+import type { ExecutionPlanDefinition, GovernedExecutionManifest } from "@convene-wire/contracts/execution-plan";
 import { executionOperationDigest } from "@convene-wire/contracts/execution-validation";
 import { BridgeConnectionRegistry } from "../../src/bridge/bridge-connection-registry.js";
 import { CoreRepository } from "../../src/data/core-repository.js";
@@ -9,7 +9,7 @@ import { AgentService } from "../../src/registry/agent-service.js";
 import { MemberDeviceService } from "../../src/registry/member-device-service.js";
 import { AuthService } from "../../src/security/auth-service.js";
 import { IsolatedWorkspaceLeaseService, planIsolatedWorkspace } from "../../src/workspace/isolated-workspace-lease-service.js";
-import { fixture, now } from "./execution-plan-fixture.js";
+import { fixture, now as defaultNow } from "./execution-plan-fixture.js";
 
 export const expiresAt = "2026-08-31T12:05:00.000Z";
 const wire = JSON.parse(await readFile(new URL("../../../../packages/contracts/fixtures/execution-runtime-cases.json", import.meta.url), "utf8"))
@@ -17,8 +17,12 @@ const wire = JSON.parse(await readFile(new URL("../../../../packages/contracts/f
 export const capability = { version: 1 as const, workspaceBoundary: "enforced" as const,
   preventivePathEnforcement: false, operations: ["prepare", "capture"] as const };
 
-export async function workspaceFixture(t: TestContext, preventivePathEnforcement = false) {
-  const f = await fixture(t), core = new CoreRepository(f.database), auth = new AuthService(f.database);
+export async function workspaceFixture(t: TestContext, preventivePathEnforcement = false, options: {
+  now?: string; clock?: () => string; configurePlan?: (definition: ExecutionPlanDefinition) => void;
+} = {}) {
+  const now = options.now ?? defaultNow;
+  const expiresAt = new Date(Date.parse(now) + 5 * 60_000).toISOString();
+  const f = await fixture(t, options.clock ?? (() => now)), core = new CoreRepository(f.database), auth = new AuthService(f.database);
   const member = auth.authenticateWebSession(f.authorization.slice(7), now);
   const device = new MemberDeviceService(core, auth).registerOwnDevice(member, f.teamId, "Workspace owner", now);
   const credential = auth.issueDeviceCredential(device.deviceId, now);
@@ -35,6 +39,7 @@ export async function workspaceFixture(t: TestContext, preventivePathEnforcement
     node.agentId = agent.agentId;
     node.scope.requirePreventivePathEnforcement = preventivePathEnforcement;
   }
+  options.configurePlan?.(command.definition);
   const draft = await f.create(command);
   const plan = (await f.ok("POST", `/api/execution-plans/${draft.planId}/approvals`, {
     operationId: "op_workspace_approval0001", expectedRevision: draft.current.revision, expectedDigest: draft.current.digest,

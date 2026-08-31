@@ -438,6 +438,10 @@ func (p *Preparer) finishCapture(ctx context.Context, prepared preparationIntent
 func (p *Preparer) ReadCapturedPatch(ctx context.Context, operationID, expectedDigest string) ([]byte, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.readCapturedPatchLocked(ctx, operationID, expectedDigest)
+}
+
+func (p *Preparer) readCapturedPatchLocked(ctx context.Context, operationID, expectedDigest string) ([]byte, error) {
 	if err := p.checkOwner(); err != nil {
 		return nil, err
 	}

@@ -217,6 +217,41 @@ verify the code, accept a Result, advance Run state, merge, or authorize cleanup
 The enrolled Bridge is the code-observation authority; Central does not infer
 an actual Git tree merely from Artifact bytes or Agent prose.
 
+### Bridge Capture Publication Adapter
+
+`Preparer.PublishCaptured` binds a sealed local capture to the generated frozen
+manifest and capture operation. It verifies canonical digests, scope, repository
+and workspace identities, prepared patch-input pins, captured time and selected
+required output slots before any HTTP request. The caller must still hold the
+current owner-local authorization and stopped-Run fence; this is not a new
+Runtime admission path. The current local adapter publishes non-empty sealed
+patch outputs. It rejects unsupported selected kinds or missing required slots
+instead of omitting them or fabricating commit/verifier content.
+
+The private owner journal retains exact publication intent before network IO,
+then an exact checkpoint proposal before sealing, and finally the confirmed
+canonical receipt. Restart first queries the Server's exact operation identity.
+A committed checkpoint is accepted only when it matches the retained proposal;
+an unsealed proposal is replayed exactly. Previously bound content is recovered
+through the canonical Artifact bind receipt, including its actual revision.
+Unknown/forbidden/unavailable lookups are never interpreted as absence.
+Confirmed local receipts are read-only replay results, not renewed authority.
+
+The Artifact client's capture path obtains `read_capture`, validates the exact
+lease projection and sends only captured bytes and safe metadata. It never
+refreshes the default Agent workspace or obtains `read_source`. Operation and
+output-slot identities namespace publication idempotency. A changed intent,
+generation, digest or receipt fails without rebinding historical output.
+The source checkout, captured worktree and later uncollected changes stay
+untouched; publication does not authorize their cleanup.
+
+The actual Go/HTTP/Git integration fixture verifies canonical uploaded bytes
+against the captured tree through response loss and separate-process restart.
+It supplies synthetic future-admission/connection metadata and fixture code
+changes, not an Agent Runtime or local grant implementation. Explicit checkpoint
+resume into a new attempt, exact-owned cleanup, remaining output producers and
+the BRG-071/RUN-018 admission connection remain required product work.
+
 ## Verification Receipts
 
 Verification is a system-owned operation on an exact candidate, not an Agent's

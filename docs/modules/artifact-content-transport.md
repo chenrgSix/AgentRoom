@@ -66,6 +66,13 @@ Optional repeatable `--derives-from`, `--reviews`, and `--verifies` flags are
 normalized into that same publication identity; changing lineage under an
 existing idempotency key is a conflicting request rather than a retry.
 
+Both first bind and exact replay return the actual canonical Artifact revision.
+Publication status alone has no revision, so a lost bind response is reconciled
+by reading the idempotent bind receipt after observing `bound`. Missing, zero,
+unsafe or inconsistent revision/content/Artifact identities are errors, never
+successful revision-zero placeholders. The legacy publication identity remains
+unchanged.
+
 ## Publication and Bind
 
 ```text
@@ -116,8 +123,14 @@ readable as historical receipts without authorizing another mutation.
 Repository checkpoint sealing resolves real bound Artifact IDs/revisions and
 rechecks the actual stored Blob digest and size. A test-result Artifact is still
 only content; it does not become a trusted VerificationReceipt through capture.
-The Go capture-to-publication adapter and real governed Runtime integration are
-separate from these Server ports.
+The Go capture client validates generated manifest/operation digests, approved
+output kind and exact `read_capture` lease fields, then uses the shared uploader
+with an operation/output-slot namespace. It does not read paths or refresh a
+default Agent workspace. Checkpoint lookup distinguishes an explicit missing
+operation/receipt from permission, network or service failure. Repository owns
+the local immutable intent, checkpoint proposal and confirmed receipt; this
+module supplies transport and exact canonical bind identities. Actual governed
+Runtime admission remains separate from these ports.
 
 Only bound canonical Artifacts enter Context Planner, Web preview, Memory
 provenance, or Run delivery. Sealed-but-unbound content is recoverable storage,
@@ -179,7 +192,10 @@ deferred.
 
 ## Security and Verification
 
-All source reads require a current `read_source` lease and local path checks.
+Ordinary source reads require a current `read_source` lease and local path
+checks. Governed capture instead requires its existing owner-local grant and
+stopped-Run fence, reads retained immutable bytes, and publishes only through the
+matching `read_capture` authorization.
 Content access is Team- and delivery-scoped. Deduplication never exposes
 cross-Team content existence. Tests cover traversal, symlinks, special files,
 changing source files, MIME mismatch, size/digest mismatch, quota, expiry,

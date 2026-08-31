@@ -20,7 +20,7 @@ const fixtures = JSON.parse(await readFile(new URL(
 const template = fixtures.cases.find((entry: { name: string }) =>
   entry.name === "execution: valid full plan").instance as ExecutionPlanDefinition;
 
-export async function fixture(t: TestContext) {
+export async function fixture(t: TestContext, clock: () => string = () => now) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-execution-history-"));
   let app: FastifyInstance | undefined;
   const connections: ReturnType<typeof openDatabase>[] = [];
@@ -35,7 +35,7 @@ export async function fixture(t: TestContext) {
     }
   });
   const databasePath = path.join(directory, "server.sqlite");
-  app = await createServerApp({ databasePath, clock: () => now, logger: false });
+  app = await createServerApp({ databasePath, clock, logger: false });
   let authorization = "";
   const request = (
     method: HTTPMethods, url: string, payload?: unknown, token = authorization
@@ -110,13 +110,13 @@ export async function fixture(t: TestContext) {
       for (const socket of app!.websocketServer.clients) socket.terminate();
       await app!.close();
       app = undefined;
-      app = await createServerApp({ databasePath, clock: () => now, logger: false });
+      app = await createServerApp({ databasePath, clock, logger: false });
     },
     async restartTrusted() {
       for (const socket of app!.websocketServer.clients) socket.terminate();
       await app!.close();
       app = undefined;
-      app = await createServerApp({ databasePath, clock: () => now, logger: false, webAuth: {
+      app = await createServerApp({ databasePath, clock, logger: false, webAuth: {
         mode: "trusted-team", publicOrigin: "https://central.example",
         ownerRecoveryToken: "execution-test-recovery-" + "r".repeat(32)
       } });

@@ -132,7 +132,15 @@ func TestPublisherRecoversLostResponsesWithoutSendingLocalPaths(t *testing.T) {
 		case strings.HasSuffix(request.URL.Path, "/bind"):
 			bindCalls++
 			state = "bound"
-			closeResponse(t, writer)
+			if bindCalls == 1 {
+				closeResponse(t, writer)
+				return
+			}
+			_ = json.NewEncoder(writer).Encode(map[string]any{
+				"revision": 7, "artifact": map[string]any{
+					"artifactId": artifactID, "artifactRevision": 7, "contentId": contentID,
+				},
+			})
 		case request.URL.Path == "/api/bridge/artifact-publications/"+publicationID:
 			writePublication(writer)
 		default:
@@ -157,14 +165,14 @@ func TestPublisherRecoversLostResponsesWithoutSendingLocalPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	if result.ArtifactID != artifactID || result.ContentID != contentID ||
-		result.PublicationID != publicationID {
+		result.PublicationID != publicationID || result.Revision != 7 {
 		t.Fatalf("unexpected publish result: %#v", result)
 	}
 	second, err := client.Publish(context.Background(), input)
-	if err != nil || second.ArtifactID != artifactID {
+	if err != nil || second.ArtifactID != artifactID || second.Revision != 7 {
 		t.Fatalf("exact retry did not converge: result=%#v err=%v", second, err)
 	}
-	if leaseCalls != 3 || prepareCalls != 3 || chunkCalls != 1 || bindCalls != 1 {
+	if leaseCalls != 3 || prepareCalls != 3 || chunkCalls != 1 || bindCalls != 3 {
 		t.Fatalf(
 			"unexpected recovery calls: lease=%d prepare=%d chunk=%d bind=%d",
 			leaseCalls, prepareCalls, chunkCalls, bindCalls,
