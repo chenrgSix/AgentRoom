@@ -7,6 +7,21 @@ use explicit journals and exact-state reconciliation rather than pretending
 SQLite can transact with remote systems. Unknown execution is never an
 automatic-retry signal; new tables preserve existing historical authorities.
 
+Migration 0059 adds immutable exact-plan approvals, compiled node/edge snapshots,
+exclusive current Task claims and append-only drift events. A single shared
+transaction compiles canonical child Tasks and provenance, advances the root
+Task revision, records the review receipt and changes plan state. Rejection
+records a receipt without compilation. SQL seals compiled history, requires the
+matching exact approval and prevents claim reassignment or release from an
+active plan. Existing migration files are not changed.
+
+The initial approval prerequisite denies legacy Run creation and unverified
+Result acceptance/completion for governed nodes. Later governed delivery and
+verification gates replace these fail-closed prerequisites. Ordinary Tasks
+remain outside those guards. Discussion creation uses the same managed
+transaction boundary for its root Message and initial orchestration, so an
+admission failure rolls back the complete request.
+
 ## Scope
 
 - Prefix: `DATA`

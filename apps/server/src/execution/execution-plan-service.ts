@@ -1,5 +1,7 @@
 import type {
   ExecutionPlanDefinition,
+  ExecutionPlanApprovalCommand,
+  ExecutionPlanApprovalReceipt,
   ExecutionPlanProjection,
   ExecutionPlanProposalCommand,
   ExecutionPlanRevisionCommand
@@ -17,9 +19,12 @@ import {
   type WebPrincipal
 } from "../security/auth-service.js";
 import type { AgentTaskRecord, AgentTaskRepository } from "../task/task-repository.js";
+import type { AgentTaskService } from "../task/agent-task-service.js";
 import { ExecutionError } from "./execution-error.js";
 import type { ExecutionPlanRepository } from "./execution-plan-repository.js";
 import type { ExecutionSourceRepository } from "./execution-source-repository.js";
+import type { ExecutionApprovalRepository } from "./execution-approval-repository.js";
+import type { ExecutionPlanCompiler } from "./execution-plan-compiler.js";
 
 export class ExecutionPlanService {
   public constructor(
@@ -29,7 +34,10 @@ export class ExecutionPlanService {
     private readonly tasks: AgentTaskRepository,
     private readonly core: CoreRepository,
     private readonly auth: AuthService,
-    private readonly onChanged: (roomId: string) => void
+    private readonly onChanged: (roomId: string) => void,
+    private readonly approvals: ExecutionApprovalRepository,
+    private readonly compiler: ExecutionPlanCompiler,
+    private readonly taskService: AgentTaskService
   ) {}
 
   public get(principal: WebPrincipal, planId: string): ExecutionPlanProjection {
@@ -67,6 +75,76 @@ export class ExecutionPlanService {
   public decisionSources(principal: WebPrincipal, decisionId: string) {
     this.decision(principal, decisionId);
     return this.plans.sources(decisionId);
+  }
+
+  public approvalHistory(principal: WebPrincipal, planId: string, afterRevision = 0, limit = 20) {
+    this.get(principal, planId);
+    this.requirePageLimit(limit);
+    if (!Number.isSafeInteger(afterRevision) || afterRevision < 0) throw new ExecutionError("EXECUTION_INVALID_CURSOR");
+    return this.approvals.history(planId, afterRevision, limit);
+  }
+
+  public review(
+    principal: WebPrincipal, planId: string, value: unknown, now: string
+  ): ExecutionPlanApprovalReceipt {
+    assertExecutionCommand("approvalCommand", value);
+    const command = value as ExecutionPlanApprovalCommand;
+    if (command.reason.trim().length === 0) throw new ExecutionError("EXECUTION_REASON_REQUIRED");
+    return this.transactions.immediate(() => {
+      const plan = this.get(principal, planId);
+      const root = this.tasks.get(plan.rootTaskId);
+      if (!root) throw new ExecutionError("EXECUTION_ROOT_NOT_FOUND", 404);
+      const member = this.auth.requireRoomMember(principal, root.roomId);
+      if (member.memberId !== root.ownerMemberId && member.role !== "owner") {
+        throw new AuthorizationError("FORBIDDEN", "Task Owner or Team Owner required");
+      }
+      const requestDigest = executionOperationDigest({
+        action: "review", planId, actor: { kind: "member", memberId: member.memberId }, command
+      });
+      const replay = this.approvals.replay(command.operationId, requestDigest);
+      if (replay) return replay;
+      if (plan.state !== "draft" || plan.current.revision !== command.expectedRevision ||
+        plan.current.digest !== command.expectedDigest || this.approvals.get(planId, command.expectedRevision)) {
+        throw new ExecutionError("EXECUTION_APPROVAL_CONFLICT", 409);
+      }
+      if (root.taskRevision !== command.expectedRootTaskRevision) {
+        throw new ExecutionError("EXECUTION_ROOT_REVISION_CONFLICT", 409);
+      }
+      let compiled: ReturnType<ExecutionPlanCompiler["compile"]> = [];
+      let rootTaskRevisionAfter = root.taskRevision;
+      if (command.decision === "approved") {
+        if (root.isDefault || root.parentTaskId !== null ||
+          root.lifecycleState === "completed" || root.lifecycleState === "canceled") {
+          throw new ExecutionError("EXECUTION_ROOT_UNAVAILABLE");
+        }
+        if (root.taskRevision >= Number.MAX_SAFE_INTEGER || plan.controlRevision >= Number.MAX_SAFE_INTEGER) {
+          throw new ExecutionError("EXECUTION_REVISION_EXHAUSTED", 409);
+        }
+        const validated = validateExecutionPlanDefinition(plan.current.definition);
+        if (validated.digest !== plan.current.digest) throw new ExecutionError("EXECUTION_HISTORY_INCONSISTENT");
+        if (validated.approvalBlockers.length > 0) throw new ExecutionError("EXECUTION_REQUIRED_QUESTIONS_UNRESOLVED", 409);
+        this.requireReferences(validated.definition, root);
+        const frozen = this.plans.sources(plan.current.decisionId);
+        const current = this.sources.freeze(validated.definition, plan.roomId);
+        if (frozen.length !== current.length || current.some((source) => !frozen.some((old) =>
+          old.source.evidenceRefId === source.source.evidenceRefId && old.revision === source.revision && old.digest === source.digest))) {
+          throw new ExecutionError("EXECUTION_SOURCE_REVISION_CONFLICT", 409);
+        }
+        this.sources.requireExternalInputs(validated.definition, plan.roomId);
+        compiled = this.compiler.compile(member, plan, command.operationId, now);
+        const fenced = this.taskService.recordExecutionApproval(member, root.taskId, {
+          operationId: `op_${executionOperationDigest({ purpose: "execution_root_approval", operationId: command.operationId })}`,
+          expectedTaskRevision: root.taskRevision
+        }, now);
+        if (fenced.taskRevision !== root.taskRevision + 1) throw new ExecutionError("EXECUTION_ROOT_REVISION_CONFLICT", 409);
+        rootTaskRevisionAfter = fenced.taskRevision;
+      }
+      const receipt = this.approvals.persist({
+        plan, command, memberId: member.memberId, requestDigest, rootTaskRevisionAfter, compiled, now
+      });
+      this.transactions.afterCommit(() => this.onChanged(plan.roomId), { key: `execution:${plan.roomId}` });
+      return receipt;
+    });
   }
 
   public create(principal: WebPrincipal, taskId: string, value: unknown, now: string) {

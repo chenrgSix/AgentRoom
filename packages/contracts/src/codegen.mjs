@@ -1357,6 +1357,9 @@ export async function generateContractTypes(packageRoot) {
     ["ExecutionPlanProposalCommand", "proposalCommand"],
     ["ExecutionPlanRevisionCommand", "revisionCommand"],
     ["ExecutionPlanApprovalCommand", "approvalCommand"],
+    ["ExecutionPlanApprovalRecord", "approvalRecord"],
+    ["ExecutionPlanApprovalReceipt", "approvalReceipt"],
+    ["ExecutionPlanApprovalPage", "approvalPage"],
     ["ExecutionPlanControlCommand", "controlCommand"],
     ["ExecutionPlanRevision", "planRevision"],
     ["ExecutionAgentPlanProposalCommand", "agentProposalCommand"]

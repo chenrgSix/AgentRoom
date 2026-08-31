@@ -58,6 +58,8 @@ import { ExecutionError } from "./execution/execution-error.js";
 import { ExecutionPlanRepository } from "./execution/execution-plan-repository.js";
 import { ExecutionSourceRepository } from "./execution/execution-source-repository.js";
 import { ExecutionPlanService } from "./execution/execution-plan-service.js";
+import { ExecutionApprovalRepository } from "./execution/execution-approval-repository.js";
+import { ExecutionPlanCompiler } from "./execution/execution-plan-compiler.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
@@ -370,6 +372,7 @@ export async function createServerApp(
     runRepository
   );
   const resultRepository = new ResultRepository(database);
+  const executionApprovals = new ExecutionApprovalRepository(database);
   const executionPlans = new ExecutionPlanService(
     transactions,
     new ExecutionPlanRepository(database),
@@ -380,7 +383,10 @@ export async function createServerApp(
     (roomId) => {
       const room = core.getRoom(roomId);
       if (room) teamChanges.notify(room.teamId, { kind: "room", roomId });
-    }
+    },
+    executionApprovals,
+    new ExecutionPlanCompiler(tasks, taskRepository, resultRepository, executionApprovals),
+    tasks
   );
   const results = new ResultService(
     database,

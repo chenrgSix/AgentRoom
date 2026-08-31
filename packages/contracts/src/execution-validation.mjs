@@ -213,6 +213,15 @@ export function validateExecutionPlanDefinition(value) {
     .map((node) => node.task.taskId);
   requireCondition(new Set(existingTasks).size === existingTasks.length,
     "PLAN_DUPLICATE_TASK");
+  const selectedActions = value.nodes.filter((node) => node.task.mode === "new" && node.task.sourceAction)
+    .map((node) => canonicalValue(node.task.sourceAction));
+  requireCondition(new Set(selectedActions).size === selectedActions.length, "PLAN_DUPLICATE_SOURCE_ACTION");
+  for (const node of value.nodes) {
+    if (node.task.mode === "new" && node.task.sourceAction) {
+      requireCondition(value.decision.sources.some((source) => source.kind === "result" &&
+        source.resultId === node.task.sourceAction.resultId), "PLAN_SOURCE_ACTION_EVIDENCE_REQUIRED");
+    }
+  }
   requireCondition(value.nodes.some((node) => node.required), "PLAN_REQUIRED_NODE_MISSING");
   requireCondition(value.policy.budget.maxRunAttempts >=
     value.nodes.filter((node) => node.required).length, "PLAN_BUDGET_BELOW_REQUIRED_NODES");

@@ -1,4 +1,5 @@
 import type Database from "better-sqlite3";
+import { SqliteTransactionBoundary } from "../data/sqlite-transaction-boundary.js";
 
 import {
   defaultDiscussionPolicy,
@@ -204,6 +205,11 @@ export interface ApplyDiscussionWaveResult extends CloseDiscussionWaveResult {
 type ClosedDiscussionWaveState = Exclude<DiscussionWaveState, "open">;
 
 export class DiscussionRepository {
+  /** Coordinates the root Message, Discussion, first Wave and ordinary Runs. */
+  public atomic<T>(work: () => T): T {
+    return new SqliteTransactionBoundary(this.database).immediate(work);
+  }
+
   public constructor(private readonly database: Database.Database) {}
 
   public create(

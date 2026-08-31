@@ -102,6 +102,12 @@ Only one nonterminal Discussion may exist per Task. Independent Tasks in the
 same Room may have active Discussions concurrently; their root Messages,
 member Runs, result anchors, and finalization remain within the owning Task.
 
+Discussion creation coordinates its root Message, initial budget, participants,
+first Wave and ordinary Runs in one managed immediate transaction. A rejected
+Task/execution admission or a failed initial Wave leaves no orphan root Message,
+partial Discussion or consumed budget. Notifications and external delivery occur
+only after commit; this boundary does not add execution authority to Discussion.
+
 ## Agent Run Report
 
 Runtime output contains a visible reply and optional structured evidence:

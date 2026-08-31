@@ -79,6 +79,19 @@ test("required questions block approval without losing an otherwise valid draft"
   assert.deepEqual(validateExecutionDecision(input.decision), input.decision);
 });
 
+test("source actions bind canonical Result evidence and cannot be compiled twice", () => {
+  const input = structuredClone(suite.cases.find((entry) => entry.name === "execution: valid source-action plan").instance);
+  const original = validateExecutionPlanDefinition(input);
+  const missing = structuredClone(input);
+  missing.decision.sources = missing.decision.sources.filter((source) => source.kind !== "result");
+  missing.decision.sourceRevisions = missing.decision.sourceRevisions.filter((pin) => pin.evidenceRefId !== "evidence_action0001");
+  reject(missing, "PLAN_SOURCE_ACTION_EVIDENCE_REQUIRED");
+  input.nodes[1].task.sourceAction = { ...input.nodes[0].task.sourceAction };
+  reject(input, "PLAN_DUPLICATE_SOURCE_ACTION");
+  input.nodes[1].task.sourceAction.nextActionKey = "next_review0001";
+  assert.notEqual(validateExecutionPlanDefinition(input).digest, original.digest);
+});
+
 const mutations = [
   ["duplicate nodes", "PLAN_DUPLICATE_NODE", (p) => p.nodes.push(structuredClone(p.nodes[0]))],
   ["duplicate edge IDs", "PLAN_DUPLICATE_EDGE", (p) => p.edges.push(structuredClone(p.edges[0]))],

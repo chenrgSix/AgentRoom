@@ -140,6 +140,13 @@ export class DiscussionOrchestrator {
       policy?: Partial<DiscussionPolicy>;
     }
   ): DiscussionMutationResult {
+    return this.repository.atomic(() => this.createWithinTransaction(principal, input));
+  }
+
+  private createWithinTransaction(
+    principal: WebPrincipal,
+    input: Parameters<DiscussionOrchestrator["create"]>[1]
+  ): DiscussionMutationResult {
     const now = this.clock();
     const member = this.auth.requireRoomMember(principal, input.roomId);
     const goal = input.goal.trim();

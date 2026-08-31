@@ -188,6 +188,7 @@ export interface PurpleTask {
   goal?:                 string;
   mode:                  Mode;
   ownerMemberId?:        string;
+  sourceAction?:         PurpleSourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -203,6 +204,11 @@ export interface PurpleCriterion {
 }
 
 export type Mode = "new" | "existing";
+
+export interface PurpleSourceAction {
+  nextActionKey: string;
+  resultId:      string;
+}
 
 export interface PurpleVerificationProfile {
   digest:    string;
@@ -261,18 +267,18 @@ export interface ExecutionDecisionSourceSnapshotSource {
 
 export interface ExecutionPlanPage {
   nextAfterPlanId: null | string;
-  plans:           Plan[];
+  plans:           PlanElement[];
 }
 
-export interface Plan {
-  compiledTasks:   PlanCompiledTask[];
+export interface PlanElement {
+  compiledTasks:   PurpleCompiledTask[];
   controlRevision: number;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
    */
   createdAt:     string;
-  current:       PlanCurrent;
+  current:       PurpleCurrent;
   ownerMemberId: string;
   planId:        string;
   roomId:        string;
@@ -285,7 +291,7 @@ export interface Plan {
   updatedAt: string;
 }
 
-export interface PlanCompiledTask {
+export interface PurpleCompiledTask {
   criteriaRevision:   number;
   definitionRevision: number;
   nodeKey:            string;
@@ -293,7 +299,7 @@ export interface PlanCompiledTask {
   taskRevision:       number;
 }
 
-export interface PlanCurrent {
+export interface PurpleCurrent {
   author: FluffyAuthor;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -440,6 +446,7 @@ export interface FluffyTask {
   goal?:                 string;
   mode:                  Mode;
   ownerMemberId?:        string;
+  sourceAction?:         FluffySourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -452,6 +459,11 @@ export interface FluffyCriterion {
   description:  string;
   ordinal:      number;
   required:     boolean;
+}
+
+export interface FluffySourceAction {
+  nextActionKey: string;
+  resultId:      string;
 }
 
 export interface FluffyVerificationProfile {
@@ -632,6 +644,7 @@ export interface TentacledTask {
   goal?:                 string;
   mode:                  Mode;
   ownerMemberId?:        string;
+  sourceAction?:         TentacledSourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -644,6 +657,11 @@ export interface TentacledCriterion {
   description:  string;
   ordinal:      number;
   required:     boolean;
+}
+
+export interface TentacledSourceAction {
+  nextActionKey: string;
+  resultId:      string;
 }
 
 export interface TentacledVerificationProfile {
@@ -890,6 +908,7 @@ export interface StickyTask {
   goal?:                 string;
   mode:                  Mode;
   ownerMemberId?:        string;
+  sourceAction?:         StickySourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -902,6 +921,11 @@ export interface StickyCriterion {
   description:  string;
   ordinal:      number;
   required:     boolean;
+}
+
+export interface StickySourceAction {
+  nextActionKey: string;
+  resultId:      string;
 }
 
 export interface StickyVerificationProfile {
@@ -1060,6 +1084,7 @@ export interface IndigoTask {
   goal?:                 string;
   mode:                  Mode;
   ownerMemberId?:        string;
+  sourceAction?:         IndigoSourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -1072,6 +1097,11 @@ export interface IndigoCriterion {
   description:  string;
   ordinal:      number;
   required:     boolean;
+}
+
+export interface IndigoSourceAction {
+  nextActionKey: string;
+  resultId:      string;
 }
 
 export interface IndigoVerificationProfile {
@@ -1231,6 +1261,7 @@ export interface IndecentTask {
   goal?:                 string;
   mode:                  Mode;
   ownerMemberId?:        string;
+  sourceAction?:         IndecentSourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -1243,6 +1274,11 @@ export interface IndecentCriterion {
   description:  string;
   ordinal:      number;
   required:     boolean;
+}
+
+export interface IndecentSourceAction {
+  nextActionKey: string;
+  resultId:      string;
 }
 
 export interface IndecentVerificationProfile {
@@ -1282,31 +1318,108 @@ export interface ExecutionPlanApprovalCommand {
 
 export type DecisionEnum = "approved" | "rejected";
 
-export interface ExecutionPlanControlCommand {
-  action:                  Action;
-  expectedControlRevision: number;
-  operationId:             string;
-  reason:                  string;
+export interface ExecutionPlanApprovalRecord {
+  compiledTasks: ExecutionPlanApprovalRecordCompiledTask[];
+  decision:      DecisionEnum;
+  digest:        string;
+  operationId:   string;
+  planId:        string;
+  reason:        string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  reviewedAt:             string;
+  reviewedByMemberId:     string;
+  revision:               number;
+  rootTaskRevisionAfter:  number;
+  rootTaskRevisionBefore: number;
 }
 
-export type Action = "pause" | "resume" | "cancel";
+export interface ExecutionPlanApprovalRecordCompiledTask {
+  criteriaRevision:   number;
+  definitionRevision: number;
+  nodeKey:            string;
+  taskId:             string;
+  taskRevision:       number;
+}
 
-export interface ExecutionPlanRevision {
-  author: ExecutionPlanRevisionAuthor;
+export interface ExecutionPlanApprovalReceipt {
+  approval: ExecutionPlanApprovalReceiptApproval;
+  plan:     ExecutionPlanApprovalReceiptPlan;
+}
+
+export interface ExecutionPlanApprovalReceiptApproval {
+  compiledTasks: FluffyCompiledTask[];
+  decision:      DecisionEnum;
+  digest:        string;
+  operationId:   string;
+  planId:        string;
+  reason:        string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  reviewedAt:             string;
+  reviewedByMemberId:     string;
+  revision:               number;
+  rootTaskRevisionAfter:  number;
+  rootTaskRevisionBefore: number;
+}
+
+export interface FluffyCompiledTask {
+  criteriaRevision:   number;
+  definitionRevision: number;
+  nodeKey:            string;
+  taskId:             string;
+  taskRevision:       number;
+}
+
+export interface ExecutionPlanApprovalReceiptPlan {
+  compiledTasks:   TentacledCompiledTask[];
+  controlRevision: number;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:     string;
+  current:       FluffyCurrent;
+  ownerMemberId: string;
+  planId:        string;
+  roomId:        string;
+  rootTaskId:    string;
+  state:         State;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  updatedAt: string;
+}
+
+export interface TentacledCompiledTask {
+  criteriaRevision:   number;
+  definitionRevision: number;
+  nodeKey:            string;
+  taskId:             string;
+  taskRevision:       number;
+}
+
+export interface FluffyCurrent {
+  author: TentacledAuthor;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
    */
   createdAt:  string;
   decisionId: string;
-  definition: ExecutionPlanRevisionDefinition;
+  definition: TentacledDefinition;
   digest:     string;
   planId:     string;
   proposalId: string;
   revision:   number;
 }
 
-export interface ExecutionPlanRevisionAuthor {
+export interface TentacledAuthor {
   kind:          AuthorKind;
   memberId?:     string;
   agentId?:      string;
@@ -1314,7 +1427,7 @@ export interface ExecutionPlanRevisionAuthor {
   discussionId?: string;
 }
 
-export interface ExecutionPlanRevisionDefinition {
+export interface TentacledDefinition {
   decision:       IndecentDecision;
   edges:          IndecentEdge[];
   externalInputs: IndecentExternalInput[];
@@ -1438,6 +1551,7 @@ export interface HilariousTask {
   goal?:                 string;
   mode:                  Mode;
   ownerMemberId?:        string;
+  sourceAction?:         HilariousSourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -1450,6 +1564,11 @@ export interface HilariousCriterion {
   description:  string;
   ordinal:      number;
   required:     boolean;
+}
+
+export interface HilariousSourceAction {
+  nextActionKey: string;
+  resultId:      string;
 }
 
 export interface HilariousVerificationProfile {
@@ -1478,18 +1597,70 @@ export interface HilariousIntegrationTarget {
   targetRef:      string;
 }
 
-export interface ExecutionAgentPlanProposalCommand {
-  command: Command;
-  runId:   string;
+export interface ExecutionPlanApprovalPage {
+  approvals:         ApprovalElement[];
+  nextAfterRevision: number | null;
 }
 
-export interface Command {
-  definition:               CommandDefinition;
-  expectedRootTaskRevision: number;
-  operationId:              string;
+export interface ApprovalElement {
+  compiledTasks: StickyCompiledTask[];
+  decision:      DecisionEnum;
+  digest:        string;
+  operationId:   string;
+  planId:        string;
+  reason:        string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  reviewedAt:             string;
+  reviewedByMemberId:     string;
+  revision:               number;
+  rootTaskRevisionAfter:  number;
+  rootTaskRevisionBefore: number;
 }
 
-export interface CommandDefinition {
+export interface StickyCompiledTask {
+  criteriaRevision:   number;
+  definitionRevision: number;
+  nodeKey:            string;
+  taskId:             string;
+  taskRevision:       number;
+}
+
+export interface ExecutionPlanControlCommand {
+  action:                  Action;
+  expectedControlRevision: number;
+  operationId:             string;
+  reason:                  string;
+}
+
+export type Action = "pause" | "resume" | "cancel";
+
+export interface ExecutionPlanRevision {
+  author: ExecutionPlanRevisionAuthor;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:  string;
+  decisionId: string;
+  definition: ExecutionPlanRevisionDefinition;
+  digest:     string;
+  planId:     string;
+  proposalId: string;
+  revision:   number;
+}
+
+export interface ExecutionPlanRevisionAuthor {
+  kind:          AuthorKind;
+  memberId?:     string;
+  agentId?:      string;
+  runId?:        string;
+  discussionId?: string;
+}
+
+export interface ExecutionPlanRevisionDefinition {
   decision:       HilariousDecision;
   edges:          HilariousEdge[];
   externalInputs: HilariousExternalInput[];
@@ -1613,6 +1784,7 @@ export interface AmbitiousTask {
   goal?:                 string;
   mode:                  Mode;
   ownerMemberId?:        string;
+  sourceAction?:         AmbitiousSourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -1625,6 +1797,11 @@ export interface AmbitiousCriterion {
   description:  string;
   ordinal:      number;
   required:     boolean;
+}
+
+export interface AmbitiousSourceAction {
+  nextActionKey: string;
+  resultId:      string;
 }
 
 export interface AmbitiousVerificationProfile {
@@ -1648,6 +1825,187 @@ export interface Budget3 {
 }
 
 export interface AmbitiousIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface ExecutionAgentPlanProposalCommand {
+  command: Command;
+  runId:   string;
+}
+
+export interface Command {
+  definition:               CommandDefinition;
+  expectedRootTaskRevision: number;
+  operationId:              string;
+}
+
+export interface CommandDefinition {
+  decision:       AmbitiousDecision;
+  edges:          AmbitiousEdge[];
+  externalInputs: AmbitiousExternalInput[];
+  nodes:          [AmbitiousNode, ...AmbitiousNode[]];
+  policy:         AmbitiousPolicy;
+  rootTaskId:     string;
+  schemaVersion:  SchemaVersion;
+  title:          string;
+}
+
+export interface AmbitiousDecision {
+  items:               CunningItem[];
+  sourceRevisions:     [CunningSourceRevision, ...CunningSourceRevision[]];
+  sources:             [CunningSource, ...CunningSource[]];
+  summary:             string;
+  unresolvedQuestions: CunningUnresolvedQuestion[];
+}
+
+export interface CunningItem {
+  itemKey:   string;
+  statement: string;
+}
+
+export interface CunningSourceRevision {
+  evidenceRefId: string;
+  revision:      number;
+}
+
+export interface CunningSource {
+  artifactId?:   string;
+  evidenceRefId: string;
+  kind:          SourceKind;
+  runId?:        string;
+  sequence?:     number;
+  messageId?:    string;
+  memoryId?:     string;
+  discussionId?: string;
+  resultId?:     string;
+}
+
+export interface CunningUnresolvedQuestion {
+  questionKey: string;
+  required:    boolean;
+  text:        string;
+}
+
+export interface AmbitiousEdge {
+  bindings:    CunningBinding[];
+  edgeKey:     string;
+  fromNodeKey: string;
+  gate:        Gate;
+  toNodeKey:   string;
+}
+
+export interface CunningBinding {
+  inputSlot:  string;
+  outputSlot: string;
+}
+
+export interface AmbitiousExternalInput {
+  artifactId:       string;
+  artifactRevision: number;
+  contentDigest:    string;
+  inputSlot:        string;
+  kind:             ExternalInputKind;
+  nodeKey:          string;
+  sourceResultId:   string;
+  sourceTaskId:     string;
+}
+
+export interface AmbitiousNode {
+  agentId:              string;
+  budget:               Budget4;
+  inputs:               CunningInput[];
+  kind:                 NodeKind;
+  nodeKey:              string;
+  outputs:              [CunningOutput, ...CunningOutput[]];
+  repository:           CunningRepository;
+  required:             boolean;
+  scope:                CunningScope;
+  task:                 CunningTask;
+  verificationProfiles: CunningVerificationProfile[];
+}
+
+export interface Budget4 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface CunningInput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface CunningOutput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface CunningRepository {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface CunningScope {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface CunningTask {
+  criteria?:             [CunningCriterion, ...CunningCriterion[]];
+  goal?:                 string;
+  mode:                  Mode;
+  ownerMemberId?:        string;
+  sourceAction?:         CunningSourceAction;
+  title?:                string;
+  criteriaRevision?:     number;
+  definitionRevision?:   number;
+  expectedTaskRevision?: number;
+  taskId?:               string;
+}
+
+export interface CunningCriterion {
+  criterionKey: string;
+  description:  string;
+  ordinal:      number;
+  required:     boolean;
+}
+
+export interface CunningSourceAction {
+  nextActionKey: string;
+  resultId:      string;
+}
+
+export interface CunningVerificationProfile {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface AmbitiousPolicy {
+  budget:                          Budget5;
+  integration:                     Integration;
+  integrationTargets:              CunningIntegrationTarget[];
+  maxConcurrency:                  number;
+  requireHumanIntegrationApproval: boolean;
+}
+
+export interface Budget5 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface CunningIntegrationTarget {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;

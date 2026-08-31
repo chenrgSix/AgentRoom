@@ -312,6 +312,22 @@ export class AgentTaskRepository {
     `).get(taskId, taskId, taskId));
   }
 
+  public fenceRevision(input: {
+    taskId: string; operationId: string; expectedTaskRevision: number; now: string;
+  }): AgentTaskRecord {
+    this.database.transaction(() => {
+      if (this.isOperationReplay(input.operationId, input.taskId)) return;
+      const current = this.requireRevision(input.taskId, input.expectedTaskRevision);
+      const result = this.database.prepare(`
+        UPDATE agent_tasks SET task_revision = task_revision + 1, updated_at = ?
+        WHERE task_id = ? AND task_revision = ?
+      `).run(input.now, input.taskId, input.expectedTaskRevision);
+      if (result.changes !== 1) throw new Error("Task revision conflict");
+      this.recordOperation(input.operationId, input.taskId, current.taskRevision + 1, input.now);
+    }).immediate();
+    return this.get(input.taskId)!;
+  }
+
   public hasUnacknowledgedAmbiguity(taskId: string): boolean {
     return Boolean(this.database.prepare(`
       SELECT 1 FROM runs run

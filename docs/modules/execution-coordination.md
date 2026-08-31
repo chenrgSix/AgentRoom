@@ -73,6 +73,37 @@ New tasks belong to the root Room, have explicit human Owners and assignments,
 and use `accepted_result_required` for governed delivery. Existing tasks must
 have equivalent completion policy and compatible current criteria.
 
+Human review uses `POST /api/execution-plans/:planId/approvals`; bounded history
+uses `GET` on the same path with `afterRevision` and `limit`. One immutable
+approved or rejected decision exists per revision. Rejection leaves the plan a
+draft with no compiled Tasks or root revision advance; another decision requires
+a new plan revision. Approval increments the root Task revision exactly once
+without changing its definition, criteria or lifecycle, and advances the plan's
+control revision. Both decisions retain an exact response-loss receipt bound to
+the actor, operation identity and command; current authorization precedes replay.
+
+New compiled Tasks begin as ordinary `draft` Tasks. Existing Tasks retain their
+identity, parent and canonical definition; they require the caller's Task/Team
+Owner authority and cannot have active work, unacknowledged unknown outcomes or
+another active plan claim. A root also cannot belong to another active plan.
+Optional `task.sourceAction` binds one accepted root Result's exact next-action
+key and goal through the canonical Result-to-child provenance port. It does not
+copy acceptance. Canonical Task text must match the approved blueprint; trimming
+must not silently change reviewed content.
+
+Immutable compilation snapshots and mutable current Task claims are separate.
+Definition, owner, assignment, workspace or budget changes pause admission and
+append a drift event. Human scheduling pause/cancellation also pauses the plan;
+historical approval receipts and Task pins remain unchanged. Completion-policy
+downgrade cannot remove an active node's execution governance.
+
+Until RUN-018, EXEC-004 and VER-001 establish governed admission and verification,
+the approval prerequisite fails closed for new Runs and accepted Results/Task
+completion on governed nodes. This is not a usable execution scheduler. Those
+later tasks must replace the prerequisite fences with exact manifest/intent and
+verified-receipt checks before claiming the complete product flow. Approval
+alone never grants local filesystem or Runtime capability.
+
 An approved plan has no back door through ordinary Message, handoff, Discussion,
 manual MCP, retry, Result completion or compatibility PATCH APIs. All new work
 against an actively governed node passes the same execution admission port.

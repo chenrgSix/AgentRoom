@@ -70,7 +70,11 @@ export class ExecutionPlanRepository {
       current,
       controlRevision: row.control_revision,
       state: row.state,
-      compiledTasks: [],
+      compiledTasks: (this.database.prepare(`
+        SELECT node_key AS nodeKey, task_id AS taskId, task_revision AS taskRevision,
+          definition_revision AS definitionRevision, criteria_revision AS criteriaRevision
+        FROM execution_plan_nodes WHERE plan_id = ? AND revision = ? ORDER BY node_key
+      `).all(planId, row.current_revision)) as ExecutionPlanProjection["compiledTasks"],
       createdAt: row.created_at,
       updatedAt: row.updated_at
     };
@@ -146,6 +150,9 @@ export class ExecutionPlanRepository {
   }
 
   public replay(operationId: string, digest: string): ExecutionPlanProjection | undefined {
+    if (this.database.prepare("SELECT 1 FROM execution_plan_approvals WHERE operation_id = ?").get(operationId)) {
+      throw new ExecutionError("EXECUTION_OPERATION_CONFLICT", 409);
+    }
     const row = this.database.prepare(`
       SELECT request_digest, response_json FROM execution_plan_operations WHERE operation_id = ?
     `).get(operationId) as { request_digest: string; response_json: string } | undefined;

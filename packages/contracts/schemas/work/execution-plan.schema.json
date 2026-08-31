@@ -232,6 +232,15 @@
         "criteria"
       ],
       "properties": {
+        "sourceAction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["resultId", "nextActionKey"],
+          "properties": {
+            "resultId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/resultId" },
+            "nextActionKey": { "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/nextActionKey" }
+          }
+        },
         "mode": {
           "const": "new"
         },
@@ -759,6 +768,42 @@
           "minLength": 1,
           "maxLength": 2000
         }
+      }
+    },
+    "approvalRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["operationId", "planId", "revision", "digest", "decision", "reason", "reviewedByMemberId", "rootTaskRevisionBefore", "rootTaskRevisionAfter", "compiledTasks", "reviewedAt"],
+      "properties": {
+        "operationId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId" },
+        "planId": { "$ref": "#/$defs/planId" },
+        "revision": { "$ref": "#/$defs/revision" },
+        "digest": { "$ref": "#/$defs/digest" },
+        "decision": { "enum": ["approved", "rejected"] },
+        "reason": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "reviewedByMemberId": { "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId" },
+        "rootTaskRevisionBefore": { "$ref": "#/$defs/revision" },
+        "rootTaskRevisionAfter": { "$ref": "#/$defs/revision" },
+        "compiledTasks": { "type": "array", "maxItems": 64, "items": { "$ref": "#/$defs/compiledTask" } },
+        "reviewedAt": { "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json" }
+      }
+    },
+    "approvalReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["plan", "approval"],
+      "properties": {
+        "plan": { "$ref": "#/$defs/planProjection" },
+        "approval": { "$ref": "#/$defs/approvalRecord" }
+      }
+    },
+    "approvalPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["approvals", "nextAfterRevision"],
+      "properties": {
+        "approvals": { "type": "array", "maxItems": 50, "items": { "$ref": "#/$defs/approvalRecord" } },
+        "nextAfterRevision": { "oneOf": [{ "$ref": "#/$defs/revision" }, { "type": "null" }] }
       }
     },
     "controlCommand": {

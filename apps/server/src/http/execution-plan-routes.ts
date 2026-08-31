@@ -67,6 +67,21 @@ export function registerExecutionPlanRoutes({
       principal(request), request.params.decisionId
     ))
   );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/approvals", options,
+    async (request) => execute(() => executionPlans.review(
+      principal(request), request.params.planId, request.body, clock()
+    ))
+  );
+  app.get<{
+    Params: { planId: string }; Querystring: { afterRevision?: string; limit?: string }
+  }>(
+    "/api/execution-plans/:planId/approvals", options,
+    async (request) => execute(() => executionPlans.approvalHistory(
+      principal(request), request.params.planId, integer(request.query.afterRevision, 0),
+      integer(request.query.limit, 20)
+    ))
+  );
   app.get<{ Params: { decisionId: string } }>(
     "/api/execution-decisions/:decisionId/sources", options,
     async (request) => execute(() => executionPlans.decisionSources(

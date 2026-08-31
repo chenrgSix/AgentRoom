@@ -452,6 +452,28 @@ export class AgentTaskService {
     return task;
   }
 
+  // Internal coordination port: approval advances the canonical Task revision
+  // without pretending to edit its goal, criteria, lifecycle or permissions.
+  public recordExecutionApproval(
+    principal: WebPrincipal,
+    taskId: string,
+    input: { operationId: string; expectedTaskRevision: number },
+    now: string
+  ): AgentTaskRecord {
+    const task = this.requireTask(taskId);
+    this.requireOwner(principal, task);
+    if (task.isDefault || terminalLifecycleStates.has(task.lifecycleState)) {
+      throw new Error("Execution approval requires a non-terminal ordinary Task");
+    }
+    return this.tasks.fenceRevision({
+      taskId,
+      operationId: boundedText(input.operationId, "Operation ID", 140),
+      expectedTaskRevision: positiveInteger(input.expectedTaskRevision,
+        "Expected Task revision", Number.MAX_SAFE_INTEGER),
+      now
+    });
+  }
+
   private requireTask(taskId: string): AgentTaskRecord {
     const task = this.tasks.get(taskId);
     if (!task) throw new Error(`Task not found: ${taskId}`);
