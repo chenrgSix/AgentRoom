@@ -523,7 +523,7 @@ Release is included.
 | ROOM-008 | DONE | Limit member-aware onboarding to selected Rooms and default Agent owners into explicit invitations | SEC-013, ROOM-007 | Server selected-roster/removal/republication coverage and real Web-to-Server Agent owner selection, explicit opt-out and persisted Agent-only roster regression pass |
 | BRG-070 | DONE | Open authorized Team and Room entry from the local client | SEC-013, BRG-069 | Full Go tests/vet, focused race checks, 56 embedded UI tests, independent-proof/downgrade/storage/Runtime/redirect/late-switch regressions, native macOS desktop tests and Windows desktop cross-build pass; actual Go entry verified in QA-051 cross-process scenario |
 | WEB-062 | DONE | Present member-aware pairing and safe client browser entry | SEC-013, ROOM-008, WEB-061 | Real Server-backed identity/confirmation/cancel/revocation/Room tests, frozen pairing intent, production build and isolated desktop/390px browser acceptance pass; ordinary-member controls and fragment removal verified |
-| QA-051 | ACTIVE | Verify client owner collaboration closure | CON-019, SEC-013, ROOM-008, BRG-070, WEB-062 | Full relevant suites, cross-process entry, builds/contracts/docs and bounded browser evidence |
+| QA-051 | DONE | Verify client owner collaboration closure | CON-019, SEC-013, ROOM-008, BRG-070, WEB-062 | All workspace suites, seven deterministic E2Es, Go/vet/focused race, native macOS tests, Windows cross-build, contracts/builds/docs and isolated browser acceptance pass; evidence and platform/release limits in docs/acceptance/qa-051-client-owner-entry.md |
 
 ## Deferred Beyond MVP
 

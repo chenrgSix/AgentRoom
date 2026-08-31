@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmod, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -39,9 +39,10 @@ async function waitFor<T>(
 
 function captureProcess(
   executable: string,
-  args: string[]
+  args: string[],
+  env?: NodeJS.ProcessEnv
 ): ProcessCapture {
-  const child = spawn(executable, args, { stdio: ["ignore", "pipe", "pipe"] });
+  const child = spawn(executable, args, { stdio: ["ignore", "pipe", "pipe"], ...(env ? { env } : {}) });
   let stdout = "";
   let stderr = "";
   child.stdout?.on("data", (source: Buffer) => {
@@ -114,7 +115,8 @@ async function stopProcess(
 
 async function startConsole(
   bridgeBinary: string,
-  configPath: string
+  configPath: string,
+  env?: NodeJS.ProcessEnv
 ): Promise<ProcessCapture & { baseUrl: string; token: string }> {
   const capture = captureProcess(bridgeBinary, [
     "console",
@@ -123,7 +125,7 @@ async function startConsole(
     "--listen",
     "127.0.0.1:0",
     "--no-open"
-  ]);
+  ], env);
   const consoleUrl = await waitFor(async () => {
     const match = capture.stdout().match(/Bridge Console: (http:\/\/[^\s]+)/u);
     return match?.[1];
@@ -553,5 +555,89 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
     if (pairingProcess) await stopProcess(pairingProcess, "SIGTERM");
     if (consoleProcess) await stopProcess(consoleProcess, "SIGTERM");
     await app.close();
+  }
+});
+
+test("member pairing opens a one-use Room entry through the real Go Console", { timeout: 120_000 }, async () => {
+  const directory = await mkdtemp(path.join(os.tmpdir(), "convenewire-client-entry-e2e-"));
+  const app = await createServerApp({ databasePath: path.join(directory, "central.sqlite") });
+  let pairingProcess: ProcessCapture | undefined;
+  let consoleProcess: Awaited<ReturnType<typeof startConsole>> | undefined;
+  try {
+    const origin = await app.listen({ host: "127.0.0.1", port: 0 });
+    const boot = (await app.inject({ method: "POST", url: "/api/bootstrap", payload: { displayName: "Admin" } })).json();
+    const headers = { authorization: `Bearer ${boot.session.token as string}` };
+    const createdTeam = (await app.inject({ method: "POST", url: "/api/teams", headers, payload: { name: "Client entry E2E" } })).json();
+    const teamId = createdTeam.team.teamId as string;
+    const room = (await app.inject({ method: "POST", url: `/api/teams/${teamId}/rooms`, headers, payload: { name: "Shared work" } })).json();
+    const restricted = (await app.inject({ method: "POST", url: `/api/teams/${teamId}/rooms`, headers, payload: { name: "Other work" } })).json();
+    const binary = path.join(directory, "convenewire-bridge");
+    await execFileAsync(process.env.CONVENE_WIRE_GO_BIN ?? "go", ["build", "-o", binary, "./cmd/convenewire-bridge"], { cwd: path.join(repositoryRoot, "bridge") });
+    const dataDir = path.join(directory, "data"), configPath = path.join(directory, "bridge.json");
+    await writeFile(configPath, JSON.stringify({ schemaVersion: 5, serverUrl: origin, deviceName: "Client laptop", dataDir,
+      agents: [{ name: "Client Builder", role: "Builder", adapter: "generic", runtimeKind: "generic", command: ["/usr/bin/true"], workspace: directory, envAllowlist: [] }] }));
+    const claimSecret = randomBytes(32).toString("base64url");
+    const created = await app.inject({ method: "POST", url: `/api/teams/${teamId}/device-pairing-sessions`, headers,
+      payload: { operationId: "op_cliententrycreate123", claimSecret, memberBinding: { displayName: "Actual person", roomIds: [room.roomId] } } });
+    assert.equal(created.statusCode, 200, created.body);
+    const pairingSessionId = created.json().pairingSessionId as string;
+    const link = `convenewire://pair-device?${new URLSearchParams({ origin, pairingSessionId, expiresAt: created.json().expiresAt as string })}#${new URLSearchParams({ claimSecret, memberAccess: "1" })}`;
+    pairingProcess = captureProcess(binary, ["pair-device", "--config", configPath, "--link", link]);
+    await waitFor(async () => {
+      const projection = (await app.inject({ method: "GET", url: `/api/teams/${teamId}/device-pairing-sessions/${pairingSessionId}`, headers })).json();
+      return projection.state === "claimed" ? true : undefined;
+    });
+    const approval = await app.inject({ method: "POST", url: `/api/teams/${teamId}/device-pairing-sessions/${pairingSessionId}/approve`, headers,
+      payload: { operationId: "op_cliententryapprove123", expectedState: "claimed" } });
+    assert.equal(approval.statusCode, 200, approval.body);
+    await waitForExit(pairingProcess);
+    const deviceSource = await readFile(path.join(dataDir, "device-credential.json"), "utf8");
+    const device = JSON.parse(deviceSource) as { token: string; ownerMemberId: string; deviceId: string };
+    const access = JSON.parse(await readFile(path.join(dataDir, "client-member-access.json"), "utf8")) as { secret: string; memberId: string };
+    assert.equal(access.memberId, device.ownerMemberId);
+    assert.notEqual(access.memberId, createdTeam.owner.memberId);
+    assert.notEqual(access.secret, device.token);
+    assert.equal(deviceSource.includes(access.secret), false);
+    assert.equal((await stat(path.join(dataDir, "client-member-access.json"))).mode & 0o777, 0o600);
+    // Replace only OS browser dispatch; pairing, Console, Central and claims are real.
+    const binDir = path.join(directory, "bin"), capturePath = path.join(directory, "opened-url");
+    await mkdir(binDir);
+    for (const name of ["open", "xdg-open"]) {
+      const file = path.join(binDir, name);
+      await writeFile(file, '#!/bin/sh\nprintf "%s" "$1" > "$CONVENE_WIRE_ENTRY_CAPTURE"\n'); await chmod(file, 0o700);
+    }
+    consoleProcess = await startConsole(binary, configPath, { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`, CONVENE_WIRE_ENTRY_CAPTURE: capturePath });
+    const state = await consoleRequest<{ clientAccessAvailable: boolean }>(consoleProcess, "/api/state");
+    assert.equal(state.clientAccessAvailable, true);
+    const identity = await consoleRequest<{ memberId: string; rooms: Array<{ roomId: string }> }>(consoleProcess, "/api/client-access");
+    assert.equal(identity.memberId, access.memberId);
+    assert.deepEqual(identity.rooms.map((r) => r.roomId), [room.roomId]);
+    const opened = await consoleRequest(consoleProcess, "/api/client-access/open", { method: "POST", body: JSON.stringify({ roomId: room.roomId }) });
+    assert.deepEqual(opened, { status: "opened" });
+    const target = await waitFor(async () => { try { const value = await readFile(capturePath, "utf8"); return value ? new URL(value) : undefined; } catch { return undefined; } });
+    assert.equal(target.origin, origin); assert.equal(target.search, "");
+    const ticket = new URLSearchParams(target.hash.slice(1)).get("clientEntry"); assert.ok(ticket);
+    const claimed = await app.inject({ method: "POST", url: "/api/auth/client-entry/claim", headers: { origin }, payload: { ticket } });
+    assert.equal(claimed.statusCode, 200, claimed.body);
+    assert.equal(claimed.json().user.displayName, "Actual person");
+    assert.equal(claimed.json().identity.roomId, room.roomId);
+    const sessionHeaders = { authorization: `Bearer ${claimed.json().session.token as string}` };
+    assert.equal((await app.inject({ method: "GET", url: `/api/rooms/${restricted.roomId}/messages`, headers: sessionHeaders })).statusCode, 403);
+    const message = await app.inject({ method: "POST", url: `/api/rooms/${room.roomId}/messages`, headers: sessionHeaders, payload: { content: "Client owner is present" } });
+    assert.equal(message.statusCode, 200, message.body);
+    assert.equal((await app.inject({ method: "POST", url: "/api/auth/client-entry/claim", headers: { origin }, payload: { ticket } })).statusCode, 401);
+    await app.inject({ method: "DELETE", url: `/api/teams/${teamId}/devices/${device.deviceId}/client-access`, headers });
+    assert.equal((await app.inject({ method: "GET", url: "/api/teams", headers: sessionHeaders })).statusCode, 401);
+    const revoked = await fetch(`${consoleProcess.baseUrl}/api/client-access`, { headers: { authorization: `Bearer ${consoleProcess.token}` } });
+    assert.equal(revoked.status, 502); await revoked.text();
+    for (const proof of [claimSecret, access.secret, device.token, ticket]) {
+      assert.equal(pairingProcess.stdout().includes(proof), false);
+      assert.equal(consoleProcess.stdout().includes(proof), false);
+    }
+  } finally {
+    for (const child of [pairingProcess, consoleProcess]) {
+      if (child && !await stopProcess(child, "SIGTERM")) await stopProcess(child, "SIGKILL");
+    }
+    await app.close(); await rm(directory, { recursive: true, force: true });
   }
 });
