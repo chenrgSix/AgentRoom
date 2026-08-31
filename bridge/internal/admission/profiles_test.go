@@ -116,6 +116,108 @@ func TestRuntimeProfileResolutionRejectsReferenceIdentityAndConfigurationDrift(t
 	}
 }
 
+func TestRuntimeProfileJustInTimeProbeRechecksExactPreparedWorkspace(t *testing.T) {
+	store, input := profileFixture(t)
+	view, err := store.registerCodex(context.Background(), input, profileNow, fixedProber(input.Spec.PermissionProfile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := execution.ExecutionGrantSummaryRuntimeProfile{ProfileID: view.Spec.ProfileID, Revision: 1, Digest: view.Digest}
+	calls := 0
+	prober := func(_ context.Context, probe localruntime.CodexLocalBoundaryProbe, now time.Time) (localruntime.CodexLocalBoundaryProbeResult, error) {
+		calls++
+		if probe.Workspace != input.Agent.Workspace || !strings.HasPrefix(probe.OutsideRoot, store.probeRoot+string(filepath.Separator)) ||
+			probe.OutsideRoot == probe.Workspace || probe.PermissionProfile != input.Spec.PermissionProfile ||
+			!reflect.DeepEqual(probe.Command, input.Agent.Command) || !reflect.DeepEqual(probe.Environment, []string{"HOME=/owner"}) {
+			t.Fatal("just-in-time probe changed its exact local inputs")
+		}
+		return successfulBoundary(input.Spec.PermissionProfile, now), nil
+	}
+	result, err := store.probeCodexRuntime(context.Background(), CodexRuntimeProbe{Reference: reference,
+		AgentID: view.Spec.AgentID, Agent: input.Agent, Workspace: input.Agent.Workspace}, profileNow.Add(time.Minute), prober)
+	if err != nil || result != view || calls != 1 {
+		t.Fatalf("result=%+v err=%v calls=%d", result, err, calls)
+	}
+	matches, err := filepath.Glob(filepath.Join(store.probeRoot, ".runtime-outside-*"))
+	if err != nil || len(matches) != 0 {
+		t.Fatalf("runtime probe residue=%v err=%v", matches, err)
+	}
+}
+
+func TestRuntimeProfileJustInTimeProbeRejectsStaleOrChangedAuthority(t *testing.T) {
+	store, input := profileFixture(t)
+	view, err := store.registerCodex(context.Background(), input, profileNow, fixedProber(input.Spec.PermissionProfile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reference := execution.ExecutionGrantSummaryRuntimeProfile{ProfileID: view.Spec.ProfileID, Revision: 1, Digest: view.Digest}
+	base := CodexRuntimeProbe{Reference: reference, AgentID: view.Spec.AgentID, Agent: input.Agent, Workspace: input.Agent.Workspace}
+	for name, change := range map[string]func(*CodexRuntimeProbe){
+		"revision":      func(value *CodexRuntimeProbe) { value.Reference.Revision = 2 },
+		"digest":        func(value *CodexRuntimeProbe) { value.Reference.Digest = strings.Repeat("f", 64) },
+		"agent":         func(value *CodexRuntimeProbe) { value.AgentID = "agent_profile0002" },
+		"configuration": func(value *CodexRuntimeProbe) { value.Agent.Command = append(value.Agent.Command, "--changed") },
+		"workspace":     func(value *CodexRuntimeProbe) { value.Workspace = "" },
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := base
+			candidate.Agent.Command = append([]string{}, base.Agent.Command...)
+			change(&candidate)
+			called := false
+			_, err := store.probeCodexRuntime(context.Background(), candidate, profileNow.Add(time.Minute), func(context.Context, localruntime.CodexLocalBoundaryProbe, time.Time) (localruntime.CodexLocalBoundaryProbeResult, error) {
+				called = true
+				return successfulBoundary(input.Spec.PermissionProfile, profileNow.Add(time.Minute)), nil
+			})
+			if err == nil || called {
+				t.Fatalf("stale authority error=%v called=%v", err, called)
+			}
+		})
+	}
+	if _, err := store.Revoke(view.Spec.ProfileID, 1, view.Digest, profileNow.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	called := false
+	if _, err := store.probeCodexRuntime(context.Background(), base, profileNow.Add(2*time.Minute), func(context.Context, localruntime.CodexLocalBoundaryProbe, time.Time) (localruntime.CodexLocalBoundaryProbeResult, error) {
+		called = true
+		return successfulBoundary(input.Spec.PermissionProfile, profileNow.Add(2*time.Minute)), nil
+	}); !errors.Is(err, ErrProfileRevoked) || called {
+		t.Fatalf("revoked error=%v called=%v", err, called)
+	}
+}
+
+func TestRuntimeProfileJustInTimeProbeRejectsPhysicalDriftAndReplacement(t *testing.T) {
+	store, input := profileFixture(t)
+	view, err := store.registerCodex(context.Background(), input, profileNow, fixedProber(input.Spec.PermissionProfile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	probe := CodexRuntimeProbe{Reference: execution.ExecutionGrantSummaryRuntimeProfile{ProfileID: view.Spec.ProfileID, Revision: 1, Digest: view.Digest},
+		AgentID: view.Spec.AgentID, Agent: input.Agent, Workspace: input.Agent.Workspace}
+	if _, err := store.probeCodexRuntime(context.Background(), probe, profileNow.Add(time.Minute), func(_ context.Context, _ localruntime.CodexLocalBoundaryProbe, now time.Time) (localruntime.CodexLocalBoundaryProbeResult, error) {
+		result := successfulBoundary(input.Spec.PermissionProfile, now)
+		result.ExecutableDigest = strings.Repeat("e", 64)
+		return result, nil
+	}); !errors.Is(err, ErrProfileConflict) {
+		t.Fatalf("physical drift error=%v", err)
+	}
+	if matches, err := filepath.Glob(filepath.Join(store.probeRoot, ".runtime-outside-*")); err != nil || len(matches) != 0 {
+		t.Fatalf("denied runtime probe residue=%v err=%v", matches, err)
+	}
+	_, err = store.probeCodexRuntime(context.Background(), probe, profileNow.Add(2*time.Minute), func(_ context.Context, _ localruntime.CodexLocalBoundaryProbe, now time.Time) (localruntime.CodexLocalBoundaryProbeResult, error) {
+		moved := store.root + ".jit-replaced"
+		if err := os.Rename(store.root, moved); err != nil {
+			t.Skipf("directory replacement is unavailable on this platform: %v", err)
+		}
+		if err := os.Mkdir(store.root, 0o700); err != nil {
+			t.Fatal(err)
+		}
+		return successfulBoundary(input.Spec.PermissionProfile, now), nil
+	})
+	if !errors.Is(err, ErrProfileChanged) {
+		t.Fatalf("replacement error=%v", err)
+	}
+}
+
 func TestRuntimeProfileReplayRejectsBoundaryOrIntentDrift(t *testing.T) {
 	store, input := profileFixture(t)
 	prober := fixedProber(input.Spec.PermissionProfile)

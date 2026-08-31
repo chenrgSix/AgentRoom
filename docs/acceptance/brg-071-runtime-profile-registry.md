@@ -38,6 +38,11 @@ BRG-071, advertise a governed capability or start a Runtime.
   configuration before retaining consent. A missing/revoked/stale profile,
   Agent mismatch or configuration drift rejects. Nonempty verification profiles
   reject until VER-001 provides their independent registry and resolver.
+- `ProbeCodexRuntime` provides a transient just-in-time recheck for an exact
+  caller-derived prepared workspace. It creates its own private outside root,
+  resolves the same safe environment names, reruns the real physical detector,
+  requires the registered executable/profile/platform/boundaries to match,
+  removes the root and re-resolves current profile authority before returning.
 
 ## Review Resolutions
 
@@ -65,11 +70,12 @@ gate.
 A registration is durable historical evidence for one physical probe, not a
 bearer permit or current startup fact. Environment values can change without
 changing the names-only configuration digest, the executable can be replaced,
-and a previously valid boundary can regress. Therefore production admission must
-resolve the same profile again and rerun the physical probe against the exact
-prepared worktree while holding current owner grant, authoritative Run and write
-generation. It must recheck before startup and each effect, and cancellation or
-revocation must stop in-flight authority.
+and a previously valid boundary can regress. The new transient API now resolves
+and reruns that profile against an exact prepared workspace, but production
+admission must invoke it while holding current owner grant, authoritative Run and
+write generation. A durable start-intent/no-duplicate journal must still fence
+the gap before process invocation; authority must be rechecked before startup and
+each effect, and cancellation or revocation must stop in-flight authority.
 
 The current installed Codex on this host still fails outside filesystem denial,
 so no positive real-host profile record is claimed. The simulated App Server
@@ -87,9 +93,10 @@ production no-start fence.
   corruption, actual directory replacement, concurrent replay, offline
   revocation and no Run machinery.
 - CLI integration uses the real local boundary probe with a controlled App
-  Server test process. It proves a safe profile can register, a loopback escape
-  leaves no record, TaskGrant issuance requires the exact current profile and
-  unresolved verifier references fail closed. No model/provider turn runs.
+  Server test process. It proves a safe profile can register and re-probe a
+  separate prepared-worktree fixture, a loopback escape leaves no record,
+  TaskGrant issuance requires the exact current profile and unresolved verifier
+  references fail closed. No model/provider turn runs.
 - Full Bridge regression, vet, native CLI build/version, Windows/Linux CLI
   cross-builds, deterministic compatibility E2E, Markdown lint and whitespace
   results are recorded by the BRG-071 task row. Cross-builds do not establish

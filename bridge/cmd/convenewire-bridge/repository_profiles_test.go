@@ -3,10 +3,12 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,7 @@ import (
 	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 func TestRepositoryProfileCommandRequiresExactOwnerInputs(t *testing.T) {
@@ -33,6 +36,9 @@ func TestRepositoryProfileCommandRequiresExactOwnerInputs(t *testing.T) {
 }
 
 func TestRepositoryProfileCLIRegistersListsAndRevokesOnlyProvenBoundary(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("positive Codex boundary registration is native-macOS-only")
+	}
 	root, configPath, data, credential := repositoryProfileFixture(t, "safe")
 	now := time.Date(2026, 9, 1, 15, 0, 0, 0, time.UTC)
 	invoke := func(args ...string) (string, error) {
@@ -58,6 +64,32 @@ func TestRepositoryProfileCLIRegistersListsAndRevokesOnlyProvenBoundary(t *testi
 	if json.Unmarshal([]byte(first), &view) != nil || len(view.Digest) != 64 || view.Spec.Revision != 1 ||
 		view.FilesystemBoundary != admission.FilesystemBoundaryName || view.NetworkBoundary != admission.NetworkBoundaryName {
 		t.Fatalf("view=%s", first)
+	}
+	prepared := filepath.Join(root, "prepared-worktree")
+	if err := os.Mkdir(prepared, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	jit, err := func() (admission.RuntimeProfileView, error) {
+		session, err := openLocalOwner(configPath, true, func() time.Time { return now })
+		if err != nil {
+			return admission.RuntimeProfileView{}, err
+		}
+		defer session.Close()
+		profiles, err := admission.OpenProfileStore(session.Context, session.DataDir, session.ProfileOwner())
+		if err != nil {
+			return admission.RuntimeProfileView{}, err
+		}
+		defer profiles.Close()
+		agent, err := identity.LookupConfigured(session.DataDir, session.Config.Agents, view.Spec.AgentID)
+		if err != nil {
+			return admission.RuntimeProfileView{}, err
+		}
+		return profiles.ProbeCodexRuntime(context.Background(), admission.CodexRuntimeProbe{
+			Reference: executionProfileReference(view), AgentID: view.Spec.AgentID, Agent: agent, Workspace: prepared,
+		}, now.Add(time.Second))
+	}()
+	if err != nil || jit != view {
+		t.Fatalf("just-in-time profile=%+v err=%v", jit, err)
 	}
 	listed, err := invoke("profile", "list")
 	if err != nil || !strings.Contains(listed, view.Digest) {
@@ -103,7 +135,14 @@ func TestRepositoryProfileCLIRegistersListsAndRevokesOnlyProvenBoundary(t *testi
 	}
 }
 
+func executionProfileReference(view admission.RuntimeProfileView) execution.ExecutionGrantSummaryRuntimeProfile {
+	return execution.ExecutionGrantSummaryRuntimeProfile{ProfileID: view.Spec.ProfileID, Revision: view.Spec.Revision, Digest: view.Digest}
+}
+
 func TestRepositoryProfileCLIRejectsPhysicalEscapeWithoutRecord(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("Codex boundary escape fixture is native-macOS-only")
+	}
 	_, configPath, data, _ := repositoryProfileFixture(t, "network-escape")
 	args := []string{"profile", "register", "--confirm", "--profile-id", "profile_runtime0001",
 		"--agent-id", "agent_profile0001", "--permission-profile", "convenewire_governed", "--config", configPath}

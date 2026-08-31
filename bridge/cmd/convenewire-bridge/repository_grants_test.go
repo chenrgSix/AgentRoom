@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +34,9 @@ func TestRepositoryGrantCommandRequiresExplicitScopeAndConfirmation(t *testing.T
 }
 
 func TestRepositoryGrantCLIHasExactOwnerConsentAndOfflineRevocation(t *testing.T) {
+	if runtime.GOOS != "darwin" {
+		t.Skip("TaskGrant CLI profile prerequisite is native-macOS-only")
+	}
 	root, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
 		t.Fatal(err)

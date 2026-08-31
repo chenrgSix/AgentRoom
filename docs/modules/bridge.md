@@ -156,6 +156,17 @@ again, rerun the physical probe against the prepared worktree, hold current
 grant/Run/generation authority and recheck immediately before startup/effects.
 See the [profile registration evidence](../acceptance/brg-071-runtime-profile-registry.md).
 
+The internal `ProbeCodexRuntime` now implements that transient physical recheck
+primitive. It accepts the exact registered reference, current configured Agent
+and caller-derived prepared workspace, while the Profile store alone creates the
+private outside root and resolves safe environment values. It requires the live
+probe to reproduce the registered executable/profile/platform and both boundary
+names, removes the outside fixture, then resolves the record again before
+returning. It persists no workspace or fresh evidence. The primitive is not yet
+wired to production delivery; a durable start-intent/no-duplicate journal and
+current grant/Run/generation transaction remain mandatory before no-start can be
+opened.
+
 ## Codex Local Boundary Probe
 
 The internal macOS `ProbeCodexLocalBoundary` primitive checks one

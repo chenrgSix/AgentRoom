@@ -110,6 +110,16 @@ type CodexRegistration struct {
 	Timeout time.Duration
 }
 
+// CodexRuntimeProbe is a transient just-in-time recheck for one exact prepared
+// workspace. It creates no reusable authority and persists no local path.
+type CodexRuntimeProbe struct {
+	Reference execution.ExecutionGrantSummaryRuntimeProfile
+	AgentID   string
+	Agent     config.AgentConfig
+	Workspace string
+	Timeout   time.Duration
+}
+
 type codexBoundaryProber func(context.Context, localruntime.CodexLocalBoundaryProbe, time.Time) (localruntime.CodexLocalBoundaryProbeResult, error)
 
 type directoryPin struct {
@@ -244,11 +254,9 @@ func (s *ProfileStore) registerCodex(ctx context.Context, input CodexRegistratio
 	if err != nil {
 		return RuntimeProfileView{}, err
 	}
-	probedAt, probedAtErr := time.Parse(time.RFC3339Nano, result.ProbedAt)
-	boundary := profileBoundary{ExecutableDigest: result.ExecutableDigest, PermissionProfileDigest: result.PermissionProfileDigest,
-		FilesystemBoundary: result.FilesystemBoundary, NetworkBoundary: result.NetworkBoundary, Platform: result.Platform}
-	if !validBoundary(boundary) || result.PermissionProfile != input.Spec.PermissionProfile || probedAtErr != nil || !probedAt.Equal(now) {
-		return RuntimeProfileView{}, ErrProfileDenied
+	boundary, err := provenCodexBoundary(result, input.Spec.PermissionProfile, now)
+	if err != nil {
+		return RuntimeProfileView{}, err
 	}
 	if err := cleanup(); err != nil {
 		return RuntimeProfileView{}, err
@@ -345,6 +353,10 @@ func (s *ProfileStore) ResolveRuntime(reference execution.ExecutionGrantSummaryR
 	if err := s.check(); err != nil {
 		return RuntimeProfileView{}, err
 	}
+	return s.resolveRuntime(reference, stableAgentID, agent)
+}
+
+func (s *ProfileStore) resolveRuntime(reference execution.ExecutionGrantSummaryRuntimeProfile, stableAgentID string, agent config.AgentConfig) (RuntimeProfileView, error) {
 	_, view, err := s.get(reference.ProfileID)
 	if err != nil {
 		return RuntimeProfileView{}, err
@@ -358,6 +370,74 @@ func (s *ProfileStore) ResolveRuntime(reference execution.ExecutionGrantSummaryR
 		return RuntimeProfileView{}, ErrProfileDenied
 	}
 	return view, nil
+}
+
+// ProbeCodexRuntime reruns the registered physical boundary against an exact
+// prepared workspace. A positive result remains transient; callers must still
+// hold and recheck current grant, Run and generation authority before startup.
+func (s *ProfileStore) ProbeCodexRuntime(ctx context.Context, input CodexRuntimeProbe, now time.Time) (RuntimeProfileView, error) {
+	return s.probeCodexRuntime(ctx, input, now, localruntime.ProbeCodexLocalBoundary)
+}
+
+func (s *ProfileStore) probeCodexRuntime(ctx context.Context, input CodexRuntimeProbe, now time.Time, prober codexBoundaryProber) (RuntimeProfileView, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.check(); err != nil {
+		return RuntimeProfileView{}, err
+	}
+	if prober == nil || now.IsZero() || input.Workspace == "" {
+		return RuntimeProfileView{}, ErrProfileInvalid
+	}
+	view, err := s.resolveRuntime(input.Reference, input.AgentID, input.Agent)
+	if err != nil {
+		return RuntimeProfileView{}, err
+	}
+	environment, err := codexProbeEnvironment(input.Agent.EnvAllowlist)
+	if err != nil {
+		return RuntimeProfileView{}, ErrProfileInvalid
+	}
+	outside, cleanup, err := s.runtimeOutsideRoot()
+	if err != nil {
+		return RuntimeProfileView{}, err
+	}
+	cleaned := false
+	defer func() {
+		if !cleaned {
+			_ = cleanup()
+		}
+	}()
+	result, err := prober(ctx, localruntime.CodexLocalBoundaryProbe{
+		Command: append([]string{}, input.Agent.Command...), Environment: environment,
+		Workspace: input.Workspace, OutsideRoot: outside,
+		PermissionProfile: view.Spec.PermissionProfile, Timeout: input.Timeout,
+	}, now)
+	if err != nil {
+		return RuntimeProfileView{}, err
+	}
+	boundary, err := provenCodexBoundary(result, view.Spec.PermissionProfile, now)
+	if err != nil {
+		return RuntimeProfileView{}, err
+	}
+	if boundary != (profileBoundary{ExecutableDigest: view.ExecutableDigest,
+		PermissionProfileDigest: view.PermissionProfileDigest, FilesystemBoundary: view.FilesystemBoundary,
+		NetworkBoundary: view.NetworkBoundary, Platform: view.Platform}) {
+		return RuntimeProfileView{}, ErrProfileConflict
+	}
+	if err := cleanup(); err != nil {
+		return RuntimeProfileView{}, err
+	}
+	cleaned = true
+	if err := s.check(); err != nil {
+		return RuntimeProfileView{}, err
+	}
+	current, err := s.resolveRuntime(input.Reference, input.AgentID, input.Agent)
+	if err != nil {
+		return RuntimeProfileView{}, err
+	}
+	if current != view {
+		return RuntimeProfileView{}, ErrProfileChanged
+	}
+	return current, nil
 }
 
 func (s *ProfileStore) get(id string) (profileRecord, RuntimeProfileView, error) {
@@ -474,6 +554,23 @@ func (s *ProfileStore) probeRoots() (string, string, func() error, error) {
 	return workspace, outside, cleanup, nil
 }
 
+func (s *ProfileStore) runtimeOutsideRoot() (string, func() error, error) {
+	outside, err := os.MkdirTemp(s.probeRoot, ".runtime-outside-")
+	if err != nil {
+		return "", nil, err
+	}
+	cleanup := func() error {
+		if err := os.RemoveAll(outside); err != nil {
+			return err
+		}
+		if _, err := os.Lstat(outside); !errors.Is(err, os.ErrNotExist) {
+			return ErrProfileChanged
+		}
+		return nil
+	}
+	return outside, cleanup, nil
+}
+
 func (s *ProfileStore) check() error {
 	if s.closed {
 		return ErrProfileChanged
@@ -498,6 +595,16 @@ func validBoundary(value profileBoundary) bool {
 	return sha256Digest.MatchString(value.ExecutableDigest) && sha256Digest.MatchString(value.PermissionProfileDigest) &&
 		value.FilesystemBoundary == FilesystemBoundaryName && value.NetworkBoundary == NetworkBoundaryName &&
 		regexp.MustCompile(`^darwin/(amd64|arm64)$`).MatchString(value.Platform)
+}
+
+func provenCodexBoundary(result localruntime.CodexLocalBoundaryProbeResult, permissionProfile string, now time.Time) (profileBoundary, error) {
+	probedAt, probedAtErr := time.Parse(time.RFC3339Nano, result.ProbedAt)
+	boundary := profileBoundary{ExecutableDigest: result.ExecutableDigest, PermissionProfileDigest: result.PermissionProfileDigest,
+		FilesystemBoundary: result.FilesystemBoundary, NetworkBoundary: result.NetworkBoundary, Platform: result.Platform}
+	if !validBoundary(boundary) || result.PermissionProfile != permissionProfile || probedAtErr != nil || !probedAt.Equal(now) {
+		return profileBoundary{}, ErrProfileDenied
+	}
+	return boundary, nil
 }
 
 func validOwner(owner Owner) bool {
