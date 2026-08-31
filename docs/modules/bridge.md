@@ -54,10 +54,67 @@ uses private Unix permissions, pinned directories and immutable fsynced files;
 malformed, duplicate-key, linked or foreign records fail closed. Windows ACL and
 native UI acceptance remain separate from cross-compilation.
 
-Task-scoped grants, local runtime/verifier profiles, enforced startup, owner UI,
-production cleanup and RUN-018 delivery remain required. Registration alone is
+Local runtime/verifier profiles, enforced startup, owner UI, production cleanup
+and RUN-018 delivery remain required. Registration alone is
 not a grant and never replaces the existing governed no-start checks. See the
 [local registration evidence](../acceptance/brg-071-local-repository-bindings.md).
+
+## Explicit Local Task Consent
+
+`repository grant issue --file /absolute/owner-reviewed-grant.json --confirm`
+stores one local `TaskGrantSpec`; `repository grant list` displays its path-free
+specification and generated `ExecutionGrantSummary`. Issuance requires the exact
+paired Central/Team/Device/owner, a current local Device credential, a registered
+physical repository and one existing configured Agent identity. Identity lookup
+is read-only: this command cannot provision an Agent or repair an ambiguous
+roster. A regular bounded JSON file is parsed strictly, without duplicate keys,
+unknown/case-altered/omitted fields, trailing documents or replacement Unicode.
+
+The specification contains these required fields:
+
+| Fields | Meaning |
+| --- | --- |
+| `grantId`, `bindingId`, `bindingRevision`, `sourceFingerprint`, `repositoryId`, `baseCommit` | Exact new consent identity and reviewed registration/base pins |
+| `planId`, `planRevision`, `planDigest`, `nodeKey`, `roomId`, `taskId`, `definitionRevision`, `criteriaRevision` | Exact compiled plan/node/Task definition and criteria |
+| `agentId`, `expiresAt`, `operations` | One configured Agent, canonical UTC expiry and generated closed operation kinds |
+| `runtimeProfile`, `verificationProfiles` | Exact generated profile ID/revision/digest pins; no command or environment |
+| `scopePolicy`, `integrationTargets` | Generated path policy and target pins; arrays are explicit, including when empty |
+
+Issue this consent after plan compilation exposes the canonical child Task IDs.
+Draft/approval references express required grant IDs; approving a plan neither
+creates local consent nor requires fabrication of not-yet-created Task IDs.
+Profile pins are declarative owner consent, not proof that the profile exists,
+is executable, or enforces isolation. No grant is advertised until the actual
+profile and production admission gates are implemented and independently pass.
+
+The immutable version-1 local record contains owner, normalized specification
+and issuance time. Its wire-compatible canonical SHA-256 is the grant digest;
+it does not hash a self-referential summary. Set-like arrays are sorted and
+duplicates rejected. Reusing a grant ID with different scope, expiry or pins
+conflicts. An exact valid retry returns the original bytes/time and repeats the
+directory durability barrier. Expired grants are never extended by replay.
+
+`repository grant revoke --grant-id ... --expected-revision 1 --expected-digest
+... --confirm` retains a separate revision-2 tombstone tied to that exact digest.
+The summary preserves the issuance digest and exposes revocation explicitly.
+Revoke/list do not require Git, an existing checkout, Runtime executable or an
+unexpired Device credential. They still require the retained exact paired owner
+and the existing standalone process-owner lock. No record or checkout is deleted.
+
+`CheckTaskGrant` validates current local consent against the generated frozen
+manifest, exact plan/Task/Agent/base/profile pins, operation, time bounds, path
+scope and physical binding. Narrower path access is allowed; parent-prefix
+expansion, dropping overlapping denials or lowering a required preventive policy
+is rejected. Read-only consent cannot become a writer. Only prepare/capture/verify
+use this prerequisite; integration/external operations require their separate
+admission and cannot use it as a generic permission check.
+
+This check is not a complete admission transaction or a transferable permit.
+The production caller must still validate current Central authority and profiles,
+hold the existing Run/generation fence, enforce the local Runtime boundary and
+recheck consent immediately before each effect. In-flight cancellation, owner UI,
+profile setup and full RUN-018 integration remain required. The existing governed
+no-start fence is unchanged. See the [Task consent increment](../acceptance/brg-071-local-task-grants.md).
 
 ## Scope
 

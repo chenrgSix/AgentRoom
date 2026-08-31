@@ -34,8 +34,11 @@ described in [Local Bridge](bridge.md#explicit-local-repository-registration).
 Its immutable registration pins physical Git identity under exact paired-owner
 scope and its separate revocation never deletes a checkout. It intentionally
 does not emit a wire capability, grant Task operations or establish cross-Device
-logical-repository membership. Runtime/verifier profiles and Task grants remain
-part of BRG-071 rather than being inferred from this registration.
+logical-repository membership. The separate `repository grant issue/list/revoke`
+CLI records exact owner-local Task consent as described in
+[Local Bridge](bridge.md#explicit-local-task-consent). Runtime/verifier profile
+resolution and enforced admission remain part of BRG-071 rather than being
+inferred from either registration or consent.
 
 ## Operation Contract
 
@@ -72,6 +75,14 @@ revocation checks occur before preparation and immediately before execution.
 The effective capability is an intersection, never a union of central request
 and local configuration. Read-only reviewers cannot request writable worktrees.
 Grant secrets and local administrative endpoints are unavailable to runtimes.
+
+The local consent store pins the compiled Task definition/criteria, exact plan
+revision/digest, selected base and physical registration fingerprint in addition
+to the generated grant summary. It preserves immutable issuance and separate
+digest-bound revocation under the same process-owner fence as registration.
+Current consent checking is one prerequisite, not a Runtime or verifier service;
+no production governed capability is advertised by this increment. Actual
+profile resolution, enforced execution and in-flight revocation remain required.
 
 The initial governed runtime path must enforce the actual Workspace boundary.
 Unsupported Generic/manual/hosted configurations reject governed coding while

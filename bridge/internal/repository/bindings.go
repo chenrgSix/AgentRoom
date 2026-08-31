@@ -75,17 +75,19 @@ type BindingView struct {
 
 // BindingStore holds the existing Bridge owner lock for its lifetime. A Console
 // integration must keep one shared instance when borrowing its existing owner.
-// It stores immutable registration and revocation receipts, never deletes Git
-// data, and does not authorize prepare, Runtime startup, verification or merge.
+// It stores immutable registration, local Task consent and revocation receipts;
+// it never deletes Git data. Consent checks alone do not authorize Runtime
+// startup, verified execution or integration without their other admission gates.
 type BindingStore struct {
-	mu       sync.Mutex
-	owner    BindingOwner
-	dataRoot string
-	root     string
-	pins     map[string]string
-	git      gitRunner
-	release  func() error
-	closed   bool
+	mu        sync.Mutex
+	owner     BindingOwner
+	dataRoot  string
+	root      string
+	grantRoot string
+	pins      map[string]string
+	git       gitRunner
+	release   func() error
+	closed    bool
 }
 
 func OpenBindingStore(ctx context.Context, dataDir string, owner BindingOwner, executable string, limits Limits) (*BindingStore, error) {
@@ -111,7 +113,8 @@ func OpenBindingStore(ctx context.Context, dataDir string, owner BindingOwner, e
 	store := &BindingStore{owner: owner, dataRoot: root, git: git, release: release, pins: map[string]string{}}
 	ownerJSON, _ := json.Marshal(owner)
 	store.root = filepath.Join(root, "repository-bindings", digest(string(ownerJSON)))
-	for _, dir := range []string{root, filepath.Dir(store.root), store.root} {
+	store.grantRoot = filepath.Join(root, "repository-grants", digest(string(ownerJSON)))
+	for _, dir := range []string{root, filepath.Dir(store.root), store.root, filepath.Dir(store.grantRoot), store.grantRoot} {
 		if dir != root {
 			if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 				_ = release()

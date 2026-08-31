@@ -1,5 +1,6 @@
-// Package repository implements owner-selected bindings and local Git operations.
-// It is not a wire API, Task-grant authority, Runtime launcher, or OS sandbox.
+// Package repository implements owner-selected bindings, exact local Task
+// consent and Git operations. It is not a wire API, Central approval authority,
+// Runtime launcher, or OS sandbox.
 package repository
 
 import (

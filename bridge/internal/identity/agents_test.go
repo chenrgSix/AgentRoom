@@ -3,10 +3,64 @@ package identity
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"convenewire.dev/bridge/internal/config"
 )
+
+func TestLookupConfiguredNeverCreatesOrRepairsIdentities(t *testing.T) {
+	dir := t.TempDir()
+	agents := []config.AgentConfig{{Name: "Builder"}}
+	const id = "agent_lookup0001"
+	file := filepath.Join(dir, filename)
+	if _, err := LookupConfigured(dir, agents, id); err == nil {
+		t.Fatal("missing identity accepted")
+	}
+	if _, err := os.Stat(file); !os.IsNotExist(err) {
+		t.Fatal("lookup created identity file")
+	}
+	for _, source := range []string{
+		`{"Builder":"agent_lookup0001"}`,
+		`{"Builder":"agent_lookup0001","old-name":"agent_lookup0001"}`,
+	} {
+		if err := os.WriteFile(file, []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		selected, err := LookupConfigured(dir, agents, id)
+		if err != nil || selected.Name != "Builder" {
+			t.Fatal(err)
+		}
+		if _, err := LookupConfigured(dir, agents, "agent_foreign0001"); err == nil {
+			t.Fatal("foreign identity accepted")
+		}
+		after, _ := os.ReadFile(file)
+		if string(after) != source {
+			t.Fatal("lookup rewrote identities")
+		}
+	}
+	for _, source := range []string{
+		`{}`, `null`, `{"Builder":null}`, `{"Builder":1}`, `{"Builder":"agent_lookup0001","Builder":"agent_lookup0001"}`,
+		`{"Builder":"agent_lookup0001"}{}`, `{"Builder":"agent_\ud800"}`, strings.Repeat(" ", (1<<20)+1),
+	} {
+		if err := os.WriteFile(file, []byte(source), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := LookupConfigured(dir, agents, id); err == nil {
+			t.Fatal("ambiguous identities accepted")
+		}
+		after, _ := os.ReadFile(file)
+		if string(after) != source {
+			t.Fatal("lookup repaired identities")
+		}
+	}
+	if err := os.WriteFile(file, []byte(`{"Builder":"agent_lookup0001","Reviewer":"agent_lookup0001"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LookupConfigured(dir, append(agents, config.AgentConfig{Name: "Reviewer"}), id); err == nil {
+		t.Fatal("duplicate active identity accepted")
+	}
+}
 
 func TestAgentIdentitySurvivesReload(t *testing.T) {
 	directory := t.TempDir()

@@ -5,14 +5,64 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/durablefs"
+	wire "convenewire.dev/contracts/generated/go/runtime"
 )
 
 const filename = "agent-identities.json"
+
+// LookupConfigured never provisions, repairs, rotates or writes identities.
+// Local authority administration must name one existing configured Agent.
+func LookupConfigured(dataDir string, agents []config.AgentConfig, agentID string) (config.AgentConfig, error) {
+	deny := fmt.Errorf("local grant requires one existing configured Agent identity")
+	path := filepath.Join(dataDir, filename)
+	info, err := os.Lstat(path)
+	if err != nil || !info.Mode().IsRegular() || info.Size() > 1<<20 {
+		return config.AgentConfig{}, deny
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return config.AgentConfig{}, deny
+	}
+	defer file.Close()
+	actual, err := file.Stat()
+	if err != nil || !os.SameFile(info, actual) {
+		return config.AgentConfig{}, deny
+	}
+	raw, err := io.ReadAll(io.LimitReader(file, (1<<20)+1))
+	if err != nil || len(raw) > 1<<20 {
+		return config.AgentConfig{}, deny
+	}
+	canonical, err := wire.CanonicalExecutionJSON(raw)
+	if err != nil {
+		return config.AgentConfig{}, deny
+	}
+	var identities map[string]string
+	if json.Unmarshal(canonical, &identities) != nil || identities == nil || agentID == "" {
+		return config.AgentConfig{}, deny
+	}
+	var selected config.AgentConfig
+	seen := map[string]bool{}
+	for _, agent := range agents {
+		id := identities[agent.Name]
+		if id == "" || seen[id] {
+			return config.AgentConfig{}, deny
+		}
+		seen[id] = true
+		if id == agentID {
+			selected = agent
+		}
+	}
+	if selected.Name == "" {
+		return config.AgentConfig{}, deny
+	}
+	return selected, nil
+}
 
 func LoadOrCreate(dataDir string, agents []config.AgentConfig) (map[string]string, error) {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
