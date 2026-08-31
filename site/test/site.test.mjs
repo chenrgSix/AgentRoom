@@ -151,8 +151,13 @@ test("home and guide have distinct truthful share metadata without an invented f
 test("product copy preserves release, authority, provider and license boundaries", () => {
   const home = textOnly(html["index.html"]);
   const guide = textOnly(html["guide/index.html"]);
-  assert.match(home, /尚未包含在 v0\.4\.1 稳定包/u);
-  assert.match(guide, /尚未包含在 v0\.4\.1 包/u);
+  assert.match(home, /已包含在 v0\.4\.2 稳定包/u);
+  assert.match(guide, /v0\.4\.2 已正式发布/u);
+  assert.match(guide, /升级前请备份中央数据库/u);
+  for (const page of [html["index.html"], html["guide/index.html"]]) {
+    assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2"));
+    assert.doesNotMatch(page, /releases\/tag\/v0\.4\.1/u);
+  }
   assert.match(guide, /仅支持固定的 OpenAI Responses API/u);
   assert.match(guide, /不能操作电脑、访问文件、执行命令或工具/u);
   assert.match(guide, /不能提交正式 Result、审核结果或自行完成任务/u);

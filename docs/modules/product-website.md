@@ -54,6 +54,10 @@ social image exists, omit image metadata rather than reference a missing or
 generic asset. Installation links and stable-version claims must be rechecked
 when application packages change.
 
+Stable-version copy follows the actual verified application Release. Moving a
+download link to `v0.4.2` does not promise later main-branch changes or remove
+the HTTP-only Agent, provider-credential, backup and physical-acceptance limits.
+
 ## Verification
 
 Product acceptance precedes website implementation. Static build/content/link
