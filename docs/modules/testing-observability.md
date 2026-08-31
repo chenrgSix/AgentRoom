@@ -438,6 +438,13 @@ Release notes name migrations, compatibility changes, security impact, and the
 exact checks run. Evidence is tracked by `QA-001` through `QA-012`. Operations
 work is tracked by `OPS-001` through `OPS-005`.
 
+`QA-047` governs the explicitly authorized `v0.5.0-rc.1` transition prerelease,
+not stable or production-provider admission. It requires exact-source main CI,
+the protected native/package matrix and closed 22-asset verification, followed
+by independent authenticated and anonymous public-download checks. Stable
+Latest stays `v0.4.1`; the open `WEB-050`, `QA-038` and `BRG-013` acceptance
+boundaries are not relabeled as complete by publishing this preview.
+
 `QA-038` is the deterministic ADR-0026 admission gate. It records focused
 Server/Web/security/migration/recovery tests, fake-HTTPS E2E, unconfigured
 Compose/readiness compatibility, existing managed/manual/Fake behavior, full
