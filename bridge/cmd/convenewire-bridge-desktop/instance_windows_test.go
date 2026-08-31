@@ -185,7 +185,7 @@ func TestWindowsNativeSecondaryForwardsPairingAndWakeWithoutOpeningConsole(t *te
 						t.Fatalf("helper status %q, want %q", line, want)
 					}
 				case <-ctx.Done():
-					t.Fatal("native helper timed out")
+					t.Fatalf("native helper timed out waiting for %q", want)
 				}
 			}
 			await("owner ready")
@@ -333,16 +333,18 @@ func TestWindowsActivationHelperProcess(t *testing.T) {
 			w32.PostQuitMessage(0)
 			return 0
 		}
+		// Fixture control is not WM_COPYDATA and must not depend on the
+		// production activation decoder accepting it.
+		if message == 0x8002 {
+			fmt.Println("blocked")
+			line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+			if err != nil || line != "unblock\n" {
+				t.Error("missing fixture UI release")
+			}
+			return 0
+		}
 		if ack, handled := receiveWindowsActivation(message, lParam, &activation); handled {
 			if legacy {
-				return 0
-			}
-			if message == 0x8002 {
-				fmt.Println("blocked")
-				line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-				if err != nil || line != "unblock\n" {
-					t.Error("missing fixture UI release")
-				}
 				return 0
 			}
 			return ack

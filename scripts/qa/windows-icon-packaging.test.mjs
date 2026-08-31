@@ -90,3 +90,14 @@ test("native exit injection copies the exact child's result, not an ambient exit
   assert.ok(source.includes("$stubInvocations -ne 1"));
   assert.doesNotMatch(source, /Set-Variable[^\n]+-Value \$LASTEXITCODE/u);
 });
+
+test("native activation fixture pause control precedes the WM_COPYDATA decoder", async () => {
+  const source = await read("bridge/cmd/convenewire-bridge-desktop/instance_windows_test.go");
+  const helper = source.slice(source.indexOf("func TestWindowsActivationHelperProcess"));
+  const pause = helper.indexOf("if message == 0x8002");
+  const decoder = helper.indexOf("if ack, handled := receiveWindowsActivation");
+  assert.ok(pause >= 0 && decoder > pause);
+  assert.ok(helper.slice(pause, decoder).includes('fmt.Println("blocked")'));
+  assert.ok(source.includes('await("blocked")'));
+  assert.ok(source.includes("sendActivationToWindow(target, encoded, 50*time.Millisecond)"));
+});
