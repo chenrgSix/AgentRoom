@@ -83,9 +83,14 @@ The specification contains these required fields:
 Issue this consent after plan compilation exposes the canonical child Task IDs.
 Draft/approval references express required grant IDs; approving a plan neither
 creates local consent nor requires fabrication of not-yet-created Task IDs.
-Profile pins are declarative owner consent, not proof that the profile exists,
-is executable, or enforces isolation. No grant is advertised until the actual
-profile and production admission gates are implemented and independently pass.
+The Runtime profile pin must resolve during issuance to one current owner-local
+immutable registration for that exact Agent and current execution-bearing local
+configuration. A changed profile revision/digest, Agent identity, command,
+sandbox, safe environment-name set or session conflict policy fails closed.
+Verification profiles are rejected until VER-001 supplies their independent
+registry and resolver. This issuance prerequisite still is not startup proof:
+no grant is advertised until production admission reruns the physical boundary
+and all remaining gates independently pass.
 
 The immutable version-1 local record contains owner, normalized specification
 and issuance time. Its wire-compatible canonical SHA-256 is the grant digest;
@@ -113,8 +118,43 @@ This check is not a complete admission transaction or a transferable permit.
 The production caller must still validate current Central authority and profiles,
 hold the existing Run/generation fence, enforce the local Runtime boundary and
 recheck consent immediately before each effect. In-flight cancellation, owner UI,
-profile setup and full RUN-018 integration remain required. The existing governed
+just-in-time profile re-probe and full RUN-018 integration remain required. The existing governed
 no-start fence is unchanged. See the [Task consent increment](../acceptance/brg-071-local-task-grants.md).
+
+## Owner-Local Runtime Profile Registration
+
+`repository profile register` accepts only an exact existing configured Agent,
+new `profile_` identity, installed Codex permission-profile name and explicit
+confirmation. It derives the execution configuration digest from that Agent; a
+caller cannot supply or persist a command, path, environment value, executable
+digest or claimed boundary. Only a safe environment-name allowlist is resolved
+inside the store for the physical probe. Ordinary Agent display metadata and its
+ordinary Workspace do not enter the digest because governed work will use a
+separately prepared exact worktree.
+
+The store creates unique owner-private probe roots below the canonical Bridge
+data directory, invokes `ProbeCodexLocalBoundary`, verifies the exact probe time,
+supported platform and closed filesystem/network boundary, then removes and
+verifies both roots before writing an immutable registration. Any probe or
+cleanup failure leaves no positive record. The retained receipt binds exact
+Central/Team/Device/human owner, Agent, configuration/profile/executable digests,
+boundary names, platform and registration time while exposing no command,
+environment value, local path, listener or canary.
+
+An exact replay reruns the physical probe and must reproduce the same immutable
+intent and boundary. `repository profile list` is path-free;
+`repository profile revoke` appends a revision-2 digest-bound tombstone and can
+run with an expired Device credential. Registration needs a current credential.
+Both reuse the existing Bridge process-owner fence, reject replaced private
+directories and never start Run/inbox machinery.
+
+TaskGrant issuance now resolves its exact Runtime profile reference against the
+current configured Agent before retaining consent. This closes fabricated/stale
+profile pins at setup time, but it deliberately does not turn the record into a
+bearer permit. The future just-in-time admission transaction must resolve it
+again, rerun the physical probe against the prepared worktree, hold current
+grant/Run/generation authority and recheck immediately before startup/effects.
+See the [profile registration evidence](../acceptance/brg-071-runtime-profile-registry.md).
 
 ## Codex Local Boundary Probe
 
@@ -131,10 +171,10 @@ external endpoint is used. Unsafe environment variables, inherited sandbox
 markers, symlinked/overlapping roots, profile inheritance and widened
 configuration fail closed.
 
-A successful simulated fixture proves the detector logic, not the installed
-Runtime. The current installed Codex named profile fails the physical outside
-read/write check before a combined positive result, so no profile or governed
-capability is registered. One loopback denial does not sample every route, and
+A successful simulated fixture proves the detector and registration logic, not
+the installed Runtime. The current installed Codex named profile fails the
+physical outside read/write check before a combined positive result, so this
+host has no positive profile record or governed capability. One loopback denial does not sample every route, and
 the probe does not establish resource limits, Windows or Linux. Production
 admission must rerun all supported physical checks against the exact governed
 workspace while holding current grant and Run authority. See the

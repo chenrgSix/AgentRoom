@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"convenewire.dev/bridge/internal/admission"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/ownership"
@@ -63,8 +64,14 @@ func TestRepositoryGrantCLIHasExactOwnerConsentAndOfflineRevocation(t *testing.T
 	gitRun("add", "README.md")
 	gitRun("commit", "-m", "fixture")
 	base := gitRun("rev-parse", "HEAD")
+	codex := filepath.Join(root, "codex")
+	if err := os.Link(os.Args[0], codex); err != nil {
+		t.Fatal(err)
+	}
 	cfg := config.Config{ServerURL: "http://127.0.0.1:1", DeviceName: "Grant fixture", DataDir: data,
-		Agents: []config.AgentConfig{{Name: "Builder", Role: "Builder", Adapter: "generic", Command: []string{"must-never-start-runtime"}, Workspace: repo}}}
+		Agents: []config.AgentConfig{{Name: "Builder", Role: "Builder", Adapter: "codex", RuntimeKind: "codex", PresetVersion: config.CurrentPresetVersion,
+			Command:   []string{codex, "-test.run=^TestRepositoryProfileHelperProcess$", "--", "app-server", "--listen", "stdio://", "profile-helper=safe"},
+			Workspace: repo, Sandbox: "workspace-write", EnvAllowlist: []string{"HOME"}}}}
 	configPath := filepath.Join(root, "bridge.json")
 	if err := config.Save(configPath, cfg); err != nil {
 		t.Fatal(err)
@@ -115,6 +122,51 @@ func TestRepositoryGrantCLIHasExactOwnerConsentAndOfflineRevocation(t *testing.T
 	if err := identity.BindName(data, "Builder", spec.AgentID); err != nil {
 		t.Fatal(err)
 	}
+	profileJSON, err := invoke("profile", "register", "--confirm", "--profile-id", spec.RuntimeProfile.ProfileID,
+		"--agent-id", spec.AgentID, "--permission-profile", "convenewire_governed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var profile admission.RuntimeProfileView
+	if json.Unmarshal([]byte(profileJSON), &profile) != nil {
+		t.Fatal(profileJSON)
+	}
+	spec.RuntimeProfile = execution.ExecutionGrantSummaryRuntimeProfile{ProfileID: profile.Spec.ProfileID, Revision: 1, Digest: profile.Digest}
+	validProfile := spec.RuntimeProfile
+	for name, change := range map[string]func(*repository.TaskGrantSpec){
+		"profile revision": func(value *repository.TaskGrantSpec) { value.RuntimeProfile.Revision = 2 },
+		"profile digest":   func(value *repository.TaskGrantSpec) { value.RuntimeProfile.Digest = strings.Repeat("f", 64) },
+		"unresolved verifier": func(value *repository.TaskGrantSpec) {
+			value.VerificationProfiles = []execution.ExecutionGrantSummaryVerificationProfile{{ProfileID: "profile_verifier0001", Revision: 1, Digest: strings.Repeat("e", 64)}}
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			candidate := spec
+			change(&candidate)
+			raw, _ := json.Marshal(candidate)
+			if err := os.WriteFile(file, raw, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if output, err := invoke(issue...); err == nil {
+				t.Fatalf("unresolved profile issued consent: %s", output)
+			}
+		})
+	}
+	spec.RuntimeProfile = validProfile
+	originalCommand := append([]string{}, cfg.Agents[0].Command...)
+	cfg.Agents[0].Command = append(cfg.Agents[0].Command, "--changed")
+	if err := config.Replace(configPath, cfg); err != nil {
+		t.Fatal(err)
+	}
+	writeSpec()
+	if output, err := invoke(issue...); err == nil {
+		t.Fatalf("changed local Agent configuration reused profile: %s", output)
+	}
+	cfg.Agents[0].Command = originalCommand
+	if err := config.Replace(configPath, cfg); err != nil {
+		t.Fatal(err)
+	}
+	writeSpec()
 	first, err := invoke(issue...)
 	if err != nil {
 		t.Fatal(err)
@@ -133,8 +185,8 @@ func TestRepositoryGrantCLIHasExactOwnerConsentAndOfflineRevocation(t *testing.T
 	}
 	spec.ScopePolicy.AllowedPaths = []string{"."}
 	writeSpec()
-	if _, err := invoke(issue...); err == nil {
-		t.Fatal("changed grant reused consent")
+	if changedOutput, err := invoke(issue...); err == nil {
+		t.Fatalf("changed grant reused consent: %s", changedOutput)
 	}
 	owner, err := ownership.Acquire(data)
 	if err != nil {

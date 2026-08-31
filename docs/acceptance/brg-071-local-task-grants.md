@@ -35,12 +35,17 @@ public creation API. Issuance follows plan compilation, so new child Task IDs
 need not exist before approval. The plan references a required grant identity;
 only a subsequent explicit local action creates consent for that compiled Task.
 
-Profile pins do not prove installation, safety or enforced sandboxing. The
-production adapter must resolve those exact local profiles, validate current
-Central/Agent authority and the existing Run/generation fence, and recheck
-consent before each effect. A positive prerequisite check cannot authorize an
-arbitrary shell, integration, push or Runtime invocation. Current delivery and
-RuntimeExecutor still reject governed manifests before starting anything.
+The later owner-local Runtime-profile increment now requires the exact Runtime
+profile pin to resolve against the current configured Agent before issuance;
+unresolved verification profiles reject until VER-001 owns their registry. That
+additional prerequisite does not rewrite this immutable-consent evidence and is
+not startup authorization. The production adapter must resolve and physically
+re-probe the exact profile, validate current Central/Agent authority and the
+existing Run/generation fence, and recheck consent before each effect. A positive
+prerequisite check cannot authorize an arbitrary shell, integration, push or
+Runtime invocation. Current delivery and RuntimeExecutor still reject governed
+manifests before starting anything. See the separate
+[profile registry increment](brg-071-runtime-profile-registry.md).
 
 During focused testing two negative fixtures initially made no actual change:
 the replacement plan digest equaled its seed and the omitted-field replacement

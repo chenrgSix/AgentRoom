@@ -36,9 +36,12 @@ scope and its separate revocation never deletes a checkout. It intentionally
 does not emit a wire capability, grant Task operations or establish cross-Device
 logical-repository membership. The separate `repository grant issue/list/revoke`
 CLI records exact owner-local Task consent as described in
-[Local Bridge](bridge.md#explicit-local-task-consent). Runtime/verifier profile
-resolution and enforced admission remain part of BRG-071 rather than being
-inferred from either registration or consent.
+[Local Bridge](bridge.md#explicit-local-task-consent). The separate owner-local
+[Runtime profile registry](bridge.md#owner-local-runtime-profile-registration)
+physically proves and retains exact Codex profile boundaries. Task consent now
+requires its Runtime profile to resolve against the selected current Agent;
+verifier resolution and enforced just-in-time admission remain part of
+BRG-071/VER-001 rather than being inferred from any stored receipt.
 
 ## Operation Contract
 
@@ -82,13 +85,14 @@ to the generated grant summary. It preserves immutable issuance and separate
 digest-bound revocation under the same process-owner fence as registration.
 Current consent checking is one prerequisite, not a Runtime or verifier service;
 no production governed capability is advertised by this increment. Actual
-profile resolution, enforced execution and in-flight revocation remain required.
+just-in-time profile re-probe, enforced execution and in-flight revocation remain required.
 
 The first Codex-specific admission foundation is a native macOS local boundary
 probe, described in [Local Bridge](bridge.md#codex-local-boundary-probe). It
 verifies an exact closed named-profile definition plus real workspace-write,
-outside-read/write and controlled IPv4 loopback-connect behavior. It is neither
-a profile registry nor reusable authorization. The current installed Codex
+outside-read/write and controlled IPv4 loopback-connect behavior. The owner-local
+registry invokes that probe and retains only an immutable path-free result; neither
+the probe nor its registration is reusable startup authorization. The current installed Codex
 executable fails the outside filesystem check before a combined positive result,
 so the production capability remains closed rather than falling back to a
 generic Runtime or treating local Task consent as sandbox evidence.

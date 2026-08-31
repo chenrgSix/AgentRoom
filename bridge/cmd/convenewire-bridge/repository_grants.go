@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"convenewire.dev/bridge/internal/admission"
 	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/repository"
 )
@@ -51,7 +52,7 @@ func repositoryGrantCommand(args []string, output io.Writer, clock func() time.T
 	if args[0] == "revoke" && (grant == "" || expectedRevision != 1 || expectedDigest == "") {
 		return fmt.Errorf("grant revoke requires --grant-id, --expected-revision 1 and --expected-digest")
 	}
-	loaded, store, closeStore, err := openRepositoryStore(*configPath, args[0] == "issue", clock)
+	session, store, closeStore, err := openRepositoryStore(*configPath, args[0] == "issue", clock)
 	if err != nil {
 		return err
 	}
@@ -59,7 +60,19 @@ func repositoryGrantCommand(args []string, output io.Writer, clock func() time.T
 	var result any
 	switch args[0] {
 	case "issue":
-		if _, err := identity.LookupConfigured(loaded.DataDir, loaded.Agents, spec.AgentID); err != nil {
+		agent, lookupErr := identity.LookupConfigured(session.DataDir, session.Config.Agents, spec.AgentID)
+		if lookupErr != nil {
+			return lookupErr
+		}
+		profiles, profileErr := admission.OpenProfileStore(session.Context, session.DataDir, session.ProfileOwner())
+		if profileErr != nil {
+			return profileErr
+		}
+		defer profiles.Close()
+		if len(spec.VerificationProfiles) != 0 {
+			return admission.ErrProfileUnsupported
+		}
+		if _, err := profiles.ResolveRuntime(spec.RuntimeProfile, spec.AgentID, agent); err != nil {
 			return err
 		}
 		result, err = store.IssueTaskGrant(context.Background(), spec, clock())

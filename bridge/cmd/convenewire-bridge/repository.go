@@ -11,9 +11,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"convenewire.dev/bridge/internal/config"
-	"convenewire.dev/bridge/internal/ownership"
-	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/repository"
 )
 
@@ -33,6 +30,9 @@ func runRepository(args []string) error { return repositoryCommand(args, os.Stdo
 func repositoryCommand(args []string, output io.Writer, clock func() time.Time) error {
 	if len(args) > 0 && args[0] == "grant" {
 		return repositoryGrantCommand(args[1:], output, clock)
+	}
+	if len(args) > 0 && args[0] == "profile" {
+		return repositoryProfileCommand(args[1:], output, clock)
 	}
 	if len(args) == 0 || (args[0] != "bind" && args[0] != "list" && args[0] != "revoke") {
 		return fmt.Errorf("repository requires bind, list, or revoke; registration is not a Runtime grant")
@@ -92,46 +92,20 @@ func repositoryCommand(args []string, output io.Writer, clock func() time.Time) 
 	return json.NewEncoder(output).Encode(result)
 }
 
-func openRepositoryStore(configPath string, issuing bool, clock func() time.Time) (config.Config, *repository.BindingStore, func(), error) {
-	fail := func(err error) (config.Config, *repository.BindingStore, func(), error) {
-		return config.Config{}, nil, nil, err
+func openRepositoryStore(configPath string, issuing bool, clock func() time.Time) (*localOwnerSession, *repository.BindingStore, func(), error) {
+	fail := func(err error) (*localOwnerSession, *repository.BindingStore, func(), error) {
+		return nil, nil, nil, err
 	}
-	resolved := configPath
-	if resolved == "" {
-		resolved = config.DefaultPath()
-	}
-	loaded, err := config.Load(resolved)
-	if err != nil {
-		return fail(err)
-	}
-	// Share the existing owner fence with Console/core. No live configuration or
-	// credential switch may race this standalone administration command.
-	owner, err := ownership.Acquire(loaded.DataDir)
+	session, err := openLocalOwner(configPath, issuing, clock)
 	if err != nil {
 		return fail(err)
 	}
 	opened := false
 	defer func() {
 		if !opened {
-			_ = owner.Release()
+			_ = session.Close()
 		}
 	}()
-	credential, err := pairing.Load(loaded.DataDir)
-	if err != nil {
-		return fail(err)
-	}
-	if err := pairing.ValidateCredentialOrigin(loaded.ServerURL, credential); err != nil {
-		return fail(err)
-	}
-	if credential.ServerURL != loaded.ServerURL {
-		return fail(fmt.Errorf("repository registration requires the exact paired Central"))
-	}
-	if issuing && credential.ExpiresAt != nil {
-		expires, err := time.Parse(time.RFC3339Nano, *credential.ExpiresAt)
-		if err != nil || !clock().Before(expires) {
-			return fail(fmt.Errorf("repository registration requires a current local Device credential"))
-		}
-	}
 	var executable string
 	if issuing {
 		executable, err = exec.LookPath("git")
@@ -143,16 +117,10 @@ func openRepositoryStore(configPath string, issuing bool, clock func() time.Time
 			return fail(err)
 		}
 	}
-	dataDir, err := filepath.EvalSymlinks(loaded.DataDir)
-	if err != nil {
-		return fail(err)
-	}
-	store, err := repository.OpenBindingStore(ownership.WithOwner(context.Background(), owner), dataDir,
-		repository.BindingOwner{ServerURL: credential.ServerURL, TeamID: credential.TeamID,
-			DeviceID: credential.DeviceID, OwnerMemberID: credential.OwnerMemberID}, executable, repository.Limits{})
+	store, err := repository.OpenBindingStore(session.Context, session.DataDir, session.RepositoryOwner(), executable, repository.Limits{})
 	if err != nil {
 		return fail(err)
 	}
 	opened = true
-	return loaded, store, func() { _ = store.Close(); _ = owner.Release() }, nil
+	return session, store, func() { _ = store.Close(); _ = session.Close() }, nil
 }

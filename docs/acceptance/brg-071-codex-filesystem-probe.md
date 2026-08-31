@@ -95,6 +95,8 @@ Runtime no-start fence.
   provider scenario is skipped. Markdown lint passes 310 maintained files and
   `git diff --check` is clean.
 
-BRG-071 remains `ACTIVE`. Remaining work includes actual profile registration
-and owner setup, non-macOS fixtures, just-in-time production admission, in-flight
+BRG-071 remains `ACTIVE`. The later owner-local registry now invokes this probe
+and retains an immutable record only after a positive result, but this host still
+has no positive physical registration. Remaining work includes owner setup UI,
+non-macOS fixtures, just-in-time production admission/re-probe, in-flight
 revocation, stopped-Run cleanup and real no-start/start evidence through RUN-018.
