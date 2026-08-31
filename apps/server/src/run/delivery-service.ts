@@ -318,8 +318,9 @@ export class DeliveryService {
   ): void {
     const bundle = this.getByRun(runId)?.payload.roomContextBundle;
     const run = this.runs.getRun(runId);
-    const agent = run && this.core.getAgent(run.targetAgentId);
-    if (!bundle || !run || !agent?.capabilities.supportsRoomContextCoverage) {
+    // Capabilities govern future Deliveries, not consumption of a frozen bundle.
+    // Historical receipts must remain valid across republication and replay.
+    if (!bundle || !run) {
       throw new Error("Run was not delivered with Room context coverage");
     }
     const values = [

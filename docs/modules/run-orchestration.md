@@ -166,6 +166,13 @@ session, not a later Agent publication. Replaying a persisted result after a
 Workspace/configuration change must remain valid without weakening Device,
 trace, sequence or evidence-page validation. Scoped reports without matching
 Delivery evidence fail closed; legacy unscoped events remain compatible.
+Room context consumption receipts likewise validate against that Delivery's
+frozen `roomContextBundle`, never the Agent's current coverage capability.
+Removing or omitting the capability cannot invalidate an already-delivered
+bundle, and enabling it cannot authorize a receipt for a Run without one.
+Checkpoint, raw interval, coverage, disposition and identity checks still apply
+to first-time and duplicate terminal reports. New Deliveries continue to use
+the current advertised capability when deciding whether to include a bundle.
 An unaccepted Delivery row remains an immutable transport fact after its Run
 becomes terminal, but it is no longer actionable backlog. Queue and oldest
 pending-delivery metrics therefore count only `pending` Deliveries whose Run is
