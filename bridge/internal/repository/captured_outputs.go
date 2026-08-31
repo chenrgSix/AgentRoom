@@ -20,6 +20,42 @@ type capturedOutput struct {
 	source  artifact.Source
 }
 
+type capturedSource struct {
+	Snapshot     workSnapshot
+	Ready        PreparedWorkspace
+	ObjectFormat string
+	GitDirectory string
+}
+
+func (p *Preparer) verifiedCapturedSource(ctx context.Context, captured CapturedRepository) (capturedSource, error) {
+	var intent captureIntent
+	if err := readJSONSized(p.claimPath("operation", captured.OperationID), &intent, 32<<20); err != nil {
+		return capturedSource{}, err
+	}
+	if intent.Kind != "capture" || intent.Version != 1 || intent.Request.OperationID != captured.OperationID ||
+		intent.Request.WorkspaceRef != captured.WorkspaceRef || intent.Request.PreparedDigest != captured.PreparedDigest ||
+		intent.Request.ManifestDigest != captured.ManifestDigest || intent.Request.ExpectedGeneration != captured.WorkspaceGeneration ||
+		intent.ObservedHead != captured.ObservedHead || digest(intent.Snapshot) != captured.SnapshotDigest {
+		return capturedSource{}, ErrChanged
+	}
+	prepared, _, ready, err := p.capturePreparation(intent.Request)
+	if err != nil {
+		return capturedSource{}, err
+	}
+	var candidate captureCandidate
+	if err := readJSON(p.claimPath("capture-candidate", captured.OperationID), &candidate); err != nil {
+		return capturedSource{}, err
+	}
+	if candidate.Commit != captured.CandidateCommit || candidate.Tree != captured.CandidateTree {
+		return capturedSource{}, ErrChanged
+	}
+	if err := p.verifyCaptureCandidate(ctx, prepared, ready, intent, candidate); err != nil {
+		return capturedSource{}, err
+	}
+	return capturedSource{Snapshot: intent.Snapshot, Ready: ready, ObjectFormat: prepared.Source.ObjectFormat,
+		GitDirectory: filepath.Join(p.capturePath(captured.OperationID), "git")}, nil
+}
+
 // Report paths remain local selectors into an immutable candidate, never paths
 // read from the live workspace or sent as filenames to Central. A test_result
 // is supplied report content, not an independently executed verification receipt.
@@ -48,32 +84,11 @@ func (p *Preparer) captureOutputSources(ctx context.Context, input CapturePublic
 		if kinds[output.SlotKey] == execution.Patch {
 			continue
 		}
-		var intent captureIntent
-		if err := readJSONSized(p.claimPath("operation", captured.OperationID), &intent, 32<<20); err != nil {
-			return nil, err
-		}
-		if intent.Kind != "capture" || intent.Version != 1 || intent.Request.OperationID != captured.OperationID ||
-			intent.Request.WorkspaceRef != captured.WorkspaceRef || intent.Request.PreparedDigest != captured.PreparedDigest ||
-			intent.Request.ManifestDigest != captured.ManifestDigest || intent.Request.ExpectedGeneration != captured.WorkspaceGeneration ||
-			intent.ObservedHead != captured.ObservedHead || digest(intent.Snapshot) != captured.SnapshotDigest {
-			return nil, ErrChanged
-		}
-		prepared, _, ready, err := p.capturePreparation(intent.Request)
+		source, err := p.verifiedCapturedSource(ctx, captured)
 		if err != nil {
 			return nil, err
 		}
-		var candidate captureCandidate
-		if err := readJSON(p.claimPath("capture-candidate", captured.OperationID), &candidate); err != nil {
-			return nil, err
-		}
-		if candidate.Commit != captured.CandidateCommit || candidate.Tree != captured.CandidateTree {
-			return nil, ErrChanged
-		}
-		if err := p.verifyCaptureCandidate(ctx, prepared, ready, intent, candidate); err != nil {
-			return nil, err
-		}
-		snapshot, format = intent.Snapshot, prepared.Source.ObjectFormat
-		gitDir = filepath.Join(p.capturePath(captured.OperationID), "git")
+		snapshot, format, gitDir = source.Snapshot, source.ObjectFormat, source.GitDirectory
 		break
 	}
 	outputs := make([]capturedOutput, 0, len(input.Outputs))

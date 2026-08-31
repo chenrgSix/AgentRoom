@@ -365,8 +365,33 @@ retirement extension previews, deletes and replays through separate Go processes
 without mutating Server checkpoints or Run state. The report extension verifies
 three distinct canonical output slots, late uncollected report edits, resume and
 retirement without promoting report claims into Task acceptance. Production
-cleanup authority and UI, the commit-output producer and BRG-071/RUN-018 admission connection
+cleanup authority and UI, canonical commit-output transport and BRG-071/RUN-018 admission connection
 remain required product work.
+
+### Retained Commit Bundle Producer
+
+`ReadCapturedCommitBundle` creates bounded standard Git bundle v3 bytes from the
+same verified sealed candidate used by report publication. The bundle advertises
+only the capture-owned candidate ref and requires the exact prepared output-base
+commit, including approved upstream inputs. The original repository base cannot
+substitute for that prerequisite. Only new candidate objects are transmitted;
+unchanged source blobs and prerequisite history are not a full-repository backup.
+The prerequisite comment is fixed text, not the source commit's subject.
+
+The owner-local journal pins the capture digest, prerequisite, object format,
+SHA-256 and byte length. Replay returns the identical retained bytes after reopen
+or exact worktree retirement; content written before its receipt can recover only
+when recomputation matches. Changed identities, configuration, checksums, extra
+refs/capabilities and outputs above 4 MiB fail closed. The envelope checks do not
+replace Git object validation: actual SHA-1/SHA-256 consumer tests verify and
+unbundle into a separate prerequisite repository, then check commit, parent,
+tree and object integrity without moving consumer refs.
+
+This local API does not yet publish a canonical commit Artifact, import code into
+a governed downstream Run, grant Runtime access or authorize integration. Its
+retention receipt is local metadata, not a second wire contract. Canonical binary
+transport and its schema/storage compatibility gate remain part of REPO-004.
+See [producer evidence](../acceptance/repo-004-commit-bundle-producer.md).
 
 ## Verification Receipts
 
