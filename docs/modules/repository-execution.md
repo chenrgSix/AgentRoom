@@ -29,6 +29,14 @@ repository. Integration serialization and configured remote identity are keyed
 by logical repository and target ref across Devices, not per checkout. Local
 operations additionally require the exact binding and its owner-local grant.
 
+The first owner entry is the local Bridge `repository bind/list/revoke` CLI,
+described in [Local Bridge](bridge.md#explicit-local-repository-registration).
+Its immutable registration pins physical Git identity under exact paired-owner
+scope and its separate revocation never deletes a checkout. It intentionally
+does not emit a wire capability, grant Task operations or establish cross-Device
+logical-repository membership. Runtime/verifier profiles and Task grants remain
+part of BRG-071 rather than being inferred from this registration.
+
 ## Operation Contract
 
 CON-021 defines the shared version-1 wire shapes in

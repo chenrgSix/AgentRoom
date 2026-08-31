@@ -67,7 +67,7 @@ func main() {
 
 func run(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("expected one of: version, console, validate-config, join, pair-device, pair, artifact, result, run")
+		return fmt.Errorf("expected one of: version, console, validate-config, join, pair-device, pair, artifact, result, repository, run")
 	}
 	switch args[0] {
 	case "version":
@@ -123,6 +123,8 @@ func run(args []string) error {
 		return runArtifact(args[1:])
 	case "result":
 		return runResult(args[1:])
+	case "repository":
+		return runRepository(args[1:])
 	case "run":
 		command := flag.NewFlagSet("run", flag.ContinueOnError)
 		path := command.String("config", "", "path to bridge JSON configuration")

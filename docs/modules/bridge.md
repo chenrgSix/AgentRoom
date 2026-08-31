@@ -22,6 +22,43 @@ and the existing stopped-Run fence. REPO-001 verifies that complete lifecycle
 after RUN-018 connects ordinary Delivery; it is not an implementation prerequisite
 of BRG-071. Foundation acceptance never enables a public governed capability.
 
+## Explicit Local Repository Registration
+
+The `repository bind`, `repository list` and `repository revoke` CLI subcommands
+are the first owner setup entry for BRG-071. Bind requires an explicit selection,
+allowed roots covering both checkout and Git metadata, exact repository/binding
+IDs, a safe alias and `--confirm`. It inspects only that selection using the
+existing bounded local Git adapter. It does not scan folders, run hooks, fetch,
+create an Agent, start a Runtime or modify the source checkout. A local logical
+repository ID does not prove Central authorization or cross-Device enrollment.
+
+Registration is immutable under an exact paired Central/Team/Device/human-owner
+namespace. Paths and physical directory pins remain under the Bridge data root;
+the printed receipt contains IDs, alias, revision, fingerprint and timestamps,
+not paths, credentials or a governed-execution capability. Exact same-ID replay
+returns the original receipt; changed input conflicts. A moved/replaced physical
+checkout cannot inherit consent, while ordinary Git commits retain its identity.
+
+Revocation appends a revision-2 receipt bound to the original registration, never
+removes Git data and cannot be undone by reusing the binding ID. It remains
+available when Git, the selected checkout or a non-expired Device token is
+unavailable, provided the retained paired identity can still be read. Expired
+credentials cannot create new registrations. Invalid credential trust or a
+different current Central fails closed rather than guessing the old identity.
+
+Standalone administration uses the existing Bridge owner lock, so the running
+CLI/Console/Desktop must be stopped first. The future Console integration must
+share one store under its existing owner and connect in-flight revocation to
+Runtime cancellation; this increment does not claim that behavior. Owner state
+uses private Unix permissions, pinned directories and immutable fsynced files;
+malformed, duplicate-key, linked or foreign records fail closed. Windows ACL and
+native UI acceptance remain separate from cross-compilation.
+
+Task-scoped grants, local runtime/verifier profiles, enforced startup, owner UI,
+production cleanup and RUN-018 delivery remain required. Registration alone is
+not a grant and never replaces the existing governed no-start checks. See the
+[local registration evidence](../acceptance/brg-071-local-repository-bindings.md).
+
 ## Scope
 
 - Prefix: `BRG`

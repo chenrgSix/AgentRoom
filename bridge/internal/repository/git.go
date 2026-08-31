@@ -1,5 +1,5 @@
-// Package repository implements owner-local Git operations. It is not a wire
-// API, local-grant authority, Runtime launcher, or operating-system sandbox.
+// Package repository implements owner-selected bindings and local Git operations.
+// It is not a wire API, Task-grant authority, Runtime launcher, or OS sandbox.
 package repository
 
 import (
