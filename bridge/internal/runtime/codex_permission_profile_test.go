@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -13,19 +14,21 @@ import (
 	"time"
 )
 
-func TestCodexFilesystemPermissionProfileProbeRequiresPhysicalBoundary(t *testing.T) {
+func TestCodexLocalBoundaryProbeRequiresPhysicalEnforcement(t *testing.T) {
 	if runtime.GOOS != "darwin" {
 		t.Skip("native macOS probe")
 	}
-	for _, mode := range []string{"safe", "read-escape", "write-escape", "profile-missing", "profile-duplicate", "profile-broadened", "malformed-protocol"} {
+	for _, mode := range []string{"safe", "network-escape", "read-escape", "write-escape", "profile-missing", "profile-duplicate", "profile-broadened", "malformed-protocol"} {
 		t.Run(mode, func(t *testing.T) {
 			workspace, outside := permissionProbeDirectories(t)
-			result, err := ProbeCodexFilesystemPermissionProfile(context.Background(), fakePermissionProbe(t, workspace, outside, mode), time.Date(2026, 9, 1, 4, 0, 0, 0, time.UTC))
+			result, err := ProbeCodexLocalBoundary(context.Background(), fakePermissionProbe(t, workspace, outside, mode), time.Date(2026, 9, 1, 4, 0, 0, 0, time.UTC))
 			if mode == "safe" {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if result.PermissionProfile != "convenewire_test" || len(result.ExecutableDigest) != 64 || len(result.PermissionProfileDigest) != 64 || result.ProbedAt != "2026-09-01T04:00:00Z" || result.Platform == "" {
+				if result.PermissionProfile != "convenewire_test" || len(result.ExecutableDigest) != 64 || len(result.PermissionProfileDigest) != 64 ||
+					result.FilesystemBoundary != "workspace_write_outside_deny" || result.NetworkBoundary != "ipv4_loopback_connect_deny" ||
+					result.ProbedAt != "2026-09-01T04:00:00Z" || result.Platform == "" {
 					t.Fatalf("result=%+v", result)
 				}
 			} else if !errors.Is(err, ErrCodexPermissionBoundary) {
@@ -43,39 +46,39 @@ func TestCodexFilesystemPermissionProfileProbeRequiresPhysicalBoundary(t *testin
 	}
 }
 
-func TestCodexFilesystemPermissionProfileProbeRejectsUnboundedLocalInputs(t *testing.T) {
+func TestCodexLocalBoundaryProbeRejectsUnboundedLocalInputs(t *testing.T) {
 	workspace, outside := permissionProbeDirectories(t)
 	base := fakePermissionProbe(t, workspace, outside, "safe")
-	for name, change := range map[string]func(*CodexFilesystemPermissionProbe){
-		"unknown profile":       func(v *CodexFilesystemPermissionProbe) { v.PermissionProfile = ":workspace" },
-		"unsafe environment":    func(v *CodexFilesystemPermissionProbe) { v.Environment = []string{"OPENAI_API_KEY=secret"} },
-		"sandbox marker":        func(v *CodexFilesystemPermissionProbe) { v.Environment = []string{"CODEX_SANDBOX=seatbelt"} },
-		"duplicate environment": func(v *CodexFilesystemPermissionProbe) { v.Environment = []string{"HOME=/one", "HOME=/two"} },
-		"short timeout":         func(v *CodexFilesystemPermissionProbe) { v.Timeout = time.Millisecond },
-		"long timeout":          func(v *CodexFilesystemPermissionProbe) { v.Timeout = 2 * time.Minute },
-		"relative workspace":    func(v *CodexFilesystemPermissionProbe) { v.Workspace = "." },
-		"overlap":               func(v *CodexFilesystemPermissionProbe) { v.OutsideRoot = v.Workspace },
-		"non-codex executable": func(v *CodexFilesystemPermissionProbe) {
+	for name, change := range map[string]func(*CodexLocalBoundaryProbe){
+		"unknown profile":       func(v *CodexLocalBoundaryProbe) { v.PermissionProfile = ":workspace" },
+		"unsafe environment":    func(v *CodexLocalBoundaryProbe) { v.Environment = []string{"OPENAI_API_KEY=secret"} },
+		"sandbox marker":        func(v *CodexLocalBoundaryProbe) { v.Environment = []string{"CODEX_SANDBOX=seatbelt"} },
+		"duplicate environment": func(v *CodexLocalBoundaryProbe) { v.Environment = []string{"HOME=/one", "HOME=/two"} },
+		"short timeout":         func(v *CodexLocalBoundaryProbe) { v.Timeout = time.Millisecond },
+		"long timeout":          func(v *CodexLocalBoundaryProbe) { v.Timeout = 2 * time.Minute },
+		"relative workspace":    func(v *CodexLocalBoundaryProbe) { v.Workspace = "." },
+		"overlap":               func(v *CodexLocalBoundaryProbe) { v.OutsideRoot = v.Workspace },
+		"non-codex executable": func(v *CodexLocalBoundaryProbe) {
 			v.Command = append([]string{}, v.Command...)
 			v.Command[0] = os.Args[0]
 		},
-		"missing stdio": func(v *CodexFilesystemPermissionProbe) {
+		"missing stdio": func(v *CodexLocalBoundaryProbe) {
 			v.Command = []string{v.Command[0], "app-server"}
 		},
-		"duplicate app server": func(v *CodexFilesystemPermissionProbe) {
+		"duplicate app server": func(v *CodexLocalBoundaryProbe) {
 			v.Command = []string{v.Command[0], "app-server", "app-server", "--listen", "stdio://"}
 		},
-		"duplicate stdio": func(v *CodexFilesystemPermissionProbe) {
+		"duplicate stdio": func(v *CodexLocalBoundaryProbe) {
 			v.Command = []string{v.Command[0], "app-server", "--listen", "stdio://", "--listen", "stdio://"}
 		},
-		"unsafe command": func(v *CodexFilesystemPermissionProbe) {
+		"unsafe command": func(v *CodexLocalBoundaryProbe) {
 			v.Command = []string{v.Command[0], "app-server", "--listen", "stdio://", "--dangerously-bypass-approvals-and-sandbox"}
 		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			value := base
 			change(&value)
-			if _, err := ProbeCodexFilesystemPermissionProfile(context.Background(), value, time.Now()); !errors.Is(err, ErrCodexPermissionProfileUnsupported) {
+			if _, err := ProbeCodexLocalBoundary(context.Background(), value, time.Now()); !errors.Is(err, ErrCodexPermissionProfileUnsupported) {
 				t.Fatal(err)
 			}
 		})
@@ -84,7 +87,7 @@ func TestCodexFilesystemPermissionProfileProbeRejectsUnboundedLocalInputs(t *tes
 	if err := os.Symlink(outside, link); err == nil {
 		value := base
 		value.OutsideRoot = link
-		if _, err := ProbeCodexFilesystemPermissionProfile(context.Background(), value, time.Now()); !errors.Is(err, ErrCodexPermissionProfileUnsupported) {
+		if _, err := ProbeCodexLocalBoundary(context.Background(), value, time.Now()); !errors.Is(err, ErrCodexPermissionProfileUnsupported) {
 			t.Fatal(err)
 		}
 	}
@@ -123,13 +126,13 @@ func permissionProbeDirectories(t *testing.T) (string, string) {
 	return workspace, outside
 }
 
-func fakePermissionProbe(t *testing.T, workspace, outside, mode string) CodexFilesystemPermissionProbe {
+func fakePermissionProbe(t *testing.T, workspace, outside, mode string) CodexLocalBoundaryProbe {
 	t.Helper()
 	executable := filepath.Join(filepath.Dir(workspace), "codex")
 	if err := os.Link(os.Args[0], executable); err != nil {
 		t.Fatal(err)
 	}
-	return CodexFilesystemPermissionProbe{Command: []string{executable, "-test.run=TestCodexPermissionProfileHelperProcess", "--", "app-server", "--listen", "stdio://", "mode=" + mode},
+	return CodexLocalBoundaryProbe{Command: []string{executable, "-test.run=TestCodexPermissionProfileHelperProcess", "--", "app-server", "--listen", "stdio://", "mode=" + mode},
 		Workspace: workspace, OutsideRoot: outside, PermissionProfile: "convenewire_test", Timeout: 5 * time.Second}
 }
 
@@ -184,7 +187,17 @@ func TestCodexPermissionProfileHelperProcess(t *testing.T) {
 			}
 			_ = json.Unmarshal(request.Params, &params)
 			exit, stdout := 1, ""
-			if len(params.Command) > 0 && params.Command[0] == "/bin/sh" {
+			if len(params.Command) > 0 && params.Command[0] == "/usr/bin/nc" {
+				if len(params.Command) == 2 && params.Command[1] == "-h" {
+					exit = 0
+				} else if mode == "network-escape" {
+					connection, dialErr := net.DialTimeout("tcp4", net.JoinHostPort(params.Command[len(params.Command)-2], params.Command[len(params.Command)-1]), time.Second)
+					if dialErr == nil {
+						_ = connection.Close()
+						exit = 0
+					}
+				}
+			} else if len(params.Command) > 0 && params.Command[0] == "/bin/sh" {
 				target := params.Command[len(params.Command)-1]
 				inside := filepath.Dir(target) == params.Cwd
 				if inside || mode == "write-escape" {

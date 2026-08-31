@@ -116,24 +116,29 @@ recheck consent immediately before each effect. In-flight cancellation, owner UI
 profile setup and full RUN-018 integration remain required. The existing governed
 no-start fence is unchanged. See the [Task consent increment](../acceptance/brg-071-local-task-grants.md).
 
-## Codex Filesystem Boundary Probe
+## Codex Local Boundary Probe
 
-The internal macOS `ProbeCodexFilesystemPermissionProfile` primitive checks one
+The internal macOS `ProbeCodexLocalBoundary` primitive checks one
 exact installed App Server executable and named profile without a model turn. It
 requires a closed profile definition, verifies workspace write, denies an actual
 read and write in separate Bridge-owned private scratch, preserves a random
 canary, accepts only an explicit `codex app-server` standard-I/O command, bounds
-protocol output, and removes only its generated fixtures. Unsafe environment
-variables, inherited sandbox markers, symlinked/overlapping roots, profile
-inheritance and widened configuration fail closed.
+protocol output, and removes only its generated fixtures. It also proves a fixed
+native netcat command can reach an ephemeral IPv4 loopback listener as a host
+control, requires the tool's help command to run inside the profile, then
+requires the connect to fail with no listener-side connection. No DNS or
+external endpoint is used. Unsafe environment variables, inherited sandbox
+markers, symlinked/overlapping roots, profile inheritance and widened
+configuration fail closed.
 
 A successful simulated fixture proves the detector logic, not the installed
 Runtime. The current installed Codex named profile fails the physical outside
-read/write check, so no profile or governed capability is registered. The probe
-also does not physically verify network isolation, resource limits, Windows or
-Linux. Production admission must rerun all supported physical checks against the
-exact governed workspace while holding current grant and Run authority. See the
-[filesystem probe evidence](../acceptance/brg-071-codex-filesystem-probe.md).
+read/write check before a combined positive result, so no profile or governed
+capability is registered. One loopback denial does not sample every route, and
+the probe does not establish resource limits, Windows or Linux. Production
+admission must rerun all supported physical checks against the exact governed
+workspace while holding current grant and Run authority. See the
+[local boundary evidence](../acceptance/brg-071-codex-filesystem-probe.md).
 
 ## Scope
 

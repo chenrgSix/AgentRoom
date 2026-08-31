@@ -84,14 +84,14 @@ Current consent checking is one prerequisite, not a Runtime or verifier service;
 no production governed capability is advertised by this increment. Actual
 profile resolution, enforced execution and in-flight revocation remain required.
 
-The first Codex-specific admission foundation is a native macOS filesystem
-probe, described in [Local Bridge](bridge.md#codex-filesystem-boundary-probe).
-It verifies an exact closed named-profile definition plus real workspace-write
-and outside-read/write behavior. It is neither a profile registry nor reusable
-authorization, and it does not physically verify the declared network denial.
-The current installed Codex executable fails the outside boundary check, so the
-production capability remains closed rather than falling back to a generic
-Runtime or treating local Task consent as sandbox evidence.
+The first Codex-specific admission foundation is a native macOS local boundary
+probe, described in [Local Bridge](bridge.md#codex-local-boundary-probe). It
+verifies an exact closed named-profile definition plus real workspace-write,
+outside-read/write and controlled IPv4 loopback-connect behavior. It is neither
+a profile registry nor reusable authorization. The current installed Codex
+executable fails the outside filesystem check before a combined positive result,
+so the production capability remains closed rather than falling back to a
+generic Runtime or treating local Task consent as sandbox evidence.
 
 The initial governed runtime path must enforce the actual Workspace boundary.
 Unsupported Generic/manual/hosted configurations reject governed coding while

@@ -76,10 +76,11 @@ an ordinary random canary beside, not inside, its selected workspace.
 
 The named-profile path therefore has no successful boundary evidence here. Its
 exact cause is unresolved; this does not establish a general failure of every
-Codex execution path. The probe is not Agent Runtime, network isolation, native
+Codex execution path. This manual finding is not Agent Runtime, native
 Windows/Linux or production admission acceptance. No failed probe is converted
-to a supported capability. A new Bridge filesystem probe preserves this result
-as a fail-closed admission prerequisite, not a registration. See its separate
+to a supported capability. A new Bridge local boundary probe preserves this
+result and adds controlled loopback denial as a fail-closed admission
+prerequisite, not a registration. See its separate
 [increment evidence](brg-071-codex-filesystem-probe.md). BRG-071 retains enforced
 Runtime/profile work, actual no-start/escape tests, owner UI, in-flight
 cancellation and stopped-Run cleanup.

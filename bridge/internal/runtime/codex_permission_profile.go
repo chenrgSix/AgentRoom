@@ -10,11 +10,13 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,12 +29,12 @@ var (
 	permissionProfileID                  = regexp.MustCompile(`^[A-Za-z][A-Za-z0-9_-]{0,63}$`)
 )
 
-// CodexFilesystemPermissionProbe is an owner-local physical check. Environment
+// CodexLocalBoundaryProbe is an owner-local physical check. Environment
 // contains exact NAME=value entries selected by the configured Agent; nothing
 // is inherited implicitly. OutsideRoot is Bridge-owned private scratch that
-// must not overlap Workspace. No model turn, repository operation or network
-// call is made by this probe.
-type CodexFilesystemPermissionProbe struct {
+// must not overlap Workspace. No model turn, repository operation or external
+// network call is made by this probe.
+type CodexLocalBoundaryProbe struct {
 	Command           []string
 	Environment       []string
 	Workspace         string
@@ -41,15 +43,17 @@ type CodexFilesystemPermissionProbe struct {
 	Timeout           time.Duration
 }
 
-// CodexFilesystemPermissionProbeResult contains no paths, command, environment
-// or canary. A positive result proves only the tested filesystem behavior for
-// this executable/profile definition on this host at this time. It is not a
-// reusable authorization or proof of network isolation. Runtime admission must
-// bind and rerun it immediately before starting governed work.
-type CodexFilesystemPermissionProbeResult struct {
+// CodexLocalBoundaryProbeResult contains no paths, command, environment,
+// listener address or canary. A positive result proves only the tested
+// filesystem and loopback-TCP behavior for this executable/profile definition
+// on this host at this time. It is not reusable authorization. Runtime
+// admission must bind and rerun it immediately before starting governed work.
+type CodexLocalBoundaryProbeResult struct {
 	ExecutableDigest        string `json:"executableDigest"`
 	PermissionProfile       string `json:"permissionProfile"`
 	PermissionProfileDigest string `json:"permissionProfileDigest"`
+	FilesystemBoundary      string `json:"filesystemBoundary"`
+	NetworkBoundary         string `json:"networkBoundary"`
 	ProbedAt                string `json:"probedAt"`
 	Platform                string `json:"platform"`
 }
@@ -60,12 +64,12 @@ type probeRPCResponse struct {
 	Error  json.RawMessage `json:"error"`
 }
 
-// ProbeCodexFilesystemPermissionProfile currently tests only native macOS.
-// Other platforms fail closed until they have native physical fixtures. The
-// configured profile must declare network disabled, but this probe does not
-// physically establish that boundary.
-func ProbeCodexFilesystemPermissionProfile(ctx context.Context, input CodexFilesystemPermissionProbe, now time.Time) (CodexFilesystemPermissionProbeResult, error) {
-	var evidence CodexFilesystemPermissionProbeResult
+// ProbeCodexLocalBoundary currently tests only native macOS. Other platforms
+// fail closed until they have native physical fixtures. Network enforcement is
+// tested against a verified ephemeral IPv4 loopback listener; no external
+// network endpoint is contacted.
+func ProbeCodexLocalBoundary(ctx context.Context, input CodexLocalBoundaryProbe, now time.Time) (CodexLocalBoundaryProbeResult, error) {
+	var evidence CodexLocalBoundaryProbeResult
 	if runtime.GOOS != "darwin" {
 		return evidence, ErrCodexPermissionProfileUnsupported
 	}
@@ -227,6 +231,19 @@ func ProbeCodexFilesystemPermissionProfile(ctx context.Context, input CodexFiles
 		err := call("command/exec", map[string]any{"command": arguments, "cwd": workspace, "permissionProfile": input.PermissionProfile, "timeoutMs": 3000, "outputBytesCap": 4096}, &result)
 		return result.ExitCode, result.Stdout, err
 	}
+	networkToolExit, _, err := execCall([]string{"/usr/bin/nc", "-h"})
+	if err != nil || networkToolExit != 0 {
+		return evidence, ErrCodexPermissionBoundary
+	}
+	listener, networkCommand, err := verifiedLoopbackProbe(processContext)
+	if err != nil {
+		return evidence, ErrCodexPermissionProfileUnsupported
+	}
+	defer listener.Close()
+	networkExit, _, err := execCall(networkCommand)
+	if err != nil || networkExit == 0 || !loopbackRemainedUnconnected(listener) {
+		return evidence, ErrCodexPermissionBoundary
+	}
 	insideExit, _, err := execCall([]string{"/bin/sh", "-c", `printf permitted > "$1"`, "probe", insidePath})
 	if err != nil || insideExit != 0 {
 		return evidence, ErrCodexPermissionBoundary
@@ -263,8 +280,59 @@ func ProbeCodexFilesystemPermissionProfile(ctx context.Context, input CodexFiles
 		return evidence, ErrCodexPermissionBoundary
 	}
 
-	return CodexFilesystemPermissionProbeResult{ExecutableDigest: executableDigest, PermissionProfile: input.PermissionProfile,
-		PermissionProfileDigest: hex.EncodeToString(profileHash[:]), ProbedAt: now.UTC().Format(time.RFC3339Nano), Platform: runtime.GOOS + "/" + runtime.GOARCH}, nil
+	return CodexLocalBoundaryProbeResult{ExecutableDigest: executableDigest, PermissionProfile: input.PermissionProfile,
+		PermissionProfileDigest: hex.EncodeToString(profileHash[:]), FilesystemBoundary: "workspace_write_outside_deny",
+		NetworkBoundary: "ipv4_loopback_connect_deny", ProbedAt: now.UTC().Format(time.RFC3339Nano), Platform: runtime.GOOS + "/" + runtime.GOARCH}, nil
+}
+
+func verifiedLoopbackProbe(ctx context.Context) (*net.TCPListener, []string, error) {
+	netcat := "/usr/bin/nc"
+	info, err := os.Lstat(netcat)
+	if err != nil || !info.Mode().IsRegular() || info.Mode().Perm()&0o111 == 0 {
+		return nil, nil, ErrCodexPermissionProfileUnsupported
+	}
+	listener, err := net.ListenTCP("tcp4", &net.TCPAddr{IP: net.ParseIP("127.0.0.1")})
+	if err != nil {
+		return nil, nil, err
+	}
+	fail := func(err error) (*net.TCPListener, []string, error) {
+		_ = listener.Close()
+		return nil, nil, err
+	}
+	port := strconv.Itoa(listener.Addr().(*net.TCPAddr).Port)
+	arguments := []string{netcat, "-4", "-G", "1", "-n", "-z", "127.0.0.1", port}
+	control := exec.CommandContext(ctx, arguments[0], arguments[1:]...)
+	control.Env = []string{}
+	if err := control.Run(); err != nil {
+		return fail(ErrCodexPermissionProfileUnsupported)
+	}
+	if err := listener.SetDeadline(time.Now().Add(time.Second)); err != nil {
+		return fail(err)
+	}
+	connection, err := listener.AcceptTCP()
+	if err != nil {
+		return fail(ErrCodexPermissionProfileUnsupported)
+	}
+	if err := connection.Close(); err != nil {
+		return fail(err)
+	}
+	if err := listener.SetDeadline(time.Time{}); err != nil {
+		return fail(err)
+	}
+	return listener, arguments, nil
+}
+
+func loopbackRemainedUnconnected(listener *net.TCPListener) bool {
+	if listener.SetDeadline(time.Now().Add(250*time.Millisecond)) != nil {
+		return false
+	}
+	connection, err := listener.AcceptTCP()
+	if err == nil {
+		_ = connection.Close()
+		return false
+	}
+	var networkError net.Error
+	return errors.As(err, &networkError) && networkError.Timeout()
 }
 
 func scanProbeResponses(reader io.Reader, responses chan<- probeRPCResponse, failures chan<- error) {
