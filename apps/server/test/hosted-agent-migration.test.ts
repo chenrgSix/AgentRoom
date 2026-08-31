@@ -148,7 +148,7 @@ test("Hosted migration preserves version-51 Agent foreign-key graphs", async () 
   }
 
   const migrated = await migrateDatabase(databasePath);
-  assert.deepEqual(migrated.appliedVersions, [52, 53, 54, 55, 56, 57, 58, 59, 60, 61]);
+  assert.deepEqual(migrated.appliedVersions, [52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62]);
 
   const database = openDatabase(databasePath);
   try {

@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
-import type { ExecutionInputBinding, ExecutionPlanProjection, GovernedExecutionManifest } from "@convene-wire/contracts/execution-plan";
+import type { ExecutionInputBinding, ExecutionPlanProjection, GovernedExecutionManifest, RepositoryOperationRequest } from "@convene-wire/contracts/execution-plan";
 import { executionOperationDigest } from "@convene-wire/contracts/execution-validation";
 import { ArtifactPublicationRepository } from "../src/artifact/artifact-publication-repository.js";
 import { LocalArtifactBlobStore } from "../src/artifact/local-artifact-blob-store.js";
@@ -18,6 +18,9 @@ import { RunRepository } from "../src/run/run-repository.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { ArtifactRepository } from "../src/task/artifact-repository.js";
 import { fixture, now } from "./helpers/execution-plan-fixture.js";
+import { BridgeConnectionRegistry } from "../src/bridge/bridge-connection-registry.js";
+import { IsolatedWorkspaceLeaseService, planIsolatedWorkspace } from "../src/workspace/isolated-workspace-lease-service.js";
+import { capability } from "./helpers/isolated-workspace-fixture.js";
 
 const expiresAt = "2026-08-31T12:05:00.000Z";
 const bytes = Buffer.from("diff --git a/src/file b/src/file\n+accepted input\n");
@@ -26,7 +29,7 @@ const wire = JSON.parse(await readFile(new URL(
   "../../../packages/contracts/fixtures/execution-runtime-cases.json", import.meta.url
 ), "utf8")).cases.find((entry: { name: string }) => entry.name === "execution runtime: valid governed wire delivery").instance.payload;
 
-async function inputFixture(t: TestContext, options: { verifiedGate?: boolean; twoInputs?: boolean; external?: boolean } = {}) {
+async function inputFixture(t: TestContext, options: { verifiedGate?: boolean; twoInputs?: boolean; external?: boolean; captureOutput?: boolean } = {}) {
   const f = await fixture(t);
   const { database } = f;
   const core = new CoreRepository(database), auth = new AuthService(database);
@@ -128,7 +131,8 @@ async function inputFixture(t: TestContext, options: { verifiedGate?: boolean; t
   const runId = "run_execution_destination0001";
   // This is a future admission-state fixture, not a working scheduler. Restore
   // the production prerequisite inside the same transaction immediately after
-  // inserting one queued Run. No Runtime is invoked or capability advertised.
+  // inserting one queued Run. No Runtime is invoked. Derived-output tests use
+  // a synthetic capability peer to exercise the separate capture HTTP gate.
   database.transaction(() => {
     const guard = database.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = 'execution_runs_require_governed_admission_insert'")
       .get() as { sql: string };
@@ -174,9 +178,29 @@ async function inputFixture(t: TestContext, options: { verifiedGate?: boolean; t
     execution.inputs = bindings;
     execution.inputDigest = executionOperationDigest(bindings);
     execution.deadline = expiresAt;
+    if (options.captureOutput) {
+      const node = plan.current.definition.nodes.find((node) => node.nodeKey === "Review")!;
+      execution.repository = node.repository!;
+      execution.scopePolicy = node.scope;
+      execution.outputs = node.outputs;
+      execution.verificationProfiles = node.verificationProfiles;
+      execution.grant = { ...execution.grant, grantId: node.repository!.grantId,
+        revision: node.repository!.grantRevision, expiresAt };
+      const current = database.prepare("SELECT task_revision FROM agent_tasks WHERE task_id = ?")
+        .get(tasks[1].taskId) as { task_revision: number };
+      context.taskRevision = current.task_revision;
+      execution.scope.taskRevision = current.task_revision;
+      execution.workspace = planIsolatedWorkspace(execution.scope, execution.repository, now, expiresAt);
+    }
     mutate?.(execution);
     const { manifestDigest: _digest, ...unsigned } = execution;
     execution.manifestDigest = executionOperationDigest(unsigned);
+    if (options.captureOutput) {
+      const connections = new BridgeConnectionRegistry();
+      connections.register(destination.device.deviceId, 1, { send() {}, close() {} }, { governedExecution: capability });
+      const isolated = new IsolatedWorkspaceLeaseService(database, new ExecutionPlanRepository(database), connections);
+      database.transaction(() => isolated.reserveForRun(execution, now))();
+    }
     database.prepare("UPDATE runs SET context_manifest_json = ? WHERE run_id = ?").run(JSON.stringify(context), runId);
     mutateDelivery?.(payload);
     database.prepare(`INSERT INTO run_deliveries (delivery_attempt_id, run_id, device_id, idempotency_key,
@@ -394,16 +418,35 @@ for (const scope of ["room", "team"] as const) {
 }
 
 async function prepareDerived(f: Awaited<ReturnType<typeof inputFixture>>, relations?: unknown[]) {
-  new RunRepository(f.database).applyEvent(f.runId, { type: "status", sequence: 1, status: "delivered" }, now);
-  const lease = await f.ok("POST", "/api/bridge/workspace-leases/read-source", {
-    runId: f.runId, agentId: f.destination.agent.agentId, workspaceRef: f.destination.agent.workspaceRef,
-    workspaceGeneration: f.destination.agent.workspaceGeneration, idempotencyKey: "idem_derived_lease0001"
-  }, f.destination.authorization);
+  const socket = await f.app.injectWS("/ws/bridge", { headers: { authorization: f.destination.authorization, host: "127.0.0.1" } });
+  const ready = new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error("Derived fixture handshake timeout")), 3_000);
+    socket.once("message", (data) => {
+      clearTimeout(timer);
+      const frame = JSON.parse(String(data));
+      if (frame.type !== "run.requested" || frame.payload.runId !== f.runId) reject(new Error("Unexpected derived fixture delivery"));
+      else resolve();
+    });
+  });
+  socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_derived_handshake0001", timestamp: now,
+    type: "bridge.hello", payload: { deviceId: f.destination.device.deviceId, connectionEpoch: 1,
+      bridgeVersion: "v0.4.0-fixture.1", supportedProtocolVersions: ["1.0"], governedExecution: capability } }));
+  await ready;
+  const manifest = (new RunRepository(f.database).getContextManifest(f.runId) as { execution: GovernedExecutionManifest }).execution;
+  const operation: RepositoryOperationRequest = { version: 1, operationId: "op_derived_capture0001", requestDigest: "a".repeat(64),
+    plan: { planId: f.plan.planId, revision: f.plan.current.revision, digest: f.plan.current.digest,
+      approvalOperationId: manifest.scope.approvalOperationId, roomId: f.roomId, rootTaskId: f.root.taskId },
+    execution: manifest.scope, repositoryId: manifest.repository.repositoryId, bindingId: manifest.repository.bindingId,
+    deviceId: f.destination.device.deviceId, grant: manifest.grant, expectedGeneration: manifest.workspace.workspaceGeneration,
+    deadline: expiresAt, action: { kind: "capture", capture: { manifestDigest: manifest.manifestDigest } } };
+  const { requestDigest: _, ...unsigned } = operation;
+  operation.requestDigest = executionOperationDigest(unsigned);
+  const lease = await f.ok("POST", "/api/bridge/repository-captures", operation, f.destination.authorization);
   const review = Buffer.from("# Review\nA bounded review of the supplied patch.\n");
   const digest = createHash("sha256").update(review).digest("hex");
   const publication = await f.ok("POST", "/api/bridge/artifact-publications", {
     leaseId: lease.leaseId, runId: f.runId, agentId: f.destination.agent.agentId,
-    workspaceRef: f.destination.agent.workspaceRef, workspaceGeneration: f.destination.agent.workspaceGeneration,
+    workspaceRef: lease.workspaceRef, workspaceGeneration: lease.workspaceGeneration,
     idempotencyKey: "idem_derived_publication0001", artifactType: "document", fileName: "review.md",
     mediaType: "text/markdown", title: "Review", summary: "Destination-owned output", sizeBytes: review.length,
     sha256: digest, ...(relations ? { relations } : {})
@@ -416,7 +459,7 @@ async function prepareDerived(f: Awaited<ReturnType<typeof inputFixture>>, relat
 }
 
 test("derived Artifacts atomically record supplied input bindings without copying cross-Task Result evidence", async (t) => {
-  const f = await inputFixture(t);
+  const f = await inputFixture(t, { captureOutput: true });
   const bindings = f.freeze();
   f.deliver(bindings);
   const bindUrl = await prepareDerived(f);
@@ -450,7 +493,7 @@ test("derived Artifacts atomically record supplied input bindings without copyin
 });
 
 test("provenance failure rolls back canonical Artifact creation and can safely retry the sealed publication", async (t) => {
-  const f = await inputFixture(t);
+  const f = await inputFixture(t, { captureOutput: true });
   f.deliver(f.freeze());
   const bindUrl = await prepareDerived(f);
   const artifacts = () => (f.database.prepare("SELECT count(*) AS n FROM task_artifact_refs WHERE task_id = ?")
@@ -469,7 +512,7 @@ test("provenance failure rolls back canonical Artifact creation and can safely r
 });
 
 test("an input read grant does not permit legacy cross-Task Artifact relations", async (t) => {
-  const f = await inputFixture(t);
+  const f = await inputFixture(t, { captureOutput: true });
   f.deliver(f.freeze());
   const bindUrl = await prepareDerived(f, [{ type: "reviews", targetArtifactId: f.artifact.artifactId }]);
   const rejected = await f.request("POST", bindUrl, {}, f.destination.authorization);

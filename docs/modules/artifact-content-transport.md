@@ -9,7 +9,7 @@ is a separate locally granted Repository operation, never a staging side effect.
 
 - Prefix: `ART`
 - Implementation: `apps/server/src/artifact/`, `apps/server/src/http/artifact-routes.ts`,
-  `bridge/internal/artifact/`, and migrations 0036-0038
+  `bridge/internal/artifact/`, and migrations 0036-0038 and 0062
 - Owns: Blob uploads, sealed content, content retention, authenticated transfer,
   and materialization receipts
 
@@ -102,6 +102,22 @@ cannot be appended after publication is bound and does not attest consumption,
 test execution or acceptance. The execution input endpoint verifies sealed
 source bytes under its own plan/Run/Device grant; ordinary Artifact download
 authorization remains unchanged.
+
+Migration 0062 adds a Repository-issued `read_capture` source lease for an exact
+governed capture operation. It reuses this module's publication/chunk/seal/bind
+channel rather than relabeling the Agent's configured source Workspace. The
+default `read_source` path rejects governed Runs. Capture writes recheck the
+current isolated generation, Run/plan/membership/capability, expiry and closure
+under one SQLite write transaction; canonical bind does the same and still
+records exact input provenance atomically. A completed checkpoint closes new
+content writes for that capture. Already sealed/bound observations remain
+readable as historical receipts without authorizing another mutation.
+
+Repository checkpoint sealing resolves real bound Artifact IDs/revisions and
+rechecks the actual stored Blob digest and size. A test-result Artifact is still
+only content; it does not become a trusted VerificationReceipt through capture.
+The Go capture-to-publication adapter and real governed Runtime integration are
+separate from these Server ports.
 
 Only bound canonical Artifacts enter Context Planner, Web preview, Memory
 provenance, or Run delivery. Sealed-but-unbound content is recoverable storage,

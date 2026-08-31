@@ -8,7 +8,7 @@ coordination, never an OS permission. Source-read and isolated-attempt leases
 have separate modes and admission rules; neither silently upgrades the other.
 
 - Prefix: `WSP`
-- Implementation: `apps/server/src/workspace/`, migrations 0035, 0042 and 0061, and
+- Implementation: `apps/server/src/workspace/`, migrations 0035, 0042, 0061-0062, and
   `bridge/internal/workspace/`
 - Owns: opaque Workspace identity, generation snapshots, and Run-scoped access
   leases
@@ -115,6 +115,14 @@ or generation-write endpoint. Local repository enrollment, grant authentication,
 actual worktree creation, runtime enforcement and cleanup stay with REPO-001,
 BRG-071 and RUN-018. The current production Bridge still cannot advertise or
 start governed coding merely because this coordination layer exists.
+
+Repository Capture derives a separate `read_capture` content lease from one
+authenticated capture operation and its frozen isolated generation. Migration
+0062 preserves existing source leases/publications while adding that explicit
+mode. The derived lease grants neither filesystem access nor a new writer;
+Repository rechecks its parent and capture lifecycle on new content effects.
+It does not publish or refresh the Agent's default Workspace identity. A closed
+capture or inactive parent cannot be used to mint further canonical output.
 
 ## Failure and Recovery
 

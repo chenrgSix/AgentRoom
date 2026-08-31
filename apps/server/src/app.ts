@@ -17,6 +17,8 @@ import { ArtifactPreviewService } from
   "./artifact/artifact-preview-service.js";
 import { ArtifactPublicationService } from
   "./artifact/artifact-publication-service.js";
+import { RepositoryCaptureService } from "./repository/repository-capture-service.js";
+import { IsolatedWorkspaceLeaseService } from "./workspace/isolated-workspace-lease-service.js";
 import { LocalArtifactBlobStore } from
   "./artifact/local-artifact-blob-store.js";
 import { CoreRepository } from "./data/core-repository.js";
@@ -286,7 +288,8 @@ export async function createServerApp(
     new WorkspaceLeaseRepository(database, transactions),
     runRepository,
     taskRepository,
-    core
+    core,
+    (principal, lease, kind, now) => repositoryCaptures.requireActiveSource(principal, lease, kind, now)
   );
   const artifactPublicationRepository = new ArtifactPublicationRepository(
     database,
@@ -319,7 +322,8 @@ export async function createServerApp(
     taskRepository,
     runRepository,
     core,
-    (principal, artifact, now) => executionInputs.recordArtifactInputs(principal, artifact, now)
+    (principal, artifact, now) => executionInputs.recordArtifactInputs(principal, artifact, now),
+    (principal, publication, now) => workspaceLeases.requireCurrentCapturePublication(principal, publication, now)
   );
   const taskArtifacts = new TaskArtifactService(
     artifactRepository,
@@ -437,6 +441,9 @@ export async function createServerApp(
   );
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
   const bridgeConnections = new BridgeConnectionRegistry();
+  const repositoryCaptures = new RepositoryCaptureService(database,
+    new IsolatedWorkspaceLeaseService(database, new ExecutionPlanRepository(database), bridgeConnections),
+    artifactRepository, artifactPublicationRepository, artifactBlobs);
   const operationalMetrics = new OperationalMetrics(
     database, bridgeConnections, clock, options.buildIdentity
   );
@@ -844,6 +851,7 @@ export async function createServerApp(
     executor,
     executionPlans,
     executionInputs,
+    repositoryCaptures,
     fakeAdapters,
     handoffs,
     hostedAgents,

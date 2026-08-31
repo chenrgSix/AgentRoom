@@ -27,6 +27,7 @@ export async function fixture(t: TestContext) {
   // Register ownership cleanup before migrations or bootstrap can fail.
   t.after(async () => {
     try {
+      for (const socket of app?.websocketServer.clients ?? []) socket.terminate();
       await app?.close();
     } finally {
       for (const connection of connections) if (connection.open) connection.close();
@@ -102,14 +103,17 @@ export async function fixture(t: TestContext) {
     "task_result_sources", "agent_tasks", "runs"
   ].map((table) => [table, (database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n]));
   return {
+    app,
     request, ok, create, command, database, counts, root: currentRoot, roomId,
     teamId, ownerMemberId, agentId, message, authorization,
     async restart() {
+      for (const socket of app!.websocketServer.clients) socket.terminate();
       await app!.close();
       app = undefined;
       app = await createServerApp({ databasePath, clock: () => now, logger: false });
     },
     async restartTrusted() {
+      for (const socket of app!.websocketServer.clients) socket.terminate();
       await app!.close();
       app = undefined;
       app = await createServerApp({ databasePath, clock: () => now, logger: false, webAuth: {

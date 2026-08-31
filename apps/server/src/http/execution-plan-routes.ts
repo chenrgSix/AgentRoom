@@ -6,7 +6,7 @@ import { bearerToken, noStore } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
-  app, auth, clock, executionPlans, executionInputs, principal
+  app, auth, clock, executionPlans, executionInputs, repositoryCaptures, principal
 }: ServerRouteContext): void {
   const options = {
     bodyLimit: 512 * 1024,
@@ -29,6 +29,13 @@ export function registerExecutionPlanRoutes({
     }
     return Number(value);
   };
+  app.post("/api/bridge/repository-captures", options, async (request) => execute(() =>
+    repositoryCaptures.begin(auth.authenticateDevice(bearerToken(request), clock()), request.body, clock())));
+  app.post("/api/bridge/repository-checkpoints", options, async (request) => execute(() =>
+    repositoryCaptures.seal(auth.authenticateDevice(bearerToken(request), clock()), request.body, clock())));
+  app.get<{ Params: { operationId: string } }>("/api/bridge/repository-captures/:operationId/checkpoint", options,
+    async (request) => execute(() => repositoryCaptures.getForDevice(
+      auth.authenticateDevice(bearerToken(request), clock()), request.params.operationId)));
   app.get<{ Params: { planId: string; bindingId: string } }>(
     "/api/execution-plans/:planId/inputs/:bindingId", options,
     async (request) => execute(() => executionInputs.getForMember(

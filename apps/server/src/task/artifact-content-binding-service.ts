@@ -23,7 +23,8 @@ export class ArtifactContentBindingService {
     private readonly tasks: AgentTaskRepository,
     private readonly runs: RunRepository,
     private readonly core: CoreRepository,
-    private readonly recordInputProvenance?: (principal: DevicePrincipal, artifact: TaskArtifactRecord, now: string) => void
+    private readonly recordInputProvenance?: (principal: DevicePrincipal, artifact: TaskArtifactRecord, now: string) => void,
+    private readonly authorizeCapturePublication?: (principal: DevicePrincipal, publication: ArtifactPublicationRecord, now: string) => void
   ) {}
 
   public bind(
@@ -45,6 +46,10 @@ export class ArtifactContentBindingService {
       if (publication.state !== "sealed" || !publication.contentId) {
         throw new Error("Artifact publication must be sealed before bind");
       }
+      if (this.publications.usesCaptureLease(publication) && !this.authorizeCapturePublication) {
+        throw new Error("Repository capture binding requires current authorization");
+      }
+      this.authorizeCapturePublication?.(principal, publication, now);
       const task = this.tasks.get(publication.taskId);
       const run = this.runs.getRun(publication.runId);
       const room = this.core.getRoom(publication.roomId);

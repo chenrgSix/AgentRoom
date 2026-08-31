@@ -13,7 +13,8 @@ export interface WorkspaceLeaseRecord {
   deviceId: string;
   workspaceRef: string;
   workspaceGeneration: string;
-  mode: "read_source";
+  mode: "read_source" | "read_capture";
+  captureOperationId?: string;
   state: "active" | "released";
   issuedAt: string;
   expiresAt: string;
@@ -32,6 +33,7 @@ interface WorkspaceLeaseRow {
   workspace_ref: string;
   workspace_generation: string;
   mode: WorkspaceLeaseRecord["mode"];
+  capture_operation_id: string | null;
   state: WorkspaceLeaseRecord["state"];
   issued_at: string;
   expires_at: string;
@@ -51,6 +53,7 @@ function mapLease(row: WorkspaceLeaseRow): WorkspaceLeaseRecord {
     workspaceRef: row.workspace_ref,
     workspaceGeneration: row.workspace_generation,
     mode: row.mode,
+    ...(row.capture_operation_id == null ? {} : { captureOperationId: row.capture_operation_id }),
     state: row.state,
     issuedAt: row.issued_at,
     expiresAt: row.expires_at,
@@ -93,13 +96,13 @@ export class WorkspaceLeaseRepository {
         INSERT INTO workspace_leases (
           lease_id, idempotency_key, team_id, room_id, task_id, run_id,
           agent_id, device_id, workspace_ref, workspace_generation, mode,
-          state, issued_at, expires_at, released_at
+          state, issued_at, expires_at, released_at${record.captureOperationId ? ", capture_operation_id" : ""}
         ) VALUES (
           @leaseId, @idempotencyKey, @teamId, @roomId, @taskId, @runId,
           @agentId, @deviceId, @workspaceRef, @workspaceGeneration, @mode,
-          @state, @issuedAt, @expiresAt, @releasedAt
+          @state, @issuedAt, @expiresAt, @releasedAt${record.captureOperationId ? ", @captureOperationId" : ""}
         )
-      `).run(record);
+      `).run({ ...record, captureOperationId: record.captureOperationId ?? null });
       return record;
     });
   }

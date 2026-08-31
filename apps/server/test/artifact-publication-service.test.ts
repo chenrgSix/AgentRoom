@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { lstat, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { copyFile, lstat, mkdir, mkdtemp, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -15,7 +15,7 @@ import { LocalArtifactBlobStore } from
   "../src/artifact/local-artifact-blob-store.js";
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
-import { migrateDatabase } from "../src/data/migration-runner.js";
+import { defaultMigrationsDirectory, migrateDatabase } from "../src/data/migration-runner.js";
 import { SqliteTransactionBoundary } from
   "../src/data/sqlite-transaction-boundary.js";
 import { AgentService } from "../src/registry/agent-service.js";
@@ -38,11 +38,20 @@ const now = "2026-08-25T10:00:00.000Z";
 const workspaceRef = `workspace_${"a".repeat(64)}`;
 const workspaceGeneration = "b".repeat(64);
 
-async function createFixture() {
+async function createFixture(maximumMigration?: number) {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-artifact-"));
   const databasePath = path.join(directory, "server.sqlite");
   const blobRoot = path.join(directory, "blobs");
-  await migrateDatabase(databasePath);
+  if (maximumMigration === undefined) await migrateDatabase(databasePath);
+  else {
+    const migrationDirectory = path.join(directory, "migrations");
+    await mkdir(migrationDirectory);
+    for (const name of await readdir(defaultMigrationsDirectory)) {
+      if (Number(name.slice(0, 4)) <= maximumMigration) await copyFile(
+        path.join(defaultMigrationsDirectory, name), path.join(migrationDirectory, name));
+    }
+    await migrateDatabase(databasePath, migrationDirectory);
+  }
   const database = openDatabase(databasePath);
   const transactions = new SqliteTransactionBoundary(database);
   const core = new CoreRepository(database, transactions);
@@ -176,6 +185,40 @@ function prepareInput(
 function chunkSha256(source: Buffer): string {
   return createHash("sha256").update(source).digest("hex");
 }
+
+test("capture lease migration preserves populated legacy publications, blobs and foreign keys", async () => {
+  const f = await createFixture(61);
+  let database = f.database;
+  try {
+    const source = Buffer.from("diff --git a/legacy b/legacy\n+retained\n");
+    const input = prepareInput(f, source, "idem_legacy_migration0001");
+    const publication = f.service.prepare(f.principal, input, now);
+    f.service.appendChunk(f.principal, publication.publicationId, 0, source, chunkSha256(source), now);
+    f.service.seal(f.principal, publication.publicationId, now);
+    const binding = new ArtifactContentBindingService(f.transactions, new ArtifactRepository(database),
+      f.publications, f.taskRepository, f.runRepository, f.core);
+    binding.bind(f.principal, publication.publicationId, now);
+    const tables = ["artifact_publications", "artifact_contents", "task_artifact_refs"];
+    const before = tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all());
+    const oldLease = database.prepare("SELECT * FROM workspace_leases").get();
+    database.close();
+    const migrated = await migrateDatabase(f.databasePath);
+    assert.deepEqual(migrated.appliedVersions, [62]);
+    database = openDatabase(f.databasePath);
+    assert.deepEqual(tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all()), before);
+    assert.deepEqual(database.prepare("SELECT * FROM workspace_leases").get(), { ...oldLease!, capture_operation_id: null });
+    const content = new ArtifactPublicationRepository(database).getContent(
+      (before[0]![0] as { content_id: string }).content_id)!;
+    assert.equal(f.blobs.hasMatchingBlob(content.storageKey, chunkSha256(source), source.length), true);
+    assert.deepEqual(database.pragma("foreign_key_check"), []);
+    assert.equal(database.pragma("foreign_keys", { simple: true }), 1);
+    assert.throws(() => database.exec("UPDATE workspace_leases SET workspace_generation = 'bad'"), /invalid/u);
+    assert.throws(() => database.exec("DELETE FROM workspace_leases"), /retained/u);
+  } finally {
+    if (database.open) database.close();
+    await rm(path.dirname(f.databasePath), { recursive: true, force: true });
+  }
+});
 
 test("publication chunks are idempotent and sealed rename recovers after restart", async () => {
   const fixture = await createFixture();

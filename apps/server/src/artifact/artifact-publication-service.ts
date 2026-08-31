@@ -108,6 +108,14 @@ export class ArtifactPublicationService {
     input: PrepareArtifactPublicationInput,
     now: string
   ): ArtifactPublicationRecord {
+    return this.publications.withCaptureWrite(input.leaseId, () => this.prepareContent(principal, input, now));
+  }
+
+  private prepareContent(
+    principal: DevicePrincipal,
+    input: PrepareArtifactPublicationInput,
+    now: string
+  ): ArtifactPublicationRecord {
     const normalized = this.validatePrepareInput(input);
     const nowMilliseconds = Date.parse(now);
     if (!Number.isFinite(nowMilliseconds)) {
@@ -129,11 +137,12 @@ export class ArtifactPublicationService {
         throw new Error("Artifact publication idempotency key conflicts");
       }
       if (retry.state === "prepared" || retry.state === "receiving") {
+        this.workspaceLeases.requireCurrentCapturePublication(principal, retry, now);
         this.blobs.ensureUpload(retry.tempStorageKey);
       }
       return retry;
     }
-    const lease = this.workspaceLeases.requireActiveReadSource(
+    const lease = this.workspaceLeases.requireActivePublicationSource(
       principal,
       normalized.leaseId,
       normalized,
@@ -213,6 +222,15 @@ export class ArtifactPublicationService {
   }
 
   public appendChunk(
+    principal: DevicePrincipal, publicationId: string, expectedOffset: number,
+    chunk: Buffer, chunkSha256: string, now: string
+  ): ArtifactPublicationRecord {
+    const publication = this.getForDevice(principal, publicationId);
+    return this.publications.withCaptureWrite(publication.leaseId, () =>
+      this.appendContent(principal, publicationId, expectedOffset, chunk, chunkSha256, now));
+  }
+
+  private appendContent(
     principal: DevicePrincipal,
     publicationId: string,
     expectedOffset: number,
@@ -221,6 +239,7 @@ export class ArtifactPublicationService {
     now: string
   ): ArtifactPublicationRecord {
     let publication = this.getForDevice(principal, publicationId);
+    this.workspaceLeases.requireCurrentCapturePublication(principal, publication, now);
     this.requireWritable(publication, now);
     if (
       !Number.isSafeInteger(expectedOffset) || expectedOffset < 0 ||
@@ -255,6 +274,13 @@ export class ArtifactPublicationService {
   }
 
   public seal(
+    principal: DevicePrincipal, publicationId: string, now: string
+  ): { publication: ArtifactPublicationRecord; content: ArtifactContentRecord } {
+    const publication = this.getForDevice(principal, publicationId);
+    return this.publications.withCaptureWrite(publication.leaseId, () => this.sealContent(principal, publicationId, now));
+  }
+
+  private sealContent(
     principal: DevicePrincipal,
     publicationId: string,
     now: string
@@ -267,6 +293,7 @@ export class ArtifactPublicationService {
       if (!content) throw new Error("Sealed Artifact content metadata is missing");
       return { publication, content };
     }
+    this.workspaceLeases.requireCurrentCapturePublication(principal, publication, now);
     this.requireWritable(publication, now);
     const storageKey = this.sealedStorageKey(publication);
     const temporaryExists = this.blobs.existsRegular(

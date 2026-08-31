@@ -199,6 +199,24 @@ Formal checkpoint publication must use actually accepted canonical content
 receipts; the legacy `read_source` publisher cannot impersonate an isolated
 workspace lease.
 
+### Canonical Capture Publication
+
+An authenticated capture operation is pinned to the existing Run manifest and
+active isolated lease. It issues a derived `read_capture` content lease, not a
+default-Agent `read_source` lease and not additional filesystem permission.
+The existing Artifact upload/seal/bind channel carries the actual bytes; capture
+authority is rechecked before new writes and binding. Exact, already-committed
+receipts remain readable for response-loss reconciliation. Neither channel
+may treat a governed Run's default Agent workspace as its execution workspace.
+
+Checkpoint sealing requires the original operation/scope, exact base/input and
+workspace pins, approved output slots, and same-operation canonical Artifact
+identities whose stored bytes still match their declared digest and size. The
+checkpoint is immutable and unique per capture operation. Sealing it does not
+verify the code, accept a Result, advance Run state, merge, or authorize cleanup.
+The enrolled Bridge is the code-observation authority; Central does not infer
+an actual Git tree merely from Artifact bytes or Agent prose.
+
 ## Verification Receipts
 
 Verification is a system-owned operation on an exact candidate, not an Agent's

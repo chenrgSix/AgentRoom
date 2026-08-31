@@ -3,6 +3,7 @@ import { createOpaqueId } from "../domain/identifiers.js";
 import type { RunRepository } from "../run/run-repository.js";
 import type { DevicePrincipal } from "../security/auth-service.js";
 import type { AgentTaskRepository } from "../task/task-repository.js";
+import type { ArtifactPublicationRecord } from "../artifact/artifact-publication-repository.js";
 import {
   type WorkspaceLeaseRecord,
   WorkspaceLeaseRepository
@@ -60,7 +61,9 @@ export class WorkspaceLeaseService {
     private readonly leases: WorkspaceLeaseRepository,
     private readonly runs: RunRepository,
     private readonly tasks: AgentTaskRepository,
-    private readonly core: CoreRepository
+    private readonly core: CoreRepository,
+    private readonly authorizeCapture?: (principal: DevicePrincipal, lease: WorkspaceLeaseRecord,
+      artifactType: ArtifactPublicationRecord["artifactType"], now: string) => void
   ) {}
 
   public getSourceSnapshot(
@@ -214,6 +217,26 @@ export class WorkspaceLeaseService {
     return lease;
   }
 
+  public requireActivePublicationSource(principal: DevicePrincipal, leaseId: string,
+    input: Pick<ArtifactPublicationRecord, "runId" | "agentId" | "workspaceRef" | "workspaceGeneration" | "artifactType">,
+    now: string): WorkspaceLeaseView {
+    const lease = this.getForDevice(principal, leaseId, now);
+    if (lease.mode === "read_source") return this.requireActiveReadSource(principal, leaseId, input, now);
+    if (lease.state !== "active" || lease.runId !== input.runId || lease.agentId !== input.agentId ||
+      lease.workspaceRef !== input.workspaceRef || lease.workspaceGeneration !== input.workspaceGeneration || !this.authorizeCapture) {
+      throw new Error("Repository capture publication lease is not active");
+    }
+    this.authorizeCapture(principal, { ...lease, state: "active" }, input.artifactType, now);
+    return lease;
+  }
+
+  /** Legacy uploads keep their existing lifecycle; governed writes recheck capture authority. */
+  public requireCurrentCapturePublication(principal: DevicePrincipal,
+    publication: ArtifactPublicationRecord, now: string): void {
+    const lease = this.getForDevice(principal, publication.leaseId, now);
+    if (lease.mode === "read_capture") this.requireActivePublicationSource(principal, lease.leaseId, publication, now);
+  }
+
   public release(
     principal: DevicePrincipal,
     leaseId: string,
@@ -266,6 +289,10 @@ export class WorkspaceLeaseService {
       workspaceGeneration: string;
     } {
     const run = this.runs.getRun(runId);
+    const manifest = run && this.runs.getContextManifest(runId);
+    if (manifest && "execution" in manifest) {
+      throw new Error("Governed Run output requires a repository capture lease");
+    }
     if (!run || !new Set(["delivered", "working"]).has(run.state)) {
       throw new Error("Workspace source lease requires an active assigned Run");
     }

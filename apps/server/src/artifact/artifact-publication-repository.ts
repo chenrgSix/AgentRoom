@@ -144,6 +144,18 @@ function mapContent(row: ArtifactContentRow): ArtifactContentRecord {
 }
 
 export class ArtifactPublicationRepository {
+  /** Keep capture authorization and its canonical writes under one SQLite lock. */
+  public withCaptureWrite<T>(leaseId: string, work: () => T): T {
+    const lease = this.database.prepare("SELECT mode FROM workspace_leases WHERE lease_id = ?")
+      .get(leaseId) as { mode: string } | undefined;
+    return lease?.mode === "read_capture" ? this.transactions.immediate(work) : work();
+  }
+  public usesCaptureLease(publication: ArtifactPublicationRecord): boolean {
+    const lease = this.database.prepare("SELECT mode FROM workspace_leases WHERE lease_id = ?")
+      .get(publication.leaseId) as { mode: string } | undefined;
+    if (!lease) throw new Error("Artifact publication source lease is missing");
+    return lease.mode === "read_capture";
+  }
   public constructor(
     private readonly database: Database.Database,
     private readonly transactions = new SqliteTransactionBoundary(database)
