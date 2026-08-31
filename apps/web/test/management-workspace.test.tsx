@@ -106,6 +106,7 @@ test("creation opens only on demand and closing removes the API-key field withou
   f.fireEvent.click(f.page.getByRole("button", { name: "Add an Agent", exact: true }));
   assert.equal(f.page.queryByLabelText("Agent name"), null);
   f.fireEvent.click(f.page.getByRole("button", { name: "Create a Central Agent", exact: true }));
+  assert.equal(f.dom.window.document.activeElement, f.page.getByRole("dialog"));
   await f.page.findByLabelText("Agent name");
   assert.equal(f.page.queryByText("Other Hosted Agent"), null);
   f.fireEvent.change(f.page.getByRole("dialog").querySelector('input[type="password"]')!, { target: { value: "synthetic-unsent-key" } });
@@ -113,6 +114,17 @@ test("creation opens only on demand and closing removes the API-key field withou
   assert.equal(f.page.queryByLabelText("Agent name"), null);
   assert.equal(f.dom.window.document.body.innerHTML.includes("synthetic-unsent-key"), false);
   assert.ok(f.requests.every((url) => url.endsWith("/hosted-agents")));
+});
+
+test("an external setup failure is reported inside the active dialog, not hidden behind it", async (t) => {
+  const f = await fixture(t);
+  const view = f.render(<AgentWorkspace {...f.props} />);
+  f.fireEvent.click(f.page.getByRole("button", { name: "Add an Agent", exact: true }));
+  f.fireEvent.click(f.page.getByRole("button", { name: "Connect an MCP client" }));
+  view.rerender(<AgentWorkspace {...f.props} error="Setup failed; review the invitation and retry." />);
+  const dialog = f.page.getByRole("dialog");
+  assert.equal(f.page.getAllByRole("alert").length, 1);
+  assert.match(f.within(dialog).getByRole("alert").textContent ?? "", /Setup failed/u);
 });
 
 test("ordinary members cannot mount Hosted configuration or its write controls", async (t) => {

@@ -131,6 +131,7 @@ export function AgentPolicySummary({
 }
 
 interface AgentWorkspaceProps {
+  error?: string | null;
   agentName: string;
   agents: Agent[];
   busy: boolean;
@@ -198,6 +199,7 @@ export function AgentWorkspace(props: AgentWorkspaceProps) {
 
   return (
     <section className="management-workspace agent-workspace" aria-label={t("agentManagement")}>
+      {props.error && !selectedAgent && !flow && <p className="error-banner" role="alert">{props.error}</p>}
       <div className="management-intro">
         <div><p>{zh ? "让合适的智能体加入协作。运行方式与权限，在配置时按需查看。" : "Bring the right Agents into your work. Inspect runtime capabilities and permissions when configuring."}</p></div>
         <button className="primary-action" onClick={() => selectSetup("choose")} type="button">{zh ? "新增智能体" : "Add an Agent"}</button>
@@ -227,7 +229,7 @@ export function AgentWorkspace(props: AgentWorkspaceProps) {
           <button aria-label={zh ? `查看 ${agent.name}` : `View ${agent.name}`} onClick={() => setSelectedId(agent.agentId)} type="button">{zh ? "查看" : "View"}<span aria-hidden="true"> →</span></button>
         </article>)}
       </div>}
-      {selectedAgent && <PanelDialog title={selectedAgent.name} locale={locale} onClose={close}>
+      {selectedAgent && <PanelDialog title={selectedAgent.name} locale={locale} onClose={close} error={props.error}>
         {selectedAgent.integrationMode === "hosted" && currentMemberIsOwner ? (
           <HostedAgentPanel agents={agents} currentMemberIsOwner locale={locale} onAgentChanged={onAgentChanged}
             onOpenRoom={onOpenHostedRoom} rooms={rooms} sessionToken={sessionToken} teamId={teamId}
@@ -246,7 +248,7 @@ export function AgentWorkspace(props: AgentWorkspaceProps) {
         </div>}
       </PanelDialog>}
       {flow && <PanelDialog title={flow === "hosted" ? t("setupHostedTitle") : flow === "local" ? t("setupLocalTitle") :
-        flow === "template" ? (zh ? "从本机模板创建" : "Create from a local template") : (zh ? "新增智能体" : "Add an Agent")} locale={locale} onClose={close}>
+        flow === "template" ? (zh ? "从本机模板创建" : "Create from a local template") : (zh ? "新增智能体" : "Add an Agent")} locale={locale} onClose={close} error={props.error} focusKey={flow}>
         {flow !== "choose" && <button className="setup-back" onClick={() => selectSetup("choose")} type="button">{zh ? "← 其他接入方式" : "← Other setup options"}</button>}
         {flow === "choose" && <>
           <AgentSetupChoices currentMemberIsOwner={currentMemberIsOwner} locale={locale} onSelect={selectSetup} />

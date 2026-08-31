@@ -127,12 +127,14 @@
   .product-shell .workspace-header { min-height: 66px; padding: 12px 16px; gap: 8px; }
   .product-shell .workspace-header h2 { font-size: 18px; }
   .product-shell .workspace-header .eyebrow { display: none; }
-  .product-shell .workspace-heading { flex: 1; min-width: 0 !important; }
+  .product-shell .workspace-heading { width: auto; flex: 1; min-width: 0 !important; }
   .product-shell .workspace-controls { width: auto; flex: none; gap: 6px; }
   .product-shell .header-locale, .product-shell .header-theme { display: none; }
-  .product-shell .header-sign-out { font-size: 11px; padding: 8px; }
+  .product-shell .header-sign-out { display: block; font-size: 11px; padding: 8px; }
   .product-shell .management-workspace { padding: 20px 16px; }
   .product-shell .management-intro { flex-direction: column; align-items: flex-start; }
+  .product-shell .inventory-toolbar { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .product-shell .inventory-toolbar input { grid-column: 1 / -1; max-width: none; width: 100%; }
   .product-shell .device-card { flex-wrap: wrap; padding: 16px; gap: 12px; }
   .product-shell .device-icon { display: none; }
   .agent-inventory-row { flex-wrap: wrap; gap: 12px; padding: 16px; }

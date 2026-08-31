@@ -11,6 +11,7 @@ import { MemberRecoveryPanel } from "./MemberRecoveryPanel.js";
 import { PanelDialog } from "../navigation/PanelDialog.js";
 
 interface TeamMembersWorkspaceProps {
+  error?: string | null;
   authMode: AuthMode | null;
   currentMember: Member | null;
   invitationCopied: boolean;
@@ -29,6 +30,7 @@ interface TeamMembersWorkspaceProps {
 
 export function TeamMembersWorkspace({
   authMode,
+  error,
   currentMember,
   invitationCopied,
   locale,
@@ -48,6 +50,7 @@ export function TeamMembersWorkspace({
 
   return (
     <section className="management-workspace member-workspace" aria-label={t("teamMembers")}>
+      {error && action !== "invite" && <p className="error-banner" role="alert">{error}</p>}
       <div className="management-intro">
         <div>
           <p>{t("membersDescription")}</p>
@@ -78,7 +81,7 @@ export function TeamMembersWorkspace({
           </div>
         </section>
 
-        {action === "invite" && authMode === "trusted-team" && currentMember?.role === "owner" && <PanelDialog title={t("inviteMember")} locale={locale} onClose={() => { setAction(null); onDismissInvitation?.(); }}>
+        {action === "invite" && authMode === "trusted-team" && currentMember?.role === "owner" && <PanelDialog title={t("inviteMember")} locale={locale} onClose={() => { setAction(null); onDismissInvitation?.(); }} error={error}>
         <section className="control-panel member-invitation-panel" aria-labelledby="member-invitation-title">
           <div className="panel-header">
             <div><p className="eyebrow">{t("privateInvitation")}</p><h3 id="member-invitation-title">{t("inviteMember")}</h3></div>

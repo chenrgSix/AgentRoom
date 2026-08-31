@@ -1695,7 +1695,7 @@ export function App() {
             )}
           </div>
         </header>
-        {error && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
+        {error && activeView !== "agents" && activeView !== "members" && !roomCreateOpen && <div className="error-banner" role="alert">{errorLabel(error, locale)}</div>}
         {restoringNavigation && <p className="navigation-status" role="status">{locale === "zh-CN" ? "正在验证并恢复工作位置…" : "Checking access and restoring your work…"}</p>}
         {copyStatus && <p className="navigation-status" role="status">{copyStatus}</p>}
         {activeView === "security" && session ? (
@@ -1795,6 +1795,7 @@ export function App() {
           {currentMember?.role === "owner" && <div className="management-page-actions"><button onClick={() => void openLifecycleDialog()} type="button">{locale === "zh-CN" ? "资源生命周期" : "Resource lifecycle"}</button></div>}
           <TeamMembersWorkspace
             key={selectedTeam.teamId}
+            error={error ? errorLabel(error, locale) : null}
             onDismissInvitation={clearSetupPresentation}
             authMode={authMode}
             currentMember={currentMember}
@@ -1818,6 +1819,7 @@ export function App() {
         ) : activeView === "agents" ? (
           <AgentWorkspace
             key={`${selectedTeam.teamId}:${session?.userId}`}
+            error={error ? errorLabel(error, locale) : null}
             agentName={agentName}
             agents={agents}
             busy={busy}
@@ -2140,7 +2142,7 @@ export function App() {
           </div>
         )}
       </main>
-      {roomCreateOpen && selectedTeam && <PanelDialog title={t("createRoom")} locale={locale} onClose={() => { setRoomCreateOpen(false); clearSetupPresentation(); }}>
+      {roomCreateOpen && selectedTeam && <PanelDialog title={t("createRoom")} locale={locale} error={error ? errorLabel(error, locale) : null} onClose={() => { setRoomCreateOpen(false); clearSetupPresentation(); }}>
         <form className="product-room-form" onSubmit={createRoom}>
           <label htmlFor="new-room-name">{t("newRoomName")}</label>
           <input autoComplete="off" id="new-room-name" onChange={(event) => setRoomName(event.target.value)} required value={roomName} />

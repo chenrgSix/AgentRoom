@@ -3,8 +3,8 @@ import { createPortal } from "react-dom";
 import type { Locale } from "../../i18n.js";
 
 /** Presentation only. Feature controllers retain command and credential ownership. */
-export function PanelDialog({ title, locale, children, onClose }: {
-  title: string; locale: Locale; children: ReactNode; onClose: () => void;
+export function PanelDialog({ title, locale, children, onClose, error, focusKey }: {
+  title: string; locale: Locale; children: ReactNode; onClose: () => void; error?: string | null | undefined; focusKey?: string;
 }) {
   const id = useId();
   const card = useRef<HTMLDivElement>(null);
@@ -29,9 +29,10 @@ export function PanelDialog({ title, locale, children, onClose }: {
       const first = controls[0];
       const last = controls.at(-1);
       if (!first) { event.preventDefault(); card.current?.focus(); return; }
-      if (event.shiftKey && (document.activeElement === first || document.activeElement === card.current)) {
+      const outside = !card.current?.contains(document.activeElement);
+      if (event.shiftKey && (outside || document.activeElement === first || document.activeElement === card.current)) {
         event.preventDefault(); last?.focus();
-      } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === card.current)) {
+      } else if (!event.shiftKey && (outside || document.activeElement === last || document.activeElement === card.current)) {
         event.preventDefault(); first.focus();
       }
     };
@@ -42,10 +43,12 @@ export function PanelDialog({ title, locale, children, onClose }: {
       if (previous?.isConnected) previous.focus();
     };
   }, []);
+  useEffect(() => { card.current?.focus(); }, [focusKey]);
   return createPortal(
     <div className="modal-backdrop product-dialog-backdrop">
       <div aria-labelledby={id} aria-modal="true" className="modal-card product-dialog" ref={card} role="dialog" tabIndex={-1}>
         <header className="product-dialog-heading"><h2 id={id}>{title}</h2><button aria-label={locale === "zh-CN" ? "关闭" : "Close"} onClick={onClose} type="button">×</button></header>
+        {error && <p className="error-banner" role="alert">{error}</p>}
         {children}
       </div>
     </div>, document.body

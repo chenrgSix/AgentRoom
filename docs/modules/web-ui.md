@@ -38,9 +38,10 @@ without changing server-owned state.
 
 ## Product Entry and Recovery
 
-ADR-0032 adds an installation-Owner-only recovery-key button independent of
-Team selection. It generates a random key locally, supports private clipboard
-copying, and requires saved-key confirmation before replacement. The dialog
+ADR-0032 adds an installation-Owner-only recovery-key button in Account and
+security, independent of Team selection. It generates a random key locally,
+supports private clipboard copying, and requires saved-key confirmation before
+replacement. The dialog
 explains old-key invalidation and other-browser logout. It retains the exact
 candidate/revision for explicit retry after an uncertain response, clears on
 success or close, and never writes the key to URLs or browser storage. Server
