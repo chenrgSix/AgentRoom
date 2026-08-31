@@ -500,6 +500,15 @@ Implementation is sequential; native-platform evidence remains explicit.
 | --- | --- | --- | --- | --- |
 | SEC-012 | DONE | Replace the Owner login recovery key without rotating Hosted encryption | SEC-010, SEC-011, WEB-055 | [acceptance evidence](acceptance/sec-012-owner-recovery-key.md): 6 Server/7 Web focused tests, real App/Fastify replace/logout/recover, 706 full-suite tests, 6 deterministic E2Es, builds/contracts/docs and 1280/720/390 px browser checks prove hash-only revisioned replacement, exact-Owner/Origin/session fences, response-loss retry, restart/backup/Hosted preservation and executable offline recovery; no live key rotation or deployment |
 
+## Central Web Product Navigation
+
+ADR-0034 fixes the scope to the existing Web application, without a new service,
+client change, live deployment or Release. Dependencies below are already DONE.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| WEB-061 | ACTIVE | Separate Collaboration and Management with contextual navigation and on-demand setup | WEB-051, WEB-058, WEB-059, WEB-060, SEC-012 | Required: focused navigation, context/draft, permission and configuration regressions; full tests/build/docs checks; isolated production-browser desktop/720/390 and keyboard/theme/locale evidence, with explicit provider/deployment exclusions |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

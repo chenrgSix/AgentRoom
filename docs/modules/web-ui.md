@@ -12,7 +12,8 @@ authorization, or Run state-machine logic.
 
 Presentation is split under `apps/web/src/features/` by product responsibility:
 Auth owns the access gate, Team owns member and lifecycle surfaces, Room owns
-the timeline and Room settings, Agent owns roster and Device presentation,
+the timeline and Room settings, Agent owns roster and configuration, Device owns
+Device inventory and pairing presentation,
 Bridge owns enrollment controls, Run owns activity and diagnostic presentation,
 Discussion owns Wave status and controls, and Task owns selection, creation, and
 clarification surfaces. Shared HTTP behavior lives in `api-client.ts`, while
@@ -73,6 +74,23 @@ selected attempt's evidence loads. Task creation supports optional criteria,
 bounded dialog scrolling, contained Tab navigation and Escape/focus restoration.
 
 ## Primary Surfaces
+
+[ADR-0034](../adr/0034-separate-collaboration-and-management.md) separates
+Collaboration (default Workbench, Task detail and Room conversation) from
+Management (Agents, Devices, Team and members, Account and security). Inventory
+pages show status and explicit actions; creation, pairing and configuration are
+mounted only when requested. Account settings remain available without a Team.
+The same-session, same-Team Collaboration destination is remembered in memory
+across management visits, including Task/tab/filter context; existing scoped
+draft and Room controllers remain the only owners. Team/identity changes clear
+transient forms and cannot restore another context. Device registration and
+Agent availability are presented separately. Existing view links remain valid,
+and Device/security links extend the same access-checked URL mechanism.
+
+Acceptance includes isolated production-browser desktop/720/390 layouts,
+keyboard focus, Chinese/English and light/dark presentation, plus actual App
+navigation/draft/permission regressions. This does not change installation,
+backend authority, HTTP-only Hosted scope or local client configuration.
 
 [ADR-0028](../adr/0028-preserve-continuous-web-work.md) adds Work creation and
 navigation-only next-action shortcuts, allowlisted authorized URL restoration,
@@ -144,10 +162,9 @@ discarded; copied links never contain credentials, drafts or recovery receipts.
 - Selected Room participant roster projected from Team members and visible Agents.
 - Owner-only Room settings for participant access, multi-Agent Discussion,
   `@all`, Agent-to-Agent handoffs, and maximum handoff depth.
-- Context sidebar ending at the selected Room participant roster, without
-  workspace, configuration, or account modules beneath it.
-- Full-height participant column without a nested card or fixed-height roster.
-- Narrow-screen navigation for Chat, Agent management, and locale selection.
+- Contextual navigation for Collaboration or Management, with Room participants
+  available on demand in conversation rather than beside configuration pages.
+- The same area and destination controls at desktop and narrow widths.
 - Persistent light and dark presentation themes for desktop and narrow screens.
 
 There is no native desktop GUI in the MVP. Runtime access is provided by the
