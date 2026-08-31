@@ -21,6 +21,8 @@ const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 type ProcessResult = {
   CaptureDigest: string; WorkPath: string; PreparedTree: string; CandidateCommit: string; CandidateTree: string;
   Error: string; Checkpoint: RepositoryCheckpoint;
+  CleanupPreview?: { digest: string; path: string; branch: string };
+  CleanupReceipt?: { digest: string; removedWorktree: string; removedBranch: string; checkpointId: string };
 };
 
 async function runCapture(binary: string, input: unknown, signal: AbortSignal): Promise<ProcessResult> {
@@ -276,6 +278,34 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         assert.equal(await git(source, "rev-parse", "HEAD"), baseCommit);
         assert.equal(await git(source, "status", "--porcelain"), "");
         assert.equal(leakedPath, false);
+        for (const table of ["repository_checkpoints", "repository_checkpoint_outputs", "task_artifact_refs", "artifact_publications"]) {
+          assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, 2);
+        }
+        assert.equal((f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(next.scope.runId) as { state: string }).state, "queued");
+        // Owner-local retirement consumes the real canonical checkpoint but
+        // performs no Central mutation or implicit Run settlement. All writer
+        // fixture processes above have actually exited before its local fence.
+        const cleanup = { operationId: "op_real_cleanup0001", checkpoint: resumed.Checkpoint, expectedPreviewDigest: "" };
+        const cleanupInput = { StatePath: state, Cleanup: cleanup };
+        const cleanupCounts = [...counts];
+        const preview = await runCapture(binary, cleanupInput, t.signal);
+        assert.ok(preview.CleanupPreview);
+        assert.equal(preview.CleanupPreview.path, resumed.WorkPath);
+        assert.equal(await readFile(path.join(resumed.WorkPath, "src", "continued.txt"), "utf8"), "continued after explicit checkpoint resume\n");
+        cleanup.expectedPreviewDigest = preview.CleanupPreview.digest;
+        const retired = await runCapture(binary, cleanupInput, t.signal);
+        assert.ok(retired.CleanupReceipt);
+        assert.equal(retired.CleanupReceipt.removedWorktree, resumed.WorkPath);
+        assert.equal(retired.CleanupReceipt.removedBranch, preview.CleanupPreview.branch);
+        assert.equal(retired.CleanupReceipt.checkpointId, resumed.Checkpoint.checkpointId);
+        await assert.rejects(readFile(path.join(resumed.WorkPath, "src", "continued.txt")), { code: "ENOENT" });
+        const retiredReplay = await runCapture(binary, cleanupInput, t.signal);
+        assert.deepEqual(retiredReplay.CleanupReceipt, retired.CleanupReceipt);
+        assert.deepEqual([...counts], cleanupCounts, "local cleanup performed HTTP writes");
+        assert.equal(await readFile(path.join(first.WorkPath, "src", "app.txt"), "utf8"), "later uncollected edit\n");
+        assert.equal(await git(source, "rev-parse", "HEAD"), baseCommit);
+        assert.equal(await git(source, "status", "--porcelain"), "");
+        assert.deepEqual(await f.ok("GET", `/api/bridge/repository-captures/${resumedOperation.operationId}/checkpoint`, undefined, authorization), resumed.Checkpoint);
         for (const table of ["repository_checkpoints", "repository_checkpoint_outputs", "task_artifact_refs", "artifact_publications"]) {
           assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, 2);
         }

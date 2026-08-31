@@ -103,6 +103,46 @@ worktree lifecycle, verifies identity again and retains an audit tombstone.
 No recursive workspace-root cleanup or automatic deletion of user changes is
 permitted. Tests use temporary directories and register cleanup immediately.
 
+### Exact Local Worktree Retirement
+
+`PreviewCleanup` and `CleanupWorkspace` implement the local Git retirement
+primitive. Both require an explicit `CleanupAuthority` callback that holds the
+existing stopped-Run fence and current owner-local cleanup authorization for the
+exact plan/node/Task, Run, Device/Agent, repository/binding, workspace generation
+and checkpoint. A missing guard fails closed. This is a synchronous internal
+adapter contract, not a serialized `stopped=true` field, new Run state machine,
+or assertion that production BRG-071/RUN-018 admission is already implemented.
+
+Preview performs no mutation. It verifies the confirmed canonical checkpoint,
+publication/observation history and retained patch, then checks current file
+hashes twice, index identity, branch HEAD, physical directories and Git worktree
+registration. Extra refs/worktrees, locked/prunable registrations, replacement
+directories, changed Git configuration and any uncollected tracked, untracked,
+ignored, deleted or staged changes make the preview ineligible. Captured but
+uncommitted changes are eligible only when every observed byte and mode still
+matches the sealed snapshot; a clean `git status` is not proof of collection.
+
+Confirmation supplies only the operation/checkpoint and exact preview digest,
+never an arbitrary local path. Current authority and physical state are checked
+again before an immutable intent and workspace retirement claim are recorded.
+Preparation refuses a workspace once its retirement claim exists. Git removes
+only the recorded worktree; branch deletion uses its exact expected old object.
+Step receipts and a final immutable local tombstone preserve response-loss
+replay. Fully completed Git effects can be reconciled after reopening, but a
+partially removed tree, moved ref, changed step record or replacement remains
+an explicit incomplete/unknown outcome, not a blind force retry or broad prune.
+Historical completed replay does not delete a later recreated directory.
+
+This command retires a worktree and branch, not all retained storage. Preview
+explicitly identifies the private Git object store, scratch diagnostics and
+checkpoint store that remain. Cleanup never recursively sweeps those stores,
+and the checkpoint remains usable for an explicitly authorized new attempt.
+This retention policy avoids treating uncollected scratch diagnostics as cache
+garbage and does not claim a total disk quota or storage-purge feature. Owner UI,
+actual local cleanup-grant/Run fencing and recovery decisions still require the
+production Bridge admission and product-surface work; no capability is advertised
+by this local primitive alone.
+
 ### Local Pinned Preparation
 
 `bridge/internal/repository.Preparer` is an owner-local Git primitive, not a
@@ -296,8 +336,10 @@ against the captured tree through response loss and separate-process restart.
 It supplies synthetic future-admission/connection metadata and fixture code
 changes, not an Agent Runtime or local grant implementation. Its resume extension
 uses a confirmed Server checkpoint in a new Go process and checks that newly
-published cumulative bytes reproduce the new actual candidate tree. Exact-owned
-cleanup, remaining output producers and the BRG-071/RUN-018 admission connection
+published cumulative bytes reproduce the new actual candidate tree. A local
+retirement extension previews, deletes and replays through separate Go processes
+without mutating Server checkpoints or Run state. Production cleanup authority
+and UI, remaining output producers and the BRG-071/RUN-018 admission connection
 remain required product work.
 
 ## Verification Receipts

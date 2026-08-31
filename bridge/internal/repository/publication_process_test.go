@@ -30,6 +30,7 @@ func TestCapturePublicationHTTPProcess(t *testing.T) {
 		Operation                                                     execution.RepositoryOperationRequest
 		ResumeOperation                                               *execution.RepositoryOperationRequest
 		ResumeCheckpoint                                              *execution.RepositoryCheckpoint
+		Cleanup                                                       *CleanupRequest
 	}
 	decoder := json.NewDecoder(io.LimitReader(os.Stdin, 2<<20))
 	decoder.DisallowUnknownFields()
@@ -55,6 +56,32 @@ func TestCapturePublicationHTTPProcess(t *testing.T) {
 			t.Error(err)
 		}
 	})
+	if input.Cleanup != nil {
+		// Parent observes every prior fixture process's terminal close. There is
+		// no Agent Runtime or production local-grant authority in this helper.
+		var result struct {
+			CleanupPreview CleanupPreview
+			CleanupReceipt CleanupReceipt
+			Error          string
+		}
+		if input.Cleanup.ExpectedPreviewDigest == "" {
+			result.CleanupPreview, err = p.PreviewCleanup(ctx, input.Cleanup.OperationID, input.Cleanup.Checkpoint, stoppedCleanupFixture)
+		} else {
+			result.CleanupReceipt, err = p.CleanupWorkspace(ctx, *input.Cleanup, stoppedCleanupFixture)
+		}
+		if (err != nil) != input.ExpectError {
+			t.Fatalf("cleanup error: %v (expected=%v)", err, input.ExpectError)
+		}
+		if err != nil {
+			result.Error = err.Error()
+		}
+		encoded, err := json.Marshal(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		fmt.Println("CAPTURE_RESULT " + string(encoded))
+		return
+	}
 	var captured CapturedRepository
 	var workPath string
 	var preparedTree string

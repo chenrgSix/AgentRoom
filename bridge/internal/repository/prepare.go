@@ -260,6 +260,9 @@ func (p *Preparer) prepareLocked(ctx context.Context, source Source, request Pre
 	if err := ctx.Err(); err != nil {
 		return PreparedWorkspace{}, err
 	}
+	if err := p.requireUnretiredWorkspace(request.WorkspaceRef); err != nil {
+		return PreparedWorkspace{}, err
+	}
 	if err := p.git.checkSource(ctx, source); err != nil {
 		return PreparedWorkspace{}, err
 	}

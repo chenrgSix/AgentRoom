@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"time"
 
-	"convenewire.dev/bridge/internal/artifact"
 	execution "convenewire.dev/contracts/generated/go/execution"
 	wire "convenewire.dev/contracts/generated/go/runtime"
 )
@@ -225,31 +224,12 @@ func (p *Preparer) PrepareFromCheckpoint(ctx context.Context, source Source, ope
 	if !validCheckpoint(checkpoint) || *operation.Action.Prepare.ResumeCheckpointID != checkpoint.CheckpointID {
 		return PreparedWorkspace{}, ErrConflict
 	}
-	var confirmed, proposed execution.RepositoryCheckpoint
-	for _, receipt := range []struct {
-		kind  string
-		value *execution.RepositoryCheckpoint
-	}{{"checkpoint", &confirmed}, {"checkpoint-proposal", &proposed}} {
-		if err := readJSON(p.claimPath(receipt.kind, checkpoint.OperationID), receipt.value); err != nil {
-			return PreparedWorkspace{}, err
-		}
-		if digest(*receipt.value) != digest(checkpoint) {
-			return PreparedWorkspace{}, ErrConflict
-		}
-	}
-	var publication CapturePublication
-	if err := readJSONSized(p.claimPath("capture-publication", checkpoint.OperationID), &publication, 2<<20); err != nil {
-		return PreparedWorkspace{}, err
-	}
-	if err := artifact.ValidateCaptureContext(publication.Manifest, publication.Operation); err != nil {
+	publication, captured, patch, err := p.confirmedCapture(ctx, checkpoint)
+	if err != nil {
 		return PreparedWorkspace{}, err
 	}
 	if !compatibleResume(publication.Manifest, manifest) || operation.Plan != publication.Operation.Plan {
 		return PreparedWorkspace{}, ErrConflict
-	}
-	captured, err := p.publicationCapture(publication)
-	if err != nil || !checkpointMatchesCapture(checkpoint, publication, captured) {
-		return PreparedWorkspace{}, ErrChanged
 	}
 	var prepared preparationIntent
 	if err := readJSON(p.claimPath("workspace", captured.WorkspaceRef), &prepared); err != nil || prepared.Source != source {
@@ -258,10 +238,6 @@ func (p *Preparer) PrepareFromCheckpoint(ctx context.Context, source Source, ope
 	issued, _ := time.Parse(time.RFC3339Nano, manifest.Workspace.IssuedAt)
 	if issued.Before(captured.CapturedAt) {
 		return PreparedWorkspace{}, ErrConflict
-	}
-	patch, err := p.readCapturedPatchLocked(ctx, checkpoint.OperationID, captured.Digest)
-	if err != nil {
-		return PreparedWorkspace{}, err
 	}
 	if len(patch) == 0 {
 		return PreparedWorkspace{}, ErrInvalid
