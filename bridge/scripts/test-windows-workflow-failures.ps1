@@ -12,6 +12,7 @@ $checked = 0
 
 function go {
   # Never run real Go or package anything in this failure-injection test.
+  $script:stubInvocations++
   & $nativeShell -NoProfile -NonInteractive -Command "exit $script:injectedExit"
   Set-Variable -Name LASTEXITCODE -Value $LASTEXITCODE -Scope 1
 }
@@ -24,18 +25,26 @@ foreach ($name in @("ci.yml", "release-bridge.yml")) {
   foreach ($check in $checks) {
     $snippet = $check.Value.Trim()
     foreach ($script:injectedExit in @(23, 0)) {
+      $script:stubInvocations = 0
       $reachedNextCommand = $false
       $caught = $false
+      $failure = ""
       try {
         Invoke-Expression $snippet
         $reachedNextCommand = $true
       }
-      catch { $caught = $true }
+      catch {
+        $caught = $true
+        $failure = $_.Exception.Message
+      }
+      if ($stubInvocations -ne 1) {
+        throw "Native stub was not invoked exactly once in ${name}: $snippet; cause: $failure"
+      }
       if ($injectedExit -eq 23 -and (-not $caught -or $reachedNextCommand)) {
         throw "Native failure was masked in ${name}: $snippet"
       }
       if ($injectedExit -eq 0 -and ($caught -or -not $reachedNextCommand)) {
-        throw "Successful native check did not continue in ${name}: $snippet"
+        throw "Successful native check did not continue in ${name}: $snippet; cause: $failure"
       }
     }
     $checked++
