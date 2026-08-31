@@ -15,6 +15,7 @@ import (
 	"strings"
 	"sync"
 
+	"convenewire.dev/bridge/internal/pairing"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -23,7 +24,7 @@ const (
 	desktopWindowClass = "dev.agentroom.bridge.desktop.window.v1"
 	// A contract-valid 2048-byte origin can expand in both origin and the
 	// private-CA trustOrigin fragment. Bound the encoded link, not a PEM size.
-	maxPairingLinkBytes       = 16 * 1024
+	maxPairingLinkBytes       = pairing.MaxSessionLinkBytes
 	maxActivationPlaintext    = 32 * 1024
 	maxActivationEncodedBytes = 48 * 1024
 )

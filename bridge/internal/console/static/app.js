@@ -99,6 +99,24 @@ let agentProvisioningDirty = false;
 let activePage = "overview";
 const runtimeTestResults = new Map();
 
+// A WebView may treat a later activation as same-document navigation. Consume
+// that fragment as well as the first page load, then remove proof from the URL.
+window.addEventListener("hashchange", consumePairingLaunchHash);
+
+function consumePairingLaunchHash() {
+  const incoming = pairingLinkFromHash(window.location.hash);
+  if (window.location.hash) history.replaceState(null, "", window.location.pathname);
+  if (!incoming) return;
+  if (enrollmentActionRunning || currentState?.enrollment?.active) {
+    showError(new Error("已有 Device 配对正在进行，请先完成或取消当前配对。"));
+    return;
+  }
+  pendingPairingLink = incoming;
+  elements["device-pairing-link"].value = incoming;
+  elements["server-url"].value = pairingOriginFromLink(incoming);
+  if (currentState) renderConfiguredPairingLaunch(currentState);
+}
+
 const pageCopy = {
   overview: {context: "本机执行环境", title: "概览"},
   agents: {context: "Runtime 与权限", title: "本机 Agent"},

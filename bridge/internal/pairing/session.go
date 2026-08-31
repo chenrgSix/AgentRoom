@@ -21,6 +21,9 @@ import (
 
 const maxPairingResponseBytes = 1 << 20
 
+// MaxSessionLinkBytes bounds the complete encoded link, including private trust.
+const MaxSessionLinkBytes = 16 * 1024
+
 var (
 	pairingSessionIDPattern          = regexp.MustCompile(`^pairing_[A-Za-z0-9_-]{8,128}$`)
 	pairingSessionOperationIDPattern = regexp.MustCompile(`^op_[A-Za-z0-9_-]{8,128}$`)
@@ -61,8 +64,11 @@ type SessionClient struct {
 }
 
 func ParseSessionLink(raw string) (SessionLink, error) {
+	if len(raw) > MaxSessionLinkBytes {
+		return SessionLink{}, fmt.Errorf("pairing link exceeds its input limit")
+	}
 	parsed, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
+	if err != nil || parsed.User != nil {
 		return SessionLink{}, fmt.Errorf("pairing link is invalid")
 	}
 	query := parsed.Query()

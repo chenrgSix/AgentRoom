@@ -53,6 +53,9 @@ func TestParseSessionLinkRequiresCanonicalSecretBearingLink(t *testing.T) {
 		raw + "&extra=value",
 		strings.Replace(raw, "https%3A%2F%2Fteam.example", "http%3A%2F%2Fteam.example", 1),
 		strings.Replace(raw, "pair-device", "other", 1),
+		"https://user:secret@team.example/device-pairing?" + httpsValues.Encode() + "#claimSecret=" + claimSecret,
+		strings.Replace(raw, "pair-device", "user@pair-device", 1),
+		raw + strings.Repeat("a", MaxSessionLinkBytes),
 	}
 	for _, candidate := range invalid {
 		if _, err := ParseSessionLink(candidate); err == nil {
