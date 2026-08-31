@@ -807,9 +807,13 @@ func TestDevicePairingPreservesLocalProfilesAndProjectsOnlyApprovalState(t *test
 		return pairing.Credential{
 			ServerURL: "http://127.0.0.1:3000", DeviceID: "device_pairing",
 			TeamID: "team_test1234", OwnerMemberID: "member_owner123", Token: "poll-secret-promoted",
+			ClientAccessSecret: strings.Repeat("h", 43),
 		}, nil
 	}
-	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential, _ operations.Observer) error {
+	dependencies.RunBridge = func(ctx context.Context, _ config.Config, credential pairing.Credential, _ operations.Observer) error {
+		if credential.ClientAccessSecret != "" {
+			t.Error("human proof crossed into managed Bridge Runtime inputs")
+		}
 		bridgeStarted <- struct{}{}
 		<-ctx.Done()
 		return ctx.Err()

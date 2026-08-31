@@ -48,6 +48,7 @@ type SessionStatus struct {
 }
 
 type SessionLink struct {
+	MemberAccess     bool
 	ServerURL        string
 	PairingSessionID string
 	ClaimSecret      string
@@ -110,6 +111,14 @@ func ParseSessionLink(raw string) (SessionLink, error) {
 	if !validPairingSecret(claimSecret) {
 		return SessionLink{}, fmt.Errorf("pairing link claim proof is invalid")
 	}
+	memberAccess := false
+	if values, present := fragment["memberAccess"]; present {
+		if len(values) != 1 || values[0] != "1" {
+			return SessionLink{}, fmt.Errorf("pairing member access marker is invalid")
+		}
+		memberAccess = true
+		fragment.Del("memberAccess")
+	}
 	var trust *ScopedPrivateTrustDescriptor
 	if hasExactQueryKeys(fragment, "claimSecret") {
 		// Public/system trust carries no override.
@@ -143,7 +152,8 @@ func ParseSessionLink(raw string) (SessionLink, error) {
 		return SessionLink{}, fmt.Errorf("pairing link claim proof is invalid")
 	}
 	return SessionLink{
-		ServerURL: serverURL, PairingSessionID: pairingSessionID,
+		MemberAccess: memberAccess,
+		ServerURL:    serverURL, PairingSessionID: pairingSessionID,
 		ClaimSecret: claimSecret, ExpiresAt: expiresAt, Trust: trust,
 	}, nil
 }
@@ -224,6 +234,14 @@ func (client SessionClient) Pair(
 			DisplayName: cfg.DeviceName, Platform: platform, BridgeVersion: version,
 		},
 	}
+	clientAccessSecret := ""
+	if link.MemberAccess {
+		clientAccessSecret, err = randomPairingValue(32)
+		if err != nil {
+			return Credential{}, err
+		}
+		claim.ClientAccessSecret = &clientAccessSecret
+	}
 	supportsScopedPrivateTrust := true
 	claim.Device.SupportsScopedPrivateTrust = &supportsScopedPrivateTrust
 	endpoint := strings.TrimRight(cfg.ServerURL, "/") + "/api/device-pairing-session-claims"
@@ -289,6 +307,9 @@ func (client SessionClient) Pair(
 		}
 		switch projection.State {
 		case pairingcontracts.FluffyConsumed:
+			if link.MemberAccess != (projection.ClientAccessEnabled != nil && *projection.ClientAccessEnabled) {
+				return Credential{}, fmt.Errorf("pairing did not confirm the requested member access")
+			}
 			if projection.CredentialSource == nil || *projection.CredentialSource != pairingcontracts.PollSecret ||
 				projection.DeviceID == nil || !deviceIDPattern.MatchString(*projection.DeviceID) ||
 				projection.TeamID == nil || !teamIDPattern.MatchString(*projection.TeamID) ||
@@ -297,7 +318,8 @@ func (client SessionClient) Pair(
 				return Credential{}, fmt.Errorf("Device pairing consumption omitted identity")
 			}
 			return Credential{
-				ServerURL: cfg.ServerURL, DeviceID: *projection.DeviceID, TeamID: *projection.TeamID,
+				ClientAccessSecret: clientAccessSecret,
+				ServerURL:          cfg.ServerURL, DeviceID: *projection.DeviceID, TeamID: *projection.TeamID,
 				OwnerMemberID: *projection.OwnerMemberID, Token: pollSecret,
 				ScopedPrivateTrust: stagedTrust,
 			}, nil

@@ -521,8 +521,8 @@ Release is included.
 | CON-019 | DONE | Define additive member pairing and client entry payloads | GOV-023, CON-012 | Deterministic TypeScript/Go generation, 145 shared fixtures (12 new identity/entry cases), Node tests, strict types and Go schema validation pass |
 | SEC-013 | DONE | Bind approved client owners and issue scoped human entry | CON-019, SEC-012 | 363 Server tests pass, including 11 client-owner regressions for atomic new/existing/self binding, selected Rooms, separate secrets, capped single-Team sessions, restart/replay/expiry, six revocation modes and pending-request reauthentication; migration and build checks pass |
 | ROOM-008 | ACTIVE | Limit member-aware onboarding to selected Rooms and default Agent owners into explicit invitations | SEC-013, ROOM-007 | Initial roster boundaries, explicit removal and republication regressions |
-| BRG-070 | ACTIVE | Open authorized Team and Room entry from the local client | SEC-013, BRG-069 | Separate credential storage, Console authorization, re-pair/switch fencing, Go/UI tests and native compilation |
-| WEB-062 | PLANNED | Present member-aware pairing and safe client browser entry | SEC-013, ROOM-008, WEB-061 | Real identity/session navigation regressions, scoped ownership controls and isolated browser acceptance |
+| BRG-070 | DONE | Open authorized Team and Room entry from the local client | SEC-013, BRG-069 | Full Go tests/vet, focused race checks, 56 embedded UI tests, independent-proof/downgrade/storage/Runtime/redirect/late-switch regressions, native macOS desktop tests and Windows desktop cross-build pass; actual Go entry verified in QA-051 cross-process scenario |
+| WEB-062 | ACTIVE | Present member-aware pairing and safe client browser entry | SEC-013, ROOM-008, WEB-061 | Real identity/session navigation regressions, scoped ownership controls and isolated browser acceptance |
 | QA-051 | PLANNED | Verify client owner collaboration closure | CON-019, SEC-013, ROOM-008, BRG-070, WEB-062 | Full relevant suites, cross-process entry, builds/contracts/docs and bounded browser evidence |
 
 ## Deferred Beyond MVP

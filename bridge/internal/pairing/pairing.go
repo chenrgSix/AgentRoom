@@ -25,6 +25,8 @@ import (
 const credentialFilename = "device-credential.json"
 
 type Credential struct {
+	// Transient approval result: never serialized with the Device credential.
+	ClientAccessSecret string              `json:"-"`
 	ServerURL          string              `json:"serverUrl"`
 	DeviceID           string              `json:"deviceId"`
 	TeamID             string              `json:"teamId"`
@@ -129,6 +131,9 @@ func Save(dataDir string, credential Credential) error {
 		return err
 	}
 	if err := temporary.Close(); err != nil {
+		return err
+	}
+	if err := saveClientAccess(dataDir, credential); err != nil {
 		return err
 	}
 	if err := os.Rename(temporaryPath, path); err != nil {

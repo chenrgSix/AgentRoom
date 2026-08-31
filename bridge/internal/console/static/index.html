@@ -96,6 +96,13 @@
                 <button class="secondary hidden" id="connection-fix" type="button">检查连接</button>
               </div>
             </article>
+            <section class="settings-card client-entry-card" aria-labelledby="client-entry-title">
+              <h3 id="client-entry-title">进入 Team 协作</h3>
+              <p id="client-entry-help"></p>
+              <div class="actions"><button class="primary" id="open-client-team" type="button">进入 Team</button><button class="secondary" id="load-client-rooms" type="button">选择房间</button></div>
+              <div class="actions"><select class="hidden" id="client-room" aria-label="已授权房间"></select><button class="secondary hidden" id="open-client-room" type="button">打开房间</button></div>
+              <p id="client-entry-status" role="status"></p>
+            </section>
             <div class="overview-statline">
               <strong id="overview-agent-count">0 个 Agent</strong>
               <span>Runtime 与权限均由本机控制</span>

@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"convenewire.dev/bridge/internal/autostart"
+	"convenewire.dev/bridge/internal/browserlaunch"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/connection"
 	"convenewire.dev/bridge/internal/diagnostics"
@@ -133,6 +134,7 @@ type ConnectionView struct {
 }
 
 type State struct {
+	ClientAccessAvailable   bool                        `json:"clientAccessAvailable"`
 	ShareReasoningSummaries bool                        `json:"shareReasoningSummaries"`
 	ReasoningEditable       bool                        `json:"reasoningConsentEditable"`
 	Phase                   Phase                       `json:"phase"`
@@ -166,6 +168,7 @@ type State struct {
 }
 
 type Dependencies struct {
+	OpenClientEntry           func(string, string) error
 	DiscoverRuntime           func(string) RuntimeDiscovery
 	Enroll                    func(context.Context, config.Config, func(enrollment.Challenge)) (pairing.Credential, error)
 	PairDevice                func(context.Context, config.Config, pairing.SessionInput, func(pairing.SessionStatus)) (pairing.Credential, error)
@@ -223,6 +226,9 @@ type Service struct {
 var environmentName = regexp.MustCompile(`^[A-Z][A-Z0-9_]{0,79}$`)
 
 func New(options Options, dependencies Dependencies) (*Service, error) {
+	if dependencies.OpenClientEntry == nil {
+		dependencies.OpenClientEntry = browserlaunch.OpenClientEntry
+	}
 	if dependencies.DiscoverRuntime == nil {
 		dependencies.DiscoverRuntime = discoverRuntime
 	}
@@ -368,6 +374,10 @@ func (s *Service) State() State {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	snapshot := cloneState(s.state)
+	if s.configuration != nil && s.credential != nil && s.joinCancel == nil {
+		_, accessError := pairing.LoadClientAccess(s.configuration.DataDir, *s.credential)
+		snapshot.ClientAccessAvailable = accessError == nil
+	}
 	if s.configuration != nil {
 		snapshot.AgentProvisioning = agentProvisioningView(
 			s.configuration.AgentProvisioning,
@@ -403,6 +413,8 @@ func (s *Service) Handler() http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/state", s.authorize(s.getState))
+	mux.HandleFunc("GET /api/client-access", s.authorize(s.clientEntryRooms))
+	mux.HandleFunc("POST /api/client-access/open", s.authorize(s.openClientEntry))
 	mux.HandleFunc("GET /api/runtime-discovery", s.authorize(s.refreshRuntimeDiscovery))
 	mux.HandleFunc("POST /api/enrollment/start", s.authorize(s.startEnrollment))
 	mux.HandleFunc("POST /api/device-pairing/start", s.authorize(s.startDevicePairing))
@@ -967,6 +979,7 @@ func (s *Service) finishEnrollment(
 		return
 	}
 	s.configuration = &configuration
+	credential.ClientAccessSecret = ""
 	s.credential = &credential
 	s.applyCredentialTrustViewLocked(credential)
 	s.state.Configured = true

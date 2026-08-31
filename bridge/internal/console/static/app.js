@@ -1,3 +1,4 @@
+import { createClientEntryController } from "./client-entry.mjs";
 import { pairingView } from "./pairing-view.mjs";
 import {
   configuredPairingEntryView,
@@ -17,6 +18,7 @@ import { reasoningConsentView } from "./reasoning-consent-view.mjs";
 import { initializeWorkspacePickers } from "./workspace-picker.mjs";
 
 const elements = Object.fromEntries([
+  "open-client-team", "load-client-rooms", "open-client-room", "client-room", "client-entry-status", "client-entry-help",
   "app-sidebar", "setup-intro", "page-context", "page-title", "phase", "phase-label",
   "configured", "paired", "running", "connection-state", "agent-count", "approval",
   "join-code", "join-expiry", "cancel-enrollment", "configured-view", "approval-eyebrow", "approval-title",
@@ -167,6 +169,8 @@ async function request(path, options = {}) {
   if (!response.ok) throw new Error(body.error || `请求失败 (${response.status})`);
   return body;
 }
+
+const clientEntryController = createClientEntryController({elements, request});
 
 function showError(error) {
   const message = error ? String(error.message || error) : "";
@@ -503,6 +507,7 @@ function closeConnectionModal() {
 
 function render(state) {
   currentState = state;
+  clientEntryController.render(state);
   const waiting = Boolean(state.enrollment?.active);
   renderDiscovery("codex", "codex");
   renderDiscovery("pi", "pi");
