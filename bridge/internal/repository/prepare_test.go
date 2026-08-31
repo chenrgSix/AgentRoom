@@ -218,7 +218,7 @@ func TestPrepareRecoversSealedCandidateBeforeCheckout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.preparer.createCandidate(context.Background(), intent, nil); err != nil {
+	if _, err := f.preparer.createCandidate(context.Background(), intent, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := f.preparer.Close(); err != nil {

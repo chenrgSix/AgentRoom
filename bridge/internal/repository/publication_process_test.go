@@ -28,6 +28,8 @@ func TestCapturePublicationHTTPProcess(t *testing.T) {
 		ExpectError                                                   bool
 		Manifest                                                      execution.GovernedExecutionManifest
 		Operation                                                     execution.RepositoryOperationRequest
+		ResumeOperation                                               *execution.RepositoryOperationRequest
+		ResumeCheckpoint                                              *execution.RepositoryCheckpoint
 	}
 	decoder := json.NewDecoder(io.LimitReader(os.Stdin, 2<<20))
 	decoder.DisallowUnknownFields()
@@ -55,23 +57,37 @@ func TestCapturePublicationHTTPProcess(t *testing.T) {
 	})
 	var captured CapturedRepository
 	var workPath string
+	var preparedTree string
 	if input.CaptureDigest == "" {
 		source, err := InspectSource(ctx, git, input.SourcePath, []string{filepath.Dir(input.SourcePath)}, Limits{})
 		if err != nil {
 			t.Fatal(err)
 		}
 		manifest := input.Manifest
-		ready, err := p.Prepare(ctx, source, Preparation{OperationID: "op_http_prepare0001", RunID: manifest.Scope.RunID,
-			RepositoryID: manifest.Repository.RepositoryID, BindingID: manifest.Repository.BindingID,
-			WorkspaceRef: manifest.Workspace.WorkspaceRef, Generation: manifest.Workspace.WorkspaceGeneration,
-			ManifestDigest: manifest.ManifestDigest, BaseCommit: manifest.Repository.BaseCommit, Inputs: []PatchInput{},
-			ScopePolicy: execution.ManifestScopePolicy(manifest.ScopePolicy)})
+		var ready PreparedWorkspace
+		if input.ResumeOperation != nil {
+			if input.ResumeCheckpoint == nil {
+				t.Fatal("missing selected checkpoint")
+			}
+			ready, err = p.PrepareFromCheckpoint(ctx, source, *input.ResumeOperation, *input.ResumeCheckpoint, []PatchInput{})
+		} else {
+			ready, err = p.Prepare(ctx, source, Preparation{OperationID: "op_http_prepare0001", RunID: manifest.Scope.RunID,
+				RepositoryID: manifest.Repository.RepositoryID, BindingID: manifest.Repository.BindingID,
+				WorkspaceRef: manifest.Workspace.WorkspaceRef, Generation: manifest.Workspace.WorkspaceGeneration,
+				ManifestDigest: manifest.ManifestDigest, BaseCommit: manifest.Repository.BaseCommit, Inputs: []PatchInput{},
+				ScopePolicy: execution.ManifestScopePolicy(manifest.ScopePolicy)})
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
 		workPath = ready.Path
+		preparedTree = ready.PreparedTree
 		// Explicit fixture output, not an Agent invocation or claimed verifier run.
-		if err := os.WriteFile(filepath.Join(ready.Path, "src", "app.txt"), []byte("implemented through real capture\n"), 0o600); err != nil {
+		name, content := "app.txt", "implemented through real capture\n"
+		if input.ResumeOperation != nil {
+			name, content = "continued.txt", "continued after explicit checkpoint resume\n"
+		}
+		if err := os.WriteFile(filepath.Join(ready.Path, "src", name), []byte(content), 0o600); err != nil {
 			t.Fatal(err)
 		}
 		captured, err = p.Capture(ctx, CaptureRequest{OperationID: input.Operation.OperationID,
@@ -106,9 +122,9 @@ func TestCapturePublicationHTTPProcess(t *testing.T) {
 		t.Fatalf("publication error: %v (expected=%v)", err, input.ExpectError)
 	}
 	result := struct {
-		CaptureDigest, WorkPath, CandidateCommit, CandidateTree, Error string
-		Checkpoint                                                     execution.RepositoryCheckpoint
-	}{CaptureDigest: input.CaptureDigest, WorkPath: workPath, CandidateCommit: captured.CandidateCommit,
+		CaptureDigest, WorkPath, PreparedTree, CandidateCommit, CandidateTree, Error string
+		Checkpoint                                                                   execution.RepositoryCheckpoint
+	}{CaptureDigest: input.CaptureDigest, WorkPath: workPath, PreparedTree: preparedTree, CandidateCommit: captured.CandidateCommit,
 		CandidateTree: captured.CandidateTree, Checkpoint: checkpoint}
 	if err != nil {
 		result.Error = err.Error()

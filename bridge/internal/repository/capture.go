@@ -60,6 +60,7 @@ type CapturedRepository struct {
 	BindingID           string           `json:"bindingId"`
 	BaseCommit          string           `json:"baseCommit"`
 	PreparedCommit      string           `json:"preparedCommit"`
+	OutputBaseCommit    string           `json:"outputBaseCommit,omitempty"`
 	ObservedHead        string           `json:"observedHead"`
 	CandidateCommit     string           `json:"candidateCommit"`
 	CandidateTree       string           `json:"candidateTree"`
@@ -88,7 +89,7 @@ func (p *Preparer) capturePreparation(request CaptureRequest) (preparationIntent
 	if err := readJSON(p.claimPath("workspace", request.WorkspaceRef), &intent); err != nil {
 		return intent, preparedCandidate{}, ready, err
 	}
-	if intent.Version != 2 || digest(intent) != request.PreparedDigest || intent.Generation != request.ExpectedGeneration ||
+	if !validPreparationVersion(intent) || digest(intent) != request.PreparedDigest || intent.Generation != request.ExpectedGeneration ||
 		intent.ManifestDigest != request.ManifestDigest || intent.WorkspaceRef != request.WorkspaceRef {
 		return intent, preparedCandidate{}, ready, ErrConflict
 	}
@@ -107,6 +108,7 @@ func (p *Preparer) capturePreparation(request CaptureRequest) (preparationIntent
 	if ready.IntentDigest != request.PreparedDigest || ready.WorkspaceRef != intent.WorkspaceRef || ready.Generation != intent.Generation ||
 		ready.OperationID != intent.OperationID || ready.RunID != intent.RunID || ready.BaseCommit != intent.BaseCommit ||
 		ready.PreparedCommit != candidate.Commit || ready.PreparedTree != candidate.Tree || ready.Branch != p.branch(intent) ||
+		ready.OutputBaseCommit != candidate.OutputBaseCommit ||
 		ready.Path != filepath.Join(attempt, "work") || ready.GitDirectory != filepath.Join(attempt, "git") {
 		return intent, candidate, ready, ErrChanged
 	}
@@ -184,7 +186,7 @@ func (p *Preparer) Capture(ctx context.Context, request CaptureRequest) (Capture
 	if err != nil {
 		return CapturedRepository{}, err
 	}
-	baseline, err := p.git.entries(ctx, ready.GitDirectory, ready.PreparedTree, intent.Source.ObjectFormat)
+	baseline, err := p.git.entries(ctx, ready.GitDirectory, ready.outputBase(), intent.Source.ObjectFormat)
 	if err != nil {
 		return CapturedRepository{}, err
 	}
@@ -257,7 +259,7 @@ func (p *Preparer) buildCapture(ctx context.Context, prepared preparationIntent,
 	}
 	source := Source{Root: ready.GitDirectory, GitDirectory: ready.GitDirectory, CommonDirectory: ready.GitDirectory,
 		ObjectFormat: prepared.Source.ObjectFormat, RootIdentity: id, GitIdentity: id, CommonIdentity: id}
-	if _, err := p.git.importSnapshot(ctx, source, ready.PreparedCommit, gitDir); err != nil {
+	if _, err := p.git.importSnapshot(ctx, source, ready.outputBase(), gitDir); err != nil {
 		return captureCandidate{}, err
 	}
 	seen := map[string]bool{}
@@ -313,7 +315,7 @@ func (p *Preparer) buildCapture(ctx context.Context, prepared preparationIntent,
 	if err != nil {
 		return captureCandidate{}, err
 	}
-	commit, err := p.git.run(ctx, gitDir, strings.NewReader("ConveneWire captured output "+digest(intent)+"\n"), 1024, "commit-tree", tree, "-p", ready.PreparedCommit)
+	commit, err := p.git.run(ctx, gitDir, strings.NewReader("ConveneWire captured output "+digest(intent)+"\n"), 1024, "commit-tree", tree, "-p", ready.outputBase())
 	if err != nil {
 		return captureCandidate{}, err
 	}
@@ -367,7 +369,7 @@ func (p *Preparer) finishCapture(ctx context.Context, prepared preparationIntent
 		return CapturedRepository{}, ErrChanged
 	}
 	shallow, err := readRegular(filepath.Join(gitDir, "shallow"), 4096)
-	if err != nil || string(shallow) != ready.PreparedCommit+"\n" {
+	if err != nil || string(shallow) != ready.outputBase()+"\n" {
 		return CapturedRepository{}, ErrChanged
 	}
 	if _, err := os.Lstat(filepath.Join(gitDir, "info", "grafts")); !errors.Is(err, os.ErrNotExist) {
@@ -404,7 +406,7 @@ func (p *Preparer) finishCapture(ctx context.Context, prepared preparationIntent
 	if _, err := p.git.run(ctx, gitDir, nil, 16<<10, "fsck", "--full", "--strict", "--no-reflogs"); err != nil {
 		return CapturedRepository{}, ErrChanged
 	}
-	patch, err := p.git.run(ctx, gitDir, nil, maximumCapturedPatch, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-renames", ready.PreparedCommit, candidate.Commit, "--")
+	patch, err := p.git.run(ctx, gitDir, nil, maximumCapturedPatch, "diff", "--binary", "--full-index", "--no-ext-diff", "--no-textconv", "--no-renames", ready.outputBase(), candidate.Commit, "--")
 	if err != nil {
 		return CapturedRepository{}, err
 	}
@@ -424,7 +426,7 @@ func (p *Preparer) finishCapture(ctx context.Context, prepared preparationIntent
 	result := CapturedRepository{Version: 1, OperationID: intent.Request.OperationID, RunID: prepared.RunID, WorkspaceRef: prepared.WorkspaceRef,
 		WorkspaceGeneration: prepared.Generation, ManifestDigest: prepared.ManifestDigest, PreparedDigest: ready.IntentDigest,
 		RepositoryID: prepared.RepositoryID, BindingID: prepared.BindingID, BaseCommit: prepared.BaseCommit, PreparedCommit: ready.PreparedCommit,
-		ObservedHead: intent.ObservedHead, CandidateCommit: candidate.Commit, CandidateTree: candidate.Tree, PatchDigest: hex.EncodeToString(hash[:]),
+		OutputBaseCommit: ready.OutputBaseCommit, ObservedHead: intent.ObservedHead, CandidateCommit: candidate.Commit, CandidateTree: candidate.Tree, PatchDigest: hex.EncodeToString(hash[:]),
 		PatchBytes: int64(len(patch)), SnapshotDigest: digest(intent.Snapshot), Changes: intent.Changes, CapturedAt: intent.CapturedAt}
 	result.Digest = digest(result)
 	if err := ensureExactJSON(p.claimPath("capture", intent.Request.OperationID), result); err != nil {

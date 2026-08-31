@@ -65,15 +65,17 @@ type preparationIntent struct {
 	Source         Source                        `json:"source"`
 	Inputs         []inputPin                    `json:"inputs"`
 	ScopePolicy    execution.ManifestScopePolicy `json:"scopePolicy"`
+	Resume         *checkpointResumePin          `json:"resume,omitempty"`
 }
 
 type preparedCandidate struct {
-	IntentDigest    string `json:"intentDigest"`
-	AttemptIdentity string `json:"attemptIdentity"`
-	GitIdentity     string `json:"gitIdentity"`
-	ConfigDigest    string `json:"configDigest"`
-	Commit          string `json:"commit"`
-	Tree            string `json:"tree"`
+	IntentDigest     string `json:"intentDigest"`
+	AttemptIdentity  string `json:"attemptIdentity"`
+	GitIdentity      string `json:"gitIdentity"`
+	ConfigDigest     string `json:"configDigest"`
+	Commit           string `json:"commit"`
+	Tree             string `json:"tree"`
+	OutputBaseCommit string `json:"outputBaseCommit,omitempty"`
 }
 
 // PreparedWorkspace is a LOCAL record, not a RepositoryCheckpoint or evidence
@@ -89,10 +91,14 @@ type PreparedWorkspace struct {
 	BaseCommit     string `json:"baseCommit"`
 	PreparedCommit string `json:"preparedCommit"`
 	PreparedTree   string `json:"preparedTree"`
-	Branch         string `json:"branch"`
-	Path           string `json:"path"`
-	GitDirectory   string `json:"gitDirectory"`
-	WorkIdentity   string `json:"workIdentity"`
+	// A resumed attempt starts at PreparedCommit but publishes cumulative Task
+	// output relative to the approved base plus upstream inputs. Empty preserves
+	// the original journal encoding and means PreparedCommit.
+	OutputBaseCommit string `json:"outputBaseCommit,omitempty"`
+	Branch           string `json:"branch"`
+	Path             string `json:"path"`
+	GitDirectory     string `json:"gitDirectory"`
+	WorkIdentity     string `json:"workIdentity"`
 }
 
 // Preparer owns a dedicated directory for its lifetime. Its lock serializes
@@ -244,6 +250,10 @@ func (p *Preparer) attemptPath(workspaceRef string) string {
 func (p *Preparer) Prepare(ctx context.Context, source Source, request Preparation) (PreparedWorkspace, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	return p.prepareLocked(ctx, source, request, nil)
+}
+
+func (p *Preparer) prepareLocked(ctx context.Context, source Source, request Preparation, resume *checkpointResume) (PreparedWorkspace, error) {
 	if err := p.checkOwner(); err != nil {
 		return PreparedWorkspace{}, err
 	}
@@ -267,6 +277,13 @@ func (p *Preparer) Prepare(ctx context.Context, source Source, request Preparati
 	intent, err := p.intent(source, request)
 	if err != nil {
 		return PreparedWorkspace{}, err
+	}
+	if resume != nil {
+		if err := resume.checkInputs(inputs, p.git.limits.SnapshotBytes); err != nil {
+			return PreparedWorkspace{}, err
+		}
+		intent.Version = 3
+		intent.Resume = &resume.pin
 	}
 	for _, claim := range []struct{ kind, id string }{{"operation", request.OperationID}, {"run", request.RunID}, {"workspace", request.WorkspaceRef}} {
 		if err := ensureExactJSON(p.claimPath(claim.kind, claim.id), intent); err != nil {
@@ -300,7 +317,7 @@ func (p *Preparer) Prepare(ctx context.Context, source Source, request Preparati
 		return PreparedWorkspace{}, err
 	}
 	if errors.Is(err, os.ErrNotExist) {
-		candidate, err = p.createCandidate(ctx, intent, request.Inputs)
+		candidate, err = p.createCandidate(ctx, intent, request.Inputs, resume)
 		if err != nil {
 			return PreparedWorkspace{}, err
 		}
@@ -334,7 +351,7 @@ func (p *Preparer) branch(intent preparationIntent) string {
 	return "refs/heads/codex/" + digest(intent.WorkspaceRef)
 }
 
-func (p *Preparer) createCandidate(ctx context.Context, intent preparationIntent, inputs []PatchInput) (preparedCandidate, error) {
+func (p *Preparer) createCandidate(ctx context.Context, intent preparationIntent, inputs []PatchInput, resume *checkpointResume) (preparedCandidate, error) {
 	attempt := p.attemptPath(intent.WorkspaceRef)
 	if err := os.Mkdir(attempt, 0o700); err != nil {
 		if errors.Is(err, os.ErrExist) {
@@ -376,6 +393,23 @@ func (p *Preparer) createCandidate(ctx context.Context, intent preparationIntent
 		}
 		commit = strings.TrimSpace(string(created))
 	}
+	outputBase := ""
+	if resume != nil {
+		outputBase = commit
+		if _, err := p.git.run(ctx, gitDir, bytes.NewReader(resume.patch), 16<<10, "apply", "--cached", "--whitespace=nowarn"); err != nil {
+			return preparedCandidate{}, err
+		}
+		tree, err = p.git.text(ctx, gitDir, "write-tree")
+		if err != nil || tree != resume.pin.CandidateTree {
+			return preparedCandidate{}, ErrChanged
+		}
+		created, err := p.git.run(ctx, gitDir, strings.NewReader("ConveneWire resumed checkpoint "+digest(intent)+"\n"), 16<<10,
+			"commit-tree", tree, "-p", outputBase)
+		if err != nil {
+			return preparedCandidate{}, err
+		}
+		commit = strings.TrimSpace(string(created))
+	}
 	if !validObject(commit, intent.Source.ObjectFormat) || !validObject(tree, intent.Source.ObjectFormat) {
 		return preparedCandidate{}, ErrInvalid
 	}
@@ -402,7 +436,7 @@ func (p *Preparer) createCandidate(ctx context.Context, intent preparationIntent
 		return preparedCandidate{}, err
 	}
 	candidate := preparedCandidate{IntentDigest: digest(intent), AttemptIdentity: attemptID, GitIdentity: id,
-		ConfigDigest: digest(string(configuration)), Commit: commit, Tree: tree}
+		ConfigDigest: digest(string(configuration)), Commit: commit, Tree: tree, OutputBaseCommit: outputBase}
 	if err := syncTree(attempt); err != nil {
 		return preparedCandidate{}, err
 	}
@@ -452,6 +486,10 @@ func (p *Preparer) checkCandidate(intent preparationIntent, candidate preparedCa
 	if !validObject(candidate.Commit, intent.Source.ObjectFormat) || !validObject(candidate.Tree, intent.Source.ObjectFormat) {
 		return ErrChanged
 	}
+	if !validPreparationVersion(intent) || (intent.Resume == nil && candidate.OutputBaseCommit != "") ||
+		(intent.Resume != nil && (!validObject(candidate.OutputBaseCommit, intent.Source.ObjectFormat) || candidate.Tree != intent.Resume.CandidateTree)) {
+		return ErrChanged
+	}
 	return nil
 }
 
@@ -496,9 +534,23 @@ func (p *Preparer) verifyWorkspace(ctx context.Context, intent preparationIntent
 	if err := p.git.verifyFiles(ctx, work, candidate.Tree, intent.Source.ObjectFormat); err != nil {
 		return PreparedWorkspace{}, err
 	}
+	if candidate.OutputBaseCommit != "" {
+		parent, err := p.git.text(ctx, gitDir, "rev-parse", candidate.Commit+"^")
+		if err != nil || parent != candidate.OutputBaseCommit {
+			return PreparedWorkspace{}, ErrChanged
+		}
+	}
 	return PreparedWorkspace{Version: 1, IntentDigest: digest(intent), OperationID: intent.OperationID, RunID: intent.RunID,
 		WorkspaceRef: intent.WorkspaceRef, Generation: intent.Generation, BaseCommit: intent.BaseCommit,
-		PreparedCommit: candidate.Commit, PreparedTree: candidate.Tree, Branch: p.branch(intent), Path: work, GitDirectory: gitDir, WorkIdentity: workID}, nil
+		PreparedCommit: candidate.Commit, PreparedTree: candidate.Tree, OutputBaseCommit: candidate.OutputBaseCommit,
+		Branch: p.branch(intent), Path: work, GitDirectory: gitDir, WorkIdentity: workID}, nil
+}
+
+func (ready PreparedWorkspace) outputBase() string {
+	if ready.OutputBaseCommit != "" {
+		return ready.OutputBaseCommit
+	}
+	return ready.PreparedCommit
 }
 
 func readRegular(path string, limit int64) ([]byte, error) {

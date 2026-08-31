@@ -13,12 +13,13 @@ import { executionOperationDigest } from "@convene-wire/contracts/execution-vali
 import { ArtifactPublicationRepository } from "../src/artifact/artifact-publication-repository.js";
 import { LocalArtifactBlobStore } from "../src/artifact/local-artifact-blob-store.js";
 import { ArtifactRepository } from "../src/task/artifact-repository.js";
+import { planIsolatedWorkspace } from "../src/workspace/isolated-workspace-lease-service.js";
 import { capability, workspaceFixture } from "./helpers/isolated-workspace-fixture.js";
 
 const exec = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
 type ProcessResult = {
-  CaptureDigest: string; WorkPath: string; CandidateCommit: string; CandidateTree: string;
+  CaptureDigest: string; WorkPath: string; PreparedTree: string; CandidateCommit: string; CandidateTree: string;
   Error: string; Checkpoint: RepositoryCheckpoint;
 };
 
@@ -210,6 +211,75 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       assert.deepEqual(f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(f.manifest.scope.runId), initialRun);
       for (const table of ["repository_checkpoints", "repository_checkpoint_outputs", "task_artifact_refs", "artifact_publications"]) {
         assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, 1);
+      }
+
+      if (mode === "lost-responses") {
+        // All old Go fixture processes have terminal close above. There was no
+        // Agent Runtime. Only future Run admission/settlement metadata is seeded;
+        // resume, publication and canonical content verification remain real.
+        const resumedAt = new Date().toISOString();
+        f.service.closeForDevice(f.principal, f.operation(lease, "op_resume_release0001"), "release", resumedAt);
+        f.database.prepare("UPDATE runs SET state = 'failed', terminal_at = ?, updated_at = ? WHERE run_id = ?")
+          .run(resumedAt, resumedAt, f.manifest.scope.runId);
+        const next = structuredClone(f.manifest);
+        next.scope.runId = "run_real_resumed0001";
+        next.scope.dispatchGeneration++;
+        await f.insertRun(next.scope.runId);
+        next.scope.taskRevision = (await f.ok("GET", `/api/tasks/${f.task.taskId}`)).taskRevision;
+        next.workspace = planIsolatedWorkspace(next.scope, next.repository, resumedAt, next.deadline);
+        f.rehash(next);
+        f.database.transaction(() => f.service.reserveForRun(next, resumedAt))();
+        f.freeze(next);
+        const preparation: RepositoryOperationRequest = {
+          ...operation, operationId: "op_real_resume_prepare0001", execution: next.scope,
+          expectedGeneration: next.workspace.workspaceGeneration,
+          action: { kind: "prepare", prepare: { manifest: next, resumeCheckpointId: second.Checkpoint.checkpointId } }
+        };
+        const { requestDigest: ignoredPreparation, ...preparationContent } = preparation;
+        preparation.requestDigest = executionOperationDigest(preparationContent);
+        const resumedOperation: RepositoryOperationRequest = {
+          ...operation, operationId: "op_real_resumed_capture0001", execution: next.scope,
+          expectedGeneration: next.workspace.workspaceGeneration,
+          action: { kind: "capture", capture: { manifestDigest: next.manifestDigest } }
+        };
+        const { requestDigest: ignoredCapture, ...captureContent } = resumedOperation;
+        resumedOperation.requestDigest = executionOperationDigest(captureContent);
+        const resumeInput = { ...input, Manifest: next, Operation: resumedOperation,
+          ResumeOperation: preparation, ResumeCheckpoint: second.Checkpoint, ExpectError: false };
+        const resumed = await runCapture(binary, resumeInput, t.signal);
+        assert.equal(resumed.PreparedTree, second.Checkpoint.candidateTree);
+        assert.notEqual(resumed.WorkPath, first.WorkPath);
+        assert.equal(await readFile(path.join(resumed.WorkPath, "src", "app.txt"), "utf8"), "implemented through real capture\n");
+        assert.equal(await readFile(path.join(first.WorkPath, "src", "app.txt"), "utf8"), "later uncollected edit\n");
+        const resumedPin = resumed.Checkpoint.outputs[0]!.artifact;
+        assert.notEqual(resumedPin.artifactId, pin.artifactId);
+        const resumedArtifact = new ArtifactRepository(f.database).get(resumedPin.artifactId)!;
+        assert.equal(resumedArtifact.sourceRunId, next.scope.runId);
+        assert.equal(resumedArtifact.artifactRevision, resumedPin.artifactRevision);
+        const resumedContent = new ArtifactPublicationRepository(f.database).getContent(resumedArtifact.contentId!)!;
+        const cumulativePatch = new LocalArtifactBlobStore(path.join(path.dirname(dbPath), "artifact-blobs"))
+          .readVerified(resumedContent.storageKey, resumedPin.contentDigest, resumedPin.byteLength);
+        assert.match(cumulativePatch.toString(), /\+implemented through real capture/u);
+        assert.match(cumulativePatch.toString(), /\+continued after explicit checkpoint resume/u);
+        assert.doesNotMatch(cumulativePatch.toString(), /later uncollected/u);
+        const resumedVerification = path.join(directory, mode, "resumed-roundtrip");
+        await git(directory, "clone", "--no-local", "--", source, resumedVerification);
+        const cumulativePath = path.join(directory, mode, "cumulative.patch");
+        await writeFile(cumulativePath, cumulativePatch);
+        await git(resumedVerification, "apply", "--index", "--", cumulativePath);
+        assert.equal(await git(resumedVerification, "write-tree"), resumed.CandidateTree);
+        assert.deepEqual(await f.ok("GET", `/api/bridge/repository-captures/${resumedOperation.operationId}/checkpoint`, undefined, authorization), resumed.Checkpoint);
+        const resumeCounts = [...counts];
+        const resumedReplay = await runCapture(binary, { ...resumeInput, CaptureDigest: resumed.CaptureDigest }, t.signal);
+        assert.deepEqual(resumedReplay.Checkpoint, resumed.Checkpoint);
+        assert.deepEqual([...counts], resumeCounts, "resumed confirmed replay performed HTTP writes");
+        assert.equal(await git(source, "rev-parse", "HEAD"), baseCommit);
+        assert.equal(await git(source, "status", "--porcelain"), "");
+        assert.equal(leakedPath, false);
+        for (const table of ["repository_checkpoints", "repository_checkpoint_outputs", "task_artifact_refs", "artifact_publications"]) {
+          assert.equal((f.database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n, 2);
+        }
+        assert.equal((f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(next.scope.runId) as { state: string }).state, "queued");
       }
     });
   }

@@ -150,6 +150,50 @@ Windows flushes owned read-only Git files with write-capable handles and restore
 their attributes. Native Windows and power-loss durability need their own
 platform evidence; cross-compilation does not establish either.
 
+### Explicit Local Checkpoint Resume
+
+`PrepareFromCheckpoint` consumes the generated prepare operation, its exact
+`resumeCheckpointId`, a canonical checkpoint already confirmed by this Bridge,
+and freshly authorized upstream patch bindings. The retained publication intent,
+checkpoint proposal, confirmed receipt and captured bytes must all agree. An
+unconfirmed proposal, missing/corrupt bytes or another local repository binding
+cannot stand in for that history. The source checkout is revalidated; the old
+attempt's working files are never read or restored, even if they contain later
+uncollected changes. This is local code restoration, not native-session resume
+or cross-Bridge checkpoint import.
+
+The new attempt retains the same approved plan revision, node, Task definition
+and criteria, Agent/Device, base, runtime profile, scope, verification and output
+contract. It uses a different Run, lease, workspace and workspace generation,
+with an increasing dispatch generation. Task/control revisions may advance and
+a grant may be renewed; current local authority and stopped-Run/explicit-retry
+admission remain mandatory caller responsibilities, not properties conferred by
+the checkpoint. Existing production Runtime admission remains fail-closed.
+
+Upstream identity compares exact receipt, Artifact, content, repository, slot
+and order. Input binding IDs, destination Run and validity intervals are renewed
+for the new attempt, so its complete input digest need not equal the old one.
+New bytes must match those new bindings. Changed upstream content is not an
+implicit rebase: it requires a separately approved reconciliation.
+
+Resume journal version 3 freezes the selected checkpoint and request digests.
+The adapter rebuilds the approved base plus upstream inputs, applies the sealed
+Task patch, and checks that the actual Git tree equals the selected checkpoint.
+It separates the Runtime starting commit from `outputBaseCommit`: subsequent
+scope checks and output capture use the latter so the patch includes cumulative
+Task changes without re-exporting upstream work. Repeated resume without new
+edits still preserves that cumulative patch. Both input and checkpoint patch
+expansion consume one local budget. Ordinary version-2 journals omit the new
+fields and preserve their exact digest encoding.
+
+A sealed candidate can finish checkout after restart and a lost local ready
+receipt can be recovered through actual file/identity checks. Changed replay
+intent, dirty new worktrees and incomplete unsealed candidates fail closed and
+remain available for inspection. This operation creates neither a Run nor a
+Runtime, and it does not release a workspace, accept a Result or authorize
+cleanup. Runtime wiring, owner-visible cleanup and remaining output producers
+retain their separate acceptance requirements.
+
 ### Frozen Output Scope and Local Capture
 
 Preparation journal version 2 also pins the generated `ManifestScopePolicy`.
@@ -168,8 +212,10 @@ from a clean filesystem. The original source, Agent branch, index and worktree
 remain unchanged.
 
 Actual files are read through a rooted filesystem and observed twice with
-head/index consistency checks. The prepared candidate, including exact upstream
-inputs, is the output-scope baseline, not the original repository commit alone.
+head/index consistency checks. The approved base plus exact upstream inputs is
+the output-scope baseline, not the original repository commit alone. For a
+resumed attempt this is its explicit output base, not the checkpoint-derived
+Runtime starting tree.
 Tracked, untracked and ignored files are all considered. Generated build state
 must be placed in locally approved attempt scratch or explicitly handled by its
 owner before capture; mutable ignore rules cannot conceal out-of-scope writes.
@@ -248,9 +294,11 @@ untouched; publication does not authorize their cleanup.
 The actual Go/HTTP/Git integration fixture verifies canonical uploaded bytes
 against the captured tree through response loss and separate-process restart.
 It supplies synthetic future-admission/connection metadata and fixture code
-changes, not an Agent Runtime or local grant implementation. Explicit checkpoint
-resume into a new attempt, exact-owned cleanup, remaining output producers and
-the BRG-071/RUN-018 admission connection remain required product work.
+changes, not an Agent Runtime or local grant implementation. Its resume extension
+uses a confirmed Server checkpoint in a new Go process and checks that newly
+published cumulative bytes reproduce the new actual candidate tree. Exact-owned
+cleanup, remaining output producers and the BRG-071/RUN-018 admission connection
+remain required product work.
 
 ## Verification Receipts
 
