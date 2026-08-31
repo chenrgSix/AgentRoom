@@ -22,7 +22,8 @@ export class ArtifactContentBindingService {
     private readonly publications: ArtifactPublicationRepository,
     private readonly tasks: AgentTaskRepository,
     private readonly runs: RunRepository,
-    private readonly core: CoreRepository
+    private readonly core: CoreRepository,
+    private readonly recordInputProvenance?: (principal: DevicePrincipal, artifact: TaskArtifactRecord, now: string) => void
   ) {}
 
   public bind(
@@ -91,6 +92,11 @@ export class ArtifactContentBindingService {
         relations: []
       };
       const created = this.artifacts.create(record, publication.relations);
+      const manifest = this.runs.getContextManifest(publication.runId);
+      if (manifest && "execution" in manifest && !this.recordInputProvenance) {
+        throw new Error("Governed Artifact publication requires input provenance");
+      }
+      this.recordInputProvenance?.(principal, created.artifact, now);
       this.publications.bind(
         publication.publicationId,
         content.contentId,

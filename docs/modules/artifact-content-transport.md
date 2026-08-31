@@ -93,6 +93,16 @@ becomes visible. A bound response-loss retry compares the requested relation
 specification with B's retained canonical lineage and returns the existing
 identity only on an exact match.
 
+For governed Runs, canonical bind also records the exact supplied execution
+input bindings from the immutable Run manifest. Migration 0060 stores this
+separate cross-Task input provenance without changing same-Task relation rules.
+Artifact creation, its input provenance and publication binding commit or roll
+back together; an exact bind retry returns the original Artifact. Provenance
+cannot be appended after publication is bound and does not attest consumption,
+test execution or acceptance. The execution input endpoint verifies sealed
+source bytes under its own plan/Run/Device grant; ordinary Artifact download
+authorization remains unchanged.
+
 Only bound canonical Artifacts enter Context Planner, Web preview, Memory
 provenance, or Run delivery. Sealed-but-unbound content is recoverable storage,
 not a result.

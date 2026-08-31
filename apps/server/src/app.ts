@@ -58,6 +58,8 @@ import { ExecutionError } from "./execution/execution-error.js";
 import { ExecutionPlanRepository } from "./execution/execution-plan-repository.js";
 import { ExecutionSourceRepository } from "./execution/execution-source-repository.js";
 import { ExecutionPlanService } from "./execution/execution-plan-service.js";
+import { ExecutionInputRepository } from "./execution/execution-input-repository.js";
+import { ExecutionInputService } from "./execution/execution-input-service.js";
 import { ExecutionApprovalRepository } from "./execution/execution-approval-repository.js";
 import { ExecutionPlanCompiler } from "./execution/execution-plan-compiler.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
@@ -316,7 +318,8 @@ export async function createServerApp(
     artifactPublicationRepository,
     taskRepository,
     runRepository,
-    core
+    core,
+    (principal, artifact, now) => executionInputs.recordArtifactInputs(principal, artifact, now)
   );
   const taskArtifacts = new TaskArtifactService(
     artifactRepository,
@@ -373,6 +376,10 @@ export async function createServerApp(
   );
   const resultRepository = new ResultRepository(database);
   const executionApprovals = new ExecutionApprovalRepository(database);
+  const executionInputs = new ExecutionInputService(
+    database, new ExecutionInputRepository(database), new ExecutionPlanRepository(database),
+    executionApprovals, artifactRepository, artifactPublicationRepository, artifactBlobs, auth
+  );
   const executionPlans = new ExecutionPlanService(
     transactions,
     new ExecutionPlanRepository(database),
@@ -836,6 +843,7 @@ export async function createServerApp(
     dispatchDiscussionRuns,
     executor,
     executionPlans,
+    executionInputs,
     fakeAdapters,
     handoffs,
     hostedAgents,

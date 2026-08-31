@@ -2,11 +2,11 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { ExecutionContractError } from "@convene-wire/contracts/execution-validation";
 import { ExecutionError } from "../execution/execution-error.js";
 import { AuthorizationError } from "../security/auth-service.js";
-import { noStore } from "./http-helpers.js";
+import { bearerToken, noStore } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
-  app, clock, executionPlans, principal
+  app, auth, clock, executionPlans, executionInputs, principal
 }: ServerRouteContext): void {
   const options = {
     bodyLimit: 512 * 1024,
@@ -29,6 +29,31 @@ export function registerExecutionPlanRoutes({
     }
     return Number(value);
   };
+  app.get<{ Params: { planId: string; bindingId: string } }>(
+    "/api/execution-plans/:planId/inputs/:bindingId", options,
+    async (request) => execute(() => executionInputs.getForMember(
+      principal(request), request.params.planId, request.params.bindingId
+    ))
+  );
+  app.get<{ Params: { planId: string; artifactId: string } }>(
+    "/api/execution-plans/:planId/artifacts/:artifactId/inputs", options,
+    async (request) => execute(() => executionInputs.artifactInputsForMember(
+      principal(request), request.params.planId, request.params.artifactId
+    ))
+  );
+  app.get<{ Params: { runId: string; bindingId: string } }>(
+    "/api/bridge/runs/:runId/execution-inputs/:bindingId/content", options,
+    async (request, reply) => execute(() => {
+      const result = executionInputs.readForDevice(
+        auth.authenticateDevice(bearerToken(request), clock()), request.params.runId,
+        request.params.bindingId, clock()
+      );
+      reply.header("x-convenewire-input-id", result.binding.bindingId);
+      reply.header("x-convenewire-content-sha256", result.binding.artifact.contentDigest);
+      reply.header("x-content-type-options", "nosniff");
+      return reply.type(result.mediaType).send(result.bytes);
+    })
+  );
   app.post<{ Params: { taskId: string } }>(
     "/api/tasks/:taskId/execution-plans", options,
     async (request) => execute(() => executionPlans.create(

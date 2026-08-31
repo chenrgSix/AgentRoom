@@ -246,6 +246,15 @@ the source, target, type, scope, and provenance cannot be updated or deleted.
 There is deliberately no post-hoc relation API and a text reply does not
 substitute for the lineage record.
 
+Governed execution input provenance is separate from same-Task Artifact
+relations and Result evidence. A destination-owned snapshot Artifact records
+the immutable input bindings supplied to its frozen Run, atomically with
+canonical publication binding. This permits inspecting the selected upstream
+source without importing its accepted claims. An input grant never permits
+foreign-Task Result evidence or a cross-Task `derives_from`, `reviews` or
+`verifies` relation. Supplied-input provenance is not proof of consumption or
+independent verification; those observations retain their own authorities.
+
 ## Shared Memory
 
 Room history and Task events are authoritative. Room and Task summaries are

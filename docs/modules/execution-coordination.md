@@ -133,6 +133,38 @@ same-Task Artifact relation and Result evidence validation remain unchanged.
 Revocation prevents new input materialization; frozen receipts still provide
 authorized historical diagnosis without disclosing data to removed members.
 
+### Accepted-Result Input Admission
+
+The internal `freezeForRun` port resolves an approved edge or exact external
+input to an accepted Result and its sealed canonical Artifact. It must run in
+the same transaction as destination Run admission and manifest freezing; a
+nested savepoint prevents a caught later insert failure from leaving partial
+input grants. Stable Run/slot identities return the original immutable binding
+on an exact retry. A frozen manifest cannot acquire new bindings afterward.
+The default accepted-result resolver does not stand in for independent
+`verified_output` or `integrated_commit` proof resolution. Those gates require
+their owning Verification and Repository implementations before admission.
+
+`GET /api/bridge/runs/:runId/execution-inputs/:bindingId/content` checks the
+authenticated destination Device, current Room/Team, Task/Agent ownership and
+assignment, active Run, expiry, approved plan pins, and the complete identical
+Run/Delivery Context Manifest. It verifies the manifest/input digests and the
+source's current definition/criteria and accepted review before reading sealed
+bytes. Revocation, archived scope, malformed or substituted context and source
+drift deny further reads. Content corruption is a safe unavailable response,
+not returned bytes. This endpoint has no public grant-creation counterpart and
+does not expand the existing same-Task Artifact download endpoint.
+
+Initial destination Artifact binding records the Run manifest's supplied input
+bindings in the same canonical Artifact/publication transaction. These immutable
+records identify provided inputs, not proof that an Agent consumed them or that
+the output is correct. They cannot be added to an already-bound Artifact.
+Room-authorized history is available at
+`GET /api/execution-plans/:planId/inputs/:bindingId` and
+`GET /api/execution-plans/:planId/artifacts/:artifactId/inputs` without exposing
+storage keys or local paths. Neither provenance nor a read grant accepts a
+destination Result, enables a legacy Run, applies code or starts a Runtime.
+
 ## Scheduling, Budgets and Recovery
 
 The scheduler is a deterministic application service driven by persisted state,
