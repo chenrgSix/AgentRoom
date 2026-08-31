@@ -180,15 +180,13 @@ func runPrimaryDesktop(configPath, dataDir, workspace, initialPairingLink string
 	if background && service.State().Configured && initialPairingLink == "" {
 		window.Hide()
 	}
-	app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
-		activation.ready(application.InvokeAsync, func(link string) {
-			if link != "" {
-				window.SetURL(consoleWindowURL(service.Token(), link))
-			}
-			window.Show()
-			window.Restore()
-			window.Focus()
-		})
+	bindActivationToLoadedPage(window.OnWindowEvent, runtime.GOOS, activation, application.InvokeAsync, func(link string) {
+		if link != "" {
+			window.SetURL(consoleWindowURL(service.Token(), link))
+		}
+		window.Show()
+		window.Restore()
+		window.Focus()
 	})
 	window.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		window.Hide()
