@@ -447,6 +447,12 @@ from `v0.4.1` to `v0.4.2`; the open `WEB-050`, `QA-038` and `BRG-013` acceptance
 boundaries are not relabeled as complete by publishing this release, nor does
 stable status claim production-provider or universal physical-platform approval.
 
+Cancellation connection tests await the production handler's return before
+inspecting local fence cleanup. Receiving a terminal WebSocket frame is not a
+handler-completion barrier: the durable fence must remain until the sender
+returns successfully. The tests retain bounded waits, callback-error checks,
+durable identity/state assertions, and failure-path context cancellation.
+
 `QA-038` is the deterministic ADR-0026 admission gate. It records focused
 Server/Web/security/migration/recovery tests, fake-HTTPS E2E, unconfigured
 Compose/readiness compatibility, existing managed/manual/Fake behavior, full

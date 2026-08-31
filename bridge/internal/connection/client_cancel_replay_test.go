@@ -209,6 +209,7 @@ func TestCanceledRunReplaysDurableTerminalStatusAfterFirstWriteIsLost(t *testing
 }
 
 func TestCancelDuringBlockedPreparationDoesNotStartRuntime(t *testing.T) {
+	handled := make(chan error, 1)
 	now := time.Date(2026, time.August, 29, 8, 30, 0, 0, time.UTC)
 	directory := t.TempDir()
 	inbox, err := delivery.Open(directory + "/inbox")
@@ -318,13 +319,16 @@ func TestCancelDuringBlockedPreparationDoesNotStartRuntime(t *testing.T) {
 			message contracts.RunRequestedMessage,
 			send func(context.Context, any) error,
 		) error {
-			return handler.Handle(ctx, message, delivery.Sender(send))
+			err := handler.Handle(ctx, message, delivery.Sender(send))
+			handled <- err
+			return err
 		},
 		FenceCanceledRun: func(message contracts.RunCancelRequestedMessage) error {
 			return executor.StageCancellation(message)
 		},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- client.Run(ctx) }()
 
@@ -335,6 +339,7 @@ func TestCancelDuringBlockedPreparationDoesNotStartRuntime(t *testing.T) {
 		cancel()
 		t.Fatal("timed out waiting for preparation cancellation acknowledgement")
 	}
+	waitCancellationHandler(t, handled)
 	var accepted contracts.RunAcceptedMessage
 	if err := json.Unmarshal(events[0], &accepted); err != nil {
 		t.Fatal(err)
@@ -378,6 +383,7 @@ func TestCancelDuringBlockedPreparationDoesNotStartRuntime(t *testing.T) {
 }
 
 func TestPreAdmissionCancellationAcknowledgesWithoutStartingRuntime(t *testing.T) {
+	handled := make(chan error, 1)
 	now := time.Date(2026, time.August, 29, 8, 45, 0, 0, time.UTC)
 	directory := t.TempDir()
 	inbox, err := delivery.Open(directory + "/inbox")
@@ -470,10 +476,13 @@ func TestPreAdmissionCancellationAcknowledgesWithoutStartingRuntime(t *testing.T
 			message contracts.RunCancelRequestedMessage,
 			send func(context.Context, any) error,
 		) error {
-			return executor.ReplayCanceledRun(ctx, message, delivery.Sender(send))
+			err := executor.ReplayCanceledRun(ctx, message, delivery.Sender(send))
+			handled <- err
+			return err
 		},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- client.Run(ctx) }()
 
@@ -484,6 +493,7 @@ func TestPreAdmissionCancellationAcknowledgesWithoutStartingRuntime(t *testing.T
 		cancel()
 		t.Fatal("timed out waiting for tombstoned cancellation result")
 	}
+	waitCancellationHandler(t, handled)
 	var tombstoneAck contracts.RunStatusMessage
 	if err := json.Unmarshal(events[0], &tombstoneAck); err != nil {
 		t.Fatal(err)
@@ -522,6 +532,7 @@ func TestPreAdmissionCancellationAcknowledgesWithoutStartingRuntime(t *testing.T
 }
 
 func TestActiveWorkerStagesCancellationBeforeInboxAdmission(t *testing.T) {
+	handled := make(chan error, 1)
 	now := time.Date(2026, time.August, 29, 8, 55, 0, 0, time.UTC)
 	directory := t.TempDir()
 	inbox, err := delivery.Open(directory + "/inbox")
@@ -629,7 +640,9 @@ func TestActiveWorkerStagesCancellationBeforeInboxAdmission(t *testing.T) {
 		) error {
 			close(workerScheduled)
 			<-workerRelease
-			return handler.Handle(ctx, message, delivery.Sender(send))
+			err := handler.Handle(ctx, message, delivery.Sender(send))
+			handled <- err
+			return err
 		},
 		FenceCanceledRun: func(message contracts.RunCancelRequestedMessage) error {
 			err := executor.StageCancellation(message)
@@ -645,6 +658,7 @@ func TestActiveWorkerStagesCancellationBeforeInboxAdmission(t *testing.T) {
 		},
 	}
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	done := make(chan error, 1)
 	go func() { done <- client.Run(ctx) }()
 
@@ -655,6 +669,7 @@ func TestActiveWorkerStagesCancellationBeforeInboxAdmission(t *testing.T) {
 		cancel()
 		t.Fatal("timed out waiting for active cancellation fence")
 	}
+	waitCancellationHandler(t, handled)
 	var accepted contracts.RunAcceptedMessage
 	if err := json.Unmarshal(events[0], &accepted); err != nil {
 		t.Fatal(err)
@@ -690,6 +705,21 @@ func TestActiveWorkerStagesCancellationBeforeInboxAdmission(t *testing.T) {
 		}
 	case <-time.After(time.Second):
 		t.Fatal("Bridge client did not stop")
+	}
+}
+
+// Receiving the terminal WebSocket frame precedes the sender returning and
+// clearing its durable cancellation fence. Inspect cleanup only after the
+// production callback completes, retaining the send-before-clear guarantee.
+func waitCancellationHandler(t *testing.T, handled <-chan error) {
+	t.Helper()
+	select {
+	case err := <-handled:
+		if err != nil {
+			t.Fatalf("cancellation handler failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("cancellation handler did not finish cleanup")
 	}
 }
 
