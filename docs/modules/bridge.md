@@ -1,5 +1,12 @@
 # Local Bridge
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) adds explicit
+owner-local repository bindings and Task-scoped grants. Pairing does not opt
+existing Agents into repository execution. Bridge keeps paths, commands,
+credentials and enforcement local; Central receives bounded capabilities and
+exact operation receipts. Repository preparation, verification and cleanup use
+durable operation ownership and never add a second Runtime-start path.
+
 ## Scope
 
 - Prefix: `BRG`

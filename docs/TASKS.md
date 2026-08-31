@@ -525,6 +525,41 @@ Release is included.
 | WEB-062 | DONE | Present member-aware pairing and safe client browser entry | SEC-013, ROOM-008, WEB-061 | Real Server-backed identity/confirmation/cancel/revocation/Room tests, frozen pairing intent, production build and isolated desktop/390px browser acceptance pass; ordinary-member controls and fragment removal verified |
 | QA-051 | DONE | Verify client owner collaboration closure | CON-019, SEC-013, ROOM-008, BRG-070, WEB-062 | All workspace suites, seven deterministic E2Es, Go/vet/focused race, native macOS tests, Windows cross-build, contracts/builds/docs and isolated browser acceptance pass; evidence and platform/release limits in docs/acceptance/qa-051-client-owner-entry.md |
 
+## Governed Software-Team Execution
+
+ADR-0036 defines the complete incremental design on the existing Task/Run/Result
+model. The three increments are cumulative; completing the first does not close
+the overall workstream. Requirements and acceptance scopes are in the owning
+Execution and Repository modules. No deployment or Release publication is implied.
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| GOV-024 | DONE | Design and review governed software-team execution | GOV-014, GOV-009, QA-051 | Accepted ADR-0036, Execution/Repository and existing owning-module extensions, EX-01 through EX-14, 12 recorded design resolutions, new-task dependency/prerequisite validation, 290-file docs lint and whitespace checks |
+| CON-020 | READY | Define immutable decision, plan and dependency contracts | GOV-024, CON-019 | Closed schemas, generated TypeScript/Go, positive/negative shared fixtures and deterministic graph/digest tests |
+| EXEC-001 | PLANNED | Persist immutable decisions, proposals and plan revisions | CON-020, TASK-013 | Authorized create/read/revise, operation fingerprints, CAS, history and reopen tests without Task/Run duplication |
+| EXEC-002 | PLANNED | Compile and approve exact plans transactionally | EXEC-001, TASK-012 | Atomic child Task/criteria/assignment compilation, versioned approval, stale/foreign/duplicate/rollback and legacy-bypass negatives |
+| CON-021 | PLANNED | Define governed execution, repository and verifier wire contracts | CON-020, CON-017 | Additive capability-negotiated manifests, grants, inputs and receipts; both languages, forged/unknown/legacy fixtures and generated checks |
+| EXEC-003 | PLANNED | Bind exact authorized outputs across Task dependencies | EXEC-002, CON-021, TASK-011 | Gate-specific pins, explicit cross-Task input grants, canonical destination provenance and two-Bridge content authorization tests |
+| WSP-003 | PLANNED | Coordinate isolated attempt workspaces and write generations | CON-021, WSP-002 | Exclusive attempt identity, lease/generation/expiry/revocation and unsupported-capability negatives |
+| REPO-001 | PLANNED | Implement owner-local pinned repository worktrees and checkpoints | WSP-003, BRG-070 | Real Git preparation, input application, scope capture, checkpoint/restart and exact-owned cleanup tests |
+| BRG-071 | PLANNED | Enforce explicit local grants before governed Runtime startup | REPO-001, ADP-015 | Local grant setup, enforced runtime boundary, revocation, missing enforcement and no-start negatives; UI and real Runtime evidence |
+| RUN-018 | PLANNED | Carry frozen execution inputs through existing Run delivery | EXEC-003, BRG-071, RUN-017 | New manifest/delivery fields, capability fencing, scope/session isolation, no duplicate start and ordinary-work compatibility |
+| EXEC-004 | PLANNED | Schedule approved dependencies with durable Run intents | RUN-018, EXEC-002 | Concurrent schedulers, all admission paths, budgets/capacity, offline/duplicate/cancel/out-of-order/restart cuts and explicit unknown retry |
+| VER-001 | PLANNED | Collect independent candidate-bound verification receipts | CON-021, REPO-001 | Actual isolated pass/fail/timeout commands, exact code/profile/source binding, safe logs and forged Agent receipt rejection |
+| DISC-010 | PLANNED | Publish structured finalization decisions and plan proposals | EXEC-001, DISC-009 | Real finalization adapter, stable proposal retry, malformed/missing structure and no-authority-escalation tests |
+| MCP-007 | PLANNED | Expose assigned Tech Lead plan proposals | EXEC-002, MCP-006 | Own-Run scoped propose/read/revise, no approval/merge authority and unauthorized schema/assignment negatives |
+| WEB-063 | PLANNED | Add plan editing, dependency inspection and exact approval | EXEC-004, DISC-010, MCP-007, WEB-062 | Real Server-backed Web flows, approval diff/receipts/blockers, keyboard/localization and 1280/720/390 browser evidence |
+| QA-052 | PLANNED | Verify controlled single-repository delivery end to end | VER-001, WEB-063 | Actual Server/Go Bridge/Git/verification/Result flow, interruption and response-loss cuts, legacy regressions and explicit live-provider limits |
+| REPO-002 | PLANNED | Serialize verified integration candidates behind exact-target CAS | VER-001, EXEC-004 | Parallel patches, reviewer inputs, conflicts, moved targets, independent merge approval and committed-but-response-lost recovery |
+| REPO-003 | PLANNED | Integrate scoped remote Git, PR and CI observations | REPO-002 | Owner-configured provider IO, exact commit/check binding, lookup-before-retry, duplicate/foreign/callback/credential negatives and real HTTP fixture |
+| WEB-064 | PLANNED | Expose verification, integration and recovery decisions | REPO-003, WEB-063 | Candidate-bound review, receipts, conflict/unknown actions, stale-response protection and real browser/Server acceptance |
+| QA-053 | PLANNED | Verify parallel coding and repository integration | QA-052, WEB-064 | Two real Bridges and isolated Git worktrees, dependency content, actual candidate verification/merge, simulated-provider fault injection and full gates |
+| EXEC-005 | PLANNED | Govern versioned replanning with bounded delegation | QA-053, MCP-007 | Exact revision adoption, immutable in-flight history, scope/criteria/budget/privilege floor checks, revoked/expired policy and human escalation tests |
+| DISC-011 | PLANNED | Select focused participants under frozen Discussion policy | EXEC-005, DISC-010 | Question-focused selection, Room/Task/role/budget constraints and deterministic frozen-member recovery |
+| DISC-012 | PLANNED | Add opt-in read-only quorum sealing and late evidence | DISC-011 | Enforced read-only capability, required-role quorum, sealed snapshot, live-Run fences, append-only late evidence and crash/permutation tests |
+| QA-054 | PLANNED | Verify bounded autonomy without weakening human authority | EXEC-005, DISC-012 | Real proposal/revision/dispatch flows, low-risk adoption and escalation, quorum recovery and no code-pipeline/Discussion authority regression |
+| QA-055 | PLANNED | Audit final implementation against the complete accepted design | QA-052, QA-053, QA-054 | Requirement-by-requirement current evidence, repaired findings, all relevant regression/build/contract/browser gates and final completion inventory |
+
 ## Deferred Beyond MVP
 
 | ID | State | Task | Trigger |

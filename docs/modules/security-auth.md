@@ -1,5 +1,12 @@
 # Security and Authorization
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) preserves separate
+human approval, Agent proposal, local execution, verifier and integration
+authorities. Plan approval pins exact content; grants are local, revocable and
+scope-bounded. Cross-Task input authority never grants Room membership. Agent
+result/prose/upload channels cannot mint verified execution receipts. Every
+legacy admission path must enforce active plan gates before scheduling is enabled.
+
 ## Scope
 
 - Prefix: `SEC`

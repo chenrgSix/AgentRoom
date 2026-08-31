@@ -77,6 +77,14 @@ When adding a module, document its build, run, format, and test commands here in
 the same commit. Use `nvm use22` when Node 22 is not active. The contracts Go
 module pins the selected Go toolchain.
 
+Governed Execution, Repository and Verification modules use the existing
+`npm run dev:server`, `npm run build --workspace @convene-wire/server`,
+`npm run test --workspace @convene-wire/server` and `npm run test:e2e`
+commands. Bridge repository operations use `gofmt`, `go test ./...` and
+`go vet ./...` from `bridge/`; concurrency-sensitive packages also require
+`go test -race`. These modules follow ADR-0036 and must not advertise unfinished
+capabilities or treat generated contracts as runtime acceptance.
+
 ## Coding Style & Naming Conventions
 
 Follow `.editorconfig`. TypeScript uses strict mode and two spaces; Go uses

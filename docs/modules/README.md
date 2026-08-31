@@ -29,6 +29,9 @@ document and the task list in the same commit.
 | REG | [Registry and Presence](agent-registry.md) | Member, Device, Agent, Presence | `apps/server/` | CON, DATA, SEC |
 | RUN | [Run Orchestration](run-orchestration.md) | Run, delivery, handoff | `apps/server/` | CON, ROOM, REG, BRG, TASK, ART, DATA |
 | DISC | [Discussion Orchestration](discussion-orchestration.md) | Discussion, progress, budget, policy | `apps/server/src/discussion/` | CON, ROOM, RUN, ADP, DATA, SEC |
+| EXEC | [Execution Coordination](execution-coordination.md) | Decisions, plans, approvals, dependencies, input grants, dispatch intents | `apps/server/src/execution/` | CON, TASK, RUN, DISC, WSP, ART, REPO, VER, DATA, SEC |
+| REPO | [Repository Execution](repository-execution.md) | Repository operation intents and owner-local Git receipts | Server and Bridge | CON, WSP, BRG, DATA, SEC |
+| VER | [Verification](repository-execution.md) | Independent exact-candidate verification receipts | Server and Bridge | CON, REPO, ART, DATA, SEC |
 | MCP | [MCP Server](mcp-server.md) | MCP auth and Team tools | `apps/server/` | CON, ROOM, TASK, RUN, SEC |
 | BRG | [Bridge](bridge.md) | Connection and local delivery state | `bridge/`, `apps/server/` | CON, REG, SEC |
 | ADP | [Runtime Adapters](runtime-adapters.md) | Local Runtime process/Team Session and bounded Central model HTTP execution | `bridge/internal/runtime/`, `apps/server/src/runtime/` | CON, BRG, DATA, SEC |
@@ -92,6 +95,12 @@ give route registrars direct provider, credential, repository, timer, or
 recovery ownership.
 
 ## Standard Module Document
+
+ADR-0036 adds governed software-team execution incrementally. Execution calls
+existing Task/Run/Result ports; it does not own mirrored terminal state.
+Repository and Verification are explicit local/provider adapters in the current
+process topology, not a new central shell. Dependencies describe contracts;
+composition-root callbacks connect scheduling without circular process ownership.
 
 Every module document contains:
 

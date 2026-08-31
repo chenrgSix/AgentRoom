@@ -1,5 +1,12 @@
 # Testing and Observability
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) defines cumulative
+software-team acceptance in EX-01 through EX-14. Required evidence includes real
+temporary Git, actual Go Bridge processes and verifier commands, two-Bridge
+parallel execution, response-loss/restart cuts, real Server-backed browser flows
+and final direction review. Contract/source-only tests cannot stand in for those
+gates; physical-platform, live-provider and deployment evidence stays explicit.
+
 ## Product Experience Acceptance
 
 ADR-0028 additionally requires authorized Work search, direct Work actions,

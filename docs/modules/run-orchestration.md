@@ -1,5 +1,12 @@
 # Run Orchestration Module
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) adds governed
+execution manifests and a common admission port. Plan dispatch still creates
+one ordinary Run and uses the existing Delivery/inbox, retry and ambiguity
+contracts. Direct Messages, handoffs, retries, Discussions and manual paths must
+not bypass an active plan's gates. Unsupported Bridges reject governed work
+without degrading it to a prompt-only ordinary Run.
+
 - Prefix: `RUN`
 - Planned location: `apps/server/`
 - Owns: Run lifecycle, durable delivery, status sequencing, cancellation,

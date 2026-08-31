@@ -1,5 +1,13 @@
 # Task Collaboration Module
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) extends this model
+with governed plan coordination, not replacement Tasks or Results. Plan nodes
+use ordinary non-default Tasks and canonical criteria; exact approvals and input
+bindings are owned by Execution. Same-Task Result/Artifact authority remains
+unchanged. Before graph scheduling is enabled, every Task mutation, work-creation
+and completion path must invoke shared execution admission/verification gates.
+Definition or assignment drift blocks new graph work without rewriting Runs.
+
 Workbench pages use one binary total order for both sorting and cursor
 continuation: descending update time, then ascending opaque Task ID. Localized
 string collation must not differ from continuation comparison when timestamps

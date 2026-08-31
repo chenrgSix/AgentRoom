@@ -1,5 +1,12 @@
 # Artifact Content Transport Module
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) specifies explicit
+cross-Task input bindings for approved graph edges. They authorize only pinned
+source bytes for an exact destination Run; they do not broaden same-Team reads,
+copy acceptance claims or weaken same-Task Artifact relations. Destination
+derivations remain destination-owned canonical Artifacts. Workspace application
+is a separate locally granted Repository operation, never a staging side effect.
+
 - Prefix: `ART`
 - Implementation: `apps/server/src/artifact/`, `apps/server/src/http/artifact-routes.ts`,
   `bridge/internal/artifact/`, and migrations 0036-0038

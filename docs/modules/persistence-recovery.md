@@ -1,5 +1,12 @@
 # Persistence and Recovery
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) requires immutable
+plan versions, fingerprinted operations, atomic graph/Task compilation and
+Run-dispatch intents on the shared transaction boundary. Git/CI/PR side effects
+use explicit journals and exact-state reconciliation rather than pretending
+SQLite can transact with remote systems. Unknown execution is never an
+automatic-retry signal; new tables preserve existing historical authorities.
+
 ## Scope
 
 - Prefix: `DATA`

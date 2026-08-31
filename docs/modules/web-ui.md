@@ -1,5 +1,12 @@
 # Web UI
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) extends Work with
+plan proposal/edit/approval, dependencies and input pins, verification,
+integration and recovery surfaces. Existing Task/Run/Result details remain the
+canonical views. Plan approval, local authority, Result acceptance and merge
+approval are separate actions with exact version/candidate receipts. New flows
+require real Server-backed and responsive browser acceptance before completion.
+
 ## Scope
 
 - Prefix: `WEB`

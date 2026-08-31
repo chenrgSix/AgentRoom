@@ -1,5 +1,12 @@
 # Contracts Module
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) introduces closed
+decision/plan contracts and later capability-negotiated execution/input/grant/
+repository/verifier envelopes. JSON Schema remains the wire authority with
+generated TypeScript and Go. Structural validity does not prove graph topology,
+referential integrity, authorization, local capability or evidence truth.
+Old Bridge compatibility never allows silent downgrade of governed coding.
+
 [ADR-0028](../adr/0028-preserve-continuous-web-work.md) adds optional bounded
 `search` to Workbench queries. It matches authorized Task titles or exact Team
 display numbers and binds pagination to normalized search. Existing callers

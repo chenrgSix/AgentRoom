@@ -1,5 +1,12 @@
 # Discussion Orchestration Module
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) adds structured
+decision/plan proposals without execution or Result acceptance authority.
+Code review/test pipelines belong to Execution, not Wave semantics. Later
+focused/read-only quorum modes require frozen participant selection, required
+roles and separate append-only supplemental evidence; existing terminal Run
+events remain immutable. All-settled remains the default.
+
 ## Scope
 
 - Prefix: `DISC`

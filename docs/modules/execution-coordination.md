@@ -1,0 +1,189 @@
+# Execution Coordination Module
+
+- Prefix: `EXEC`
+- Planned implementation: `apps/server/src/execution/`
+- Owns: immutable decisions/plans, approvals, dependency/input bindings,
+  dispatch intents and derived graph progress
+- Governing decision: [ADR-0036](../adr/0036-add-governed-software-team-execution.md)
+
+## Purpose and Non-goals
+
+Turn an approved software-development plan into existing bounded Task Runs and
+verified deliveries. This module does not duplicate Task lifecycle, Run outcome,
+Result review, Artifact content, Discussion state or provider sessions. It does
+not expose a shell. A top-level Product Task represents the objective.
+
+## Requirement and Acceptance Map
+
+Requirement IDs identify behavior, not delivery status. Only TASKS records state.
+
+| ID | Required outcome | Owning task and decisive evidence |
+| --- | --- | --- |
+| EX-01 | Decisions and proposals are immutable, attributed and non-executing | EXEC-001, DISC-010; exact source and malformed-output tests |
+| EX-02 | Complete versioned DAG validation and atomic child-Task compilation | CON-020, EXEC-001, EXEC-002; cycle/duplicate/rollback/reopen tests |
+| EX-03 | Exact-version human approval fences scope, definitions and authority | EXEC-002; stale/foreign/changed-payload response-loss tests |
+| EX-04 | Dependencies bind exact upstream outputs and authorized cross-Task inputs | EXEC-003; two-Task/two-Bridge transfer and foreign-scope negatives |
+| EX-05 | One dispatch intent creates one ordinary Run under all admission gates | EXEC-004, RUN-018; concurrent schedulers, offline/reconnect and crash cuts |
+| EX-06 | Coding uses explicit local grants and isolated workspaces before startup | WSP-003, BRG-071, REPO-001; actual Git and denied-runtime execution tests |
+| EX-07 | Verifier receipts are independent from Agent claims and pin exact code | VER-001; actual command plus forgery/profile/tree mismatch tests |
+| EX-08 | Integration checks the candidate and compare-and-sets the target | REPO-002; parallel patches, conflict, moved-base and response-loss tests |
+| EX-09 | Scoped CI/PR operations reconcile external effects without blind retry | REPO-003; real HTTP adapter with lost responses and target identity checks |
+| EX-10 | Web completes proposal, approval, diagnosis, review and recovery flows | WEB-063, WEB-064; real Server browser acceptance at desktop/mobile widths |
+| EX-11 | Tech Lead proposals and bounded revisions do not inherit human authority | MCP-007, EXEC-005; assigned/unassigned and privilege/budget drift negatives |
+| EX-12 | Focused/quorum discussions preserve frozen evidence and actual Run outcomes | DISC-011, DISC-012; permutation/restart/late-result/role tests |
+| EX-13 | Existing Rooms, default Tasks, ordinary Runs and human Result review remain intact | QA-052, QA-053, QA-054; full regression plus legacy-route bypass negatives |
+| EX-14 | Final scope and completion evidence match the accepted design | QA-055; requirement-by-requirement direction audit |
+
+## Aggregates and Identities
+
+| Record | Minimum identity and frozen content |
+| --- | --- |
+| DecisionRecord | decisionId, rootTaskId, sources, item keys, summary, unresolved questions, supersedes |
+| PlanProposal | proposalId, revision, digest, author/source, node blueprints, edge/input specification, policy |
+| ExecutionPlan | planId, rootTaskId, roomId, ownerMemberId, current revision, execution-control revision |
+| PlanRevision | planId/revision, schema version, canonical digest, complete nodes/edges/policy, source proposal |
+| PlanApproval | operationId, exact revision/digest, actor, root Task revision, decision, timestamp |
+| PlanNode | stable nodeKey, taskId, definition/criteria pins, Agent, repository and verifier requirements |
+| PlanEdge | edgeKey, source/target node keys, gate, selected output/input slots |
+| TaskInputBinding | bindingId, plan revision/edge, source receipt, destination Task/Run, immutable content pins |
+| DispatchIntent | plan revision/node/generation, unique Run ID, exact inputs, operation digest |
+| PlanControlEvent | operationId, expected execution revision, actor, pause/resume/cancel reason |
+
+Opaque IDs, not names or display numbers, are authoritative. JSON canonicalization
+sorts object keys recursively and preserves semantically ordered arrays; nodes,
+edges and set-like fields are normalized deterministically before hashing.
+Duplicates are rejected, not silently discarded. JSON is finite, bounded and
+schema-validated before hashing. Reusing an operation ID with another actor,
+target or normalized payload fails instead of returning an unrelated receipt.
+
+## Plan Validation and Compilation
+
+Validation is layered: closed JSON Schema; deterministic graph validation;
+current authorization/Task pins; repository and grant capability checks.
+Schema validity never claims referential, cycle, approval or permission validity.
+Use binary key order for a deterministic Kahn topological ordering. At most 64
+nodes, 256 edges and concurrency 8 are accepted. Every required input has one
+explicit producer or pinned external input; unresolved mandatory questions block
+approval. A node cannot appear twice under different aliases for the same Task.
+
+Draft creation performs no Run dispatch. Compilation is one shared SQLite
+transaction over approval, graph rows, canonical child Tasks, criteria and
+assignments. Source-result next actions use the existing child provenance port.
+New tasks belong to the root Room, have explicit human Owners and assignments,
+and use `accepted_result_required` for governed delivery. Existing tasks must
+have equivalent completion policy and compatible current criteria.
+
+An approved plan has no back door through ordinary Message, handoff, Discussion,
+manual MCP, retry, Result completion or compatibility PATCH APIs. All new work
+against an actively governed node passes the same execution admission port.
+Task definition/assignment edits remain human commands but pause affected plan
+admission; an edit cannot invalidate a frozen Run's historical manifest.
+
+## Dependency and Input Semantics
+
+The default edge gate is `accepted_result`. `verified_output` may release a
+bounded downstream verifier/reviewer without prematurely completing its source
+Task. `integrated_commit` requires a successful exact-candidate integration
+receipt. Gate selection is part of human-approved policy, not a runtime guess.
+Node success and input readiness are different facts. Failed/canceled/unknown
+upstream work blocks required downstream nodes; optional work requires an
+explicit approved omission, never an implicit successful status.
+
+Each selected output has a stable slot key and expected kind. A source receipt
+pins its exact Result/Artifact/commit. The binding proves source and destination
+authorization in the same Room and approved graph. It creates a bounded read
+capability for an exact destination Run, not a global Artifact ACL extension.
+Staging stays read-only and is not a Workspace apply. Code changes need the
+separate local preparation operation described in Repository Execution.
+
+Old source acceptance is not copied into destination claims. New derived
+Artifacts stay destination-owned and cite the immutable binding. Existing
+same-Task Artifact relation and Result evidence validation remain unchanged.
+Revocation prevents new input materialization; frozen receipts still provide
+authorized historical diagnosis without disclosing data to removed members.
+
+## Scheduling, Budgets and Recovery
+
+The scheduler is a deterministic application service driven by persisted state,
+startup reconciliation and bounded wakeups. It never needs an LLM to decide
+that an already-approved dependency is satisfied. Plan-wide Run count/duration
+budgets compose with each Task budget; unknown token/cost telemetry stays null.
+Queued work consumes reserved capacity so offline Agents cannot overbook a plan.
+Released slots derive from actual terminal Runs, not from a UI badge.
+
+Admission validates the plan approval and control revision, Task pins, active
+Room/Team, current human ownership/Agent assignments, input receipts, required
+runtime capabilities, grant expiry and repository capacity. It atomically
+reserves the node generation and creates an ordinary Run using a unique
+orchestration identity. Dispatch occurs after commit through existing delivery.
+
+| Crash cut | Authoritative evidence | Recovery |
+| --- | --- | --- |
+| proposal/approval response lost | operation fingerprint and immutable revision | return exact stored receipt |
+| child compilation fails | shared transaction not committed | no partial Tasks/graph/approval |
+| dispatch committed before transport | dispatch intent and queued Run | replay existing Run ID |
+| workspace prepared before Runtime start | Bridge operation journal | reuse only exact owned prepared workspace |
+| Runtime may have started | durable Run/inbox and invocation marker | preserve unknown; no automatic new attempt |
+| Run terminal before graph projection | existing Run events and input receipts | recompute, never invent Result acceptance |
+| verification response lost | verifier operation and receipt | query/replay receipt; no hidden rerun |
+| target/remote mutation response lost | repository intent plus exact ref/PR query | confirm or retain unknown |
+| plan revision changes during dispatch | revision CAS and frozen manifest | one winner; old Run remains historical |
+
+Pause prevents new admission but does not pretend to pause a provider process.
+Cancel records durable cancellation requests for active Runs and repository
+operations. Terminal plan cancellation waits for active operations or explicitly
+audited unresolved outcomes. Retrying a failed node uses a new Run ID and
+existing ambiguity acknowledgement, never an automatic duplicate attempt.
+
+Canonical repository identity is distinct from a Device's local binding. All
+graph references and integration-capacity locks use the authorized logical
+repository ID; every dispatch additionally pins the selected local binding.
+This prevents two different Bridges from concurrently promoting the same
+logical target under separate checkout locks.
+
+## APIs and Agent Tools
+
+The typed HTTP surface includes Room-scoped proposal/plan listing and creation,
+proposal revision and compilation, exact revision approval, plan detail,
+pause/resume/cancel, node retry, input inspection, verification and integration
+receipt reads. Routes use current Web authentication, Origin protection,
+bounded payloads, safe errors, no-store and Team change wakeups.
+
+Agent tools are `team.propose_plan`, `team.get_plan`, and
+`team.propose_plan_revision`. They require the assigned Agent's own persisted
+Run and current Room access. They cannot directly approve plans, accept Results,
+acknowledge ambiguity, expand budgets, grant local permissions or merge code.
+Decision finalization is a typed proposal adapter, not a prose parser.
+
+## Autonomy Policy
+
+Low-risk delegation is explicit, revocable, versioned and bounded. A candidate
+revision may be automatically adopted only when a deterministic comparison
+proves it is within the approved repository/path/Agent/budget envelope, does
+not weaken criteria or required verification, and does not broaden integration
+authority. Otherwise it waits for a human. Policy expiry/revocation stops new
+admission. No automatic revision changes existing accepted history.
+
+## User Experience
+
+The Plan surface shows the objective, proposal source, dependency graph,
+required inputs and outputs, scope/permissions, verification requirements,
+budget and approval diff. Approval clearly names the exact digest/version.
+Execution shows node blockers and links to existing Task, Run, Result and
+Artifact surfaces. Review and integration are independent actions with explicit
+candidate/base identity. Unknown outcomes never appear as retryable success.
+
+Drafts, mutation operation IDs, selection and pending receipts survive refresh
+where existing Web recovery infrastructure supports them. Responses are scoped
+to plan/revision/request identity. Tests cover unauthorized selection, stale
+tabs, changed revisions, response loss, keyboard access, localization and
+390/720/1280 pixel layouts. No new global dashboard replaces ordinary Room use.
+
+## Dependencies and Commands
+
+Contracts, Task, Run, Discussion, Workspace, Artifact, Repository, Verification,
+Security and shared Persistence. Composition owns cross-module callbacks;
+repositories do not import each other's process lifecycle. Delivery tasks live
+only in TASKS. Build with `npm run build --workspace @convene-wire/server`;
+test with `npm run test --workspace @convene-wire/server` and
+`npm run test:e2e`; follow two-space TypeScript and `git diff --check`.

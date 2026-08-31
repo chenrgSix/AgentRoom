@@ -1,5 +1,12 @@
 # MCP Server
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) adds scoped
+`team.propose_plan`, `team.get_plan` and `team.propose_plan_revision` tools.
+Tech Lead is an assignment/delegation, not a human identity. Proposals require
+the caller's own persisted Run and current Room authority; MCP gains no plan
+approval, Result acceptance, ambiguity acknowledgement, local grant or merge
+administration tool.
+
 ## Scope
 
 - Prefix: `MCP`

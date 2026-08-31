@@ -1,5 +1,12 @@
 # Workspace Coordination Module
 
+[ADR-0036](../adr/0036-add-governed-software-team-execution.md) defines the next
+write/worktree milestone. It requires explicit owner-local repository bindings
+and grants, unique isolated attempts, actual runtime enforcement capability and
+generation fencing before governed coding starts. A central lease remains
+coordination, never an OS permission. Current source-read behavior below stays
+unchanged until that milestone has its own implementation evidence.
+
 - Prefix: `WSP`
 - Implementation: `apps/server/src/workspace/`, migrations 0035 and 0042, and
   `bridge/internal/workspace/`
