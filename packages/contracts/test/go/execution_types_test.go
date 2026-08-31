@@ -28,6 +28,8 @@ func TestExecutionGeneratedTypesPreserveWireFixtures(t *testing.T) {
 		"execution runtime: valid manifest":             func() any { return &execution.GovernedExecutionManifest{} },
 		"execution runtime: valid input binding":        func() any { return &execution.ExecutionInputBinding{} },
 		"execution runtime: valid capability":           func() any { return &execution.GovernedExecutionCapability{} },
+		"execution runtime: valid authority request":    func() any { return &execution.RuntimeAuthorityRequest{} },
+		"execution runtime: valid authority view":       func() any { return &execution.RuntimeAuthorityView{} },
 		"execution runtime: valid grant summary":        func() any { return &execution.ExecutionGrantSummary{} },
 		"execution runtime: valid repository binding":   func() any { return &execution.RepositoryBindingSummary{} },
 		"execution runtime: valid checkpoint":           func() any { return &execution.RepositoryCheckpoint{} },

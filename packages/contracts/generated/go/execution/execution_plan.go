@@ -2129,6 +2129,32 @@ type GovernedExecutionCapability struct {
 	WorkspaceBoundary         WorkspaceBoundary `json:"workspaceBoundary"`
 }
 
+type RuntimeAuthorityRequest struct {
+	LeaseID             string `json:"leaseId"`
+	ManifestDigest      string `json:"manifestDigest"`
+	RunID               string `json:"runId"`
+	Version             int64  `json:"version"`
+	WorkspaceGeneration string `json:"workspaceGeneration"`
+	WorkspaceRef        string `json:"workspaceRef"`
+}
+
+type RuntimeAuthorityView struct {
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CheckedAt string `json:"checkedAt"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt           string                    `json:"expiresAt"`
+	LeaseID             string                    `json:"leaseId"`
+	LeaseRevision       int64                     `json:"leaseRevision"`
+	ManifestDigest      string                    `json:"manifestDigest"`
+	RunID               string                    `json:"runId"`
+	State               RuntimeAuthorityViewState `json:"state"`
+	Version             int64                     `json:"version"`
+	WorkspaceGeneration string                    `json:"workspaceGeneration"`
+	WorkspaceRef        string                    `json:"workspaceRef"`
+}
+
 type RepositoryBindingSummary struct {
 	BindingID      string                                 `json:"bindingId"`
 	Capability     Capability                             `json:"capability"`
@@ -2738,6 +2764,12 @@ type WorkspaceBoundary string
 
 const (
 	Enforced WorkspaceBoundary = "enforced"
+)
+
+type RuntimeAuthorityViewState string
+
+const (
+	Active RuntimeAuthorityViewState = "active"
 )
 
 type PublishMode string

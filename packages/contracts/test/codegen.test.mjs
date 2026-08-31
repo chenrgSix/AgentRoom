@@ -69,6 +69,7 @@ test("contract generation is deterministic", async () => {
   assert.match(first.executionValidators, /exports\.planDefinition/);
   for (const name of [
     "GovernedExecutionManifest", "ExecutionInputBinding", "GovernedExecutionCapability",
+    "RuntimeAuthorityRequest", "RuntimeAuthorityView",
     "RepositoryBindingSummary", "ExecutionGrantSummary", "RepositoryOperationRequest",
     "RepositoryOperationReceipt", "RepositoryCheckpoint", "VerificationReceipt"
   ]) {
@@ -76,7 +77,8 @@ test("contract generation is deterministic", async () => {
     assert.match(first.executionGo, new RegExp(`type ${name} struct`));
   }
   for (const name of [
-    "executionManifest", "executionInputBinding", "executionCapability", "repositoryBinding",
+    "executionManifest", "executionInputBinding", "executionCapability", "runtimeAuthorityRequest",
+    "runtimeAuthorityView", "repositoryBinding",
     "executionGrant", "repositoryOperation", "repositoryReceipt", "executionCheckpoint",
     "verificationReceipt"
   ]) assert.match(first.executionValidators, new RegExp(`exports\\.${name}`));

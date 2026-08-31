@@ -1,5 +1,9 @@
 import type Database from "better-sqlite3";
-import type { GovernedExecutionManifest as Manifest } from "@convene-wire/contracts/execution-plan";
+import type {
+  GovernedExecutionManifest as Manifest,
+  RuntimeAuthorityRequest,
+  RuntimeAuthorityView
+} from "@convene-wire/contracts/execution-plan";
 import { assertExecutionCommand, canonicalExecutionJSON, executionOperationDigest } from "@convene-wire/contracts/execution-validation";
 import type { BridgeConnectionRegistry } from "../bridge/bridge-connection-registry.js";
 import { ExecutionError } from "../execution/execution-error.js";
@@ -95,6 +99,33 @@ export class IsolatedWorkspaceLeaseService {
     const state = this.project(row, now);
     if (state.state !== "active") return fail("WORKSPACE_LEASE_INACTIVE");
     return state;
+  }
+
+  /** Read-only just-in-time authority observation; never a bearer permit. */
+  public requireRuntimeAuthority(principal: DevicePrincipal, value: unknown, now: string): RuntimeAuthorityView {
+    try { assertExecutionCommand("runtimeAuthorityRequest", value); }
+    catch { return fail("RUNTIME_AUTHORITY_REQUEST_INVALID"); }
+    const request = value as RuntimeAuthorityRequest;
+    const row = this.row(request.leaseId);
+    this.requireDevice(principal, row);
+    if (row.run_id !== request.runId || row.manifest_digest !== request.manifestDigest) {
+      return fail("RUNTIME_AUTHORITY_CONFLICT");
+    }
+    const current = this.requireActiveForDevice(principal, request.leaseId, now);
+    if (this.database.prepare("SELECT 1 FROM run_cancellation_intents WHERE run_id = ?").get(request.runId)) {
+      return fail("RUNTIME_AUTHORITY_CANCELED");
+    }
+    if (current.state !== "active" || current.generation !== request.workspaceGeneration ||
+      current.lease.workspaceRef !== request.workspaceRef ||
+      current.lease.workspaceGeneration !== request.workspaceGeneration) {
+      return fail("RUNTIME_AUTHORITY_STALE");
+    }
+    return {
+      version: 1, runId: request.runId, leaseId: request.leaseId,
+      manifestDigest: request.manifestDigest, workspaceRef: request.workspaceRef,
+      workspaceGeneration: request.workspaceGeneration, state: "active",
+      leaseRevision: current.revision, checkedAt: now, expiresAt: current.lease.expiresAt
+    };
   }
 
   /** Called only after the Repository owner authenticates the exact capture operation. */

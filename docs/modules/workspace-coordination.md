@@ -110,6 +110,17 @@ capacity, attest that a process stopped, or authorize filesystem cleanup.
 Historical Repository receipts remain owned by Repository Execution; a delayed
 receipt is not permission to start a new operation under an expired lease.
 
+The Device-authenticated `POST /api/bridge/governed-runtime-authority` endpoint
+is the read-only just-in-time projection of that existing check. Its closed
+request must match the exact Run, manifest digest, isolated lease, workspace
+reference and current generation. The response repeats those pins with the
+current lease revision, original expiry and observation time under `no-store`.
+It rejects changed Device ownership, terminal Run state, inactive/advanced
+leases, a pending or resolved cancellation intent, scope drift and malformed
+extensions, and it appends no operation.
+This endpoint neither grants local filesystem/process authority nor proves that
+the Bridge performed its other local admission checks.
+
 These internal ports expose no Agent-controlled shell, path, public lease mint
 or generation-write endpoint. Local repository enrollment, grant authentication,
 actual worktree creation, runtime enforcement and cleanup stay with REPO-001,

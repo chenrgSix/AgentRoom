@@ -2205,6 +2205,38 @@ export type KindElement = "prepare" | "capture" | "verify" | "integrate" | "publ
 
 export type WorkspaceBoundary = "enforced";
 
+export interface RuntimeAuthorityRequest {
+  leaseId:             string;
+  manifestDigest:      string;
+  runId:               string;
+  version:             number;
+  workspaceGeneration: string;
+  workspaceRef:        string;
+}
+
+export interface RuntimeAuthorityView {
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  checkedAt: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt:           string;
+  leaseId:             string;
+  leaseRevision:       number;
+  manifestDigest:      string;
+  runId:               string;
+  state:               RuntimeAuthorityViewState;
+  version:             number;
+  workspaceGeneration: string;
+  workspaceRef:        string;
+}
+
+export type RuntimeAuthorityViewState = "active";
+
 export interface RepositoryBindingSummary {
   bindingId:      string;
   capability:     Capability;

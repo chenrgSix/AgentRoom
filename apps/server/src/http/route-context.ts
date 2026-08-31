@@ -64,6 +64,8 @@ import type { TaskClarificationService } from "../task/task-clarification-servic
 import type { WorkbenchService } from "../task/workbench-service.js";
 import type { WorkspaceLeaseService } from
   "../workspace/workspace-lease-service.js";
+import type { IsolatedWorkspaceLeaseService } from
+  "../workspace/isolated-workspace-lease-service.js";
 
 export type PersistedRun = NonNullable<ReturnType<RunRepository["getRun"]>>;
 
@@ -93,6 +95,7 @@ export interface ServerRouteContext {
   executor: InProcessRunExecutor;
   executionPlans: ExecutionPlanService;
   executionInputs: ExecutionInputService;
+  isolatedWorkspaces: IsolatedWorkspaceLeaseService;
   repositoryCaptures: RepositoryCaptureService;
   fakeAdapters: Map<string, FakeRuntimeAdapter>;
   handoffs: HandoffService;

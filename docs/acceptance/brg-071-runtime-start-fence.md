@@ -56,6 +56,18 @@ permission to retry.
 - Recovery closes only unresolved `starting` records as `outcome_unknown` and
   leaves claim-only records untouched. Its API explicitly requires the caller
   to fence or terminate a surviving process first.
+- The Server now exposes a Device-authenticated, no-store, read-only authority
+  observation for the exact Run/manifest/lease/workspace generation. It reuses
+  current scope, frozen-manifest, capability, Device, Run-state, cancellation
+  and expiry validation and records no lease operation.
+- Both request and response are closed definitions in the authoritative
+  execution-runtime JSON Schema, generated into TypeScript and Go and admitted
+  through the shared strict raw-wire validators before business use.
+- `RuntimeAuthorityClient` binds that response to the exact local admission,
+  revision-1 lease and original expiry. Malformed, stale, foreign-origin,
+  unauthorized and unavailable observations all fail closed. This client is
+  not yet composed with `RuntimeFenceStore.Start`, so it changes no production
+  capability.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -69,18 +81,28 @@ stop/reopen, ambiguous recovery, orphan stage and directory replacement. It
 passes normally and under Go's race detector; Go vet also passes for the
 admission package.
 
-The completion commit additionally records full Bridge regression, native and
-cross-platform compilation, deterministic compatibility E2E, documentation
-lint and whitespace results. These checks validate this primitive; they do not
-substitute for production Server/Bridge/Runtime acceptance.
+The current increment adds 40 focused Server lease/capture cases, including the
+authenticated HTTP surface, no-store response, exact replay, generation drift,
+foreign credentials, terminal Run and pending cancellation. The complete
+Server suite passes 477/477 and its production TypeScript build passes.
+
+The contract package passes 78 Node checks, generated/current TypeScript, Go
+round trips and 243 shared positive/negative fixtures. The Bridge admission
+package passes normally, under the race detector and under vet; all 26 Bridge
+packages pass. Native macOS and Windows/Linux amd64 CLI builds plus both
+cross-compiled admission tests pass. Seven deterministic compatibility E2Es
+pass and the explicitly live provider case is skipped. Markdown lint covers 312
+files and the final diff has no whitespace errors. These checks validate this
+primitive; they do not substitute for production Server/Bridge/Runtime
+acceptance.
 
 ## Remaining BRG-071 gates
 
 - wire the exact governed manifest through the existing inbox without opening a
   second Runtime-start path;
-- implement the production callback over current authenticated Run/generation,
-  cancellation, grant/profile re-resolution, prepared-identity recheck and
-  physical re-probe;
+- compose the production callback from the authenticated Server observation,
+  cancellation, local grant/profile re-resolution, prepared-identity recheck
+  and physical re-probe;
 - retain/terminate the process handle and connect stopped-Run, revocation and
   owner-visible cleanup;
 - expose owner setup/state without leaking local details;

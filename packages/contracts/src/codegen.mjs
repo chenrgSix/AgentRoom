@@ -415,6 +415,8 @@ function renderExecutionValidators(schemas) {
     executionManifest: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/manifest`,
     executionInputBinding: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/inputBinding`,
     executionCapability: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/capability`,
+    runtimeAuthorityRequest: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/runtimeAuthorityRequest`,
+    runtimeAuthorityView: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/runtimeAuthorityView`,
     repositoryBinding: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/bindingSummary`,
     executionGrant: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/grantSummary`,
     repositoryOperation: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/operationRequest`,
@@ -1409,6 +1411,8 @@ export async function generateContractTypes(packageRoot) {
     ["GovernedExecutionManifest", "manifest"],
     ["ExecutionInputBinding", "inputBinding"],
     ["GovernedExecutionCapability", "capability"],
+    ["RuntimeAuthorityRequest", "runtimeAuthorityRequest"],
+    ["RuntimeAuthorityView", "runtimeAuthorityView"],
     ["RepositoryBindingSummary", "bindingSummary"],
     ["ExecutionGrantSummary", "grantSummary"],
     ["RepositoryOperationRequest", "operationRequest"],
@@ -1558,6 +1562,7 @@ export async function generateContractTypes(packageRoot) {
       $id: "https://agentroom.dev/schemas/runtime/go-execution.json",
       $defs: Object.fromEntries(Object.entries({
         executionManifest: "manifest", executionInputBinding: "inputBinding", executionCapability: "capability",
+        runtimeAuthorityRequest: "runtimeAuthorityRequest", runtimeAuthorityView: "runtimeAuthorityView",
         repositoryBinding: "bindingSummary", executionGrant: "grantSummary", repositoryOperation: "operationRequest",
         repositoryReceipt: "operationReceipt", executionCheckpoint: "checkpoint", verificationReceipt: "verificationReceipt"
       }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(

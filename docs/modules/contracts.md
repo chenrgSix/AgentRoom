@@ -10,6 +10,9 @@ Old Bridge compatibility never allows silent downgrade of governed coding.
 `CON-021` adds version-1 `work/execution-runtime.schema.json`: the governed Run
 manifest, exact input binding, capability, repository binding, local grant
 summary, repository operation/request receipt, checkpoint and verifier receipt.
+BRG-071 extends that same schema with the closed Runtime authority request and
+read-only view used for the just-in-time Server observation; these values add no
+grant or local process permission.
 The existing Run Context Manifest carries the single optional `execution`
 snapshot; delivery does not introduce a second copy or a new Agent Run model.
 Required nullable pins remain explicit through generated Go round trips. The
@@ -22,7 +25,7 @@ would normalize fractional precision and change an approved digest. Ordinary
 Bridge timestamps outside that subtree retain their existing Go types; the
 authoritative UTC format validation and JSON shapes are unchanged.
 
-The generated Go runtime embeds the nine standalone execution-runtime schemas
+The generated Go runtime embeds the eleven standalone execution-runtime schemas
 and exposes `ValidateExecutionCommand`, `ValidateAndNormalizeExecutionCommand`,
 `CanonicalExecutionJSON` and `ExecutionDigest`. Raw validation precedes typed
 decoding, rejecting duplicate or case-aliased properties, invalid Unicode,

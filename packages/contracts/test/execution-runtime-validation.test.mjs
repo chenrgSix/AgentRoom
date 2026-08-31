@@ -10,6 +10,7 @@ const suite = JSON.parse(await readFile(
 const kinds = {
   manifest: "executionManifest", inputBinding: "executionInputBinding",
   capability: "executionCapability", bindingSummary: "repositoryBinding",
+  runtimeAuthorityRequest: "runtimeAuthorityRequest", runtimeAuthorityView: "runtimeAuthorityView",
   grantSummary: "executionGrant", operationRequest: "repositoryOperation",
   operationReceipt: "repositoryReceipt", checkpoint: "executionCheckpoint",
   verificationReceipt: "verificationReceipt"

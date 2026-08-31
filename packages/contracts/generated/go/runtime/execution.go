@@ -38,7 +38,8 @@ func compileExecutionSchemas() map[string]*jsonschema.Schema {
 	}
 	result := map[string]*jsonschema.Schema{}
 	for _, kind := range []string{"executionManifest", "executionInputBinding", "executionCapability", "repositoryBinding",
-		"executionGrant", "repositoryOperation", "repositoryReceipt", "executionCheckpoint", "verificationReceipt"} {
+		"runtimeAuthorityRequest", "runtimeAuthorityView", "executionGrant", "repositoryOperation", "repositoryReceipt",
+		"executionCheckpoint", "verificationReceipt"} {
 		schema, err := compiler.Compile(id + "#/$defs/" + kind)
 		if err != nil {
 			panic(err)

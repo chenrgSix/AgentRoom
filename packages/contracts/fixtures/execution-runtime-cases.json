@@ -165,6 +165,50 @@
       "valid": true
     },
     {
+      "name": "execution runtime: valid authority request",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/runtimeAuthorityRequest",
+      "instance": {
+        "version": 1,
+        "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "leaseId": "lease_runtime0001",
+        "manifestDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceRef": "workspace_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceGeneration": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "valid": true
+    },
+    {
+      "name": "execution runtime: valid authority view",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/runtimeAuthorityView",
+      "instance": {
+        "version": 1,
+        "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "leaseId": "lease_runtime0001",
+        "manifestDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceRef": "workspace_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceGeneration": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "state": "active",
+        "leaseRevision": 1,
+        "checkedAt": "2026-08-31T10:00:00Z",
+        "expiresAt": "2026-08-31T11:00:00Z"
+      },
+      "valid": true
+    },
+    {
+      "name": "execution runtime: authority request rejects extension",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/runtimeAuthorityRequest",
+      "instance": {
+        "version": 1,
+        "runId": "run_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+        "leaseId": "lease_runtime0001",
+        "manifestDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceRef": "workspace_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "workspaceGeneration": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "command": "arbitrary"
+      },
+      "valid": false
+    },
+    {
       "name": "execution runtime: valid grant summary",
       "schemaId": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/grantSummary",
       "instance": {

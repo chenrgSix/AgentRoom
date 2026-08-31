@@ -274,6 +274,88 @@
         }
       }
     },
+    "runtimeAuthorityRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "runId",
+        "leaseId",
+        "manifestDigest",
+        "workspaceRef",
+        "workspaceGeneration"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "leaseId": {
+          "type": "string",
+          "pattern": "^lease_[A-Za-z0-9_-]{8,128}$"
+        },
+        "manifestDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "workspaceRef": {
+          "$ref": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/workspaceRef"
+        },
+        "workspaceGeneration": {
+          "$ref": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/workspaceGeneration"
+        }
+      }
+    },
+    "runtimeAuthorityView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "runId",
+        "leaseId",
+        "manifestDigest",
+        "workspaceRef",
+        "workspaceGeneration",
+        "state",
+        "leaseRevision",
+        "checkedAt",
+        "expiresAt"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "leaseId": {
+          "type": "string",
+          "pattern": "^lease_[A-Za-z0-9_-]{8,128}$"
+        },
+        "manifestDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "workspaceRef": {
+          "$ref": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/workspaceRef"
+        },
+        "workspaceGeneration": {
+          "$ref": "https://agentroom.dev/schemas/bridge/messages.schema.json#/$defs/workspaceGeneration"
+        },
+        "state": {
+          "const": "active"
+        },
+        "leaseRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "checkedAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        },
+        "expiresAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
     "inputBinding": {
       "type": "object",
       "additionalProperties": false,

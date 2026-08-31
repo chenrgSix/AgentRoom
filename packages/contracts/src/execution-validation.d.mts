@@ -14,6 +14,7 @@ export function assertExecutionCommand(
   kind: "planDefinition" | "proposalCommand" | "revisionCommand" |
     "approvalCommand" | "controlCommand" | "decisionContent" |
     "executionManifest" | "executionInputBinding" | "executionCapability" |
+    "runtimeAuthorityRequest" | "runtimeAuthorityView" |
     "repositoryBinding" | "executionGrant" | "repositoryOperation" |
     "repositoryReceipt" | "executionCheckpoint" | "verificationReceipt",
   value: unknown

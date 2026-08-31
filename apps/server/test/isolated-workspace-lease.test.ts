@@ -41,6 +41,52 @@ test("a rolled-back admission leaves no isolated workspace reservation", async (
   assert.equal(f.reserve().revision, 1);
 });
 
+test("Runtime authority is a read-only exact current observation", async (t) => {
+  const f = await workspaceFixture(t), state = f.reserve();
+  f.freeze();
+  const request = {
+    version: 1 as const, runId: f.manifest.scope.runId, leaseId: state.lease.leaseId,
+    manifestDigest: f.manifest.manifestDigest, workspaceRef: state.lease.workspaceRef,
+    workspaceGeneration: state.lease.workspaceGeneration
+  };
+  assert.deepEqual(f.service.requireRuntimeAuthority(f.principal, request, now), {
+    ...request, state: "active", leaseRevision: 1, checkedAt: now, expiresAt: state.lease.expiresAt
+  });
+  assert.deepEqual(f.service.requireRuntimeAuthority(f.principal, request, now), {
+    ...request, state: "active", leaseRevision: 1, checkedAt: now, expiresAt: state.lease.expiresAt
+  });
+  assert.equal((f.database.prepare("SELECT count(*) AS n FROM isolated_workspace_operations").get() as { n: number }).n, 0);
+
+  for (const changed of [
+    { ...request, runId: "run_foreign0001" },
+    { ...request, leaseId: "lease_foreign0001" },
+    { ...request, manifestDigest: "f".repeat(64) },
+    { ...request, workspaceRef: "workspace_foreign0001" },
+    { ...request, workspaceGeneration: "f".repeat(64) },
+    { ...request, extra: true },
+    { ...request, version: 2 }
+  ]) assert.throws(() => f.service.requireRuntimeAuthority(f.principal, changed, now),
+    /RUNTIME_AUTHORITY_|WORKSPACE_LEASE_UNAVAILABLE/u);
+
+  const advanced = { ...f.operation(state, "op_runtime_authority_advance01"), generation: "c".repeat(64) };
+  assert.equal(f.service.advanceForDevice(f.principal, advanced, now).revision, 2);
+  assert.throws(() => f.service.requireRuntimeAuthority(f.principal, request, now), /RUNTIME_AUTHORITY_STALE/u);
+});
+
+test("Runtime authority rechecks terminal Run and Device ownership", async (t) => {
+  const f = await workspaceFixture(t), state = f.reserve();
+  f.freeze();
+  const request = { version: 1 as const, runId: f.manifest.scope.runId, leaseId: state.lease.leaseId,
+    manifestDigest: f.manifest.manifestDigest, workspaceRef: state.lease.workspaceRef,
+    workspaceGeneration: state.lease.workspaceGeneration };
+  assert.throws(() => f.service.requireRuntimeAuthority(
+    { ...f.principal, deviceId: "device_foreign0001" }, request, now
+  ), /access denied/u);
+  new RunRepository(f.database).applyEvent(f.manifest.scope.runId,
+    { type: "status", sequence: 1, status: "outcome_unknown" }, now);
+  assert.throws(() => f.service.requireRuntimeAuthority(f.principal, request, now), /WORKSPACE_SCOPE_UNAVAILABLE/u);
+});
+
 test("workspace reservations reject changed approval, scope, grant, identity and time pins", async (t) => {
   const f = await workspaceFixture(t);
   for (const mutate of [

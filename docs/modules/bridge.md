@@ -209,14 +209,24 @@ without calling the callback. Therefore the persisted `starting` state means
 the Runtime may have started, including a crash after the append but before the
 caller invokes it; recovery never guesses that it is safe to invoke again.
 
+The internal `RuntimeAuthorityClient` now supplies the Central half of that
+future callback. It posts only the exact Run, manifest, isolated lease,
+workspace reference and generation to the Device-authenticated, no-store
+authority endpoint, then requires the response to reproduce every value, the
+initial lease revision and expiry. A changed or malformed response, rejected
+scope, unavailable Server, mismatched credential origin or missing credential
+fails closed. The observation creates, extends and caches no authority. It is
+not yet composed with local grant/profile/prepared-identity rechecks or passed
+to `RuntimeFenceStore.Start`, so it cannot enable a Runtime.
+
 `Stop` appends one exact version-3 closed local outcome bound to both admission
 and start digests. It does not create a Task Result, verification receipt or
 completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
 That explicit surviving-process cleanup, inbox/cancellation integration,
-current-authority callback, capability advertisement and real Runtime evidence
-remain open. The production governed no-start rejection is unchanged. See the
+complete current-authority callback composition, capability advertisement and
+real Runtime evidence remain open. The production governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 
 ## Codex Local Boundary Probe

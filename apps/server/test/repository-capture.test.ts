@@ -178,6 +178,38 @@ test("capture publishes real canonical content and an immutable checkpoint throu
   await assert.rejects(f.prepare("after_checkpoint"), /ALREADY_SEALED/u);
 });
 
+test("runtime authority HTTP observes only the exact current isolated lease", async (t) => {
+  const f = await captureFixture(t);
+  const request = {
+    version: 1, runId: f.manifest.scope.runId, leaseId: f.initial.lease.leaseId,
+    manifestDigest: f.manifest.manifestDigest, workspaceRef: f.initial.lease.workspaceRef,
+    workspaceGeneration: f.initial.generation
+  };
+  const accepted = await f.http("POST", "/api/bridge/governed-runtime-authority", request);
+  assert.equal(accepted.statusCode, 200, accepted.body);
+  assert.equal(accepted.headers["cache-control"], "no-store");
+  assert.deepEqual(accepted.json(), {
+    ...request, state: "active", leaseRevision: 1, checkedAt: now,
+    expiresAt: f.initial.lease.expiresAt
+  });
+  assert.equal((f.database.prepare("SELECT count(*) AS n FROM isolated_workspace_operations").get() as { n: number }).n, 0);
+
+  const changed = await f.http("POST", "/api/bridge/governed-runtime-authority", {
+    ...request, workspaceGeneration: "f".repeat(64)
+  });
+  assert.equal(changed.statusCode, 409);
+  assert.equal((await f.http("POST", "/api/bridge/governed-runtime-authority", request, f.authorization)).statusCode, 401);
+
+  new RunRepository(f.database).requestCancellation({
+    runId: f.manifest.scope.runId, messageId: "msg_runtime_authority_cancel0001",
+    requestedByMemberId: f.ownerMemberId, reason: "Stop before Runtime admission", now,
+    ackDeadlineAt: new Date(Date.parse(now) + 30_000).toISOString()
+  });
+  const canceled = await f.http("POST", "/api/bridge/governed-runtime-authority", request);
+  assert.equal(canceled.statusCode, 409);
+  assert.match(canceled.body, /RUNTIME_AUTHORITY_CANCELED/u);
+});
+
 test("capture rejects changed request identity, scope and competing generation claims", async (t) => {
   const f = await captureFixture(t);
   for (const mutate of [

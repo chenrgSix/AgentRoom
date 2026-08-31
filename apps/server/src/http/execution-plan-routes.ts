@@ -6,7 +6,7 @@ import { bearerToken, noStore } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
-  app, auth, clock, executionPlans, executionInputs, repositoryCaptures, principal
+  app, auth, clock, executionPlans, executionInputs, isolatedWorkspaces, repositoryCaptures, principal
 }: ServerRouteContext): void {
   const options = {
     bodyLimit: 512 * 1024,
@@ -33,6 +33,10 @@ export function registerExecutionPlanRoutes({
     repositoryCaptures.begin(auth.authenticateDevice(bearerToken(request), clock()), request.body, clock())));
   app.post("/api/bridge/repository-checkpoints", options, async (request) => execute(() =>
     repositoryCaptures.seal(auth.authenticateDevice(bearerToken(request), clock()), request.body, clock())));
+  app.post("/api/bridge/governed-runtime-authority", options, async (request) => execute(() =>
+    isolatedWorkspaces.requireRuntimeAuthority(
+      auth.authenticateDevice(bearerToken(request), clock()), request.body, clock()
+    )));
   app.get<{ Params: { operationId: string } }>("/api/bridge/repository-captures/:operationId/checkpoint", options,
     async (request) => execute(() => repositoryCaptures.getForDevice(
       auth.authenticateDevice(bearerToken(request), clock()), request.params.operationId)));

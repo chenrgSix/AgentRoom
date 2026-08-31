@@ -442,8 +442,11 @@ export async function createServerApp(
   );
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
   const bridgeConnections = new BridgeConnectionRegistry();
+  const isolatedWorkspaces = new IsolatedWorkspaceLeaseService(
+    database, new ExecutionPlanRepository(database), bridgeConnections
+  );
   const repositoryCaptures = new RepositoryCaptureService(database,
-    new IsolatedWorkspaceLeaseService(database, new ExecutionPlanRepository(database), bridgeConnections),
+    isolatedWorkspaces,
     artifactRepository, artifactPublicationRepository, artifactBlobs);
   const operationalMetrics = new OperationalMetrics(
     database, bridgeConnections, clock, options.buildIdentity
@@ -852,6 +855,7 @@ export async function createServerApp(
     executor,
     executionPlans,
     executionInputs,
+    isolatedWorkspaces,
     repositoryCaptures,
     fakeAdapters,
     handoffs,
