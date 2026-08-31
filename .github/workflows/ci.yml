@@ -210,6 +210,7 @@ jobs:
           ./scripts/test-windows-desktop-icons.ps1
           ./scripts/test-windows-workflow-failures.ps1
           ./scripts/test-windows-silent-prerequisite.ps1
+          ./scripts/test-windows-output-paths.ps1
           go test -count=1 ./... -run Windows -v
           if ($LASTEXITCODE -ne 0) { throw "Windows process tests failed" }
           go test -tags desktop ./cmd/convenewire-bridge-desktop

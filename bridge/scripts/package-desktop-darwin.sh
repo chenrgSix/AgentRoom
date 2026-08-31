@@ -37,6 +37,10 @@ if [[ "${host_os}/${host_arch}" != "darwin/${goarch}" ]]; then
   exit 1
 fi
 
+# Resolve against the caller once, before either the build or ZIP changes cwd.
+mkdir -p "${output_dir}"
+output_dir=$(CDPATH= cd -- "${output_dir}" && pwd -P)
+
 package="convenewire-bridge-desktop_${version}_darwin_${goarch}"
 staging="${output_dir}/${package}"
 app="${staging}/ConveneWire Bridge.app"

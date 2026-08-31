@@ -36,6 +36,8 @@ function Invoke-WindowsResourceCheck {
 if ([string]::IsNullOrWhiteSpace($OutputDir)) {
   $OutputDir = Join-Path $bridgeRoot "dist"
 }
+# Resolve against the caller before Go, resource verification or ISCC changes cwd.
+$OutputDir = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($OutputDir)
 if ([string]::IsNullOrWhiteSpace($ReleaseTag)) {
   throw "RELEASE_TAG is required"
 }
