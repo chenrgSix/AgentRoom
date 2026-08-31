@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc --noEmit && vite build",
     "dev": "vite",
-    "test": "tsx --test test/**/*.test.tsx && tsc --noEmit"
+    "test": "tsx --test --test-concurrency=2 test/**/*.test.tsx && tsc --noEmit"
   },
   "dependencies": {
     "@convene-wire/contracts": "0.1.0",

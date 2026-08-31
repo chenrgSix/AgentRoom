@@ -11,7 +11,7 @@
     "db:backup": "tsx src/data/backup-cli.ts",
     "dev": "tsx watch src/server.ts",
     "start": "node dist/server.js",
-    "test": "tsx --test test/**/*.test.ts"
+    "test": "tsx --test --test-concurrency=2 test/**/*.test.ts"
   },
   "dependencies": {
     "@convene-wire/contracts": "0.1.0",

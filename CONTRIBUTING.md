@@ -70,6 +70,11 @@ Never bypass hooks with `--no-verify`.
 
 ## Testing
 
+Server SQLite and Web JSDOM suites use two file-level test workers, independent
+of host core count. This bounds fixture contention without widening deadlines,
+skipping cases or weakening assertions; behavioral concurrency tests still run
+their actual overlapping operations inside each case.
+
 Every behavioral change needs a focused regression test. Protocol changes
 require TypeScript and Go contract tests plus an interoperability scenario.
 Routing and delivery changes must cover offline, retry, duplicate, cancellation,
