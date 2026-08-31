@@ -133,6 +133,22 @@ func TestPairingBrowserFixture(t *testing.T) {
 			return pairing.Credential{}, ctx.Err()
 		}
 	}
+	dependencies.PairDevice = func(ctx context.Context, cfg config.Config, _ pairing.SessionInput, show func(pairing.SessionStatus)) (pairing.Credential, error) {
+		result := make(chan bool, 1)
+		mu.Lock()
+		decision = result
+		mu.Unlock()
+		show(pairing.SessionStatus{State: "claimed", VerificationPhrase: "VIOLET-RIVER-42", ExpiresAt: time.Now().Add(10 * time.Minute)})
+		select {
+		case accepted := <-result:
+			if !accepted {
+				return pairing.Credential{}, fmt.Errorf("Fixture: pairing rejected by target Central")
+			}
+			return approvedRecoveryCredential(cfg), nil
+		case <-ctx.Done():
+			return pairing.Credential{}, ctx.Err()
+		}
+	}
 	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential, observer operations.Observer) error {
 		observer.Connection(operations.ConnectionEvent{State: operations.ConnectionOnline, At: time.Now()})
 		<-ctx.Done()

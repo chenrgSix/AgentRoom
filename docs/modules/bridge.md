@@ -122,26 +122,49 @@ initialization. A configured but not yet paired Bridge presents an explicit
 continuation confirmation and reuses its saved local Runtime, Workspace and
 privacy settings. A Bridge that already owns a Device presents a replacement
 confirmation bound to the displayed `expectedDeviceId`; it must be stopped and
-fully drained, and the link must name the exact currently configured Central.
+fully drained. Same-Central links reuse the saved connection settings; a different
+origin requires the separate `BRG-069` switch confirmation described below.
 The authenticated `POST /api/device-pairing/restart` route then reuses the
 existing isolated re-enrollment transaction: the old identity and data remain
 active until Owner approval returns a complete new identity and the owner-only
 sibling data directory is atomically selected. Failure and cancellation keep
 the old pairing usable. A different-Central link cannot overwrite connection
-settings or carry the old Server Token elsewhere; changing Central remains a
-separate explicit connection/migration decision. Closing the confirmation
+settings or carry the old Server Token elsewhere without the explicit switch
+flow, which discards old-origin credentials and trust. Closing the confirmation
 discards the pending fragment proof from the WebView state.
 
 `BRG-053` makes OS protocol activation a convenience rather than the only
 discoverable configured-client path. **Settings → Pairing and recovery → Use
 pairing link** accepts one complete canonical link inside the local WebView,
-projects only its exact origin for a same-Central check, and then enters the
-existing `BRG-050` confirmation. Invalid, ambiguous, cross-Central or concurrent
-attempts cannot continue. A running idle Bridge still requires the explicit
+projects only its exact origin, and then enters the `BRG-050` re-pairing or
+`BRG-069` Central-switch confirmation. Invalid, ambiguous or concurrent attempts
+cannot continue. A running idle Bridge still requires the explicit
 stop action, active Runs remain fenced, and the authenticated Go backend parses
 the complete link again before starting the isolated replacement transaction.
 Canceling either dialog clears the fragment proof; no credential, Runtime,
 Workspace or privacy setting is projected into or changed by this entry step.
+
+`BRG-069` ([ADR-0033](../adr/0033-explicit-client-central-switch.md)) allows an
+already configured client to switch Central, including IP-to-domain changes,
+through **Settings → Central connection → Switch Central** and a complete new
+pairing link. The confirmation names both the current and
+target origins. Its local request includes `confirmCentralSwitch: true` and
+`expectedServerUrl`; paired clients additionally confirm a new Device and supply
+`expectedDeviceId`. Stale confirmation cannot replace a newer binding. Configured
+clients without credentials use the same staged selection when switching. Merely
+pasting a link or loading a desktop deep link never commits a switch.
+
+The stopped-and-drained Bridge claims the target session with no old Server Token,
+Device token or private CA; legacy pins, reasoning-sharing consent and remote Agent
+provisioning codes are reset. System CA validation or the new link's independently
+verified scoped CA establishes target trust. Complete local Agent, Runtime and
+Workspace profiles are retained. Approval state names the target while the active
+configuration still names the old Central. Only approval plus successful isolated
+staging and atomic configuration replacement selects the new Central and starts
+its Bridge. Failure, cancellation or external file changes do not overwrite the
+old selection. Old data and `previous-bridge.json` remain for recovery; Team history,
+Runtime sessions and remote Device revocation are not migrated. This is fresh
+pairing, distinct from same-installation hostname migration that preserves identity.
 
 ## Local Configuration Console
 

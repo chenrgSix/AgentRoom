@@ -2,6 +2,17 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { pairingView } from "./static/pairing-view.mjs";
 
+test("pending Central switch names the approval target without changing current binding", () => {
+  const state = {configured: true, paired: true, serverUrl: "https://old.example", teamId: "team_old", deviceId: "device_old",
+    enrollment: {active: true, recovery: true, pairingState: "claimed", targetServerUrl: "https://new.example"}};
+  const view = pairingView(state);
+  assert.match(view.guidance, /https:\/\/new.example/);
+  assert.match(view.guidance, /保留旧配置/);
+  assert.match(view.binding, /team_old/);
+  assert.match(view.approvalTitle, /https:\/\/new.example/);
+  assert.equal(view.canCancel, true);
+});
+
 const now = Date.parse("2026-08-26T00:00:00Z");
 const paired = {
   configured: true, paired: true, teamId: "team_original", deviceId: "device_original",

@@ -76,6 +76,7 @@ type EnrollmentInput struct {
 
 type DevicePairingInput struct {
 	EnrollmentInput
+	CentralSwitchInput
 	PairingLink      string `json:"pairingLink,omitempty"`
 	PairingShortCode string `json:"pairingShortCode,omitempty"`
 }
@@ -827,10 +828,18 @@ func (s *Service) startDevicePairing(response http.ResponseWriter, request *http
 	}
 	configuredBefore := s.configuration != nil
 	configuration := s.configuration
-	if configuration != nil && linkServerURL != "" && configuration.ServerURL != linkServerURL {
-		s.mu.Unlock()
-		writeError(response, http.StatusConflict, "Device pairing link origin does not match the configured Central")
-		return
+	switching := configuration != nil && linkServerURL != "" && configuration.ServerURL != linkServerURL
+	if configuration != nil && linkServerURL != "" {
+		candidate, err := pairingCandidate(*configuration, linkServerURL, input.CentralSwitchInput)
+		if err == nil && switching {
+			err = s.verifyPairingUnchangedLocked(*configuration)
+		}
+		if err != nil {
+			s.mu.Unlock()
+			writeError(response, http.StatusConflict, err.Error())
+			return
+		}
+		configuration = &candidate
 	}
 	if configuration == nil {
 		built, err := buildConfig(input.EnrollmentInput, s.options.DataDir)
@@ -851,21 +860,24 @@ func (s *Service) startDevicePairing(response http.ResponseWriter, request *http
 		}
 		configuration = &built
 	}
-	if err := s.applyConfigView(*configuration); err != nil {
-		s.mu.Unlock()
-		writeError(response, http.StatusInternalServerError, publicError(err))
-		return
+	if !switching {
+		if err := s.applyConfigView(*configuration); err != nil {
+			s.mu.Unlock()
+			writeError(response, http.StatusInternalServerError, publicError(err))
+			return
+		}
 	}
-	ctx, epoch := s.beginEnrollmentLocked(false)
+	ctx, epoch := s.beginEnrollmentLocked(switching)
 	method := "link"
 	if shortCode != "" {
 		method = "short_code"
 	}
 	s.state.Enrollment.PairingMethod = method
 	s.state.Enrollment.PairingState = "claiming"
+	s.state.Enrollment.TargetServerURL = configuration.ServerURL
 	s.mu.Unlock()
 
-	go s.pairDevice(ctx, *configuration, configuredBefore, false, epoch, pairing.SessionInput{
+	go s.pairDevice(ctx, *configuration, configuredBefore, switching, epoch, pairing.SessionInput{
 		Link: link, ShortCode: shortCode,
 	})
 	writeJSON(response, http.StatusAccepted, map[string]string{"status": "pairing"})

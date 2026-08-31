@@ -23,6 +23,9 @@ export function pairingView(state, now = Date.now()) {
       : enrollment.recovery
       ? "正在申请新的 Device 身份。审批成功并保存前，旧配对与全部智能体配置保持不变；可取消返回。"
       : "请在中央 Web 选择目标 Team → 智能体管理 → Bridge 审批码，由 Owner 批准。";
+    if (devicePairing && enrollment.targetServerUrl && enrollment.targetServerUrl !== state.serverUrl) {
+      guidance = `正在配对新 Central：${enrollment.targetServerUrl}。请在该 Central 核对确认短语并由 Owner 批准；成功前保留旧配置，可取消返回。`;
+    }
   } else if (state.lastError && enrollment.recovery) {
     guidance = "重新配对未完成，旧配对仍保留。若中央已批准，请检查新建 Device；本地保存失败不会自动重复创建或撤销设备。";
   }
@@ -40,7 +43,11 @@ export function pairingView(state, now = Date.now()) {
       : canCopy ? state.joinCode : expired ? "审批码已过期" : "正在申请…",
     canCopy,
     approvalEyebrow: devicePairing ? "核对确认短语" : "等待 Owner 批准",
-    approvalTitle: devicePairing ? "中央 Web 必须显示完全相同的短语" : "在中央 Web 管理界面输入此代码",
+    approvalTitle: devicePairing
+      ? enrollment.targetServerUrl && enrollment.targetServerUrl !== state.serverUrl
+        ? `请在 ${enrollment.targetServerUrl} 核对相同短语`
+        : "中央 Web 必须显示完全相同的短语"
+      : "在中央 Web 管理界面输入此代码",
     expiry: canCopy
       ? `剩余 ${Math.floor(seconds / 60)} 分 ${seconds % 60} 秒 · 有效期至 ${new Date(deadline).toLocaleTimeString()}`
       : devicePairing && Number.isFinite(deadline)

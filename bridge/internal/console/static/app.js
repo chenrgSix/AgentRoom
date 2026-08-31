@@ -25,10 +25,11 @@ const elements = Object.fromEntries([
   "fixed-management-code", "rotating-management-code-panel", "rotating-management-code",
   "rotating-management-code-expiry", "save-agent-provisioning", "agent-provisioning-result",
   "pairing-status", "pairing-binding", "pairing-guidance", "pairing-blocked", "pairing-backup",
-  "use-pairing-link", "request-enrollment", "start-existing-pairing", "join-copy-result",
+  "use-pairing-link", "switch-central", "request-enrollment", "start-existing-pairing", "join-copy-result",
   "pairing-link-modal-backdrop", "configured-pairing-link", "pairing-link-modal-error",
   "close-pairing-link-modal", "cancel-pairing-link-modal", "continue-pairing-link",
   "pairing-modal-backdrop", "pairing-modal-title", "pairing-modal-guidance", "pairing-modal-retention",
+  "pairing-central-addresses", "pairing-current-central", "pairing-target-central",
   "pairing-modal-blocked", "close-pairing-modal", "cancel-pairing-modal", "stop-for-pairing",
   "confirm-reenrollment", "pairing-modal-error",
   "current-server-token", "current-server-trust",
@@ -94,6 +95,7 @@ let editingAgentId = null;
 let draftPreflightRunning = false;
 let enrollmentActionRunning = false;
 let expectedPairingDeviceId = null;
+let pairingReview = null;
 let discoveryRunning = false;
 let agentProvisioningDirty = false;
 let activePage = "overview";
@@ -547,6 +549,7 @@ function render(state) {
   elements["request-enrollment"].textContent = pairing.requestLabel;
   elements["request-enrollment"].disabled = enrollmentActionRunning || !pairing.canRequest;
   elements["use-pairing-link"].disabled = enrollmentActionRunning || Boolean(state.enrollment?.active);
+  elements["switch-central"].disabled = elements["use-pairing-link"].disabled;
   elements["start-existing-pairing"].classList.toggle("hidden", !state.paired);
   elements["start-existing-pairing"].disabled = !pairing.canStartExisting;
   const backup = state.enrollment?.backupConfigPath;
@@ -645,20 +648,33 @@ function render(state) {
 function renderConfiguredPairingLaunch(state) {
   const view = configuredPairingLaunchView(pendingPairingLink, state);
   if (!view.show) return;
-  expectedPairingDeviceId = state.paired ? state.deviceId : null;
-  elements["pairing-modal-title"].textContent = view.mode === "replace"
+  if (!pairingReview || pairingReview.link !== pendingPairingLink) {
+    pairingReview = {link: pendingPairingLink, serverUrl: state.serverUrl, deviceId: state.paired ? state.deviceId : null};
+  }
+  const stale = pairingReview.serverUrl !== state.serverUrl || pairingReview.deviceId !== (state.paired ? state.deviceId : null);
+  const switching = pairingOriginFromLink(pairingReview.link) !== pairingReview.serverUrl;
+  elements["pairing-modal-title"].textContent = switching ? "切换 Central 并重新配对" : view.mode === "replace"
     ? "使用链接重新配对"
     : "继续未完成的 Device 配对";
-  elements["pairing-modal-guidance"].textContent = view.mode === "replace"
+  elements["pairing-modal-guidance"].textContent = switching
+    ? "确认后将向下方新 Central 申请配对。请在新 Central 核对确认短语并由 Owner 批准，成功后才切换连接。旧 Team 历史不会迁移，旧设备不会自动撤销。"
+    : view.mode === "replace"
     ? "该链接会向当前 Central 申请新的 Device 身份。只有确认短语一致并由 Owner 批准后，Bridge 才会切换身份。"
     : "这台 Bridge 已保存本机配置但还没有 Device 凭据。确认后将使用该链接继续配对。";
-  elements["pairing-modal-retention"].textContent = view.mode === "replace"
+  elements["pairing-modal-retention"].textContent = switching
+    ? "保留本机 Agent、Runtime 和工作区。失败或取消保留旧配置；成功后保存旧配置备份。旧凭据与证书信任不带入新 Central；思考摘要共享和远程添加 Agent 授权将关闭，可在切换后重新设置。"
+    : view.mode === "replace"
     ? "旧身份、旧数据与全部本机 Agent 配置在新身份安全保存前保持不变；失败或取消仍可使用旧配对。"
     : "本机 Runtime、Workspace 与隐私设置保持不变；配对链接不会覆盖它们。";
-  elements["pairing-modal-blocked"].textContent = view.blockedReason;
-  elements["pairing-modal-blocked"].classList.toggle("hidden", !view.blockedReason);
-  elements["stop-for-pairing"].classList.toggle("hidden", !view.showStop);
-  elements["confirm-reenrollment"].disabled = enrollmentActionRunning || !view.canConfirm;
+  elements["pairing-central-addresses"].classList.toggle("hidden", !switching);
+  elements["pairing-current-central"].textContent = pairingReview.serverUrl;
+  elements["pairing-target-central"].textContent = pairingOriginFromLink(pairingReview.link);
+  const blockedReason = stale ? "当前配对或 Central 已变化，请关闭确认窗口后重试。" : view.blockedReason;
+  elements["pairing-modal-blocked"].textContent = blockedReason;
+  elements["pairing-modal-blocked"].classList.toggle("hidden", !blockedReason);
+  elements["stop-for-pairing"].classList.toggle("hidden", stale || !view.showStop);
+  elements["confirm-reenrollment"].textContent = switching ? "确认切换并配对" : "确认申请新身份";
+  elements["confirm-reenrollment"].disabled = enrollmentActionRunning || stale || !view.canConfirm;
   elements["pairing-modal-backdrop"].classList.remove("hidden");
 }
 
@@ -742,11 +758,13 @@ function closePairingLinkModal() {
   elements["pairing-link-modal-backdrop"].classList.add("hidden");
 }
 
-elements["use-pairing-link"].addEventListener("click", () => {
-  closePairingLinkModal();
-  elements["pairing-link-modal-backdrop"].classList.remove("hidden");
-  elements["configured-pairing-link"].focus();
-});
+for (const id of ["use-pairing-link", "switch-central"]) {
+  elements[id].addEventListener("click", () => {
+    closePairingLinkModal();
+    elements["pairing-link-modal-backdrop"].classList.remove("hidden");
+    elements["configured-pairing-link"].focus();
+  });
+}
 elements["configured-pairing-link"].addEventListener("input", renderPairingLinkEntry);
 for (const id of ["close-pairing-link-modal", "cancel-pairing-link-modal"]) {
   elements[id].addEventListener("click", closePairingLinkModal);
@@ -763,6 +781,7 @@ function closePairingModal() {
   if (enrollmentActionRunning) return;
   elements["pairing-modal-backdrop"].classList.add("hidden");
   expectedPairingDeviceId = null;
+  pairingReview = null;
   if (pendingPairingLink) {
     pendingPairingLink = "";
     elements["device-pairing-link"].value = "";
@@ -770,30 +789,40 @@ function closePairingModal() {
 }
 
 async function requestConfiguredDevicePairing() {
-  if (enrollmentActionRunning || !pendingPairingLink || !currentState?.configured) return;
+  if (enrollmentActionRunning || !pendingPairingLink || !currentState?.configured || !pairingReview) return;
+  const review = pairingReview;
+  if (review.link !== pendingPairingLink || review.serverUrl !== currentState.serverUrl ||
+      review.deviceId !== (currentState.paired ? currentState.deviceId : null) ||
+      !configuredPairingLaunchView(review.link, currentState).canConfirm) return;
   enrollmentActionRunning = true;
   elements["confirm-reenrollment"].disabled = true;
   showError(null);
   try {
-    if (currentState.paired) {
+    const switchConfirmation = {
+      expectedServerUrl: review.serverUrl,
+      confirmCentralSwitch: pairingOriginFromLink(review.link) !== review.serverUrl
+    };
+    if (review.deviceId) {
       await request("/api/device-pairing/restart", {
         method: "POST",
         body: JSON.stringify({
-          pairingLink: pendingPairingLink,
+          pairingLink: review.link,
           confirmNewDevice: true,
-          expectedDeviceId: currentState.deviceId
+          expectedDeviceId: review.deviceId,
+          ...switchConfirmation
         })
       });
     } else {
       await request("/api/device-pairing/start", {
         method: "POST",
-        body: JSON.stringify({pairingLink: pendingPairingLink})
+        body: JSON.stringify({pairingLink: review.link, ...switchConfirmation})
       });
     }
     pendingPairingLink = "";
     elements["device-pairing-link"].value = "";
     elements["pairing-modal-backdrop"].classList.add("hidden");
     expectedPairingDeviceId = null;
+    pairingReview = null;
     await refresh();
   } catch (error) {
     showError(error);
@@ -828,6 +857,7 @@ async function requestEnrollment(expectedDeviceId = null) {
 elements["request-enrollment"].addEventListener("click", () => {
   if (currentState.paired) {
     pendingPairingLink = "";
+    pairingReview = null;
     expectedPairingDeviceId = currentState.deviceId;
     showError(null);
     elements["pairing-modal-title"].textContent = "申请新审批码";
@@ -835,6 +865,8 @@ elements["request-enrollment"].addEventListener("click", () => {
     elements["pairing-modal-retention"].textContent = "保留所有本机智能体配置。新凭据保存成功前不替换旧配对；成功后旧数据仍保留，并生成 previous-bridge.json 备份。";
     elements["pairing-modal-blocked"].classList.add("hidden");
     elements["stop-for-pairing"].classList.add("hidden");
+    elements["pairing-central-addresses"].classList.add("hidden");
+    elements["confirm-reenrollment"].textContent = "确认申请新身份";
     elements["confirm-reenrollment"].disabled = false;
     elements["pairing-modal-backdrop"].classList.remove("hidden");
     elements["cancel-pairing-modal"].focus();

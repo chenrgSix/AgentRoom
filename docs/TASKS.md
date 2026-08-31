@@ -488,6 +488,12 @@ Implementation is sequential; native-platform evidence remains explicit.
 | QA-050 | DONE | Dispatch native activation fixture control messages independently | BRG-056, BRG-063 | CI 33355476410 and Release 33355702399 pass native pairing/wake/legacy, receiver rejection and 50-ms unresponsive-window checks after fixture pause dispatch precedes WM_COPYDATA; 33 policy tests and Windows cross-build pass, timeout diagnostics identify the awaited event, and production activation code is unchanged |
 | SITE-002 | DONE | Align public version copy with v0.4.2 stable | SITE-001, QA-047 | README/home/guide now identify verified v0.4.2 without changing hosting/design or HTTP-only/provider/backup boundaries; 15 static tests/build and 245-file docs lint pass; Pages 33356999313 publishes 9b51a05 and nine public files match its exact built bytes, including version metadata and current stable links |
 
+## Client Central Switching
+
+| ID | State | Task | Depends On | Completion Evidence |
+| --- | --- | --- | --- | --- |
+| BRG-069 | DONE | Allow an explicitly confirmed Central switch from the configured client | BRG-050, BRG-053, BRG-064 | [evidence](acceptance/brg-069-client-central-switch.md), ADR-0033; 54 embedded UI tests, full Bridge tests/vet, Console/pairing race, native macOS desktop tests, Windows cross-build and real isolated page flow prove explicit old/new-origin review, fresh approved selection, credential isolation, preserved local profiles and failure/cancel recovery; no installer release or physical Windows acceptance claimed |
+
 ## Owner Login Recovery Settings
 
 | ID | State | Task | Depends On | Completion Evidence |

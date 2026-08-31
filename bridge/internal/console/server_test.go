@@ -569,7 +569,8 @@ func TestEmbeddedUIExposesOperationsWithoutAutomaticUpdateChecks(t *testing.T) {
 		!bytes.Contains(javascript, []byte(`pairingLinkFromHash(window.location.hash)`)) ||
 		!bytes.Contains(javascript, []byte(`elements["server-url"].value = pairingOriginFromLink(pendingPairingLink)`)) ||
 		!bytes.Contains(javascript, []byte(`elements["device-pairing-link"].addEventListener("input"`)) ||
-		!bytes.Contains(javascript, []byte(`elements["use-pairing-link"].addEventListener("click"`)) ||
+		!bytes.Contains(javascript, []byte(`for (const id of ["use-pairing-link", "switch-central"])`)) ||
+		!bytes.Contains(html, []byte(`id="switch-central" type="button">切换 Central`)) ||
 		!bytes.Contains(javascript, []byte(`configuredPairingEntryView(`)) ||
 		!bytes.Contains(javascript, []byte(`renderConfiguredPairingLaunch(state)`)) {
 		t.Fatal("Device pairing must remain one explicit local action with a closed metadata disclosure")

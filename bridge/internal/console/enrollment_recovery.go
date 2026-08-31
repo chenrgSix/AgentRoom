@@ -27,6 +27,7 @@ type EnrollmentView struct {
 	PairingSessionID   string `json:"pairingSessionId,omitempty"`
 	VerificationPhrase string `json:"verificationPhrase,omitempty"`
 	PairingExpiresAt   string `json:"pairingExpiresAt,omitempty"`
+	TargetServerURL    string `json:"targetServerUrl,omitempty"`
 }
 
 type ReEnrollmentInput struct {
@@ -36,7 +37,36 @@ type ReEnrollmentInput struct {
 
 type ReDevicePairingInput struct {
 	ReEnrollmentInput
+	CentralSwitchInput
 	PairingLink string `json:"pairingLink"`
+}
+
+// CentralSwitchInput is local confirmation, never sent to a Central.
+type CentralSwitchInput struct {
+	ConfirmCentralSwitch bool   `json:"confirmCentralSwitch"`
+	ExpectedServerURL    string `json:"expectedServerUrl"`
+}
+
+func pairingCandidate(previous config.Config, target string, input CentralSwitchInput) (config.Config, error) {
+	if input.ExpectedServerURL != "" && input.ExpectedServerURL != previous.ServerURL {
+		return previous, fmt.Errorf("当前 Central 已变化，请关闭确认窗口后重试。")
+	}
+	if target == previous.ServerURL {
+		return cloneConfiguration(previous), nil
+	}
+	if !input.ConfirmCentralSwitch || input.ExpectedServerURL != previous.ServerURL {
+		return previous, fmt.Errorf("切换 Central 需要明确确认，并提供当前 Central 地址。")
+	}
+	candidate := cloneConfiguration(previous)
+	candidate.ServerURL = target
+	// Server credentials, trust and remote permissions must not cross origins.
+	// PairDevice derives any scoped CA solely from the newly supplied link.
+	candidate.ServerToken = ""
+	candidate.ServerTrustMode = config.TrustSystemCA
+	candidate.ServerCertificateSHA256 = ""
+	candidate.ShareReasoningSummaries = false
+	candidate.AgentProvisioning = config.AgentProvisioningConfig{}
+	return candidate, candidate.Validate()
 }
 
 func (s *Service) enrollmentBlockedReasonLocked() string {
@@ -79,6 +109,7 @@ func (s *Service) clearDevicePairingLocked() {
 	s.state.Enrollment.PairingSessionID = ""
 	s.state.Enrollment.VerificationPhrase = ""
 	s.state.Enrollment.PairingExpiresAt = ""
+	s.state.Enrollment.TargetServerURL = ""
 }
 
 func (s *Service) restartEnrollment(response http.ResponseWriter, request *http.Request) {
@@ -138,22 +169,23 @@ func (s *Service) restartDevicePairing(response http.ResponseWriter, request *ht
 		writeError(response, http.StatusConflict, "The paired Device changed; reload before requesting a new pairing")
 		return
 	}
-	if parsed.ServerURL != s.configuration.ServerURL {
-		writeError(response, http.StatusConflict, "Device pairing link origin does not match the configured Central")
+	configuration, err := pairingCandidate(*s.configuration, parsed.ServerURL, input.CentralSwitchInput)
+	if err != nil {
+		writeError(response, http.StatusConflict, err.Error())
 		return
 	}
 	if reason := s.enrollmentBlockedReasonLocked(); reason != "" {
 		writeError(response, http.StatusConflict, reason)
 		return
 	}
-	configuration := cloneConfiguration(*s.configuration)
-	if err := s.verifyPairingUnchangedLocked(configuration); err != nil {
+	if err := s.verifyPairingUnchangedLocked(*s.configuration); err != nil {
 		writeError(response, http.StatusConflict, err.Error())
 		return
 	}
 	ctx, epoch := s.beginEnrollmentLocked(true)
 	s.state.Enrollment.PairingMethod = "link"
 	s.state.Enrollment.PairingState = "claiming"
+	s.state.Enrollment.TargetServerURL = configuration.ServerURL
 	go s.pairDevice(ctx, configuration, true, true, epoch, pairing.SessionInput{Link: link})
 	writeJSON(response, http.StatusAccepted, map[string]string{"status": "pairing"})
 }
@@ -163,16 +195,26 @@ func (s *Service) verifyPairingUnchangedLocked(expected config.Config) error {
 	if err != nil || !reflect.DeepEqual(cloneConfiguration(current), cloneConfiguration(expected)) {
 		return fmt.Errorf("Local configuration changed; reopen the Console before re-enrollment")
 	}
+	if s.credential == nil {
+		if _, err := pairing.EnsureAvailable(expected.DataDir); err != nil {
+			return fmt.Errorf("Local Device credentials changed; reopen the Console before re-enrollment")
+		}
+		return nil
+	}
 	credential, err := pairing.Load(expected.DataDir)
-	if err != nil || s.credential == nil || !reflect.DeepEqual(credential, *s.credential) {
+	if err != nil || !reflect.DeepEqual(credential, *s.credential) {
 		return fmt.Errorf("Local Device credentials changed; reopen the Console before re-enrollment")
 	}
 	return nil
 }
 
-func (s *Service) installReEnrollmentLocked(previous config.Config, credential pairing.Credential) (config.Config, error) {
+func (s *Service) installReEnrollmentLocked(candidate config.Config, credential pairing.Credential) (config.Config, error) {
+	// The active in-memory configuration stays on the previous selection for the
+	// entire attempt. Mutating Console operations are fenced by joinCancel.
+	previous := cloneConfiguration(*s.configuration)
+	sameDevice := s.credential != nil && candidate.ServerURL == previous.ServerURL && credential.DeviceID == s.credential.DeviceID
 	if credential.DeviceID == "" || credential.TeamID == "" || credential.OwnerMemberID == "" ||
-		credential.Token == "" || credential.ServerURL != previous.ServerURL || credential.DeviceID == s.credential.DeviceID {
+		credential.Token == "" || credential.ServerURL != candidate.ServerURL || sameDevice {
 		return previous, fmt.Errorf("Approval did not return a new complete Device identity")
 	}
 	if err := s.verifyPairingUnchangedLocked(previous); err != nil {
@@ -199,7 +241,6 @@ func (s *Service) installReEnrollmentLocked(previous config.Config, credential p
 		return previous, fmt.Errorf("Unable to back up configuration; previous pairing is unchanged")
 	}
 	s.state.Enrollment.BackupConfigPath = backupPath
-	candidate := cloneConfiguration(previous)
 	candidate.DataDir = directory
 	if err := s.dependencies.SaveCredential(directory, credential); err != nil {
 		return previous, fmt.Errorf("Unable to save approved credentials; previous pairing is unchanged")

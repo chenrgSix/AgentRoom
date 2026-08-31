@@ -70,12 +70,6 @@ export function configuredPairingEntryView(link, state) {
       error: "请粘贴完整的 Device 配对链接（convenewire:// 或 HTTPS 链接）。"
     };
   }
-  if (origin !== state.serverUrl) {
-    return {
-      canContinue: false,
-      error: "该配对链接不属于当前 Central；不会覆盖现有连接。"
-    };
-  }
   return {canContinue: true, error: ""};
 }
 
@@ -86,16 +80,14 @@ export function configuredPairingLaunchView(link, state) {
   }
   const sameOrigin = origin === state.serverUrl;
   const activeRuns = state.agents?.some((agent) => agent.activeRuns > 0) || false;
-  const blockedReason = !sameOrigin
-    ? "该配对链接不属于当前 Central；不会覆盖现有连接。"
-    : activeRuns
+  const blockedReason = activeRuns
       ? "请等待当前 Team 任务结束；重新配对不会中断正在运行的任务。"
       : state.enrollment?.blockedReason || "";
   return {
     show: true,
-    mode: state.paired ? "replace" : "complete",
-    canConfirm: sameOrigin && Boolean(state.enrollment?.canRequest),
-    showStop: sameOrigin && Boolean(state.bridgeRunning) && !activeRuns,
+    mode: !sameOrigin ? "switch" : state.paired ? "replace" : "complete",
+    canConfirm: !activeRuns && !state.bridgeRunning && Boolean(state.enrollment?.canRequest),
+    showStop: Boolean(state.bridgeRunning) && !activeRuns,
     blockedReason
   };
 }
