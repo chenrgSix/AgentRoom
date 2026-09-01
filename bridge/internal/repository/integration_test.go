@@ -44,6 +44,8 @@ func TestIntegrateExactTargetAtomicallyAdvancesOnlyApprovedRef(t *testing.T) {
 	for _, format := range []string{"sha1", "sha256"} {
 		t.Run(format, func(t *testing.T) {
 			f, checkpoint, operation := integrationCandidateFixture(t, format)
+			beforeTarget := f.git(t, f.sourcePath, "show-ref", "--verify", "--hash",
+				operation.Action.Integrate.Target.TargetRef)
 			beforeHead := f.git(t, f.sourcePath, "rev-parse", "HEAD")
 			beforeBranch := f.git(t, f.sourcePath, "symbolic-ref", "HEAD")
 			beforeStatus := f.git(t, f.sourcePath, "status", "--porcelain=v1", "--untracked-files=all")
@@ -51,9 +53,14 @@ func TestIntegrateExactTargetAtomicallyAdvancesOnlyApprovedRef(t *testing.T) {
 			if err != nil || result != checkpoint.CandidateCommit {
 				t.Fatalf("result=%s error=%v", result, err)
 			}
-			if got := f.git(t, f.sourcePath, "show-ref", "--verify", "--hash", operation.Action.Integrate.Target.TargetRef); got != checkpoint.CandidateCommit {
-				t.Fatalf("target=%s", got)
+			afterTarget := f.git(t, f.sourcePath, "show-ref", "--verify", "--hash",
+				operation.Action.Integrate.Target.TargetRef)
+			if afterTarget != checkpoint.CandidateCommit {
+				t.Fatalf("target=%s", afterTarget)
 			}
+			t.Logf("format=%s target=%s before=%s after=%s tree=%s", format,
+				operation.Action.Integrate.Target.TargetRef, beforeTarget, afterTarget,
+				checkpoint.CandidateTree)
 			if got := f.git(t, f.sourcePath, "rev-parse", checkpoint.CandidateCommit+"^{tree}"); got != checkpoint.CandidateTree {
 				t.Fatalf("candidate tree=%s", got)
 			}
