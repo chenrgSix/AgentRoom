@@ -514,7 +514,12 @@ primitives and are not renamed. Producing approved Artifact content, including a
 that separate authority remains VER-001 and is not a hidden prerequisite of the
 local content producer. `BRG-071` connects owner binding/grant setup,
 runtime enforcement and owner-visible cleanup to the existing stopped-Run
-authority. `RUN-018` connects those capabilities to ordinary frozen Run Delivery.
+authority. Its internal coordinator now consumes exact ordered patch bytes
+through a narrow loader boundary, rechecks preparation under the possible-start
+callback and exposes no path in durable state. The concrete authenticated input
+client and production Handler construction remain `RUN-018` work; commit inputs
+stay fail-closed until their separate materializer exists. `RUN-018` connects
+those capabilities to ordinary frozen Run Delivery.
 `REPO-001` retains the full owner-local lifecycle acceptance using these actual
 production adapters, and is a prerequisite of QA-052 rather than of its own
 BRG-071 implementation. Local fixtures alone cannot satisfy that closure.

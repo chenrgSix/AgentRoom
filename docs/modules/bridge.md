@@ -163,10 +163,9 @@ private outside root and resolves safe environment values. It requires the live
 probe to reproduce the registered executable/profile/platform and both boundary
 names, removes the outside fixture, then resolves the record again before
 returning. It persists no workspace or fresh evidence. The primitive is not yet
-wired to production delivery; production must join it to the durable
-start-intent/no-duplicate journal below and one current
-grant/Run/generation/prepared-identity transaction before no-start can be
-opened.
+wired to production delivery. The internal admission coordinator below now
+joins it to the durable start-intent/no-duplicate journal and the other local
+prerequisites, but the production Handler still rejects governed execution.
 
 ## Durable Runtime Possible-Start Fence
 
@@ -197,27 +196,38 @@ strict reads, exclusive fsynced writes and bounded inventory. This claim is
 still not startup authority.
 
 `Start` requires the caller's expected admission digest and a mandatory
-current-authority callback. Production wiring must make that callback recheck
-the authenticated current Run and dispatch generation, cancellation, current
-local Task grant, exact prepared physical identity and exact Runtime profile
-through the physical re-probe. The callback cannot start a process or perform
-another irreversible effect and may run on competing requests. After a
-successful callback the store checks time and immutable state again, durably
-appends version-2 start-intent, and returns `invoke=true` only to the writer of
-that first record. Every `starting` or `stopped` replay returns `invoke=false`
-without calling the callback. Therefore the persisted `starting` state means
-the Runtime may have started, including a crash after the append but before the
-caller invokes it; recovery never guesses that it is safe to invoke again.
+current-authority callback. The internal `GovernedAdmissionCoordinator` now
+builds that callback from one re-decoded frozen delivery and repeats the exact
+Task grant, ordered patch-input binding, repository source, deterministic
+worktree preparation and physical Runtime-profile probe. The authenticated
+Server Run/generation/cancellation observation is the final callback step. Any
+changed input bytes, prepared identity, profile or returned Server view fails
+closed before the possible-start write. Unsupported commit inputs and any
+independent verification profile remain closed rather than being silently
+ignored.
+
+The coordinator then delegates the sole possible-start decision to
+`RuntimeFenceStore.Start`; it cannot start a process or perform another
+irreversible effect. Its transient ticket keeps input bytes and local paths out
+of the durable record, and the worktree path is returned only to the sole
+`invoke=true` caller and is absent from JSON. After a successful callback the
+store checks time and immutable state again, durably appends version-2
+start-intent, and returns `invoke=true` only to the writer of that first record.
+Every `starting` or `stopped` replay returns `invoke=false` without calling the
+callback. Therefore the persisted `starting` state means the Runtime may have
+started, including a crash after the append but before the caller invokes it;
+recovery never guesses that it is safe to invoke again.
 
 The internal `RuntimeAuthorityClient` now supplies the Central half of that
-future callback. It posts only the exact Run, manifest, isolated lease,
+callback. It posts only the exact Run, manifest, isolated lease,
 workspace reference and generation to the Device-authenticated, no-store
 authority endpoint, then requires the response to reproduce every value, the
 initial lease revision and expiry. A changed or malformed response, rejected
 scope, unavailable Server, mismatched credential origin or missing credential
 fails closed. The observation creates, extends and caches no authority. It is
-not yet composed with local grant/profile/prepared-identity rechecks or passed
-to `RuntimeFenceStore.Start`, so it cannot enable a Runtime.
+composed only in the internal coordinator; no production delivery, input
+transport, Handler, Runtime executor or capability advertisement constructs or
+calls that coordinator yet, so it cannot enable a Runtime.
 
 `Stop` appends one exact version-3 closed local outcome bound to both admission
 and start digests. It does not create a Task Result, verification receipt or
@@ -225,8 +235,9 @@ completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
 That explicit surviving-process cleanup, inbox/cancellation integration,
-complete current-authority callback composition, capability advertisement and
-real Runtime evidence remain open. The production governed no-start rejection is unchanged. See the
+concrete authenticated input transport, production coordinator construction,
+capability advertisement and real Runtime evidence remain open. The production
+governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 
 ## Codex Local Boundary Probe

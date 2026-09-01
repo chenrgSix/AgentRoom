@@ -66,8 +66,23 @@ permission to retry.
 - `RuntimeAuthorityClient` binds that response to the exact local admission,
   revision-1 lease and original expiry. Malformed, stale, foreign-origin,
   unauthorized and unavailable observations all fail closed. This client is
-  not yet composed with `RuntimeFenceStore.Start`, so it changes no production
-  capability.
+  now used only by the internal admission coordinator, so it changes no
+  production capability.
+- `GovernedAdmissionCoordinator.Prepare` freezes the typed outer delivery,
+  re-decodes its exact governed manifest, checks current Task consent, binds
+  exact ordered patch bytes, resolves the registered repository, deterministically
+  prepares the isolated worktree, physically re-probes the exact Codex profile
+  and records the path-free claim. Verification profiles and non-patch inputs
+  stay explicitly unsupported.
+- `GovernedAdmissionCoordinator.Start` repeats every mutable local prerequisite
+  inside the fence callback and performs the authenticated Server observation
+  last. It exact-compares input bytes, prepared workspace identity, profile,
+  rebuilt admission and Server response before the possible-start append. The
+  transient worktree path is returned only with the sole `invoke=true` decision
+  and is never serialized.
+- The coordinator still invokes no Runtime, emits no event, retains no process
+  handle and advertises no capability. No production Handler or inbox path
+  constructs it, and its input loader remains an injected internal boundary.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -86,6 +101,13 @@ authenticated HTTP surface, no-store response, exact replay, generation drift,
 foreign credentials, terminal Run and pending cancellation. The complete
 Server suite passes 477/477 and its production TypeScript build passes.
 
+The coordinator-focused suite proves exact prepare/recheck/Server-observation
+order, caller-input and Agent-config freezing, cancellation before preparation
+or possible start, path-free serialization, one invoke decision and replay
+without a second authority callback. It also covers grant denial, unsupported
+verification authority, input binding/kind/length/digest drift, prepared
+identity drift, Runtime-profile drift and rejected/changed Server authority.
+
 The contract package passes 78 Node checks, generated/current TypeScript, Go
 round trips and 243 shared positive/negative fixtures. The Bridge admission
 package passes normally, under the race detector and under vet; all 26 Bridge
@@ -100,9 +122,8 @@ acceptance.
 
 - wire the exact governed manifest through the existing inbox without opening a
   second Runtime-start path;
-- compose the production callback from the authenticated Server observation,
-  cancellation, local grant/profile re-resolution, prepared-identity recheck
-  and physical re-probe;
+- implement the concrete authenticated, bounded execution-input loader and
+  construct the reviewed coordinator under the Bridge process-owner context;
 - retain/terminate the process handle and connect stopped-Run, revocation and
   owner-visible cleanup;
 - expose owner setup/state without leaking local details;
