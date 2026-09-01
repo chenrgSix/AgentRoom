@@ -57,13 +57,19 @@ not establish any of those facts or enable execution.
 An optional `governedExecution` declaration in authenticated `bridge.hello` and
 managed Agent capabilities names version 1, enforced workspace isolation,
 preventive path enforcement and exact supported operations. Manual capability
-declarations cannot opt into governed execution. Current-epoch metadata is
-copied, and transport requires both prepare and capture before sending a
-governed Run; an observing-only Bridge is insufficient. Future admission must
-add the exact Agent/runtime/grant checks. Unknown versions or capability shapes
-are rejected before replacing an existing connection. Missing declarations
-preserve ordinary work, never a fallback for governed work. Production Bridges
-do not advertise this capability until the local implementation is available.
+declarations cannot opt into governed execution, and Web/hosted/manual Agent
+publication cannot forge a Bridge-owned declaration. Current-epoch metadata is
+copied only when an Agent declaration is a subset of the authenticated Device
+hello. Each new hello starts an empty current-epoch Agent set; only a successful
+Agent publication in that same epoch populates it. Transport and workspace
+admission require both `prepare` and `capture` on that Device, current exact
+Agent declaration and matching persisted Agent projection before sending a
+governed Run. An observing-only or prepare-only Bridge is insufficient. Unknown
+versions, malformed persisted JSON or incompatible capability shapes fail
+closed. Missing declarations preserve ordinary work, never a fallback for
+governed work. Production may truthfully advertise `prepare` for an exact
+locally ready Agent while capture remains unavailable and governed transport
+remains closed.
 
 `CON-020` adds `work/execution-plan.schema.json`, generated execution types and
 an Ajv standalone validator. The shared Execution validation port rejects

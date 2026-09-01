@@ -84,8 +84,11 @@ revision/digest, selected base and physical registration fingerprint in addition
 to the generated grant summary. It preserves immutable issuance and separate
 digest-bound revocation under the same process-owner fence as registration.
 Current consent checking is one prerequisite, not a Runtime or verifier service;
-no production governed capability is advertised by this increment. Actual
-just-in-time profile re-probe, enforced execution and in-flight revocation remain required.
+production readiness now intersects it with the current Agent configuration,
+runtime profile, repository binding and physical Git source before advertising
+only `prepare`. Actual per-Run admission still performs the just-in-time profile
+re-probe and current Server observation; capture/result publication and
+in-flight revocation remain required.
 
 The first Codex-specific admission foundation is a native macOS local boundary
 probe, described in [Local Bridge](bridge.md#codex-local-boundary-probe). It
@@ -172,8 +175,8 @@ and the checkpoint remains usable for an explicitly authorized new attempt.
 This retention policy avoids treating uncollected scratch diagnostics as cache
 garbage and does not claim a total disk quota or storage-purge feature. Owner UI,
 actual local cleanup-grant/Run fencing and recovery decisions still require the
-production Bridge admission and product-surface work; no capability is advertised
-by this local primitive alone.
+production Bridge admission and product-surface work; this local primitive alone
+never creates a capability.
 
 ### Local Pinned Preparation
 
@@ -518,8 +521,11 @@ authority. Its internal coordinator now consumes exact ordered patch bytes
 through a narrow loader boundary, rechecks preparation under the possible-start
 callback and exposes no path in durable state. The concrete authenticated input
 client now performs a bounded exact download without retaining files; production
-Handler construction remains `RUN-018` work. Commit inputs stay fail-closed
-until their separate materializer exists. `RUN-018` connects those capabilities
+Handler construction now injects that governed path only for startup-derived
+ready Agents. The Bridge advertises `prepare` only; Central requires both
+`prepare` and `capture`, so actual frozen Run Delivery remains closed until
+capture/result publication is connected. Commit inputs stay fail-closed until
+their separate materializer exists. `RUN-018` connects the completed capability
 to ordinary frozen Run Delivery.
 `REPO-001` retains the full owner-local lifecycle acceptance using these actual
 production adapters, and is a prerequisite of QA-052 rather than of its own

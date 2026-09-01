@@ -31,6 +31,7 @@ type GovernedHandler struct {
 	Admission            GovernedAdmission
 	Runner               GovernedRunner
 	Executor             *RuntimeExecutor
+	AllowsAgent          func(string) bool
 	IsExplicitCancel     func(context.Context) bool
 	IsRetryableAdmission func(error) bool
 	Now                  func() time.Time
@@ -39,7 +40,8 @@ type GovernedHandler struct {
 func (h *GovernedHandler) Handle(ctx context.Context, message contracts.RunRequestedMessage, send Sender) error {
 	if h == nil || h.Inbox == nil || h.Admission == nil || h.Runner == nil || h.Executor == nil ||
 		h.Executor.Inbox != h.Inbox || send == nil || message.Payload.ContextManifest == nil ||
-		message.Payload.ContextManifest.Execution == nil {
+		message.Payload.ContextManifest.Execution == nil || h.AllowsAgent == nil ||
+		!h.AllowsAgent(message.Payload.TargetAgentID) {
 		return ErrGovernedExecutionUnsupported
 	}
 	now := h.now()

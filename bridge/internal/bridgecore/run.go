@@ -3,8 +3,12 @@ package bridgecore
 import (
 	"context"
 	"errors"
+	"os/exec"
 	"path/filepath"
+	"sync"
+	"time"
 
+	"convenewire.dev/bridge/internal/admission"
 	bridgeartifact "convenewire.dev/bridge/internal/artifact"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/connection"
@@ -16,6 +20,28 @@ import (
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
 	contracts "convenewire.dev/contracts/generated/go"
 )
+
+type governedAgentReadiness struct {
+	mu     sync.RWMutex
+	agents map[string]bool
+}
+
+func (r *governedAgentReadiness) replace(agents map[string]bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.agents = make(map[string]bool, len(agents))
+	for agentID, ready := range agents {
+		if ready {
+			r.agents[agentID] = true
+		}
+	}
+}
+
+func (r *governedAgentReadiness) allows(agentID string) bool {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return r.agents[agentID]
+}
 
 // Run starts one managed Bridge connection and blocks until the context ends.
 // Both CLI and desktop shells call this function so delivery and Runtime
@@ -60,6 +86,9 @@ func RunObservedWithProvisioning(
 	}
 	defer releaseOwner()
 	ctx = ownedContext
+	if ctx.Err() != nil {
+		return nil
+	}
 	inbox, err := delivery.Open(filepath.Join(loaded.DataDir, "inbox"))
 	if err != nil {
 		return err
@@ -106,7 +135,7 @@ func RunObservedWithProvisioning(
 		event.AgentName = agentNames[event.AgentID]
 		observer.Runtime(event)
 	}
-	executor := delivery.RuntimeExecutor{
+	executor := &delivery.RuntimeExecutor{
 		Inbox: inbox, Adapters: adapters, Observer: runtimeObserver,
 		ShareReasoningSummaries: loaded.ShareReasoningSummaries,
 		Prepare:                 materializer.Materialize,
@@ -124,14 +153,59 @@ func RunObservedWithProvisioning(
 			return errors.Is(context.Cause(ctx), connection.ErrRunCancelRequested)
 		},
 	}
+	gitExecutable := ""
+	if candidate, lookupErr := exec.LookPath("git"); lookupErr == nil {
+		if absolute, absoluteErr := filepath.Abs(candidate); absoluteErr == nil {
+			gitExecutable = absolute
+		}
+	}
+	governedResources, err := admission.OpenGovernedAdmissionResources(ctx, loaded, credential,
+		gitExecutable, configuredAgentsByID(loaded.Agents, identities))
+	if err != nil {
+		return err
+	}
+	defer governedResources.Close()
+	governedRecovery := &delivery.GovernedRecovery{Inbox: inbox, Fence: governedResources.RecoveryFence(),
+		Processes: governedResources.ProcessFencer(), Executor: executor}
+	readiness := &governedAgentReadiness{}
+	if coordinator := governedResources.Coordinator(); coordinator != nil {
+		runner, runnerErr := admission.NewGovernedRuntimeRunner(coordinator,
+			configuredAgentsByID(loaded.Agents, identities), sessions, governedResources.ProcessTracker())
+		if runnerErr != nil {
+			return runnerErr
+		}
+		runHandler.Governed = &delivery.GovernedHandler{Inbox: inbox, Gate: runHandler.Gate,
+			Admission: coordinator, Runner: runner, Executor: executor, AllowsAgent: readiness.allows,
+			IsExplicitCancel: runHandler.IsExplicitCancel}
+	}
 	return (connection.Client{
 		Config: loaded, Credential: credential, BridgeVersion: bridgeVersion, Observer: observer,
 		HandleProvision:  handleProvision,
 		ResumeAgentNames: resumeAgentNames, StreamingAgentNames: streamingAgentNames,
 		RoomContextCoverageAgentNames:     roomContextCoverageAgentNames,
 		ArtifactMaterializationAgentNames: artifactMaterializationAgentNames,
-		RecoverRuns: func(ctx context.Context, send func(context.Context, any) error) error {
-			return executor.Recover(ctx, delivery.Sender(send))
+		PrepareRuns: func(ctx context.Context) (connection.PreparedRuns, error) {
+			readiness.replace(nil)
+			messages := []any{}
+			if err := governedRecovery.RecoverAll(ctx, func(_ context.Context, value any) error {
+				messages = append(messages, value)
+				return nil
+			}); err != nil {
+				return connection.PreparedRuns{}, err
+			}
+			readyIDs, err := governedResources.ReadyAgentIDs(ctx, time.Now().UTC())
+			if err != nil {
+				return connection.PreparedRuns{}, err
+			}
+			readiness.replace(readyIDs)
+			readyNames := make(map[string]bool, len(readyIDs))
+			for agentID := range readyIDs {
+				if name := agentNames[agentID]; name != "" {
+					readyNames[name] = true
+				}
+			}
+			return connection.PreparedRuns{ReplayMessages: messages,
+				GovernedExecutionAgentNames: readyNames}, nil
 		},
 		ReplayCanceledRun: func(
 			ctx context.Context,
@@ -147,4 +221,14 @@ func RunObservedWithProvisioning(
 			return runHandler.Handle(ctx, message, delivery.Sender(send))
 		},
 	}).Run(ctx)
+}
+
+func configuredAgentsByID(agents []config.AgentConfig, identities map[string]string) map[string]config.AgentConfig {
+	configured := make(map[string]config.AgentConfig, len(agents))
+	for _, agent := range agents {
+		if agentID := identities[agent.Name]; agentID != "" {
+			configured[agentID] = agent
+		}
+	}
+	return configured
 }

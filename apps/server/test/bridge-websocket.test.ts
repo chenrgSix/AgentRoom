@@ -111,6 +111,34 @@ test("execution capability handshake rejects unknown and ambiguous declarations 
   send(capable, hello(capability));
   assert.equal((await superseded).code, 4_001);
   assert.equal(capable.readyState, 1);
+  await sendAndFlush(capable, envelope("agent.publish", {
+    agentId,
+    capabilities: {
+      governedExecution: capability,
+      invocationMode: "managed",
+      supportsHandoff: false,
+      supportsInterrupt: true,
+      supportsResume: false,
+      supportsStart: true,
+      supportsStreaming: false
+    },
+    deviceId: fixture.deviceId,
+    name: "Governed Protocol Agent",
+    ownerMemberId: fixture.ownerMemberId,
+    role: "Protocol Test",
+    teamId: fixture.teamId
+  }));
+  await waitFor(async () => {
+    const response = await fixture.app.inject({
+      method: "GET",
+      url: `/api/teams/${fixture.teamId}/agents`,
+      headers: fixture.authorization
+    });
+    return response.json().find((agent: { agentId: string }) =>
+      agent.agentId === agentId
+    )?.capabilities?.governedExecution?.operations?.join(",") ===
+      "prepare,capture,verify";
+  });
   const legacy = await open();
   const downgraded = nextClose(capable);
   send(legacy, envelope("bridge.hello", {

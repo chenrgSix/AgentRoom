@@ -13,6 +13,12 @@ import { AuthService } from "../src/security/auth-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
 const now = "2026-08-22T10:00:00.000Z";
+const governedExecution = {
+  version: 1 as const,
+  workspaceBoundary: "enforced" as const,
+  preventivePathEnforcement: false,
+  operations: ["prepare"] as const
+};
 
 test("managed, fake, and manual Agent publications enforce capability ownership", async () => {
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-agent-"));
@@ -95,6 +101,7 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
       name: "Remote Builder",
       role: "Managed",
       capabilities: {
+        governedExecution,
         supportsHandoff: false,
         supportsInterrupt: true,
         supportsResume: false,
@@ -130,6 +137,7 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
     assert.equal(manual.presence, "manual");
     assert.equal(fake.integrationMode, "fake");
     assert.equal(republished.name, "Remote Builder Updated");
+    assert.deepEqual(republished.capabilities.governedExecution, governedExecution);
     assert.deepEqual(republished.runtimePolicy, {
       filesystemAccess: "read-only"
     });
@@ -201,6 +209,22 @@ test("managed, fake, and manual Agent publications enforce capability ownership"
       },
       now
     }), /Manual Agents cannot advertise/u);
+    assert.throws(() => agents.publishAgent(principal, {
+      teamId: created.team.teamId,
+      deviceId: device.deviceId,
+      name: "Invalid Governed Double",
+      role: "Acceptance",
+      integrationMode: "fake",
+      capabilities: {
+        governedExecution,
+        supportsHandoff: false,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: false
+      },
+      now
+    }), /requires a managed Device Agent/u);
     assert.throws(() => agents.publishAgent(principal, {
       teamId: created.team.teamId,
       deviceId: null,

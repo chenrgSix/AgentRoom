@@ -38,14 +38,21 @@ async function inputFixture(t: TestContext, options: { gate?: "verified_output" 
   const devices = ["Source", "Destination"].map((name, index) => {
     const device = registry.registerOwnDevice(member, f.teamId, name, now);
     const credential = auth.issueDeviceCredential(device.deviceId, now);
-    const agent = agents.publishAgent(member, {
+    let agent = agents.publishAgent(member, {
       teamId: f.teamId, deviceId: device.deviceId, name, role: name, integrationMode: "managed",
       workspaceRef: `workspace_${String(index + 1).repeat(64)}`, workspaceGeneration: "b".repeat(64),
       capabilities: { supportsStart: true, supportsResume: false, supportsStreaming: false, supportsInterrupt: true,
         supportsHandoff: false, supportsWorkspaceLeases: true, supportsArtifactPublication: true }, now
     });
-    return { device, agent, authorization: `Bearer ${credential.secret}`,
-      principal: auth.authenticateDevice(credential.secret, now) };
+    const principal = auth.authenticateDevice(credential.secret, now);
+    if (name === "Destination") {
+      agent = agents.publishDeviceAgent(principal, {
+        agentId: agent.agentId, name: agent.name, role: agent.role, now,
+        workspaceRef: agent.workspaceRef!, workspaceGeneration: agent.workspaceGeneration!,
+        capabilities: { ...agent.capabilities, governedExecution: capability }
+      });
+    }
+    return { device, agent, authorization: `Bearer ${credential.secret}`, principal };
   });
   const [source, destination] = devices as [typeof devices[number], typeof devices[number]];
   await f.ok("PUT", `/api/rooms/${f.roomId}/participants`, {
@@ -204,6 +211,9 @@ async function inputFixture(t: TestContext, options: { gate?: "verified_output" 
     if (options.captureOutput) {
       const connections = new BridgeConnectionRegistry();
       connections.register(destination.device.deviceId, 1, { send() {}, close() {} }, { governedExecution: capability });
+      assert.equal(connections.recordGovernedAgentCapability(
+        destination.device.deviceId, 1, destination.agent.agentId, capability
+      ), true);
       const isolated = new IsolatedWorkspaceLeaseService(database, new ExecutionPlanRepository(database), connections);
       database.transaction(() => isolated.reserveForRun(execution, now))();
     }
@@ -472,6 +482,22 @@ async function prepareDerived(f: Awaited<ReturnType<typeof inputFixture>>, relat
   socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_derived_handshake0001", timestamp: now,
     type: "bridge.hello", payload: { deviceId: f.destination.device.deviceId, connectionEpoch: 1,
       bridgeVersion: "v0.4.0-fixture.1", supportedProtocolVersions: ["1.0"], governedExecution: capability } }));
+  socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_derived_agentpub0001", timestamp: now,
+    type: "agent.publish", payload: {
+      agentId: f.destination.agent.agentId,
+      capabilities: {
+        ...f.destination.agent.capabilities,
+        governedExecution: capability,
+        invocationMode: "managed"
+      },
+      deviceId: f.destination.device.deviceId,
+      name: f.destination.agent.name,
+      ownerMemberId: f.destination.agent.ownerMemberId,
+      role: f.destination.agent.role,
+      teamId: f.teamId,
+      workspaceRef: f.destination.agent.workspaceRef,
+      workspaceGeneration: f.destination.agent.workspaceGeneration
+    } }));
   await ready;
   const manifest = (new RunRepository(f.database).getContextManifest(f.runId) as { execution: GovernedExecutionManifest }).execution;
   const operation: RepositoryOperationRequest = { version: 1, operationId: "op_derived_capture0001", requestDigest: "a".repeat(64),

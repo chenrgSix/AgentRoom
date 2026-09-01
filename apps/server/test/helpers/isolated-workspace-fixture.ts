@@ -27,11 +27,17 @@ export async function workspaceFixture(t: TestContext, preventivePathEnforcement
   const device = new MemberDeviceService(core, auth).registerOwnDevice(member, f.teamId, "Workspace owner", now);
   const credential = auth.issueDeviceCredential(device.deviceId, now);
   const principal = auth.authenticateDevice(credential.secret, now);
-  const agent = new AgentService(core, auth).publishAgent(member, {
+  const agentService = new AgentService(core, auth);
+  let agent = agentService.publishAgent(member, {
     teamId: f.teamId, deviceId: device.deviceId, name: "Isolated builder", role: "Builder", integrationMode: "managed",
     workspaceRef: `workspace_${"b".repeat(64)}`, workspaceGeneration: "b".repeat(64), now,
     capabilities: { supportsStart: true, supportsResume: false, supportsInterrupt: true,
       supportsHandoff: false, supportsStreaming: false, supportsWorkspaceLeases: true }
+  });
+  agent = agentService.publishDeviceAgent(principal, {
+    agentId: agent.agentId, name: agent.name, role: agent.role, now,
+    workspaceRef: agent.workspaceRef!, workspaceGeneration: agent.workspaceGeneration!,
+    capabilities: { ...agent.capabilities, governedExecution: capability }
   });
   await f.ok("PUT", `/api/rooms/${f.roomId}/participants`, { memberIds: [f.ownerMemberId], agentIds: [agent.agentId] });
   const command = f.command();
@@ -71,6 +77,9 @@ export async function workspaceFixture(t: TestContext, preventivePathEnforcement
   task = await f.ok("GET", `/api/tasks/${task.taskId}`);
   const connections = new BridgeConnectionRegistry();
   connections.register(device.deviceId, 1, { send() {}, close() {} }, { governedExecution: capability });
+  if (!connections.recordGovernedAgentCapability(
+    device.deviceId, 1, agent.agentId, capability
+  )) throw new Error("Workspace fixture Agent capability was not recorded");
   const service = new IsolatedWorkspaceLeaseService(f.database, new ExecutionPlanRepository(f.database), connections);
   const manifest = structuredClone(wire.contextManifest.execution) as GovernedExecutionManifest;
   Object.assign(manifest.scope, { planId: plan.planId, planRevision: plan.current.revision,

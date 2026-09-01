@@ -195,6 +195,96 @@ func TestClientAuthenticatesAndSendsHelloAndHeartbeat(t *testing.T) {
 	}
 }
 
+func TestClientPreparesRecoveryBeforePublishingTruthfulGovernedCapability(t *testing.T) {
+	var requests atomic.Int32
+	messages := make(chan map[string]any, 3)
+	server := httptest.NewServer(http.HandlerFunc(func(response http.ResponseWriter, request *http.Request) {
+		requests.Add(1)
+		socket, err := websocket.Accept(response, request, nil)
+		if err != nil {
+			return
+		}
+		defer socket.CloseNow()
+		for index := 0; index < 3; index++ {
+			_, source, err := socket.Read(request.Context())
+			if err != nil {
+				return
+			}
+			var message map[string]any
+			if err := json.Unmarshal(source, &message); err != nil {
+				t.Error(err)
+				return
+			}
+			messages <- message
+		}
+		<-request.Context().Done()
+	}))
+	defer server.Close()
+	directory := t.TempDir()
+	prepared := atomic.Bool{}
+	ctx, cancel := context.WithCancel(context.Background())
+	client := Client{Config: config.Config{ServerURL: server.URL, DataDir: directory,
+		Agents: []config.AgentConfig{{Name: "Builder", Role: "Implementation", Adapter: "generic",
+			Command: []string{"agent"}, Workspace: directory}}}, Credential: pairing.Credential{
+		ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
+		OwnerMemberID: "member_test", Token: "device-secret"}, BridgeVersion: "0.4.0",
+		PrepareRuns: func(context.Context) (PreparedRuns, error) {
+			if requests.Load() != 0 {
+				t.Fatal("Run recovery started after network publication")
+			}
+			prepared.Store(true)
+			return PreparedRuns{GovernedExecutionAgentNames: map[string]bool{"Builder": true},
+				ReplayMessages: []any{map[string]any{"type": "prepared.replay"}}}, nil
+		}}
+	done := make(chan error, 1)
+	go func() { done <- client.Run(ctx) }()
+	hello, publication, replay := <-messages, <-messages, <-messages
+	if !prepared.Load() || hello["type"] != "bridge.hello" || publication["type"] != "agent.publish" || replay["type"] != "prepared.replay" {
+		t.Fatalf("unexpected preparation/publication order: %#v %#v %#v", hello, publication, replay)
+	}
+	assertPrepareOnly := func(value any) {
+		t.Helper()
+		capability, ok := value.(map[string]any)
+		operations, operationsOK := capability["operations"].([]any)
+		if !ok || capability["version"] != float64(1) || capability["workspaceBoundary"] != "enforced" ||
+			capability["preventivePathEnforcement"] != false || !operationsOK || len(operations) != 1 || operations[0] != "prepare" {
+			t.Fatalf("governed capability exceeded implemented operations: %#v", value)
+		}
+	}
+	helloPayload := hello["payload"].(map[string]any)
+	assertPrepareOnly(helloPayload["governedExecution"])
+	publicationPayload := publication["payload"].(map[string]any)
+	capabilities := publicationPayload["capabilities"].(map[string]any)
+	assertPrepareOnly(capabilities["governedExecution"])
+	cancel()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("Bridge client did not stop")
+	}
+}
+
+func TestClientPreparationFailurePreventsCapabilityPublicationAndNetwork(t *testing.T) {
+	var requests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		requests.Add(1)
+	}))
+	defer server.Close()
+	want := errors.New("local governed recovery failed")
+	client := Client{Config: config.Config{ServerURL: server.URL, DataDir: t.TempDir()},
+		Credential:  pairing.Credential{ServerURL: server.URL, DeviceID: "device_test", Token: "device-secret"},
+		PrepareRuns: func(context.Context) (PreparedRuns, error) { return PreparedRuns{}, want }}
+	if _, err := client.connectOnce(context.Background()); !errors.Is(err, want) {
+		t.Fatalf("unexpected preparation failure: %v", err)
+	}
+	if requests.Load() != 0 {
+		t.Fatal("failed local recovery reached the network")
+	}
+}
+
 func TestClientRejectsPartialBuildObservationBeforeNetwork(t *testing.T) {
 	var requests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {

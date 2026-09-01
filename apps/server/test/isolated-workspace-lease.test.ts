@@ -111,8 +111,27 @@ test("workspace admission requires a current capability and cannot silently use 
   f.connections.register(f.device.deviceId, 2, { send() {}, close() {} });
   assert.throws(() => f.reserve(), /WORKSPACE_CAPABILITY_UNAVAILABLE/u);
   f.connections.register(f.device.deviceId, 3, { send() {}, close() {} }, { governedExecution: { ...capability, operations: ["prepare"] } });
+  assert.equal(f.connections.recordGovernedAgentCapability(
+    f.device.deviceId, 3, f.agent.agentId, { ...capability, operations: ["prepare"] }
+  ), true);
   assert.throws(() => f.reserve(), /WORKSPACE_CAPABILITY_UNAVAILABLE/u);
   f.connections.register(f.device.deviceId, 4, { send() {}, close() {} }, { governedExecution: capability });
+  assert.throws(() => f.reserve(), /WORKSPACE_CAPABILITY_UNAVAILABLE/u,
+    "new Device hello reused the prior persisted Agent capability");
+  assert.equal(f.connections.recordGovernedAgentCapability(
+    f.device.deviceId, 4, f.agent.agentId, capability
+  ), true);
+  const withoutGoverned = { ...f.agent.capabilities };
+  delete withoutGoverned.governedExecution;
+  f.database.prepare("UPDATE agents SET capabilities_json = ? WHERE agent_id = ?")
+    .run(JSON.stringify(withoutGoverned), f.agent.agentId);
+  assert.throws(() => f.reserve(), /WORKSPACE_CAPABILITY_UNAVAILABLE/u);
+  f.database.prepare("UPDATE agents SET capabilities_json = ? WHERE agent_id = ?")
+    .run(JSON.stringify({ ...f.agent.capabilities,
+      governedExecution: { ...capability, operations: ["prepare"] } }), f.agent.agentId);
+  assert.throws(() => f.reserve(), /WORKSPACE_CAPABILITY_UNAVAILABLE/u);
+  f.database.prepare("UPDATE agents SET capabilities_json = ? WHERE agent_id = ?")
+    .run(JSON.stringify(f.agent.capabilities), f.agent.agentId);
   f.reserve();
 });
 
@@ -139,6 +158,13 @@ test("preventive path requirements reject a Bridge with only a workspace boundar
   f.connections.register(f.device.deviceId, 2, { send() {}, close() {} }, {
     governedExecution: { ...capability, preventivePathEnforcement: true }
   });
+  assert.equal(f.connections.recordGovernedAgentCapability(
+    f.device.deviceId, 2, f.agent.agentId,
+    { ...capability, preventivePathEnforcement: true }
+  ), true);
+  f.database.prepare("UPDATE agents SET capabilities_json = ? WHERE agent_id = ?")
+    .run(JSON.stringify({ ...f.agent.capabilities,
+      governedExecution: { ...capability, preventivePathEnforcement: true } }), f.agent.agentId);
   f.reserve();
 });
 
@@ -197,9 +223,10 @@ test("overlapping processes advance one lease generation at most once", { timeou
     import { BridgeConnectionRegistry } from ${JSON.stringify(new URL("../src/bridge/bridge-connection-registry.ts", import.meta.url).href)};
     import { IsolatedWorkspaceLeaseService } from ${JSON.stringify(new URL("../src/workspace/isolated-workspace-lease-service.ts", import.meta.url).href)};
     process.send({ ready: true });
-    process.once("message", ({ databasePath, principal, capability, command, now }) => {
+    process.once("message", ({ databasePath, principal, capability, agentId, command, now }) => {
       const database = openDatabase(databasePath), connections = new BridgeConnectionRegistry();
       connections.register(principal.deviceId, 1, { send() {}, close() {} }, { governedExecution: capability });
+      connections.recordGovernedAgentCapability(principal.deviceId, 1, agentId, capability);
       try {
         const state = new IsolatedWorkspaceLeaseService(database, new ExecutionPlanRepository(database), connections)
           .advanceForDevice(principal, command, now);
@@ -234,7 +261,9 @@ test("overlapping processes advance one lease generation at most once", { timeou
     result.catch(() => {});
   }));
   const workers = await Promise.all(ready);
-  for (const { child, command } of workers) child.send!({ databasePath, principal: f.principal, capability, command, now });
+  for (const { child, command } of workers) child.send!({
+    databasePath, principal: f.principal, capability, agentId: f.agent.agentId, command, now
+  });
   const results = await Promise.all(workers.map((worker) => worker.result));
   assert.equal(results.filter((result) => result.state?.revision === 2).length, 1, JSON.stringify(results));
   assert.equal(results.filter((result) => result.error === "WORKSPACE_GENERATION_CONFLICT").length, 1, JSON.stringify(results));

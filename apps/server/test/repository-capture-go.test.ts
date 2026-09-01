@@ -115,6 +115,18 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_real_capture_hello0001", timestamp: now,
         type: "bridge.hello", payload: { deviceId: f.device.deviceId, connectionEpoch: 1,
           bridgeVersion: "v0.4.0-fixture.1", supportedProtocolVersions: ["1.0"], governedExecution: capability } }));
+      socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_real_capture_agentpub0001", timestamp: now,
+        type: "agent.publish", payload: {
+          agentId: f.agent.agentId,
+          capabilities: { ...f.agent.capabilities, governedExecution: capability, invocationMode: "managed" },
+          deviceId: f.device.deviceId,
+          name: f.agent.name,
+          ownerMemberId: f.agent.ownerMemberId,
+          role: f.agent.role,
+          teamId: f.teamId,
+          workspaceRef: f.agent.workspaceRef,
+          workspaceGeneration: f.agent.workspaceGeneration
+        } }));
       const [frame] = await ready;
       assert.equal(JSON.parse(String(frame)).type, "run.requested");
       const initialRun = f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(f.manifest.scope.runId);

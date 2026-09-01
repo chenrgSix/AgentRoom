@@ -51,7 +51,8 @@ function assertHostedAgentBoundary(agent: AgentRecord): void {
     agent.capabilities.supportsRoomContextCoverage === true ||
     agent.capabilities.supportsWorkspaceLeases === true ||
     agent.capabilities.supportsArtifactPublication === true ||
-    agent.capabilities.supportsArtifactMaterialization === true
+    agent.capabilities.supportsArtifactMaterialization === true ||
+    agent.capabilities.governedExecution !== undefined
   ) {
     throw new Error(
       "Hosted Agent capabilities exceed the Central HTTP boundary"

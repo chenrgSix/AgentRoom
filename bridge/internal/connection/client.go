@@ -51,6 +51,17 @@ type CanceledRunFenceHandler func(
 	contracts.RunCancelRequestedMessage,
 ) error
 
+// PreparedRuns is produced before a connection advertises capabilities. Replay
+// messages are flushed only after hello and Agent publication; governed Agent
+// names therefore describe the same recovered local state that will service
+// incoming delivery on this connection.
+type PreparedRuns struct {
+	ReplayMessages              []any
+	GovernedExecutionAgentNames map[string]bool
+}
+
+type RunPreparationHandler func(context.Context) (PreparedRuns, error)
+
 // The Bridge protocol permits a Run request with one 32,768-character
 // instruction and up to fifty 32,768-character context messages. Sixteen MiB
 // covers those defined fields after worst-case UTF-8 and JSON escaping while
@@ -72,6 +83,7 @@ type Client struct {
 	FenceCanceledRun                  CanceledRunFenceHandler
 	ReplayCanceledRun                 CanceledRunReplayHandler
 	HandleProvision                   ProvisionHandler
+	PrepareRuns                       RunPreparationHandler
 	RecoverRuns                       func(context.Context, func(context.Context, any) error) error
 	Observer                          operations.Observer
 	RetryInitial                      time.Duration
@@ -91,6 +103,43 @@ func publishedRuntimePolicy(agent config.AgentConfig) contracts.RuntimePolicy {
 		}
 	}
 	return contracts.RuntimePolicy{FilesystemAccess: filesystemAccess}
+}
+
+func governedHelloCapability() contracts.PayloadGovernedExecution {
+	return contracts.PayloadGovernedExecution{Version: 1, WorkspaceBoundary: contracts.Enforced,
+		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare}}
+}
+
+func governedAgentCapability() contracts.CapabilitiesGovernedExecution {
+	return contracts.CapabilitiesGovernedExecution{Version: 1, WorkspaceBoundary: contracts.Enforced,
+		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare}}
+}
+
+func hasGovernedExecutionAgent(agents []config.AgentConfig, ready map[string]bool) bool {
+	for _, agent := range agents {
+		if ready[agent.Name] {
+			return true
+		}
+	}
+	return false
+}
+
+func validatePreparedRuns(agents []config.AgentConfig, prepared PreparedRuns) error {
+	configured := make(map[string]bool, len(agents))
+	for _, agent := range agents {
+		configured[agent.Name] = true
+	}
+	for name, ready := range prepared.GovernedExecutionAgentNames {
+		if ready && !configured[name] {
+			return errors.New("Bridge Run preparation returned an unknown governed Agent")
+		}
+	}
+	for _, message := range prepared.ReplayMessages {
+		if message == nil {
+			return errors.New("Bridge Run preparation returned a nil replay message")
+		}
+	}
+	return nil
 }
 
 func (c Client) Run(ctx context.Context) error {
@@ -183,6 +232,20 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 		return false, trustErr
 	}
 	c.Credential = credential
+	preparedRuns := PreparedRuns{}
+	if c.PrepareRuns != nil {
+		if c.RecoverRuns != nil {
+			return false, errors.New("Bridge Run recovery has conflicting preparation paths")
+		}
+		prepared, prepareErr := c.PrepareRuns(ctx)
+		if prepareErr != nil {
+			return false, prepareErr
+		}
+		preparedRuns = prepared
+		if err := validatePreparedRuns(c.Config.Agents, preparedRuns); err != nil {
+			return false, err
+		}
+	}
 	epoch, err := nextEpoch(c.Config.DataDir)
 	if err != nil {
 		return false, err
@@ -233,6 +296,10 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			SupportedProtocolVersions: []string{"1.0"},
 		},
 	}
+	if hasGovernedExecutionAgent(c.Config.Agents, preparedRuns.GovernedExecutionAgentNames) {
+		capability := governedHelloCapability()
+		hello.Payload.GovernedExecution = &capability
+	}
 	if err := writer.writeJSON(ctx, hello); err != nil {
 		return false, err
 	}
@@ -257,6 +324,10 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			SupportsResume:    c.ResumeAgentNames[configured.Name],
 			SupportsStart:     true,
 			SupportsStreaming: c.StreamingAgentNames[configured.Name],
+		}
+		if preparedRuns.GovernedExecutionAgentNames[configured.Name] {
+			capability := governedAgentCapability()
+			capabilities.GovernedExecution = &capability
 		}
 		supportsRoomContextCoverage :=
 			c.RoomContextCoverageAgentNames[configured.Name]
@@ -294,7 +365,12 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			return false, err
 		}
 	}
-	if c.RecoverRuns != nil {
+	for _, message := range preparedRuns.ReplayMessages {
+		if err := writer.writeJSON(ctx, message); err != nil {
+			return false, err
+		}
+	}
+	if c.PrepareRuns == nil && c.RecoverRuns != nil {
 		if err := c.RecoverRuns(ctx, func(sendContext context.Context, value any) error {
 			return writer.writeJSON(sendContext, value)
 		}); err != nil {

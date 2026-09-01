@@ -7,14 +7,16 @@ credentials and enforcement local; Central receives bounded capabilities and
 exact operation receipts. Repository preparation, verification and cleanup use
 durable operation ownership and never add a second Runtime-start path.
 
-`CON-021` adds the generated version-1 execution wire types but deliberately
-does not advertise governed execution from the production Bridge. A governed
-Context Manifest is rejected before inbox acceptance and again at direct
-Runtime execution; it cannot fall back to an ordinary prompt. BRG-071/RUN-018
-must replace this prerequisite with actual owner-local grant, preparation and
-runtime admission. The Server keeps capabilities scoped to the current
-authenticated connection epoch and does not send governed Runs to legacy or
-observing-only connections. Capability metadata is not local authorization.
+`CON-021` adds the generated version-1 execution wire types. The production
+Bridge may now advertise only the `prepare` operation for an exact locally ready
+Agent after governed recovery has completed. The Server requires both `prepare`
+and `capture` on the current Device connection and that exact Agent before it
+can send a governed Run, so this truthful partial declaration does not open the
+transport. A governed Context Manifest cannot fall back to an ordinary prompt.
+BRG-071/RUN-018 must still connect capture/result publication before delivery is
+enabled. Capability metadata is current-epoch routing evidence, not local
+authorization; every delivered Run must independently pass the current local
+grant, repository, profile and just-in-time Server checks.
 
 BRG-071 consumes the REPO-004 local primitives and owns the production local
 binding/grant and cleanup adapters, including the owner-visible exact preview
@@ -173,16 +175,17 @@ again, rerun the physical probe against the prepared worktree, hold current
 grant/Run/generation authority and recheck immediately before startup/effects.
 See the [profile registration evidence](../acceptance/brg-071-runtime-profile-registry.md).
 
-The internal `ProbeCodexRuntime` now implements that transient physical recheck
+The internal `ProbeCodexRuntime` implements that transient physical recheck
 primitive. It accepts the exact registered reference, current configured Agent
 and caller-derived prepared workspace, while the Profile store alone creates the
 private outside root and resolves safe environment values. It requires the live
 probe to reproduce the registered executable/profile/platform and both boundary
 names, removes the outside fixture, then resolves the record again before
-returning. It persists no workspace or fresh evidence. The primitive is not yet
-wired to production delivery. The internal admission coordinator below now
-joins it to the durable start-intent/no-duplicate journal and the other local
-prerequisites, but the production Handler still rejects governed execution.
+returning. It persists no workspace or fresh evidence. The production admission
+coordinator joins it to the durable start-intent/no-duplicate journal and the
+other local prerequisites. The Handler accepts that branch only for the
+startup-derived ready-Agent set; Central transport remains closed until capture
+is also advertised.
 
 ## Durable Runtime Possible-Start Fence
 
@@ -247,11 +250,12 @@ as `outcome_unknown`; terminal delivery failure retains the observed terminal
 local outcome for replay. This stopped receipt is still not verification,
 Result acceptance or Task completion.
 
-The runner is not yet owned by the production Handler and does not solve
-cross-process surviving-child discovery. The existing adapter's context/OS
-process controls cover in-process cancellation, but startup recovery must still
-fence or terminate any surviving process before converting unresolved
-`starting` records to unknown. No governed capability is published.
+The production Handler owns this runner only when admission resources can build
+a coordinator for configured Agents and a physical Git source. Cross-process
+surviving-child discovery is owned by the process journal/fencer below. Startup
+recovery fences or terminates every nonterminal process record before converting
+unresolved `starting` admissions to unknown. That recovery completes before any
+network connection or capability publication.
 
 The internal `delivery.GovernedRecovery` now owns that restart ordering without
 pretending the process proof exists. It preflights every governed Inbox record
@@ -268,9 +272,11 @@ Ordinary `RuntimeExecutor.Recover` now rejects mixed governed inventory before
 mutating any record. `GovernedRecovery.RecoverAll` is the only reviewed ordering
 that can recover governed state first and then skip it in ordinary recovery.
 Admission resources expose a restricted recovery view that can list and close
-but cannot claim or start. They now also own one owner-scoped governed process
-store and expose separate restricted tracker/fencer views. Managed-core
-construction, production recovery and capability publication remain closed.
+but cannot claim or start. They also own one owner-scoped governed process store
+and expose separate restricted tracker/fencer views. Production opens those
+recovery resources even when Git is absent or no Agent is configured; missing
+execution prerequisites disable new admission without skipping possible-start
+or process cleanup.
 
 The Runtime layer now provides the launch half of that missing process proof as
 an optional `GovernedProcessTracker`; ordinary Codex, Pi and generic adapters
@@ -284,7 +290,8 @@ signaling its caller. On Windows, the existing process starts suspended inside
 the kill-on-close Job Object; PID plus process creation time is observed and
 accepted before the first thread resumes. Failed observation kills the blocked
 tree on both paths. The owner-scoped journal, restart PID/lock validation and
-concrete fencer are described below; this primitive is still not injected.
+concrete fencer are described below and are injected into managed-core governed
+startup/recovery.
 
 The governed process store durably writes `prepared` before any helper/child
 exists, then `active` from the blocked/suspended PID observation, and finally
@@ -297,13 +304,14 @@ creation time before terminating a matching PID, so a reused PID is not killed;
 the kill-on-close Job is still authoritative for descendants. `FenceAll` runs
 before Inbox/admission inventory recovery and cleans every nonterminal process
 record, including prepared-only and upper-layer orphan cases. The Runtime runner
-now passes the exact process identity and restricted tracker into its Codex
-adapter factory. Production core does not yet construct that runner/recovery.
+passes the exact process identity and restricted tracker into its Codex adapter
+factory. Production core constructs the runner and recovery from the same Inbox,
+admission fence and process fencer, preserving a single possible-start authority.
 
-The internal `delivery.GovernedHandler` now defines the reviewed connection to
-the existing delivery lifecycle without activating it. `delivery.Handler`
-continues to reject every governed manifest unless that dependency is explicitly
-injected. Once injected, the governed branch uses the same Inbox acceptance,
+The internal `delivery.GovernedHandler` is the reviewed connection to the
+existing delivery lifecycle. Production injects it only when the governed
+coordinator exists, and an Agent-specific readiness predicate rejects an
+unpublished Agent before Inbox mutation. The governed branch uses the same Inbox acceptance,
 per-Agent execution gate, cancellation tombstones, event sequence, terminal
 persistence and replay as ordinary Runs. Preparation reconstructs only a
 transient ticket; no local path or input byte is added to the Inbox.
@@ -318,7 +326,8 @@ accepted record and emits no false failure. `RuntimeExecutor.ExecuteAdmitted`
 reuses the ordinary event/terminal machinery with only the fence-backed adapter
 and deliberately skips ordinary Artifact aliases because governed inputs are
 already exact-applied in the worktree. Production core construction and startup
-recovery are still absent, so the top-level rejection remains the shipped path.
+recovery are now composed, but the Server-side `prepare` plus `capture` transport
+gate keeps governed delivery closed until capture is connected.
 
 The internal `RuntimeAuthorityClient` now supplies the Central half of that
 callback. It posts only the exact Run, manifest, isolated lease,
@@ -326,10 +335,10 @@ workspace reference and generation to the Device-authenticated, no-store
 authority endpoint, then requires the response to reproduce every value, the
 initial lease revision and expiry. A changed or malformed response, rejected
 scope, unavailable Server, mismatched credential origin or missing credential
-fails closed. The observation creates, extends and caches no authority. It is
-composed only in the internal coordinator; no production delivery, Handler,
-Runtime executor or capability-advertisement path constructs or calls that
-coordinator yet, so it cannot enable a Runtime.
+fails closed. The observation creates, extends and caches no authority. Production
+composes it only inside the governed coordinator, which performs this observation
+last in the possible-start callback after all earlier local checks. A readiness
+declaration still cannot replace that per-Run observation.
 
 The internal `ExecutionInputClient` now supplies the coordinator's concrete
 input-loader implementation. Before making any request it validates the exact
@@ -340,19 +349,29 @@ origin with redirects forbidden. Status, cache/sniffing/media headers, binding
 ID, declared length, digest header and actual body SHA-256 must all match. A
 bad later binding cannot cause an earlier partial download because the whole
 intent is preflighted first. The client retains no cache or file; production
-still does not construct the coordinator.
+constructs it only as the governed coordinator's narrow input port.
 
 `Stop` appends one exact version-3 closed local outcome bound to both admission
 and start digests. It does not create a Task Result, verification receipt or
 completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
-The Inbox/fence recovery ordering, cancellation reuse, durable process identity
-and concrete platform fencer are now implemented behind the unopened governed
-resource bundle. Production resource/Handler construction, readiness and
-capability advertisement, owner-visible cleanup and real Runtime evidence remain
-open. The production governed no-start rejection is unchanged. See the
-[possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
+Managed-core startup opens the resource bundle, runs process fencing and governed
+Inbox/admission recovery before connection, then derives a current ready-Agent
+set from the exact Agent configuration, unexpired/unrevoked Task grant, runtime
+profile, repository binding and physical Git source. Only those Agents publish a
+version-1, enforced-workspace, non-preventive `prepare` declaration in both hello
+and Agent capability metadata. A recovery/readiness error prevents the network
+connection; invalid unrelated local records fail the inventory closed. The
+Server verifies the Agent declaration is a subset of the current Device hello
+and persists it only from that owning Bridge. The connection registry starts
+each hello with an empty Agent set and records an Agent only after its same-epoch
+publication transaction commits; send and workspace admission also compare that
+current declaration with the persisted projection. It still requires both
+`prepare` and `capture` at Device and exact-Agent scope, so actual governed
+delivery, owner-visible cleanup and real Runtime evidence remain open. See the
+[possible-start evidence](../acceptance/brg-071-runtime-start-fence.md) and
+[managed-core readiness evidence](../acceptance/brg-071-managed-core-readiness.md).
 
 ## Codex Local Boundary Probe
 

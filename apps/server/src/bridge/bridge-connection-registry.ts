@@ -9,6 +9,7 @@ export interface BridgeSocket {
 interface Connection {
   deviceId: string;
   epoch: number;
+  governedExecutionAgents: Map<string, GovernedExecutionCapability>;
   supportsAgentProvisioning: boolean;
   governedExecution?: GovernedExecutionCapability;
   socket: BridgeSocket;
@@ -40,6 +41,7 @@ export class BridgeConnectionRegistry {
       ...(capabilities.governedExecution !== undefined ? {
         governedExecution: structuredClone(capabilities.governedExecution) as GovernedExecutionCapability
       } : {}),
+      governedExecutionAgents: new Map(),
       socket
     });
     return true;
@@ -56,8 +58,11 @@ export class BridgeConnectionRegistry {
     if (!connection) {
       return false;
     }
-    if (hasGovernedExecution(message) && !this.supportsGovernedExecution(deviceId)) {
-      return false;
+    if (hasGovernedExecution(message)) {
+      const agentId = governedExecutionAgentId(message);
+      if (!agentId || !this.supportsGovernedAgentExecution(deviceId, agentId)) {
+        return false;
+      }
     }
     connection.socket.send(JSON.stringify(message));
     return true;
@@ -82,6 +87,67 @@ export class BridgeConnectionRegistry {
     return capability && structuredClone(capability);
   }
 
+  public supportsGovernedAgentCapability(
+    deviceId: string,
+    agentCapability: GovernedExecutionCapability
+  ): boolean {
+    const deviceCapability = this.connections.get(deviceId)?.governedExecution;
+    return deviceCapability !== undefined &&
+      deviceCapability.version === agentCapability.version &&
+      deviceCapability.workspaceBoundary === agentCapability.workspaceBoundary &&
+      (!agentCapability.preventivePathEnforcement ||
+        deviceCapability.preventivePathEnforcement) &&
+      agentCapability.operations.every((operation) =>
+        deviceCapability.operations.includes(operation)
+      );
+  }
+
+  public recordGovernedAgentCapability(
+    deviceId: string,
+    epoch: number,
+    agentId: string,
+    agentCapability: GovernedExecutionCapability | undefined
+  ): boolean {
+    const connection = this.connections.get(deviceId);
+    if (!connection || connection.epoch !== epoch) {
+      return false;
+    }
+    if (agentCapability === undefined) {
+      connection.governedExecutionAgents.delete(agentId);
+      return true;
+    }
+    if (!this.supportsGovernedAgentCapability(deviceId, agentCapability)) {
+      return false;
+    }
+    connection.governedExecutionAgents.set(
+      agentId,
+      structuredClone(agentCapability)
+    );
+    return true;
+  }
+
+  public governedAgentExecutionCapability(
+    deviceId: string,
+    agentId: string
+  ): GovernedExecutionCapability | undefined {
+    const capability = this.connections
+      .get(deviceId)
+      ?.governedExecutionAgents.get(agentId);
+    return capability && structuredClone(capability);
+  }
+
+  public supportsGovernedAgentExecution(
+    deviceId: string,
+    agentId: string
+  ): boolean {
+    const capability = this.connections
+      .get(deviceId)
+      ?.governedExecutionAgents.get(agentId);
+    return this.supportsGovernedExecution(deviceId) &&
+      capability?.operations.includes("prepare") === true &&
+      capability.operations.includes("capture");
+  }
+
   public activeCount(): number {
     return this.connections.size;
   }
@@ -100,4 +166,14 @@ function hasGovernedExecution(message: unknown): boolean {
   const payload = message.payload;
   if (!("contextManifest" in payload) || !payload.contextManifest || typeof payload.contextManifest !== "object") return false;
   return Object.hasOwn(payload.contextManifest, "execution");
+}
+
+function governedExecutionAgentId(message: unknown): string | undefined {
+  if (!message || typeof message !== "object" || !("payload" in message) ||
+    !message.payload || typeof message.payload !== "object" ||
+    !("targetAgentId" in message.payload) ||
+    typeof message.payload.targetAgentId !== "string") {
+    return undefined;
+  }
+  return message.payload.targetAgentId;
 }

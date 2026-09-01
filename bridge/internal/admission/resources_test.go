@@ -5,12 +5,15 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/repository"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *testing.T) {
@@ -85,8 +88,19 @@ func TestGovernedAdmissionResourcesBorrowOwnerAndRollbackFailure(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := OpenGovernedAdmissionResources(context.Background(), cfg, credential, git, nil); err == nil {
-		t.Fatal("empty Agent authority constructed resources")
+	recoveryOnly, err := OpenGovernedAdmissionResources(context.Background(), cfg, credential, git, nil)
+	if err != nil {
+		t.Fatalf("empty Agent inventory could not open recovery resources: %v", err)
+	}
+	if recoveryOnly.Coordinator() != nil || recoveryOnly.RecoveryFence() == nil ||
+		recoveryOnly.ProcessFencer() == nil {
+		t.Fatal("empty Agent inventory enabled admission or omitted recovery")
+	}
+	if ready, err := recoveryOnly.ReadyAgentIDs(context.Background(), time.Now()); err != nil || len(ready) != 0 {
+		t.Fatalf("recovery-only resources reported readiness: %#v %v", ready, err)
+	}
+	if err := recoveryOnly.Close(); err != nil {
+		t.Fatal(err)
 	}
 	reacquired, err := ownership.Acquire(dataDir)
 	if err != nil {
@@ -102,6 +116,146 @@ func TestGovernedAdmissionResourcesBorrowOwnerAndRollbackFailure(t *testing.T) {
 	if err := preparer.Close(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBinding(t *testing.T) {
+	_, git, cfg, credential, agents := governedResourcesFixture(t)
+	resources, err := OpenGovernedAdmissionResources(context.Background(), cfg, credential, git, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resources.Close()
+	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
+	if ready, err := resources.ReadyAgentIDs(context.Background(), now); err != nil || len(ready) != 0 {
+		t.Fatalf("unconfigured resources reported readiness: %#v %v", ready, err)
+	}
+
+	repositoryRoot := t.TempDir()
+	repositoryRoot, err = filepath.EvalSymlinks(repositoryRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	runResourceGit(t, git, repositoryRoot, "init")
+	runResourceGit(t, git, repositoryRoot, "config", "user.name", "ConveneWire Test")
+	runResourceGit(t, git, repositoryRoot, "config", "user.email", "test@example.com")
+	if err := os.Mkdir(filepath.Join(repositoryRoot, "src"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(repositoryRoot, "src", "app.txt"), []byte("base\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	runResourceGit(t, git, repositoryRoot, "add", "--", "src/app.txt")
+	runResourceGit(t, git, repositoryRoot, "commit", "-m", "base")
+	base := strings.TrimSpace(runResourceGit(t, git, repositoryRoot, "rev-parse", "HEAD"))
+	binding, err := resources.bindings.Bind(context.Background(), repository.BindRepository{
+		BindingID: "repobind_ready0001", RepositoryID: "repo_ready0001", Alias: "Ready source",
+		SelectedRoot: repositoryRoot, AllowedRoots: []string{repositoryRoot}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	agentID := "agent_runtime0001"
+	agent := agents[agentID]
+	configurationDigest, err := CodexConfigurationDigest(agent, agentID, "convenewire_governed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile, err := resources.profiles.registerCodex(context.Background(), CodexRegistration{Spec: RuntimeProfileSpec{
+		ProfileID: "profile_ready0001", Revision: 1, AgentID: agentID, RuntimeKind: CodexRuntimeKind,
+		ConfigurationDigest: configurationDigest, PermissionProfile: "convenewire_governed"}, Agent: agent}, now,
+		fixedProber("convenewire_governed"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant, err := resources.bindings.IssueTaskGrant(context.Background(), repository.TaskGrantSpec{
+		GrantID: "grant_ready0001", BindingID: binding.BindingID, BindingRevision: binding.Revision,
+		SourceFingerprint: binding.SourceFingerprint, RepositoryID: binding.RepositoryID, BaseCommit: base,
+		PlanID: "plan_ready0001", PlanRevision: 1, PlanDigest: strings.Repeat("a", 64), NodeKey: "build",
+		RoomID: "room_ready0001", TaskID: "task_ready0001", DefinitionRevision: 1, CriteriaRevision: 1,
+		AgentID: agentID, ExpiresAt: now.Add(time.Hour).Format(time.RFC3339Nano),
+		Operations: []execution.KindElement{execution.Prepare}, RuntimeProfile: execution.ExecutionGrantSummaryRuntimeProfile{
+			ProfileID: profile.Spec.ProfileID, Revision: profile.Spec.Revision, Digest: profile.Digest},
+		VerificationProfiles: []execution.ExecutionGrantSummaryVerificationProfile{},
+		ScopePolicy: execution.ExecutionGrantSummaryScopePolicy{Access: execution.IsolatedWrite,
+			AllowedPaths: []string{"src"}, ForbiddenPaths: []string{}},
+		IntegrationTargets: []execution.ExecutionGrantSummaryIntegrationTarget{}}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready, err := resources.ReadyAgentIDs(context.Background(), now.Add(time.Minute))
+	if err != nil || len(ready) != 1 || !ready[agentID] {
+		t.Fatalf("valid local authority chain was not ready: %#v %v", ready, err)
+	}
+	if ready, err := resources.ReadyAgentIDs(context.Background(), now.Add(2*time.Hour)); err != nil || len(ready) != 0 {
+		t.Fatalf("expired grant remained ready: %#v %v", ready, err)
+	}
+	if _, err := resources.bindings.RevokeTaskGrant(grant.Spec.GrantID, 1, grant.Summary.Grant.Digest,
+		now.Add(10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if ready, err := resources.ReadyAgentIDs(context.Background(), now.Add(11*time.Minute)); err != nil || len(ready) != 0 {
+		t.Fatalf("revoked grant remained ready: %#v %v", ready, err)
+	}
+}
+
+func TestGovernedAdmissionResourcesWithoutGitRetainRecoveryButDisableAdmission(t *testing.T) {
+	_, _, cfg, credential, agents := governedResourcesFixture(t)
+	resources, err := OpenGovernedAdmissionResources(context.Background(), cfg, credential, "", agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resources.Close()
+	if resources.Coordinator() != nil || resources.RecoveryFence() == nil || resources.ProcessFencer() == nil {
+		t.Fatal("missing Git enabled admission or disabled mandatory recovery")
+	}
+	if ready, err := resources.ReadyAgentIDs(context.Background(), time.Now()); err != nil || len(ready) != 0 {
+		t.Fatalf("missing Git reported governed readiness: %#v %v", ready, err)
+	}
+}
+
+func TestGovernedAdmissionResourcesCanonicalizeParentAliasButRejectLinkedLeaf(t *testing.T) {
+	_, git, cfg, credential, agents := governedResourcesFixture(t)
+	base, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualParent := filepath.Join(base, "actual")
+	dataDir := filepath.Join(actualParent, "data")
+	if err := os.MkdirAll(dataDir, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	alias := filepath.Join(base, "alias")
+	if err := os.Symlink(actualParent, alias); err != nil {
+		t.Skipf("directory symlinks are unavailable: %v", err)
+	}
+	cfg.DataDir = filepath.Join(alias, "data")
+	resources, err := OpenGovernedAdmissionResources(context.Background(), cfg, credential, git, agents)
+	if err != nil {
+		t.Fatalf("safe parent alias was rejected: %v", err)
+	}
+	if err := resources.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	linkedLeaf := filepath.Join(base, "linked-data")
+	if err := os.Symlink(dataDir, linkedLeaf); err != nil {
+		t.Fatal(err)
+	}
+	cfg.DataDir = linkedLeaf
+	if resources, err := OpenGovernedAdmissionResources(context.Background(), cfg, credential, git, agents); err == nil {
+		_ = resources.Close()
+		t.Fatal("symlinked data-directory leaf was accepted")
+	}
+}
+
+func runResourceGit(t *testing.T, git, directory string, args ...string) string {
+	t.Helper()
+	command := exec.Command(git, append([]string{"-C", directory}, args...)...)
+	command.Env = append(os.Environ(), "GIT_CONFIG_NOSYSTEM=1")
+	output, err := command.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, output)
+	}
+	return string(output)
 }
 
 func governedResourcesFixture(t *testing.T) (string, string, config.Config, pairing.Credential, map[string]config.AgentConfig) {

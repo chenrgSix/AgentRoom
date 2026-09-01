@@ -25,7 +25,7 @@ func TestGovernedHandlerUsesExistingInboxRuntimeEventsAndReplay(t *testing.T) {
 		return nil, errors.New("ordinary Artifact resolver must not run")
 	}}
 	governed := &GovernedHandler{Inbox: inbox, Admission: admitted, Runner: runner, Executor: executor,
-		Now: func() time.Time { return now }}
+		AllowsAgent: func(string) bool { return true }, Now: func() time.Time { return now }}
 	handler := Handler{Governed: governed}
 	message := governedRunMessage("run_governed_delivery01", "agent_governed_delivery01")
 	var sent []any
@@ -62,6 +62,23 @@ func TestGovernedHandlerUsesExistingInboxRuntimeEventsAndReplay(t *testing.T) {
 	if admitted.prepareCalls != 1 || admitted.startCalls != 1 || runner.calls != 1 || len(replayed) != 3 {
 		t.Fatalf("duplicate prepare=%d start=%d runner=%d replayed=%d", admitted.prepareCalls,
 			admitted.startCalls, runner.calls, len(replayed))
+	}
+}
+
+func TestGovernedHandlerRejectsUnpublishedAgentBeforeInboxMutation(t *testing.T) {
+	handler, inbox, admitted, runner, message := governedHandlerFixture(t)
+	handler.Governed.AllowsAgent = func(string) bool { return false }
+	if err := handler.Handle(context.Background(), message, func(context.Context, any) error {
+		t.Fatal("unsupported governed delivery emitted a message")
+		return nil
+	}); !errors.Is(err, ErrGovernedExecutionUnsupported) {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if _, err := inbox.Get(message.Payload.RunID); err == nil {
+		t.Fatal("unsupported governed delivery mutated the Inbox")
+	}
+	if admitted.prepareCalls != 0 || admitted.startCalls != 0 || runner.calls != 0 {
+		t.Fatalf("prepare=%d start=%d runner=%d", admitted.prepareCalls, admitted.startCalls, runner.calls)
 	}
 }
 
@@ -192,7 +209,8 @@ func governedHandlerFixture(t *testing.T) (Handler, *Inbox, *governedAdmissionSt
 	runner := &governedRunnerStub{}
 	executor := &RuntimeExecutor{Inbox: inbox}
 	governed := &GovernedHandler{Inbox: inbox, Admission: admitted, Runner: runner, Executor: executor,
-		Now: func() time.Time { return time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC) }}
+		AllowsAgent: func(string) bool { return true },
+		Now:         func() time.Time { return time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC) }}
 	return Handler{Governed: governed}, inbox, admitted, runner,
 		governedRunMessage("run_governed_failure01", "agent_governed_failure01")
 }

@@ -1,3 +1,4 @@
+import type { GovernedExecutionCapability } from "@convene-wire/contracts/execution-plan";
 import type Database from "better-sqlite3";
 
 import type { RoomCollaborationPolicy } from "../team-room/room-collaboration-policy.js";
@@ -58,6 +59,7 @@ export interface DeviceRecord {
 }
 
 export interface AgentCapabilities {
+  governedExecution?: GovernedExecutionCapability;
   supportsHandoff: boolean;
   supportsInterrupt: boolean;
   supportsResume: boolean;

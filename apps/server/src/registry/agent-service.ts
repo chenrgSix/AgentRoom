@@ -1,3 +1,6 @@
+import { assertExecutionCommand } from
+  "@convene-wire/contracts/execution-validation";
+
 import type {
   AgentCapabilities,
   AgentRecord,
@@ -56,6 +59,21 @@ function normalizedWorkspaceAlias(value: string | undefined): string | null {
 }
 
 function validateCapabilities(input: PublishAgentInput): void {
+  if (input.capabilities.governedExecution !== undefined) {
+    assertExecutionCommand(
+      "executionCapability",
+      input.capabilities.governedExecution
+    );
+    if (
+      input.integrationMode !== "managed" ||
+      !input.deviceId ||
+      !input.capabilities.supportsStart
+    ) {
+      throw new Error(
+        "Governed execution capability requires a managed Device Agent"
+      );
+    }
+  }
   if (
     input.runtimePolicy != null &&
     (
@@ -106,7 +124,8 @@ function validateCapabilities(input: PublishAgentInput): void {
       input.capabilities.supportsRoomContextCoverage === true ||
       input.capabilities.supportsWorkspaceLeases === true ||
       input.capabilities.supportsArtifactPublication === true ||
-      input.capabilities.supportsArtifactMaterialization === true
+      input.capabilities.supportsArtifactMaterialization === true ||
+      input.capabilities.governedExecution !== undefined
     ) {
       throw new Error(
         "Hosted Agents cannot advertise Bridge Runtime capabilities"
@@ -140,7 +159,8 @@ function validateCapabilities(input: PublishAgentInput): void {
     input.capabilities.supportsResume ||
     input.capabilities.supportsInterrupt ||
     input.capabilities.supportsArtifactPublication ||
-    input.capabilities.supportsArtifactMaterialization
+    input.capabilities.supportsArtifactMaterialization ||
+    input.capabilities.governedExecution !== undefined
   ) {
     throw new Error("Manual Agents cannot advertise managed lifecycle capabilities");
   }
@@ -185,6 +205,11 @@ export class AgentService {
   ): AgentRecord {
     const member = this.auth.requireTeamMember(principal, input.teamId);
     validateCapabilities(input);
+    if (input.capabilities.governedExecution !== undefined) {
+      throw new Error(
+        "Governed execution capability is published only by the owning Bridge"
+      );
+    }
     const roomIds = explicitHostedRoomIds(input);
     if (input.integrationMode === "hosted" && member.role !== "owner") {
       throw new AuthorizationError(
@@ -276,6 +301,12 @@ export class AgentService {
     }
     if (!input.capabilities.supportsStart) {
       throw new Error("Managed Bridge Agent must support start");
+    }
+    if (input.capabilities.governedExecution !== undefined) {
+      assertExecutionCommand(
+        "executionCapability",
+        input.capabilities.governedExecution
+      );
     }
     if (
       input.runtimePolicy !== undefined &&

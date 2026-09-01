@@ -50,6 +50,18 @@ async function captureFixture(t: TestContext, commitOutput = false) {
   socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_capture_handshake0001", timestamp: now,
     type: "bridge.hello", payload: { deviceId: f.device.deviceId, connectionEpoch: 1,
       bridgeVersion: "v0.4.0-fixture.1", supportedProtocolVersions: ["1.0"], governedExecution: capability } }));
+  socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_capture_agentpub0001", timestamp: now,
+    type: "agent.publish", payload: {
+      agentId: f.agent.agentId,
+      capabilities: { ...f.agent.capabilities, governedExecution: capability, invocationMode: "managed" },
+      deviceId: f.device.deviceId,
+      name: f.agent.name,
+      ownerMemberId: f.agent.ownerMemberId,
+      role: f.agent.role,
+      teamId: f.teamId,
+      workspaceRef: f.agent.workspaceRef,
+      workspaceGeneration: f.agent.workspaceGeneration
+    } }));
   await ready;
   const initialRunState = new RunRepository(f.database).getRun(f.manifest.scope.runId)!.state;
   const request = hashRequest({ version: 1, operationId: "op_capture_publication0001", requestDigest: "a".repeat(64),

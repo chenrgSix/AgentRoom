@@ -1,4 +1,5 @@
 import { decodeBridgeMessage } from "@convene-wire/contracts/bridge-validator";
+import type { GovernedExecutionCapability } from "@convene-wire/contracts/execution-plan";
 
 import type { BridgeRunEventService } from "../run/bridge-run-event-service.js";
 import type { AgentRuntimePolicy } from "../data/core-repository.js";
@@ -297,6 +298,9 @@ export function registerBridgeSocketRoutes({
           const capabilities = publicationPayload.capabilities as
             | Record<string, unknown>
             | undefined;
+          const governedExecution = capabilities?.governedExecution as
+            | GovernedExecutionCapability
+            | undefined;
           const runtimePolicy = publicationPayload.runtimePolicy;
           const runtimePolicyObject = runtimePolicy &&
             typeof runtimePolicy === "object" &&
@@ -319,6 +323,11 @@ export function registerBridgeSocketRoutes({
               Object.prototype.hasOwnProperty.call(publicationPayload, field)
             ) ||
             capabilities?.invocationMode !== "managed" ||
+            (governedExecution !== undefined &&
+              !bridgeConnections.supportsGovernedAgentCapability(
+                devicePrincipal.deviceId,
+                governedExecution
+              )) ||
             !validRuntimePolicy
           ) {
             rejectMessage("agent_publication_rejected");
@@ -344,6 +353,9 @@ export function registerBridgeSocketRoutes({
                 ? { runtimeScopeId: publicationPayload.runtimeScopeId }
                 : {}),
               capabilities: {
+                ...(governedExecution !== undefined
+                  ? { governedExecution }
+                  : {}),
                 supportsHandoff: capabilities.supportsHandoff === true,
                 supportsInterrupt: capabilities.supportsInterrupt === true,
                 supportsResume: capabilities.supportsResume === true,
@@ -370,6 +382,15 @@ export function registerBridgeSocketRoutes({
               now: clock()
             })
           );
+          if (!bridgeConnections.recordGovernedAgentCapability(
+            devicePrincipal.deviceId,
+            registeredEpoch,
+            publicationPayload.agentId as string,
+            governedExecution
+          )) {
+            socket.close(4_009, "Stale Bridge connection epoch");
+            return;
+          }
           cancellations.resendForDevice(devicePrincipal.deviceId);
           delivery.dispatchQueuedForDevice(devicePrincipal.deviceId);
           teamChanges.notify(devicePrincipal.teamId);

@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type {
+  GovernedExecutionCapability,
   GovernedExecutionManifest as Manifest,
   RuntimeAuthorityRequest,
   RuntimeAuthorityView
@@ -204,8 +205,16 @@ export class IsolatedWorkspaceLeaseService {
       (node.scope.requirePreventivePathEnforcement && !capability.preventivePathEnforcement)) {
       return fail("WORKSPACE_CAPABILITY_UNAVAILABLE");
     }
+    const currentAgentCapability = this.connections
+      .governedAgentExecutionCapability(s.deviceId, s.agentId);
+    if (!currentAgentCapability ||
+      !this.connections.supportsGovernedAgentExecution(s.deviceId, s.agentId) ||
+      (node.scope.requirePreventivePathEnforcement &&
+        currentAgentCapability.preventivePathEnforcement !== true)) {
+      return fail("WORKSPACE_CAPABILITY_UNAVAILABLE");
+    }
     const owner = this.database.prepare(`SELECT device.owner_member_id, device.team_id,
-      run.deadline_at, run.context_manifest_json, task.task_revision
+      run.deadline_at, run.context_manifest_json, task.task_revision, agent.capabilities_json
       FROM runs run JOIN agent_tasks task ON task.task_id = run.task_id AND task.room_id = run.room_id
       JOIN rooms room ON room.room_id = run.room_id AND room.archived_at IS NULL
       JOIN teams team ON team.team_id = room.team_id AND team.archived_at IS NULL
@@ -237,8 +246,32 @@ export class IsolatedWorkspaceLeaseService {
       revision: s.planRevision, nodeKey: s.nodeKey, runId: s.runId, taskId: s.taskId, roomId: s.roomId,
       agentId: s.agentId, deviceId: s.deviceId, approvalId: s.approvalOperationId, planDigest: s.planDigest,
       definitionRevision: s.definitionRevision, criteriaRevision: s.criteriaRevision, admission: admission ? 1 : 0 }) as
-      { owner_member_id: string; team_id: string; deadline_at: string; context_manifest_json: string | null; task_revision: number } | undefined;
+      {
+        owner_member_id: string;
+        team_id: string;
+        deadline_at: string;
+        context_manifest_json: string | null;
+        task_revision: number;
+        capabilities_json: string;
+      } | undefined;
     if (!owner || Date.parse(manifest.deadline) > Date.parse(owner.deadline_at)) return fail("WORKSPACE_SCOPE_UNAVAILABLE");
+    let agentCapability: GovernedExecutionCapability | undefined;
+    try {
+      const candidate = (JSON.parse(owner.capabilities_json) as {
+        governedExecution?: unknown;
+      }).governedExecution;
+      if (candidate !== undefined) {
+        assertExecutionCommand("executionCapability", candidate);
+        agentCapability = candidate as GovernedExecutionCapability;
+      }
+    } catch {
+      return fail("WORKSPACE_CAPABILITY_UNAVAILABLE");
+    }
+    if (!agentCapability || !equal(agentCapability, currentAgentCapability) ||
+      !agentCapability.operations.includes("prepare") || !agentCapability.operations.includes("capture") ||
+      (node.scope.requirePreventivePathEnforcement && agentCapability.preventivePathEnforcement !== true)) {
+      return fail("WORKSPACE_CAPABILITY_UNAVAILABLE");
+    }
     if (owner.context_manifest_json !== null) {
       if (!equal(JSON.parse(owner.context_manifest_json).execution, manifest)) return fail("WORKSPACE_MANIFEST_CONFLICT");
     } else if (!admission || owner.task_revision !== s.taskRevision) return fail("WORKSPACE_MANIFEST_CONFLICT");
