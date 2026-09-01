@@ -133,6 +133,62 @@ temp-lifecycle suite runs in an isolated owned `TMPDIR`; before/after snapshots
 must show no new `agentroom-*`, `agent-room-*`, `convenewire-*` or
 `convene-wire-*` directories.
 
+## Implemented Increment
+
+Commit `9db0a8f` implements the frozen slice without expanding its authority:
+
+- migration `0065_execution_graph_runtime.sql` adds immutable DispatchIntents,
+  node-state projections, exact-scope/current-authority triggers and a bounded
+  backfill for existing RUN-018 member-message admissions;
+- the readiness evaluator is pure, and the node-state repository is the only
+  persistence boundary used by settlement/recovery for the projection;
+- the scheduler rechecks admission in one immediate transaction, creates the
+  zero-mention system trace, intent, ordinary Run, sealed manifest/inputs and
+  workspace reservation atomically, then uses the existing Delivery path;
+- startup settles and recovers committed Runs before admitting new work, while
+  one bounded periodic sweep is allowed in flight per Server;
+- every governed member-message admission now also records a DispatchIntent, so
+  the database requires the same explicit authority record for both paths.
+
+The implementation moves an approved plan to `running` after its admitted Run
+exists, but it never marks a node, Task or plan successful. A completed Run
+settles only to `awaiting_result`, preserving VER-001 and REPO-002 authority.
+
+## Verification Evidence
+
+All commands below ran from the repository root on 2026-09-01 against commit
+`9db0a8f` unless stated otherwise.
+
+| Gate | Result |
+| --- | --- |
+| `npm run build --workspace @convene-wire/server` | passed |
+| focused readiness/admission/runtime tests | readiness 3 passed; governed admission/runtime 13 passed |
+| migration tests | 9 passed |
+| `npm test --workspace @convene-wire/server` | 493 passed, 0 failed |
+| `npm run validate` | 11 schemas and 243 fixtures validated |
+| `npm run test:e2e` | 7 passed, 0 failed, 1 live-provider scenario explicitly skipped |
+| `npm run test:temp-lifecycle` repeated three times with `CONVENE_WIRE_TEST_RUN_BASE=/private/tmp/convenewire-exec004-acceptance.H7Mt68` | each run passed 24 tests and printed removal of its exact owned `convene-wire-test-run-*` root |
+
+The focused database assertions cover no partial records after an admission
+block, exact trace/intent/Run/manifest identity, restart and duplicate recovery,
+offline then reconnect, completed/failed/canceled/expired/outcome-unknown
+settlement, no automatic generation 2, late/out-of-order events and a shared
+winner for two Server schedulers. They inspect physical SQLite rows rather than
+accepting an API status as sufficient evidence.
+
+Before the three temp-lifecycle runs, and again after the final run, the
+following isolated-root query returned no paths:
+
+```sh
+find /private/tmp/convenewire-exec004-acceptance.H7Mt68 \
+  -mindepth 1 -maxdepth 1 -type d \
+  \( -name 'agentroom-*' -o -name 'agent-room-*' \
+     -o -name 'convenewire-*' -o -name 'convene-wire-*' \) -print
+```
+
+This is physical before/after evidence inside an exact root owned by this
+acceptance run; no user or global temporary directory was scanned or deleted.
+
 ## Explicit Remainder
 
 This increment does not claim dependency input materialization (EXEC-003),
