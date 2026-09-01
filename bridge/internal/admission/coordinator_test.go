@@ -51,6 +51,33 @@ func TestGovernedCoordinatorComposesExactPrepareAndPossibleStart(t *testing.T) {
 	}
 }
 
+func TestGovernedCoordinatorCarriesExactRequiredInputsThroughBothStartChecks(t *testing.T) {
+	coordinator, rig, request := governedCoordinatorFixtureWithInputs(t)
+	ticket, err := coordinator.Prepare(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(ticket.inputs) != 1 || len(rig.preparedInputs) != 1 ||
+		!reflect.DeepEqual(ticket.inputs, rig.inputs) ||
+		!reflect.DeepEqual(rig.preparedInputs[0], rig.inputs) {
+		t.Fatalf("prepared ticket did not retain the exact input: ticket=%+v prepared=%+v", ticket.inputs, rig.preparedInputs)
+	}
+	decision, err := coordinator.Start(context.Background(), ticket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !decision.Invoke || len(rig.preparedInputs) != 2 ||
+		!reflect.DeepEqual(rig.preparedInputs[1], rig.inputs) {
+		t.Fatalf("possible-start recheck did not retain the exact input: decision=%+v prepared=%+v", decision, rig.preparedInputs)
+	}
+	// The coordinator and preparer must not retain caller-owned byte slices.
+	rig.inputs[0].Bytes[0] = 'X'
+	if ticket.inputs[0].Bytes[0] == 'X' || rig.preparedInputs[0][0].Bytes[0] == 'X' ||
+		rig.preparedInputs[1][0].Bytes[0] == 'X' {
+		t.Fatal("required input bytes were not frozen across admission boundaries")
+	}
+}
+
 func TestGovernedCoordinatorFailsClosedBeforePossibleStart(t *testing.T) {
 	t.Run("canceled preparation", func(t *testing.T) {
 		coordinator, rig, request := governedCoordinatorFixture(t)
@@ -235,6 +262,8 @@ type coordinatorRig struct {
 	stopCalls        int
 	stopped          RuntimeAdmissionView
 	startWriteErr    error
+	inputs           []repository.PatchInput
+	preparedInputs   [][]repository.PatchInput
 }
 
 func (r *coordinatorRig) CheckTaskGrant(_ context.Context, manifest execution.GovernedExecutionManifest,
@@ -251,7 +280,12 @@ func (r *coordinatorRig) LoadPatches(_ context.Context, manifest execution.Gover
 	if !reflect.DeepEqual(manifest, r.manifest) {
 		return nil, ErrAdmissionChanged
 	}
-	return []repository.PatchInput{}, nil
+	result := make([]repository.PatchInput, len(r.inputs))
+	for index, input := range r.inputs {
+		result[index] = input
+		result[index].Bytes = append([]byte{}, input.Bytes...)
+	}
+	return result, nil
 }
 
 func (r *coordinatorRig) ResolveSource(_ context.Context, binding, repositoryID string, revision int) (repository.Source, error) {
@@ -266,9 +300,15 @@ func (r *coordinatorRig) Prepare(_ context.Context, _ repository.Source, input r
 	r.calls = append(r.calls, "prepare")
 	r.prepareCalls++
 	if input.OperationID != "op_prepare_"+r.manifest.ManifestDigest || input.RunID != r.manifest.Scope.RunID ||
-		input.ManifestDigest != r.manifest.ManifestDigest || len(input.Inputs) != 0 {
+		input.ManifestDigest != r.manifest.ManifestDigest || !reflect.DeepEqual(input.Inputs, r.inputs) {
 		return repository.PreparedWorkspace{}, ErrAdmissionChanged
 	}
+	observed := make([]repository.PatchInput, len(input.Inputs))
+	for index, patch := range input.Inputs {
+		observed[index] = patch
+		observed[index].Bytes = append([]byte{}, patch.Bytes...)
+	}
+	r.preparedInputs = append(r.preparedInputs, observed)
 	prepared := r.prepared
 	if r.changePreparedAt == r.prepareCalls {
 		prepared.PreparedTree = strings.Repeat("d", len(prepared.PreparedTree))
@@ -364,13 +404,32 @@ func (r *coordinatorRig) Check(_ context.Context, spec RuntimeAdmissionSpec) (Ru
 }
 
 func governedCoordinatorFixture(t *testing.T) (*GovernedAdmissionCoordinator, *coordinatorRig, contracts.RunRequestedPayload) {
+	return governedCoordinatorFixtureMode(t, false)
+}
+
+func governedCoordinatorFixtureWithInputs(t *testing.T) (*GovernedAdmissionCoordinator, *coordinatorRig, contracts.RunRequestedPayload) {
+	return governedCoordinatorFixtureMode(t, true)
+}
+
+func governedCoordinatorFixtureMode(t *testing.T, withInputs bool) (*GovernedAdmissionCoordinator, *coordinatorRig, contracts.RunRequestedPayload) {
 	t.Helper()
 	request := governedDeliveryFixture(t)
 	manifest, err := DecodeGovernedManifest(request)
 	if err != nil {
 		t.Fatal(err)
 	}
-	manifest.Inputs = []execution.GovernedExecutionManifestInput{}
+	inputs := []repository.PatchInput{}
+	if withInputs {
+		content := []byte("diff --git a/dependency.txt b/dependency.txt\nnew file mode 100644\n--- /dev/null\n+++ b/dependency.txt\n@@ -0,0 +1 @@\n+integrated dependency\n")
+		hash := sha256.Sum256(content)
+		manifest.Inputs[0].Artifact.Kind = execution.Patch
+		manifest.Inputs[0].Artifact.ContentDigest = hex.EncodeToString(hash[:])
+		manifest.Inputs[0].Artifact.ByteLength = int64(len(content))
+		inputs = append(inputs, repository.PatchInput{BindingID: manifest.Inputs[0].BindingID,
+			SHA256: manifest.Inputs[0].Artifact.ContentDigest, Bytes: content})
+	} else {
+		manifest.Inputs = []execution.GovernedExecutionManifestInput{}
+	}
 	manifest.InputDigest, err = executionDigest(manifest.Inputs, "")
 	if err != nil {
 		t.Fatal(err)
@@ -388,7 +447,7 @@ func governedCoordinatorFixture(t *testing.T) (*GovernedAdmissionCoordinator, *c
 	}
 	prepared, profile := runtimePrerequisites(manifest)
 	prepared.OperationID = "op_prepare_" + manifest.ManifestDigest
-	rig := &coordinatorRig{manifest: manifest,
+	rig := &coordinatorRig{manifest: manifest, inputs: inputs,
 		source: repository.Source{Root: "/source", GitDirectory: "/source/.git", CommonDirectory: "/source/.git",
 			ObjectFormat: "sha1", RootIdentity: "root", GitIdentity: "git", CommonIdentity: "git"},
 		prepared: prepared, profile: profile}
