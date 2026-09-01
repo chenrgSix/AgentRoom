@@ -35,8 +35,10 @@ invocations and unrelated user data must remain independent.
 
 Every supported repository test command enters a shared Node runner. The
 outermost runner creates exactly one unique root with `mkdtemp` below the
-caller's temporary base. It records an unpredictable owner token and the
-created directory identity before starting any child process.
+explicit caller base, or below `/private/tmp` on Darwin so Unix-domain socket
+fixtures remain within `sun_path` while still belonging to the run. It records
+an unpredictable owner token and the created directory identity before
+starting any child process.
 
 The root layout is:
 
@@ -114,6 +116,9 @@ them.
 Go tests continue to prefer `t.TempDir` and `t.Cleanup`. Non-test Go flows use
 an immediate `defer os.RemoveAll` or an owned closer. The run owner contains
 their temporary state when the complete Go test process is canceled.
+Darwin socket fixtures and the Unix non-regular-file fixture use short prefixes
+below inherited `os.TempDir()` rather than bypassing the owner with hard-coded
+`/private/tmp` or `/tmp` paths.
 
 ### Child process ownership
 
@@ -125,10 +130,9 @@ must not make process ownership conditional on successful readiness.
 
 ### Shell ownership
 
-Shell scripts install cleanup immediately after `mktemp -d` and trap `EXIT`,
-`INT` and `TERM`. The trap removes only the exact path assigned by that
-invocation. Signal handlers retain a non-successful outcome and must not clear
-or scan `/private/tmp`.
+Shell scripts install `EXIT`, `INT` and `TERM` cleanup before invoking `mktemp`
+and remove only the exact path assigned by that invocation. Signal handlers
+retain a non-successful outcome and must not clear or scan `/private/tmp`.
 
 ## Alternatives
 
