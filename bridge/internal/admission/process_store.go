@@ -96,6 +96,13 @@ type RuntimeProcessFencer struct {
 	store *GovernedProcessStore
 }
 
+// RuntimeProcessCompletion exposes only the exact finished-process proof needed
+// before repository capture or workspace retirement. It cannot start, fence or
+// mutate a Runtime process.
+type RuntimeProcessCompletion struct {
+	store *GovernedProcessStore
+}
+
 func (f *RuntimeProcessFencer) FenceAll(ctx context.Context) error {
 	if f == nil || f.store == nil {
 		return ErrAdmissionInvalid
@@ -108,6 +115,42 @@ func (f *RuntimeProcessFencer) FenceAndWait(ctx context.Context, view RuntimeAdm
 		return ErrAdmissionInvalid
 	}
 	return f.store.FenceAndWait(ctx, view)
+}
+
+func (p *RuntimeProcessCompletion) RequireFinished(identity bridgeruntime.GovernedProcessIdentity) error {
+	if p == nil || p.store == nil {
+		return ErrAdmissionInvalid
+	}
+	return p.store.RequireFinished(identity)
+}
+
+// RequireFinished returns nil only for the exact process identity whose active
+// process tree was proven absent and durably closed as finished. Prepared-only
+// abandonment is not execution evidence.
+func (s *GovernedProcessStore) RequireFinished(identity bridgeruntime.GovernedProcessIdentity) error {
+	if bridgeruntime.ValidateGovernedProcessIdentity(identity) != nil {
+		return ErrAdmissionInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.check(); err != nil {
+		return err
+	}
+	view, err := s.get(identity.RunID)
+	if err != nil {
+		return err
+	}
+	if view.prepared.Identity != identity || view.terminal == nil ||
+		view.terminalStage != governedProcessFinished || view.active == nil {
+		return ErrAdmissionChanged
+	}
+	if _, err := os.Lstat(s.lockPath(identity.RunID)); !errors.Is(err, os.ErrNotExist) {
+		if err != nil {
+			return err
+		}
+		return ErrAdmissionChanged
+	}
+	return nil
 }
 
 func (s *GovernedProcessStore) FenceAll(ctx context.Context) error {

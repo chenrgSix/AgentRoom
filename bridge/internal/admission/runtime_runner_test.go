@@ -10,6 +10,7 @@ import (
 	"convenewire.dev/bridge/internal/config"
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
 	contracts "convenewire.dev/contracts/generated/go"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 func TestGovernedRuntimeRunnerUsesExactWorkspaceAndClosesOutcome(t *testing.T) {
@@ -46,9 +47,15 @@ func TestGovernedRuntimeRunnerUsesExactWorkspaceAndClosesOutcome(t *testing.T) {
 			var used config.AgentConfig
 			var usedIdentity bridgeruntime.GovernedProcessIdentity
 			processes := &runnerProcessTrackerStub{}
+			capture := &runnerCaptureStub{beforeCapture: func() error {
+				if rig.stopCalls != 0 {
+					return errors.New("capture ran after admission stop")
+				}
+				return nil
+			}}
 			adapter := &governedFakeAdapter{events: test.events}
 			runner, err := newGovernedRuntimeRunner(coordinator,
-				map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: configured}, nil, processes,
+				map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: configured}, nil, processes, capture,
 				func(agent config.AgentConfig, _ bridgeruntime.RuntimeSessionStore,
 					tracker bridgeruntime.GovernedProcessTracker,
 					identity bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
@@ -66,6 +73,9 @@ func TestGovernedRuntimeRunnerUsesExactWorkspaceAndClosesOutcome(t *testing.T) {
 			var emitted []bridgeruntime.Event
 			view, runErr := runner.Run(context.Background(), ticket, decision,
 				func(_ context.Context, event bridgeruntime.Event) error {
+					if event.Status != nil && *event.Status != contracts.Working && rig.stopCalls != 1 {
+						return errors.New("terminal emitted before admission stop")
+					}
 					emitted = append(emitted, event)
 					if test.emitErr != nil && event.Status != nil && *event.Status != contracts.Working {
 						return test.emitErr
@@ -81,7 +91,8 @@ func TestGovernedRuntimeRunnerUsesExactWorkspaceAndClosesOutcome(t *testing.T) {
 				view.State != RuntimeAdmissionStopped || view.Outcome == nil || *view.Outcome != test.want ||
 				usedIdentity.RunID != ticket.manifest.Scope.RunID ||
 				usedIdentity.AdmissionDigest != decision.View.AdmissionDigest ||
-				decision.View.StartDigest == nil || usedIdentity.StartDigest != *decision.View.StartDigest {
+				decision.View.StartDigest == nil || usedIdentity.StartDigest != *decision.View.StartDigest ||
+				capture.calls != boolInt(test.want == RuntimeOutcomeCompleted) {
 				t.Fatalf("view=%+v err=%v workspace=%q emitted=%v stops=%d", view, runErr, used.Workspace, emitted, rig.stopCalls)
 			}
 		})
@@ -100,7 +111,16 @@ func TestGovernedRuntimeRunnerClosesUnknownAfterInvokeSetupFailure(t *testing.T)
 	}
 	runner, err := newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
 		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
-	}}, nil, &runnerProcessTrackerStub{}, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+	}}, nil, &runnerProcessTrackerStub{}, nil, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
+		return nil
+	})
+	if err == nil {
+		t.Fatal("runner accepted missing capture coordinator")
+	}
+	runner, err = newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
+		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
+	}}, nil, &runnerProcessTrackerStub{}, &runnerCaptureStub{}, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
 		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
 		return nil
 	})
@@ -128,7 +148,17 @@ func TestGovernedRuntimeRunnerRejectsReplayAndPostTerminalEvents(t *testing.T) {
 	adapter := &governedFakeAdapter{events: []bridgeruntime.Event{{Status: &completed}, {Status: &working}}}
 	runner, err := newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
 		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
-	}}, nil, &runnerProcessTrackerStub{}, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+	}}, nil, &runnerProcessTrackerStub{}, nil, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
+		return adapter
+	})
+	if err == nil {
+		t.Fatal("runner accepted missing capture coordinator")
+	}
+	capture := &runnerCaptureStub{}
+	runner, err = newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
+		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
+	}}, nil, &runnerProcessTrackerStub{}, capture, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
 		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
 		return adapter
 	})
@@ -137,7 +167,8 @@ func TestGovernedRuntimeRunnerRejectsReplayAndPostTerminalEvents(t *testing.T) {
 	}
 	runner.now = func() time.Time { return runtimeFenceNow.Add(time.Minute) }
 	view, err := runner.Run(context.Background(), ticket, decision, func(context.Context, bridgeruntime.Event) error { return nil })
-	if !errors.Is(err, ErrAdmissionChanged) || view.Outcome == nil || *view.Outcome != RuntimeOutcomeCompleted || rig.stopCalls != 1 {
+	if !errors.Is(err, ErrAdmissionChanged) || view.Outcome == nil || *view.Outcome != RuntimeOutcomeCompleted ||
+		rig.stopCalls != 1 || capture.calls != 0 {
 		t.Fatalf("post-terminal view=%+v err=%v stops=%d", view, err, rig.stopCalls)
 	}
 	replay := decision
@@ -147,12 +178,72 @@ func TestGovernedRuntimeRunnerRejectsReplayAndPostTerminalEvents(t *testing.T) {
 	}
 }
 
+func TestGovernedRuntimeRunnerDowngradesCaptureFailureBeforeTerminalDelivery(t *testing.T) {
+	coordinator, rig, request := governedCoordinatorFixture(t)
+	ticket, err := coordinator.Prepare(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	decision, err := coordinator.Start(context.Background(), ticket)
+	if err != nil {
+		t.Fatal(err)
+	}
+	captureErr := errors.New("capture unavailable")
+	capture := &runnerCaptureStub{err: captureErr, beforeCapture: func() error {
+		if rig.stopCalls != 0 {
+			return errors.New("capture ran after admission stop")
+		}
+		return nil
+	}}
+	completed := contracts.Completed
+	runner, err := newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
+		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
+	}}, nil, &runnerProcessTrackerStub{}, capture, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
+		return &governedFakeAdapter{events: []bridgeruntime.Event{{Status: &completed}}}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	runner.now = func() time.Time { return runtimeFenceNow.Add(time.Minute) }
+	var emitted bridgeruntime.Event
+	view, err := runner.Run(context.Background(), ticket, decision, func(_ context.Context, event bridgeruntime.Event) error {
+		if rig.stopCalls != 1 {
+			return errors.New("terminal emitted before admission stop")
+		}
+		emitted = event
+		return nil
+	})
+	if err != nil || capture.calls != 1 || view.Outcome == nil || *view.Outcome != RuntimeOutcomeCompleted ||
+		emitted.Status == nil || *emitted.Status != contracts.OutcomeUnknown || emitted.Error == nil ||
+		emitted.Error.Code != "GOVERNED_CAPTURE_OUTCOME_UNKNOWN" || emitted.Error.Retryable {
+		t.Fatalf("view=%+v err=%v captureCalls=%d emitted=%+v", view, err, capture.calls, emitted)
+	}
+}
+
 type governedFakeAdapter struct {
 	events []bridgeruntime.Event
 	calls  int
 }
 
 type runnerProcessTrackerStub struct{}
+
+type runnerCaptureStub struct {
+	calls         int
+	err           error
+	beforeCapture func() error
+}
+
+func (s *runnerCaptureStub) CaptureCompleted(context.Context, GovernedAdmissionTicket,
+	GovernedStartDecision) (execution.RepositoryCheckpoint, error) {
+	s.calls++
+	if s.beforeCapture != nil {
+		if err := s.beforeCapture(); err != nil {
+			return execution.RepositoryCheckpoint{}, err
+		}
+	}
+	return execution.RepositoryCheckpoint{}, s.err
+}
 
 func (*runnerProcessTrackerStub) PrepareProcess(bridgeruntime.GovernedProcessIdentity) (bridgeruntime.GovernedProcessLease, error) {
 	return nil, errors.New("fake adapter must not create a process lease")
@@ -179,4 +270,11 @@ func runtimeStatusEvents(statuses ...contracts.RunExecutionStatus) []bridgerunti
 		events = append(events, bridgeruntime.Event{Status: &status})
 	}
 	return events
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
 }

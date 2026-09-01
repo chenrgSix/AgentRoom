@@ -9,10 +9,15 @@ import (
 	"convenewire.dev/bridge/internal/config"
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
 	contracts "convenewire.dev/contracts/generated/go"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 type governedAdapterFactory func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
 	bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter
+
+type governedCapture interface {
+	CaptureCompleted(context.Context, GovernedAdmissionTicket, GovernedStartDecision) (execution.RepositoryCheckpoint, error)
+}
 
 var ErrRuntimeOutcomeMissing = errors.New("governed Runtime returned without a terminal outcome")
 
@@ -24,14 +29,15 @@ type GovernedRuntimeRunner struct {
 	agents      map[string]config.AgentConfig
 	sessions    bridgeruntime.RuntimeSessionStore
 	processes   bridgeruntime.GovernedProcessTracker
+	capture     governedCapture
 	newAdapter  governedAdapterFactory
 	now         func() time.Time
 }
 
 func NewGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents map[string]config.AgentConfig,
 	sessions bridgeruntime.RuntimeSessionStore,
-	processes bridgeruntime.GovernedProcessTracker) (*GovernedRuntimeRunner, error) {
-	return newGovernedRuntimeRunner(coordinator, agents, sessions, processes,
+	processes bridgeruntime.GovernedProcessTracker, capture *GovernedCaptureCoordinator) (*GovernedRuntimeRunner, error) {
+	return newGovernedRuntimeRunner(coordinator, agents, sessions, processes, capture,
 		func(agent config.AgentConfig, store bridgeruntime.RuntimeSessionStore,
 			tracker bridgeruntime.GovernedProcessTracker,
 			identity bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
@@ -42,8 +48,8 @@ func NewGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents 
 
 func newGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents map[string]config.AgentConfig,
 	sessions bridgeruntime.RuntimeSessionStore, processes bridgeruntime.GovernedProcessTracker,
-	factory governedAdapterFactory) (*GovernedRuntimeRunner, error) {
-	if coordinator == nil || len(agents) == 0 || processes == nil || factory == nil {
+	capture governedCapture, factory governedAdapterFactory) (*GovernedRuntimeRunner, error) {
+	if coordinator == nil || len(agents) == 0 || processes == nil || capture == nil || factory == nil {
 		return nil, ErrAdmissionInvalid
 	}
 	cloned := make(map[string]config.AgentConfig, len(agents))
@@ -56,12 +62,12 @@ func newGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents 
 		cloned[id] = agent
 	}
 	return &GovernedRuntimeRunner{coordinator: coordinator, agents: cloned, sessions: sessions, processes: processes,
-		newAdapter: factory, now: time.Now}, nil
+		capture: capture, newAdapter: factory, now: time.Now}, nil
 }
 
 func (r *GovernedRuntimeRunner) Run(ctx context.Context, ticket GovernedAdmissionTicket,
 	decision GovernedStartDecision, emit bridgeruntime.EmitFunc) (RuntimeAdmissionView, error) {
-	if r == nil || r.coordinator == nil || r.newAdapter == nil || r.now == nil || emit == nil ||
+	if r == nil || r.coordinator == nil || r.capture == nil || r.newAdapter == nil || r.now == nil || emit == nil ||
 		!decision.Invoke || decision.workspace == "" || decision.workspace != ticket.prepared.Path ||
 		decision.View.Spec != ticket.admission.Spec || decision.View.AdmissionDigest != ticket.admission.AdmissionDigest ||
 		decision.View.State != RuntimeAdmissionStarting || decision.View.StartDigest == nil {
@@ -87,6 +93,7 @@ func (r *GovernedRuntimeRunner) Run(ctx context.Context, ticket GovernedAdmissio
 	}
 	outcome := RuntimeOutcomeUnknown
 	terminal := false
+	var terminalEvent bridgeruntime.Event
 	var emittedErr error
 	executeErr := adapter.Execute(ctx, bridgeruntime.Request{Run: ticket.request},
 		func(eventContext context.Context, event bridgeruntime.Event) error {
@@ -97,6 +104,8 @@ func (r *GovernedRuntimeRunner) Run(ctx context.Context, ticket GovernedAdmissio
 			if event.Status != nil {
 				if resolved, ok := runtimeOutcomeForStatus(*event.Status); ok {
 					outcome, terminal = resolved, true
+					terminalEvent = event
+					return nil
 				}
 			}
 			if err := emit(eventContext, event); err != nil {
@@ -111,8 +120,25 @@ func (r *GovernedRuntimeRunner) Run(ctx context.Context, ticket GovernedAdmissio
 	if !terminal && executeErr == nil {
 		executeErr = ErrRuntimeOutcomeMissing
 	}
+	if terminal && executeErr == nil && outcome == RuntimeOutcomeCompleted {
+		if _, captureErr := r.capture.CaptureCompleted(ctx, ticket, decision); captureErr != nil {
+			terminalEvent = captureOutcomeUnknownEvent(terminalEvent)
+		}
+	}
 	view, stopErr := r.coordinator.Stop(ticket, decision, outcome, r.now().UTC())
-	return view, errors.Join(executeErr, stopErr)
+	if executeErr != nil || stopErr != nil || !terminal {
+		return view, errors.Join(executeErr, stopErr)
+	}
+	return view, emit(ctx, terminalEvent)
+}
+
+func captureOutcomeUnknownEvent(event bridgeruntime.Event) bridgeruntime.Event {
+	status := contracts.OutcomeUnknown
+	event.Status = &status
+	event.Clarification = nil
+	event.Error = &contracts.ConveneWireError{Code: "GOVERNED_CAPTURE_OUTCOME_UNKNOWN",
+		Message: "Governed repository output could not be confirmed as a canonical checkpoint.", Retryable: false}
+	return event
 }
 
 func (r *GovernedRuntimeRunner) stopUnknown(ticket GovernedAdmissionTicket,

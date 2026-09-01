@@ -84,7 +84,7 @@ func reportSeed(t *testing.T, format, document, report string, configureSource .
 	writeWork(t, ready, "tests/review.md", document)
 	writeWork(t, ready, "tests/results.json", report)
 	op := operationForManifest(t, m, "op_capture_reports0001")
-	op.Action = execution.ActionClass{Kind: execution.Capture, Capture: &execution.CaptureClass{ManifestDigest: m.ManifestDigest}}
+	op.Action = execution.ActionClass{Kind: execution.Capture, Capture: &execution.ActionCapture{ManifestDigest: m.ManifestDigest}}
 	op.RequestDigest = resumeDigest(t, op, "requestDigest")
 	captured := mustCapture(t, f, CaptureRequest{OperationID: op.OperationID, WorkspaceRef: ready.WorkspaceRef,
 		PreparedDigest: ready.IntentDigest, ExpectedGeneration: ready.Generation, ManifestDigest: m.ManifestDigest})

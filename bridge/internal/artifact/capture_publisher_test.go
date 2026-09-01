@@ -86,7 +86,7 @@ func captureInputFixture(t *testing.T) CapturePublishInput {
 		Execution: &scope, RepositoryID: manifest.Repository.RepositoryID, BindingID: manifest.Repository.BindingID,
 		DeviceID: scope.DeviceID, Grant: execution.RepositoryOperationRequestGrant(manifest.Grant),
 		ExpectedGeneration: manifest.Workspace.WorkspaceGeneration, Deadline: manifest.Deadline,
-		Action: execution.ActionClass{Kind: execution.Capture, Capture: &execution.CaptureClass{ManifestDigest: manifest.ManifestDigest}}}
+		Action: execution.ActionClass{Kind: execution.Capture, Capture: &execution.ActionCapture{ManifestDigest: manifest.ManifestDigest}}}
 	operation.RequestDigest = captureHash(t, operation, "requestDigest")
 	patch := []byte("diff --git a/a b/a\n+client fixture\n")
 	hash := sha256.Sum256(patch)

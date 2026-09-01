@@ -122,7 +122,7 @@ func resumeOperation(t *testing.T, manifest execution.GovernedExecutionManifest,
 func publishResumeFixture(t *testing.T, f *fixture, ready PreparedWorkspace, manifest execution.GovernedExecutionManifest, transport *resumeTransport) (CapturedRepository, execution.RepositoryCheckpoint) {
 	t.Helper()
 	op := operationForManifest(t, manifest, "op_capture_"+manifest.Scope.RunID)
-	op.Action = execution.ActionClass{Kind: execution.Capture, Capture: &execution.CaptureClass{ManifestDigest: manifest.ManifestDigest}}
+	op.Action = execution.ActionClass{Kind: execution.Capture, Capture: &execution.ActionCapture{ManifestDigest: manifest.ManifestDigest}}
 	op.RequestDigest = resumeDigest(t, op, "requestDigest")
 	captured := mustCapture(t, f, CaptureRequest{OperationID: op.OperationID, WorkspaceRef: ready.WorkspaceRef,
 		PreparedDigest: ready.IntentDigest, ExpectedGeneration: ready.Generation, ManifestDigest: manifest.ManifestDigest})

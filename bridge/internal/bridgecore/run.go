@@ -169,8 +169,12 @@ func RunObservedWithProvisioning(
 		Processes: governedResources.ProcessFencer(), Executor: executor}
 	readiness := &governedAgentReadiness{}
 	if coordinator := governedResources.Coordinator(); coordinator != nil {
+		capture := governedResources.CaptureCoordinator()
+		if capture == nil {
+			return admission.ErrAdmissionInvalid
+		}
 		runner, runnerErr := admission.NewGovernedRuntimeRunner(coordinator,
-			configuredAgentsByID(loaded.Agents, identities), sessions, governedResources.ProcessTracker())
+			configuredAgentsByID(loaded.Agents, identities), sessions, governedResources.ProcessTracker(), capture)
 		if runnerErr != nil {
 			return runnerErr
 		}

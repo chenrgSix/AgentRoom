@@ -52,6 +52,9 @@ func TestGovernedProcessStoreAbandonsPreparedOnlyLeaseAcrossRestart(t *testing.T
 	if err := reopened.FenceAndWait(context.Background(), governedProcessAdmissionView(identity)); err != nil {
 		t.Fatalf("exact abandoned replay failed: %v", err)
 	}
+	if err := reopened.RequireFinished(identity); !errors.Is(err, ErrAdmissionChanged) {
+		t.Fatalf("prepared-only abandonment became finished proof: %v", err)
+	}
 	view, err := reopened.get(identity.RunID)
 	if err != nil || view.terminalStage != governedProcessAbandoned || view.active != nil {
 		t.Fatalf("view=%+v err=%v", view, err)

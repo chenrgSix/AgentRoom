@@ -99,6 +99,14 @@ func TestGovernedProcessLeaseFinishesOnlyAfterObservedProcessExit(t *testing.T) 
 	if err != nil || view.terminalStage != governedProcessFinished {
 		t.Fatalf("view=%+v err=%v", view, err)
 	}
+	if err := store.RequireFinished(identity); err != nil {
+		t.Fatalf("finished proof failed: %v", err)
+	}
+	changed := identity
+	changed.StartDigest = "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+	if err := store.RequireFinished(changed); !errors.Is(err, ErrAdmissionChanged) {
+		t.Fatalf("changed finished identity error=%v", err)
+	}
 	if err := lease.Finished(observation); !errors.Is(err, ErrAdmissionChanged) {
 		t.Fatalf("closed lease replay error=%v", err)
 	}

@@ -13,8 +13,10 @@ Agent after governed recovery has completed. The Server requires both `prepare`
 and `capture` on the current Device connection and that exact Agent before it
 can send a governed Run, so this truthful partial declaration does not open the
 transport. A governed Context Manifest cannot fall back to an ordinary prompt.
-BRG-071/RUN-018 must still connect capture/result publication before delivery is
-enabled. Capability metadata is current-epoch routing evidence, not local
+BRG-071/RUN-018 now connect local capture/checkpoint publication but must still
+finish Server capture-intent validation and advertise the reviewed full
+declaration before delivery is enabled. Result proposal remains a separate
+explicit authority. Capability metadata is current-epoch routing evidence, not local
 authorization; every delivered Run must independently pass the current local
 grant, repository, profile and just-in-time Server checks.
 
@@ -59,19 +61,21 @@ native UI acceptance remain separate from cross-compilation.
 The managed Bridge core now carries the exact acquired or shell-borrowed owner
 in its derived process context for the full connection lifetime. Local stores
 opened from that context can borrow the same OS lease without reacquiring or
-releasing it, while another data directory still requires its own lock. This is
-only lifecycle plumbing: the core does not yet open the governed stores or
-construct the coordinator, and the production governed rejection is unchanged.
+releasing it, while another data directory still requires its own lock. This
+lifecycle plumbing is consumed by managed-core startup before governed recovery
+or any network connection.
 
-`OpenGovernedAdmissionResources` now defines the complete local composition
-lifetime without enabling it. Under one acquired or borrowed data-root owner it
+`OpenGovernedAdmissionResources` defines the complete local composition
+lifetime. Under one acquired or borrowed data-root owner it
 opens the owner-namespaced Binding/Grant, Runtime-profile and possible-start
 stores, plus one independently locked private preparation root, then constructs
-the exact input and Server-authority clients and the reviewed coordinator.
+the exact input, Server-authority and capture Artifact clients and the reviewed
+admission/capture coordinators.
 Partial construction closes every opened store and both locks in reverse order;
 normal close is idempotent. The bundle requires a canonical private data root,
 exact paired origin/owner identifiers, Device token, absolute Git executable and
-stable Agent map. The managed core does not call this constructor yet.
+stable Agent map. Managed-core startup opens this bundle before recovery and
+network connection.
 
 Local runtime/verifier profiles, enforced startup, owner UI, production cleanup
 and RUN-018 delivery remain required. Registration alone is
@@ -242,9 +246,15 @@ The internal `GovernedRuntimeRunner` is now the sole consumer designed for that
 `invoke=true` decision. It revalidates the frozen ticket/decision, selects only
 the exact Codex Agent, clones its local configuration and replaces the ordinary
 Workspace with the transient prepared worktree before constructing the existing
-Codex adapter. Runtime events remain caller-delivered, while the runner captures
-the first terminal status and closes the exact admission/start digests through
-`GovernedAdmissionCoordinator.Stop`. A setup failure after the possible-start
+Codex adapter. Runtime events remain caller-delivered, while the runner buffers
+the first terminal status. A successful Runtime outcome first requires the exact
+finished-process proof, a current capture grant, local sealed capture and
+canonical checkpoint receipt; only then does it close the exact admission/start
+digests through `GovernedAdmissionCoordinator.Stop` and publish the terminal
+status. Capture uncertainty is downgraded to one safe `outcome_unknown` terminal
+after the local Runtime outcome is closed, with the workspace and capture journal
+retained for inspection. Failed, canceled and input-required outcomes never
+capture. A setup failure after the possible-start
 write, a missing terminal event or any post-terminal event closes conservatively
 as `outcome_unknown`; terminal delivery failure retains the observed terminal
 local outcome for replay. This stopped receipt is still not verification,
@@ -325,9 +335,11 @@ fence and returns explicit possible-start ambiguity; delivery retains the
 accepted record and emits no false failure. `RuntimeExecutor.ExecuteAdmitted`
 reuses the ordinary event/terminal machinery with only the fence-backed adapter
 and deliberately skips ordinary Artifact aliases because governed inputs are
-already exact-applied in the worktree. Production core construction and startup
-recovery are now composed, but the Server-side `prepare` plus `capture` transport
-gate keeps governed delivery closed until capture is connected.
+already exact-applied in the worktree. Production core construction, startup
+recovery and the capture coordinator are now composed. The Server-side `prepare`
+plus `capture` transport gate still keeps governed delivery closed until Server
+capture-intent derivation/validation and the Bridge's full capability declaration
+are reviewed together.
 
 The internal `RuntimeAuthorityClient` now supplies the Central half of that
 callback. It posts only the exact Run, manifest, isolated lease,
@@ -368,10 +380,13 @@ and persists it only from that owning Bridge. The connection registry starts
 each hello with an empty Agent set and records an Agent only after its same-epoch
 publication transaction commits; send and workspace admission also compare that
 current declaration with the persisted projection. It still requires both
-`prepare` and `capture` at Device and exact-Agent scope, so actual governed
-delivery, owner-visible cleanup and real Runtime evidence remain open. See the
+`prepare` and `capture` at Device and exact-Agent scope, while the Bridge remains
+prepare-only until the Server issues a frozen capture intent validated against
+the approved plan. Actual governed delivery, owner-visible cleanup and real
+Runtime evidence therefore remain open. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md) and
-[managed-core readiness evidence](../acceptance/brg-071-managed-core-readiness.md).
+[managed-core readiness evidence](../acceptance/brg-071-managed-core-readiness.md),
+plus the [governed capture evidence](../acceptance/brg-071-governed-capture-publication.md).
 
 ## Codex Local Boundary Probe
 

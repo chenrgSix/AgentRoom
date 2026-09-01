@@ -149,9 +149,22 @@ func validateCaptureOutputs(input CapturePublication) error {
 	return nil
 }
 
-// PublishCaptured requires the caller's current local authorization and existing
-// stopped-Run fence. It only reads sealed capture bytes, retains an immutable
-// publication intent before network IO, and never marks the Run/Task complete.
+// ValidateCapturePublicationIntent validates only frozen wire metadata and
+// output selection. It performs no filesystem access, local authorization or
+// network IO and therefore grants no capture authority.
+func ValidateCapturePublicationIntent(manifest execution.GovernedExecutionManifest,
+	operation execution.RepositoryOperationRequest, outputs []CaptureOutputDescription) error {
+	if err := artifact.ValidateCaptureContext(manifest, operation); err != nil {
+		return err
+	}
+	frozen := CapturePublication{Manifest: manifest, Operation: operation, Outputs: outputs}
+	return validateCaptureOutputs(frozen)
+}
+
+// PublishCaptured requires the caller's current local authorization, exact
+// still-starting admission and finished-process proof. It only reads sealed
+// capture bytes, retains an immutable publication intent before network IO, and
+// never marks the Run/Task complete.
 // Exact retry queries the checkpoint before uploading or repeating a seal.
 func (p *Preparer) PublishCaptured(ctx context.Context, input CapturePublication, transport CaptureTransport) (execution.RepositoryCheckpoint, error) {
 	p.mu.Lock()

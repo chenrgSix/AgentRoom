@@ -87,8 +87,10 @@ Current consent checking is one prerequisite, not a Runtime or verifier service;
 production readiness now intersects it with the current Agent configuration,
 runtime profile, repository binding and physical Git source before advertising
 only `prepare`. Actual per-Run admission still performs the just-in-time profile
-re-probe and current Server observation; capture/result publication and
-in-flight revocation remain required.
+re-probe and current Server observation. Successful governed execution now
+composes local capture/checkpoint publication after exact process absence and
+before terminal delivery; Server manifest derivation, Result proposal and
+in-flight revocation remain separate required increments.
 
 The first Codex-specific admission foundation is a native macOS local boundary
 probe, described in [Local Bridge](bridge.md#codex-local-boundary-probe). It
@@ -343,9 +345,10 @@ an actual Git tree merely from Artifact bytes or Agent prose.
 `Preparer.PublishCaptured` binds a sealed local capture to the generated frozen
 manifest and capture operation. It verifies canonical digests, scope, repository
 and workspace identities, prepared patch-input pins, captured time and selected
-required output slots before any HTTP request. The caller must still hold the
-current owner-local authorization and stopped-Run fence; this is not a new
-Runtime admission path. The local adapter publishes non-empty sealed patch,
+required output slots before any HTTP request. The caller must still prove the
+exact process is finished while the same local admission remains in `starting`,
+then recheck current owner-local capture authorization; this is not a new Runtime
+admission path. The local adapter publishes non-empty sealed patch,
 Markdown document, JSON test-report and incremental Git commit-bundle outputs.
 It rejects unsupported selected kinds or missing required slots instead of
 omitting them or fabricating content or verifier observations.
@@ -533,9 +536,14 @@ through a narrow loader boundary, rechecks preparation under the possible-start
 callback and exposes no path in durable state. The concrete authenticated input
 client now performs a bounded exact download without retaining files; production
 Handler construction now injects that governed path only for startup-derived
-ready Agents. The Bridge advertises `prepare` only; Central requires both
-`prepare` and `capture`, so actual frozen Run Delivery remains closed until
-capture/result publication is connected. Commit inputs stay fail-closed until
+ready Agents. On a successful Runtime terminal, the Bridge requires an exact
+finished-process record, derives the signed capture operation from the frozen
+manifest, publishes the canonical checkpoint, writes the local stopped outcome,
+and only then emits the terminal status. Capture uncertainty emits
+`outcome_unknown` and retains the workspace; it never fabricates a Result. The
+Bridge still advertises `prepare` only; Central requires both `prepare` and
+`capture`, so actual frozen Run Delivery remains closed until Server manifest
+validation and the full declaration are complete. Commit inputs stay fail-closed until
 their separate materializer exists. `RUN-018` connects the completed capability
 to ordinary frozen Run Delivery.
 `REPO-001` retains the full owner-local lifecycle acceptance using these actual

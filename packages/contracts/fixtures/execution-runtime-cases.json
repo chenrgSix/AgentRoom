@@ -1217,8 +1217,20 @@
                   "required": true
                 }
               ],
+              "capture": {
+                "operationId": "op_capture_runtime0001",
+                "rootTaskId": "task_runtime_root0001",
+                "outputs": [
+                  {
+                    "slotKey": "output",
+                    "title": "Governed patch",
+                    "summary": "Captured implementation output",
+                    "path": null
+                  }
+                ]
+              },
               "deadline": "2026-08-31T10:20:00Z",
-              "manifestDigest": "b64be95ccec4315846a1254ec40c32ed2feaca93f52c2387cbce03d8e4407cb8"
+              "manifestDigest": "e323fbb2b11984dae9bddafa8e3a2920b258455a7068d93df1224af721b26510"
             }
           },
           "contextMessages": [],

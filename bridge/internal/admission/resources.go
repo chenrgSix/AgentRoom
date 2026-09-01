@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"convenewire.dev/bridge/internal/artifact"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/durablefs"
 	"convenewire.dev/bridge/internal/ownership"
@@ -27,6 +28,7 @@ const governedPreparationDirectory = "governed-preparation"
 type GovernedAdmissionResources struct {
 	mu           sync.Mutex
 	coordinator  *GovernedAdmissionCoordinator
+	capture      *GovernedCaptureCoordinator
 	bindings     *repository.BindingStore
 	preparer     *repository.Preparer
 	profiles     *ProfileStore
@@ -105,8 +107,25 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 		if err != nil {
 			return fail(err)
 		}
+		resources.capture, err = NewGovernedCaptureCoordinator(resources.bindings, resources.preparer,
+			resources.fence, resources.processes, artifact.NewClient(cfg, credential))
+		if err != nil {
+			return fail(err)
+		}
 	}
 	return resources, nil
+}
+
+func (r *GovernedAdmissionResources) CaptureCoordinator() *GovernedCaptureCoordinator {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil
+	}
+	return r.capture
 }
 
 // governedDataDirectory keeps the configured leaf non-symlinked while
@@ -253,6 +272,7 @@ func (r *GovernedAdmissionResources) Close() error {
 	}
 	r.closed = true
 	r.coordinator = nil
+	r.capture = nil
 	r.agents = nil
 	var result error
 	if r.processes != nil {

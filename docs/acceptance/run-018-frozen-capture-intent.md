@@ -31,6 +31,9 @@ workspace eligible for cleanup.
   passed from `packages/contracts`.
 - `git diff --check` passed.
 
-Production capture composition, stopped-process fencing, canonical checkpoint
-publication, owner cleanup, full capability publication and actual governed Run
-delivery remain explicit open gates.
+Production Bridge capture composition, finished-process fencing and canonical
+checkpoint publication are now covered by
+[BRG-071 governed capture evidence](brg-071-governed-capture-publication.md).
+Server plan-to-manifest validation, prompt scope projection, owner cleanup, full
+capability publication and actual governed Run delivery remain explicit open
+gates.
