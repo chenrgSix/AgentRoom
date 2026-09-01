@@ -2012,6 +2012,7 @@ export interface CunningIntegrationTarget {
 }
 
 export interface GovernedExecutionManifest {
+  capture?: GovernedExecutionManifestCapture;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -2028,6 +2029,19 @@ export interface GovernedExecutionManifest {
   verificationProfiles: GovernedExecutionManifestVerificationProfile[];
   version:              number;
   workspace:            GovernedExecutionManifestWorkspace;
+}
+
+export interface GovernedExecutionManifestCapture {
+  operationId: string;
+  outputs:     [MagentaOutput, ...MagentaOutput[]];
+  rootTaskId:  string;
+}
+
+export interface MagentaOutput {
+  path:    null | string;
+  slotKey: string;
+  summary: string;
+  title:   string;
 }
 
 export interface GovernedExecutionManifestGrant {
@@ -2353,14 +2367,14 @@ export interface RepositoryOperationRequest {
 export interface ActionClass {
   kind:       KindElement;
   prepare?:   Prepare;
-  capture?:   Capture;
+  capture?:   ActionCapture;
   verify?:    Verify;
   integrate?: Integrate;
   publish?:   Publish;
   observe?:   Observe;
 }
 
-export interface Capture {
+export interface ActionCapture {
   manifestDigest: string;
 }
 
@@ -2392,6 +2406,7 @@ export interface Prepare {
 }
 
 export interface Manifest {
+  capture?: ManifestCapture;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -2408,6 +2423,19 @@ export interface Manifest {
   verificationProfiles: ManifestVerificationProfile[];
   version:              number;
   workspace:            ManifestWorkspace;
+}
+
+export interface ManifestCapture {
+  operationId: string;
+  outputs:     [FriskyOutput, ...FriskyOutput[]];
+  rootTaskId:  string;
+}
+
+export interface FriskyOutput {
+  path:    null | string;
+  slotKey: string;
+  summary: string;
+  title:   string;
 }
 
 export interface ManifestGrant {

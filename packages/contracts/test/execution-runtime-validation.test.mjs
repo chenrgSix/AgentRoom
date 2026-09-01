@@ -43,3 +43,22 @@ test("all six operation payloads reject injected commands and cross-kind fields"
     }
   }
 });
+
+test("governed capture intent is frozen, bounded, and path-safe", () => {
+  const manifest = suite.cases.find((entry) =>
+    entry.name === "execution runtime: valid manifest"
+  ).instance;
+  assert.doesNotThrow(() => assertExecutionCommand("executionManifest", manifest));
+  for (const mutate of [
+    (value) => { delete value.capture.operationId; },
+    (value) => { value.capture.outputs[0].slotKey = "bad slot"; },
+    (value) => { value.capture.outputs[0].path = "/absolute/report.json"; },
+    (value) => { value.capture.outputs[0].path = "reports\\secret.json"; },
+    (value) => { value.capture.outputs[0].command = "git add -A"; },
+    (value) => { value.capture.outputs = []; }
+  ]) {
+    const invalid = structuredClone(manifest);
+    mutate(invalid);
+    assert.throws(() => assertExecutionCommand("executionManifest", invalid), /PLAN_SCHEMA_INVALID/u);
+  }
+});

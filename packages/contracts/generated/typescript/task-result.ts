@@ -190,6 +190,7 @@ export interface RunContextManifestCriterion {
 }
 
 export interface Execution {
+  capture?: Capture;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -199,13 +200,26 @@ export interface Execution {
   inputDigest:          string;
   inputs:               Input[];
   manifestDigest:       string;
-  outputs:              [Output, ...Output[]];
+  outputs:              [ExecutionOutput, ...ExecutionOutput[]];
   repository:           Repository;
   scope:                ScopeClass;
   scopePolicy:          ScopePolicy;
   verificationProfiles: VerificationProfile[];
   version:              number;
   workspace:            Workspace;
+}
+
+export interface Capture {
+  operationId: string;
+  outputs:     [CaptureOutput, ...CaptureOutput[]];
+  rootTaskId:  string;
+}
+
+export interface CaptureOutput {
+  path:    null | string;
+  slotKey: string;
+  summary: string;
+  title:   string;
 }
 
 export interface Grant {
@@ -266,7 +280,7 @@ export type ArtifactKind = "patch" | "commit" | "document" | "test_result";
 
 export type Gate = "accepted_result" | "verified_output" | "integrated_commit";
 
-export interface Output {
+export interface ExecutionOutput {
   kind:     ArtifactKind;
   required: boolean;
   slotKey:  string;

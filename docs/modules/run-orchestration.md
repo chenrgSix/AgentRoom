@@ -15,6 +15,16 @@ they do not implement frozen-input creation or execution admission. RUN-018 and
 EXEC-004 own that integration and must preserve ordinary Run identity, inbox
 deduplication, cancellation and explicit unknown-outcome retry.
 
+RUN-018 now has its first additive delivery field: a governed execution manifest
+may freeze one `capture` intent containing the stable repository operation ID,
+root Task ID, and selected output slot descriptions. Each selected output has
+bounded title/summary text and either a portable repository-relative report path
+or `null` for patch/commit content. The intent is covered by the manifest digest
+and remains optional for old manifests; its presence is data, not local Git
+permission, process-stop proof, Artifact publication authority or a Result. The
+production Bridge and Server must still validate it against approved slots and
+current Run authority before they can advertise or consume `capture`.
+
 - Prefix: `RUN`
 - Planned location: `apps/server/`
 - Owns: Run lifecycle, durable delivery, status sequencing, cancellation,

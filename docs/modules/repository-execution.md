@@ -367,6 +367,17 @@ generation, digest or receipt fails without rebinding historical output.
 The source checkout, captured worktree and later uncollected changes stay
 untouched; publication does not authorize their cleanup.
 
+RUN-018 freezes the caller-facing portion of that publication intent inside the
+optional governed manifest `capture` field: one operation ID, the approved
+plan's root Task ID, and bounded output descriptions/selectors. The Bridge must
+derive the signed `RepositoryOperationRequest` from this exact manifest rather
+than inventing a root, operation identity, output slot or live path after
+execution. Schema validity alone remains insufficient: the production adapter
+must require all required manifest outputs exactly once, prohibit report paths
+for patch and commit slots, require a portable path for document/test-result
+slots, and rerun local and Central authority while the Run is still eligible for
+capture.
+
 Document and test-report selectors are local, portable repository-relative paths
 inside the frozen allowed output scope; forbidden prefixes win. They address
 only regular blobs in the sealed candidate, not live Workspace files or arbitrary

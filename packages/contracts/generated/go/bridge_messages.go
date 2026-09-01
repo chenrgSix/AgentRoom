@@ -287,6 +287,7 @@ type Criterion struct {
 }
 
 type Execution struct {
+	Capture *CaptureClass `json:"capture,omitempty"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
 	Deadline             string                `json:"deadline"`
@@ -294,13 +295,26 @@ type Execution struct {
 	InputDigest          string                `json:"inputDigest"`
 	Inputs               []Input               `json:"inputs"`
 	ManifestDigest       string                `json:"manifestDigest"`
-	Outputs              []Output              `json:"outputs"`
+	Outputs              []ExecutionOutput     `json:"outputs"`
 	Repository           Repository            `json:"repository"`
 	Scope                ScopeClass            `json:"scope"`
 	ScopePolicy          ScopePolicy           `json:"scopePolicy"`
 	VerificationProfiles []VerificationProfile `json:"verificationProfiles"`
 	Version              int64                 `json:"version"`
 	Workspace            Workspace             `json:"workspace"`
+}
+
+type CaptureClass struct {
+	OperationID string          `json:"operationId"`
+	Outputs     []CaptureOutput `json:"outputs"`
+	RootTaskID  string          `json:"rootTaskId"`
+}
+
+type CaptureOutput struct {
+	Path    *string `json:"path"`
+	SlotKey string  `json:"slotKey"`
+	Summary string  `json:"summary"`
+	Title   string  `json:"title"`
 }
 
 type Grant struct {
@@ -351,7 +365,7 @@ type Artifact struct {
 	Kind             Kind   `json:"kind"`
 }
 
-type Output struct {
+type ExecutionOutput struct {
 	Kind     Kind   `json:"kind"`
 	Required bool   `json:"required"`
 	SlotKey  string `json:"slotKey"`

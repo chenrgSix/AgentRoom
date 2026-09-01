@@ -1958,6 +1958,7 @@ type CunningIntegrationTarget struct {
 }
 
 type GovernedExecutionManifest struct {
+	Capture *GovernedExecutionManifestCapture `json:"capture,omitempty"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
 	Deadline             string                                         `json:"deadline"`
@@ -1972,6 +1973,19 @@ type GovernedExecutionManifest struct {
 	VerificationProfiles []GovernedExecutionManifestVerificationProfile `json:"verificationProfiles"`
 	Version              int64                                          `json:"version"`
 	Workspace            GovernedExecutionManifestWorkspace             `json:"workspace"`
+}
+
+type GovernedExecutionManifestCapture struct {
+	OperationID string          `json:"operationId"`
+	Outputs     []MagentaOutput `json:"outputs"`
+	RootTaskID  string          `json:"rootTaskId"`
+}
+
+type MagentaOutput struct {
+	Path    *string `json:"path"`
+	SlotKey string  `json:"slotKey"`
+	Summary string  `json:"summary"`
+	Title   string  `json:"title"`
 }
 
 type GovernedExecutionManifestGrant struct {
@@ -2263,14 +2277,14 @@ type RepositoryOperationRequest struct {
 type ActionClass struct {
 	Kind      KindElement     `json:"kind"`
 	Prepare   *PrepareClass   `json:"prepare,omitempty"`
-	Capture   *CaptureClass   `json:"capture,omitempty"`
+	Capture   *ActionCapture  `json:"capture,omitempty"`
 	Verify    *VerifyClass    `json:"verify,omitempty"`
 	Integrate *IntegrateClass `json:"integrate,omitempty"`
 	Publish   *PublishClass   `json:"publish,omitempty"`
 	Observe   *ObserveClass   `json:"observe,omitempty"`
 }
 
-type CaptureClass struct {
+type ActionCapture struct {
 	ManifestDigest string `json:"manifestDigest"`
 }
 
@@ -2302,6 +2316,7 @@ type PrepareClass struct {
 }
 
 type Manifest struct {
+	Capture *ManifestCapture `json:"capture,omitempty"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
 	Deadline             string                        `json:"deadline"`
@@ -2316,6 +2331,19 @@ type Manifest struct {
 	VerificationProfiles []ManifestVerificationProfile `json:"verificationProfiles"`
 	Version              int64                         `json:"version"`
 	Workspace            ManifestWorkspace             `json:"workspace"`
+}
+
+type ManifestCapture struct {
+	OperationID string         `json:"operationId"`
+	Outputs     []FriskyOutput `json:"outputs"`
+	RootTaskID  string         `json:"rootTaskId"`
+}
+
+type FriskyOutput struct {
+	Path    *string `json:"path"`
+	SlotKey string  `json:"slotKey"`
+	Summary string  `json:"summary"`
+	Title   string  `json:"title"`
 }
 
 type ManifestGrant struct {

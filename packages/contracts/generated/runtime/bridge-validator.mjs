@@ -726,6 +726,22 @@ const canonicalPropertyTrees = {
                       }
                     }
                   },
+                  "capture": {
+                    "p": {
+                      "operationId": {},
+                      "rootTaskId": {},
+                      "outputs": {
+                        "i": {
+                          "p": {
+                            "slotKey": {},
+                            "title": {},
+                            "summary": {},
+                            "path": {}
+                          }
+                        }
+                      }
+                    }
+                  },
                   "deadline": {},
                   "manifestDigest": {}
                 }

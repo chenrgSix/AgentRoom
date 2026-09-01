@@ -568,6 +568,69 @@
             }
           }
         },
+        "capture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "operationId",
+            "rootTaskId",
+            "outputs"
+          ],
+          "properties": {
+            "operationId": {
+              "type": "string",
+              "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+            },
+            "rootTaskId": {
+              "type": "string",
+              "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+            },
+            "outputs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 32,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "slotKey",
+                  "title",
+                  "summary",
+                  "path"
+                ],
+                "properties": {
+                  "slotKey": {
+                    "type": "string",
+                    "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                  },
+                  "title": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 160
+                  },
+                  "summary": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 4000
+                  },
+                  "path": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "minLength": 1,
+                        "maxLength": 512,
+                        "pattern": "^[^/\\\\\\x00-\\x1f\\x7f:*?\"<>|]+(/[^/\\\\\\x00-\\x1f\\x7f:*?\"<>|]+)*$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
         "deadline": {
           "title": "ConveneWire UTC Timestamp",
           "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
@@ -2139,6 +2202,69 @@
                               },
                               "required": {
                                 "type": "boolean"
+                              }
+                            }
+                          }
+                        },
+                        "capture": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "operationId",
+                            "rootTaskId",
+                            "outputs"
+                          ],
+                          "properties": {
+                            "operationId": {
+                              "type": "string",
+                              "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                            },
+                            "rootTaskId": {
+                              "type": "string",
+                              "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                            },
+                            "outputs": {
+                              "type": "array",
+                              "minItems": 1,
+                              "maxItems": 32,
+                              "items": {
+                                "type": "object",
+                                "additionalProperties": false,
+                                "required": [
+                                  "slotKey",
+                                  "title",
+                                  "summary",
+                                  "path"
+                                ],
+                                "properties": {
+                                  "slotKey": {
+                                    "type": "string",
+                                    "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+                                  },
+                                  "title": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 160
+                                  },
+                                  "summary": {
+                                    "type": "string",
+                                    "minLength": 1,
+                                    "maxLength": 4000
+                                  },
+                                  "path": {
+                                    "oneOf": [
+                                      {
+                                        "type": "string",
+                                        "minLength": 1,
+                                        "maxLength": 512,
+                                        "pattern": "^[^/\\\\\\x00-\\x1f\\x7f:*?\"<>|]+(/[^/\\\\\\x00-\\x1f\\x7f:*?\"<>|]+)*$"
+                                      },
+                                      {
+                                        "type": "null"
+                                      }
+                                    ]
+                                  }
+                                }
                               }
                             }
                           }
