@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import { createServerApp } from "../src/app.js";
 import { CoreRepository } from "../src/data/core-repository.js";
@@ -25,11 +25,13 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-29T10:00:00.000Z";
 
-async function createFixture() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-consistency-"));
+async function createFixture(t: TestContext) {
+  const resources = await createTestResources(t, "convene-wire-consistency-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
+  resources.defer(() => { if (database.open) database.close(); });
   const transactions = new SqliteTransactionBoundary(database);
   const core = new CoreRepository(database, transactions);
   const auth = new AuthService(database);
@@ -91,8 +93,8 @@ async function createFixture() {
   };
 }
 
-test("member Message and mentioned Runs commit atomically and repair an old retry", async () => {
-  const fixture = await createFixture();
+test("member Message and mentioned Runs commit atomically and repair an old retry", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const input = {
       roomId: fixture.room.roomId,
@@ -156,8 +158,8 @@ test("member Message and mentioned Runs commit atomically and repair an old retr
   }
 });
 
-test("manual completion rolls claim, reply Message, and terminal status back together", async () => {
-  const fixture = await createFixture();
+test("manual completion rolls claim, reply Message, and terminal status back together", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const routed = fixture.memberMessageRuns.create(fixture.principal, {
       roomId: fixture.room.roomId,
@@ -236,8 +238,8 @@ test("manual completion rolls claim, reply Message, and terminal status back tog
   }
 });
 
-test("startup restores orphaned mentioned Messages with original deadlines exactly once", async () => {
-  const fixture = await createFixture();
+test("startup restores orphaned mentioned Messages with original deadlines exactly once", async (t) => {
+  const fixture = await createFixture(t);
   const staleCreatedAt = now;
   const freshCreatedAt = "2026-08-29T10:20:00.000Z";
   const recoveryTime = "2026-08-29T10:30:00.000Z";
@@ -325,8 +327,8 @@ test("startup restores orphaned mentioned Messages with original deadlines exact
   }
 });
 
-test("startup leaves a fresh orphan Message unrouted while its Task is not runnable", async () => {
-  const fixture = await createFixture();
+test("startup leaves a fresh orphan Message unrouted while its Task is not runnable", async (t) => {
+  const fixture = await createFixture(t);
   const message = fixture.messages.createMemberMessage(fixture.principal, {
     roomId: fixture.room.roomId,
     content: "Wait until the Task is runnable again",
@@ -376,8 +378,8 @@ test("startup leaves a fresh orphan Message unrouted while its Task is not runna
   }
 });
 
-test("Server startup runs the durable Member Message projection recovery", async () => {
-  const fixture = await createFixture();
+test("Server startup runs the durable Member Message projection recovery", async (t) => {
+  const fixture = await createFixture(t);
   const message = fixture.messages.createMemberMessage(fixture.principal, {
     roomId: fixture.room.roomId,
     content: "Recover this during Server startup",
@@ -410,8 +412,8 @@ test("Server startup runs the durable Member Message projection recovery", async
   }
 });
 
-test("startup reconciles legacy reply Messages by exact durable identity", async () => {
-  const fixture = await createFixture();
+test("startup reconciles legacy reply Messages by exact durable identity", async (t) => {
+  const fixture = await createFixture(t);
   const eventCreatedAt = "2026-08-29T10:05:00.000Z";
   const recoveryTime = "2026-08-29T10:06:00.000Z";
   const cases = [

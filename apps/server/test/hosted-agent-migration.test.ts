@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import {
   mkdir,
-  mkdtemp,
   readFile,
   readdir,
   writeFile
 } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import Database from "better-sqlite3";
 
@@ -20,8 +20,8 @@ import {
 
 const now = "2026-08-30T08:00:00.000Z";
 
-async function temporaryDirectory(name: string): Promise<string> {
-  return mkdtemp(path.join(os.tmpdir(), `convene-wire-${name}-`));
+async function temporaryDirectory(t: TestContext, name: string): Promise<string> {
+  return (await createTestResources(t, `convene-wire-${name}-`)).directory;
 }
 
 async function copyMigrationsBefore(
@@ -50,8 +50,8 @@ async function writeMigration(
   await writeFile(path.join(directory, filename), sql, "utf8");
 }
 
-test("Hosted migration preserves version-51 Agent foreign-key graphs", async () => {
-  const directory = await temporaryDirectory("hosted-upgrade");
+test("Hosted migration preserves version-51 Agent foreign-key graphs", async (t) => {
+  const directory = await temporaryDirectory(t, "hosted-upgrade");
   const databasePath = path.join(directory, "server.sqlite");
   const legacyMigrations = path.join(directory, "legacy-migrations");
   await copyMigrationsBefore(legacyMigrations, "0052_");
@@ -426,8 +426,8 @@ test("Hosted migration preserves version-51 Agent foreign-key graphs", async () 
   }
 });
 
-test("foreign-key-off migration rolls back when its final graph is invalid", async () => {
-  const directory = await temporaryDirectory("migration-fk-rollback");
+test("foreign-key-off migration rolls back when its final graph is invalid", async (t) => {
+  const directory = await temporaryDirectory(t, "migration-fk-rollback");
   const migrations = path.join(directory, "migrations");
   const databasePath = path.join(directory, "server.sqlite");
   await writeMigration(migrations, "0001_parent.sql", `
@@ -468,8 +468,8 @@ test("foreign-key-off migration rolls back when its final graph is invalid", asy
   }
 });
 
-test("foreign-key-off migration restores enforcement before the next migration", async () => {
-  const directory = await temporaryDirectory("migration-fk-restore");
+test("foreign-key-off migration restores enforcement before the next migration", async (t) => {
+  const directory = await temporaryDirectory(t, "migration-fk-restore");
   const migrations = path.join(directory, "migrations");
   const databasePath = path.join(directory, "server.sqlite");
   await writeMigration(migrations, "0001_parent.sql", `
@@ -509,8 +509,8 @@ test("foreign-key-off migration restores enforcement before the next migration",
   }
 });
 
-test("migration directives are accepted only as the exact first line", async () => {
-  const directory = await temporaryDirectory("migration-directive");
+test("migration directives are accepted only as the exact first line", async (t) => {
+  const directory = await temporaryDirectory(t, "migration-directive");
   const invalidSources = [
     `
 -- convenewire:migration foreign_keys=off

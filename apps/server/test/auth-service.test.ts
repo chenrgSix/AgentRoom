@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
@@ -20,12 +20,14 @@ const teamId = "team_01K4Z6J7Y8N9P0Q1R2S3T4V5W6";
 const memberId = "member_01K4Z6J7Y8N9P0Q1R2S3T4V5W6";
 const deviceId = "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6";
 
-async function createFixture() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-auth-"));
+async function createFixture(t: TestContext) {
+  const resources = await createTestResources(t, "convene-wire-auth-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   await prepareDatabaseDirectory(databasePath);
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
+  resources.defer(() => { if (database.open) database.close(); });
   const repository = new CoreRepository(database);
   repository.createUser({ userId, displayName: "Alice", createdAt: now });
   repository.createTeamWithOwner(
@@ -51,8 +53,8 @@ async function createFixture() {
   return { auth: new AuthService(database), database };
 }
 
-test("web sessions store only hashes and authorize Team membership", async () => {
-  const { auth, database } = await createFixture();
+test("web sessions store only hashes and authorize Team membership", async (t) => {
+  const { auth, database } = await createFixture(t);
   try {
     const issued = auth.issueWebSession(userId, now, future);
     const stored = database.prepare(`
@@ -77,8 +79,8 @@ test("web sessions store only hashes and authorize Team membership", async () =>
   }
 });
 
-test("forged, expired, and revoked web sessions are rejected", async () => {
-  const { auth, database } = await createFixture();
+test("forged, expired, and revoked web sessions are rejected", async (t) => {
+  const { auth, database } = await createFixture(t);
   try {
     assert.throws(
       () => auth.authenticateWebSession("forged-token", now),
@@ -104,8 +106,8 @@ test("forged, expired, and revoked web sessions are rejected", async () => {
   }
 });
 
-test("device credentials rotate and revoke without persisting the secret", async () => {
-  const { auth, database } = await createFixture();
+test("device credentials rotate and revoke without persisting the secret", async (t) => {
+  const { auth, database } = await createFixture(t);
   try {
     const first = auth.issueDeviceCredential(deviceId, now);
     assert.equal(auth.authenticateDevice(first.secret, now).deviceId, deviceId);
@@ -125,8 +127,8 @@ test("device credentials rotate and revoke without persisting the secret", async
   }
 });
 
-test("successful authentication coalesces activity timestamp writes", async () => {
-  const { auth, database } = await createFixture();
+test("successful authentication coalesces activity timestamp writes", async (t) => {
+  const { auth, database } = await createFixture(t);
   try {
     const oneMinuteLater = "2026-08-22T10:01:00.000Z";
     const sixMinutesLater = "2026-08-22T10:06:00.000Z";

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
 import { execFile, spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdtemp, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { createServerApp } from "../../apps/server/src/app.js";
+import { createTestResources } from "../../scripts/test/resources.mjs";
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -33,8 +33,9 @@ async function stopProcess(process: ChildProcess): Promise<void> {
   ]);
 }
 
-async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<void> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-e2e-"));
+async function verifyManagedBridge(t: TestContext, shareReasoningSummaries: boolean): Promise<void> {
+  const resources = await createTestResources(t, "convene-wire-e2e-");
+  const directory = resources.directory;
   const bridgeServerToken = "managed-e2e-central-token-12345678901234567890";
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
@@ -580,5 +581,5 @@ async function verifyManagedBridge(shareReasoningSummaries: boolean): Promise<vo
 for (const shareReasoningSummaries of [false, true]) {
   test(`Web Mention and managed Result complete through a paired Go Bridge with reasoning sharing ${shareReasoningSummaries ? "enabled" : "disabled by default"}`, {
     timeout: 60_000
-  }, () => verifyManagedBridge(shareReasoningSummaries));
+  }, (t) => verifyManagedBridge(t, shareReasoningSummaries));
 }

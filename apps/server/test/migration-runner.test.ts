@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, readdir, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import Database from "better-sqlite3";
 
@@ -18,12 +19,12 @@ import { RunRepository } from "../src/run/run-repository.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
-async function temporaryDirectory(name: string): Promise<string> {
-  return mkdtemp(path.join(os.tmpdir(), `convene-wire-${name}-`));
+async function temporaryDirectory(t: TestContext, name: string): Promise<string> {
+  return (await createTestResources(t, `convene-wire-${name}-`)).directory;
 }
 
-test("an empty database migrates from zero and reruns idempotently", async () => {
-  const directory = await temporaryDirectory("migration");
+test("an empty database migrates from zero and reruns idempotently", async (t) => {
+  const directory = await temporaryDirectory(t, "migration");
   const databasePath = path.join(directory, "nested", "server.sqlite");
   await prepareDatabaseDirectory(databasePath);
 
@@ -199,8 +200,8 @@ test("an empty database migrates from zero and reruns idempotently", async () =>
   }
 });
 
-test("Discussion Wave migration preserves legacy singleton Turns", async () => {
-  const directory = await temporaryDirectory("wave-migration");
+test("Discussion Wave migration preserves legacy singleton Turns", async (t) => {
+  const directory = await temporaryDirectory(t, "wave-migration");
   const databasePath = path.join(directory, "server.sqlite");
   const legacyMigrations = path.join(directory, "legacy-migrations");
   await mkdir(legacyMigrations, { recursive: true });
@@ -329,8 +330,8 @@ test("Discussion Wave migration preserves legacy singleton Turns", async () => {
   }
 });
 
-test("Runtime activity migration preserves pending reply routing intents", async () => {
-  const directory = await temporaryDirectory("activity-migration");
+test("Runtime activity migration preserves pending reply routing intents", async (t) => {
+  const directory = await temporaryDirectory(t, "activity-migration");
   const databasePath = path.join(directory, "server.sqlite");
   const legacyMigrations = path.join(directory, "legacy-migrations");
   await mkdir(legacyMigrations, { recursive: true });
@@ -467,8 +468,8 @@ test("Runtime activity migration preserves pending reply routing intents", async
   }
 });
 
-test("Task work migration maps legacy state and replaces a terminal default", async () => {
-  const directory = await temporaryDirectory("task-work-migration");
+test("Task work migration maps legacy state and replaces a terminal default", async (t) => {
+  const directory = await temporaryDirectory(t, "task-work-migration");
   const databasePath = path.join(directory, "server.sqlite");
   const legacyMigrations = path.join(directory, "legacy-migrations");
   await mkdir(legacyMigrations, { recursive: true });
@@ -608,8 +609,8 @@ test("Task work migration maps legacy state and replaces a terminal default", as
   }
 });
 
-test("an applied migration cannot be changed", async () => {
-  const directory = await temporaryDirectory("checksum");
+test("an applied migration cannot be changed", async (t) => {
+  const directory = await temporaryDirectory(t, "checksum");
   const databasePath = path.join(directory, "server.sqlite");
   const migrationsDirectory = path.join(directory, "migrations");
   await prepareDatabaseDirectory(databasePath);
@@ -628,8 +629,8 @@ test("an applied migration cannot be changed", async () => {
   );
 });
 
-test("a failed migration rolls back its own schema changes", async () => {
-  const directory = await temporaryDirectory("rollback");
+test("a failed migration rolls back its own schema changes", async (t) => {
+  const directory = await temporaryDirectory(t, "rollback");
   const databasePath = path.join(directory, "server.sqlite");
   const migrationsDirectory = path.join(directory, "migrations");
   await prepareDatabaseDirectory(databasePath);

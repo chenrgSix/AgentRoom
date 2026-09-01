@@ -1,16 +1,16 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import {
-  mkdtemp,
   readFile,
   rename,
   symlink,
   utimes,
   writeFile
 } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
+
+import { createTestResources } from "../test/resources.mjs";
 
 import Database from "better-sqlite3";
 
@@ -319,8 +319,9 @@ convenewire_run_event_lag_seconds 0
 convenewire_runs{state="completed"} 2
 `;
 
-async function fixture() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-qa002-evidence-"));
+async function fixture(t) {
+  const resources = await createTestResources(t, "convene-wire-qa002-evidence-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   const database = new Database(databasePath);
   seed(database);
@@ -344,8 +345,8 @@ async function fixture() {
   return { directory, databasePath, inputPath, metricsPath, outputPath };
 }
 
-test("physical evidence capture cross-checks Runs and writes only sanitized facts", async () => {
-  const files = await fixture();
+test("physical evidence capture cross-checks Runs and writes only sanitized facts", async (t) => {
+  const files = await fixture(t);
   const source = input();
   delete source.secondAgentId;
   await writeFile(files.inputPath, JSON.stringify(source));
@@ -392,8 +393,8 @@ test("physical evidence capture cross-checks Runs and writes only sanitized fact
   }), /EEXIST|exist/iu);
 });
 
-test("physical evidence capture accepts the public system-CA profile", async () => {
-  const files = await fixture();
+test("physical evidence capture accepts the public system-CA profile", async (t) => {
+  const files = await fixture(t);
   const source = input({
     tlsProfile: "public_ca",
     httpsVerificationMethod: "public system CA"
@@ -419,8 +420,8 @@ test("physical evidence capture accepts the public system-CA profile", async () 
   assert.match(output, /exactly one `consumed` session/u);
 });
 
-test("physical evidence capture computes artifact and running source identity", async () => {
-  const tamperedArtifact = await fixture();
+test("physical evidence capture computes artifact and running source identity", async (t) => {
+  const tamperedArtifact = await fixture(t);
   const source = input();
   delete source.secondAgentId;
   await writeFile(tamperedArtifact.inputPath, JSON.stringify(source));
@@ -435,7 +436,7 @@ test("physical evidence capture computes artifact and running source identity", 
     outputPath: tamperedArtifact.outputPath
   }), /computed Bridge installer SHA-256 does not match input/u);
 
-  const mismatchedRelease = await fixture();
+  const mismatchedRelease = await fixture(t);
   await writeFile(mismatchedRelease.inputPath, JSON.stringify(source));
   await writeFile(
     path.join(mismatchedRelease.directory, "SHA256SUMS"),
@@ -448,7 +449,7 @@ test("physical evidence capture computes artifact and running source identity", 
     outputPath: mismatchedRelease.outputPath
   }), /does not match Release SHA256SUMS/u);
 
-  const mismatchedRuntime = await fixture();
+  const mismatchedRuntime = await fixture(t);
   await writeFile(mismatchedRuntime.inputPath, JSON.stringify(source));
   await writeFile(
     mismatchedRuntime.metricsPath,
@@ -468,7 +469,7 @@ test("physical evidence capture computes artifact and running source identity", 
     outputPath: mismatchedRuntime.outputPath
   }), /running Central build identity does not match the selected Release/u);
 
-  const duplicateChecksum = await fixture();
+  const duplicateChecksum = await fixture(t);
   await writeFile(duplicateChecksum.inputPath, JSON.stringify(source));
   await writeFile(
     path.join(duplicateChecksum.directory, "SHA256SUMS"),
@@ -481,7 +482,7 @@ test("physical evidence capture computes artifact and running source identity", 
     outputPath: duplicateChecksum.outputPath
   }), /duplicate entry/u);
 
-  const duplicateBuild = await fixture();
+  const duplicateBuild = await fixture(t);
   await writeFile(duplicateBuild.inputPath, JSON.stringify(source));
   await writeFile(duplicateBuild.metricsPath, `${metrics}${metrics.split("\n")[1]}\n`);
   await utimes(
@@ -496,7 +497,7 @@ test("physical evidence capture computes artifact and running source identity", 
     outputPath: duplicateBuild.outputPath
   }), /exactly one ConveneWire build identity/u);
 
-  const linkedArtifact = await fixture();
+  const linkedArtifact = await fixture(t);
   await writeFile(linkedArtifact.inputPath, JSON.stringify(source));
   const linkedPath = path.join(linkedArtifact.directory, bridgeArchiveName);
   const targetPath = path.join(linkedArtifact.directory, "installer-fixture.bin");
@@ -510,8 +511,8 @@ test("physical evidence capture computes artifact and running source identity", 
   }), /must be one non-empty regular file/u);
 });
 
-test("physical evidence capture fails closed on unsafe or unbound desktop ZIPs", async () => {
-  const tampered = await fixture();
+test("physical evidence capture fails closed on unsafe or unbound desktop ZIPs", async (t) => {
+  const tampered = await fixture(t);
   const source = input();
   delete source.secondAgentId;
   await writeFile(tampered.inputPath, JSON.stringify(source));
@@ -549,7 +550,7 @@ test("physical evidence capture fails closed on unsafe or unbound desktop ZIPs",
       /expected exactly one/u
     ]
   ]) {
-    const files = await fixture();
+    const files = await fixture(t);
     const digest = createHash("sha256").update(archive).digest("hex");
     const archiveBoundInput = input({ bridgeDesktopArchiveSha256: digest });
     delete archiveBoundInput.secondAgentId;
@@ -569,7 +570,7 @@ test("physical evidence capture fails closed on unsafe or unbound desktop ZIPs",
   }
 });
 
-test("the runbook schema-v4 sample stays structurally aligned with the verifier", async () => {
+test("the runbook schema-v4 sample stays structurally aligned with the verifier", async (t) => {
   const runbook = await readFile(new URL(
     "../../docs/acceptance/qa-002-two-machine-managed-agent.md",
     import.meta.url
@@ -591,8 +592,8 @@ test("the runbook schema-v4 sample stays structurally aligned with the verifier"
   );
 });
 
-test("physical evidence capture rejects stale or inconsistent TLS evidence", async () => {
-  const files = await fixture();
+test("physical evidence capture rejects stale or inconsistent TLS evidence", async (t) => {
+  const files = await fixture(t);
   const legacy = input({ schemaVersion: 1 });
   delete legacy.secondAgentId;
   await writeFile(files.inputPath, JSON.stringify(legacy));
@@ -654,8 +655,8 @@ test("physical evidence capture rejects stale or inconsistent TLS evidence", asy
   }
 });
 
-test("physical evidence capture binds TLS claims to one consumed pairing", async () => {
-  const files = await fixture();
+test("physical evidence capture binds TLS claims to one consumed pairing", async (t) => {
+  const files = await fixture(t);
   const source = input();
   delete source.secondAgentId;
   await writeFile(files.inputPath, JSON.stringify(source));
@@ -708,8 +709,8 @@ test("physical evidence capture binds TLS claims to one consumed pairing", async
   await assert.rejects(capture, /consumed pairing does not match public_ca/u);
 });
 
-test("physical evidence capture binds the package build to authenticated hello state", async () => {
-  const files = await fixture();
+test("physical evidence capture binds the package build to authenticated hello state", async (t) => {
+  const files = await fixture(t);
   const source = input();
   delete source.secondAgentId;
   await writeFile(files.inputPath, JSON.stringify(source));
@@ -726,7 +727,7 @@ test("physical evidence capture binds the package build to authenticated hello s
     outputPath: files.outputPath
   }), /current authenticated Bridge build observation does not match/u);
 
-  const sourceFiles = await fixture();
+  const sourceFiles = await fixture(t);
   await writeFile(sourceFiles.inputPath, JSON.stringify(source));
   const sourceDatabase = new Database(sourceFiles.databasePath);
   sourceDatabase.prepare(`
@@ -740,7 +741,7 @@ test("physical evidence capture binds the package build to authenticated hello s
     outputPath: sourceFiles.outputPath
   }), /current authenticated Bridge build observation does not match/u);
 
-  const executableFiles = await fixture();
+  const executableFiles = await fixture(t);
   await writeFile(executableFiles.inputPath, JSON.stringify(source));
   const executableDatabase = new Database(executableFiles.databasePath);
   executableDatabase.prepare(`
@@ -755,8 +756,8 @@ test("physical evidence capture binds the package build to authenticated hello s
   }), /current authenticated Bridge build observation does not match/u);
 });
 
-test("physical evidence capture binds every observation to one bounded time window", async () => {
-  const files = await fixture();
+test("physical evidence capture binds every observation to one bounded time window", async (t) => {
+  const files = await fixture(t);
   const future = input({
     utcStart: "2026-08-29T10:00:00.000Z",
     utcEnd: "2026-08-29T10:10:00.000Z",
@@ -820,8 +821,8 @@ test("physical evidence capture binds every observation to one bounded time wind
   }), /review currentBuildExecutionConfirmed must be true/u);
 });
 
-test("physical evidence capture binds metrics to the live observed connection", async () => {
-  const files = await fixture();
+test("physical evidence capture binds metrics to the live observed connection", async (t) => {
+  const files = await fixture(t);
   const source = input();
   delete source.secondAgentId;
   await writeFile(files.inputPath, JSON.stringify(source));
@@ -845,7 +846,7 @@ test("physical evidence capture binds metrics to the live observed connection", 
   stale.close();
   await assert.rejects(capture, /current Bridge heartbeat was stale/u);
 
-  const displacedFiles = await fixture();
+  const displacedFiles = await fixture(t);
   await writeFile(displacedFiles.inputPath, JSON.stringify(source));
   const displacedTime = new Date("2026-08-28T10:08:00.000Z");
   await utimes(displacedFiles.metricsPath, displacedTime, displacedTime);
@@ -857,8 +858,8 @@ test("physical evidence capture binds metrics to the live observed connection", 
   }), /metricsCapturedAt does not match the metrics snapshot file time/u);
 });
 
-test("physical evidence capture proves current-build online and reconnect execution", async () => {
-  const onlineFiles = await fixture();
+test("physical evidence capture proves current-build online and reconnect execution", async (t) => {
+  const onlineFiles = await fixture(t);
   const source = input();
   delete source.secondAgentId;
   await writeFile(onlineFiles.inputPath, JSON.stringify(source));
@@ -882,7 +883,7 @@ test("physical evidence capture proves current-build online and reconnect execut
     outputPath: onlineFiles.outputPath
   }), /online Run was not created on the current Bridge connection/u);
 
-  const reconnectFiles = await fixture();
+  const reconnectFiles = await fixture(t);
   await writeFile(reconnectFiles.inputPath, JSON.stringify(source));
   const reconnectDatabase = new Database(reconnectFiles.databasePath);
   reconnectDatabase.prepare(`
@@ -906,7 +907,7 @@ test("physical evidence capture proves current-build online and reconnect execut
     outputPath: reconnectFiles.outputPath
   }), /reconnect Run was not queued before the current Bridge connection/u);
 
-  const acceptedFiles = await fixture();
+  const acceptedFiles = await fixture(t);
   await writeFile(acceptedFiles.inputPath, JSON.stringify(source));
   const acceptedDatabase = new Database(acceptedFiles.databasePath);
   acceptedDatabase.prepare(`
@@ -923,7 +924,7 @@ test("physical evidence capture proves current-build online and reconnect execut
     outputPath: acceptedFiles.outputPath
   }), /reconnect Delivery was not sent and accepted on the current Bridge connection/u);
 
-  const reorderedFiles = await fixture();
+  const reorderedFiles = await fixture(t);
   await writeFile(reorderedFiles.inputPath, JSON.stringify(source));
   const reorderedDatabase = new Database(reorderedFiles.databasePath);
   reorderedDatabase.prepare(`
@@ -940,8 +941,8 @@ test("physical evidence capture proves current-build online and reconnect execut
   }), /online Message, Run and Delivery timestamps are not ordered/u);
 });
 
-test("physical evidence capture rejects private host details and false reconnect scope", async () => {
-  const files = await fixture();
+test("physical evidence capture rejects private host details and false reconnect scope", async (t) => {
+  const files = await fixture(t);
   const unsafe = input({ machineB: "client at 192.168.1.44" });
   delete unsafe.secondAgentId;
   await writeFile(files.inputPath, JSON.stringify(unsafe));

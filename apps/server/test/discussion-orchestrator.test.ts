@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import type Database from "better-sqlite3";
 
@@ -39,9 +39,11 @@ interface OrchestratorFixture {
 }
 
 async function fixture(
+  t: TestContext,
   clock: { value: string } = { value: now }
 ): Promise<OrchestratorFixture> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-orchestrator-"));
+  const resources = await createTestResources(t, "convene-wire-orchestrator-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
@@ -88,13 +90,18 @@ async function fixture(
     },
     now
   }).agentId);
+  let closed = false;
+  const close = (): void => {
+    if (closed) return;
+    closed = true;
+    for (const restartedDatabase of restartedDatabases.reverse()) {
+      if (restartedDatabase.open) restartedDatabase.close();
+    }
+    if (database.open) database.close();
+  };
+  resources.defer(close);
   return {
-    close: () => {
-      for (const restartedDatabase of restartedDatabases.reverse()) {
-        restartedDatabase.close();
-      }
-      database.close();
-    },
+    close,
     clock,
     core,
     database,
@@ -207,8 +214,8 @@ function sortedRunIds(runs: readonly RunRecord[]): string[] {
   return runs.map(({ runId }) => runId).sort();
 }
 
-test("Room policy can disable new Agent Discussions", async () => {
-  const environment = await fixture();
+test("Room policy can disable new Agent Discussions", async (t) => {
+  const environment = await fixture(t);
   try {
     environment.core.replaceRoomSettings(
       environment.roomId,
@@ -233,8 +240,8 @@ test("Room policy can disable new Agent Discussions", async () => {
   }
 });
 
-test("create fans one Wave out to every participant and advances only after its barrier", async () => {
-  const value = await fixture();
+test("create fans one Wave out to every participant and advances only after its barrier", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -331,9 +338,9 @@ test("create fans one Wave out to every participant and advances only after its 
   }
 });
 
-test("Wave aggregation is invariant to participant callback order", async () => {
+test("Wave aggregation is invariant to participant callback order", async (t) => {
   async function runInOrder(order: readonly number[]) {
-    const value = await fixture();
+    const value = await fixture(t);
     try {
       let result = value.orchestrator.create(value.principal, {
         roomId: value.roomId,
@@ -398,8 +405,8 @@ test("Wave aggregation is invariant to participant callback order", async () => 
   assert.deepEqual(reverse.scheduledOrdinals, [0, 1]);
 });
 
-test("a partial Wave continues while an all-failed Wave waits for a human", async () => {
-  const partial = await fixture();
+test("a partial Wave continues while an all-failed Wave waits for a human", async (t) => {
+  const partial = await fixture(t);
   try {
     let result = partial.orchestrator.create(partial.principal, {
       roomId: partial.roomId,
@@ -433,7 +440,7 @@ test("a partial Wave continues while an all-failed Wave waits for a human", asyn
     partial.close();
   }
 
-  const allFailed = await fixture();
+  const allFailed = await fixture(t);
   try {
     let result = allFailed.orchestrator.create(allFailed.principal, {
       roomId: allFailed.roomId,
@@ -460,8 +467,8 @@ test("a partial Wave continues while an all-failed Wave waits for a human", asyn
   }
 });
 
-test("cancel returns every active Wave Run id", async () => {
-  const value = await fixture();
+test("cancel returns every active Wave Run id", async (t) => {
+  const value = await fixture(t);
   try {
     const created = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -486,8 +493,8 @@ test("cancel returns every active Wave Run id", async () => {
   }
 });
 
-test("automatic completion waits for the Wave barrier then schedules one finalizer", async () => {
-  const value = await fixture();
+test("automatic completion waits for the Wave barrier then schedules one finalizer", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -556,8 +563,8 @@ test("automatic completion waits for the Wave barrier then schedules one finaliz
   }
 });
 
-test("continue after an all-failed Wave uses a fresh system anchor", async () => {
-  const value = await fixture();
+test("continue after an all-failed Wave uses a fresh system anchor", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -597,8 +604,8 @@ test("continue after an all-failed Wave uses a fresh system anchor", async () =>
   }
 });
 
-test("expired Wave members converge to waiting_human at the durable deadline", async () => {
-  const value = await fixture();
+test("expired Wave members converge to waiting_human at the durable deadline", async (t) => {
+  const value = await fixture(t);
   try {
     const created = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -630,8 +637,8 @@ test("expired Wave members converge to waiting_human at the durable deadline", a
   }
 });
 
-test("a working Wave member becomes outcome_unknown when the deadline passes", async () => {
-  const value = await fixture();
+test("a working Wave member becomes outcome_unknown when the deadline passes", async (t) => {
+  const value = await fixture(t);
   try {
     const created = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -666,8 +673,8 @@ test("a working Wave member becomes outcome_unknown when the deadline passes", a
   }
 });
 
-test("input_required waits for the Wave barrier before selecting its state reason", async () => {
-  const value = await fixture();
+test("input_required waits for the Wave barrier before selecting its state reason", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -715,8 +722,8 @@ test("input_required waits for the Wave barrier before selecting its state reaso
   }
 });
 
-test("finalizing rejects goal and pause changes while repeated finish is idempotent", async () => {
-  const value = await fixture();
+test("finalizing rejects goal and pause changes while repeated finish is idempotent", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -781,8 +788,8 @@ test("finalizing rejects goal and pause changes while repeated finish is idempot
   }
 });
 
-test("recovery terminates queued Runs and closes a canceled Wave", async () => {
-  const value = await fixture();
+test("recovery terminates queued Runs and closes a canceled Wave", async (t) => {
+  const value = await fixture(t);
   try {
     const created = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -818,8 +825,8 @@ test("recovery terminates queued Runs and closes a canceled Wave", async () => {
   }
 });
 
-test("a disabled participant is omitted from the next Wave", async () => {
-  const value = await fixture();
+test("a disabled participant is omitted from the next Wave", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -860,8 +867,8 @@ test("a disabled participant is omitted from the next Wave", async () => {
   }
 });
 
-test("recovery resumes an atomically planned Wave across the Run bind cut", async () => {
-  const value = await fixture();
+test("recovery resumes an atomically planned Wave across the Run bind cut", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -935,8 +942,8 @@ test("recovery resumes an atomically planned Wave across the Run bind cut", asyn
   }
 });
 
-test("recovery preserves a partially settled Wave until its remaining member finishes", async () => {
-  const value = await fixture();
+test("recovery preserves a partially settled Wave until its remaining member finishes", async (t) => {
+  const value = await fixture(t);
   try {
     const created = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -1009,12 +1016,12 @@ test("recovery preserves a partially settled Wave until its remaining member fin
   }
 });
 
-test("Wave result anchors and next transcripts ignore callback and Room arrival order", async () => {
+test("Wave result anchors and next transcripts ignore callback and Room arrival order", async (t) => {
   async function converge(
     arrivalOrder: readonly number[],
     callbackOrder: readonly number[]
   ): Promise<{ anchorContent: string; transcripts: string[] }> {
-    const value = await fixture();
+    const value = await fixture(t);
     try {
       let result = value.orchestrator.create(value.principal, {
         roomId: value.roomId,
@@ -1085,8 +1092,8 @@ test("Wave result anchors and next transcripts ignore callback and Room arrival 
   }
 });
 
-test("recovery reuses a Wave result anchor written before barrier closure", async () => {
-  const value = await fixture();
+test("recovery reuses a Wave result anchor written before barrier closure", async (t) => {
+  const value = await fixture(t);
   try {
     const created = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -1159,8 +1166,8 @@ test("recovery reuses a Wave result anchor written before barrier closure", asyn
   }
 });
 
-test("next Wave context keeps exactly the newest 24 participant-ordered messages", async () => {
-  const value = await fixture();
+test("next Wave context keeps exactly the newest 24 participant-ordered messages", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -1205,8 +1212,8 @@ test("next Wave context keeps exactly the newest 24 participant-ordered messages
   }
 });
 
-test("startup recovery expires a due planned Wave instead of dispatching it", async () => {
-  const value = await fixture();
+test("startup recovery expires a due planned Wave instead of dispatching it", async (t) => {
+  const value = await fixture(t);
   try {
     const created = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -1243,8 +1250,8 @@ test("startup recovery expires a due planned Wave instead of dispatching it", as
   }
 });
 
-test("startup recovery does not create a Wave for an already expired no-Wave Discussion", async () => {
-  const value = await fixture();
+test("startup recovery does not create a Wave for an already expired no-Wave Discussion", async (t) => {
+  const value = await fixture(t);
   try {
     const created = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -1283,8 +1290,8 @@ test("startup recovery does not create a Wave for an already expired no-Wave Dis
   }
 });
 
-test("hard budget termination outranks loss of every eligible participant", async () => {
-  const value = await fixture();
+test("hard budget termination outranks loss of every eligible participant", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,
@@ -1343,8 +1350,8 @@ test("hard budget termination outranks loss of every eligible participant", asyn
   }
 });
 
-test("soft-boundary recovery never fabricates a user extension", async () => {
-  const value = await fixture();
+test("soft-boundary recovery never fabricates a user extension", async (t) => {
+  const value = await fixture(t);
   try {
     let result = value.orchestrator.create(value.principal, {
       roomId: value.roomId,

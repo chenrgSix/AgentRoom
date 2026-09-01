@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import {
   BridgeConnectionRegistry,
@@ -41,7 +41,7 @@ class CapturingSocket implements BridgeSocket {
   }
 }
 
-async function createFixture(): Promise<{
+async function createFixture(t: TestContext): Promise<{
   databasePath: string;
   database: ReturnType<typeof openDatabase>;
   core: CoreRepository;
@@ -58,10 +58,12 @@ async function createFixture(): Promise<{
   socket: CapturingSocket;
   runs: RunRepository;
 }> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-revoke-"));
+  const resources = await createTestResources(t, "convene-wire-revoke-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
+  resources.defer(() => { if (database.open) database.close(); });
   const core = new CoreRepository(database);
   const auth = new AuthService(database);
   const teams = new TeamRoomService(core, auth);
@@ -170,8 +172,8 @@ async function createFixture(): Promise<{
   };
 }
 
-test("Device revocation distinguishes pending from accepted Run outcomes", async () => {
-  const fixture = await createFixture();
+test("Device revocation distinguishes pending from accepted Run outcomes", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const service = new DeviceRevocationService(
       fixture.registry,
@@ -227,8 +229,8 @@ test("Device revocation distinguishes pending from accepted Run outcomes", async
   }
 });
 
-test("startup recovery closes Runs left behind after durable Device revoke", async () => {
-  const fixture = await createFixture();
+test("startup recovery closes Runs left behind after durable Device revoke", async (t) => {
+  const fixture = await createFixture(t);
   fixture.registry.revokeDevice(
     fixture.principal,
     fixture.teamId,

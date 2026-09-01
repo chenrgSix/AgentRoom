@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
@@ -13,11 +13,13 @@ import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
 const now = "2026-08-22T10:00:00.000Z";
 
-async function createFixture() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-team-"));
+async function createFixture(t: TestContext) {
+  const resources = await createTestResources(t, "convene-wire-team-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
+  resources.defer(() => { if (database.open) database.close(); });
   const repository = new CoreRepository(database);
   const auth = new AuthService(database);
   return {
@@ -28,8 +30,8 @@ async function createFixture() {
   };
 }
 
-test("a user creates and reloads Teams and Rooms", async () => {
-  const { auth, database, service } = await createFixture();
+test("a user creates and reloads Teams and Rooms", async (t) => {
+  const { auth, database, service } = await createFixture(t);
   try {
     const created = service.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
@@ -55,8 +57,8 @@ test("a user creates and reloads Teams and Rooms", async () => {
   }
 });
 
-test("an Owner persists Room collaboration policy with participant settings", async () => {
-  const { auth, database, repository, service } = await createFixture();
+test("an Owner persists Room collaboration policy with participant settings", async (t) => {
+  const { auth, database, repository, service } = await createFixture(t);
   try {
     const created = service.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5P1",
@@ -147,8 +149,8 @@ test("an Owner persists Room collaboration policy with participant settings", as
   }
 });
 
-test("Room settings restore Hosted availability without clearing unrelated failures", async () => {
-  const { auth, database, repository, service } = await createFixture();
+test("Room settings restore Hosted availability without clearing unrelated failures", async (t) => {
+  const { auth, database, repository, service } = await createFixture(t);
   try {
     const created = service.createTeamForUser({
       userId: "user_hosted_room_settings_12345678",
@@ -211,8 +213,8 @@ test("Room settings restore Hosted availability without clearing unrelated failu
   }
 });
 
-test("a non-member cannot discover Team Rooms", async () => {
-  const { auth, database, repository, service } = await createFixture();
+test("a non-member cannot discover Team Rooms", async (t) => {
+  const { auth, database, repository, service } = await createFixture(t);
   try {
     const created = service.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
@@ -241,8 +243,8 @@ test("a non-member cannot discover Team Rooms", async () => {
   }
 });
 
-test("an Owner renames, archives, and restores Teams and Rooms without changing IDs", async () => {
-  const { auth, database, repository, service } = await createFixture();
+test("an Owner renames, archives, and restores Teams and Rooms without changing IDs", async (t) => {
+  const { auth, database, repository, service } = await createFixture(t);
   try {
     const created = service.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
@@ -428,8 +430,8 @@ test("an Owner renames, archives, and restores Teams and Rooms without changing 
   }
 });
 
-test("an Owner controls Room humans and Agents without deleting the Room", async () => {
-  const { auth, database, repository, service } = await createFixture();
+test("an Owner controls Room humans and Agents without deleting the Room", async (t) => {
+  const { auth, database, repository, service } = await createFixture(t);
   try {
     const created = service.createTeamForUser({
       userId: "user_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",

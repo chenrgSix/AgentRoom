@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
-import os from "node:os";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import { CoreRepository } from "../src/data/core-repository.js";
 import { backupDatabase } from "../src/data/backup.js";
@@ -29,15 +30,17 @@ import { TeamRoomService } from "../src/team-room/team-room-service.js";
 
 const now = "2026-08-30T03:00:00.000Z";
 
-async function fixture(options: {
+async function fixture(t: TestContext, options: {
   probe?: HostedProviderProbe;
   probePolicy?: HostedProviderProbePolicy;
   root?: ConstructorParameters<typeof HostedAgentRepository>[1];
 } = {}) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-hosted-config-"));
+  const resources = await createTestResources(t, "convene-wire-hosted-config-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
+  resources.defer(() => { if (database.open) database.close(); });
   const transactions = new SqliteTransactionBoundary(database);
   const core = new CoreRepository(database, transactions);
   const auth = new AuthService(database);
@@ -147,8 +150,8 @@ function connectionInput(teamId: string, signal?: AbortSignal) {
   };
 }
 
-test("Hosted Agent configuration is explicit, encrypted, revisioned, and recoverable", async () => {
-  const context = await fixture();
+test("Hosted Agent configuration is explicit, encrypted, revisioned, and recoverable", async (t) => {
+  const context = await fixture(t);
   const firstKey = "sk-first-hosted-secret";
   const secondKey = "sk-second-hosted-secret";
   try {
@@ -287,8 +290,8 @@ test("Hosted Agent configuration is explicit, encrypted, revisioned, and recover
   }
 });
 
-test("stale Hosted profile updates are rejected before provider dispatch", async () => {
-  const context = await fixture();
+test("stale Hosted profile updates are rejected before provider dispatch", async (t) => {
+  const context = await fixture(t);
   try {
     const created = await context.service.create(context.principal, {
       ...connectionInput(context.created.team.teamId),
@@ -320,8 +323,8 @@ test("stale Hosted profile updates are rejected before provider dispatch", async
   }
 });
 
-test("unavailable Hosted root authority rejects credential-bearing probes", async () => {
-  const context = await fixture({
+test("unavailable Hosted root authority rejects credential-bearing probes", async (t) => {
+  const context = await fixture(t, {
     root: {
       mode: "trusted_recovery",
       secret: "original-recovery-token-0123456789abcdef"
@@ -404,11 +407,11 @@ for (const operation of ["configured-test", "update-saved-key", "update-new-key"
   for (const change of ["revoked", "revised"] as const) {
     test(`queued ${operation} rejects a ${change} profile before provider dispatch`, {
       timeout: 5_000
-    }, async () => {
+    }, async (t) => {
       const held: Array<ReturnType<typeof deferred<HostedProviderProbeResult>>> = [];
       const slotsOccupied = deferred<void>();
       const providerModels: string[] = [];
-      const context = await fixture({
+      const context = await fixture(t, {
         probe: {
           async test(input) {
             providerModels.push(input.model);
@@ -501,11 +504,11 @@ for (const operation of ["configured-test", "update-saved-key", "update-new-key"
   }
 }
 
-test("queued work locks configuration and is rechecked after the provider probe", async () => {
+test("queued work locks configuration and is rechecked after the provider probe", async (t) => {
   const updateStarted = deferred<void>();
   const completeUpdateProbe = deferred<HostedProviderProbeResult>();
   let probeCalls = 0;
-  const context = await fixture({
+  const context = await fixture(t, {
     probe: {
       async test() {
         probeCalls += 1;
@@ -557,11 +560,11 @@ test("queued work locks configuration and is rechecked after the provider probe"
   }
 });
 
-test("credential revocation fences an in-flight profile replacement", async () => {
+test("credential revocation fences an in-flight profile replacement", async (t) => {
   const updateStarted = deferred<void>();
   const completeUpdateProbe = deferred<HostedProviderProbeResult>();
   let probeCalls = 0;
-  const context = await fixture({
+  const context = await fixture(t, {
     probe: {
       async test() {
         probeCalls += 1;
@@ -605,11 +608,11 @@ test("credential revocation fences an in-flight profile replacement", async () =
 });
 
 for (const change of ["busy", "revised"] as const) {
-  test(`a configured probe cannot overwrite ${change} Agent state`, async () => {
+  test(`a configured probe cannot overwrite ${change} Agent state`, async (t) => {
     const probeStarted = deferred<void>();
     const completeProbe = deferred<HostedProviderProbeResult>();
     let probeCalls = 0;
-    const context = await fixture({
+    const context = await fixture(t, {
       probe: {
         async test() {
           probeCalls += 1;
@@ -666,7 +669,7 @@ for (const change of ["busy", "revised"] as const) {
 
 test("a stalled provider fetch is aborted at the configuration probe deadline", {
   timeout: 2_000
-}, async () => {
+}, async (t) => {
   let transportSignal: AbortSignal | undefined;
   const started = deferred<void>();
   const stalledFetch: typeof fetch = async (_input, init) => {
@@ -679,7 +682,7 @@ test("a stalled provider fetch is aborted at the configuration probe deadline", 
       else init.signal!.addEventListener("abort", rejectAbort, { once: true });
     });
   };
-  const context = await fixture({
+  const context = await fixture(t, {
     probe: new HostedOpenAIResponsesProbe(stalledFetch),
     probePolicy: { deadlineMilliseconds: 50, maximumConcurrency: 2 }
   });
@@ -701,7 +704,7 @@ test("a stalled provider fetch is aborted at the configuration probe deadline", 
 
 test("all Hosted configuration operations share the same probe concurrency limit", {
   timeout: 5_000
-}, async () => {
+}, async (t) => {
   let holdProbes = false;
   let activeProbes = 0;
   let peakProbes = 0;
@@ -709,7 +712,7 @@ test("all Hosted configuration operations share the same probe concurrency limit
   const secondStarted = deferred<void>();
   const thirdStarted = deferred<void>();
   const fourthStarted = deferred<void>();
-  const context = await fixture({
+  const context = await fixture(t, {
     probe: {
       async test() {
         if (!holdProbes) return { status: "ready" };
@@ -780,10 +783,10 @@ test("all Hosted configuration operations share the same probe concurrency limit
 
 test("probes that ignore abort retain their slots while queued callers time out", {
   timeout: 2_000
-}, async () => {
+}, async (t) => {
   const probes: Array<ReturnType<typeof deferred<HostedProviderProbeResult>>> = [];
   const signals: AbortSignal[] = [];
-  const context = await fixture({
+  const context = await fixture(t, {
     probe: {
       async test(input) {
         assert.ok(input.signal);
@@ -819,10 +822,10 @@ test("probes that ignore abort retain their slots while queued callers time out"
 
 test("caller cancellation and service shutdown abort probes and queued work", {
   timeout: 2_000
-}, async () => {
+}, async (t) => {
   const signals: AbortSignal[] = [];
   const started: Array<ReturnType<typeof deferred<void>>> = [deferred(), deferred()];
-  const context = await fixture({
+  const context = await fixture(t, {
     probe: {
       async test(input) {
         assert.ok(input.signal);
@@ -878,8 +881,8 @@ test("caller cancellation and service shutdown abort probes and queued work", {
   }
 });
 
-test("Hosted Presence follows active Room membership and lifecycle", async () => {
-  const context = await fixture();
+test("Hosted Presence follows active Room membership and lifecycle", async (t) => {
+  const context = await fixture(t);
   try {
     const created = await context.service.create(context.principal, {
       teamId: context.created.team.teamId,
@@ -923,8 +926,8 @@ test("Hosted Presence follows active Room membership and lifecycle", async () =>
   }
 });
 
-test("Hosted configuration fails closed before persistence and enforces Owner scope", async () => {
-  const context = await fixture({
+test("Hosted configuration fails closed before persistence and enforces Owner scope", async (t) => {
+  const context = await fixture(t, {
     probe: {
       async test() {
         return {
@@ -993,12 +996,12 @@ test("Hosted configuration fails closed before persistence and enforces Owner sc
   }
 });
 
-test("trusted Hosted credential envelopes require the original recovery authority", async () => {
+test("trusted Hosted credential envelopes require the original recovery authority", async (t) => {
   const root = {
     mode: "trusted_recovery" as const,
     secret: "owner-recovery-token-0123456789abcdef"
   };
-  const context = await fixture({ root });
+  const context = await fixture(t, { root });
   try {
     const created = await context.service.create(context.principal, {
       teamId: context.created.team.teamId,

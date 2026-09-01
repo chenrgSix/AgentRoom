@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import {
   BridgeConnectionRegistry,
@@ -53,13 +53,13 @@ interface Fixture {
   traceId: string;
 }
 
-async function createWorkingRun(): Promise<Fixture> {
-  const directory = await mkdtemp(
-    path.join(os.tmpdir(), "convene-wire-cancellation-")
-  );
+async function createWorkingRun(t: TestContext): Promise<Fixture> {
+  const resources = await createTestResources(t, "convene-wire-cancellation-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
+  resources.defer(() => { if (database.open) database.close(); });
   const core = new CoreRepository(database);
   const auth = new AuthService(database);
   const teams = new TeamRoomService(core, auth);
@@ -179,8 +179,8 @@ async function createWorkingRun(): Promise<Fixture> {
   };
 }
 
-test("a persisted cancellation survives a crash before send and replays on hello", async () => {
-  const fixture = await createWorkingRun();
+test("a persisted cancellation survives a crash before send and replays on hello", async (t) => {
+  const fixture = await createWorkingRun(t);
   const messageId = "msg_cancellation_crash_boundary_12345678";
   fixture.runs.requestCancellation({
     runId: fixture.runId,
@@ -248,8 +248,8 @@ test("a persisted cancellation survives a crash before send and replays on hello
   }
 });
 
-test("socket writes and duplicate requests retain one frozen cancellation intent", async () => {
-  const fixture = await createWorkingRun();
+test("socket writes and duplicate requests retain one frozen cancellation intent", async (t) => {
+  const fixture = await createWorkingRun(t);
   try {
     const connections = new BridgeConnectionRegistry();
     const socket = new CapturingSocket();
@@ -300,8 +300,8 @@ test("socket writes and duplicate requests retain one frozen cancellation intent
   }
 });
 
-test("cancellation reasons truncate by Unicode code point without splitting astral text", async () => {
-  const fixture = await createWorkingRun();
+test("cancellation reasons truncate by Unicode code point without splitting astral text", async (t) => {
+  const fixture = await createWorkingRun(t);
   try {
     const connections = new BridgeConnectionRegistry();
     const socket = new CapturingSocket();
@@ -327,8 +327,8 @@ test("cancellation reasons truncate by Unicode code point without splitting astr
   }
 });
 
-test("only the frozen Device can acknowledge a terminal status and resolution stops replay", async () => {
-  const fixture = await createWorkingRun();
+test("only the frozen Device can acknowledge a terminal status and resolution stops replay", async (t) => {
+  const fixture = await createWorkingRun(t);
   try {
     const connections = new BridgeConnectionRegistry();
     const originalSocket = new CapturingSocket();
@@ -390,8 +390,8 @@ test("only the frozen Device can acknowledge a terminal status and resolution st
   }
 });
 
-test("an unacknowledged cancellation reaches outcome_unknown at its deadline", async () => {
-  const fixture = await createWorkingRun();
+test("an unacknowledged cancellation reaches outcome_unknown at its deadline", async (t) => {
+  const fixture = await createWorkingRun(t);
   try {
     let currentTime = "2026-08-29T08:00:10.000Z";
     const service = new CancellationService(
@@ -433,8 +433,8 @@ test("an unacknowledged cancellation reaches outcome_unknown at its deadline", a
   }
 });
 
-test("terminal Run state and cancellation resolution roll back together", async () => {
-  const fixture = await createWorkingRun();
+test("terminal Run state and cancellation resolution roll back together", async (t) => {
+  const fixture = await createWorkingRun(t);
   try {
     const service = new CancellationService(
       fixture.core,

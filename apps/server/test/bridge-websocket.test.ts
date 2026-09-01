@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 import Database from "better-sqlite3";
@@ -33,6 +33,7 @@ interface BridgeFixture {
   roomId: string;
   runId: string;
   traceId: string;
+  close(): Promise<void>;
 }
 
 interface CapturedLog extends Record<string, unknown> {
@@ -78,11 +79,7 @@ function send(socket: BridgeSocket, value: object): void {
 }
 
 test("execution capability handshake rejects unknown and ambiguous declarations without replacing a live epoch", { timeout: 30_000 }, async (t) => {
-  const fixture = await createFixture();
-  t.after(async () => {
-    await closeFixture(fixture);
-    await rm(path.dirname(fixture.databasePath), { recursive: true, force: true });
-  });
+  const fixture = await createFixture(t);
   const capability = {
     version: 1, workspaceBoundary: "enforced", preventivePathEnforcement: false,
     operations: ["prepare", "capture", "verify"]
@@ -197,17 +194,36 @@ async function waitFor(
 }
 
 async function createFixture(
+  t: TestContext,
   loggerInstance?: FastifyBaseLogger,
   supportsAgentProvisioning = true,
   agentLabels: { name?: string; role?: string } = {}
 ): Promise<BridgeFixture> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-bridge-ws-"));
+  const resources = await createTestResources(t, "convene-wire-bridge-ws-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({
     databasePath,
     clock: () => now,
     ...(loggerInstance ? { loggerInstance } : {})
   });
+  let socket: BridgeSocket | undefined;
+  let closed = false;
+  const close = async (): Promise<void> => {
+    if (closed) return;
+    closed = true;
+    for (const serverSocket of app.websocketServer.clients) {
+      serverSocket.terminate();
+    }
+    if (socket && socket.readyState < 2) {
+      const socketClosed = nextClose(socket);
+      socket.terminate();
+      await socketClosed;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+    await app.close();
+  };
+  resources.defer(close);
   await app.ready();
   const bootstrap = await app.inject({
     method: "POST",
@@ -249,7 +265,7 @@ async function createFixture(
     device: { deviceId: string; ownerMemberId: string; teamId: string };
     credential: { token: string };
   };
-  const socket = await app.injectWS("/ws/bridge", {
+  socket = await app.injectWS("/ws/bridge", {
     headers: {
       authorization: `Bearer ${paired.credential.token}`,
       host: "127.0.0.1"
@@ -323,21 +339,13 @@ async function createFixture(
     teamId: paired.device.teamId,
     roomId,
     runId: requested.payload.runId as string,
-    traceId: requested.payload.traceId as string
+    traceId: requested.payload.traceId as string,
+    close
   };
 }
 
 async function closeFixture(fixture: BridgeFixture): Promise<void> {
-  for (const serverSocket of fixture.app.websocketServer.clients) {
-    serverSocket.terminate();
-  }
-  if (fixture.socket.readyState < 2) {
-    const closed = nextClose(fixture.socket);
-    fixture.socket.terminate();
-    await closed;
-  }
-  await new Promise((resolve) => setImmediate(resolve));
-  await fixture.app.close();
+  await fixture.close();
 }
 
 async function runState(fixture: BridgeFixture, expected: string): Promise<boolean> {
@@ -385,8 +393,8 @@ test("Bridge trace validation accepts every contract-valid base64url prefix", ()
   assert.equal(isBridgeTraceId("trace_short"), false);
 });
 
-test("one committed Bridge Run event advances the Team cursor once", async () => {
-  const fixture = await createFixture();
+test("one committed Bridge Run event advances the Team cursor once", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const before = await fixture.app.inject({
       method: "GET",
@@ -411,8 +419,8 @@ test("one committed Bridge Run event advances the Team cursor once", async () =>
   }
 });
 
-test("an unaccepted Run resolves only from the frozen Bridge cancellation ACK", async () => {
-  const fixture = await createFixture();
+test("an unaccepted Run resolves only from the frozen Bridge cancellation ACK", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const cancellationMessage = nextMessage(fixture.socket);
     const canceled = await fixture.app.inject({
@@ -481,8 +489,8 @@ test("an unaccepted Run resolves only from the frozen Bridge cancellation ACK", 
   }
 });
 
-test("authenticated hello records the current Bridge version without replacing pairing identity", async () => {
-  const fixture = await createFixture();
+test("authenticated hello records the current Bridge version without replacing pairing identity", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const readObservation = (): {
       connection_epoch: number;
@@ -552,8 +560,8 @@ test("authenticated hello records the current Bridge version without replacing p
   }
 });
 
-test("declared Agent status frames update the owned Agent without heartbeat drift", async () => {
-  const fixture = await createFixture();
+test("declared Agent status frames update the owned Agent without heartbeat drift", async (t) => {
+  const fixture = await createFixture(t);
   const readPresence = async (): Promise<string | undefined> => {
     const response = await fixture.app.inject({
       method: "GET",
@@ -590,10 +598,10 @@ test("declared Agent status frames update the owned Agent without heartbeat drif
   }
 });
 
-test("Agent publication counts astral labels as Unicode code points", async () => {
+test("Agent publication counts astral labels as Unicode code points", async (t) => {
   const name = "😀".repeat(80);
   const role = "🛠".repeat(80);
-  const fixture = await createFixture(undefined, true, { name, role });
+  const fixture = await createFixture(t, undefined, true, { name, role });
   try {
     const response = await fixture.app.inject({
       method: "GET",
@@ -612,8 +620,8 @@ test("Agent publication counts astral labels as Unicode code points", async () =
   }
 });
 
-test("a restarted Central replays a durable cancellation on the frozen Device hello", async () => {
-  const fixture = await createFixture();
+test("a restarted Central replays a durable cancellation on the frozen Device hello", async (t) => {
+  const fixture = await createFixture(t);
   let restarted: Awaited<ReturnType<typeof createServerApp>> | undefined;
   let restartedSocket: BridgeSocket | undefined;
   try {
@@ -751,8 +759,8 @@ test("a restarted Central replays a durable cancellation on the frozen Device he
   }
 });
 
-test("central provisioning keeps the code transient and converges after Bridge publication", async () => {
-  const fixture = await createFixture();
+test("central provisioning keeps the code transient and converges after Bridge publication", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const requestId = "agentprov_websocket_12345678";
     const deliveredMessage = nextMessage(fixture.socket);
@@ -893,8 +901,8 @@ test("central provisioning keeps the code transient and converges after Bridge p
   }
 });
 
-test("reserved Agent publication recovers a lost acceptance result atomically", async () => {
-  const fixture = await createFixture();
+test("reserved Agent publication recovers a lost acceptance result atomically", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const requestId = "agentprov_lost_result_12345678";
     const deliveredMessage = nextMessage(fixture.socket);
@@ -960,8 +968,8 @@ test("reserved Agent publication recovers a lost acceptance result atomically", 
   }
 });
 
-test("configuration save failure retries the same reserved Agent identity", async () => {
-  const fixture = await createFixture();
+test("configuration save failure retries the same reserved Agent identity", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const payload = {
       requestId: "agentprov_config_retry_12345678",
@@ -1016,8 +1024,8 @@ test("configuration save failure retries the same reserved Agent identity", asyn
   }
 });
 
-test("an older Bridge cannot receive central Agent provisioning", async () => {
-  const fixture = await createFixture(undefined, false);
+test("an older Bridge cannot receive central Agent provisioning", async (t) => {
+  const fixture = await createFixture(t, undefined, false);
   try {
     const submitted = await fixture.app.inject({
       method: "POST",
@@ -1051,8 +1059,8 @@ test("an older Bridge cannot receive central Agent provisioning", async () => {
   }
 });
 
-test("Bridge schema rejects a missing traceId as an invalid envelope", async () => {
-  const fixture = await createFixture();
+test("Bridge schema rejects a missing traceId as an invalid envelope", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const closed = nextClose(fixture.socket);
     send(fixture.socket, envelope("run.accepted", {
@@ -1069,8 +1077,8 @@ test("Bridge schema rejects a missing traceId as an invalid envelope", async () 
   }
 });
 
-test("Bridge raw decoding rejects a fractional integer before JavaScript rounding", async () => {
-  const fixture = await createFixture();
+test("Bridge raw decoding rejects a fractional integer before JavaScript rounding", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     const closed = nextClose(fixture.socket);
@@ -1122,9 +1130,9 @@ test("Bridge schema closes required identity and unknown envelope fields", async
   ];
 
   for (const scenario of cases) {
-    await t.test(scenario.name, async () => {
+    await t.test(scenario.name, async (t) => {
       const logs: CapturedLog[] = [];
-      const fixture = await createFixture(capturingLogger(logs));
+      const fixture = await createFixture(t, capturingLogger(logs));
       try {
         const closed = nextClose(fixture.socket);
         send(fixture.socket, scenario.value);
@@ -1140,9 +1148,9 @@ test("Bridge schema closes required identity and unknown envelope fields", async
   }
 });
 
-test("Bridge rejects a parsed non-object payload as an invalid envelope", async () => {
+test("Bridge rejects a parsed non-object payload as an invalid envelope", async (t) => {
   const logs: CapturedLog[] = [];
-  const fixture = await createFixture(capturingLogger(logs));
+  const fixture = await createFixture(t, capturingLogger(logs));
   try {
     const closed = nextClose(fixture.socket);
     fixture.socket.send(JSON.stringify({
@@ -1165,8 +1173,8 @@ test("Bridge rejects a parsed non-object payload as an invalid envelope", async 
   }
 });
 
-test("Bridge rejects empty traceId on Run status", async () => {
-  const fixture = await createFixture();
+test("Bridge rejects empty traceId on Run status", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     const closed = nextClose(fixture.socket);
@@ -1183,9 +1191,9 @@ test("Bridge rejects empty traceId on Run status", async () => {
   }
 });
 
-test("Bridge rejects whitespace traceId on Run reply without echoing content", async () => {
+test("Bridge rejects whitespace traceId on Run reply without echoing content", async (t) => {
   const logs: CapturedLog[] = [];
-  const fixture = await createFixture(capturingLogger(logs));
+  const fixture = await createFixture(t, capturingLogger(logs));
   try {
     await acceptRun(fixture);
     send(fixture.socket, envelope("run.status", {
@@ -1218,9 +1226,9 @@ test("Bridge rejects whitespace traceId on Run reply without echoing content", a
   }
 });
 
-test("Bridge rejects a well-formed but incorrect traceId", async () => {
+test("Bridge rejects a well-formed but incorrect traceId", async (t) => {
   const logs: CapturedLog[] = [];
-  const fixture = await createFixture(capturingLogger(logs));
+  const fixture = await createFixture(t, capturingLogger(logs));
   try {
     const closed = nextClose(fixture.socket);
     send(fixture.socket, envelope("run.accepted", {
@@ -1242,8 +1250,8 @@ test("Bridge rejects a well-formed but incorrect traceId", async () => {
   }
 });
 
-test("Bridge applies accepted, output, activity, status, and reply messages with the matching traceId", async () => {
-  const fixture = await createFixture();
+test("Bridge applies accepted, output, activity, status, and reply messages with the matching traceId", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     send(fixture.socket, envelope("run.status", {
@@ -1325,8 +1333,8 @@ test("Bridge applies accepted, output, activity, status, and reply messages with
   }
 });
 
-test("Bridge and JSON Schema share Unicode code-point length semantics", async () => {
-  const fixture = await createFixture();
+test("Bridge and JSON Schema share Unicode code-point length semantics", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     send(fixture.socket, envelope("run.status", {
@@ -1422,8 +1430,8 @@ test("Bridge and JSON Schema share Unicode code-point length semantics", async (
   }
 });
 
-test("Bridge rejects malformed Runtime output metadata", async () => {
-  const fixture = await createFixture();
+test("Bridge rejects malformed Runtime output metadata", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     const closed = nextClose(fixture.socket);
@@ -1444,8 +1452,8 @@ test("Bridge rejects malformed Runtime output metadata", async () => {
   }
 });
 
-test("Bridge schema enforces the Runtime error bound before persistence", async () => {
-  const fixture = await createFixture();
+test("Bridge schema enforces the Runtime error bound before persistence", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     send(fixture.socket, envelope("run.status", {
@@ -1480,8 +1488,8 @@ test("Bridge schema enforces the Runtime error bound before persistence", async 
   }
 });
 
-test("Bridge persists only allowlisted Runtime failure details", async () => {
-  const fixture = await createFixture();
+test("Bridge persists only allowlisted Runtime failure details", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     send(fixture.socket, envelope("run.status", {
@@ -1543,8 +1551,8 @@ test("Bridge persists only allowlisted Runtime failure details", async () => {
   }
 });
 
-test("Bridge Task clarification resumes through one authorized same-Task Run", async () => {
-  const fixture = await createFixture();
+test("Bridge Task clarification resumes through one authorized same-Task Run", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     send(fixture.socket, envelope("run.status", {
@@ -1614,8 +1622,8 @@ test("Bridge Task clarification resumes through one authorized same-Task Run", a
   }
 });
 
-test("Bridge rejects permission-shaped Task clarification fields", async () => {
-  const fixture = await createFixture();
+test("Bridge rejects permission-shaped Task clarification fields", async (t) => {
+  const fixture = await createFixture(t);
   try {
     await acceptRun(fixture);
     const closed = nextClose(fixture.socket);
@@ -1640,8 +1648,8 @@ test("Bridge rejects permission-shaped Task clarification fields", async () => {
   }
 });
 
-test("Bridge rejects local details inside a Runtime policy summary", async () => {
-  const fixture = await createFixture();
+test("Bridge rejects local details inside a Runtime policy summary", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const closed = nextClose(fixture.socket);
     send(fixture.socket, envelope("agent.publish", {
@@ -1673,8 +1681,8 @@ test("Bridge rejects local details inside a Runtime policy summary", async () =>
   }
 });
 
-test("Bridge rejects local Workspace binding detail without changing its safe projection", async () => {
-  const fixture = await createFixture();
+test("Bridge rejects local Workspace binding detail without changing its safe projection", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const closed = nextClose(fixture.socket);
     send(fixture.socket, envelope("agent.publish", {
@@ -1712,9 +1720,9 @@ test("Bridge rejects local Workspace binding detail without changing its safe pr
   }
 });
 
-test("Bridge reserves close code 4007 for malformed JSON", async () => {
+test("Bridge reserves close code 4007 for malformed JSON", async (t) => {
   const logs: CapturedLog[] = [];
-  const fixture = await createFixture(capturingLogger(logs));
+  const fixture = await createFixture(t, capturingLogger(logs));
   try {
     const closed = nextClose(fixture.socket);
     fixture.socket.send("{");
@@ -1730,8 +1738,8 @@ test("Bridge reserves close code 4007 for malformed JSON", async () => {
   }
 });
 
-test("Bridge rejects binary and invalid UTF-8 frames before JSON decoding", async () => {
-  const fixture = await createFixture();
+test("Bridge rejects binary and invalid UTF-8 frames before JSON decoding", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const closed = nextClose(fixture.socket);
     fixture.socket.send(Buffer.from([0xff]), { binary: true });

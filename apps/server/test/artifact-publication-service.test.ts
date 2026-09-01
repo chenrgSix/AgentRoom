@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { copyFile, lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { copyFile, lstat, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import { ArtifactPublicationRepository } from
   "../src/artifact/artifact-publication-repository.js";
@@ -38,8 +39,9 @@ const now = "2026-08-25T10:00:00.000Z";
 const workspaceRef = `workspace_${"a".repeat(64)}`;
 const workspaceGeneration = "b".repeat(64);
 
-async function createFixture(maximumMigration?: number) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-artifact-"));
+async function createFixture(t: TestContext, maximumMigration?: number) {
+  const resources = await createTestResources(t, "convene-wire-artifact-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   const blobRoot = path.join(directory, "blobs");
   if (maximumMigration === undefined) await migrateDatabase(databasePath);
@@ -53,6 +55,7 @@ async function createFixture(maximumMigration?: number) {
     await migrateDatabase(databasePath, migrationDirectory);
   }
   const database = openDatabase(databasePath);
+  resources.defer(() => { if (database.open) database.close(); });
   const transactions = new SqliteTransactionBoundary(database);
   const core = new CoreRepository(database, transactions);
   const auth = new AuthService(database);
@@ -186,8 +189,8 @@ function chunkSha256(source: Buffer): string {
   return createHash("sha256").update(source).digest("hex");
 }
 
-test("capture lease migration preserves populated legacy publications, blobs and foreign keys", async () => {
-  const f = await createFixture(61);
+test("capture lease migration preserves populated legacy publications, blobs and foreign keys", async (t) => {
+  const f = await createFixture(t, 61);
   let database = f.database;
   try {
     const source = Buffer.from("diff --git a/legacy b/legacy\n+retained\n");
@@ -220,8 +223,8 @@ test("capture lease migration preserves populated legacy publications, blobs and
   }
 });
 
-test("commit migration preserves populated canonical lineage and rolls back a failed rebuild", async () => {
-  const f = await createFixture(62);
+test("commit migration preserves populated canonical lineage and rolls back a failed rebuild", async (t) => {
+  const f = await createFixture(t, 62);
   let database = f.database;
   try {
     const binder = new ArtifactContentBindingService(f.transactions, new ArtifactRepository(database),
@@ -282,8 +285,8 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
   }
 });
 
-test("ordinary source leases cannot publish commit bundles through service or SQL", async () => {
-  const f = await createFixture();
+test("ordinary source leases cannot publish commit bundles through service or SQL", async (t) => {
+  const f = await createFixture(t);
   try {
     const source = Buffer.from("not a commit bundle");
     const input = { ...prepareInput(f, source, "idem_commit_read_source0001"),
@@ -300,8 +303,8 @@ test("ordinary source leases cannot publish commit bundles through service or SQ
   }
 });
 
-test("publication chunks are idempotent and sealed rename recovers after restart", async () => {
-  const fixture = await createFixture();
+test("publication chunks are idempotent and sealed rename recovers after restart", async (t) => {
+  const fixture = await createFixture(t);
   let database = fixture.database;
   try {
     const source = Buffer.from("diff --git a/a.ts b/a.ts\n+verified\n", "utf8");
@@ -416,8 +419,8 @@ test("publication chunks are idempotent and sealed rename recovers after restart
   }
 });
 
-test("sealed bytes deduplicate inside a Team but never bypass upload", async () => {
-  const fixture = await createFixture();
+test("sealed bytes deduplicate inside a Team but never bypass upload", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const source = Buffer.from("shared artifact bytes", "utf8");
     const first = fixture.service.prepare(
@@ -478,8 +481,8 @@ test("sealed bytes deduplicate inside a Team but never bypass upload", async () 
   }
 });
 
-test("sealed publication binds one canonical Artifact in one transaction", async () => {
-  const fixture = await createFixture();
+test("sealed publication binds one canonical Artifact in one transaction", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const artifacts = new ArtifactRepository(
       fixture.database,
@@ -697,8 +700,8 @@ test("sealed publication binds one canonical Artifact in one transaction", async
   }
 });
 
-test("digest mismatch, expiry, symlink, and active-upload quota fail closed", async () => {
-  const fixture = await createFixture();
+test("digest mismatch, expiry, symlink, and active-upload quota fail closed", async (t) => {
+  const fixture = await createFixture(t);
   try {
     const source = Buffer.from("unsafe bytes", "utf8");
     assert.throws(

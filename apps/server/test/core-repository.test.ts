@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
@@ -11,16 +11,16 @@ import { migrateDatabase } from "../src/data/migration-runner.js";
 
 const createdAt = "2026-08-22T10:00:00.000Z";
 
-async function createDatabasePath(): Promise<string> {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-core-"));
+async function createDatabasePath(t: TestContext): Promise<string> {
+  const directory = (await createTestResources(t, "convene-wire-core-")).directory;
   const databasePath = path.join(directory, "data", "server.sqlite");
   await prepareDatabaseDirectory(databasePath);
   await migrateDatabase(databasePath);
   return databasePath;
 }
 
-test("core entities persist and reload with structured mentions", async () => {
-  const databasePath = await createDatabasePath();
+test("core entities persist and reload with structured mentions", async (t) => {
+  const databasePath = await createDatabasePath(t);
   const database = openDatabase(databasePath);
   const repository = new CoreRepository(database);
 
@@ -143,8 +143,8 @@ test("core entities persist and reload with structured mentions", async () => {
   }
 });
 
-test("a message rejects an unavailable or cross-Team Agent mention", async () => {
-  const databasePath = await createDatabasePath();
+test("a message rejects an unavailable or cross-Team Agent mention", async (t) => {
+  const databasePath = await createDatabasePath(t);
   const database = openDatabase(databasePath);
   try {
     const repository = new CoreRepository(database);

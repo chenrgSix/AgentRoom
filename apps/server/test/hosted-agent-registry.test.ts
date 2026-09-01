@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import {
   CoreRepository,
@@ -30,11 +30,13 @@ const hostedCapabilities: AgentCapabilities = {
   supportsStreaming: true
 };
 
-async function createFixture(prefix: string) {
-  const directory = await mkdtemp(path.join(os.tmpdir(), prefix));
+async function createFixture(t: TestContext, prefix: string) {
+  const resources = await createTestResources(t, prefix);
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   await migrateDatabase(databasePath);
   const database = openDatabase(databasePath);
+  resources.defer(() => { if (database.open) database.close(); });
   const repository = new CoreRepository(database);
   const auth = new AuthService(database);
   const teams = new TeamRoomService(repository, auth);
@@ -64,8 +66,8 @@ async function createFixture(prefix: string) {
   };
 }
 
-test("Hosted Agent creation requires explicit Rooms and no local Runtime authority", async () => {
-  const fixture = await createFixture("convene-wire-hosted-registry-");
+test("Hosted Agent creation requires explicit Rooms and no local Runtime authority", async (t) => {
+  const fixture = await createFixture(t, "convene-wire-hosted-registry-");
   try {
     const firstRoom = fixture.teams.createRoom(
       fixture.owner,
@@ -325,8 +327,8 @@ test("Hosted Agent creation requires explicit Rooms and no local Runtime authori
   }
 });
 
-test("Hosted Presence derives from injected profile availability without Bridge state", async () => {
-  const fixture = await createFixture("convene-wire-hosted-presence-");
+test("Hosted Presence derives from injected profile availability without Bridge state", async (t) => {
+  const fixture = await createFixture(t, "convene-wire-hosted-presence-");
   try {
     const room = fixture.teams.createRoom(
       fixture.owner,

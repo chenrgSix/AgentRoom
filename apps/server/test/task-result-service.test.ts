@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
+
+import { createTestResources } from "../../../scripts/test/resources.mjs";
 
 import Database from "better-sqlite3";
 
@@ -19,8 +19,9 @@ import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-28T14:00:00.000Z";
 
-async function setup() {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-result-"));
+async function setup(t: TestContext) {
+  const resources = await createTestResources(t, "convene-wire-result-");
+  const directory = resources.directory;
   const databasePath = path.join(directory, "server.sqlite");
   const app = await createServerApp({ databasePath, clock: () => now, logger: false });
   const bootstrap = await app.inject({
@@ -208,8 +209,8 @@ function proposal(input: {
   };
 }
 
-test("Result acceptance atomically completes its Task and survives response loss", async () => {
-  const context = await setup();
+test("Result acceptance atomically completes its Task and survives response loss", async (t) => {
+  const context = await setup(t);
   let app = context.app;
   try {
     const task = await createActiveTask(context);
@@ -375,8 +376,8 @@ test("Result acceptance atomically completes its Task and survives response loss
   }
 });
 
-test("concurrent Result review and Task definition edit keep one revision-consistent winner", async () => {
-  const context = await setup();
+test("concurrent Result review and Task definition edit keep one revision-consistent winner", async (t) => {
+  const context = await setup(t);
   let app = context.app;
   try {
     const task = await createActiveTask(context);
@@ -504,8 +505,8 @@ test("concurrent Result review and Task definition edit keep one revision-consis
   }
 });
 
-test("Result corrections preserve typed sources, actor limits, and child provenance", async () => {
-  const context = await setup();
+test("Result corrections preserve typed sources, actor limits, and child provenance", async (t) => {
+  const context = await setup(t);
   try {
     const task = await createActiveTask(context);
     const run = await createCompletedRun(context, task.taskId as string);
@@ -757,8 +758,8 @@ test("Result corrections preserve typed sources, actor limits, and child provena
   }
 });
 
-test("Task completion rejects required claims without Artifact evidence", async () => {
-  const context = await setup();
+test("Task completion rejects required claims without Artifact evidence", async (t) => {
+  const context = await setup(t);
   try {
     const task = await createActiveTask(context);
     const run = await createCompletedRun(context, task.taskId as string);
