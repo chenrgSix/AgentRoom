@@ -33,11 +33,15 @@ type Handler struct {
 	IsPrepareRetryable func(error) bool
 	IsExplicitCancel   func(context.Context) bool
 	Now                func() time.Time
+	Governed           *GovernedHandler
 }
 
 func (h Handler) Handle(ctx context.Context, message contracts.RunRequestedMessage, send Sender) error {
 	if message.Payload.ContextManifest != nil && message.Payload.ContextManifest.Execution != nil {
-		return ErrGovernedExecutionUnsupported
+		if h.Governed == nil {
+			return ErrGovernedExecutionUnsupported
+		}
+		return h.Governed.Handle(ctx, message, send)
 	}
 	now := time.Now().UTC()
 	if h.Now != nil {

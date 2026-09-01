@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"time"
 
@@ -37,6 +38,7 @@ type governedProfiles interface {
 
 type governedFence interface {
 	Claim(RuntimeAdmissionSpec, time.Time) (RuntimeAdmissionView, error)
+	Get(string) (RuntimeAdmissionView, error)
 	Start(context.Context, string, string, RuntimeStartAuthority) (RuntimeAdmissionView, bool, error)
 	Stop(string, string, string, RuntimeOutcome, time.Time) (RuntimeAdmissionView, error)
 }
@@ -152,8 +154,10 @@ func (c *GovernedAdmissionCoordinator) Start(ctx context.Context, ticket Governe
 		ticket.prepared.RunID != ticket.manifest.Scope.RunID || !sha256Digest.MatchString(ticket.admission.AdmissionDigest) {
 		return decision, ErrAdmissionInvalid
 	}
+	var callbackFailure error
 	view, invoke, err := c.fence.Start(ctx, ticket.admission.Spec.RunID, ticket.admission.AdmissionDigest,
-		func(checkContext context.Context, expected RuntimeAdmissionSpec) error {
+		func(checkContext context.Context, expected RuntimeAdmissionSpec) (result error) {
+			defer func() { callbackFailure = result }()
 			manifest, decodeErr := DecodeGovernedManifest(ticket.request)
 			if decodeErr != nil || !reflect.DeepEqual(manifest, ticket.manifest) || expected != ticket.admission.Spec {
 				return ErrAdmissionChanged
@@ -176,7 +180,19 @@ func (c *GovernedAdmissionCoordinator) Start(ctx context.Context, ticket Governe
 			return nil
 		})
 	if err != nil {
-		return decision, err
+		if callbackFailure != nil {
+			return decision, err
+		}
+		observed, observeErr := c.fence.Get(ticket.admission.Spec.RunID)
+		if observeErr == nil && observed.Spec == ticket.admission.Spec &&
+			observed.AdmissionDigest == ticket.admission.AdmissionDigest {
+			if observed.State == RuntimeAdmissionClaimed {
+				return decision, err
+			}
+			decision.View = observed
+			return decision, errors.Join(ErrAdmissionPossibleStart, err)
+		}
+		return decision, errors.Join(ErrAdmissionPossibleStart, err, observeErr)
 	}
 	if view.Spec != ticket.admission.Spec || view.AdmissionDigest != ticket.admission.AdmissionDigest {
 		return decision, ErrAdmissionChanged

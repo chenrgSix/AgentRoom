@@ -21,13 +21,14 @@ import (
 )
 
 var (
-	ErrAdmissionInvalid    = errors.New("local Runtime admission is invalid")
-	ErrAdmissionChanged    = errors.New("local Runtime admission state changed")
-	ErrAdmissionConflict   = errors.New("local Runtime admission conflicts with immutable state")
-	ErrAdmissionNotCurrent = errors.New("local Runtime admission is not current")
-	runID                  = regexp.MustCompile(`^run_[A-Za-z0-9_-]{8,128}$`)
-	operationID            = regexp.MustCompile(`^op_[A-Za-z0-9_-]{8,128}$`)
-	objectID               = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
+	ErrAdmissionInvalid       = errors.New("local Runtime admission is invalid")
+	ErrAdmissionChanged       = errors.New("local Runtime admission state changed")
+	ErrAdmissionConflict      = errors.New("local Runtime admission conflicts with immutable state")
+	ErrAdmissionNotCurrent    = errors.New("local Runtime admission is not current")
+	ErrAdmissionPossibleStart = errors.New("local Runtime may have crossed the possible-start boundary")
+	runID                     = regexp.MustCompile(`^run_[A-Za-z0-9_-]{8,128}$`)
+	operationID               = regexp.MustCompile(`^op_[A-Za-z0-9_-]{8,128}$`)
+	objectID                  = regexp.MustCompile(`^(?:[a-f0-9]{40}|[a-f0-9]{64})$`)
 )
 
 const (

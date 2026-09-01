@@ -126,6 +126,20 @@ func TestGovernedCoordinatorFailsClosedBeforePossibleStart(t *testing.T) {
 	}
 }
 
+func TestGovernedCoordinatorReportsPersistedPossibleStartAfterWriteResponseFailure(t *testing.T) {
+	coordinator, rig, request := governedCoordinatorFixture(t)
+	ticket, err := coordinator.Prepare(context.Background(), request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rig.startWriteErr = errors.New("read after durable start failed")
+	decision, err := coordinator.Start(context.Background(), ticket)
+	if !errors.Is(err, ErrAdmissionPossibleStart) || decision.Invoke ||
+		decision.View.State != RuntimeAdmissionStarting || decision.View.StartDigest == nil || !rig.started {
+		t.Fatalf("decision=%+v error=%v started=%t", decision, err, rig.started)
+	}
+}
+
 func TestGovernedCoordinatorFreezesAgentConfiguration(t *testing.T) {
 	_, rig, request := governedCoordinatorFixture(t)
 	manifest, err := DecodeGovernedManifest(request)
@@ -221,6 +235,7 @@ type coordinatorRig struct {
 	started          bool
 	stopCalls        int
 	stopped          RuntimeAdmissionView
+	startWriteErr    error
 }
 
 func (r *coordinatorRig) CheckTaskGrant(_ context.Context, manifest execution.GovernedExecutionManifest,
@@ -299,7 +314,20 @@ func (r *coordinatorRig) Start(ctx context.Context, run, digest string, authoriz
 	startDigest, checked := strings.Repeat("8", 64), profileTime(runtimeFenceNow)
 	r.start = r.claim
 	r.start.State, r.start.StartDigest, r.start.AuthorityCheckedAt = RuntimeAdmissionStarting, &startDigest, &checked
+	if r.startWriteErr != nil {
+		return RuntimeAdmissionView{}, false, r.startWriteErr
+	}
 	return r.start, true, nil
+}
+
+func (r *coordinatorRig) Get(_ string) (RuntimeAdmissionView, error) {
+	if r.stopped.State != "" {
+		return r.stopped, nil
+	}
+	if r.start.State != "" {
+		return r.start, nil
+	}
+	return r.claim, nil
 }
 
 func (r *coordinatorRig) Stop(run, admissionDigest, startDigest string, outcome RuntimeOutcome,

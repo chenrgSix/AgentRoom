@@ -105,6 +105,15 @@ permission to retry.
   start digests from the first terminal status. Missing terminal, post-terminal
   output and post-invoke setup failure all record `outcome_unknown`; an observed
   terminal remains authoritative when its delivery fails.
+- `delivery.GovernedHandler` is an injectable internal branch over the existing
+  Inbox, Agent gate, cancellation, sequence, terminal persistence and replay.
+  The default nil dependency preserves rejection before acceptance. Definite
+  admission denial produces a generic failed status; retryable unavailability
+  preserves retry state; terminal duplicate replay never invokes again.
+- The coordinator distinguishes callback denial before the start write from an
+  error after the possible-start boundary. It rereads the exact durable fence;
+  any observed/uncertain `starting` state becomes explicit ambiguity. Delivery
+  retains `accepted` and records no fabricated failed terminal in that case.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -141,6 +150,11 @@ The runner cases cover all five local outcomes, exact workspace substitution,
 configuration immutability, terminal delivery failure, missing terminal,
 post-terminal output, non-invoke replay and adapter-construction failure. Every
 valid invoke decision is closed exactly once in these cases.
+The governed-delivery cases prove same-Inbox accepted/working/completed sequence,
+terminal duplicate replay, ordinary Artifact-resolver exclusion, retryable
+preparation resume, generic non-retryable prepare/start failure, non-invoke
+ambiguity and persisted-start response ambiguity. Existing nil-handler and
+direct-executor negatives continue to prove no fallback.
 
 The contract package passes 78 Node checks, generated/current TypeScript, Go
 round trips and 243 shared positive/negative fixtures. The Bridge admission
@@ -156,9 +170,9 @@ acceptance.
 
 - wire the exact governed manifest through the existing inbox without opening a
   second Runtime-start path;
-- let the managed core open the reviewed resource bundle and route only exact
-  governed delivery into it;
-- connect the runner to the existing inbox/cancellation/terminal replay path,
+- let the managed core open the reviewed resource bundle, inject this exact
+  governed delivery branch and publish capability only after readiness;
+- recover accepted/working Inbox state together with the possible-start fence,
   then retain/fence any surviving process and connect stopped-Run, revocation
   and owner-visible cleanup;
 - expose owner setup/state without leaking local details;

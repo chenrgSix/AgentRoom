@@ -30,14 +30,29 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 	if record.Request.ContextManifest != nil && record.Request.ContextManifest.Execution != nil {
 		return ErrGovernedExecutionUnsupported
 	}
+	return e.executeAdapter(ctx, record, e.Adapters[record.Request.TargetAgentID], send, true)
+}
+
+// ExecuteAdmitted retains the existing inbox/event/terminal machinery for a
+// governed adapter that already owns the sole possible-start decision.
+func (e RuntimeExecutor) ExecuteAdmitted(ctx context.Context, record Record,
+	adapter bridgeruntime.Adapter, send Sender) error {
+	if record.Request.ContextManifest == nil || record.Request.ContextManifest.Execution == nil || adapter == nil {
+		return ErrGovernedExecutionUnsupported
+	}
+	return e.executeAdapter(ctx, record, adapter, send, false)
+}
+
+func (e RuntimeExecutor) executeAdapter(ctx context.Context, record Record,
+	adapter bridgeruntime.Adapter, send Sender, resolveArtifacts bool) error {
 	var artifacts []bridgeruntime.VerifiedArtifactAlias
 	var artifactErr error
-	if e.ResolveArtifacts != nil {
+	if resolveArtifacts && e.ResolveArtifacts != nil {
 		artifacts, artifactErr = e.ResolveArtifacts(record.Request)
-	} else if runHasPinnedArtifactContent(record.Request) {
+	} else if resolveArtifacts && runHasPinnedArtifactContent(record.Request) {
 		artifactErr = fmt.Errorf("Runtime Artifact resolver is unavailable")
 	}
-	if artifactErr == nil {
+	if resolveArtifacts && artifactErr == nil {
 		artifacts, artifactErr = bridgeruntime.ValidateArtifactAliases(
 			record.Request,
 			artifacts,
@@ -66,7 +81,6 @@ func (e RuntimeExecutor) Execute(ctx context.Context, record Record, send Sender
 		finished.At = e.now()
 		e.Observer.Runtime(finished)
 	}()
-	adapter := e.Adapters[record.Request.TargetAgentID]
 	if adapter == nil {
 		finished.ErrorCode = "RUNTIME_ADAPTER_MISSING"
 		return e.emitUnknown(ctx, record, send, "RUNTIME_ADAPTER_MISSING")

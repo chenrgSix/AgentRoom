@@ -253,6 +253,26 @@ process controls cover in-process cancellation, but startup recovery must still
 fence or terminate any surviving process before converting unresolved
 `starting` records to unknown. No governed capability is published.
 
+The internal `delivery.GovernedHandler` now defines the reviewed connection to
+the existing delivery lifecycle without activating it. `delivery.Handler`
+continues to reject every governed manifest unless that dependency is explicitly
+injected. Once injected, the governed branch uses the same Inbox acceptance,
+per-Agent execution gate, cancellation tombstones, event sequence, terminal
+persistence and replay as ordinary Runs. Preparation reconstructs only a
+transient ticket; no local path or input byte is added to the Inbox.
+
+Retryable input/authority unavailability leaves `preparing` or `accepted` for an
+exact retry. A definite local/current-authority denial emits one generic failed
+status without leaking the cause. A terminal duplicate replays stored events
+without rechecking current authority or invoking again. If a start write may
+have committed but its response failed, the coordinator observes the durable
+fence and returns explicit possible-start ambiguity; delivery retains the
+accepted record and emits no false failure. `RuntimeExecutor.ExecuteAdmitted`
+reuses the ordinary event/terminal machinery with only the fence-backed adapter
+and deliberately skips ordinary Artifact aliases because governed inputs are
+already exact-applied in the worktree. Production core construction and startup
+recovery are still absent, so the top-level rejection remains the shipped path.
+
 The internal `RuntimeAuthorityClient` now supplies the Central half of that
 callback. It posts only the exact Run, manifest, isolated lease,
 workspace reference and generation to the Device-authenticated, no-store
@@ -281,8 +301,8 @@ completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
 That explicit surviving-process cleanup, inbox/cancellation integration,
-production resource/Handler routing, capability advertisement and real
-Runtime evidence remain open. The production
+production resource/Handler construction, startup ambiguity recovery,
+capability advertisement and real Runtime evidence remain open. The production
 governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 
