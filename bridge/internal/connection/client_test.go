@@ -267,13 +267,14 @@ func TestClientPreparesRecoveryBeforePublishingTruthfulGovernedCapability(t *tes
 	if !prepared.Load() || hello["type"] != "bridge.hello" || publication["type"] != "agent.publish" || replay["type"] != "prepared.replay" {
 		t.Fatalf("unexpected preparation/publication order: %#v %#v %#v", hello, publication, replay)
 	}
-	assertPrepareCapture := func(value any, grants bool) {
+	assertGovernedOperations := func(value any, grants bool) {
 		t.Helper()
 		capability, ok := value.(map[string]any)
 		operations, operationsOK := capability["operations"].([]any)
 		if !ok || capability["version"] != float64(1) || capability["workspaceBoundary"] != "enforced" ||
-			capability["preventivePathEnforcement"] != false || !operationsOK || len(operations) != 2 ||
-			operations[0] != "prepare" || operations[1] != "capture" {
+			capability["preventivePathEnforcement"] != false || !operationsOK || len(operations) != 4 ||
+			operations[0] != "prepare" || operations[1] != "capture" ||
+			operations[2] != "verify" || operations[3] != "integrate" {
 			t.Fatalf("governed capability omitted an implemented operation: %#v", value)
 		}
 		ready, exists := capability["readyGrants"]
@@ -287,10 +288,10 @@ func TestClientPreparesRecoveryBeforePublishingTruthfulGovernedCapability(t *tes
 		}
 	}
 	helloPayload := hello["payload"].(map[string]any)
-	assertPrepareCapture(helloPayload["governedExecution"], false)
+	assertGovernedOperations(helloPayload["governedExecution"], false)
 	publicationPayload := publication["payload"].(map[string]any)
 	capabilities := publicationPayload["capabilities"].(map[string]any)
-	assertPrepareCapture(capabilities["governedExecution"], true)
+	assertGovernedOperations(capabilities["governedExecution"], true)
 	cancel()
 	select {
 	case err := <-done:
