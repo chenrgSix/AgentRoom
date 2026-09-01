@@ -119,12 +119,14 @@ append a drift event. Human scheduling pause/cancellation also pauses the plan;
 historical approval receipts and Task pins remain unchanged. Completion-policy
 downgrade cannot remove an active node's execution governance.
 
-Until RUN-018, EXEC-004 and VER-001 establish governed admission and verification,
-the approval prerequisite fails closed for new Runs and accepted Results/Task
-completion on governed nodes. This is not a usable execution scheduler. Those
-later tasks must replace the prerequisite fences with exact manifest/intent and
-verified-receipt checks before claiming the complete product flow. Approval
-alone never grants local filesystem or Runtime capability.
+RUN-018 establishes the initial owner-dispatched, zero-input governed admission.
+The frozen [EXEC-004 Graph Runtime increment](../acceptance/exec-004-graph-runtime-scheduler.md)
+reuses that exact manifest/lease/Delivery path for deterministic automatic
+admission of one dependency-free implementation node. Review, verification,
+dependency materialization and explicit retries remain fail-closed. VER-001 must
+still replace the governed Result review/completion fence before any node may be
+projected as successful. Approval alone never grants local filesystem or Runtime
+capability.
 
 An approved plan has no back door through ordinary Message, handoff, Discussion,
 manual MCP, retry, Result completion or compatibility PATCH APIs. All new work
@@ -236,6 +238,31 @@ graph references and integration-capacity locks use the authorized logical
 repository ID; every dispatch additionally pins the selected local binding.
 This prevents two different Bridges from concurrently promoting the same
 logical target under separate checkout locks.
+
+### First Graph Runtime Increment
+
+EXEC-004 begins with one bounded vertical slice rather than scaffolding every
+future policy. `ExecutionNodeState` is a recomputable Execution-owned projection;
+it is not a provider Runtime or a second Run aggregate. Settlement is its sole
+writer and reads Run/Result facts without mutating their owners. The first slice
+supports generation 1 of dependency-free, zero-input `implementation` nodes.
+Incoming edges, review/verification kinds, required inputs and automatic retries
+remain explicit blockers.
+
+The scheduler persists an immutable DispatchIntent and ordinary governed Run in
+one immediate transaction. Because the existing Run schema still requires a
+trigger Message for Context/reply compatibility, the same transaction creates a
+zero-mention `system` trace Message. It is an audit projection only: it bypasses
+Message routing, is not the Run instruction and holds no dispatch authority.
+The approved/current Task goal supplies the instruction and the DispatchIntent
+is the unique scheduling fact.
+
+`run.completed` settles the node to `awaiting_result`, never success. Failed,
+canceled, expired and outcome-unknown Runs remain bound to their original intent
+and cannot create generation 2 automatically. Startup settlement precedes
+admission and ordinary Delivery replay; bounded single-flight wakeups cover
+state changes. Concurrent Server processes rely on immediate transactions plus
+unique plan/revision/node/generation and Run constraints, then reread the winner.
 
 ## APIs and Agent Tools
 
