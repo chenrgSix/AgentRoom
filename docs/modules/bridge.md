@@ -225,9 +225,20 @@ authority endpoint, then requires the response to reproduce every value, the
 initial lease revision and expiry. A changed or malformed response, rejected
 scope, unavailable Server, mismatched credential origin or missing credential
 fails closed. The observation creates, extends and caches no authority. It is
-composed only in the internal coordinator; no production delivery, input
-transport, Handler, Runtime executor or capability advertisement constructs or
-calls that coordinator yet, so it cannot enable a Runtime.
+composed only in the internal coordinator; no production delivery, Handler,
+Runtime executor or capability-advertisement path constructs or calls that
+coordinator yet, so it cannot enable a Runtime.
+
+The internal `ExecutionInputClient` now supplies the coordinator's concrete
+input-loader implementation. Before making any request it validates the exact
+manifest/input digests, paired Device, destination Plan/Task/Run/Agent/Device,
+repository identity, unique binding IDs, patch kind and 4 MiB per-input bound.
+It then downloads sequentially in manifest order from the authenticated Server
+origin with redirects forbidden. Status, cache/sniffing/media headers, binding
+ID, declared length, digest header and actual body SHA-256 must all match. A
+bad later binding cannot cause an earlier partial download because the whole
+intent is preflighted first. The client retains no cache or file; production
+still does not construct the coordinator.
 
 `Stop` appends one exact version-3 closed local outcome bound to both admission
 and start digests. It does not create a Task Result, verification receipt or
@@ -235,8 +246,8 @@ completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
 That explicit surviving-process cleanup, inbox/cancellation integration,
-concrete authenticated input transport, production coordinator construction,
-capability advertisement and real Runtime evidence remain open. The production
+production coordinator/owner-context construction, capability advertisement
+and real Runtime evidence remain open. The production
 governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 

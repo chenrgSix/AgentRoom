@@ -177,6 +177,17 @@ drift deny further reads. Content corruption is a safe unavailable response,
 not returned bytes. This endpoint has no public grant-creation counterpart and
 does not expand the existing same-Task Artifact download endpoint.
 
+The Bridge-internal `ExecutionInputClient` consumes that endpoint only for an
+exact schema-valid manifest and the paired Device at the identical Server
+origin. It preflights all bindings before any request, preserves manifest order
+and currently accepts only repository-matched patch inputs up to the Server's
+4 MiB sealed-input limit. Every response must be non-redirected `200`,
+`no-store`, `nosniff`, `text/x-diff`, and reproduce the binding ID, declared
+length and SHA-256; the client also hashes the actual bounded body. Duplicate,
+cross-destination, commit, compressed, truncated, malformed or substituted
+content fails closed. The client caches nothing and is not yet constructed by
+the production inbox/Handler path.
+
 Initial destination Artifact binding records the Run manifest's supplied input
 bindings in the same canonical Artifact/publication transaction. These immutable
 records identify provided inputs, not proof that an Agent consumed them or that

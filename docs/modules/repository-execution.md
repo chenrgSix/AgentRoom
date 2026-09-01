@@ -517,9 +517,10 @@ runtime enforcement and owner-visible cleanup to the existing stopped-Run
 authority. Its internal coordinator now consumes exact ordered patch bytes
 through a narrow loader boundary, rechecks preparation under the possible-start
 callback and exposes no path in durable state. The concrete authenticated input
-client and production Handler construction remain `RUN-018` work; commit inputs
-stay fail-closed until their separate materializer exists. `RUN-018` connects
-those capabilities to ordinary frozen Run Delivery.
+client now performs a bounded exact download without retaining files; production
+Handler construction remains `RUN-018` work. Commit inputs stay fail-closed
+until their separate materializer exists. `RUN-018` connects those capabilities
+to ordinary frozen Run Delivery.
 `REPO-001` retains the full owner-local lifecycle acceptance using these actual
 production adapters, and is a prerequisite of QA-052 rather than of its own
 BRG-071 implementation. Local fixtures alone cannot satisfy that closure.

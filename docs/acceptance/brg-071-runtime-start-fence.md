@@ -83,6 +83,12 @@ permission to retry.
 - The coordinator still invokes no Runtime, emits no event, retains no process
   handle and advertises no capability. No production Handler or inbox path
   constructs it, and its input loader remains an injected internal boundary.
+- `ExecutionInputClient` is the concrete implementation of that boundary. It
+  validates the paired Device and entire manifest before networking, forbids
+  redirects, preserves exact input order and accepts only unique repository
+  patch inputs within the Server's 4 MiB limit. Each bounded response must
+  reproduce the no-cache/sniffing/media, binding, length and digest metadata;
+  the actual bytes are SHA-256 checked and never cached.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -107,6 +113,11 @@ or possible start, path-free serialization, one invoke decision and replay
 without a second authority callback. It also covers grant denial, unsupported
 verification authority, input binding/kind/length/digest drift, prepared
 identity drift, Runtime-profile drift and rejected/changed Server authority.
+The input-client cases add exact ordered success plus zero-request invalid
+manifest/device/origin/duplicate/destination/kind/limit negatives. Response
+status, redirect, metadata, media, length and actual-content drift all fail
+closed. The review caught and repaired a partial-read ordering bug by moving
+whole-manifest preflight before the first HTTP request.
 
 The contract package passes 78 Node checks, generated/current TypeScript, Go
 round trips and 243 shared positive/negative fixtures. The Bridge admission
@@ -122,8 +133,8 @@ acceptance.
 
 - wire the exact governed manifest through the existing inbox without opening a
   second Runtime-start path;
-- implement the concrete authenticated, bounded execution-input loader and
-  construct the reviewed coordinator under the Bridge process-owner context;
+- construct the reviewed coordinator under the Bridge process-owner context
+  and route only exact governed delivery into it;
 - retain/terminate the process handle and connect stopped-Run, revocation and
   owner-visible cleanup;
 - expose owner setup/state without leaking local details;

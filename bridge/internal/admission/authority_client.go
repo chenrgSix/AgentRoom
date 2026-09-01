@@ -89,6 +89,14 @@ func (c *RuntimeAuthorityClient) Check(ctx context.Context, spec RuntimeAdmissio
 }
 
 func runtimeAuthorityEndpoint(configured, credential string) (string, error) {
+	base, err := governedServerBase(configured, credential)
+	if err != nil {
+		return "", err
+	}
+	return base + "/api/bridge/governed-runtime-authority", nil
+}
+
+func governedServerBase(configured, credential string) (string, error) {
 	configured = strings.TrimRight(strings.TrimSpace(configured), "/")
 	credential = strings.TrimRight(strings.TrimSpace(credential), "/")
 	if configured == "" || credential == "" || configured != credential {
@@ -100,5 +108,5 @@ func runtimeAuthorityEndpoint(configured, credential string) (string, error) {
 			(parsed.Hostname() == "127.0.0.1" || parsed.Hostname() == "localhost" || parsed.Hostname() == "::1"))) {
 		return "", ErrAdmissionInvalid
 	}
-	return configured + "/api/bridge/governed-runtime-authority", nil
+	return configured, nil
 }
