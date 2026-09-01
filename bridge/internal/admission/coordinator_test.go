@@ -219,6 +219,8 @@ type coordinatorRig struct {
 	profileCalls     int
 	authorityCalls   int
 	started          bool
+	stopCalls        int
+	stopped          RuntimeAdmissionView
 }
 
 func (r *coordinatorRig) CheckTaskGrant(_ context.Context, manifest execution.GovernedExecutionManifest,
@@ -298,6 +300,25 @@ func (r *coordinatorRig) Start(ctx context.Context, run, digest string, authoriz
 	r.start = r.claim
 	r.start.State, r.start.StartDigest, r.start.AuthorityCheckedAt = RuntimeAdmissionStarting, &startDigest, &checked
 	return r.start, true, nil
+}
+
+func (r *coordinatorRig) Stop(run, admissionDigest, startDigest string, outcome RuntimeOutcome,
+	_ time.Time) (RuntimeAdmissionView, error) {
+	r.stopCalls++
+	if run != r.start.Spec.RunID || admissionDigest != r.start.AdmissionDigest || r.start.StartDigest == nil ||
+		startDigest != *r.start.StartDigest || !validRuntimeOutcome(outcome) {
+		return RuntimeAdmissionView{}, ErrAdmissionChanged
+	}
+	if r.stopped.State != "" {
+		if r.stopped.Outcome == nil || *r.stopped.Outcome != outcome {
+			return RuntimeAdmissionView{}, ErrAdmissionConflict
+		}
+		return r.stopped, nil
+	}
+	stoppedAt := profileTime(runtimeFenceNow.Add(time.Minute))
+	r.stopped = r.start
+	r.stopped.State, r.stopped.Outcome, r.stopped.StoppedAt = RuntimeAdmissionStopped, &outcome, &stoppedAt
+	return r.stopped, nil
 }
 
 func (r *coordinatorRig) Check(_ context.Context, spec RuntimeAdmissionSpec) (RuntimeAuthorityView, error) {

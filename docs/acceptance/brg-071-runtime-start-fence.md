@@ -99,6 +99,12 @@ permission to retry.
   root, exact paired owner/token, absolute Git executable and stable Agent map.
   Failure at any stage rolls back every acquired resource without deleting
   retained records or prepared workspaces.
+- `GovernedRuntimeRunner` accepts only the exact sole `invoke=true` decision,
+  substitutes the private prepared workspace into a cloned exact Codex Agent
+  configuration and uses the existing adapter. It closes the same admission and
+  start digests from the first terminal status. Missing terminal, post-terminal
+  output and post-invoke setup failure all record `outcome_unknown`; an observed
+  terminal remains authoritative when its delivery fails.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -131,6 +137,10 @@ whole-manifest preflight before the first HTTP request.
 The resource cases prove both fresh-owner and shell-owner composition,
 preparation-lock exclusion, idempotent close, borrowed-owner preservation and
 full lock release after a deliberately failed late-stage construction.
+The runner cases cover all five local outcomes, exact workspace substitution,
+configuration immutability, terminal delivery failure, missing terminal,
+post-terminal output, non-invoke replay and adapter-construction failure. Every
+valid invoke decision is closed exactly once in these cases.
 
 The contract package passes 78 Node checks, generated/current TypeScript, Go
 round trips and 243 shared positive/negative fixtures. The Bridge admission
@@ -148,8 +158,9 @@ acceptance.
   second Runtime-start path;
 - let the managed core open the reviewed resource bundle and route only exact
   governed delivery into it;
-- retain/terminate the process handle and connect stopped-Run, revocation and
-  owner-visible cleanup;
+- connect the runner to the existing inbox/cancellation/terminal replay path,
+  then retain/fence any surviving process and connect stopped-Run, revocation
+  and owner-visible cleanup;
 - expose owner setup/state without leaking local details;
 - obtain actual no-start and positive-start evidence before advertising the
   governed capability.

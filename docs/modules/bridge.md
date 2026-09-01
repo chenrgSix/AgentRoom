@@ -235,6 +235,24 @@ callback. Therefore the persisted `starting` state means the Runtime may have
 started, including a crash after the append but before the caller invokes it;
 recovery never guesses that it is safe to invoke again.
 
+The internal `GovernedRuntimeRunner` is now the sole consumer designed for that
+`invoke=true` decision. It revalidates the frozen ticket/decision, selects only
+the exact Codex Agent, clones its local configuration and replaces the ordinary
+Workspace with the transient prepared worktree before constructing the existing
+Codex adapter. Runtime events remain caller-delivered, while the runner captures
+the first terminal status and closes the exact admission/start digests through
+`GovernedAdmissionCoordinator.Stop`. A setup failure after the possible-start
+write, a missing terminal event or any post-terminal event closes conservatively
+as `outcome_unknown`; terminal delivery failure retains the observed terminal
+local outcome for replay. This stopped receipt is still not verification,
+Result acceptance or Task completion.
+
+The runner is not yet owned by the production Handler and does not solve
+cross-process surviving-child discovery. The existing adapter's context/OS
+process controls cover in-process cancellation, but startup recovery must still
+fence or terminate any surviving process before converting unresolved
+`starting` records to unknown. No governed capability is published.
+
 The internal `RuntimeAuthorityClient` now supplies the Central half of that
 callback. It posts only the exact Run, manifest, isolated lease,
 workspace reference and generation to the Device-authenticated, no-store
@@ -263,8 +281,8 @@ completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
 That explicit surviving-process cleanup, inbox/cancellation integration,
-production resource opening/routing, capability advertisement and real Runtime
-evidence remain open. The production
+production resource/Handler routing, capability advertisement and real
+Runtime evidence remain open. The production
 governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 

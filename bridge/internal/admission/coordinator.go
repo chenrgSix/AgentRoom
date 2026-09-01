@@ -38,6 +38,7 @@ type governedProfiles interface {
 type governedFence interface {
 	Claim(RuntimeAdmissionSpec, time.Time) (RuntimeAdmissionView, error)
 	Start(context.Context, string, string, RuntimeStartAuthority) (RuntimeAdmissionView, bool, error)
+	Stop(string, string, string, RuntimeOutcome, time.Time) (RuntimeAdmissionView, error)
 }
 
 type governedAuthority interface {
@@ -188,6 +189,30 @@ func (c *GovernedAdmissionCoordinator) Start(ctx context.Context, ticket Governe
 		decision.workspace = ticket.prepared.Path
 	}
 	return decision, nil
+}
+
+// Stop closes only the exact invoke=true possible-start decision. It records a
+// local process outcome, not verification, Result acceptance or Task completion.
+func (c *GovernedAdmissionCoordinator) Stop(ticket GovernedAdmissionTicket, decision GovernedStartDecision,
+	outcome RuntimeOutcome, now time.Time) (RuntimeAdmissionView, error) {
+	if c == nil || c.fence == nil || !decision.Invoke || decision.workspace == "" ||
+		decision.workspace != ticket.prepared.Path || decision.View.Spec != ticket.admission.Spec ||
+		decision.View.AdmissionDigest != ticket.admission.AdmissionDigest ||
+		decision.View.State != RuntimeAdmissionStarting || decision.View.StartDigest == nil ||
+		!validRuntimeOutcome(outcome) || now.IsZero() {
+		return RuntimeAdmissionView{}, ErrAdmissionInvalid
+	}
+	view, err := c.fence.Stop(ticket.admission.Spec.RunID, ticket.admission.AdmissionDigest,
+		*decision.View.StartDigest, outcome, now.UTC())
+	if err != nil {
+		return RuntimeAdmissionView{}, err
+	}
+	if view.Spec != ticket.admission.Spec || view.AdmissionDigest != ticket.admission.AdmissionDigest ||
+		view.State != RuntimeAdmissionStopped || view.StartDigest == nil ||
+		*view.StartDigest != *decision.View.StartDigest || view.Outcome == nil || *view.Outcome != outcome {
+		return RuntimeAdmissionView{}, ErrAdmissionChanged
+	}
+	return view, nil
 }
 
 func (c *GovernedAdmissionCoordinator) recheckLocal(ctx context.Context, manifest execution.GovernedExecutionManifest,
