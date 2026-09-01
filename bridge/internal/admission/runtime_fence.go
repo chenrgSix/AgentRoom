@@ -134,6 +134,10 @@ type RuntimeAdmissionView struct {
 // immediately after it.
 type RuntimeStartAuthority func(context.Context, RuntimeAdmissionSpec) error
 
+// StoppedRunAuthority is invoked synchronously while the exact local
+// admission record is locked in its terminal state.
+type StoppedRunAuthority func(RuntimeAdmissionView) error
+
 // RuntimeFenceStore records the local point after which a Runtime may have
 // started. A starting record is deliberately not replayable as a fresh start.
 type RuntimeFenceStore struct {
@@ -321,6 +325,41 @@ func (s *RuntimeFenceStore) List() ([]RuntimeAdmissionView, error) {
 		return nil, err
 	}
 	return s.list()
+}
+
+// WithStoppedRun holds the local stopped-Run fence over one exact callback.
+// A claimed/starting/unknown or scope-drifted admission can never authorize
+// repository retirement.
+func (s *RuntimeFenceStore) WithStoppedRun(ctx context.Context,
+	scope repository.CleanupScope, action StoppedRunAuthority) error {
+	if action == nil {
+		return ErrAdmissionInvalid
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.check(); err != nil {
+		return err
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	view, err := s.get(scope.RunID)
+	if err != nil {
+		return err
+	}
+	spec := view.Spec
+	if view.State != RuntimeAdmissionStopped || view.StartDigest == nil ||
+		view.Outcome == nil || view.StoppedAt == nil ||
+		spec.RunID != scope.RunID || spec.RepositoryID != scope.RepositoryID ||
+		spec.BindingID != scope.BindingID || spec.PlanID != scope.PlanID ||
+		spec.PlanRevision != scope.PlanRevision || spec.NodeKey != scope.NodeKey ||
+		spec.TaskID != scope.TaskID || spec.AgentID != scope.AgentID ||
+		spec.DeviceID != scope.DeviceID || spec.WorkspaceRef != scope.WorkspaceRef ||
+		spec.WorkspaceGeneration != scope.Generation ||
+		spec.ManifestDigest != scope.ManifestDigest {
+		return ErrAdmissionNotCurrent
+	}
+	return action(view)
 }
 
 // Start persists the possible-start point after the caller's current-authority

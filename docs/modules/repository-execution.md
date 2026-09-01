@@ -148,7 +148,11 @@ existing stopped-Run fence and current owner-local cleanup authorization for the
 exact plan/node/Task, Run, Device/Agent, repository/binding, workspace generation
 and checkpoint. A missing guard fails closed. This is a synchronous internal
 adapter contract, not a serialized `stopped=true` field, new Run state machine,
-or assertion that production BRG-071/RUN-018 admission is already implemented.
+or assertion that a checkpoint alone authorizes deletion. BRG-071 now supplies
+the production local adapter: a cleanup-only immutable owner grant is joined to
+the retained checkpoint history, the exact terminal admission and the finished
+process journal before this callback can run. It remains separate from advertised
+Runtime grants and shared wire capabilities.
 
 Preview performs no mutation. It verifies the confirmed canonical checkpoint,
 publication/observation history and retained patch, then checks current file
@@ -175,10 +179,11 @@ explicitly identifies the private Git object store, scratch diagnostics and
 checkpoint store that remain. Cleanup never recursively sweeps those stores,
 and the checkpoint remains usable for an explicitly authorized new attempt.
 This retention policy avoids treating uncollected scratch diagnostics as cache
-garbage and does not claim a total disk quota or storage-purge feature. Owner UI,
-actual local cleanup-grant/Run fencing and recovery decisions still require the
-production Bridge admission and product-surface work; this local primitive alone
-never creates a capability.
+garbage and does not claim a total disk quota or storage-purge feature. The
+production CLI exposes exact grant issue/list/revoke plus preview/confirmed
+execute, but the owner console UI and full RUN-018/REPO-001 physical lifecycle
+remain product acceptance work. This local authority never creates a shared
+capability.
 
 ### Local Pinned Preparation
 

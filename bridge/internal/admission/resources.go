@@ -116,7 +116,7 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 	// Recovery must remain available even when Git is temporarily absent. A
 	// missing executable disables new preparation instead of bypassing the
 	// process/admission journals that may still contain a possible start.
-	if gitExecutable != "" && len(clonedAgents) != 0 {
+	if gitExecutable != "" {
 		preparationRoot, prepareErr := ensureGovernedPreparationRoot(dataDir)
 		if prepareErr != nil {
 			return fail(prepareErr)
@@ -131,6 +131,8 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 		if err != nil {
 			return fail(err)
 		}
+	}
+	if resources.preparer != nil && len(clonedAgents) != 0 {
 		resources.coordinator, err = NewGovernedAdmissionCoordinator(resources.bindings,
 			NewExecutionInputClient(cfg, credential), resources.preparer, resources.profiles, resources.fence,
 			NewRuntimeAuthorityClient(cfg, credential), clonedAgents)
@@ -150,6 +152,90 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 		}
 	}
 	return resources, nil
+}
+
+func (r *GovernedAdmissionResources) CleanupCoordinator(grantID string) (*GovernedCleanupCoordinator, error) {
+	if r == nil {
+		return nil, ErrAdmissionInvalid
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.bindings == nil || r.preparer == nil || r.fence == nil || r.processes == nil {
+		return nil, ErrAdmissionInvalid
+	}
+	authority, err := NewGovernedCleanupAuthority(r.bindings, r.fence, r.processes, grantID)
+	if err != nil {
+		return nil, err
+	}
+	return NewGovernedCleanupCoordinator(r.preparer, authority)
+}
+
+func (r *GovernedAdmissionResources) IssueCleanupGrant(ctx context.Context,
+	grantID, operationID string, checkpoint execution.RepositoryCheckpoint,
+	expiresAt string, now time.Time) (repository.CleanupGrantView, error) {
+	if r == nil || now.IsZero() {
+		return repository.CleanupGrantView{}, ErrAdmissionInvalid
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.bindings == nil || r.preparer == nil || r.fence == nil || r.processes == nil {
+		return repository.CleanupGrantView{}, ErrAdmissionInvalid
+	}
+	scope, err := r.preparer.InspectCleanupScope(ctx, operationID, checkpoint)
+	if err != nil {
+		return repository.CleanupGrantView{}, err
+	}
+	view, err := r.fence.Get(scope.RunID)
+	if err != nil {
+		return repository.CleanupGrantView{}, err
+	}
+	spec := view.Spec
+	if view.State != RuntimeAdmissionStopped || view.StartDigest == nil || view.Outcome == nil ||
+		scope.RepositoryID != spec.RepositoryID || scope.BindingID != spec.BindingID ||
+		scope.WorkspaceRef != spec.WorkspaceRef || scope.Generation != spec.WorkspaceGeneration ||
+		scope.RunID != spec.RunID || scope.AgentID != spec.AgentID || scope.DeviceID != spec.DeviceID ||
+		scope.PlanID != spec.PlanID || scope.PlanRevision != spec.PlanRevision || scope.NodeKey != spec.NodeKey ||
+		scope.TaskID != spec.TaskID || scope.ManifestDigest != spec.ManifestDigest {
+		return repository.CleanupGrantView{}, ErrAdmissionChanged
+	}
+	identity := bridgeruntime.GovernedProcessIdentity{RunID: spec.RunID,
+		AdmissionDigest: view.AdmissionDigest, StartDigest: *view.StartDigest}
+	if err := (&RuntimeProcessCompletion{store: r.processes}).RequireFinished(identity); err != nil {
+		return repository.CleanupGrantView{}, err
+	}
+	grant := repository.CleanupGrantSpec{GrantID: grantID, OperationID: operationID,
+		CheckpointID: scope.CheckpointID, CheckpointDigest: scope.CheckpointDigest,
+		RepositoryID: scope.RepositoryID, BindingID: scope.BindingID,
+		RunID: scope.RunID, AgentID: scope.AgentID, DeviceID: scope.DeviceID,
+		WorkspaceRef: scope.WorkspaceRef, Generation: scope.Generation,
+		ManifestDigest: spec.ManifestDigest, PlanID: scope.PlanID, PlanRevision: scope.PlanRevision,
+		NodeKey: scope.NodeKey, TaskID: scope.TaskID, ExpiresAt: expiresAt}
+	return r.bindings.IssueCleanupGrant(ctx, grant, now)
+}
+
+func (r *GovernedAdmissionResources) ListCleanupGrants() ([]repository.CleanupGrantView, error) {
+	if r == nil {
+		return nil, ErrAdmissionInvalid
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.bindings == nil {
+		return nil, ErrAdmissionInvalid
+	}
+	return r.bindings.ListCleanupGrants()
+}
+
+func (r *GovernedAdmissionResources) RevokeCleanupGrant(grantID string,
+	expectedRevision int64, expectedDigest string, now time.Time) (repository.CleanupGrantView, error) {
+	if r == nil {
+		return repository.CleanupGrantView{}, ErrAdmissionInvalid
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.bindings == nil {
+		return repository.CleanupGrantView{}, ErrAdmissionInvalid
+	}
+	return r.bindings.RevokeCleanupGrant(grantID, expectedRevision, expectedDigest, now)
 }
 
 func (r *GovernedAdmissionResources) IntegrationCoordinator() *GovernedIntegrationCoordinator {

@@ -104,6 +104,9 @@ func TestGovernedAdmissionResourcesBorrowOwnerAndRollbackFailure(t *testing.T) {
 		recoveryOnly.ProcessFencer() == nil {
 		t.Fatal("empty Agent inventory enabled admission or omitted recovery")
 	}
+	if coordinator, err := recoveryOnly.CleanupCoordinator("cleanupgrant_resources0001"); err != nil || coordinator == nil {
+		t.Fatalf("empty Agent inventory omitted owner cleanup recovery: coordinator=%v err=%v", coordinator, err)
+	}
 	if ready, err := recoveryOnly.ReadyAgentGrants(context.Background(), time.Now()); err != nil || len(ready) != 0 {
 		t.Fatalf("recovery-only resources reported readiness: %#v %v", ready, err)
 	}

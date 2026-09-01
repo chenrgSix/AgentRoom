@@ -19,7 +19,7 @@ var ErrWorkspaceRetired = errors.New("repository workspace has entered explicit 
 // CleanupScope is local adapter input, not a wire permission. The admission
 // owner must authorize this exact scope and hold its existing stopped-Run fence
 // throughout the callback. A checkpoint, lease closure or clean directory alone
-// must never satisfy that fence. No production adapter is connected yet.
+// must never satisfy that fence.
 type CleanupScope struct {
 	OperationID, CheckpointID, CheckpointDigest       string
 	RepositoryID, BindingID, RunID, AgentID, DeviceID string
@@ -153,6 +153,21 @@ func (e cleanupEvidence) scope(operationID string) CleanupScope {
 		RepositoryID: m.Repository.RepositoryID, BindingID: m.Repository.BindingID, RunID: m.Scope.RunID, AgentID: m.Scope.AgentID, DeviceID: m.Scope.DeviceID,
 		WorkspaceRef: m.Workspace.WorkspaceRef, Generation: e.captured.WorkspaceGeneration, ManifestDigest: m.ManifestDigest,
 		PlanID: m.Scope.PlanID, PlanRevision: m.Scope.PlanRevision, NodeKey: m.Scope.NodeKey, TaskID: m.Scope.TaskID}
+}
+
+// InspectCleanupScope resolves an owner-selected checkpoint only through the
+// retained local capture history. It returns no path and performs no mutation;
+// callers still need a cleanup grant, the stopped-Run fence, process absence and
+// an exact reviewed preview before retirement.
+func (p *Preparer) InspectCleanupScope(ctx context.Context, operationID string,
+	checkpoint execution.RepositoryCheckpoint) (CleanupScope, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	evidence, err := p.cleanupEvidence(ctx, operationID, checkpoint)
+	if err != nil {
+		return CleanupScope{}, err
+	}
+	return evidence.scope(operationID), nil
 }
 
 func underCleanupAuthority(ctx context.Context, authority CleanupAuthority, scope CleanupScope, action func() error) error {

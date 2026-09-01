@@ -79,15 +79,16 @@ type BindingView struct {
 // it never deletes Git data. Consent checks alone do not authorize Runtime
 // startup, verified execution or integration without their other admission gates.
 type BindingStore struct {
-	mu        sync.Mutex
-	owner     BindingOwner
-	dataRoot  string
-	root      string
-	grantRoot string
-	pins      map[string]string
-	git       gitRunner
-	release   func() error
-	closed    bool
+	mu               sync.Mutex
+	owner            BindingOwner
+	dataRoot         string
+	root             string
+	grantRoot        string
+	cleanupGrantRoot string
+	pins             map[string]string
+	git              gitRunner
+	release          func() error
+	closed           bool
 }
 
 func OpenBindingStore(ctx context.Context, dataDir string, owner BindingOwner, executable string, limits Limits) (*BindingStore, error) {
@@ -114,7 +115,9 @@ func OpenBindingStore(ctx context.Context, dataDir string, owner BindingOwner, e
 	ownerJSON, _ := json.Marshal(owner)
 	store.root = filepath.Join(root, "repository-bindings", digest(string(ownerJSON)))
 	store.grantRoot = filepath.Join(root, "repository-grants", digest(string(ownerJSON)))
-	for _, dir := range []string{root, filepath.Dir(store.root), store.root, filepath.Dir(store.grantRoot), store.grantRoot} {
+	store.cleanupGrantRoot = filepath.Join(root, "repository-cleanup-grants", digest(string(ownerJSON)))
+	for _, dir := range []string{root, filepath.Dir(store.root), store.root, filepath.Dir(store.grantRoot), store.grantRoot,
+		filepath.Dir(store.cleanupGrantRoot), store.cleanupGrantRoot} {
 		if dir != root {
 			if err := os.Mkdir(dir, 0o700); err != nil && !errors.Is(err, os.ErrExist) {
 				_ = release()

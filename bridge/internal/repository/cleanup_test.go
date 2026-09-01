@@ -219,6 +219,34 @@ func TestCleanupAuthorityAndExactConfirmation(t *testing.T) {
 	}
 }
 
+func TestInspectCleanupScopeUsesRetainedCheckpointHistoryWithoutMutation(t *testing.T) {
+	seed := seedResume(t, "sha1", false)
+	operationID := "op_cleanup_inspect0001"
+	scope, err := seed.f.preparer.InspectCleanupScope(context.Background(), operationID, seed.checkpoint)
+	if err != nil {
+		t.Fatal(err)
+	}
+	manifest := seed.manifest
+	if scope.OperationID != operationID || scope.CheckpointID != seed.checkpoint.CheckpointID ||
+		scope.CheckpointDigest != seed.checkpoint.Digest || scope.RepositoryID != manifest.Repository.RepositoryID ||
+		scope.BindingID != manifest.Repository.BindingID || scope.RunID != manifest.Scope.RunID ||
+		scope.AgentID != manifest.Scope.AgentID || scope.DeviceID != manifest.Scope.DeviceID ||
+		scope.WorkspaceRef != manifest.Workspace.WorkspaceRef ||
+		scope.Generation != manifest.Workspace.WorkspaceGeneration || scope.ManifestDigest != manifest.ManifestDigest ||
+		scope.PlanID != manifest.Scope.PlanID || scope.PlanRevision != manifest.Scope.PlanRevision ||
+		scope.NodeKey != manifest.Scope.NodeKey || scope.TaskID != manifest.Scope.TaskID {
+		t.Fatalf("scope=%+v", scope)
+	}
+	if _, err := os.Stat(seed.f.preparer.claimPath("operation", operationID)); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("scope inspection wrote an operation: %v", err)
+	}
+	changed := seed.checkpoint
+	changed.Digest = strings.Repeat("f", 64)
+	if _, err := seed.f.preparer.InspectCleanupScope(context.Background(), operationID, changed); err == nil {
+		t.Fatal("changed checkpoint was accepted")
+	}
+}
+
 func TestCleanupReconcilesCompletedGitStepsAfterRestart(t *testing.T) {
 	for _, cut := range []string{"intent", "worktree removed", "branch removed", "partially removed", "moved branch"} {
 		t.Run(cut, func(t *testing.T) {

@@ -103,8 +103,9 @@ Verified locally on macOS arm64 with Node 22.23.1, Go 1.26.7 and actual Git:
 
 ## Remaining Product Work
 
-The owner-visible cleanup/recovery flow and actual local cleanup-grant/stopped-Run
-fence still require the production Bridge adapter. There is deliberately no new
-public cleanup capability yet. Remaining output producers, actual Runtime
-admission, graph scheduling, independent verification, parallel integration,
-bounded autonomy and the final complete-design audit remain required.
+The follow-up [BRG-071 production cleanup authority](brg-071-owner-visible-cleanup.md)
+now connects this primitive to a separate owner-local grant, exact stopped-Run
+fence, finished-process journal and CLI preview/confirmation flow without adding
+a public cleanup capability. REPO-001 still requires the complete physical
+Central/Bridge/Git lifecycle, owner console UX, recovery cuts and final
+complete-design audit before it can close.

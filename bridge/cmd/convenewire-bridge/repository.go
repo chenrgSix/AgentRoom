@@ -40,6 +40,9 @@ func repositoryCommand(args []string, output io.Writer, clock func() time.Time) 
 	if len(args) > 0 && args[0] == "integration" {
 		return repositoryIntegrationCommand(args[1:], output, clock)
 	}
+	if len(args) > 0 && args[0] == "cleanup" {
+		return repositoryCleanupCommand(args[1:], output, clock)
+	}
 	if len(args) == 0 || (args[0] != "bind" && args[0] != "list" && args[0] != "revoke") {
 		return fmt.Errorf("repository requires bind, list, or revoke; registration is not a Runtime grant")
 	}

@@ -192,6 +192,58 @@ func TestRuntimeAdmissionStartWritesPossibleStartOnceAfterAuthority(t *testing.T
 	}
 }
 
+func TestStoppedRunAuthorityRequiresExactTerminalAdmission(t *testing.T) {
+	store, spec := runtimeFenceFixture(t)
+	claim, err := store.Claim(spec, runtimeFenceNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := repository.CleanupScope{RunID: spec.RunID, RepositoryID: spec.RepositoryID,
+		BindingID: spec.BindingID, PlanID: spec.PlanID, PlanRevision: spec.PlanRevision,
+		NodeKey: spec.NodeKey, TaskID: spec.TaskID, AgentID: spec.AgentID, DeviceID: spec.DeviceID,
+		WorkspaceRef: spec.WorkspaceRef, Generation: spec.WorkspaceGeneration,
+		ManifestDigest: spec.ManifestDigest}
+	if err := store.WithStoppedRun(context.Background(), scope, func(RuntimeAdmissionView) error {
+		t.Fatal("claimed admission authorized cleanup")
+		return nil
+	}); !errors.Is(err, ErrAdmissionNotCurrent) {
+		t.Fatalf("claimed error=%v", err)
+	}
+	started, invoke, err := store.start(context.Background(), spec.RunID, claim.AdmissionDigest,
+		func(context.Context, RuntimeAdmissionSpec) error { return nil },
+		func() time.Time { return runtimeFenceNow.Add(time.Minute) })
+	if err != nil || !invoke || started.StartDigest == nil {
+		t.Fatalf("started=%+v invoke=%t err=%v", started, invoke, err)
+	}
+	if err := store.WithStoppedRun(context.Background(), scope, func(RuntimeAdmissionView) error {
+		t.Fatal("possible start authorized cleanup")
+		return nil
+	}); !errors.Is(err, ErrAdmissionNotCurrent) {
+		t.Fatalf("starting error=%v", err)
+	}
+	stopped, err := store.Stop(spec.RunID, claim.AdmissionDigest, *started.StartDigest,
+		RuntimeOutcomeCompleted, runtimeFenceNow.Add(2*time.Minute))
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	if err := store.WithStoppedRun(context.Background(), scope, func(view RuntimeAdmissionView) error {
+		calls++
+		if !reflect.DeepEqual(view, stopped) {
+			t.Fatalf("callback view=%+v stopped=%+v", view, stopped)
+		}
+		return nil
+	}); err != nil || calls != 1 {
+		t.Fatalf("calls=%d err=%v", calls, err)
+	}
+	drifted := scope
+	drifted.WorkspaceRef = "workspace_foreign0001"
+	if err := store.WithStoppedRun(context.Background(), drifted,
+		func(RuntimeAdmissionView) error { t.Fatal("drifted scope ran"); return nil }); !errors.Is(err, ErrAdmissionNotCurrent) {
+		t.Fatalf("drift error=%v", err)
+	}
+}
+
 func TestRuntimeAdmissionStartRechecksExpiryAfterAuthority(t *testing.T) {
 	store, spec := runtimeFenceFixture(t)
 	claim, err := store.Claim(spec, runtimeFenceNow)

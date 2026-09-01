@@ -146,6 +146,34 @@ recheck consent immediately before each effect. In-flight cancellation, owner UI
 just-in-time profile re-probe and full RUN-018 integration remain required. The existing governed
 no-start fence is unchanged. See the [Task consent increment](../acceptance/brg-071-local-task-grants.md).
 
+## Owner-Visible Exact Worktree Cleanup
+
+`repository cleanup grant issue` accepts one absolute bounded canonical
+`RepositoryCheckpoint` file plus new `cleanupgrant_`/`op_cleanup_` identities,
+an expiry and explicit confirmation. The Bridge does not trust that file as
+authority: it resolves the exact receipt through retained local capture history,
+then requires the matching stopped Runtime admission, exact finished-process
+journal and current physical repository binding before persisting consent.
+Cleanup grants use a separate owner-private inventory and never appear in
+Runtime readiness, Agent declarations or Central capability metadata.
+
+`repository cleanup preview` rechecks that immutable consent while holding the
+stopped-Run fence and finished-process proof, then returns the exact recorded
+worktree/ref and retained evidence paths. `repository cleanup execute` accepts
+only the same grant, operation, checkpoint, reviewed preview digest and
+`--confirm`; no path argument, glob, scan, prune or generic recursive deletion
+exists. The authority locks remain held synchronously across the exact Git
+retirement callback, so a concurrent local revocation or replacement cannot
+race the mutation. Interrupt and termination signals cancel the operation.
+
+Issue and execute require local Git. List/revoke remain available without Git,
+without an unexpired Device token and after the original Agent is absent from
+current configuration; they do not provision an identity while reopening
+recovery state. Revocation is an irreversible digest-bound revision-2 tombstone.
+The captured checkpoint, private Git objects and diagnostics remain retained,
+and a response-loss replay returns the exact cleanup receipt rather than
+deleting a recreated path. See the [production cleanup authority evidence](../acceptance/brg-071-owner-visible-cleanup.md).
+
 ## Owner-Local Runtime Profile Registration
 
 `repository profile register` accepts only an exact existing configured Agent,
