@@ -11,6 +11,7 @@ import (
 	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/repository"
+	"convenewire.dev/bridge/internal/verification"
 )
 
 // localOwnerSession holds the one existing Bridge process-owner fence while a
@@ -78,5 +79,10 @@ func (s *localOwnerSession) RepositoryOwner() repository.BindingOwner {
 
 func (s *localOwnerSession) ProfileOwner() admission.Owner {
 	return admission.Owner{ServerURL: s.Credential.ServerURL, TeamID: s.Credential.TeamID,
+		DeviceID: s.Credential.DeviceID, OwnerMemberID: s.Credential.OwnerMemberID}
+}
+
+func (s *localOwnerSession) VerificationOwner() verification.Owner {
+	return verification.Owner{ServerURL: s.Credential.ServerURL, TeamID: s.Credential.TeamID,
 		DeviceID: s.Credential.DeviceID, OwnerMemberID: s.Credential.OwnerMemberID}
 }

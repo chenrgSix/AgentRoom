@@ -13,6 +13,7 @@ import (
 	"convenewire.dev/bridge/internal/admission"
 	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/repository"
+	"convenewire.dev/bridge/internal/verification"
 )
 
 func repositoryGrantCommand(args []string, output io.Writer, clock func() time.Time) error {
@@ -71,6 +72,17 @@ func repositoryGrantCommand(args []string, output io.Writer, clock func() time.T
 		defer profiles.Close()
 		if _, err := profiles.ResolveRuntime(spec.RuntimeProfile, spec.AgentID, agent); err != nil {
 			return err
+		}
+		verifiers, verifierErr := verification.OpenProfileStore(session.DataDir, session.VerificationOwner())
+		if verifierErr != nil {
+			return verifierErr
+		}
+		defer verifiers.Close()
+		for _, profile := range spec.VerificationProfiles {
+			if _, err := verifiers.Resolve(verification.Reference{ProfileID: profile.ProfileID,
+				Revision: profile.Revision, Digest: profile.Digest}); err != nil {
+				return err
+			}
 		}
 		result, err = store.IssueTaskGrant(context.Background(), spec, clock())
 	case "list":

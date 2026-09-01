@@ -50,6 +50,22 @@ type runtimeCommand interface {
 	Run() error
 }
 
+// OwnedCommand exposes the existing cross-platform process-tree lifecycle to
+// other Bridge-owned subprocesses such as independent verifiers. It creates no
+// governed Runtime admission or durable Run-process claim.
+type OwnedCommand interface {
+	Start() error
+	Wait() error
+}
+
+func NewOwnedCommand(ctx context.Context, args []string) (*exec.Cmd, OwnedCommand, error) {
+	if ctx == nil || len(args) == 0 || args[0] == "" {
+		return nil, nil, ErrGovernedProcessInvalid
+	}
+	command := exec.CommandContext(ctx, args[0], args[1:]...)
+	return command, configureRuntimeCommand(command), nil
+}
+
 func newRuntimeCommand(ctx context.Context, args []string, tracker GovernedProcessTracker,
 	identity GovernedProcessIdentity) (*exec.Cmd, runtimeCommand, error) {
 	if len(args) == 0 {

@@ -17,6 +17,7 @@ import (
 	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/repository"
+	"convenewire.dev/bridge/internal/verification"
 	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
@@ -157,6 +158,30 @@ func TestRepositoryGrantCLIHasExactOwnerConsentAndOfflineRevocation(t *testing.T
 	spec.VerificationProfiles = []execution.ExecutionGrantSummaryVerificationProfile{{
 		ProfileID: "profile_verifier0001", Revision: 1, Digest: strings.Repeat("e", 64),
 	}}
+	spec.Operations = append(spec.Operations, execution.Verify)
+	writeSpec()
+	if output, err := invoke(issue...); err == nil {
+		t.Fatalf("unregistered verifier profile issued consent: %s", output)
+	}
+	verifierSpec := verification.ProfileSpec{ProfileID: "profile_verifier0001", Revision: 1,
+		Command:          []string{codex, "-test.run=^TestRepositoryProfileHelperProcess$", "--", "verifier"},
+		EnvironmentNames: []string{"PATH"}, TimeoutMilliseconds: 1000, OutputLimitBytes: 4096}
+	verifierFile := filepath.Join(root, "verifier.json")
+	verifierRaw, _ := json.Marshal(verifierSpec)
+	if err := os.WriteFile(verifierFile, verifierRaw, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	verifierJSON, err := invoke("verifier", "register", "--confirm", "--file", verifierFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var verifier verification.ProfileView
+	if json.Unmarshal([]byte(verifierJSON), &verifier) != nil {
+		t.Fatal(verifierJSON)
+	}
+	spec.VerificationProfiles[0] = execution.ExecutionGrantSummaryVerificationProfile{
+		ProfileID: verifier.ProfileID, Revision: verifier.Revision, Digest: verifier.Digest,
+	}
 	originalCommand := append([]string{}, cfg.Agents[0].Command...)
 	cfg.Agents[0].Command = append(cfg.Agents[0].Command, "--changed")
 	if err := config.Replace(configPath, cfg); err != nil {
