@@ -27,7 +27,8 @@
     "check:generated": "node scripts/check-generated.mjs",
     "check:types": "tsc --noEmit --strict --skipLibCheck --target ES2022 generated/runtime/bridge-validator.d.ts generated/typescript/bridge-messages.ts generated/typescript/pairing-session.ts generated/typescript/task-result.ts generated/typescript/execution-plan.ts src/execution-validation.d.mts",
     "generate": "node scripts/generate.mjs",
-    "test": "node --test && npm run check:generated && npm run check:types && go test ./generated/go/... ./test/go",
+    "test": "node ../../scripts/test/run-with-temp-root.mjs -- npm run test:inner",
+    "test:inner": "node --test && npm run check:generated && npm run check:types && go test ./generated/go/... ./test/go",
     "validate": "node scripts/validate.mjs"
   },
   "dependencies": {

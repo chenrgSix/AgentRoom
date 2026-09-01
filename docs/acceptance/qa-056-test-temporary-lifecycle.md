@@ -30,9 +30,16 @@ Acceptance retains all four historical/current patterns:
 
 ## Controlled reproduction
 
-Pending implementation-start capture. The reproduction will run one known
-leaking Server test below a unique repository-local outer `TMPDIR`, record the
-remaining directory and remove only that exact owned outer root.
+Before implementation, a unique repository-local outer directory was assigned
+to `TMPDIR`, `TEMP` and `TMP`, and only `apps/server/test/app.test.ts` was run.
+The test passed, but the outer directory still contained:
+
+- `convene-wire-api-yt7TlV/server.sqlite` and `artifact-blobs/`;
+- 120 compiled entries below `tsx-501/`; and
+- 3.4 MiB total retained bytes.
+
+The exact outer reproduction root was then removed and verified absent. No
+global temporary directory was scanned or deleted as part of reproduction.
 
 ## Required regression matrix
 

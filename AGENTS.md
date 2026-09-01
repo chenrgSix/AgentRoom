@@ -34,6 +34,11 @@ Node.js 22 and Go 1.26.7 are required. Repository commands are:
 - `npm run preview:site` — build and serve the product website on a printed loopback-only URL.
 - `git diff --check -- site` — check the website's `.editorconfig`-aligned HTML/CSS/JavaScript edits for whitespace errors; no generated `site/dist/` files are committed.
 - `npm test` — run implemented workspace tests.
+- `npm run test:temp-lifecycle` — verify success, failure, spawn error, timeout,
+  cancellation, nested and parallel test-run cleanup with physical directory
+  assertions.
+- `npm run test:bridge` — run all Go Bridge tests with one owned temporary root
+  and invocation-scoped Go build and module caches.
 - `npm run test:bridge-ui` — test the embedded Bridge GUI's pairing state projection.
 - `npm run test:qa-evidence` — test the sanitized two-machine acceptance evidence verifier.
 - `npm run test:product-experience` — verify disposable local/trusted product acceptance fixtures with real sealed evidence.
