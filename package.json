@@ -29,7 +29,7 @@
     "test:product-experience": "node scripts/test/run-with-temp-root.mjs -- tsx --test scripts/qa/product-experience-seed.test.ts",
     "test:temp-lifecycle": "node scripts/test/run-with-temp-root.mjs -- npm run test:temp-lifecycle:inner",
     "test:temp-lifecycle:inner": "node --test scripts/test/*.test.mjs",
-    "preview:product-experience": "tsx scripts/qa/product-experience-preview.mts",
+    "preview:product-experience": "node scripts/test/run-with-temp-root.mjs -- tsx scripts/qa/product-experience-preview.mts",
     "test:site": "node scripts/test/run-with-temp-root.mjs -- npm run test:site:inner",
     "test:site:inner": "node --test site/test/*.test.mjs",
     "preview:site": "npm run build:site && node site/preview.mjs",

@@ -16,8 +16,9 @@ assert.equal(process.env.CONVENE_WIRE_PRODUCT_PREVIEW, "1", "Set CONVENE_WIRE_PR
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const webRoot = path.join(repositoryRoot, "apps/web/dist");
 assert.ok((await stat(path.join(webRoot, "index.html"))).isFile(), "Run npm run build first");
-const directory = await mkdtemp(path.join(os.tmpdir(), "convenewire-product-preview-"));
+let directory = "";
 const apps: FastifyInstance[] = [];
+let cleanupPromise: Promise<void> | undefined;
 // This is an intentionally public, synthetic credential for this fixture only.
 const ownerRecoveryToken = "qa-only-owner-recovery-0123456789abcdef";
 
@@ -66,12 +67,36 @@ function checked<T = Record<string, unknown>>(response: { statusCode: number; js
 }
 
 async function cleanup(): Promise<void> {
-  await Promise.all(apps.map((app) => app.close()));
-  // Only the exact fresh directory created above belongs to this process.
-  await rm(directory, { recursive: true, force: true });
+  cleanupPromise ??= (async () => {
+    const errors: unknown[] = [];
+    for (const result of await Promise.allSettled(apps.map((app) => app.close()))) {
+      if (result.status === "rejected") errors.push(result.reason);
+    }
+    if (directory) {
+      try {
+        // Only the exact fresh directory created by this process is removed.
+        await rm(directory, { recursive: true, force: false, maxRetries: 3, retryDelay: 100 });
+        await assert.rejects(stat(directory), { code: "ENOENT" });
+      } catch (error) {
+        errors.push(error);
+      }
+    }
+    if (errors.length > 0) throw new AggregateError(errors, "Product preview cleanup failed");
+  })();
+  return cleanupPromise;
 }
 
+let stopping = false;
+const stop = (): void => {
+  if (stopping) return;
+  stopping = true;
+  void cleanup().then(() => process.exit(0), () => process.exit(1));
+};
+process.once("SIGINT", stop);
+process.once("SIGTERM", stop);
+
 try {
+  directory = await mkdtemp(path.join(os.tmpdir(), "convenewire-product-preview-"));
   const local = await createServerApp({ databasePath: path.join(directory, "local/server.sqlite"), webRoot, hostedFetch });
   apps.push(local);
   const localUrl = await local.listen({ host: "127.0.0.1", port: 0 });
@@ -111,14 +136,6 @@ try {
   await seedProductExperience(trusted, { databasePath, headers, teamId, roomId: room.roomId, ownerMemberId: team.owner.memberId });
   await trusted.listen({ host: "127.0.0.1", port });
   process.stdout.write(`Local first-use preview: ${localUrl}\nTrusted Team preview: ${origin}\nSynthetic Owner recovery key: ${ownerRecoveryToken}\nOnly disposable QA data; model requests are simulated and never leave this process.\n`);
-  let stopping = false;
-  const stop = (): void => {
-    if (stopping) return;
-    stopping = true;
-    void cleanup().then(() => process.exit(0), () => process.exit(1));
-  };
-  process.once("SIGINT", stop);
-  process.once("SIGTERM", stop);
 } catch (error) {
   await cleanup();
   throw error;

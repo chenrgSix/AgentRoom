@@ -7,6 +7,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
+const repositoryRoot = path.resolve(directory, "../..");
 const runner = path.join(directory, "run-with-temp-root.mjs");
 const childFixture = path.join(directory, "fixtures", "run-child.mjs");
 const forbiddenPrefixes = ["agentroom-", "agent-room-", "convenewire-", "convene-wire-"];
@@ -208,5 +209,28 @@ test("three consecutive runs leave no four-prefix directory", async (t) => {
       forbiddenPrefixes.some((prefix) => name.startsWith(prefix))
     );
     assert.deepEqual(matches, []);
+  }
+});
+
+test("registered test and disposable preview entrypoints use the shared run owner", async () => {
+  const manifests = [
+    ["package.json", [
+      "test:all", "test:bridge", "test:bridge-ui", "test:qa-evidence",
+      "test:product-experience", "test:temp-lifecycle", "test:site", "test:compose",
+      "test:e2e", "test:e2e:live", "preview:product-experience"
+    ]],
+    ["apps/server/package.json", ["test"]],
+    ["apps/web/package.json", ["test"]],
+    ["packages/contracts/package.json", ["test"]]
+  ];
+  for (const [manifestPath, scriptNames] of manifests) {
+    const manifest = JSON.parse(await readFile(path.join(repositoryRoot, manifestPath), "utf8"));
+    for (const scriptName of scriptNames) {
+      assert.match(
+        manifest.scripts[scriptName],
+        /(?:^|\s)node\s+[^\n]*run-with-temp-root\.mjs(?:\s|$)/u,
+        `${manifestPath} ${scriptName} bypasses the shared test-run owner`
+      );
+    }
   }
 });
