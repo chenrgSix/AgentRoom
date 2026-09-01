@@ -91,7 +91,7 @@ async function inheritedRoot(environment) {
 async function createRoot(environment) {
   const requestedBase = environment[baseEnvironment]
     ? path.resolve(environment[baseEnvironment])
-    : os.tmpdir();
+    : process.platform === "darwin" ? "/private/tmp" : os.tmpdir();
   const base = await realpath(requestedBase);
   const baseStat = await lstat(base);
   if (!baseStat.isDirectory() || baseStat.isSymbolicLink()) {

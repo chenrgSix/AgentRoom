@@ -71,7 +71,7 @@ func TestDarwinNativeAppleEventCaptureForwardsOnlyValidatedIntent(t *testing.T) 
 		t.Run(mode, func(t *testing.T) {
 			// Darwin sockaddr_un allows only 103 pathname bytes. The normal Go
 			// test temp root may be longer; this private fixture has an exact owner.
-			root, err := os.MkdirTemp("/private/tmp", "cwurl-")
+			root, err := os.MkdirTemp(os.TempDir(), "cwurl-")
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -25,7 +25,7 @@ func darwinTestRoot(t *testing.T) string {
 	t.Helper()
 	// The Darwin sun_path limit includes the full name. Go's default test
 	// directory may exceed it before the application-specific suffix is added.
-	root, err := os.MkdirTemp("/private/tmp", "cwipc-")
+	root, err := os.MkdirTemp(os.TempDir(), "cwipc-")
 	if err != nil {
 		t.Fatal(err)
 	}

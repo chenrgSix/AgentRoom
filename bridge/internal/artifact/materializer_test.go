@@ -323,7 +323,7 @@ func TestMaterializerRejectsNonRegularPartialFile(t *testing.T) {
 		t.Skip("Unix-domain socket fixture is not portable to Windows")
 	}
 	download := newDownloadServer(t, []byte("verified source"))
-	dataDir, err := os.MkdirTemp("/tmp", "convenewire-materializer-")
+	dataDir, err := os.MkdirTemp(os.TempDir(), "cwmat-")
 	if err != nil {
 		t.Fatal(err)
 	}
