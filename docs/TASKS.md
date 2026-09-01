@@ -574,6 +574,7 @@ DONE merely because this dependency split is recorded.
 | QA-054 | PLANNED | Verify bounded autonomy without weakening human authority | EXEC-005, DISC-012 | Real proposal/revision/dispatch flows, low-risk adoption and escalation, quorum recovery and no code-pipeline/Discussion authority regression |
 | QA-055 | PLANNED | Audit final implementation against the complete accepted design | QA-052, QA-053, QA-054 | Requirement-by-requirement current evidence, repaired findings, all relevant regression/build/contract/browser gates and final completion inventory |
 | QA-056 | DONE | Own and reclaim every test-run temporary resource | none | [Accepted lifecycle design](adr/0037-own-test-temporary-resources-by-run.md) and [physical acceptance](acceptance/qa-056-test-temporary-lifecycle.md): one exact run root, shared isolated caches, immediate fixture/process/script cleanup, success/failure/spawn/timeout/cancel/parallel regressions, macOS orphan-group `EPERM` convergence, three consecutive no-residue runs and no global prefix deletion |
+| QA-057 | DONE | Keep verification success acceptance stable under race instrumentation | VER-001 | [Race-timeout evidence](acceptance/qa-057-verification-race-timeout.md): the pass-only helper budget is five seconds instead of a performance-sensitive one second, explicit timeout profiles remain unchanged, ten focused race repetitions and full admission/repository race pass through owned temporary roots |
 
 ## Deferred Beyond MVP
 

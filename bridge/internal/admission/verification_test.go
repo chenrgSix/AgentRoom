@@ -51,7 +51,7 @@ func TestGovernedVerificationCoordinatorRetainsPassAndNeverRerunsJournal(t *test
 		Digest:    manifest.VerificationProfiles[0].Digest,
 	}, Executable: executable, ExecutableDigest: fileSHA256(t, executable),
 		Arguments: []string{"-test.run=TestGovernedVerificationHelperProcess", "--", "pass"},
-		Timeout:   time.Second, OutputLimitBytes: 4096}
+		Timeout:   5 * time.Second, OutputLimitBytes: 4096}
 	profiles := &verificationProfilesStub{profile: profile}
 	preparer := &verificationPreparerStub{}
 	transport := &verificationTransportStub{}
