@@ -14,6 +14,10 @@ function processGroupExists(processGroupId) {
     return true;
   } catch (error) {
     if (error.code === "ESRCH") return false;
+    // POSIX kill(2) uses EPERM to report that a target exists but cannot be
+    // probed. macOS can return it after the original group leader exits, while
+    // an owned orphan is still converging through teardown.
+    if (error.code === "EPERM") return true;
     throw error;
   }
 }

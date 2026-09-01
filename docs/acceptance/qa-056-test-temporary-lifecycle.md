@@ -103,6 +103,23 @@ Three subsequent, consecutive invocations exited 0 and physically removed:
 - `/private/tmp/convene-wire-test-run-17wpJH`; and
 - `/private/tmp/convene-wire-test-run-9PBaXh`.
 
+A 2026-09-01 revalidation exposed one additional macOS process-group edge. The
+first two outer lifecycle invocations passed, while the third received
+`EPERM` from `kill(-pgid, 0)` after the original process-group leader exited.
+POSIX uses that result to report that the group still exists but cannot be
+probed; treating it as a cleanup exception skipped the remaining forced-stop
+path. The outer owner still removed its exact run root, so this failure left no
+physical residue. The process helper now treats only this zero-signal `EPERM`
+as existence and continues the existing owned `SIGTERM`/`SIGKILL` convergence;
+it never selects another PID or path.
+
+After that repair, a fresh acceptance count passed all 24 lifecycle tests three
+consecutive times and physically removed the exact roots ending `f8uyqW`,
+`MYbyvw` and `JqbBde`. The dedicated acceptance base was empty after every run
+and removed by its `EXIT INT TERM` trap. Read-only before/after snapshots of
+both `/private/tmp` and the canonical macOS user temporary directory remained
+at zero entries for all four accepted prefixes.
+
 ### Focused and full gates
 
 | Command | Result | Physical evidence |
