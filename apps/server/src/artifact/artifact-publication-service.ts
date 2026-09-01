@@ -39,6 +39,7 @@ export interface PrepareArtifactPublicationInput {
   sizeBytes: number;
   sha256: string;
   relations?: ArtifactRelationInput[];
+  verificationOperationId?: string;
 }
 
 function boundedText(
@@ -68,7 +69,8 @@ function requestFingerprint(input: PrepareArtifactPublicationInput): string {
     input.summary,
     input.sizeBytes,
     input.sha256,
-    input.relations ?? []
+    input.relations ?? [],
+    input.verificationOperationId ?? null
   ])).digest("hex");
 }
 
@@ -193,7 +195,8 @@ export class ArtifactPublicationService {
       ).toISOString(),
       createdAt: now,
       updatedAt: now,
-      relations: normalized.relations ?? []
+      relations: normalized.relations ?? [],
+      verificationOperationId: normalized.verificationOperationId ?? null
     };
     try {
       const created = this.publications.create(record);

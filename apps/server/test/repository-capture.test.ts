@@ -3,7 +3,11 @@ import { createHash } from "node:crypto";
 import { writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
-import type { RepositoryCheckpoint, RepositoryOperationRequest } from "@convene-wire/contracts/execution-plan";
+import type {
+  RepositoryCheckpoint,
+  RepositoryOperationRequest,
+  VerificationReceipt
+} from "@convene-wire/contracts/execution-plan";
 import { executionOperationDigest } from "@convene-wire/contracts/execution-validation";
 import { ArtifactPublicationRepository } from "../src/artifact/artifact-publication-repository.js";
 import { LocalArtifactBlobStore } from "../src/artifact/local-artifact-blob-store.js";
@@ -33,9 +37,29 @@ function hashRequest(value: RepositoryOperationRequest) {
   return value;
 }
 
-async function captureFixture(t: TestContext, commitOutput = false) {
+async function captureFixture(
+  t: TestContext,
+  commitOutput = false,
+  independentVerification = false
+) {
   const f = await workspaceFixture(t, false, { configurePlan: (definition) => {
-    if (commitOutput) for (const node of definition.nodes) node.outputs.push({ slotKey: "commit", kind: "commit", required: true });
+    for (const node of definition.nodes) {
+      if (commitOutput) {
+        node.outputs.push({
+          slotKey: "commit",
+          kind: "commit",
+          required: true
+        });
+      }
+      if (independentVerification) {
+        node.verificationProfiles = [{
+          profileId: "profile_verification0001",
+          revision: 1,
+          digest: "e".repeat(64),
+          required: true
+        }];
+      }
+    }
   } }), initial = f.reserve();
   f.freeze();
   const authorization = `Bearer ${f.credential.secret}`;
@@ -199,6 +223,219 @@ test("capture publishes real canonical content and an immutable checkpoint throu
   assert.throws(() => f.database.exec("DELETE FROM repository_capture_operations"), /retained/u);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
   await assert.rejects(f.prepare("after_checkpoint"), /ALREADY_SEALED/u);
+});
+
+test("Central admits exact candidate verification and retains only the paired Device receipt", async (t) => {
+  const f = await captureFixture(t, false, true);
+  const output = await f.publish();
+  const checkpoint = f.checkpoint(output);
+  await f.deviceOK("POST", "/api/bridge/repository-checkpoints", checkpoint);
+  const profile = f.manifest.verificationProfiles[0]!;
+  const verificationRequest = hashRequest({
+    version: 1,
+    operationId: "op_verification_candidate0001",
+    requestDigest: "a".repeat(64),
+    plan: {
+      planId: f.manifest.scope.planId,
+      revision: f.manifest.scope.planRevision,
+      digest: f.manifest.scope.planDigest,
+      approvalOperationId: f.manifest.scope.approvalOperationId,
+      roomId: f.roomId,
+      rootTaskId: f.root.taskId
+    },
+    execution: f.manifest.scope,
+    repositoryId: f.manifest.repository.repositoryId,
+    bindingId: f.manifest.repository.bindingId,
+    deviceId: f.device.deviceId,
+    grant: f.manifest.grant,
+    expectedGeneration: f.initial.generation,
+    deadline: f.manifest.deadline,
+    action: {
+      kind: "verify",
+      verify: {
+        candidateCommit: checkpoint.candidateCommit,
+        candidateTree: checkpoint.candidateTree,
+        inputDigest: checkpoint.inputDigest,
+        profile: {
+          profileId: profile.profileId,
+          revision: profile.revision,
+          digest: profile.digest
+        }
+      }
+    }
+  });
+  for (const [suffix, mutate] of [
+    ["generation", (request: RepositoryOperationRequest) => {
+      request.expectedGeneration = "f".repeat(64);
+    }],
+    ["profile", (request: RepositoryOperationRequest) => {
+      request.action.verify!.profile.digest = "f".repeat(64);
+    }],
+    ["candidate", (request: RepositoryOperationRequest) => {
+      request.action.verify!.candidateTree = "f".repeat(40);
+    }]
+  ] as const) {
+    const changed = structuredClone(verificationRequest);
+    changed.operationId = `op_verification_wrong_${suffix}0001`;
+    mutate(changed);
+    hashRequest(changed);
+    const response = await f.http(
+      "POST",
+      "/api/bridge/repository-verifications",
+      changed
+    );
+    assert.equal(response.statusCode, 409, response.body);
+  }
+  const admitted = await f.deviceOK(
+    "POST",
+    "/api/bridge/repository-verifications",
+    verificationRequest
+  );
+  assert.deepEqual(admitted, {
+    operationId: verificationRequest.operationId,
+    requestDigest: verificationRequest.requestDigest,
+    admittedAt: now,
+    deadline: verificationRequest.deadline
+  });
+  assert.deepEqual(await f.deviceOK(
+    "POST",
+    "/api/bridge/repository-verifications",
+    verificationRequest
+  ), admitted);
+  const changedRequest = structuredClone(verificationRequest);
+  changedRequest.action.verify!.candidateTree = "f".repeat(40);
+  hashRequest(changedRequest);
+  assert.equal((await f.http(
+    "POST",
+    "/api/bridge/repository-verifications",
+    changedRequest
+  )).statusCode, 409);
+
+  const logBytes = Buffer.from(JSON.stringify({
+    version: 1,
+    stdout: "verification passed",
+    stderr: "",
+    truncated: false,
+    spawned: true
+  }));
+  const publication = await f.deviceOK(
+    "POST",
+    "/api/bridge/artifact-publications",
+    {
+      leaseId: f.lease.leaseId,
+      runId: f.manifest.scope.runId,
+      agentId: f.agent.agentId,
+      workspaceRef: f.lease.workspaceRef,
+      workspaceGeneration: f.lease.workspaceGeneration,
+      verificationOperationId: verificationRequest.operationId,
+      idempotencyKey: "idem_verification_log0001",
+      artifactType: "test_result",
+      fileName: "verification.json",
+      mediaType: "application/json",
+      title: "Independent verification log",
+      summary: "Bounded output from the admitted Bridge verifier",
+      sizeBytes: logBytes.length,
+      sha256: sha(logBytes)
+    }
+  );
+  await f.upload(publication.publicationId, logBytes);
+  const logArtifact = (await f.deviceOK(
+    "POST",
+    `/api/bridge/artifact-publications/${publication.publicationId}/bind`
+  )).artifact;
+  const receipt: VerificationReceipt = {
+    version: 1,
+    verificationId: "verification_candidate0001",
+    operationId: verificationRequest.operationId,
+    requestDigest: verificationRequest.requestDigest,
+    plan: verificationRequest.plan,
+    execution: f.manifest.scope,
+    integrationOperationId: null,
+    repositoryId: verificationRequest.repositoryId,
+    bindingId: verificationRequest.bindingId,
+    authority: { kind: "bridge", deviceId: f.device.deviceId },
+    candidateCommit: checkpoint.candidateCommit,
+    candidateTree: checkpoint.candidateTree,
+    inputDigest: checkpoint.inputDigest,
+    profile: verificationRequest.action.verify!.profile,
+    startedAt: now,
+    finishedAt: now,
+    outcome: "passed",
+    exitCode: 0,
+    durationMilliseconds: 0,
+    logArtifact: {
+      artifactId: logArtifact.artifactId,
+      artifactRevision: logArtifact.artifactRevision,
+      contentDigest: sha(logBytes),
+      byteLength: logBytes.length,
+      kind: "test_result"
+    }
+  };
+  const forged = structuredClone(receipt);
+  forged.candidateTree = "f".repeat(40);
+  const rejected = await f.http(
+    "POST",
+    "/api/bridge/verification-receipts",
+    forged
+  );
+  assert.equal(rejected.statusCode, 409, rejected.body);
+  assert.equal((f.database.prepare(
+    "SELECT count(*) AS n FROM verification_receipts"
+  ).get() as { n: number }).n, 0);
+  assert.equal((await f.http(
+    "POST",
+    "/api/bridge/verification-receipts",
+    receipt,
+    f.authorization
+  )).statusCode, 401, "a Web member cannot mint a receipt");
+  const missingLog = structuredClone(receipt);
+  missingLog.logArtifact = null;
+  assert.equal((await f.http(
+    "POST",
+    "/api/bridge/verification-receipts",
+    missingLog
+  )).statusCode, 409, "a trustworthy terminal outcome requires its exact log");
+  const retained = await f.deviceOK(
+    "POST",
+    "/api/bridge/verification-receipts",
+    receipt
+  );
+  assert.deepEqual(retained.receipt, receipt);
+  assert.equal(retained.receiptDigest, executionOperationDigest(receipt));
+  assert.deepEqual(await f.deviceOK(
+    "GET",
+    `/api/bridge/repository-verifications/${verificationRequest.operationId}/receipt`
+  ), retained, "a lost terminal response is recovered by exact lookup");
+  assert.deepEqual(await f.deviceOK(
+    "POST",
+    "/api/bridge/verification-receipts",
+    receipt
+  ), retained);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM artifact_publications
+    WHERE verification_operation_id = ? AND state = 'bound'
+  `).get(verificationRequest.operationId) as { n: number }).n, 1);
+  const content = new ArtifactPublicationRepository(f.database)
+    .getContent(logArtifact.contentId)!;
+  assert.deepEqual(
+    await readFile(path.join(f.blobRoot, content.storageKey)),
+    logBytes
+  );
+  assert.throws(() => f.database.exec(
+    "UPDATE verification_receipts SET outcome = outcome"
+  ), /immutable/u);
+  assert.throws(() => f.database.exec(
+    "DELETE FROM repository_verification_operations"
+  ), /retained/u);
+  assert.throws(() => f.database.exec(
+    "UPDATE artifact_publications SET verification_operation_id = NULL"
+  ), /immutable|state transition/u);
+  assert.equal((f.database.prepare(`
+    SELECT verification_operation_id AS operationId
+    FROM artifact_publications WHERE publication_id = ?
+  `).get(publication.publicationId) as { operationId: string }).operationId,
+  verificationRequest.operationId);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
 test("runtime authority HTTP observes only the exact current isolated lease", async (t) => {

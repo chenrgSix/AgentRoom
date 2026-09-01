@@ -6,7 +6,8 @@ import { bearerToken, noStore } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
-  app, auth, clock, executionPlans, executionInputs, isolatedWorkspaces, repositoryCaptures, principal
+  app, auth, clock, executionPlans, executionInputs, isolatedWorkspaces,
+  repositoryCaptures, repositoryVerifications, principal
 }: ServerRouteContext): void {
   const options = {
     bodyLimit: 512 * 1024,
@@ -40,6 +41,19 @@ export function registerExecutionPlanRoutes({
   app.get<{ Params: { operationId: string } }>("/api/bridge/repository-captures/:operationId/checkpoint", options,
     async (request) => execute(() => repositoryCaptures.getForDevice(
       auth.authenticateDevice(bearerToken(request), clock()), request.params.operationId)));
+
+  app.post("/api/bridge/repository-verifications", options, async (request) =>
+    execute(() => repositoryVerifications.begin(
+      auth.authenticateDevice(bearerToken(request), clock()), request.body, clock())));
+  app.post("/api/bridge/verification-receipts", options, async (request) =>
+    execute(() => repositoryVerifications.retain(
+      auth.authenticateDevice(bearerToken(request), clock()), request.body, clock())));
+  app.get<{ Params: { operationId: string } }>(
+    "/api/bridge/repository-verifications/:operationId/receipt",
+    options,
+    async (request) => execute(() => repositoryVerifications.getForDevice(
+      auth.authenticateDevice(bearerToken(request), clock()), request.params.operationId))
+  );
   app.get<{ Params: { planId: string; bindingId: string } }>(
     "/api/execution-plans/:planId/inputs/:bindingId", options,
     async (request) => execute(() => executionInputs.getForMember(

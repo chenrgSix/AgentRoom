@@ -2,6 +2,7 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { ExecutionPlanService } from "../execution/execution-plan-service.js";
 import type { ExecutionInputService } from "../execution/execution-input-service.js";
 import type { RepositoryCaptureService } from "../repository/repository-capture-service.js";
+import type { RepositoryVerificationService } from "../verification/repository-verification-service.js";
 
 import type { ArtifactPublicationService } from
   "../artifact/artifact-publication-service.js";
@@ -97,6 +98,7 @@ export interface ServerRouteContext {
   executionInputs: ExecutionInputService;
   isolatedWorkspaces: IsolatedWorkspaceLeaseService;
   repositoryCaptures: RepositoryCaptureService;
+  repositoryVerifications: RepositoryVerificationService;
   fakeAdapters: Map<string, FakeRuntimeAdapter>;
   handoffs: HandoffService;
   hostedAgents: HostedAgentConfigurationService;

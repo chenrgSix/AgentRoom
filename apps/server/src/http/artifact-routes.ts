@@ -178,6 +178,13 @@ export function registerArtifactRoutes({
         "idempotencyKey",
         133
       ),
+      ...(body.verificationOperationId === undefined ? {} : {
+        verificationOperationId: requiredString(
+          body.verificationOperationId,
+          "verificationOperationId",
+          140
+        )
+      }),
       artifactType: requiredString(body.artifactType, "artifactType") as
         ArtifactPublicationRecord["artifactType"],
       fileName: requiredString(body.fileName, "fileName", 255),

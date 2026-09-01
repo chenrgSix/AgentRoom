@@ -63,7 +63,9 @@ export class WorkspaceLeaseService {
     private readonly tasks: AgentTaskRepository,
     private readonly core: CoreRepository,
     private readonly authorizeCapture?: (principal: DevicePrincipal, lease: WorkspaceLeaseRecord,
-      artifactType: ArtifactPublicationRecord["artifactType"], now: string) => void
+      publication: Pick<ArtifactPublicationRecord, "artifactType"> &
+        Partial<Pick<ArtifactPublicationRecord, "verificationOperationId">>,
+      now: string) => void
   ) {}
 
   public getSourceSnapshot(
@@ -218,7 +220,9 @@ export class WorkspaceLeaseService {
   }
 
   public requireActivePublicationSource(principal: DevicePrincipal, leaseId: string,
-    input: Pick<ArtifactPublicationRecord, "runId" | "agentId" | "workspaceRef" | "workspaceGeneration" | "artifactType">,
+    input: Pick<ArtifactPublicationRecord, "runId" | "agentId" | "workspaceRef" |
+      "workspaceGeneration" | "artifactType"> &
+      Partial<Pick<ArtifactPublicationRecord, "verificationOperationId">>,
     now: string): WorkspaceLeaseView {
     const lease = this.getForDevice(principal, leaseId, now);
     if (input.artifactType === "commit" && lease.mode !== "read_capture") {
@@ -229,7 +233,7 @@ export class WorkspaceLeaseService {
       lease.workspaceRef !== input.workspaceRef || lease.workspaceGeneration !== input.workspaceGeneration || !this.authorizeCapture) {
       throw new Error("Repository capture publication lease is not active");
     }
-    this.authorizeCapture(principal, { ...lease, state: "active" }, input.artifactType, now);
+    this.authorizeCapture(principal, { ...lease, state: "active" }, input, now);
     return lease;
   }
 
