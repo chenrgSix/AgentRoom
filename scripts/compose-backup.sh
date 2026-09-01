@@ -14,11 +14,29 @@ host_backup="${backup_root}/${backup_name}"
 temporary_backup=""
 
 cleanup() {
+  local backup_status=$?
+  local signal=${1:-}
+  local cleanup_status=0
+  trap - EXIT INT TERM
+  set +e
   if [[ -n "${temporary_backup}" && -e "${temporary_backup}" ]]; then
     rm -f -- "${temporary_backup}"
+    if [[ -e "${temporary_backup}" || -L "${temporary_backup}" ]]; then
+      cleanup_status=1
+      echo "Failed to remove owned temporary backup: ${temporary_backup}" >&2
+    fi
   fi
+  if [[ -n "${signal}" ]]; then
+    kill -s "${signal}" "$$"
+    [[ "${signal}" == "INT" ]] && exit 130
+    exit 143
+  fi
+  [[ "${backup_status}" -eq 0 && "${cleanup_status}" -ne 0 ]] && backup_status=1
+  exit "${backup_status}"
 }
 trap cleanup EXIT
+trap 'cleanup INT' INT
+trap 'cleanup TERM' TERM
 
 if [[ -e "${host_backup}" ]]; then
   echo "Backup already exists: ${host_backup}" >&2

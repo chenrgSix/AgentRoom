@@ -220,16 +220,16 @@ if [[ "${server_command}" != '["node","apps/server/dist/server.js"]' ]]; then
   exit 1
 fi
 
-runtime_root=$(mktemp -d "${bundle_dir}/.convenewire-runtime-gate.XXXXXX")
-runtime_data="${runtime_root}/data"
-recovery_file="${runtime_root}/owner_recovery_token"
+runtime_root=""
+runtime_data=""
+recovery_file=""
 container_name="convenewire-central-runtime-${target_arch}-$$"
-mkdir -m 0777 "${runtime_data}"
-printf '%064d\n' 0 > "${recovery_file}"
-chmod 0444 "${recovery_file}"
 cleanup_runtime() {
-  verifier_status=$?
-  trap - EXIT
+  local verifier_status=$?
+  local signal=${1:-}
+  local image_cleanup_status=0
+  local host_cleanup_status=0
+  trap - EXIT INT TERM
   set +e
   docker rm --force "${container_name}" >/dev/null 2>&1 || true
 
@@ -238,25 +238,44 @@ cleanup_runtime() {
   # before the host removes the runner-owned outer directory. The helper is
   # offline, cannot pull, has no capabilities, and can write only this mktemp
   # data directory.
-  docker run --rm --pull=never --network none --read-only \
-    --cap-drop ALL --security-opt no-new-privileges:true \
-    --mount "type=bind,src=${runtime_data},dst=/cleanup" \
-    "${server_reference}" node -e \
-    'const fs=require("node:fs"),path=require("node:path");for(const name of fs.readdirSync("/cleanup"))fs.rmSync(path.join("/cleanup",name),{recursive:true,force:true});' \
-    >/dev/null 2>&1
-  image_cleanup_status=$?
-
-  rm -rf -- "${runtime_root}" >/dev/null 2>&1
-  host_cleanup_status=$?
-  if [[ "${image_cleanup_status}" -ne 0 || "${host_cleanup_status}" -ne 0 ]]; then
-    echo "Warning: Central runtime verifier could not completely remove ${runtime_root}" >&2
+  if [[ -n "${runtime_data}" && -d "${runtime_data}" ]]; then
+    docker run --rm --pull=never --network none --read-only \
+      --cap-drop ALL --security-opt no-new-privileges:true \
+      --mount "type=bind,src=${runtime_data},dst=/cleanup" \
+      "${server_reference}" node -e \
+      'const fs=require("node:fs"),path=require("node:path");for(const name of fs.readdirSync("/cleanup"))fs.rmSync(path.join("/cleanup",name),{recursive:true,force:true});' \
+      >/dev/null 2>&1
+    image_cleanup_status=$?
   fi
 
-  # Cleanup is diagnostic hygiene, not a second runtime gate. Preserve the
-  # verifier result even if the runner cannot remove a temporary entry.
+  if [[ -n "${runtime_root}" ]]; then
+    rm -rf -- "${runtime_root}" >/dev/null 2>&1
+    host_cleanup_status=$?
+    if [[ -e "${runtime_root}" || -L "${runtime_root}" ]]; then
+      host_cleanup_status=1
+    fi
+  fi
+  if [[ "${image_cleanup_status}" -ne 0 || "${host_cleanup_status}" -ne 0 ]]; then
+    echo "Central runtime verifier could not completely remove ${runtime_root}" >&2
+    [[ "${verifier_status}" -eq 0 ]] && verifier_status=1
+  fi
+
+  if [[ -n "${signal}" ]]; then
+    kill -s "${signal}" "$$"
+    [[ "${signal}" == "INT" ]] && exit 130
+    exit 143
+  fi
   exit "${verifier_status}"
 }
 trap cleanup_runtime EXIT
+trap 'cleanup_runtime INT' INT
+trap 'cleanup_runtime TERM' TERM
+runtime_root=$(mktemp -d "${bundle_dir}/.convenewire-runtime-gate.XXXXXX")
+runtime_data="${runtime_root}/data"
+recovery_file="${runtime_root}/owner_recovery_token"
+mkdir -m 0777 "${runtime_data}"
+printf '%064d\n' 0 > "${recovery_file}"
+chmod 0444 "${recovery_file}"
 
 # OPS-013_DEFAULT_SERVER_CMD_GATE: no command or entrypoint override is allowed.
 docker run --detach --name "${container_name}" --pull=never --network none \

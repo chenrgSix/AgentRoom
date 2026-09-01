@@ -44,11 +44,30 @@ if [[ -e "${archive}" || -e "${metadata}" ]]; then
   exit 1
 fi
 
-temporary_root=$(mktemp -d "${output_dir}/.convenewire-image-build.XXXXXX")
+temporary_root=""
 cleanup() {
+  local build_status=$?
+  local signal=${1:-}
+  local cleanup_status=0
+  trap - EXIT INT TERM
+  set +e
   rm -rf -- "${temporary_root}"
+  if [[ -e "${temporary_root}" || -L "${temporary_root}" ]]; then
+    cleanup_status=1
+    echo "Failed to remove owned Central image build root: ${temporary_root}" >&2
+  fi
+  if [[ -n "${signal}" ]]; then
+    kill -s "${signal}" "$$"
+    [[ "${signal}" == "INT" ]] && exit 130
+    exit 143
+  fi
+  [[ "${build_status}" -eq 0 && "${cleanup_status}" -ne 0 ]] && build_status=1
+  exit "${build_status}"
 }
 trap cleanup EXIT
+trap 'cleanup INT' INT
+trap 'cleanup TERM' TERM
+temporary_root=$(mktemp -d "${output_dir}/.convenewire-image-build.XXXXXX")
 context_root="${temporary_root}/context"
 mkdir -p "${context_root}"
 source_paths=(

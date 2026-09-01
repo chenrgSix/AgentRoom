@@ -24,11 +24,30 @@ fi
 source_commit=$(git -C "${repository_root}" rev-parse --verify "${source_ref}^{commit}")
 
 targets=(darwin/amd64 darwin/arm64 linux/amd64 linux/arm64)
-temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/convenewire-central-verify.XXXXXX")
+temporary_root=""
 cleanup() {
+  local verifier_status=$?
+  local signal=${1:-}
+  local cleanup_status=0
+  trap - EXIT INT TERM
+  set +e
   rm -rf -- "${temporary_root}"
+  if [[ -e "${temporary_root}" || -L "${temporary_root}" ]]; then
+    cleanup_status=1
+    echo "Failed to remove owned Central verification root: ${temporary_root}" >&2
+  fi
+  if [[ -n "${signal}" ]]; then
+    kill -s "${signal}" "$$"
+    [[ "${signal}" == "INT" ]] && exit 130
+    exit 143
+  fi
+  [[ "${verifier_status}" -eq 0 && "${cleanup_status}" -ne 0 ]] && verifier_status=1
+  exit "${verifier_status}"
 }
 trap cleanup EXIT
+trap 'cleanup INT' INT
+trap 'cleanup TERM' TERM
+temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/convenewire-central-verify.XXXXXX")
 amd64_image_sha=""
 amd64_metadata_sha=""
 arm64_image_sha=""

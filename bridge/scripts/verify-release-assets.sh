@@ -104,11 +104,30 @@ else
   exit 1
 fi
 
-temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/convenewire-release-verify.XXXXXX")
+temporary_root=""
 cleanup() {
-  rm -rf "${temporary_root}"
+  local verifier_status=$?
+  local signal=${1:-}
+  local cleanup_status=0
+  trap - EXIT INT TERM
+  set +e
+  rm -rf -- "${temporary_root}"
+  if [[ -e "${temporary_root}" || -L "${temporary_root}" ]]; then
+    cleanup_status=1
+    echo "Failed to remove owned release verification root: ${temporary_root}" >&2
+  fi
+  if [[ -n "${signal}" ]]; then
+    kill -s "${signal}" "$$"
+    [[ "${signal}" == "INT" ]] && exit 130
+    exit 143
+  fi
+  [[ "${verifier_status}" -eq 0 && "${cleanup_status}" -ne 0 ]] && verifier_status=1
+  exit "${verifier_status}"
 }
 trap cleanup EXIT
+trap 'cleanup INT' INT
+trap 'cleanup TERM' TERM
+temporary_root=$(mktemp -d "${TMPDIR:-/tmp}/convenewire-release-verify.XXXXXX")
 
 assert_safe_members() {
   local archive=$1
