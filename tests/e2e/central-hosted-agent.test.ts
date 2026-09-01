@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { inspect } from "node:util";
@@ -8,6 +6,7 @@ import { inspect } from "node:util";
 import type { FastifyBaseLogger, FastifyInstance } from "fastify";
 
 import { createServerApp } from "../../apps/server/src/app.js";
+import { createTestResources } from "../../scripts/test/resources.mjs";
 import { hostedOpenAIResponsesEndpoint } from
   "../../apps/server/src/runtime/hosted-openai-responses-adapter.js";
 
@@ -187,11 +186,9 @@ async function waitForCompletedRun(
 
 test("Central Hosted Agent completes a real-HTTP Mention without Bridge", {
   timeout: 15_000
-}, async () => {
-  const directory = await mkdtemp(path.join(
-    os.tmpdir(),
-    "convene-wire-central-hosted-e2e-"
-  ));
+}, async (t) => {
+  const resources = await createTestResources(t, "convene-wire-central-hosted-e2e-");
+  const directory = resources.directory;
   const apiTranscript: string[] = [];
   const logEntries: string[] = [];
   const hostedRequests: HostedRequest[] = [];
@@ -217,6 +214,13 @@ test("Central Hosted Agent completes a real-HTTP Mention without Bridge", {
         );
   }) as typeof fetch;
   let app: FastifyInstance | undefined;
+  let appClosed = false;
+  const closeApp = async () => {
+    if (!app || appClosed) return;
+    appClosed = true;
+    await app.close();
+  };
+  resources.defer(closeApp);
   try {
     app = await createServerApp({
       databasePath: path.join(directory, "server.sqlite"),
@@ -396,7 +400,6 @@ test("Central Hosted Agent completes a real-HTTP Mention without Bridge", {
       assert.equal(logEntries.join("\n").includes(sensitive), false);
     }
   } finally {
-    if (app) await app.close();
-    await rm(directory, { recursive: true, force: true });
+    await closeApp();
   }
 });

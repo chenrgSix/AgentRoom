@@ -1,10 +1,9 @@
 import assert from "node:assert/strict";
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   access,
   mkdir,
-  mkdtemp,
   readFile,
   realpath,
   stat,
@@ -18,13 +17,14 @@ import {
   type ServerResponse
 } from "node:http";
 import { connect as connectTcp } from "node:net";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { createServerApp } from "../../apps/server/src/app.js";
+import { spawnTestProcess, type TestProcess } from "../../scripts/test/child-process.mjs";
+import { createTestResources, type TestResources } from "../../scripts/test/resources.mjs";
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -42,8 +42,7 @@ interface FaultState {
   heldResponses: Set<ServerResponse>;
 }
 
-interface BridgeHandle {
-  process: ChildProcess;
+interface BridgeHandle extends TestProcess {
   stdout: string;
   stderr: string;
 }
@@ -89,23 +88,15 @@ async function waitFor<T>(
 }
 
 async function stopBridge(handle: BridgeHandle | undefined): Promise<void> {
-  if (!handle || handle.process.exitCode !== null) return;
-  handle.process.kill("SIGTERM");
-  await Promise.race([
-    new Promise<void>((resolve) => handle.process.once("exit", () => resolve())),
-    new Promise<void>((resolve) => setTimeout(resolve, 2_000))
-  ]);
-  if (handle.process.exitCode === null) {
-    handle.process.kill("SIGKILL");
-    await new Promise<void>((resolve) => handle.process.once("exit", () => resolve()));
-  }
+  if (handle) await handle.stop();
 }
 
-function startBridge(binary: string, configPath: string): BridgeHandle {
+function startBridge(resources: TestResources, binary: string, configPath: string): BridgeHandle {
+  const processHandle = spawnTestProcess(resources, binary, ["run", "--config", configPath], {
+    stdio: ["ignore", "pipe", "pipe"]
+  });
   const handle: BridgeHandle = {
-    process: spawn(binary, ["run", "--config", configPath], {
-      stdio: ["ignore", "pipe", "pipe"]
-    }),
+    ...processHandle,
     stdout: "",
     stderr: ""
   };
@@ -128,7 +119,11 @@ function copyUpstreamResponse(
   }
 }
 
-function createFaultProxy(upstreamPort: number, faults: FaultState): HttpServer {
+function createFaultProxy(
+  resources: TestResources,
+  upstreamPort: number,
+  faults: FaultState
+): HttpServer {
   const proxy = createHttpServer((incoming, downstream) => {
     const requestPath = incoming.url ?? "/";
     const isContent = incoming.method === "GET" && contentPathPattern.test(requestPath);
@@ -209,6 +204,7 @@ function createFaultProxy(upstreamPort: number, faults: FaultState): HttpServer 
     upstream.once("error", () => socket.destroy());
     socket.once("error", () => upstream.destroy());
   });
+  resources.defer(() => closeProxy(proxy, faults));
   return proxy;
 }
 
@@ -225,6 +221,7 @@ async function listen(server: HttpServer): Promise<number> {
 async function closeProxy(server: HttpServer, faults: FaultState): Promise<void> {
   for (const response of faults.heldResponses) response.destroy();
   faults.heldResponses.clear();
+  if (!server.listening) return;
   server.closeAllConnections();
   await new Promise<void>((resolve) => server.close(() => resolve()));
 }
@@ -237,8 +234,9 @@ function artifactId(stdout: string): string {
 
 test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts", {
   timeout: 120_000
-}, async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-artifact-e2e-"));
+}, async (t) => {
+  const resources = await createTestResources(t, "convene-wire-artifact-e2e-");
+  const directory = resources.directory;
   const workspaceA = path.join(directory, "workspace-a");
   const workspaceB = path.join(directory, "workspace-b");
   const dataA = path.join(directory, "data-a");
@@ -252,6 +250,13 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
     databasePath: path.join(directory, "server.sqlite"),
     bridgeServerToken
   });
+  let appClosed = false;
+  const closeApp = async () => {
+    if (appClosed) return;
+    appClosed = true;
+    await app.close();
+  };
+  resources.defer(closeApp);
   const faults: FaultState = {
     corruptNextContent: false,
     corruptedContentResponses: 0,
@@ -273,7 +278,7 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
     if (!serverAddress || typeof serverAddress === "string") {
       throw new Error("Server did not bind TCP");
     }
-    proxy = createFaultProxy(serverAddress.port, faults);
+    proxy = createFaultProxy(resources, serverAddress.port, faults);
     const proxyPort = await listen(proxy);
     const serverUrl = `http://127.0.0.1:${proxyPort}`;
 
@@ -405,8 +410,8 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
       ]);
     }
 
-    bridgeA = startBridge(bridgeBinary, configA);
-    bridgeB = startBridge(bridgeBinary, configB);
+    bridgeA = startBridge(resources, bridgeBinary, configA);
+    bridgeB = startBridge(resources, bridgeBinary, configB);
     bridgeBHistory.push(bridgeB);
     stage = "wait for both managed Agents";
     const agents = await waitFor(async () => {
@@ -546,7 +551,7 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
     assert.equal(queuedRun?.state, "queued");
 
     faults.corruptNextContent = true;
-    bridgeB = startBridge(bridgeBinary, configB);
+    bridgeB = startBridge(resources, bridgeBinary, configB);
     bridgeBHistory.push(bridgeB);
     stage = "fail closed on corrupted staged bytes";
     await waitFor(async () => {
@@ -595,7 +600,7 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
     assert.equal(consumeMessage.json().runs[0].state, "queued");
 
     faults.holdSecondChunk = true;
-    bridgeB = startBridge(bridgeBinary, configB);
+    bridgeB = startBridge(resources, bridgeBinary, configB);
     bridgeBHistory.push(bridgeB);
     const resumablePartial = path.join(
       dataB,
@@ -622,7 +627,7 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
     faults.heldResponses.clear();
 
     stage = "restart Bridge B and resume the same materialization";
-    bridgeB = startBridge(bridgeBinary, configB);
+    bridgeB = startBridge(resources, bridgeBinary, configB);
     bridgeBHistory.push(bridgeB);
     const consumed = await waitFor(async () => {
       try {
@@ -733,6 +738,6 @@ test("two Bridges converge an Artifact-to-Artifact handoff across recovery cuts"
     await stopBridge(bridgeA);
     await stopBridge(bridgeB);
     if (proxy) await closeProxy(proxy, faults);
-    await app.close();
+    await closeApp();
   }
 });

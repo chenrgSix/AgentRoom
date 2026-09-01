@@ -1,21 +1,27 @@
 import assert from "node:assert/strict";
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { chmod, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { createServerApp } from "../../apps/server/src/app.js";
+import {
+  spawnTestProcess,
+  type TestProcess
+} from "../../scripts/test/child-process.mjs";
+import {
+  createTestResources,
+  type TestResources
+} from "../../scripts/test/resources.mjs";
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(testDirectory, "../..");
 
-interface ProcessCapture {
-  process: ChildProcess;
+interface ProcessCapture extends TestProcess {
   stdout: () => string;
   stderr: () => string;
 }
@@ -38,20 +44,24 @@ async function waitFor<T>(
 }
 
 function captureProcess(
+  resources: TestResources,
   executable: string,
   args: string[],
   env?: NodeJS.ProcessEnv
 ): ProcessCapture {
-  const child = spawn(executable, args, { stdio: ["ignore", "pipe", "pipe"], ...(env ? { env } : {}) });
+  const handle = spawnTestProcess(resources, executable, args, {
+    stdio: ["ignore", "pipe", "pipe"],
+    ...(env ? { env } : {})
+  });
   let stdout = "";
   let stderr = "";
-  child.stdout?.on("data", (source: Buffer) => {
+  handle.process.stdout?.on("data", (source: Buffer) => {
     stdout = (stdout + source.toString()).slice(-8_000);
   });
-  child.stderr?.on("data", (source: Buffer) => {
+  handle.process.stderr?.on("data", (source: Buffer) => {
     stderr = (stderr + source.toString()).slice(-8_000);
   });
-  return { process: child, stdout: () => stdout, stderr: () => stderr };
+  return { ...handle, stdout: () => stdout, stderr: () => stderr };
 }
 
 async function waitForExit(capture: ProcessCapture, timeoutMs = 15_000): Promise<void> {
@@ -114,11 +124,12 @@ async function stopProcess(
 }
 
 async function startConsole(
+  resources: TestResources,
   bridgeBinary: string,
   configPath: string,
   env?: NodeJS.ProcessEnv
 ): Promise<ProcessCapture & { baseUrl: string; token: string }> {
-  const capture = captureProcess(bridgeBinary, [
+  const capture = captureProcess(resources, bridgeBinary, [
     "console",
     "--config",
     configPath,
@@ -164,8 +175,9 @@ async function consoleRequest<T>(
 
 test("one link pairs one Device with several Agents and recovers real Bridge work", {
   timeout: 120_000
-}, async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-device-e2e-"));
+}, async (t) => {
+  const resources = await createTestResources(t, "convene-wire-device-e2e-");
+  const directory = resources.directory;
   const bridgeServerToken = "unused-zero-copy-server-token-12345678901234567890";
   let nowMilliseconds = Date.now();
   const app = await createServerApp({
@@ -173,6 +185,13 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
     bridgeServerToken,
     clock: () => new Date(nowMilliseconds).toISOString()
   });
+  let appClosed = false;
+  const closeApp = async () => {
+    if (appClosed) return;
+    appClosed = true;
+    await app.close();
+  };
+  resources.defer(closeApp);
   let pairingProcess: ProcessCapture | undefined;
   let consoleProcess: Awaited<ReturnType<typeof startConsole>> | undefined;
   let stage = "setup";
@@ -278,7 +297,7 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
     }).toString()}#${new URLSearchParams({ claimSecret }).toString()}`;
 
     stage = "pair Device through canonical deep link";
-    pairingProcess = captureProcess(bridgeBinary, [
+    pairingProcess = captureProcess(resources, bridgeBinary, [
       "pair-device",
       "--config",
       configPath,
@@ -322,7 +341,7 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
     assert.equal(credentialInfo.mode & 0o777, 0o600);
 
     stage = "start paired Console and publish Agents";
-    consoleProcess = await startConsole(bridgeBinary, configPath);
+    consoleProcess = await startConsole(resources, bridgeBinary, configPath);
     const agents = await waitFor(async () => {
       const response = await app.inject({
         method: "GET",
@@ -414,7 +433,7 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
     const offlineRunId = offlineMessage.json().runs[0].runId as string;
     assert.equal(offlineMessage.json().runs[0].state, "queued");
     stage = "reconnect queued offline work";
-    consoleProcess = await startConsole(bridgeBinary, configPath);
+    consoleProcess = await startConsole(resources, bridgeBinary, configPath);
     let lastReconnectState = "not_observed";
     const reconnected = await waitFor(async () => {
       const response = await app.inject({
@@ -552,15 +571,23 @@ test("one link pairs one Device with several Agents and recovers real Bridge wor
       cause: error
     });
   } finally {
-    if (pairingProcess) await stopProcess(pairingProcess, "SIGTERM");
-    if (consoleProcess) await stopProcess(consoleProcess, "SIGTERM");
-    await app.close();
+    if (pairingProcess) await pairingProcess.stop();
+    if (consoleProcess) await consoleProcess.stop();
+    await closeApp();
   }
 });
 
-test("member pairing opens a one-use Room entry through the real Go Console", { timeout: 120_000 }, async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convenewire-client-entry-e2e-"));
+test("member pairing opens a one-use Room entry through the real Go Console", { timeout: 120_000 }, async (t) => {
+  const resources = await createTestResources(t, "convenewire-client-entry-e2e-");
+  const directory = resources.directory;
   const app = await createServerApp({ databasePath: path.join(directory, "central.sqlite") });
+  let appClosed = false;
+  const closeApp = async () => {
+    if (appClosed) return;
+    appClosed = true;
+    await app.close();
+  };
+  resources.defer(closeApp);
   let pairingProcess: ProcessCapture | undefined;
   let consoleProcess: Awaited<ReturnType<typeof startConsole>> | undefined;
   try {
@@ -582,7 +609,7 @@ test("member pairing opens a one-use Room entry through the real Go Console", { 
     assert.equal(created.statusCode, 200, created.body);
     const pairingSessionId = created.json().pairingSessionId as string;
     const link = `convenewire://pair-device?${new URLSearchParams({ origin, pairingSessionId, expiresAt: created.json().expiresAt as string })}#${new URLSearchParams({ claimSecret, memberAccess: "1" })}`;
-    pairingProcess = captureProcess(binary, ["pair-device", "--config", configPath, "--link", link]);
+    pairingProcess = captureProcess(resources, binary, ["pair-device", "--config", configPath, "--link", link]);
     await waitFor(async () => {
       const projection = (await app.inject({ method: "GET", url: `/api/teams/${teamId}/device-pairing-sessions/${pairingSessionId}`, headers })).json();
       return projection.state === "claimed" ? true : undefined;
@@ -606,7 +633,7 @@ test("member pairing opens a one-use Room entry through the real Go Console", { 
       const file = path.join(binDir, name);
       await writeFile(file, '#!/bin/sh\nprintf "%s" "$1" > "$CONVENE_WIRE_ENTRY_CAPTURE"\n'); await chmod(file, 0o700);
     }
-    consoleProcess = await startConsole(binary, configPath, { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`, CONVENE_WIRE_ENTRY_CAPTURE: capturePath });
+    consoleProcess = await startConsole(resources, binary, configPath, { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ""}`, CONVENE_WIRE_ENTRY_CAPTURE: capturePath });
     const state = await consoleRequest<{ clientAccessAvailable: boolean }>(consoleProcess, "/api/state");
     assert.equal(state.clientAccessAvailable, true);
     const identity = await consoleRequest<{ memberId: string; rooms: Array<{ roomId: string }> }>(consoleProcess, "/api/client-access");
@@ -636,8 +663,8 @@ test("member pairing opens a one-use Room entry through the real Go Console", { 
     }
   } finally {
     for (const child of [pairingProcess, consoleProcess]) {
-      if (child && !await stopProcess(child, "SIGTERM")) await stopProcess(child, "SIGKILL");
+      if (child) await child.stop();
     }
-    await app.close(); await rm(directory, { recursive: true, force: true });
+    await closeApp();
   }
 });

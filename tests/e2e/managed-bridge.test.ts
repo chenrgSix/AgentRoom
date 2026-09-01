@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { execFile, spawn, type ChildProcess } from "node:child_process";
+import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -8,6 +8,7 @@ import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { createServerApp } from "../../apps/server/src/app.js";
+import { spawnTestProcess, type TestProcess } from "../../scripts/test/child-process.mjs";
 import { createTestResources } from "../../scripts/test/resources.mjs";
 
 const execFileAsync = promisify(execFile);
@@ -24,15 +25,6 @@ async function waitFor<T>(read: () => Promise<T | undefined>, timeoutMs = 25_000
   throw new Error("Timed out waiting for cross-process state");
 }
 
-async function stopProcess(process: ChildProcess): Promise<void> {
-  if (process.exitCode !== null) return;
-  process.kill("SIGTERM");
-  await Promise.race([
-    new Promise<void>((resolve) => process.once("exit", () => resolve())),
-    new Promise<void>((resolve) => setTimeout(resolve, 2_000))
-  ]);
-}
-
 async function verifyManagedBridge(t: TestContext, shareReasoningSummaries: boolean): Promise<void> {
   const resources = await createTestResources(t, "convene-wire-e2e-");
   const directory = resources.directory;
@@ -41,7 +33,14 @@ async function verifyManagedBridge(t: TestContext, shareReasoningSummaries: bool
     databasePath: path.join(directory, "server.sqlite"),
     bridgeServerToken
   });
-  let bridgeProcess: ChildProcess | undefined;
+  let appClosed = false;
+  const closeApp = async () => {
+    if (appClosed) return;
+    appClosed = true;
+    await app.close();
+  };
+  resources.defer(closeApp);
+  let bridgeProcess: TestProcess | undefined;
   let stage = "setup";
   let bridgeStdout = "";
   let bridgeStderr = "";
@@ -147,13 +146,13 @@ async function verifyManagedBridge(t: TestContext, shareReasoningSummaries: bool
       }]
     }, null, 2));
     await execFileAsync(bridgeBinary, ["pair", "--config", configPath, "--code", pairingCode]);
-    bridgeProcess = spawn(bridgeBinary, ["run", "--config", configPath], {
+    bridgeProcess = spawnTestProcess(resources, bridgeBinary, ["run", "--config", configPath], {
       stdio: ["ignore", "pipe", "pipe"]
     });
-    bridgeProcess.stdout?.on("data", (source: Buffer) => {
+    bridgeProcess.process.stdout?.on("data", (source: Buffer) => {
       bridgeStdout = (bridgeStdout + source.toString()).slice(-2_000);
     });
-    bridgeProcess.stderr?.on("data", (source: Buffer) => {
+    bridgeProcess.process.stderr?.on("data", (source: Buffer) => {
       bridgeStderr = (bridgeStderr + source.toString()).slice(-2_000);
     });
 
@@ -569,12 +568,12 @@ async function verifyManagedBridge(t: TestContext, shareReasoningSummaries: bool
   } catch (error) {
     throw new Error(
       `${String(error)}\nStage: ${stage}` +
-      `\nBridge exit: code=${String(bridgeProcess?.exitCode)} signal=${String(bridgeProcess?.signalCode)}` +
+      `\nBridge exit: code=${String(bridgeProcess?.process.exitCode)} signal=${String(bridgeProcess?.process.signalCode)}` +
       `\nBridge stdout:\n${bridgeStdout}\nBridge stderr:\n${bridgeStderr}`
     );
   } finally {
-    if (bridgeProcess) await stopProcess(bridgeProcess);
-    await app.close();
+    if (bridgeProcess) await bridgeProcess.stop();
+    await closeApp();
   }
 }
 

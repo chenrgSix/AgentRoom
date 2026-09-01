@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
-import { execFile, spawn, type ChildProcess } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { execFile } from "node:child_process";
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
 
 import { createServerApp } from "../../apps/server/src/app.js";
+import { spawnTestProcess, type TestProcess } from "../../scripts/test/child-process.mjs";
+import { createTestResources } from "../../scripts/test/resources.mjs";
 
 const execFileAsync = promisify(execFile);
 const testDirectory = path.dirname(fileURLToPath(import.meta.url));
@@ -58,18 +59,6 @@ async function waitFor<T>(
   throw new Error("Timed out waiting for live Runtime state");
 }
 
-async function stopProcess(process: ChildProcess): Promise<void> {
-  if (process.exitCode !== null) return;
-  process.kill("SIGTERM");
-  const exited = await Promise.race([
-    new Promise<boolean>((resolve) => process.once("exit", () => resolve(true))),
-    new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 2_000))
-  ]);
-  if (!exited && process.exitCode === null) {
-    process.kill("SIGKILL");
-  }
-}
-
 async function executable(name: string, override: string | undefined): Promise<string> {
   if (override) return path.resolve(override);
   const result = await execFileAsync("which", [name]);
@@ -79,12 +68,20 @@ async function executable(name: string, override: string | undefined): Promise<s
 test("real Codex and Pi complete one governed Discussion", {
   timeout: 300_000,
   skip: !liveRuntimeEnabled
-}, async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-live-discussion-"));
+}, async (t) => {
+  const resources = await createTestResources(t, "convene-wire-live-discussion-");
+  const directory = resources.directory;
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite")
   });
-  let bridgeProcess: ChildProcess | undefined;
+  let appClosed = false;
+  const closeApp = async () => {
+    if (appClosed) return;
+    appClosed = true;
+    await app.close();
+  };
+  resources.defer(closeApp);
+  let bridgeProcess: TestProcess | undefined;
   let bridgeStderr = "";
   try {
     const [codexBinary, piBinary] = await Promise.all([
@@ -176,10 +173,10 @@ test("real Codex and Pi complete one governed Discussion", {
     await execFileAsync(bridgeBinary, [
       "pair", "--config", configPath, "--code", inviteResponse.json().code as string
     ]);
-    bridgeProcess = spawn(bridgeBinary, ["run", "--config", configPath], {
+    bridgeProcess = spawnTestProcess(resources, bridgeBinary, ["run", "--config", configPath], {
       stdio: ["ignore", "ignore", "pipe"]
     });
-    bridgeProcess.stderr?.on("data", (source: Buffer) => {
+    bridgeProcess.process.stderr?.on("data", (source: Buffer) => {
       bridgeStderr += source.toString();
     });
 
@@ -384,8 +381,7 @@ test("real Codex and Pi complete one governed Discussion", {
   } catch (error) {
     throw new Error(`${String(error)}\nBridge stderr:\n${bridgeStderr}`);
   } finally {
-    if (bridgeProcess) await stopProcess(bridgeProcess);
-    await app.close();
-    await rm(directory, { recursive: true, force: true });
+    if (bridgeProcess) await bridgeProcess.stop();
+    await closeApp();
   }
 });

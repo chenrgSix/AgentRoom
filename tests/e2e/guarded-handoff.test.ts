@@ -1,19 +1,26 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { createServerApp } from "../../apps/server/src/app.js";
+import { createTestResources } from "../../scripts/test/resources.mjs";
 
 const now = "2026-08-23T12:00:00.000Z";
 
-test("three Remote MCP Agents complete one guarded handoff chain", async () => {
-  const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-handoff-e2e-"));
+test("three Remote MCP Agents complete one guarded handoff chain", async (t) => {
+  const resources = await createTestResources(t, "convene-wire-handoff-e2e-");
+  const directory = resources.directory;
   const app = await createServerApp({
     databasePath: path.join(directory, "server.sqlite"),
     clock: () => now
   });
+  let appClosed = false;
+  const closeApp = async () => {
+    if (appClosed) return;
+    appClosed = true;
+    await app.close();
+  };
+  resources.defer(closeApp);
   try {
     const bootstrap = await app.inject({
       method: "POST", url: "/api/bootstrap", payload: { displayName: "Team Owner" }
@@ -217,6 +224,6 @@ test("three Remote MCP Agents complete one guarded handoff chain", async () => {
       new Set([rootRun.runId, bobRun.runId, carolRun.runId])
     );
   } finally {
-    await app.close();
+    await closeApp();
   }
 });
