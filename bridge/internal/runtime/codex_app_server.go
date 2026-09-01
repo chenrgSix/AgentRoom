@@ -92,8 +92,12 @@ func (c CodexAdapter) executeAppServer(ctx context.Context, request Request, emi
 	processContext, cancelProcess := context.WithCancel(runContext)
 	defer cancelProcess()
 
-	command := exec.CommandContext(processContext, c.Config.Command[0], c.Config.Command[1:]...)
-	managedCommand := configureRuntimeCommand(command)
+	command, managedCommand, commandErr := newRuntimeCommand(
+		processContext, c.Config.Command, c.ProcessTracker, c.ProcessIdentity,
+	)
+	if commandErr != nil {
+		return emitCodexFailure(ctx, emit, "CODEX_START_FAILED", "Codex process could not be prepared.")
+	}
 	command.Dir = c.Config.Workspace
 	command.Env = allowedEnvironment(c.Config.EnvAllowlist)
 	stdin, err := command.StdinPipe()

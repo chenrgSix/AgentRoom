@@ -10,8 +10,10 @@ import (
 )
 
 type CodexAdapter struct {
-	Config   config.AgentConfig
-	Sessions RuntimeSessionStore
+	Config          config.AgentConfig
+	Sessions        RuntimeSessionStore
+	ProcessTracker  GovernedProcessTracker
+	ProcessIdentity GovernedProcessIdentity
 }
 
 func (c CodexAdapter) Name() string { return "codex" }

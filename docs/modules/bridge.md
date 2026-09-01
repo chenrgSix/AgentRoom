@@ -272,6 +272,20 @@ but cannot claim or start. A concrete durable process identity and
 `FenceAndWait` implementation is still missing, so managed-core construction,
 production recovery and capability publication remain closed.
 
+The Runtime layer now provides the launch half of that missing process proof as
+an optional `GovernedProcessTracker`; ordinary Codex, Pi and generic adapters
+retain their existing path. A governed Unix launch starts the exact Bridge
+executable as a new process-group supervisor with a blocked gate and inherited
+lease lock. Only a successful durable PID observation releases the configured
+Runtime. The supervisor owns its direct child and kills the complete group when
+that child exits, so daemonized descendants cannot outlive the lock. A manual or
+malformed helper invocation is not a process-group owner and exits without
+signaling its caller. On Windows, the existing process starts suspended inside
+the kill-on-close Job Object; PID plus process creation time is observed and
+accepted before the first thread resumes. Failed observation kills the blocked
+tree on both paths. The owner-scoped journal, restart PID/lock validation and
+concrete fencer are still absent, so this primitive is not yet injected.
+
 The internal `delivery.GovernedHandler` now defines the reviewed connection to
 the existing delivery lifecycle without activating it. `delivery.Handler`
 continues to reject every governed manifest unless that dependency is explicitly

@@ -124,6 +124,15 @@ permission to retry.
   and exact closure operations. It cannot claim or start a Runtime. The concrete
   surviving-process identity/fencer is still absent, so production cannot yet
   construct this recovery branch or advertise governed execution.
+- The Runtime package now has an optional governed process lease and OS launch
+  gate without changing ordinary adapters. On Unix, the exact running Bridge
+  becomes a private process-group supervisor: the configured Runtime cannot run
+  until `Started` durably accepts its PID observation, the supervisor retains an
+  inherited lock and group-kills daemonized descendants on exit. On Windows,
+  the existing suspended process is assigned to its kill-on-close Job Object,
+  its creation-time identity is observed and durably accepted before resume.
+  Observation failure terminates the still-blocked/suspended tree and never
+  releases the configured Runtime.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -170,6 +179,13 @@ closure, `working` to unknown convergence, persisted-terminal replay, claim-only
 preservation, idempotent replay, orphan cleanup with offline failure, no closure
 when process absence is unproved, governed-before-ordinary ordering and ordinary
 recovery rejection before any mixed-inventory mutation.
+The process-gate cases prove on native Unix that the configured command has not
+executed when the durable `Started` callback runs, a rejected callback never
+creates its marker, successful execution reports one exact observation and
+completion, and the group supervisor returns only after cleanup. These cases
+pass normally and for three focused race runs; Runtime vet and Windows/Linux
+amd64 compilation pass. Windows behavior remains cross-compiled, not physically
+executed on native Windows in this increment.
 
 The contract package passes 78 Node checks, generated/current TypeScript, Go
 round trips and 243 shared positive/negative fixtures. The Bridge admission
@@ -185,9 +201,9 @@ acceptance.
 
 - let the managed core open the reviewed resource bundle, inject this exact
   governed delivery branch and publish capability only after readiness;
-- implement the durable cross-process Runtime identity and concrete
-  `FenceAndWait` proof, then connect it to this Inbox/fence recovery branch,
-  stopped-Run, revocation and owner-visible cleanup;
+- implement the owner-scoped durable process lease store and concrete
+  `FenceAndWait` proof over this OS launch gate, then connect it to the
+  Inbox/fence recovery branch, stopped-Run, revocation and owner-visible cleanup;
 - expose owner setup/state without leaking local details;
 - obtain actual no-start and positive-start evidence before advertising the
   governed capability.

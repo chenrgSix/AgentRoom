@@ -3,6 +3,7 @@
 package runtime
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -28,8 +29,9 @@ const (
 type windowsRuntimeCommand struct {
 	command *exec.Cmd
 
-	mu  sync.Mutex
-	job windows.Handle
+	mu           sync.Mutex
+	job          windows.Handle
+	beforeResume func(GovernedProcessObservation) error
 }
 
 // Keep managed Runtimes windowless and make both cancellation and normal
@@ -74,6 +76,23 @@ func (command *windowsRuntimeCommand) Start() error {
 		}
 		return fmt.Errorf("assign Runtime process tree: %w", err)
 	}
+	observation, err := windowsProcessObservation(command.command)
+	if err != nil {
+		_ = windows.TerminateJobObject(command.job, 1)
+		closeError := command.closeJobLocked()
+		command.mu.Unlock()
+		_ = command.command.Wait()
+		return errors.Join(fmt.Errorf("observe Runtime process: %w", err), closeError)
+	}
+	if command.beforeResume != nil {
+		if err := command.beforeResume(observation); err != nil {
+			_ = windows.TerminateJobObject(command.job, 1)
+			closeError := command.closeJobLocked()
+			command.mu.Unlock()
+			_ = command.command.Wait()
+			return errors.Join(err, closeError)
+		}
+	}
 	if err := resumeSuspendedProcess(uint32(command.command.Process.Pid)); err != nil {
 		_ = windows.TerminateJobObject(command.job, 1)
 		closeError := command.closeJobLocked()
@@ -87,6 +106,74 @@ func (command *windowsRuntimeCommand) Start() error {
 
 	command.mu.Unlock()
 	return nil
+}
+
+type governedWindowsRuntimeCommand struct {
+	managed  *windowsRuntimeCommand
+	lease    GovernedProcessLease
+	observed GovernedProcessObservation
+}
+
+func configureGovernedRuntimeCommand(ctx context.Context, args []string, tracker GovernedProcessTracker,
+	identity GovernedProcessIdentity) (*exec.Cmd, runtimeCommand, error) {
+	lease, err := tracker.PrepareProcess(identity)
+	if err != nil {
+		return nil, nil, err
+	}
+	command := exec.CommandContext(ctx, args[0], args[1:]...)
+	managed, ok := configureRuntimeCommand(command).(*windowsRuntimeCommand)
+	if !ok {
+		return nil, nil, errors.Join(ErrGovernedProcessInvalid, lease.Abandon())
+	}
+	governed := &governedWindowsRuntimeCommand{managed: managed, lease: lease}
+	managed.beforeResume = func(observation GovernedProcessObservation) error {
+		governed.observed = observation
+		return lease.Started(observation)
+	}
+	return command, governed, nil
+}
+
+func (c *governedWindowsRuntimeCommand) Start() error {
+	if err := c.managed.Start(); err != nil {
+		if c.observed.PID == 0 {
+			return errors.Join(err, c.lease.Abandon())
+		}
+		return errors.Join(err, c.lease.Finished(c.observed))
+	}
+	return nil
+}
+
+func (c *governedWindowsRuntimeCommand) Wait() error {
+	return errors.Join(c.managed.Wait(), c.lease.Finished(c.observed))
+}
+
+func (c *governedWindowsRuntimeCommand) Run() error {
+	if err := c.Start(); err != nil {
+		return err
+	}
+	return c.Wait()
+}
+
+func windowsProcessObservation(command *exec.Cmd) (GovernedProcessObservation, error) {
+	if command == nil || command.Process == nil {
+		return GovernedProcessObservation{}, ErrGovernedProcessInvalid
+	}
+	var created, exited, kernel, user windows.Filetime
+	var processError error
+	if err := command.Process.WithHandle(func(handle uintptr) {
+		processError = windows.GetProcessTimes(windows.Handle(handle), &created, &exited, &kernel, &user)
+	}); err != nil {
+		return GovernedProcessObservation{}, err
+	}
+	if processError != nil {
+		return GovernedProcessObservation{}, processError
+	}
+	createdValue := uint64(created.HighDateTime)<<32 | uint64(created.LowDateTime)
+	if createdValue == 0 {
+		return GovernedProcessObservation{}, ErrGovernedProcessInvalid
+	}
+	return GovernedProcessObservation{PID: command.Process.Pid,
+		PlatformIdentity: fmt.Sprintf("windows-filetime:%d", createdValue)}, nil
 }
 
 func (command *windowsRuntimeCommand) Wait() error {
