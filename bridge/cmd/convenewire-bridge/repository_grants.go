@@ -8,12 +8,14 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"convenewire.dev/bridge/internal/admission"
 	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/repository"
 	"convenewire.dev/bridge/internal/verification"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 func repositoryGrantCommand(args []string, output io.Writer, clock func() time.Time) error {
@@ -65,23 +67,26 @@ func repositoryGrantCommand(args []string, output io.Writer, clock func() time.T
 		if lookupErr != nil {
 			return lookupErr
 		}
-		profiles, profileErr := admission.OpenProfileStore(session.Context, session.DataDir, session.ProfileOwner())
-		if profileErr != nil {
-			return profileErr
-		}
-		defer profiles.Close()
-		if _, err := profiles.ResolveRuntime(spec.RuntimeProfile, spec.AgentID, agent); err != nil {
-			return err
-		}
-		verifiers, verifierErr := verification.OpenProfileStore(session.DataDir, session.VerificationOwner())
-		if verifierErr != nil {
-			return verifierErr
-		}
-		defer verifiers.Close()
-		for _, profile := range spec.VerificationProfiles {
-			if _, err := verifiers.Resolve(verification.Reference{ProfileID: profile.ProfileID,
-				Revision: profile.Revision, Digest: profile.Digest}); err != nil {
+		integrationOnly := len(spec.Operations) == 1 && slices.Contains(spec.Operations, execution.Integrate)
+		if !integrationOnly {
+			profiles, profileErr := admission.OpenProfileStore(session.Context, session.DataDir, session.ProfileOwner())
+			if profileErr != nil {
+				return profileErr
+			}
+			defer profiles.Close()
+			if _, err := profiles.ResolveRuntime(spec.RuntimeProfile, spec.AgentID, agent); err != nil {
 				return err
+			}
+			verifiers, verifierErr := verification.OpenProfileStore(session.DataDir, session.VerificationOwner())
+			if verifierErr != nil {
+				return verifierErr
+			}
+			defer verifiers.Close()
+			for _, profile := range spec.VerificationProfiles {
+				if _, err := verifiers.Resolve(verification.Reference{ProfileID: profile.ProfileID,
+					Revision: profile.Revision, Digest: profile.Digest}); err != nil {
+					return err
+				}
 			}
 		}
 		result, err = store.IssueTaskGrant(context.Background(), spec, clock())

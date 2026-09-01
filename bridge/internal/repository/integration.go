@@ -162,6 +162,21 @@ func (p *Preparer) integrationTarget(ctx context.Context, source Source, targetR
 	return p.git.text(ctx, source.Root, "show-ref", "--verify", "--hash", targetRef)
 }
 
+// InspectIntegrationTarget reads only the exact approved local branch. It is
+// used after a retained intent when a prior process may have stopped around
+// the atomic update; it never searches or mutates other refs.
+func (p *Preparer) InspectIntegrationTarget(ctx context.Context, source Source, targetRef string) (string, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if ctx == nil || !validGrantTarget(targetRef) {
+		return "", ErrInvalid
+	}
+	if err := p.checkOwner(); err != nil {
+		return "", err
+	}
+	return p.integrationTarget(ctx, source, targetRef)
+}
+
 func integrationContextError(ctx context.Context, err error) error {
 	if ctx.Err() != nil {
 		return ctx.Err()

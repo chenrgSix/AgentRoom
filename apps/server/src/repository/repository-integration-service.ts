@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import type {
   ExecutionGrantSummary,
   GovernedExecutionManifest,
+  RepositoryCheckpoint,
   RepositoryOperationReceipt,
   RepositoryOperationRequest
 } from "@convene-wire/contracts/execution-plan";
@@ -62,6 +63,7 @@ export interface IntegrationApprovalRecord extends IntegrationApprovalCommand {
 export interface IntegrationAdmission {
   admittedAt: string;
   approvalDigest: string;
+  checkpoint: RepositoryCheckpoint;
   operation: RepositoryOperationRequest;
 }
 
@@ -381,7 +383,8 @@ export class RepositoryIntegrationService {
     return {
       operation: this.decodeOperation(operation),
       approvalDigest: approval.approval_digest,
-      admittedAt: operation.admitted_at
+      admittedAt: operation.admitted_at,
+      checkpoint: this.integrationCheckpoint(operation.approval_operation_id)
     };
   }
 
@@ -502,6 +505,7 @@ export class RepositoryIntegrationService {
     now: string
   ): void {
     const action = request.action.integrate!;
+    const checkpoint = this.integrationCheckpoint(operation.approval_operation_id);
     const recorded = Date.parse(receipt.recordedAt);
     const retained = Date.parse(now);
     if (
@@ -512,14 +516,14 @@ export class RepositoryIntegrationService {
       receipt.bindingId !== request.bindingId ||
       receipt.deviceId !== request.deviceId ||
       receipt.observedGeneration !== request.expectedGeneration ||
-      receipt.checkpointId !== null || receipt.verificationId !== null ||
+      receipt.checkpointId !== checkpoint.checkpointId ||
+      receipt.verificationId !== null ||
       receipt.providerObservationId !== null ||
       receipt.candidateCommit !== action.candidateCommit ||
       receipt.candidateTree !== action.candidateTree ||
       !equal(receipt.target, action.target) || receipt.state === "prepared" ||
       !Number.isFinite(recorded) || !Number.isFinite(retained) ||
       recorded < Date.parse(operation.admitted_at) || recorded > retained ||
-      recorded > Date.parse(operation.deadline) ||
       (receipt.state === "succeeded" && receipt.errorCode !== null) ||
       (receipt.state !== "succeeded" && receipt.errorCode === null)
     ) return fail("INTEGRATION_RECEIPT_SCOPE_CONFLICT");
@@ -585,6 +589,20 @@ export class RepositoryIntegrationService {
       receiptDigest: row.receipt_digest,
       recordedAt: row.recorded_at
     };
+  }
+
+  private integrationCheckpoint(approvalOperationId: string): RepositoryCheckpoint {
+    const row = this.database.prepare(`
+      SELECT checkpoint.checkpoint_json
+      FROM execution_integration_approvals approval
+      JOIN repository_checkpoints checkpoint
+        ON checkpoint.checkpoint_id = approval.checkpoint_id
+      WHERE approval.approval_operation_id = ?
+    `).get(approvalOperationId) as { checkpoint_json: string } | undefined;
+    if (!row) return fail("INTEGRATION_CHECKPOINT_NOT_FOUND", 404);
+    const checkpoint = JSON.parse(row.checkpoint_json) as RepositoryCheckpoint;
+    assertExecutionCommand("executionCheckpoint", checkpoint);
+    return checkpoint;
   }
 
   private approval(operationId: string): ApprovalRow | undefined {

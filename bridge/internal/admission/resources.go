@@ -14,6 +14,7 @@ import (
 	"convenewire.dev/bridge/internal/artifact"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/durablefs"
+	bridgeintegration "convenewire.dev/bridge/internal/integration"
 	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/repository"
@@ -27,20 +28,22 @@ const governedPreparationDirectory = "governed-preparation"
 // GovernedAdmissionResources owns the local stores needed by one coordinator.
 // Opening it starts no Runtime and advertises no capability.
 type GovernedAdmissionResources struct {
-	mu           sync.Mutex
-	coordinator  *GovernedAdmissionCoordinator
-	capture      *GovernedCaptureCoordinator
-	verification *GovernedVerificationCoordinator
-	bindings     *repository.BindingStore
-	preparer     *repository.Preparer
-	profiles     *ProfileStore
-	verifiers    *verification.ProfileStore
-	journal      *verification.Journal
-	fence        *RuntimeFenceStore
-	processes    *GovernedProcessStore
-	agents       map[string]config.AgentConfig
-	releaseOwner func() error
-	closed       bool
+	mu                 sync.Mutex
+	coordinator        *GovernedAdmissionCoordinator
+	capture            *GovernedCaptureCoordinator
+	verification       *GovernedVerificationCoordinator
+	integration        *GovernedIntegrationCoordinator
+	bindings           *repository.BindingStore
+	preparer           *repository.Preparer
+	profiles           *ProfileStore
+	verifiers          *verification.ProfileStore
+	journal            *verification.Journal
+	integrationJournal *bridgeintegration.Journal
+	fence              *RuntimeFenceStore
+	processes          *GovernedProcessStore
+	agents             map[string]config.AgentConfig
+	releaseOwner       func() error
+	closed             bool
 }
 
 func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, credential pairing.Credential,
@@ -96,6 +99,12 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 	if err != nil {
 		return fail(err)
 	}
+	resources.integrationJournal, err = bridgeintegration.OpenJournal(dataDir,
+		bridgeintegration.Owner{ServerURL: owner.ServerURL, TeamID: owner.TeamID,
+			DeviceID: owner.DeviceID, OwnerMemberID: owner.OwnerMemberID})
+	if err != nil {
+		return fail(err)
+	}
 	resources.fence, err = OpenRuntimeFenceStore(ownedContext, dataDir, owner)
 	if err != nil {
 		return fail(err)
@@ -113,6 +122,12 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 			return fail(prepareErr)
 		}
 		resources.preparer, err = repository.NewPreparer(preparationRoot, gitExecutable, repository.Limits{})
+		if err != nil {
+			return fail(err)
+		}
+		resources.integration, err = NewGovernedIntegrationCoordinator(resources.bindings,
+			resources.preparer, resources.integrationJournal,
+			bridgeintegration.NewClient(cfg, credential))
 		if err != nil {
 			return fail(err)
 		}
@@ -135,6 +150,18 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 		}
 	}
 	return resources, nil
+}
+
+func (r *GovernedAdmissionResources) IntegrationCoordinator() *GovernedIntegrationCoordinator {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil
+	}
+	return r.integration
 }
 
 func (r *GovernedAdmissionResources) VerificationCoordinator() *GovernedVerificationCoordinator {
@@ -340,6 +367,7 @@ func (r *GovernedAdmissionResources) Close() error {
 	r.coordinator = nil
 	r.capture = nil
 	r.verification = nil
+	r.integration = nil
 	r.agents = nil
 	var result error
 	if r.processes != nil {
@@ -356,6 +384,9 @@ func (r *GovernedAdmissionResources) Close() error {
 	}
 	if r.journal != nil {
 		result = errors.Join(result, r.journal.Close())
+	}
+	if r.integrationJournal != nil {
+		result = errors.Join(result, r.integrationJournal.Close())
 	}
 	if r.bindings != nil {
 		result = errors.Join(result, r.bindings.Close())

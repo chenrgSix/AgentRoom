@@ -1201,6 +1201,9 @@ test("exact human integration approval admits one immutable serialized operation
     `Bearer ${f.credential.secret}`
   );
   const operation = admission.operation as RepositoryOperationRequest;
+  assert.equal(admission.checkpoint.checkpointId, materialization.checkpointId);
+  assert.equal(admission.checkpoint.candidateCommit, materialization.candidateCommit);
+  assert.equal(admission.checkpoint.candidateTree, materialization.candidateTree);
   assert.equal(operation.action.kind, "integrate");
   assert.deepEqual(operation.action.integrate?.target, target);
   assert.equal(
@@ -1227,7 +1230,7 @@ test("exact human integration approval admits one immutable serialized operation
     deviceId: operation.deviceId,
     state: "succeeded",
     observedGeneration: operation.expectedGeneration,
-    checkpointId: null,
+    checkpointId: admission.checkpoint.checkpointId,
     verificationId: null,
     candidateCommit: operation.action.integrate!.candidateCommit,
     candidateTree: operation.action.integrate!.candidateTree,

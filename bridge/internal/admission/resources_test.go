@@ -23,7 +23,7 @@ func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resources.Coordinator() == nil || resources.VerificationCoordinator() == nil ||
+	if resources.Coordinator() == nil || resources.VerificationCoordinator() == nil || resources.IntegrationCoordinator() == nil ||
 		resources.RecoveryFence() == nil ||
 		resources.ProcessTracker() == nil || resources.ProcessFencer() == nil {
 		t.Fatal("resources did not construct admission and restricted recovery")
@@ -45,6 +45,9 @@ func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *test
 	}
 	if resources.VerificationCoordinator() != nil {
 		t.Fatal("closed resources retained the verification coordinator")
+	}
+	if resources.IntegrationCoordinator() != nil {
+		t.Fatal("closed resources retained the integration coordinator")
 	}
 	if resources.RecoveryFence() != nil {
 		t.Fatal("closed resources retained the recovery fence")
