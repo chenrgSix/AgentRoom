@@ -543,7 +543,11 @@ func TestCodexAdapterTerminatesAppServerAtDeadline(t *testing.T) {
 	var terminal Event
 	run := roomContextFixture()
 	run.Instruction = "wait"
-	run.Deadline = time.Now().Add(150 * time.Millisecond)
+	// Leave enough time for the helper process to accept and persist the
+	// logical Session before the deadline. The assertion is about teardown and
+	// retained coverage, not whether a new process can boot within 150 ms on a
+	// contended test host.
+	run.Deadline = time.Now().Add(2 * time.Second)
 	if err := adapter.Execute(context.Background(), Request{Run: run}, func(_ context.Context, event Event) error {
 		terminal = event
 		return nil
