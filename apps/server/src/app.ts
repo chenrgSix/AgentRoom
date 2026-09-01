@@ -80,6 +80,12 @@ import { ExecutionSettlementService } from
 import { ExecutionRecoveryService } from
   "./execution/execution-recovery-service.js";
 import { ExecutionScheduler } from "./execution/execution-scheduler.js";
+import { AcceptedResultMaterializer } from
+  "./execution/materialization/accepted-result-materializer.js";
+import { ExecutionMaterializationService } from
+  "./execution/materialization/execution-materialization-service.js";
+import { VerifiedOutputMaterializer } from
+  "./execution/materialization/verified-output-materializer.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
@@ -618,7 +624,10 @@ export async function createServerApp(
     database,
     transactions,
     executionNodeProjector,
-    executionMaterializations
+    new ExecutionMaterializationService(
+      new AcceptedResultMaterializer(database, executionMaterializations),
+      new VerifiedOutputMaterializer(database, executionMaterializations)
+    )
   );
   const executionRecovery = new ExecutionRecoveryService(
     database,

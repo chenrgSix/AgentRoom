@@ -743,16 +743,23 @@ async function reconcileVerifiedMaterializationConcurrently(
     import { ExecutionNodeProjector } from ${JSON.stringify(new URL("../src/execution/execution-node-projector.ts", import.meta.url).href)};
     import { ExecutionNodeStateRepository } from ${JSON.stringify(new URL("../src/execution/execution-node-state-repository.ts", import.meta.url).href)};
     import { ExecutionSettlementService } from ${JSON.stringify(new URL("../src/execution/execution-settlement-service.ts", import.meta.url).href)};
+    import { AcceptedResultMaterializer } from ${JSON.stringify(new URL("../src/execution/materialization/accepted-result-materializer.ts", import.meta.url).href)};
+    import { ExecutionMaterializationService } from ${JSON.stringify(new URL("../src/execution/materialization/execution-materialization-service.ts", import.meta.url).href)};
+    import { VerifiedOutputMaterializer } from ${JSON.stringify(new URL("../src/execution/materialization/verified-output-materializer.ts", import.meta.url).href)};
     process.send({ ready: true });
     process.once("message", ({ databasePath, identity, now }) => {
       const database = openDatabase(databasePath);
       try {
         const nodes = new ExecutionNodeStateRepository(database);
+        const materializations = new ExecutionNodeMaterializationRepository(database);
         const settlement = new ExecutionSettlementService(
           database,
           new SqliteTransactionBoundary(database),
           new ExecutionNodeProjector(nodes),
-          new ExecutionNodeMaterializationRepository(database)
+          new ExecutionMaterializationService(
+            new AcceptedResultMaterializer(database, materializations),
+            new VerifiedOutputMaterializer(database, materializations)
+          )
         );
         process.send({ state: settlement.reconcileOne(identity, now) });
       } catch (error) {
