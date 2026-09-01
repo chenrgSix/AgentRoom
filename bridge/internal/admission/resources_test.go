@@ -222,6 +222,21 @@ func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBindin
 	if ready, err := resources.ReadyAgentGrants(context.Background(), now.Add(11*time.Minute)); err != nil || len(ready) != 0 {
 		t.Fatalf("revoked grant remained ready: %#v %v", ready, err)
 	}
+	grantSpec.GrantID = "grant_ready0003"
+	grantSpec.Operations = []execution.KindElement{execution.Integrate}
+	grantSpec.VerificationProfiles = []execution.ExecutionGrantSummaryVerificationProfile{}
+	grantSpec.IntegrationTargets = []execution.ExecutionGrantSummaryIntegrationTarget{{
+		RepositoryID: binding.RepositoryID, TargetRef: "refs/heads/release", ExpectedCommit: base,
+	}}
+	integration, err := resources.bindings.IssueTaskGrant(context.Background(), grantSpec, now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ready, err = resources.ReadyAgentGrants(context.Background(), now.Add(12*time.Minute))
+	if err != nil || len(ready) != 1 || len(ready[agentID]) != 1 ||
+		ready[agentID][0].Grant.GrantID != integration.Summary.Grant.GrantID {
+		t.Fatalf("integration-only authority chain was not ready: %#v %v", ready, err)
+	}
 }
 
 func TestGovernedAdmissionResourcesWithoutGitRetainRecoveryButDisableAdmission(t *testing.T) {

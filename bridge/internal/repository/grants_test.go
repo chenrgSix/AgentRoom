@@ -59,6 +59,37 @@ func issuedTaskManifest(t *testing.T, store *BindingStore, spec TaskGrantSpec, m
 	return view, m
 }
 
+func integrationGrantOperation(t *testing.T, store *BindingStore, spec TaskGrantSpec,
+	m execution.GovernedExecutionManifest) (TaskGrantView, execution.RepositoryOperationRequest) {
+	t.Helper()
+	spec.Operations = []execution.KindElement{execution.Integrate}
+	spec.VerificationProfiles = []execution.ExecutionGrantSummaryVerificationProfile{}
+	spec.IntegrationTargets = []execution.ExecutionGrantSummaryIntegrationTarget{{
+		RepositoryID: spec.RepositoryID, TargetRef: "refs/heads/release", ExpectedCommit: spec.BaseCommit,
+	}}
+	view, err := store.IssueTaskGrant(context.Background(), spec, bindingNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope := execution.RepositoryOperationRequestExecution(m.Scope)
+	operation := execution.RepositoryOperationRequest{Version: 1, OperationID: "op_integration_local0001",
+		Plan: execution.RepositoryOperationRequestPlan{PlanID: scope.PlanID, Revision: scope.PlanRevision,
+			Digest: scope.PlanDigest, ApprovalOperationID: scope.ApprovalOperationID,
+			RoomID: scope.RoomID, RootTaskID: "task_integration_root0001"},
+		Execution: &scope, RepositoryID: spec.RepositoryID, BindingID: spec.BindingID,
+		DeviceID: scope.DeviceID, Grant: execution.RepositoryOperationRequestGrant(view.Summary.Grant),
+		ExpectedGeneration: m.Workspace.WorkspaceGeneration, Deadline: m.Deadline,
+		Action: execution.ActionClass{Kind: execution.Integrate, Integrate: &execution.IntegrateClass{
+			CandidateCommit: strings.Repeat("b", 40), CandidateTree: strings.Repeat("c", 40),
+			InputDigest: strings.Repeat("d", 64), Target: execution.IntegrateTarget(spec.IntegrationTargets[0]),
+			IntegrationApprovalOperationID: "op_integration_approval0001",
+			VerificationIDS:                []string{"verification_local0001"},
+		}},
+	}
+	operation.RequestDigest = resumeDigest(t, operation, "requestDigest")
+	return view, operation
+}
+
 func TestTaskGrantIssuanceIsCanonicalDurableAndPathFree(t *testing.T) {
 	for _, format := range []string{"sha1", "sha256"} {
 		t.Run(format, func(t *testing.T) {
@@ -176,6 +207,64 @@ func TestTaskGrantRejectsManifestDriftAndPrivilegeExpansion(t *testing.T) {
 	narrower.ScopePolicy.ForbiddenPaths = []string{}
 	resignManifest(t, &narrower)
 	if err := store.CheckTaskGrant(context.Background(), narrower, execution.Prepare, bindingNow); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestIntegrationGrantAdmitsOnlyExactIndependentTargetOperation(t *testing.T) {
+	_, store, spec, manifest := taskGrantFixture(t, "sha1")
+	view, operation := integrationGrantOperation(t, store, spec, manifest)
+	if err := store.CheckIntegrationGrant(context.Background(), operation, bindingNow.Add(time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	for name, change := range map[string]func(*execution.RepositoryOperationRequest){
+		"action": func(v *execution.RepositoryOperationRequest) { v.Action.Kind = execution.Verify },
+		"target": func(v *execution.RepositoryOperationRequest) { v.Action.Integrate.Target.TargetRef = "refs/heads/main" },
+		"expected": func(v *execution.RepositoryOperationRequest) {
+			v.Action.Integrate.Target.ExpectedCommit = strings.Repeat("a", 40)
+		},
+		"repository": func(v *execution.RepositoryOperationRequest) { v.RepositoryID = "repo_foreign0001" },
+		"binding":    func(v *execution.RepositoryOperationRequest) { v.BindingID = "repobind_foreign0001" },
+		"device":     func(v *execution.RepositoryOperationRequest) { v.DeviceID = "device_foreign0001" },
+		"agent":      func(v *execution.RepositoryOperationRequest) { v.Execution.AgentID = "agent_foreign0001" },
+		"plan":       func(v *execution.RepositoryOperationRequest) { v.Plan.Digest = strings.Repeat("f", 64) },
+		"node":       func(v *execution.RepositoryOperationRequest) { v.Execution.NodeKey = "foreign-node" },
+		"grant":      func(v *execution.RepositoryOperationRequest) { v.Grant.Digest = strings.Repeat("0", 64) },
+	} {
+		t.Run(name, func(t *testing.T) {
+			var changed execution.RepositoryOperationRequest
+			raw, _ := json.Marshal(operation)
+			_ = json.Unmarshal(raw, &changed)
+			change(&changed)
+			changed.RequestDigest = resumeDigest(t, changed, "requestDigest")
+			if err := store.CheckIntegrationGrant(context.Background(), changed, bindingNow.Add(time.Minute)); err == nil {
+				t.Fatal("changed integration operation retained authority")
+			}
+		})
+	}
+	if _, err := store.RevokeTaskGrant(spec.GrantID, 1, view.Summary.Grant.Digest, bindingNow.Add(2*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.CheckIntegrationGrant(context.Background(), operation, bindingNow.Add(3*time.Minute)); !errors.Is(err, ErrGrantRevoked) {
+		t.Fatal(err)
+	}
+}
+
+func TestIntegrationGrantRejectsMixedRuntimeAuthority(t *testing.T) {
+	_, store, spec, manifest := taskGrantFixture(t, "sha1")
+	spec.IntegrationTargets = []execution.ExecutionGrantSummaryIntegrationTarget{{
+		RepositoryID: spec.RepositoryID, TargetRef: "refs/heads/release", ExpectedCommit: spec.BaseCommit,
+	}}
+	view, manifest := issuedTaskManifest(t, store, spec, manifest)
+	operation := operationForManifest(t, manifest, "op_integration_mixed0001")
+	operation.Action = execution.ActionClass{Kind: execution.Integrate, Integrate: &execution.IntegrateClass{
+		CandidateCommit: strings.Repeat("b", 40), CandidateTree: strings.Repeat("c", 40),
+		InputDigest: strings.Repeat("d", 64), Target: execution.IntegrateTarget(spec.IntegrationTargets[0]),
+		IntegrationApprovalOperationID: "op_integration_approval0002", VerificationIDS: []string{"verification_local0002"},
+	}}
+	operation.Grant = execution.RepositoryOperationRequestGrant(view.Summary.Grant)
+	operation.RequestDigest = resumeDigest(t, operation, "requestDigest")
+	if err := store.CheckIntegrationGrant(context.Background(), operation, bindingNow.Add(time.Minute)); !errors.Is(err, ErrGrantDenied) {
 		t.Fatal(err)
 	}
 }

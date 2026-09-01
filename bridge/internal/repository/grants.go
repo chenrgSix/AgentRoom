@@ -267,6 +267,55 @@ func (s *BindingStore) CheckTaskGrant(ctx context.Context, manifest execution.Go
 	return s.checkGrantBinding(ctx, spec)
 }
 
+// CheckIntegrationGrant validates a distinct owner-local consent chain for one
+// exact repository target. It grants no Runtime preparation, capture or
+// verification authority and does not itself authorize a Git ref mutation;
+// callers must also hold the exact Central integration operation and its
+// retained verification proof.
+func (s *BindingStore) CheckIntegrationGrant(ctx context.Context, operation execution.RepositoryOperationRequest, now time.Time) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.check(); err != nil {
+		return err
+	}
+	raw, err := json.Marshal(operation)
+	if err != nil || wire.ValidateExecutionCommand("repositoryOperation", raw) != nil {
+		return ErrInvalid
+	}
+	requestDigest, err := executionValueDigest(operation, "requestDigest")
+	if err != nil || requestDigest != operation.RequestDigest || operation.Execution == nil ||
+		operation.Action.Kind != execution.Integrate || operation.Action.Integrate == nil {
+		return ErrInvalid
+	}
+	record, view, err := s.getTaskGrant(operation.Grant.GrantID)
+	if err != nil {
+		return err
+	}
+	if view.Summary.RevokedAt != nil {
+		return ErrGrantRevoked
+	}
+	expires, _ := time.Parse(time.RFC3339Nano, record.Spec.ExpiresAt)
+	issued, _ := time.Parse(time.RFC3339Nano, record.IssuedAt)
+	deadline, _ := time.Parse(time.RFC3339Nano, operation.Deadline)
+	if now.IsZero() || now.Before(issued) || !now.Before(expires) || !now.Before(deadline) || deadline.After(expires) {
+		return ErrGrantExpired
+	}
+	spec, scope, target := record.Spec, operation.Execution, operation.Action.Integrate.Target
+	if len(spec.Operations) != 1 || spec.Operations[0] != execution.Integrate || len(spec.IntegrationTargets) != 1 ||
+		operation.Grant.GrantID != view.Summary.Grant.GrantID || operation.Grant.Revision != view.Summary.Grant.Revision ||
+		operation.Grant.Digest != view.Summary.Grant.Digest || operation.Grant.ExpiresAt != view.Summary.Grant.ExpiresAt ||
+		operation.BindingID != spec.BindingID || operation.RepositoryID != spec.RepositoryID || operation.DeviceID != s.owner.DeviceID ||
+		operation.Plan.PlanID != spec.PlanID || operation.Plan.Revision != spec.PlanRevision || operation.Plan.Digest != spec.PlanDigest ||
+		operation.Plan.RoomID != spec.RoomID || scope.PlanID != spec.PlanID || scope.PlanRevision != spec.PlanRevision ||
+		scope.PlanDigest != spec.PlanDigest || scope.NodeKey != spec.NodeKey || scope.RoomID != spec.RoomID ||
+		scope.TaskID != spec.TaskID || scope.DefinitionRevision != spec.DefinitionRevision || scope.CriteriaRevision != spec.CriteriaRevision ||
+		scope.AgentID != spec.AgentID || scope.DeviceID != s.owner.DeviceID || target.RepositoryID != spec.RepositoryID ||
+		target.RepositoryID != operation.RepositoryID || spec.IntegrationTargets[0] != execution.ExecutionGrantSummaryIntegrationTarget(target) {
+		return ErrGrantDenied
+	}
+	return s.checkGrantBinding(ctx, spec)
+}
+
 func (s *BindingStore) checkGrantBinding(ctx context.Context, spec TaskGrantSpec) error {
 	record, binding, err := s.get(spec.BindingID)
 	if err != nil {

@@ -234,9 +234,9 @@ func (r *GovernedAdmissionResources) ProcessFencer() *RuntimeProcessFencer {
 }
 
 // ReadyAgentGrants returns only path-free summaries for current owner-local
-// chains that the present implementation can actually prepare and capture:
-// exact configured Codex Runtime, positive unrevoked profile, current Task
-// grant, current repository binding and unchanged physical Git source.
+// chains that the present implementation can actually use. Runtime grants need
+// exact configured Runtime and verifier profiles. Integration-only grants need
+// one exact target and the same current binding and physical Git source.
 //
 // This is capability readiness, not Run authority. Admission still checks the
 // exact manifest/grant and reruns the physical Runtime probe immediately before
@@ -276,30 +276,35 @@ func (r *GovernedAdmissionResources) ReadyAgentGrants(ctx context.Context, now t
 		issuedAt, issuedErr := time.Parse(time.RFC3339Nano, grant.Summary.IssuedAt)
 		expiresAt, expiresErr := time.Parse(time.RFC3339Nano, grant.Summary.Grant.ExpiresAt)
 		agent, configured := r.agents[grant.Spec.AgentID]
+		runtimeReady := slices.Contains(grant.Spec.Operations, execution.Prepare) &&
+			slices.Contains(grant.Spec.Operations, execution.Capture)
+		integrationReady := len(grant.Spec.Operations) == 1 && grant.Spec.Operations[0] == execution.Integrate &&
+			len(grant.Spec.IntegrationTargets) == 1
 		if issuedErr != nil || expiresErr != nil || now.Before(issuedAt) || !now.Before(expiresAt) ||
 			grant.Summary.RevokedAt != nil || grant.Summary.Grant.Revision != 1 || !configured ||
-			!slices.Contains(grant.Spec.Operations, execution.Prepare) ||
-			!slices.Contains(grant.Spec.Operations, execution.Capture) ||
+			(!runtimeReady && !integrationReady) ||
 			grant.Spec.ScopePolicy.RequirePreventivePathEnforcement {
 			continue
 		}
-		if _, err := r.profiles.ResolveRuntime(grant.Spec.RuntimeProfile, grant.Spec.AgentID, agent); err != nil {
-			continue
-		}
-		if len(grant.Spec.VerificationProfiles) > 0 {
-			if !slices.Contains(grant.Spec.Operations, execution.Verify) {
+		if runtimeReady {
+			if _, err := r.profiles.ResolveRuntime(grant.Spec.RuntimeProfile, grant.Spec.AgentID, agent); err != nil {
 				continue
 			}
-			resolved := true
-			for _, profile := range grant.Spec.VerificationProfiles {
-				if _, err := r.verifiers.Resolve(verification.Reference{ProfileID: profile.ProfileID,
-					Revision: profile.Revision, Digest: profile.Digest}); err != nil {
-					resolved = false
-					break
+			if len(grant.Spec.VerificationProfiles) > 0 {
+				if !slices.Contains(grant.Spec.Operations, execution.Verify) {
+					continue
 				}
-			}
-			if !resolved {
-				continue
+				resolved := true
+				for _, profile := range grant.Spec.VerificationProfiles {
+					if _, err := r.verifiers.Resolve(verification.Reference{ProfileID: profile.ProfileID,
+						Revision: profile.Revision, Digest: profile.Digest}); err != nil {
+						resolved = false
+						break
+					}
+				}
+				if !resolved {
+					continue
+				}
 			}
 		}
 		if _, err := r.bindings.ResolveSource(ctx, grant.Spec.BindingID, grant.Spec.RepositoryID,

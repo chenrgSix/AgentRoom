@@ -109,12 +109,12 @@ func publishedRuntimePolicy(agent config.AgentConfig) contracts.RuntimePolicy {
 
 func governedHelloCapability() contracts.PayloadGovernedExecution {
 	return contracts.PayloadGovernedExecution{Version: 1, WorkspaceBoundary: contracts.Enforced,
-		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare, contracts.Capture}}
+		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare, contracts.Capture, contracts.Verify, contracts.Integrate}}
 }
 
 func governedAgentCapability(grants []execution.ExecutionGrantSummary) (contracts.CapabilitiesGovernedExecution, error) {
 	capability := contracts.CapabilitiesGovernedExecution{Version: 1, WorkspaceBoundary: contracts.Enforced,
-		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare, contracts.Capture}}
+		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare, contracts.Capture, contracts.Verify, contracts.Integrate}}
 	capability.ReadyGrants = make([]contracts.FluffyReadyGrant, len(grants))
 	for i, grant := range grants {
 		raw, err := json.Marshal(grant)
