@@ -1,14 +1,18 @@
 import assert from "node:assert/strict";
 import { execFile, spawn } from "node:child_process";
 import { once } from "node:events";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import type { RepositoryCheckpoint, RepositoryOperationRequest } from "@convene-wire/contracts/execution-plan";
+import type {
+  RepositoryCheckpoint,
+  RepositoryOperationRequest,
+  VerificationReceipt
+} from "@convene-wire/contracts/execution-plan";
 import { executionOperationDigest } from "@convene-wire/contracts/execution-validation";
 import { ArtifactPublicationRepository } from "../src/artifact/artifact-publication-repository.js";
 import { LocalArtifactBlobStore } from "../src/artifact/local-artifact-blob-store.js";
@@ -31,6 +35,14 @@ type ProcessResult = {
   Error: string; Checkpoint: RepositoryCheckpoint;
   CleanupPreview?: { digest: string; path: string; branch: string };
   CleanupReceipt?: { digest: string; removedWorktree: string; removedBranch: string; checkpointId: string };
+};
+type VerificationProcessResult = {
+  error: string;
+  receipts: Array<{
+    receipt: VerificationReceipt;
+    receiptDigest: string;
+    recordedAt: string;
+  }>;
 };
 
 async function runCapture(binary: string, input: unknown, signal: AbortSignal): Promise<ProcessResult> {
@@ -67,13 +79,72 @@ async function runCapture(binary: string, input: unknown, signal: AbortSignal): 
   } finally { clearTimeout(timer); signal.removeEventListener("abort", abort); }
 }
 
-test("real Go capture publication seals actual Git bytes and reconciles lost responses across process restart", { timeout: 180_000 }, async (t) => {
+async function runVerification(
+  binary: string,
+  input: unknown,
+  signal: AbortSignal
+): Promise<VerificationProcessResult> {
+  const child = spawn(binary, [
+    "-test.run=^TestGovernedVerificationHTTPProcess$",
+    "-test.timeout=40s"
+  ], {
+    env: {
+      ...process.env,
+      CONVENE_WIRE_VERIFICATION_HTTP_PROCESS: "1"
+    },
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  let output = "", error = "", exceeded = false, startError: Error | undefined;
+  child.stdout.setEncoding("utf8").on("data", (chunk) => {
+    output += chunk;
+    if (output.length > 1 << 20) { exceeded = true; child.kill("SIGKILL"); }
+  });
+  child.stderr.setEncoding("utf8").on("data", (chunk) => {
+    error += chunk;
+    if (error.length > 1 << 20) { exceeded = true; child.kill("SIGKILL"); }
+  });
+  child.once("error", (cause) => { startError = cause; });
+  const closed = new Promise<number | null>((resolve) =>
+    child.once("close", (code) => resolve(code))
+  );
+  const abort = () => child.kill("SIGKILL");
+  signal.addEventListener("abort", abort, { once: true });
+  if (signal.aborted) abort();
+  const timer = setTimeout(() => child.kill("SIGKILL"), 45_000);
+  child.stdin.on("error", () => {});
+  child.stdin.end(JSON.stringify(input));
+  try {
+    const code = await closed;
+    assert.equal(startError, undefined);
+    assert.equal(exceeded, false, "verification fixture output exceeded its limit");
+    assert.equal(code, 0, `${output}\n${error}`);
+    const result = output.split("\n").find((line) =>
+      line.startsWith("VERIFICATION_RESULT ")
+    );
+    assert.ok(result, "Go verifier process did not emit its observation");
+    return JSON.parse(result.slice("VERIFICATION_RESULT ".length));
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener("abort", abort);
+  }
+}
+
+test("real Go capture publication seals actual Git bytes and reconciles lost responses across process restart", { timeout: 240_000 }, async (t) => {
   const directory = await realpath(await mkdtemp(path.join(os.tmpdir(), "convene-wire-go-capture-http-")));
   t.after(() => rm(directory, { recursive: true, force: true }));
   const binary = path.join(directory, process.platform === "win32" ? "capture.test.exe" : "capture.test");
-  await exec("go", ["test", "-c", "-o", binary, "./internal/repository"], {
-    cwd: path.join(repositoryRoot, "bridge"), timeout: 90_000, maxBuffer: 2 << 20
-  });
+  const verificationBinary = path.join(
+    directory,
+    process.platform === "win32" ? "verification.test.exe" : "verification.test"
+  );
+  await Promise.all([
+    exec("go", ["test", "-c", "-o", binary, "./internal/repository"], {
+      cwd: path.join(repositoryRoot, "bridge"), timeout: 90_000, maxBuffer: 2 << 20
+    }),
+    exec("go", ["test", "-c", "-o", verificationBinary, "./internal/admission"], {
+      cwd: path.join(repositoryRoot, "bridge"), timeout: 90_000, maxBuffer: 2 << 20
+    })
+  ]);
   const gitEnv: NodeJS.ProcessEnv = {
     PATH: process.env.PATH, SystemRoot: process.env.SystemRoot, TMPDIR: process.env.TMPDIR,
     TEMP: process.env.TEMP, TMP: process.env.TMP,
@@ -409,4 +480,272 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       }
     });
   }
+
+  await t.test("real verifier pass failure timeout and lost receipt response", async (t) => {
+    const source = path.join(directory, "verification", "source");
+    const state = path.join(directory, "verification", "owner-state");
+    const dataPath = path.join(directory, "verification", "verification-state");
+    const temporaryParent = path.join(directory, "verification", "temporary-runs");
+    const markerPath = path.join(directory, "verification", "process-markers.txt");
+    for (const target of [path.join(source, "src"), state, dataPath, temporaryParent]) {
+      await mkdir(target, { recursive: true, mode: 0o700 });
+    }
+    await writeFile(path.join(source, "src", "app.txt"), "base\n");
+    await git(source, "init", "--template=", "--object-format=sha1", "-b", "main", ".");
+    await git(source, "add", "--all");
+    await git(source, "commit", "-m", "verified fixture base");
+    const baseCommit = await git(source, "rev-parse", "HEAD");
+    const profiles = [{
+      profileId: "profile_e2e_fail0001",
+      revision: 1,
+      digest: "a".repeat(64),
+      required: true,
+      mode: "fail",
+      timeoutMilliseconds: 2_000
+    }, {
+      profileId: "profile_e2e_pass0001",
+      revision: 1,
+      digest: "b".repeat(64),
+      required: true,
+      mode: "pass",
+      timeoutMilliseconds: 2_000
+    }, {
+      profileId: "profile_e2e_timeout0001",
+      revision: 1,
+      digest: "c".repeat(64),
+      required: true,
+      mode: "timeout",
+      timeoutMilliseconds: 150
+    }];
+    const observedAt = new Date().toISOString();
+    const f = await workspaceFixture(t, false, {
+      now: observedAt,
+      clock: () => new Date().toISOString(),
+      configurePlan: (definition) => {
+        for (const node of definition.nodes) {
+          if (node.repository) node.repository.baseCommit = baseCommit;
+          if (node.nodeKey === "Build") {
+            node.verificationProfiles = profiles.map((profile) => ({
+              profileId: profile.profileId,
+              revision: profile.revision,
+              digest: profile.digest,
+              required: profile.required
+            }));
+          }
+        }
+      }
+    });
+    assert.ok(f.manifest.capture);
+    f.manifest.capture.operationId = "op_real_verification_capture0001";
+    f.manifest.capture.rootTaskId = f.root.taskId;
+    f.rehash(f.manifest);
+    const lease = f.reserve();
+    f.freeze();
+    const authorization = `Bearer ${f.credential.secret}`;
+    const socket = await f.app.injectWS("/ws/bridge", {
+      headers: { authorization, host: "127.0.0.1" }
+    });
+    t.after(() => socket.terminate());
+    const ready = once(socket, "message", { signal: t.signal });
+    socket.send(JSON.stringify({
+      protocolVersion: "1.0",
+      messageId: "msg_real_verification_hello0001",
+      timestamp: observedAt,
+      type: "bridge.hello",
+      payload: {
+        deviceId: f.device.deviceId,
+        connectionEpoch: 1,
+        bridgeVersion: "v0.4.0-fixture.1",
+        supportedProtocolVersions: ["1.0"],
+        governedExecution: capability
+      }
+    }));
+    socket.send(JSON.stringify({
+      protocolVersion: "1.0",
+      messageId: "msg_real_verification_agentpub0001",
+      timestamp: observedAt,
+      type: "agent.publish",
+      payload: {
+        agentId: f.agent.agentId,
+        capabilities: {
+          ...f.agent.capabilities,
+          governedExecution: capabilityForManifest(f.manifest),
+          invocationMode: "managed"
+        },
+        deviceId: f.device.deviceId,
+        name: f.agent.name,
+        ownerMemberId: f.agent.ownerMemberId,
+        role: f.agent.role,
+        teamId: f.teamId,
+        workspaceRef: f.agent.workspaceRef,
+        workspaceGeneration: f.agent.workspaceGeneration
+      }
+    }));
+    const [frameBytes] = await ready;
+    const frame = JSON.parse(String(frameBytes));
+    assert.equal(frame.type, "run.requested");
+    assert.deepEqual(
+      frame.payload.contextManifest.execution.verificationProfiles,
+      f.manifest.verificationProfiles
+    );
+    const serverURL = await f.app.listen({ host: "127.0.0.1", port: 0 });
+    const captureOperation: RepositoryOperationRequest = {
+      version: 1,
+      operationId: "op_real_verification_capture0001",
+      requestDigest: "",
+      plan: {
+        planId: f.plan.planId,
+        revision: f.plan.current.revision,
+        digest: f.plan.current.digest,
+        approvalOperationId: f.manifest.scope.approvalOperationId,
+        roomId: f.roomId,
+        rootTaskId: f.root.taskId
+      },
+      execution: f.manifest.scope,
+      repositoryId: f.manifest.repository.repositoryId,
+      bindingId: f.manifest.repository.bindingId,
+      deviceId: f.device.deviceId,
+      grant: f.manifest.grant,
+      expectedGeneration: lease.generation,
+      deadline: f.manifest.deadline,
+      action: {
+        kind: "capture",
+        capture: { manifestDigest: f.manifest.manifestDigest }
+      }
+    };
+    const { requestDigest: _requestDigest, ...captureUnsigned } = captureOperation;
+    captureOperation.requestDigest = executionOperationDigest(captureUnsigned);
+    const captured = await runCapture(binary, {
+      ServerURL: serverURL,
+      Token: f.credential.secret,
+      SourcePath: source,
+      StatePath: state,
+      Manifest: f.manifest,
+      Operation: captureOperation,
+      ExpectError: false
+    }, t.signal);
+    assert.equal(captured.Error, "");
+    assert.equal(captured.Checkpoint.candidateCommit, captured.CandidateCommit);
+    assert.equal(captured.Checkpoint.candidateTree, captured.CandidateTree);
+
+    const counts = new Map<string, number>();
+    const rejections: string[] = [];
+    let droppedPassedReceipt = false;
+    const proxy = createServer(async (request, response) => {
+      try {
+        const url = request.url!;
+        const key = `${request.method} ${url}`;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        const parts: Buffer[] = [];
+        for await (const chunk of request) parts.push(Buffer.from(chunk));
+        const body = Buffer.concat(parts);
+        const upstream = await fetch(serverURL + url, {
+          method: request.method,
+          signal: AbortSignal.any([t.signal, AbortSignal.timeout(15_000)]),
+          headers: {
+            authorization: request.headers.authorization ?? "",
+            "content-type": "application/json"
+          },
+          ...(body.length ? { body } : {})
+        });
+        const result = Buffer.from(await upstream.arrayBuffer());
+        if (!upstream.ok) {
+          rejections.push(`${request.method} ${url}: ${result.toString()}`);
+        }
+        if (
+          upstream.ok && !droppedPassedReceipt &&
+          request.method === "POST" && url === "/api/bridge/verification-receipts" &&
+          JSON.parse(body.toString()).outcome === "passed"
+        ) {
+          droppedPassedReceipt = true;
+          response.destroy();
+          return;
+        }
+        response.writeHead(upstream.status, { "content-type": "application/json" });
+        response.end(result);
+      } catch {
+        response.destroy();
+      }
+    });
+    proxy.listen(0, "127.0.0.1");
+    await once(proxy, "listening");
+    t.after(async () => {
+      proxy.closeAllConnections();
+      await new Promise<void>((resolve) => proxy.close(() => resolve()));
+    });
+    const address = proxy.address();
+    assert.ok(address && typeof address !== "string");
+    const verified = await runVerification(verificationBinary, {
+      ServerURL: `http://127.0.0.1:${address.port}`,
+      Token: f.credential.secret,
+      StatePath: state,
+      DataPath: dataPath,
+      TemporaryParent: temporaryParent,
+      MarkerPath: markerPath,
+      Request: frame.payload,
+      Manifest: f.manifest,
+      Checkpoint: captured.Checkpoint,
+      Profiles: profiles.map(({ required: _required, ...profile }) => profile)
+    }, t.signal);
+    assert.equal(verified.error, "", rejections.join("\n"));
+    assert.deepEqual(
+      verified.receipts.map(({ receipt }) => receipt.outcome).sort(),
+      ["failed", "passed", "timed_out"]
+    );
+    assert.equal(droppedPassedReceipt, true);
+    assert.equal((counts.get("POST /api/bridge/verification-receipts") ?? 0), 3);
+    assert.equal(
+      [...counts].filter(([key]) =>
+        key.startsWith("GET /api/bridge/repository-verifications/") &&
+        key.endsWith("/receipt")
+      ).reduce((sum, [, count]) => sum + count, 0),
+      1,
+      "lost receipt response was not resolved by exact lookup"
+    );
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM repository_verification_operations
+    `).get() as { n: number }).n, 3);
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM verification_receipts
+    `).get() as { n: number }).n, 3);
+    assert.deepEqual((f.database.prepare(`
+      SELECT outcome FROM verification_receipts ORDER BY outcome
+    `).all() as Array<{ outcome: string }>).map(({ outcome }) => outcome),
+    ["failed", "passed", "timed_out"]);
+    const markers = (await readFile(markerPath, "utf8")).trim().split("\n");
+    for (const mode of ["pass", "fail", "timeout"]) {
+      assert.equal(markers.filter((line) => line === `${mode}:started`).length, 1);
+    }
+    assert.equal(markers.filter((line) => line === "pass:completed").length, 1);
+    assert.equal(markers.filter((line) => line === "fail:completed").length, 1);
+    assert.equal(markers.includes("timeout:completed"), false,
+      "timed-out process continued after the owned process group was stopped");
+    assert.deepEqual(await readdir(temporaryParent), [],
+      "verification run root was not physically removed");
+    const databasePath = (f.database.pragma("database_list") as Array<{
+      file: string;
+    }>)[0]!.file;
+    for (const retained of verified.receipts) {
+      assert.ok(retained.receipt.logArtifact);
+      const artifact = new ArtifactRepository(f.database)
+        .get(retained.receipt.logArtifact.artifactId)!;
+      const content = new ArtifactPublicationRepository(f.database)
+        .getContent(artifact.contentId!)!;
+      const bytes = new LocalArtifactBlobStore(
+        path.join(path.dirname(databasePath), "artifact-blobs")
+      ).readVerified(
+        content.storageKey,
+        retained.receipt.logArtifact.contentDigest,
+        retained.receipt.logArtifact.byteLength
+      );
+      const log = JSON.parse(bytes.toString());
+      assert.equal(log.spawned, true);
+      assert.equal(bytes.includes(Buffer.from(source)), false);
+      assert.equal(bytes.includes(Buffer.from(state)), false);
+      assert.equal(bytes.includes(Buffer.from(temporaryParent)), false);
+    }
+    assert.equal(await git(source, "rev-parse", "HEAD"), baseCommit);
+    assert.equal(await git(source, "status", "--porcelain"), "");
+    assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+  });
 });
