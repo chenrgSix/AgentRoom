@@ -62,3 +62,21 @@ test("governed capture intent is frozen, bounded, and path-safe", () => {
     assert.throws(() => assertExecutionCommand("executionManifest", invalid), /PLAN_SCHEMA_INVALID/u);
   }
 });
+
+test("governed readiness publishes only schema-valid path-free grant summaries", () => {
+  const capability = suite.cases.find((entry) =>
+    entry.name === "execution runtime: valid capability"
+  ).instance;
+  assert.equal(capability.readyGrants.length, 1);
+  assert.doesNotThrow(() => assertExecutionCommand("executionCapability", capability));
+  for (const mutate of [
+    (value) => { value.readyGrants[0].command = "git status"; },
+    (value) => { value.readyGrants[0].scopePolicy.allowedPaths = ["/private/source"]; },
+    (value) => { value.readyGrants[0].operations = ["prepare", "capture", "capture"]; },
+    (value) => { value.readyGrants = []; }
+  ]) {
+    const invalid = structuredClone(capability);
+    mutate(invalid);
+    assert.throws(() => assertExecutionCommand("executionCapability", invalid), /PLAN_SCHEMA_INVALID/u);
+  }
+});

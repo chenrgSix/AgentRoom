@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
 	"convenewire.dev/bridge/internal/workspace"
 	contracts "convenewire.dev/contracts/generated/go"
+	execution "convenewire.dev/contracts/generated/go/execution"
 	runtimecontracts "convenewire.dev/contracts/generated/go/runtime"
 	"github.com/coder/websocket"
 )
@@ -56,8 +58,8 @@ type CanceledRunFenceHandler func(
 // names therefore describe the same recovered local state that will service
 // incoming delivery on this connection.
 type PreparedRuns struct {
-	ReplayMessages              []any
-	GovernedExecutionAgentNames map[string]bool
+	ReplayMessages          []any
+	GovernedExecutionGrants map[string][]execution.ExecutionGrantSummary
 }
 
 type RunPreparationHandler func(context.Context) (PreparedRuns, error)
@@ -107,31 +109,55 @@ func publishedRuntimePolicy(agent config.AgentConfig) contracts.RuntimePolicy {
 
 func governedHelloCapability() contracts.PayloadGovernedExecution {
 	return contracts.PayloadGovernedExecution{Version: 1, WorkspaceBoundary: contracts.Enforced,
-		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare}}
+		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare, contracts.Capture}}
 }
 
-func governedAgentCapability() contracts.CapabilitiesGovernedExecution {
-	return contracts.CapabilitiesGovernedExecution{Version: 1, WorkspaceBoundary: contracts.Enforced,
-		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare}}
+func governedAgentCapability(grants []execution.ExecutionGrantSummary) (contracts.CapabilitiesGovernedExecution, error) {
+	capability := contracts.CapabilitiesGovernedExecution{Version: 1, WorkspaceBoundary: contracts.Enforced,
+		PreventivePathEnforcement: false, Operations: []contracts.Operation{contracts.Prepare, contracts.Capture}}
+	capability.ReadyGrants = make([]contracts.FluffyReadyGrant, len(grants))
+	for i, grant := range grants {
+		raw, err := json.Marshal(grant)
+		if err != nil || runtimecontracts.ValidateExecutionCommand("executionGrant", raw) != nil ||
+			json.Unmarshal(raw, &capability.ReadyGrants[i]) != nil {
+			return contracts.CapabilitiesGovernedExecution{}, errors.New("Bridge Run preparation returned an invalid governed grant")
+		}
+	}
+	return capability, nil
 }
 
-func hasGovernedExecutionAgent(agents []config.AgentConfig, ready map[string]bool) bool {
+func hasGovernedExecutionAgent(agents []config.AgentConfig, ready map[string][]execution.ExecutionGrantSummary) bool {
 	for _, agent := range agents {
-		if ready[agent.Name] {
+		if len(ready[agent.Name]) != 0 {
 			return true
 		}
 	}
 	return false
 }
 
-func validatePreparedRuns(agents []config.AgentConfig, prepared PreparedRuns) error {
+func validatePreparedRuns(agents []config.AgentConfig, prepared PreparedRuns, deviceID string) error {
 	configured := make(map[string]bool, len(agents))
 	for _, agent := range agents {
 		configured[agent.Name] = true
 	}
-	for name, ready := range prepared.GovernedExecutionAgentNames {
-		if ready && !configured[name] {
+	for name, grants := range prepared.GovernedExecutionGrants {
+		if len(grants) != 0 && !configured[name] {
 			return errors.New("Bridge Run preparation returned an unknown governed Agent")
+		}
+		if len(grants) == 0 || len(grants) > 64 {
+			return errors.New("Bridge Run preparation returned an invalid governed grant set")
+		}
+		seen := map[string]bool{}
+		for _, grant := range grants {
+			if grant.AgentID == "" || grant.DeviceID != deviceID || seen[grant.Grant.GrantID] ||
+				grant.RevokedAt != nil || !slices.Contains(grant.Operations, execution.Prepare) ||
+				!slices.Contains(grant.Operations, execution.Capture) {
+				return errors.New("Bridge Run preparation returned an invalid governed grant")
+			}
+			seen[grant.Grant.GrantID] = true
+		}
+		if _, err := governedAgentCapability(grants); err != nil {
+			return err
 		}
 	}
 	for _, message := range prepared.ReplayMessages {
@@ -242,7 +268,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			return false, prepareErr
 		}
 		preparedRuns = prepared
-		if err := validatePreparedRuns(c.Config.Agents, preparedRuns); err != nil {
+		if err := validatePreparedRuns(c.Config.Agents, preparedRuns, c.Credential.DeviceID); err != nil {
 			return false, err
 		}
 	}
@@ -296,7 +322,7 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			SupportedProtocolVersions: []string{"1.0"},
 		},
 	}
-	if hasGovernedExecutionAgent(c.Config.Agents, preparedRuns.GovernedExecutionAgentNames) {
+	if hasGovernedExecutionAgent(c.Config.Agents, preparedRuns.GovernedExecutionGrants) {
 		capability := governedHelloCapability()
 		hello.Payload.GovernedExecution = &capability
 	}
@@ -325,8 +351,16 @@ func (c Client) connectOnce(ctx context.Context) (bool, error) {
 			SupportsStart:     true,
 			SupportsStreaming: c.StreamingAgentNames[configured.Name],
 		}
-		if preparedRuns.GovernedExecutionAgentNames[configured.Name] {
-			capability := governedAgentCapability()
+		if grants := preparedRuns.GovernedExecutionGrants[configured.Name]; len(grants) != 0 {
+			for _, grant := range grants {
+				if grant.AgentID != agentID {
+					return false, errors.New("Bridge Run preparation returned a governed grant for another Agent")
+				}
+			}
+			capability, err := governedAgentCapability(grants)
+			if err != nil {
+				return false, err
+			}
 			capabilities.GovernedExecution = &capability
 		}
 		supportsRoomContextCoverage :=

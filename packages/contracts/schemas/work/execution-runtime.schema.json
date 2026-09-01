@@ -184,6 +184,15 @@
             "$ref": "#/$defs/operationKind"
           },
           "uniqueItems": true
+        },
+        "readyGrants": {
+          "description": "Path-free current local grant summaries available to one published Agent. Omission means no admission-ready grant was published and grants no authority.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/grantSummary"
+          }
         }
       }
     },

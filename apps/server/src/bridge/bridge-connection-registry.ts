@@ -1,5 +1,8 @@
 import { assertExecutionCommand } from "@convene-wire/contracts/execution-validation";
-import type { GovernedExecutionCapability } from "@convene-wire/contracts/execution-plan";
+import type {
+  GovernedExecutionCapability,
+  GovernedExecutionCapabilityReadyGrant
+} from "@convene-wire/contracts/execution-plan";
 
 export interface BridgeSocket {
   close(code?: number, reason?: string): void;
@@ -30,6 +33,9 @@ export class BridgeConnectionRegistry {
     }
     if (capabilities.governedExecution !== undefined) {
       assertExecutionCommand("executionCapability", capabilities.governedExecution);
+      if ((capabilities.governedExecution as GovernedExecutionCapability).readyGrants !== undefined) {
+        throw new Error("Device execution capability cannot publish Agent grants");
+      }
     }
     if (existing) {
       existing.socket.close(4_001, "Superseded by a newer connection epoch");
@@ -89,6 +95,7 @@ export class BridgeConnectionRegistry {
 
   public supportsGovernedAgentCapability(
     deviceId: string,
+    agentId: string,
     agentCapability: GovernedExecutionCapability
   ): boolean {
     const deviceCapability = this.connections.get(deviceId)?.governedExecution;
@@ -99,6 +106,10 @@ export class BridgeConnectionRegistry {
         deviceCapability.preventivePathEnforcement) &&
       agentCapability.operations.every((operation) =>
         deviceCapability.operations.includes(operation)
+      ) && readyGrantsBelongToAgent(
+        deviceId,
+        agentId,
+        agentCapability
       );
   }
 
@@ -116,7 +127,7 @@ export class BridgeConnectionRegistry {
       connection.governedExecutionAgents.delete(agentId);
       return true;
     }
-    if (!this.supportsGovernedAgentCapability(deviceId, agentCapability)) {
+    if (!this.supportsGovernedAgentCapability(deviceId, agentId, agentCapability)) {
       return false;
     }
     connection.governedExecutionAgents.set(
@@ -134,6 +145,17 @@ export class BridgeConnectionRegistry {
       .get(deviceId)
       ?.governedExecutionAgents.get(agentId);
     return capability && structuredClone(capability);
+  }
+
+  public governedAgentReadyGrants(
+    deviceId: string,
+    agentId: string
+  ): GovernedExecutionCapabilityReadyGrant[] {
+    const grants = this.connections
+      .get(deviceId)
+      ?.governedExecutionAgents.get(agentId)
+      ?.readyGrants;
+    return grants ? structuredClone(grants) : [];
   }
 
   public supportsGovernedAgentExecution(
@@ -158,6 +180,31 @@ export class BridgeConnectionRegistry {
     this.connections.delete(deviceId);
     connection.socket.close(4_004, "Device revoked");
   }
+}
+
+function readyGrantsBelongToAgent(
+  deviceId: string,
+  agentId: string,
+  capability: GovernedExecutionCapability
+): boolean {
+  const seen = new Set<string>();
+  for (const grant of capability.readyGrants ?? []) {
+    if (
+      grant.deviceId !== deviceId ||
+      grant.agentId !== agentId ||
+      grant.revokedAt !== null ||
+      seen.has(grant.grant.grantId) ||
+      !grant.operations.includes("prepare") ||
+      !grant.operations.includes("capture") ||
+      !grant.operations.every((operation) =>
+        capability.operations.includes(operation)
+      )
+    ) {
+      return false;
+    }
+    seen.add(grant.grant.grantId);
+  }
+  return true;
 }
 
 function hasGovernedExecution(message: unknown): boolean {

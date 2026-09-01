@@ -70,6 +70,80 @@ const canonicalPropertyTrees = {
               "preventivePathEnforcement": {},
               "operations": {
                 "i": {}
+              },
+              "readyGrants": {
+                "i": {
+                  "p": {
+                    "grant": {
+                      "p": {
+                        "grantId": {},
+                        "revision": {
+                          "n": true,
+                          "l": "1",
+                          "u": "9007199254740991"
+                        },
+                        "digest": {},
+                        "expiresAt": {}
+                      }
+                    },
+                    "repositoryId": {},
+                    "bindingId": {},
+                    "deviceId": {},
+                    "agentId": {},
+                    "planId": {},
+                    "nodeKey": {},
+                    "operations": {
+                      "i": {}
+                    },
+                    "runtimeProfile": {
+                      "p": {
+                        "profileId": {},
+                        "revision": {
+                          "n": true,
+                          "l": "1",
+                          "u": "9007199254740991"
+                        },
+                        "digest": {}
+                      }
+                    },
+                    "verificationProfiles": {
+                      "i": {
+                        "p": {
+                          "profileId": {},
+                          "revision": {
+                            "n": true,
+                            "l": "1",
+                            "u": "9007199254740991"
+                          },
+                          "digest": {}
+                        }
+                      }
+                    },
+                    "scopePolicy": {
+                      "p": {
+                        "access": {},
+                        "allowedPaths": {
+                          "i": {}
+                        },
+                        "forbiddenPaths": {
+                          "i": {}
+                        },
+                        "requirePreventivePathEnforcement": {}
+                      }
+                    },
+                    "integrationTargets": {
+                      "i": {
+                        "p": {
+                          "repositoryId": {},
+                          "targetRef": {},
+                          "expectedCommit": {}
+                        }
+                      }
+                    },
+                    "issuedAt": {},
+                    "revokedAt": {}
+                  }
+                }
               }
             }
           },
@@ -135,6 +209,80 @@ const canonicalPropertyTrees = {
                   "preventivePathEnforcement": {},
                   "operations": {
                     "i": {}
+                  },
+                  "readyGrants": {
+                    "i": {
+                      "p": {
+                        "grant": {
+                          "p": {
+                            "grantId": {},
+                            "revision": {
+                              "n": true,
+                              "l": "1",
+                              "u": "9007199254740991"
+                            },
+                            "digest": {},
+                            "expiresAt": {}
+                          }
+                        },
+                        "repositoryId": {},
+                        "bindingId": {},
+                        "deviceId": {},
+                        "agentId": {},
+                        "planId": {},
+                        "nodeKey": {},
+                        "operations": {
+                          "i": {}
+                        },
+                        "runtimeProfile": {
+                          "p": {
+                            "profileId": {},
+                            "revision": {
+                              "n": true,
+                              "l": "1",
+                              "u": "9007199254740991"
+                            },
+                            "digest": {}
+                          }
+                        },
+                        "verificationProfiles": {
+                          "i": {
+                            "p": {
+                              "profileId": {},
+                              "revision": {
+                                "n": true,
+                                "l": "1",
+                                "u": "9007199254740991"
+                              },
+                              "digest": {}
+                            }
+                          }
+                        },
+                        "scopePolicy": {
+                          "p": {
+                            "access": {},
+                            "allowedPaths": {
+                              "i": {}
+                            },
+                            "forbiddenPaths": {
+                              "i": {}
+                            },
+                            "requirePreventivePathEnforcement": {}
+                          }
+                        },
+                        "integrationTargets": {
+                          "i": {
+                            "p": {
+                              "repositoryId": {},
+                              "targetRef": {},
+                              "expectedCommit": {}
+                            }
+                          }
+                        },
+                        "issuedAt": {},
+                        "revokedAt": {}
+                      }
+                    }
                   }
                 }
               },

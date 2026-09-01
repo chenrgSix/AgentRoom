@@ -82,10 +82,66 @@ type BridgeHelloPayload struct {
 }
 
 type PayloadGovernedExecution struct {
-	Operations                []Operation       `json:"operations"`
-	PreventivePathEnforcement bool              `json:"preventivePathEnforcement"`
-	Version                   int64             `json:"version"`
-	WorkspaceBoundary         WorkspaceBoundary `json:"workspaceBoundary"`
+	Operations                []Operation `json:"operations"`
+	PreventivePathEnforcement bool        `json:"preventivePathEnforcement"`
+	// Path-free current local grant summaries available to one published Agent. Omission means
+	// no admission-ready grant was published and grants no authority.
+	ReadyGrants       []PurpleReadyGrant `json:"readyGrants,omitempty"`
+	Version           int64              `json:"version"`
+	WorkspaceBoundary WorkspaceBoundary  `json:"workspaceBoundary"`
+}
+
+type PurpleReadyGrant struct {
+	AgentID            string                    `json:"agentId"`
+	BindingID          string                    `json:"bindingId"`
+	DeviceID           string                    `json:"deviceId"`
+	Grant              PurpleGrant               `json:"grant"`
+	IntegrationTargets []PurpleIntegrationTarget `json:"integrationTargets"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt             time.Time                   `json:"issuedAt"`
+	NodeKey              string                      `json:"nodeKey"`
+	Operations           []Operation                 `json:"operations"`
+	PlanID               string                      `json:"planId"`
+	RepositoryID         string                      `json:"repositoryId"`
+	RevokedAt            *time.Time                  `json:"revokedAt"`
+	RuntimeProfile       PurpleRuntimeProfile        `json:"runtimeProfile"`
+	ScopePolicy          PurpleScopePolicy           `json:"scopePolicy"`
+	VerificationProfiles []PurpleVerificationProfile `json:"verificationProfiles"`
+}
+
+type PurpleGrant struct {
+	Digest string `json:"digest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt time.Time `json:"expiresAt"`
+	GrantID   string    `json:"grantId"`
+	Revision  int64     `json:"revision"`
+}
+
+type PurpleIntegrationTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type PurpleRuntimeProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type PurpleScopePolicy struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type PurpleVerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
 }
 
 // Fields shared by versioned cross-process messages.
@@ -149,10 +205,66 @@ type Capabilities struct {
 }
 
 type CapabilitiesGovernedExecution struct {
-	Operations                []Operation       `json:"operations"`
-	PreventivePathEnforcement bool              `json:"preventivePathEnforcement"`
-	Version                   int64             `json:"version"`
-	WorkspaceBoundary         WorkspaceBoundary `json:"workspaceBoundary"`
+	Operations                []Operation `json:"operations"`
+	PreventivePathEnforcement bool        `json:"preventivePathEnforcement"`
+	// Path-free current local grant summaries available to one published Agent. Omission means
+	// no admission-ready grant was published and grants no authority.
+	ReadyGrants       []FluffyReadyGrant `json:"readyGrants,omitempty"`
+	Version           int64              `json:"version"`
+	WorkspaceBoundary WorkspaceBoundary  `json:"workspaceBoundary"`
+}
+
+type FluffyReadyGrant struct {
+	AgentID            string                    `json:"agentId"`
+	BindingID          string                    `json:"bindingId"`
+	DeviceID           string                    `json:"deviceId"`
+	Grant              FluffyGrant               `json:"grant"`
+	IntegrationTargets []FluffyIntegrationTarget `json:"integrationTargets"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt             time.Time                   `json:"issuedAt"`
+	NodeKey              string                      `json:"nodeKey"`
+	Operations           []Operation                 `json:"operations"`
+	PlanID               string                      `json:"planId"`
+	RepositoryID         string                      `json:"repositoryId"`
+	RevokedAt            *time.Time                  `json:"revokedAt"`
+	RuntimeProfile       FluffyRuntimeProfile        `json:"runtimeProfile"`
+	ScopePolicy          FluffyScopePolicy           `json:"scopePolicy"`
+	VerificationProfiles []FluffyVerificationProfile `json:"verificationProfiles"`
+}
+
+type FluffyGrant struct {
+	Digest string `json:"digest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt time.Time `json:"expiresAt"`
+	GrantID   string    `json:"grantId"`
+	Revision  int64     `json:"revision"`
+}
+
+type FluffyIntegrationTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type FluffyRuntimeProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type FluffyScopePolicy struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type FluffyVerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
 }
 
 type RuntimePolicy struct {
@@ -290,18 +402,18 @@ type Execution struct {
 	Capture *CaptureClass `json:"capture,omitempty"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	Deadline             string                `json:"deadline"`
-	Grant                Grant                 `json:"grant"`
-	InputDigest          string                `json:"inputDigest"`
-	Inputs               []Input               `json:"inputs"`
-	ManifestDigest       string                `json:"manifestDigest"`
-	Outputs              []ExecutionOutput     `json:"outputs"`
-	Repository           Repository            `json:"repository"`
-	Scope                ScopeClass            `json:"scope"`
-	ScopePolicy          ScopePolicy           `json:"scopePolicy"`
-	VerificationProfiles []VerificationProfile `json:"verificationProfiles"`
-	Version              int64                 `json:"version"`
-	Workspace            Workspace             `json:"workspace"`
+	Deadline             string                         `json:"deadline"`
+	Grant                ExecutionGrant                 `json:"grant"`
+	InputDigest          string                         `json:"inputDigest"`
+	Inputs               []Input                        `json:"inputs"`
+	ManifestDigest       string                         `json:"manifestDigest"`
+	Outputs              []ExecutionOutput              `json:"outputs"`
+	Repository           Repository                     `json:"repository"`
+	Scope                ScopeClass                     `json:"scope"`
+	ScopePolicy          ExecutionScopePolicy           `json:"scopePolicy"`
+	VerificationProfiles []ExecutionVerificationProfile `json:"verificationProfiles"`
+	Version              int64                          `json:"version"`
+	Workspace            Workspace                      `json:"workspace"`
 }
 
 type CaptureClass struct {
@@ -317,7 +429,7 @@ type CaptureOutput struct {
 	Title   string  `json:"title"`
 }
 
-type Grant struct {
+type ExecutionGrant struct {
 	Digest string `json:"digest"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
@@ -399,14 +511,14 @@ type ScopeClass struct {
 	TaskRevision        int64  `json:"taskRevision"`
 }
 
-type ScopePolicy struct {
+type ExecutionScopePolicy struct {
 	Access                           Access   `json:"access"`
 	AllowedPaths                     []string `json:"allowedPaths"`
 	ForbiddenPaths                   []string `json:"forbiddenPaths"`
 	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
 }
 
-type VerificationProfile struct {
+type ExecutionVerificationProfile struct {
 	Digest    string `json:"digest"`
 	ProfileID string `json:"profileId"`
 	Required  bool   `json:"required"`
@@ -900,6 +1012,13 @@ const (
 	Verify    Operation = "verify"
 )
 
+type Access string
+
+const (
+	IsolatedWrite Access = "isolated_write"
+	ReadOnly      Access = "read_only"
+)
+
 type WorkspaceBoundary string
 
 const (
@@ -1000,13 +1119,6 @@ const (
 	AcceptedResult   Gate = "accepted_result"
 	IntegratedCommit Gate = "integrated_commit"
 	VerifiedOutput   Gate = "verified_output"
-)
-
-type Access string
-
-const (
-	IsolatedWrite Access = "isolated_write"
-	ReadOnly      Access = "read_only"
 )
 
 type Mode string

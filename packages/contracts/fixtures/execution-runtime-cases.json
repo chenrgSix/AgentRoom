@@ -172,6 +172,46 @@
           "prepare",
           "capture",
           "verify"
+        ],
+        "readyGrants": [
+          {
+            "grant": {
+              "grantId": "grant_00000001",
+              "revision": 1,
+              "digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+              "expiresAt": "2026-08-31T11:00:00Z"
+            },
+            "repositoryId": "repo_00000001",
+            "bindingId": "repobind_00000001",
+            "deviceId": "device_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "agentId": "agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6",
+            "planId": "plan_runtime0001",
+            "nodeKey": "Build",
+            "operations": [
+              "prepare",
+              "capture"
+            ],
+            "runtimeProfile": {
+              "profileId": "profile_runtime01",
+              "revision": 1,
+              "digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+            },
+            "verificationProfiles": [],
+            "scopePolicy": {
+              "access": "isolated_write",
+              "allowedPaths": [
+                "src",
+                "tests"
+              ],
+              "forbiddenPaths": [
+                "secrets"
+              ],
+              "requirePreventivePathEnforcement": false
+            },
+            "integrationTargets": [],
+            "issuedAt": "2026-08-31T10:00:00Z",
+            "revokedAt": null
+          }
         ]
       },
       "valid": true

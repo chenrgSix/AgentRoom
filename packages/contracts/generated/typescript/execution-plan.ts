@@ -2211,11 +2211,73 @@ export interface ExecutionInputBindingArtifact {
 export interface GovernedExecutionCapability {
   operations:                [KindElement, ...KindElement[]];
   preventivePathEnforcement: boolean;
-  version:                   number;
-  workspaceBoundary:         WorkspaceBoundary;
+  /**
+   * Path-free current local grant summaries available to one published Agent. Omission means
+   * no admission-ready grant was published and grants no authority.
+   */
+  readyGrants?:      [GovernedExecutionCapabilityReadyGrant, ...GovernedExecutionCapabilityReadyGrant[]];
+  version:           number;
+  workspaceBoundary: WorkspaceBoundary;
 }
 
 export type KindElement = "prepare" | "capture" | "verify" | "integrate" | "publish" | "observe";
+
+export interface GovernedExecutionCapabilityReadyGrant {
+  agentId:            string;
+  bindingId:          string;
+  deviceId:           string;
+  grant:              PurpleGrant;
+  integrationTargets: MagentaIntegrationTarget[];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:             string;
+  nodeKey:              string;
+  operations:           [KindElement, ...KindElement[]];
+  planId:               string;
+  repositoryId:         string;
+  revokedAt:            null | string;
+  runtimeProfile:       PurpleRuntimeProfile;
+  scopePolicy:          PurpleScopePolicy;
+  verificationProfiles: MagentaVerificationProfile[];
+}
+
+export interface PurpleGrant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface MagentaIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface PurpleRuntimeProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface PurpleScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface MagentaVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
 
 export type WorkspaceBoundary = "enforced";
 
@@ -2272,8 +2334,70 @@ export interface RepositoryBindingSummary {
 export interface Capability {
   operations:                [KindElement, ...KindElement[]];
   preventivePathEnforcement: boolean;
-  version:                   number;
-  workspaceBoundary:         WorkspaceBoundary;
+  /**
+   * Path-free current local grant summaries available to one published Agent. Omission means
+   * no admission-ready grant was published and grants no authority.
+   */
+  readyGrants?:      [CapabilityReadyGrant, ...CapabilityReadyGrant[]];
+  version:           number;
+  workspaceBoundary: WorkspaceBoundary;
+}
+
+export interface CapabilityReadyGrant {
+  agentId:            string;
+  bindingId:          string;
+  deviceId:           string;
+  grant:              FluffyGrant;
+  integrationTargets: FriskyIntegrationTarget[];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:             string;
+  nodeKey:              string;
+  operations:           [KindElement, ...KindElement[]];
+  planId:               string;
+  repositoryId:         string;
+  revokedAt:            null | string;
+  runtimeProfile:       FluffyRuntimeProfile;
+  scopePolicy:          FluffyScopePolicy;
+  verificationProfiles: FriskyVerificationProfile[];
+}
+
+export interface FluffyGrant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface FriskyIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface FluffyRuntimeProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface FluffyScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface FriskyVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
 }
 
 export interface RepositoryBindingSummaryRuntimeProfile {

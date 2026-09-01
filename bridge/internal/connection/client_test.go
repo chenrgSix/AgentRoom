@@ -13,9 +13,11 @@ import (
 
 	"convenewire.dev/bridge/internal/buildidentity"
 	"convenewire.dev/bridge/internal/config"
+	"convenewire.dev/bridge/internal/identity"
 	"convenewire.dev/bridge/internal/operations"
 	"convenewire.dev/bridge/internal/pairing"
 	contracts "convenewire.dev/contracts/generated/go"
+	execution "convenewire.dev/contracts/generated/go/execution"
 	runtimecontracts "convenewire.dev/contracts/generated/go/runtime"
 	"github.com/coder/websocket"
 )
@@ -39,6 +41,23 @@ func contractRunRequest(runID, traceID, targetAgentID string) contracts.RunReque
 			ContextMessages:   []contracts.ContextMessage{},
 			Deadline:          time.Now().UTC().Add(time.Minute),
 		},
+	}
+}
+
+func preparedGovernedGrant(agentID, deviceID string) execution.ExecutionGrantSummary {
+	return execution.ExecutionGrantSummary{
+		AgentID: agentID, BindingID: "repobind_prepared0001", DeviceID: deviceID,
+		Grant: execution.ExecutionGrantSummaryGrant{GrantID: "grant_prepared0001", Revision: 1,
+			Digest: strings.Repeat("a", 64), ExpiresAt: "2026-09-01T12:00:00Z"},
+		RepositoryID: "repo_prepared0001", PlanID: "plan_prepared0001", NodeKey: "build",
+		Operations: []execution.KindElement{execution.Prepare, execution.Capture},
+		RuntimeProfile: execution.ExecutionGrantSummaryRuntimeProfile{ProfileID: "profile_prepared0001",
+			Revision: 1, Digest: strings.Repeat("b", 64)},
+		VerificationProfiles: []execution.ExecutionGrantSummaryVerificationProfile{},
+		ScopePolicy: execution.ExecutionGrantSummaryScopePolicy{Access: execution.IsolatedWrite,
+			AllowedPaths: []string{"src"}, ForbiddenPaths: []string{}},
+		IntegrationTargets: []execution.ExecutionGrantSummaryIntegrationTarget{},
+		IssuedAt:           "2026-09-01T10:00:00Z",
 	}
 }
 
@@ -221,19 +240,25 @@ func TestClientPreparesRecoveryBeforePublishingTruthfulGovernedCapability(t *tes
 	}))
 	defer server.Close()
 	directory := t.TempDir()
+	agents := []config.AgentConfig{{Name: "Builder", Role: "Implementation", Adapter: "generic",
+		Command: []string{"agent"}, Workspace: directory}}
+	identities, err := identity.LoadOrCreate(directory, agents)
+	if err != nil {
+		t.Fatal(err)
+	}
+	grant := preparedGovernedGrant(identities["Builder"], "device_test0001")
 	prepared := atomic.Bool{}
 	ctx, cancel := context.WithCancel(context.Background())
 	client := Client{Config: config.Config{ServerURL: server.URL, DataDir: directory,
-		Agents: []config.AgentConfig{{Name: "Builder", Role: "Implementation", Adapter: "generic",
-			Command: []string{"agent"}, Workspace: directory}}}, Credential: pairing.Credential{
-		ServerURL: server.URL, DeviceID: "device_test", TeamID: "team_test",
+		Agents: agents}, Credential: pairing.Credential{
+		ServerURL: server.URL, DeviceID: "device_test0001", TeamID: "team_test",
 		OwnerMemberID: "member_test", Token: "device-secret"}, BridgeVersion: "0.4.0",
 		PrepareRuns: func(context.Context) (PreparedRuns, error) {
 			if requests.Load() != 0 {
 				t.Fatal("Run recovery started after network publication")
 			}
 			prepared.Store(true)
-			return PreparedRuns{GovernedExecutionAgentNames: map[string]bool{"Builder": true},
+			return PreparedRuns{GovernedExecutionGrants: map[string][]execution.ExecutionGrantSummary{"Builder": {grant}},
 				ReplayMessages: []any{map[string]any{"type": "prepared.replay"}}}, nil
 		}}
 	done := make(chan error, 1)
@@ -242,20 +267,30 @@ func TestClientPreparesRecoveryBeforePublishingTruthfulGovernedCapability(t *tes
 	if !prepared.Load() || hello["type"] != "bridge.hello" || publication["type"] != "agent.publish" || replay["type"] != "prepared.replay" {
 		t.Fatalf("unexpected preparation/publication order: %#v %#v %#v", hello, publication, replay)
 	}
-	assertPrepareOnly := func(value any) {
+	assertPrepareCapture := func(value any, grants bool) {
 		t.Helper()
 		capability, ok := value.(map[string]any)
 		operations, operationsOK := capability["operations"].([]any)
 		if !ok || capability["version"] != float64(1) || capability["workspaceBoundary"] != "enforced" ||
-			capability["preventivePathEnforcement"] != false || !operationsOK || len(operations) != 1 || operations[0] != "prepare" {
-			t.Fatalf("governed capability exceeded implemented operations: %#v", value)
+			capability["preventivePathEnforcement"] != false || !operationsOK || len(operations) != 2 ||
+			operations[0] != "prepare" || operations[1] != "capture" {
+			t.Fatalf("governed capability omitted an implemented operation: %#v", value)
+		}
+		ready, exists := capability["readyGrants"]
+		if grants {
+			values, valid := ready.([]any)
+			if !exists || !valid || len(values) != 1 || values[0].(map[string]any)["grant"].(map[string]any)["grantId"] != "grant_prepared0001" {
+				t.Fatalf("Agent capability omitted the exact path-free grant: %#v", value)
+			}
+		} else if exists {
+			t.Fatalf("Device capability published Agent-specific grants: %#v", value)
 		}
 	}
 	helloPayload := hello["payload"].(map[string]any)
-	assertPrepareOnly(helloPayload["governedExecution"])
+	assertPrepareCapture(helloPayload["governedExecution"], false)
 	publicationPayload := publication["payload"].(map[string]any)
 	capabilities := publicationPayload["capabilities"].(map[string]any)
-	assertPrepareOnly(capabilities["governedExecution"])
+	assertPrepareCapture(capabilities["governedExecution"], true)
 	cancel()
 	select {
 	case err := <-done:
@@ -282,6 +317,52 @@ func TestClientPreparationFailurePreventsCapabilityPublicationAndNetwork(t *test
 	}
 	if requests.Load() != 0 {
 		t.Fatal("failed local recovery reached the network")
+	}
+}
+
+func TestValidatePreparedRunsRejectsNonCurrentGovernedGrantSets(t *testing.T) {
+	agents := []config.AgentConfig{{Name: "Builder"}}
+	valid := preparedGovernedGrant("agent_prepared0001", "device_prepared0001")
+	if err := validatePreparedRuns(agents, PreparedRuns{
+		GovernedExecutionGrants: map[string][]execution.ExecutionGrantSummary{"Builder": {valid}},
+	}, valid.DeviceID); err != nil {
+		t.Fatalf("valid prepared grant was rejected: %v", err)
+	}
+	revokedAt := "2026-09-01T10:30:00Z"
+	tests := []struct {
+		name   string
+		device string
+		grants map[string][]execution.ExecutionGrantSummary
+	}{
+		{name: "unknown Agent name", device: valid.DeviceID,
+			grants: map[string][]execution.ExecutionGrantSummary{"Foreign": {valid}}},
+		{name: "empty grant set", device: valid.DeviceID,
+			grants: map[string][]execution.ExecutionGrantSummary{"Builder": {}}},
+		{name: "foreign Device", device: "device_foreign0001",
+			grants: map[string][]execution.ExecutionGrantSummary{"Builder": {valid}}},
+		{name: "duplicate grant", device: valid.DeviceID,
+			grants: map[string][]execution.ExecutionGrantSummary{"Builder": {valid, valid}}},
+		{name: "missing capture", device: valid.DeviceID,
+			grants: map[string][]execution.ExecutionGrantSummary{"Builder": {func() execution.ExecutionGrantSummary {
+				changed := valid
+				changed.Operations = []execution.KindElement{execution.Prepare}
+				return changed
+			}()}}},
+		{name: "revoked", device: valid.DeviceID,
+			grants: map[string][]execution.ExecutionGrantSummary{"Builder": {func() execution.ExecutionGrantSummary {
+				changed := valid
+				changed.RevokedAt = &revokedAt
+				return changed
+			}()}}},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if err := validatePreparedRuns(agents, PreparedRuns{
+				GovernedExecutionGrants: test.grants,
+			}, test.device); err == nil {
+				t.Fatal("non-current governed grant set was accepted")
+			}
+		})
 	}
 }
 

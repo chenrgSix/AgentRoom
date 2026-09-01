@@ -7,15 +7,16 @@ credentials and enforcement local; Central receives bounded capabilities and
 exact operation receipts. Repository preparation, verification and cleanup use
 durable operation ownership and never add a second Runtime-start path.
 
-`CON-021` adds the generated version-1 execution wire types. The production
-Bridge may now advertise only the `prepare` operation for an exact locally ready
-Agent after governed recovery has completed. The Server requires both `prepare`
-and `capture` on the current Device connection and that exact Agent before it
-can send a governed Run, so this truthful partial declaration does not open the
-transport. A governed Context Manifest cannot fall back to an ordinary prompt.
-BRG-071/RUN-018 now connect local capture/checkpoint publication but must still
-finish Server capture-intent validation and advertise the reviewed full
-declaration before delivery is enabled. Result proposal remains a separate
+`CON-021` adds the generated version-1 execution wire types. After governed
+recovery, the production Bridge advertises `prepare` plus `capture` only for an
+exact locally ready Agent and publishes that Agent's path-free current grant
+summaries. The Device hello carries no Agent grants. This truthful declaration
+still does not open transport because the Server has not yet derived and frozen
+an approved plan-to-manifest capture intent or matched delivery to one exact
+summary. A governed Context Manifest cannot fall back to an ordinary prompt.
+BRG-071/RUN-018 now connect local capture/checkpoint publication and the reviewed
+capability declaration but must still finish Server capture-intent validation.
+Result proposal remains a separate
 explicit authority. Capability metadata is current-epoch routing evidence, not local
 authorization; every delivered Run must independently pass the current local
 grant, repository, profile and just-in-time Server checks.
@@ -370,19 +371,20 @@ records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
 Managed-core startup opens the resource bundle, runs process fencing and governed
 Inbox/admission recovery before connection, then derives a current ready-Agent
-set from the exact Agent configuration, unexpired/unrevoked Task grant, runtime
-profile, repository binding and physical Git source. Only those Agents publish a
-version-1, enforced-workspace, non-preventive `prepare` declaration in both hello
-and Agent capability metadata. A recovery/readiness error prevents the network
+set from the exact Agent configuration, unexpired/unrevoked `prepare` plus
+`capture` Task grant, runtime profile, repository binding and physical Git
+source. The Device hello publishes the version-1 enforced-workspace operation
+support without Agent grants; only ready Agents publish sorted path-free exact
+grant summaries. A recovery/readiness error prevents the network
 connection; invalid unrelated local records fail the inventory closed. The
 Server verifies the Agent declaration is a subset of the current Device hello
 and persists it only from that owning Bridge. The connection registry starts
 each hello with an empty Agent set and records an Agent only after its same-epoch
-publication transaction commits; send and workspace admission also compare that
-current declaration with the persisted projection. It still requires both
-`prepare` and `capture` at Device and exact-Agent scope, while the Bridge remains
-prepare-only until the Server issues a frozen capture intent validated against
-the approved plan. Actual governed delivery, owner-visible cleanup and real
+publication transaction commits; foreign Device/Agent, duplicate, revoked or
+operation-incomplete summaries fail closed. Send and workspace admission also
+compare that current declaration with the persisted projection. The Server must
+still issue a frozen capture intent validated against the approved plan and bind
+it to one exact summary. Actual governed delivery, owner-visible cleanup and real
 Runtime evidence therefore remain open. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md) and
 [managed-core readiness evidence](../acceptance/brg-071-managed-core-readiness.md),

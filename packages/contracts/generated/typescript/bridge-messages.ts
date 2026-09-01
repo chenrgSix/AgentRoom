@@ -112,11 +112,75 @@ export interface BridgeHelloPayload {
 export interface PayloadGovernedExecution {
   operations:                [Operation, ...Operation[]];
   preventivePathEnforcement: boolean;
-  version:                   number;
-  workspaceBoundary:         WorkspaceBoundary;
+  /**
+   * Path-free current local grant summaries available to one published Agent. Omission means
+   * no admission-ready grant was published and grants no authority.
+   */
+  readyGrants?:      [PurpleReadyGrant, ...PurpleReadyGrant[]];
+  version:           number;
+  workspaceBoundary: WorkspaceBoundary;
 }
 
 export type Operation = "prepare" | "capture" | "verify" | "integrate" | "publish" | "observe";
+
+export interface PurpleReadyGrant {
+  agentId:            string;
+  bindingId:          string;
+  deviceId:           string;
+  grant:              PurpleGrant;
+  integrationTargets: PurpleIntegrationTarget[];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:             string;
+  nodeKey:              string;
+  operations:           [Operation, ...Operation[]];
+  planId:               string;
+  repositoryId:         string;
+  revokedAt:            null | string;
+  runtimeProfile:       PurpleRuntimeProfile;
+  scopePolicy:          PurpleScopePolicy;
+  verificationProfiles: PurpleVerificationProfile[];
+}
+
+export interface PurpleGrant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface PurpleIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface PurpleRuntimeProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface PurpleScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export type Access = "read_only" | "isolated_write";
+
+export interface PurpleVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
 
 export type WorkspaceBoundary = "enforced";
 
@@ -204,8 +268,70 @@ export interface Capabilities {
 export interface CapabilitiesGovernedExecution {
   operations:                [Operation, ...Operation[]];
   preventivePathEnforcement: boolean;
-  version:                   number;
-  workspaceBoundary:         WorkspaceBoundary;
+  /**
+   * Path-free current local grant summaries available to one published Agent. Omission means
+   * no admission-ready grant was published and grants no authority.
+   */
+  readyGrants?:      [FluffyReadyGrant, ...FluffyReadyGrant[]];
+  version:           number;
+  workspaceBoundary: WorkspaceBoundary;
+}
+
+export interface FluffyReadyGrant {
+  agentId:            string;
+  bindingId:          string;
+  deviceId:           string;
+  grant:              FluffyGrant;
+  integrationTargets: FluffyIntegrationTarget[];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:             string;
+  nodeKey:              string;
+  operations:           [Operation, ...Operation[]];
+  planId:               string;
+  repositoryId:         string;
+  revokedAt:            null | string;
+  runtimeProfile:       FluffyRuntimeProfile;
+  scopePolicy:          FluffyScopePolicy;
+  verificationProfiles: FluffyVerificationProfile[];
+}
+
+export interface FluffyGrant {
+  digest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  grantId:   string;
+  revision:  number;
+}
+
+export interface FluffyIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface FluffyRuntimeProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface FluffyScopePolicy {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface FluffyVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
 }
 
 export type InvocationMode = "managed" | "manual";
@@ -396,15 +522,15 @@ export interface Execution {
    * most nanosecond precision.
    */
   deadline:             string;
-  grant:                Grant;
+  grant:                ExecutionGrant;
   inputDigest:          string;
   inputs:               Input[];
   manifestDigest:       string;
   outputs:              [ExecutionOutput, ...ExecutionOutput[]];
   repository:           Repository;
   scope:                ScopeClass;
-  scopePolicy:          ScopePolicy;
-  verificationProfiles: VerificationProfile[];
+  scopePolicy:          ExecutionScopePolicy;
+  verificationProfiles: ExecutionVerificationProfile[];
   version:              number;
   workspace:            Workspace;
 }
@@ -422,7 +548,7 @@ export interface CaptureOutput {
   title:   string;
 }
 
-export interface Grant {
+export interface ExecutionGrant {
   digest: string;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -514,16 +640,14 @@ export interface ScopeClass {
   taskRevision:        number;
 }
 
-export interface ScopePolicy {
+export interface ExecutionScopePolicy {
   access:                           Access;
   allowedPaths:                     string[];
   forbiddenPaths:                   string[];
   requirePreventivePathEnforcement: boolean;
 }
 
-export type Access = "read_only" | "isolated_write";
-
-export interface VerificationProfile {
+export interface ExecutionVerificationProfile {
   digest:    string;
   profileId: string;
   required:  boolean;

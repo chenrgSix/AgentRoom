@@ -96,7 +96,7 @@ func TestGovernedAdmissionResourcesBorrowOwnerAndRollbackFailure(t *testing.T) {
 		recoveryOnly.ProcessFencer() == nil {
 		t.Fatal("empty Agent inventory enabled admission or omitted recovery")
 	}
-	if ready, err := recoveryOnly.ReadyAgentIDs(context.Background(), time.Now()); err != nil || len(ready) != 0 {
+	if ready, err := recoveryOnly.ReadyAgentGrants(context.Background(), time.Now()); err != nil || len(ready) != 0 {
 		t.Fatalf("recovery-only resources reported readiness: %#v %v", ready, err)
 	}
 	if err := recoveryOnly.Close(); err != nil {
@@ -126,7 +126,7 @@ func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBindin
 	}
 	defer resources.Close()
 	now := time.Date(2026, 9, 1, 10, 0, 0, 0, time.UTC)
-	if ready, err := resources.ReadyAgentIDs(context.Background(), now); err != nil || len(ready) != 0 {
+	if ready, err := resources.ReadyAgentGrants(context.Background(), now); err != nil || len(ready) != 0 {
 		t.Fatalf("unconfigured resources reported readiness: %#v %v", ready, err)
 	}
 
@@ -166,7 +166,7 @@ func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBindin
 	if err != nil {
 		t.Fatal(err)
 	}
-	grant, err := resources.bindings.IssueTaskGrant(context.Background(), repository.TaskGrantSpec{
+	grantSpec := repository.TaskGrantSpec{
 		GrantID: "grant_ready0001", BindingID: binding.BindingID, BindingRevision: binding.Revision,
 		SourceFingerprint: binding.SourceFingerprint, RepositoryID: binding.RepositoryID, BaseCommit: base,
 		PlanID: "plan_ready0001", PlanRevision: 1, PlanDigest: strings.Repeat("a", 64), NodeKey: "build",
@@ -177,22 +177,34 @@ func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBindin
 		VerificationProfiles: []execution.ExecutionGrantSummaryVerificationProfile{},
 		ScopePolicy: execution.ExecutionGrantSummaryScopePolicy{Access: execution.IsolatedWrite,
 			AllowedPaths: []string{"src"}, ForbiddenPaths: []string{}},
-		IntegrationTargets: []execution.ExecutionGrantSummaryIntegrationTarget{}}, now)
+		IntegrationTargets: []execution.ExecutionGrantSummaryIntegrationTarget{}}
+	if _, err := resources.bindings.IssueTaskGrant(context.Background(), grantSpec, now); err != nil {
+		t.Fatal(err)
+	}
+	if ready, err := resources.ReadyAgentGrants(context.Background(), now.Add(time.Minute)); err != nil || len(ready) != 0 {
+		t.Fatalf("prepare-only grant reported capture readiness: %#v %v", ready, err)
+	}
+	grantSpec.GrantID = "grant_ready0002"
+	grantSpec.Operations = []execution.KindElement{execution.Prepare, execution.Capture}
+	grant, err := resources.bindings.IssueTaskGrant(context.Background(), grantSpec, now)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ready, err := resources.ReadyAgentIDs(context.Background(), now.Add(time.Minute))
-	if err != nil || len(ready) != 1 || !ready[agentID] {
+	ready, err := resources.ReadyAgentGrants(context.Background(), now.Add(time.Minute))
+	if err != nil || len(ready) != 1 || len(ready[agentID]) != 1 {
 		t.Fatalf("valid local authority chain was not ready: %#v %v", ready, err)
 	}
-	if ready, err := resources.ReadyAgentIDs(context.Background(), now.Add(2*time.Hour)); err != nil || len(ready) != 0 {
+	if len(ready[agentID]) != 1 || ready[agentID][0].Grant.GrantID != grant.Spec.GrantID {
+		t.Fatalf("readiness did not publish the exact capture grant: %#v", ready)
+	}
+	if ready, err := resources.ReadyAgentGrants(context.Background(), now.Add(2*time.Hour)); err != nil || len(ready) != 0 {
 		t.Fatalf("expired grant remained ready: %#v %v", ready, err)
 	}
 	if _, err := resources.bindings.RevokeTaskGrant(grant.Spec.GrantID, 1, grant.Summary.Grant.Digest,
 		now.Add(10*time.Minute)); err != nil {
 		t.Fatal(err)
 	}
-	if ready, err := resources.ReadyAgentIDs(context.Background(), now.Add(11*time.Minute)); err != nil || len(ready) != 0 {
+	if ready, err := resources.ReadyAgentGrants(context.Background(), now.Add(11*time.Minute)); err != nil || len(ready) != 0 {
 		t.Fatalf("revoked grant remained ready: %#v %v", ready, err)
 	}
 }
@@ -207,7 +219,7 @@ func TestGovernedAdmissionResourcesWithoutGitRetainRecoveryButDisableAdmission(t
 	if resources.Coordinator() != nil || resources.RecoveryFence() == nil || resources.ProcessFencer() == nil {
 		t.Fatal("missing Git enabled admission or disabled mandatory recovery")
 	}
-	if ready, err := resources.ReadyAgentIDs(context.Background(), time.Now()); err != nil || len(ready) != 0 {
+	if ready, err := resources.ReadyAgentGrants(context.Background(), time.Now()); err != nil || len(ready) != 0 {
 		t.Fatalf("missing Git reported governed readiness: %#v %v", ready, err)
 	}
 }

@@ -84,6 +84,17 @@ test("execution capability handshake rejects unknown and ambiguous declarations 
     version: 1, workspaceBoundary: "enforced", preventivePathEnforcement: false,
     operations: ["prepare", "capture", "verify"]
   };
+  const agentCapability = { ...capability, readyGrants: [{
+    grant: { grantId: "grant_protocol0001", revision: 1, digest: "a".repeat(64),
+      expiresAt: "2026-09-01T12:00:00Z" },
+    repositoryId: "repo_protocol0001", bindingId: "repobind_protocol0001",
+    deviceId: fixture.deviceId, agentId, planId: "plan_protocol0001", nodeKey: "build",
+    operations: ["prepare", "capture"], runtimeProfile: {
+      profileId: "profile_protocol0001", revision: 1, digest: "b".repeat(64)
+    }, verificationProfiles: [], scopePolicy: { access: "isolated_write",
+      allowedPaths: ["src"], forbiddenPaths: [], requirePreventivePathEnforcement: false },
+    integrationTargets: [], issuedAt: "2026-09-01T10:00:00Z", revokedAt: null
+  }] };
   const hello = (governedExecution: unknown) => envelope("bridge.hello", {
     bridgeVersion: "0.4.0", connectionEpoch: 2, deviceId: fixture.deviceId,
     supportedProtocolVersions: ["1.0"], governedExecution
@@ -111,7 +122,7 @@ test("execution capability handshake rejects unknown and ambiguous declarations 
   await sendAndFlush(capable, envelope("agent.publish", {
     agentId,
     capabilities: {
-      governedExecution: capability,
+      governedExecution: agentCapability,
       invocationMode: "managed",
       supportsHandoff: false,
       supportsInterrupt: true,
@@ -133,8 +144,8 @@ test("execution capability handshake rejects unknown and ambiguous declarations 
     });
     return response.json().find((agent: { agentId: string }) =>
       agent.agentId === agentId
-    )?.capabilities?.governedExecution?.operations?.join(",") ===
-      "prepare,capture,verify";
+    )?.capabilities?.governedExecution?.readyGrants?.[0]?.grant?.grantId ===
+      "grant_protocol0001";
   });
   const legacy = await open();
   const downgraded = nextClose(capable);

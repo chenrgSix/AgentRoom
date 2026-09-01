@@ -200,16 +200,16 @@ func (r *GovernedAdmissionResources) ProcessFencer() *RuntimeProcessFencer {
 	return &RuntimeProcessFencer{store: r.processes}
 }
 
-// ReadyAgentIDs returns only Agents with one current owner-local chain that the
-// present implementation can actually prepare: exact configured Codex Runtime,
-// positive unrevoked profile, current Task grant, current repository binding
-// and unchanged physical Git source. It publishes no local identity or path.
+// ReadyAgentGrants returns only path-free summaries for current owner-local
+// chains that the present implementation can actually prepare and capture:
+// exact configured Codex Runtime, positive unrevoked profile, current Task
+// grant, current repository binding and unchanged physical Git source.
 //
 // This is capability readiness, not Run authority. Admission still checks the
 // exact manifest/grant and reruns the physical Runtime probe immediately before
 // the sole possible start.
-func (r *GovernedAdmissionResources) ReadyAgentIDs(ctx context.Context, now time.Time) (map[string]bool, error) {
-	ready := map[string]bool{}
+func (r *GovernedAdmissionResources) ReadyAgentGrants(ctx context.Context, now time.Time) (map[string][]execution.ExecutionGrantSummary, error) {
+	ready := map[string][]execution.ExecutionGrantSummary{}
 	if r == nil || now.IsZero() {
 		return nil, ErrAdmissionInvalid
 	}
@@ -242,7 +242,8 @@ func (r *GovernedAdmissionResources) ReadyAgentIDs(ctx context.Context, now time
 		agent, configured := r.agents[grant.Spec.AgentID]
 		if issuedErr != nil || expiresErr != nil || now.Before(issuedAt) || !now.Before(expiresAt) ||
 			grant.Summary.RevokedAt != nil || grant.Summary.Grant.Revision != 1 || !configured ||
-			!slices.Contains(grant.Spec.Operations, execution.Prepare) || len(grant.Spec.VerificationProfiles) != 0 ||
+			!slices.Contains(grant.Spec.Operations, execution.Prepare) ||
+			!slices.Contains(grant.Spec.Operations, execution.Capture) || len(grant.Spec.VerificationProfiles) != 0 ||
 			grant.Spec.ScopePolicy.RequirePreventivePathEnforcement {
 			continue
 		}
@@ -256,7 +257,15 @@ func (r *GovernedAdmissionResources) ReadyAgentIDs(ctx context.Context, now time
 			}
 			continue
 		}
-		ready[grant.Spec.AgentID] = true
+		ready[grant.Spec.AgentID] = append(ready[grant.Spec.AgentID], grant.Summary)
+		if len(ready[grant.Spec.AgentID]) > 64 {
+			return nil, ErrAdmissionInvalid
+		}
+	}
+	for agentID := range ready {
+		slices.SortFunc(ready[agentID], func(a, b execution.ExecutionGrantSummary) int {
+			return strings.Compare(a.Grant.GrantID, b.Grant.GrantID)
+		})
 	}
 	return ready, nil
 }

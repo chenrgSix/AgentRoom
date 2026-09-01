@@ -2137,10 +2137,66 @@ type ExecutionInputBindingArtifact struct {
 }
 
 type GovernedExecutionCapability struct {
-	Operations                []KindElement     `json:"operations"`
-	PreventivePathEnforcement bool              `json:"preventivePathEnforcement"`
-	Version                   int64             `json:"version"`
-	WorkspaceBoundary         WorkspaceBoundary `json:"workspaceBoundary"`
+	Operations                []KindElement `json:"operations"`
+	PreventivePathEnforcement bool          `json:"preventivePathEnforcement"`
+	// Path-free current local grant summaries available to one published Agent. Omission means
+	// no admission-ready grant was published and grants no authority.
+	ReadyGrants       []GovernedExecutionCapabilityReadyGrant `json:"readyGrants,omitempty"`
+	Version           int64                                   `json:"version"`
+	WorkspaceBoundary WorkspaceBoundary                       `json:"workspaceBoundary"`
+}
+
+type GovernedExecutionCapabilityReadyGrant struct {
+	AgentID            string                     `json:"agentId"`
+	BindingID          string                     `json:"bindingId"`
+	DeviceID           string                     `json:"deviceId"`
+	Grant              PurpleGrant                `json:"grant"`
+	IntegrationTargets []MagentaIntegrationTarget `json:"integrationTargets"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt             string                       `json:"issuedAt"`
+	NodeKey              string                       `json:"nodeKey"`
+	Operations           []KindElement                `json:"operations"`
+	PlanID               string                       `json:"planId"`
+	RepositoryID         string                       `json:"repositoryId"`
+	RevokedAt            *string                      `json:"revokedAt"`
+	RuntimeProfile       PurpleRuntimeProfile         `json:"runtimeProfile"`
+	ScopePolicy          PurpleScopePolicy            `json:"scopePolicy"`
+	VerificationProfiles []MagentaVerificationProfile `json:"verificationProfiles"`
+}
+
+type PurpleGrant struct {
+	Digest string `json:"digest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt string `json:"expiresAt"`
+	GrantID   string `json:"grantId"`
+	Revision  int64  `json:"revision"`
+}
+
+type MagentaIntegrationTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type PurpleRuntimeProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type PurpleScopePolicy struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type MagentaVerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
 }
 
 type RuntimeAuthorityRequest struct {
@@ -2186,10 +2242,66 @@ type RepositoryBindingSummary struct {
 }
 
 type Capability struct {
-	Operations                []KindElement     `json:"operations"`
-	PreventivePathEnforcement bool              `json:"preventivePathEnforcement"`
-	Version                   int64             `json:"version"`
-	WorkspaceBoundary         WorkspaceBoundary `json:"workspaceBoundary"`
+	Operations                []KindElement `json:"operations"`
+	PreventivePathEnforcement bool          `json:"preventivePathEnforcement"`
+	// Path-free current local grant summaries available to one published Agent. Omission means
+	// no admission-ready grant was published and grants no authority.
+	ReadyGrants       []CapabilityReadyGrant `json:"readyGrants,omitempty"`
+	Version           int64                  `json:"version"`
+	WorkspaceBoundary WorkspaceBoundary      `json:"workspaceBoundary"`
+}
+
+type CapabilityReadyGrant struct {
+	AgentID            string                    `json:"agentId"`
+	BindingID          string                    `json:"bindingId"`
+	DeviceID           string                    `json:"deviceId"`
+	Grant              FluffyGrant               `json:"grant"`
+	IntegrationTargets []FriskyIntegrationTarget `json:"integrationTargets"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt             string                      `json:"issuedAt"`
+	NodeKey              string                      `json:"nodeKey"`
+	Operations           []KindElement               `json:"operations"`
+	PlanID               string                      `json:"planId"`
+	RepositoryID         string                      `json:"repositoryId"`
+	RevokedAt            *string                     `json:"revokedAt"`
+	RuntimeProfile       FluffyRuntimeProfile        `json:"runtimeProfile"`
+	ScopePolicy          FluffyScopePolicy           `json:"scopePolicy"`
+	VerificationProfiles []FriskyVerificationProfile `json:"verificationProfiles"`
+}
+
+type FluffyGrant struct {
+	Digest string `json:"digest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt string `json:"expiresAt"`
+	GrantID   string `json:"grantId"`
+	Revision  int64  `json:"revision"`
+}
+
+type FriskyIntegrationTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type FluffyRuntimeProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type FluffyScopePolicy struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type FriskyVerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
 }
 
 type RepositoryBindingSummaryRuntimeProfile struct {

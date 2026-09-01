@@ -124,11 +124,12 @@ the Bridge performed its other local admission checks.
 These internal ports expose no Agent-controlled shell, path, public lease mint
 or generation-write endpoint. Local repository enrollment, grant authentication,
 actual worktree creation, runtime enforcement and cleanup stay with REPO-001,
-BRG-071 and RUN-018. The production Bridge can now advertise only its locally
-ready `prepare` operation after recovery, but this coordination layer requires
-both `prepare` and `capture` at current Device, same-epoch exact-Agent and
-matching persisted-Agent scope. Therefore the partial declaration still cannot
-admit or start governed coding.
+BRG-071 and RUN-018. The production Bridge now advertises `prepare` plus
+`capture` only after recovery and attaches path-free current grant summaries to
+the same-epoch exact-Agent publication. This coordination layer still does not
+derive a manifest or treat that summary as authority. Governed coding remains
+closed until RUN-018 validates an approved plan, freezes the exact capture
+intent and matches the manifest to one current summary.
 
 Repository Capture derives a separate `read_capture` content lease from one
 authenticated capture operation and its frozen isolated generation. Migration

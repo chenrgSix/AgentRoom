@@ -5,10 +5,12 @@ Date: 2026-09-01
 ## Scope
 
 This increment connects the frozen RUN-018 capture intent to the existing local
-Git capture and canonical Artifact/checkpoint publication path. It does not open
-governed transport: the Bridge continues to publish only `prepare` until Server
-plan-to-manifest validation and the full Device/Agent declaration are reviewed.
-It also does not infer a Result, verify code, accept a Task or authorize cleanup.
+Git capture and canonical Artifact/checkpoint publication path. The later
+[capability readiness increment](brg-071-governed-capability-readiness.md) now
+publishes reviewed `prepare` plus `capture` declarations and exact path-free
+grant summaries, but transport remains closed pending Server plan-to-manifest
+validation and exact summary matching. This increment also does not infer a
+Result, verify code, accept a Task or authorize cleanup.
 
 ## Reviewed Runtime Order
 
@@ -71,7 +73,7 @@ or abandoned process identity, success/capture/stop/terminal order, capture
 uncertainty downgrade, non-success terminal exclusion, post-terminal protocol
 failure and terminal delivery failure.
 
-Server-side manifest derivation, capability opening, real governed product E2E,
+Server-side manifest derivation, exact summary matching, real governed product E2E,
 owner-visible cleanup and physical-platform acceptance remain explicit later
 gates. Full cross-platform race and native acceptance remain separate from the
 focused race and local build evidence above.

@@ -19,6 +19,7 @@ import (
 	"convenewire.dev/bridge/internal/pairing"
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
 	contracts "convenewire.dev/contracts/generated/go"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 type governedAgentReadiness struct {
@@ -197,19 +198,21 @@ func RunObservedWithProvisioning(
 			}); err != nil {
 				return connection.PreparedRuns{}, err
 			}
-			readyIDs, err := governedResources.ReadyAgentIDs(ctx, time.Now().UTC())
+			readyGrants, err := governedResources.ReadyAgentGrants(ctx, time.Now().UTC())
 			if err != nil {
 				return connection.PreparedRuns{}, err
 			}
-			readiness.replace(readyIDs)
-			readyNames := make(map[string]bool, len(readyIDs))
-			for agentID := range readyIDs {
+			readyIDs := make(map[string]bool, len(readyGrants))
+			readyNames := make(map[string][]execution.ExecutionGrantSummary, len(readyGrants))
+			for agentID, grants := range readyGrants {
+				readyIDs[agentID] = true
 				if name := agentNames[agentID]; name != "" {
-					readyNames[name] = true
+					readyNames[name] = append([]execution.ExecutionGrantSummary{}, grants...)
 				}
 			}
+			readiness.replace(readyIDs)
 			return connection.PreparedRuns{ReplayMessages: messages,
-				GovernedExecutionAgentNames: readyNames}, nil
+				GovernedExecutionGrants: readyNames}, nil
 		},
 		ReplayCanceledRun: func(
 			ctx context.Context,

@@ -326,6 +326,7 @@ export function registerBridgeSocketRoutes({
             (governedExecution !== undefined &&
               !bridgeConnections.supportsGovernedAgentCapability(
                 devicePrincipal.deviceId,
+                publicationPayload.agentId as string,
                 governedExecution
               )) ||
             !validRuntimePolicy

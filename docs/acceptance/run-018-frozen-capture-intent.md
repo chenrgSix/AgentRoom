@@ -3,9 +3,11 @@
 Date: 2026-09-01
 
 This increment adds only the frozen, path-safe capture intent needed by the
-later production delivery adapter. It does not advertise `capture`, start a
-Runtime, read a repository, publish an Artifact, propose a Result, or make a
-workspace eligible for cleanup.
+later production delivery adapter. The later
+[capability readiness increment](brg-071-governed-capability-readiness.md) now
+truthfully advertises `prepare` plus `capture`, but neither increment creates a
+Run, starts a Runtime, reads a repository, publishes an Artifact, proposes a
+Result or makes a workspace eligible for cleanup.
 
 ## Delivered boundary
 
@@ -23,7 +25,7 @@ workspace eligible for cleanup.
 
 ## Verification
 
-- `npm test --workspace @convene-wire/contracts` passed all 79 Node contract
+- `npm test --workspace @convene-wire/contracts` originally passed all 79 Node contract
   checks, deterministic generation and strict TypeScript checks. Its embedded Go
   step was rerun with task-scoped `GOCACHE` because the macOS shared cache is not
   writable in this environment.
@@ -34,6 +36,7 @@ workspace eligible for cleanup.
 Production Bridge capture composition, finished-process fencing and canonical
 checkpoint publication are now covered by
 [BRG-071 governed capture evidence](brg-071-governed-capture-publication.md).
-Server plan-to-manifest validation, prompt scope projection, owner cleanup, full
-capability publication and actual governed Run delivery remain explicit open
-gates.
+Server plan-to-manifest validation, exact summary matching, prompt scope
+projection, owner cleanup and actual governed Run delivery remain explicit open
+gates. Full capability publication is recorded separately in
+[BRG-071 readiness evidence](brg-071-governed-capability-readiness.md).

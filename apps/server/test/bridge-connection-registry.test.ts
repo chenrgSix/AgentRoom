@@ -57,6 +57,19 @@ test("governed Run transport requires the current exact execution capability", (
   const downgraded = new FakeSocket();
   const capability = { version: 1, workspaceBoundary: "enforced", preventivePathEnforcement: false,
     operations: ["prepare", "capture", "verify"] };
+  const readyGrant = {
+    grant: { grantId: "grant_execution0001", revision: 1, digest: "a".repeat(64),
+      expiresAt: "2026-09-01T12:00:00Z" },
+    repositoryId: "repo_execution0001", bindingId: "repobind_execution0001",
+    deviceId: "device_execution", agentId: "agent_execution",
+    planId: "plan_execution0001", nodeKey: "build",
+    operations: ["prepare", "capture"], runtimeProfile: {
+      profileId: "profile_execution0001", revision: 1, digest: "b".repeat(64)
+    }, verificationProfiles: [], scopePolicy: { access: "isolated_write",
+      allowedPaths: ["src"], forbiddenPaths: [], requirePreventivePathEnforcement: false },
+    integrationTargets: [], issuedAt: "2026-09-01T10:00:00Z", revokedAt: null
+  };
+  const agentCapability = { ...capability, readyGrants: [readyGrant] };
   const governed = { type: "run.requested", payload: {
     targetAgentId: "agent_execution", contextManifest: { execution: {} }
   } };
@@ -72,20 +85,24 @@ test("governed Run transport requires the current exact execution capability", (
   }
   registry.register("device_execution", 2, capable, { governedExecution: capability });
   assert.equal(registry.supportsGovernedExecution("device_execution"), true);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", capability), true);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", {
+  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", agentCapability), true);
+  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", {
     ...capability, operations: ["prepare"]
   }), true);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", {
+  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", {
     ...capability, preventivePathEnforcement: true
   }), false);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", {
+  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", {
     ...capability, operations: ["publish"]
   }), false);
+  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", {
+    ...agentCapability,
+    readyGrants: [{ ...readyGrant, deviceId: "device_foreign0001" }]
+  }), false, "a foreign Device grant was accepted");
   assert.equal(registry.send("device_execution", governed), false,
     "Device hello cannot stand in for current Agent publication");
   assert.equal(registry.recordGovernedAgentCapability(
-    "device_execution", 1, "agent_execution", capability
+    "device_execution", 1, "agent_execution", agentCapability
   ), false, "a stale epoch recorded Agent capability");
   assert.equal(registry.recordGovernedAgentCapability(
     "device_execution", 2, "agent_execution", {
@@ -95,12 +112,15 @@ test("governed Run transport requires the current exact execution capability", (
   assert.equal(registry.send("device_execution", governed), false,
     "prepare-only Agent publication enabled complete governed transport");
   assert.equal(registry.recordGovernedAgentCapability(
-    "device_execution", 2, "agent_execution", capability
+    "device_execution", 2, "agent_execution", agentCapability
   ), true);
   const agentSnapshot = registry.governedAgentExecutionCapability(
     "device_execution", "agent_execution"
   )!;
   assert.deepEqual(agentSnapshot.operations, capability.operations);
+  assert.equal(registry.governedAgentReadyGrants(
+    "device_execution", "agent_execution"
+  )[0]?.grant.grantId, readyGrant.grant.grantId);
   agentSnapshot.operations.splice(0);
   assert.equal(registry.supportsGovernedAgentExecution(
     "device_execution", "agent_execution"
@@ -112,11 +132,13 @@ test("governed Run transport requires the current exact execution capability", (
   assert.equal(registry.send("device_execution", governed), false,
     "same-epoch Agent downgrade retained its prior declaration");
   assert.equal(registry.recordGovernedAgentCapability(
-    "device_execution", 2, "agent_execution", capability
+    "device_execution", 2, "agent_execution", agentCapability
   ), true);
   registry.register("device_execution", 3, downgraded);
   assert.equal(registry.supportsGovernedExecution("device_execution"), false);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", capability), false);
+  assert.equal(registry.supportsGovernedAgentCapability(
+    "device_execution", "agent_execution", agentCapability
+  ), false);
   assert.equal(registry.governedAgentExecutionCapability(
     "device_execution", "agent_execution"
   ), undefined, "a new hello retained an older Agent declaration");
