@@ -100,6 +100,18 @@ func (r *GovernedAdmissionResources) Coordinator() *GovernedAdmissionCoordinator
 	return r.coordinator
 }
 
+func (r *GovernedAdmissionResources) RecoveryFence() *RuntimeRecoveryFence {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.fence == nil {
+		return nil
+	}
+	return &RuntimeRecoveryFence{store: r.fence}
+}
+
 func (r *GovernedAdmissionResources) Close() error {
 	if r == nil {
 		return nil

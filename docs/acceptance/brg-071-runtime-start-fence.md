@@ -114,6 +114,16 @@ permission to retry.
   error after the possible-start boundary. It rereads the exact durable fence;
   any observed/uncertain `starting` state becomes explicit ambiguity. Delivery
   retains `accepted` and records no fabricated failed terminal in that case.
+- `delivery.GovernedRecovery` preflights the exact Inbox/manifest/admission join
+  before mutation and never invokes a Runtime. Every durable `starting` record,
+  including an orphan or mismatched Inbox record, must pass an injected
+  process-tree `FenceAndWait` proof before the exact start digest can close as
+  unknown. Ordinary recovery refuses governed inventory unless this pass has
+  completed; claim-only records remain available for exact redelivery.
+- Admission resources expose a restricted recovery fence with only inventory
+  and exact closure operations. It cannot claim or start a Runtime. The concrete
+  surviving-process identity/fencer is still absent, so production cannot yet
+  construct this recovery branch or advertise governed execution.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -155,6 +165,11 @@ terminal duplicate replay, ordinary Artifact-resolver exclusion, retryable
 preparation resume, generic non-retryable prepare/start failure, non-invoke
 ambiguity and persisted-start response ambiguity. Existing nil-handler and
 direct-executor negatives continue to prove no fallback.
+The recovery cases prove exact wire/fence restart joins, process fencing before
+closure, `working` to unknown convergence, persisted-terminal replay, claim-only
+preservation, idempotent replay, orphan cleanup with offline failure, no closure
+when process absence is unproved, governed-before-ordinary ordering and ordinary
+recovery rejection before any mixed-inventory mutation.
 
 The contract package passes 78 Node checks, generated/current TypeScript, Go
 round trips and 243 shared positive/negative fixtures. The Bridge admission
@@ -168,13 +183,11 @@ acceptance.
 
 ## Remaining BRG-071 gates
 
-- wire the exact governed manifest through the existing inbox without opening a
-  second Runtime-start path;
 - let the managed core open the reviewed resource bundle, inject this exact
   governed delivery branch and publish capability only after readiness;
-- recover accepted/working Inbox state together with the possible-start fence,
-  then retain/fence any surviving process and connect stopped-Run, revocation
-  and owner-visible cleanup;
+- implement the durable cross-process Runtime identity and concrete
+  `FenceAndWait` proof, then connect it to this Inbox/fence recovery branch,
+  stopped-Run, revocation and owner-visible cleanup;
 - expose owner setup/state without leaking local details;
 - obtain actual no-start and positive-start evidence before advertising the
   governed capability.

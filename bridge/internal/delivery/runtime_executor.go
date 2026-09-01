@@ -731,12 +731,26 @@ func privateReasoningReplay(source json.RawMessage) (json.RawMessage, error) {
 }
 
 func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
+	return e.recover(ctx, send, false)
+}
+
+func (e RuntimeExecutor) recover(ctx context.Context, send Sender, governedAlreadyRecovered bool) error {
 	records, err := e.Inbox.List()
 	if err != nil {
 		return err
 	}
+	if !governedAlreadyRecovered {
+		for _, record := range records {
+			if isGovernedRequest(record.Request) {
+				return ErrGovernedExecutionUnsupported
+			}
+		}
+	}
 	recoverable := make([]Record, 0, len(records))
 	for _, record := range records {
+		if isGovernedRequest(record.Request) {
+			continue
+		}
 		if err := validateRecoveryRecord(record); err != nil {
 			if !isTerminalState(record.State) {
 				return fmt.Errorf(
@@ -822,6 +836,10 @@ func (e RuntimeExecutor) Recover(ctx context.Context, send Sender) error {
 		}
 	}
 	return nil
+}
+
+func isGovernedRequest(request contracts.RunRequestedPayload) bool {
+	return request.ContextManifest != nil && request.ContextManifest.Execution != nil
 }
 
 func hasPersistedMaterializationFailure(record Record) bool {

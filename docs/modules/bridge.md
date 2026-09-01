@@ -253,6 +253,25 @@ process controls cover in-process cancellation, but startup recovery must still
 fence or terminate any surviving process before converting unresolved
 `starting` records to unknown. No governed capability is published.
 
+The internal `delivery.GovernedRecovery` now owns that restart ordering without
+pretending the process proof exists. It preflights every governed Inbox record
+against the exact immutable wire manifest and path-free admission inventory,
+then calls an injected `FenceAndWait` contract for every durable `starting`
+record before closing its exact admission/start digests as unknown. An orphan
+or mismatched record is still fenced and closed, but keeps the Bridge offline.
+Claim-only `preparing`/`accepted` records remain eligible for exact Server
+redelivery; active records whose possible start is already closed converge to a
+persisted `outcome_unknown`; persisted terminal events remain authoritative and
+are replayed only after process fencing. No recovery path re-invokes Runtime.
+
+Ordinary `RuntimeExecutor.Recover` now rejects mixed governed inventory before
+mutating any record. `GovernedRecovery.RecoverAll` is the only reviewed ordering
+that can recover governed state first and then skip it in ordinary recovery.
+Admission resources expose a restricted recovery view that can list and close
+but cannot claim or start. A concrete durable process identity and
+`FenceAndWait` implementation is still missing, so managed-core construction,
+production recovery and capability publication remain closed.
+
 The internal `delivery.GovernedHandler` now defines the reviewed connection to
 the existing delivery lifecycle without activating it. `delivery.Handler`
 continues to reject every governed manifest unless that dependency is explicitly
@@ -300,8 +319,9 @@ and start digests. It does not create a Task Result, verification receipt or
 completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
-That explicit surviving-process cleanup, inbox/cancellation integration,
-production resource/Handler construction, startup ambiguity recovery,
+The Inbox/fence recovery ordering and cancellation reuse are now implemented
+behind an injected process-fencing contract. Durable process identity and the
+concrete surviving-process proof, production resource/Handler construction,
 capability advertisement and real Runtime evidence remain open. The production
 governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).

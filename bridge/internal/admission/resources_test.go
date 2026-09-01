@@ -19,8 +19,8 @@ func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resources.Coordinator() == nil {
-		t.Fatal("resources did not construct the coordinator")
+	if resources.Coordinator() == nil || resources.RecoveryFence() == nil {
+		t.Fatal("resources did not construct admission and restricted recovery")
 	}
 	if second, err := ownership.Acquire(dataDir); err == nil {
 		_ = second.Release()
@@ -36,6 +36,9 @@ func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *test
 	}
 	if resources.Coordinator() != nil {
 		t.Fatal("closed resources retained the coordinator")
+	}
+	if resources.RecoveryFence() != nil {
+		t.Fatal("closed resources retained the recovery fence")
 	}
 	if err := resources.Close(); err != nil {
 		t.Fatalf("close replay failed: %v", err)

@@ -85,6 +85,28 @@ func TestDecodeGovernedManifestRejectsInvalidInnerDigests(t *testing.T) {
 	}
 }
 
+func TestValidateRuntimeAdmissionRequestJoinsExactRestartInventory(t *testing.T) {
+	request := governedDeliveryFixture(t)
+	store, spec := runtimeFenceFixture(t)
+	view, err := store.Claim(spec, runtimeFenceNow)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateRuntimeAdmissionRequest(request, view); err != nil {
+		t.Fatal(err)
+	}
+	changed := view
+	changed.Spec.WorkspaceGeneration = "workspace-generation-foreign"
+	if err := ValidateRuntimeAdmissionRequest(request, changed); !errors.Is(err, ErrAdmissionChanged) {
+		t.Fatalf("changed restart join error=%v", err)
+	}
+	invalid := view
+	invalid.Spec.PreparedIdentityDigest = "bad"
+	if err := ValidateRuntimeAdmissionRequest(request, invalid); !errors.Is(err, ErrAdmissionInvalid) {
+		t.Fatalf("invalid restart inventory error=%v", err)
+	}
+}
+
 func governedDeliveryFixture(t *testing.T) contracts.RunRequestedPayload {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "packages", "contracts", "fixtures", "execution-runtime-cases.json"))
