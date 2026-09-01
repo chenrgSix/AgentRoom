@@ -67,6 +67,7 @@ the actual RUN-018/EXEC-003 delivery and materialization gates.
 | PlanApproval | operationId, exact revision/digest, actor, root Task revision, decision, timestamp |
 | PlanNode | stable nodeKey, taskId, definition/criteria pins, Agent, repository and verifier requirements |
 | PlanEdge | edgeKey, source/target node keys, gate, selected output/input slots |
+| NodeMaterialization | plan revision/node/gate, exact source Run/Result/review and canonical checkpoint Artifact pins |
 | TaskInputBinding | bindingId, plan revision/edge, source receipt, destination Task/Run, immutable content pins |
 | DispatchIntent | plan revision/node/generation, unique Run ID, exact inputs, operation digest |
 | PlanControlEvent | operationId, expected execution revision, actor, pause/resume/cancel reason |
@@ -243,11 +244,17 @@ logical target under separate checkout locks.
 
 EXEC-004 begins with one bounded vertical slice rather than scaffolding every
 future policy. `ExecutionNodeState` is a recomputable Execution-owned projection;
-it is not a provider Runtime or a second Run aggregate. Settlement is its sole
-writer and reads Run/Result facts without mutating their owners. The first slice
-supports generation 1 of dependency-free, zero-input `implementation` nodes.
-Incoming edges, review/verification kinds, required inputs and automatic retries
-remain explicit blockers.
+it is not a provider Runtime or a second Run aggregate. The first slice supports
+generation 1 of dependency-free, zero-input `implementation` nodes. Incoming
+edges, review/verification kinds, required inputs and automatic retries remain
+explicit blockers.
+
+`ExecutionNodeProjector` is the sole application mutation path for this
+projection. The Scheduler owns candidate order/readiness and asks it to record a
+readiness result. Settlement owns interpretation of Run/Result facts and asks it
+to record a settled attempt. The node-state repository is CRUD only. This
+matches the actual two-source projection inputs without giving either Scheduler
+or Settlement ownership of the other's facts.
 
 The scheduler persists an immutable DispatchIntent and ordinary governed Run in
 one immediate transaction. Because the existing Run schema still requires a
@@ -263,6 +270,28 @@ and cannot create generation 2 automatically. Startup settlement precedes
 admission and ordinary Delivery replay; bounded single-flight wakeups cover
 state changes. Concurrent Server processes rely on immediate transactions plus
 unique plan/revision/node/generation and Run constraints, then reread the winner.
+
+### First Accepted-Result Dependency Increment
+
+EXEC-007 adds no separate materialization engine. A thin read-only
+`ExecutionDependencyResolver` maps approved inbound `accepted_result` edges and
+retained NodeMaterialization evidence to the existing input `Selection[]` port.
+`ExecutionInputService.freezeForRun()` remains the final authority validation
+and persistence boundary inside the destination admission transaction.
+
+NodeMaterialization is immutable evidence, not a new transient node state. It
+pins the exact generation-1 completed Run, its accepted managed Result and human
+review, and canonical checkpoint output Artifacts. A completed node therefore
+remains `awaiting_result`; a separate materialization record releases eligible
+downstream edges. Governed Result acceptance is allowed only for this exact
+canonical shape, never completes the Task and never stands in for independent
+verification or integration.
+
+The bounded first edge uses the existing production-supported patch input. The
+[frozen acceptance record](../acceptance/exec-007-accepted-result-dependency-runtime.md)
+defines the physical A-to-B provenance, restart and concurrency evidence. Commit
+bundle preparation, `verified_output`, `integrated_commit` and generation 2
+remain fail-closed.
 
 ## APIs and Agent Tools
 
