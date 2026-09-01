@@ -228,13 +228,18 @@ function readyGrantsBelongToAgent(
 ): boolean {
   const seen = new Set<string>();
   for (const grant of capability.readyGrants ?? []) {
+    const runtimeReady = grant.operations.includes("prepare") &&
+      grant.operations.includes("capture") &&
+      grant.integrationTargets.length === 0;
+    const integrationReady = grant.operations.length === 1 &&
+      grant.operations[0] === "integrate" &&
+      grant.integrationTargets.length > 0;
     if (
       grant.deviceId !== deviceId ||
       grant.agentId !== agentId ||
       grant.revokedAt !== null ||
       seen.has(grant.grant.grantId) ||
-      !grant.operations.includes("prepare") ||
-      !grant.operations.includes("capture") ||
+      (!runtimeReady && !integrationReady) ||
       !grant.operations.every((operation) =>
         capability.operations.includes(operation)
       )

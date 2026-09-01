@@ -7,7 +7,7 @@ import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
   app, auth, clock, executionPlans, executionInputs, isolatedWorkspaces,
-  repositoryCaptures, repositoryVerifications, principal
+  repositoryCaptures, repositoryIntegrations, repositoryVerifications, principal
 }: ServerRouteContext): void {
   const options = {
     bodyLimit: 512 * 1024,
@@ -53,6 +53,38 @@ export function registerExecutionPlanRoutes({
     options,
     async (request) => execute(() => repositoryVerifications.getForDevice(
       auth.authenticateDevice(bearerToken(request), clock()), request.params.operationId))
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/integration-approvals",
+    options,
+    async (request) => execute(() => repositoryIntegrations.approve(
+      principal(request), request.params.planId, request.body, clock()
+    ))
+  );
+  app.get<{ Params: { operationId: string } }>(
+    "/api/bridge/repository-integrations/:operationId",
+    options,
+    async (request) => execute(() => repositoryIntegrations.getForDevice(
+      auth.authenticateDevice(bearerToken(request), clock()),
+      request.params.operationId
+    ))
+  );
+  app.post(
+    "/api/bridge/integration-receipts",
+    options,
+    async (request) => execute(() => repositoryIntegrations.retain(
+      auth.authenticateDevice(bearerToken(request), clock()),
+      request.body,
+      clock()
+    ))
+  );
+  app.get<{ Params: { operationId: string } }>(
+    "/api/bridge/repository-integrations/:operationId/receipt",
+    options,
+    async (request) => execute(() => repositoryIntegrations.receiptForDevice(
+      auth.authenticateDevice(bearerToken(request), clock()),
+      request.params.operationId
+    ))
   );
   app.get<{ Params: { planId: string; bindingId: string } }>(
     "/api/execution-plans/:planId/inputs/:bindingId", options,

@@ -102,7 +102,7 @@ export class VerifiedOutputMaterializer {
           SELECT 1 FROM execution_plan_edges edge
           WHERE edge.plan_id = node.plan_id AND edge.revision = node.revision
             AND edge.from_node_key = node.node_key
-            AND edge.gate = 'verified_output'
+            AND edge.gate IN ('verified_output', 'integrated_commit')
         )
       ORDER BY result.result_version, checkpoint.checkpoint_id
     `).all(

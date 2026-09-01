@@ -7,6 +7,7 @@ import type {
   GovernedExecutionCapabilityReadyGrant,
   GovernedExecutionManifest,
   RepositoryCheckpoint,
+  RepositoryOperationReceipt,
   RepositoryOperationRequest,
   VerificationReceipt
 } from "@convene-wire/contracts/execution-plan";
@@ -40,7 +41,7 @@ const capability = {
   version: 1 as const,
   workspaceBoundary: "enforced" as const,
   preventivePathEnforcement: false,
-  operations: ["prepare", "capture", "verify"] as const
+  operations: ["prepare", "capture", "verify", "integrate"] as const
 };
 
 function envelope(
@@ -101,6 +102,7 @@ async function admissionFixture(
   grantChange?: (grant: GovernedExecutionCapabilityReadyGrant) => void,
   options: {
     acceptedDependency?: boolean;
+    integratedDependency?: boolean;
     requiredVerificationProfiles?: number;
     verifiedDependency?: boolean;
     captureScheduledDelivery?: boolean;
@@ -169,7 +171,8 @@ async function admissionFixture(
       required: true
     });
   }
-  if (options.acceptedDependency || options.verifiedDependency) {
+  if (options.acceptedDependency || options.verifiedDependency ||
+    options.integratedDependency) {
     const build = command.definition.nodes.find((node) => node.nodeKey === "Build");
     const consume = command.definition.nodes.find((node) => node.nodeKey === "Review");
     assert.ok(build?.repository);
@@ -194,10 +197,20 @@ async function admissionFixture(
       edgeKey: "build_consume",
       fromNodeKey: "Build",
       toNodeKey: "Consume",
-      gate: options.verifiedDependency ? "verified_output" : "accepted_result",
+      gate: options.integratedDependency
+        ? "integrated_commit"
+        : options.verifiedDependency ? "verified_output" : "accepted_result",
       bindings: [{ outputSlot: "output", inputSlot: "patch" }]
     }];
     command.definition.policy.maxConcurrency = 1;
+    if (options.integratedDependency) {
+      command.definition.policy.integration = "local_integration";
+      command.definition.policy.integrationTargets = [{
+        repositoryId: build.repository.repositoryId,
+        targetRef: "refs/heads/main",
+        expectedCommit: build.repository.baseCommit
+      }];
+    }
   }
   const draft = await f.create(command);
   const plan = (await f.ok(
@@ -274,6 +287,20 @@ async function admissionFixture(
     });
   const grant = grants.find((candidate) => candidate.nodeKey === "Build");
   assert.ok(grant);
+  if (options.integratedDependency) {
+    grants.push({
+      ...structuredClone(grant),
+      grant: {
+        ...structuredClone(grant.grant),
+        grantId: "grant_governed_integrate0001",
+        digest: "c".repeat(64)
+      },
+      operations: ["integrate"],
+      integrationTargets: structuredClone(
+        command.definition.policy.integrationTargets
+      )
+    });
+  }
   grantChange?.(grant);
   const agentCapability = { ...capability, readyGrants: grants };
   const scheduledDelivery = options.captureScheduledDelivery
@@ -593,9 +620,13 @@ async function retainIndependentVerification(
   );
 }
 
-async function prepareVerifiedDependencySource(t: TestContext) {
+async function prepareVerifiedDependencySource(
+  t: TestContext,
+  integrated = false
+) {
   const f = await admissionFixture(t, undefined, {
-    verifiedDependency: true,
+    integratedDependency: integrated,
+    verifiedDependency: !integrated,
     captureScheduledDelivery: true,
     schedulerMilliseconds: 100
   });
@@ -1106,6 +1137,138 @@ test("a failed independent verification receipt leaves the dependency gate close
     WHERE verification_id = ?
   `).get(retained.receipt.verificationId) as { outcome: string }).outcome,
   "failed");
+});
+
+test("exact human integration approval admits one immutable serialized operation", {
+  timeout: 30_000
+}, async (t) => {
+  const { f, manifest, captured } =
+    await prepareVerifiedDependencySource(t, true);
+  const verification = await retainIndependentVerification(
+    f,
+    manifest,
+    captured
+  );
+  await f.restart(0);
+  await reconnectGovernedAgent(t, f, 2, false);
+  await waitFor(() => Boolean(f.database.prepare(`
+    SELECT 1 FROM execution_verified_node_materializations
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId)));
+  const materialization = new ExecutionNodeMaterializationRepository(
+    f.database
+  ).get({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build"
+  }, "verified_output");
+  assert.ok(materialization?.gate === "verified_output");
+  const target = f.plan.current.definition.policy.integrationTargets[0];
+  assert.ok(target);
+  const command = {
+    operationId: "op_integration_approval0001",
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build",
+    materializationDigest: materialization.materializationDigest,
+    candidateCommit: materialization.candidateCommit,
+    candidateTree: materialization.candidateTree,
+    inputDigest: materialization.inputDigest,
+    target,
+    verificationReceipts: materialization.verificationReceipts.map((pin) => ({
+      verificationId: pin.verificationId,
+      receiptDigest: pin.receiptDigest
+    })),
+    deadline: "2026-08-31T12:30:00.000Z"
+  };
+  const approval = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/integration-approvals`,
+    command
+  );
+  assert.match(approval.approvalDigest, /^[a-f0-9]{64}$/u);
+  assert.match(approval.integrationOperationId, /^op_integration_[a-f0-9]{64}$/u);
+  assert.equal(approval.approvedByMemberId, f.ownerMemberId);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM repository_integration_locks
+    WHERE repository_id = ? AND target_ref = ?
+  `).get(target.repositoryId, target.targetRef) as { n: number }).n, 1);
+
+  const admission = await f.ok(
+    "GET",
+    `/api/bridge/repository-integrations/${approval.integrationOperationId}`,
+    undefined,
+    `Bearer ${f.credential.secret}`
+  );
+  const operation = admission.operation as RepositoryOperationRequest;
+  assert.equal(operation.action.kind, "integrate");
+  assert.deepEqual(operation.action.integrate?.target, target);
+  assert.equal(
+    operation.action.integrate?.integrationApprovalOperationId,
+    command.operationId
+  );
+  assert.deepEqual(
+    operation.action.integrate?.verificationIds,
+    [verification.receipt.verificationId]
+  );
+  const integrationGrant = f.grants.find((grant) =>
+    grant.operations.length === 1 && grant.operations[0] === "integrate"
+  );
+  assert.ok(integrationGrant);
+  assert.equal(operation.grant.digest, integrationGrant.grant.digest);
+
+  const receipt: RepositoryOperationReceipt = {
+    version: 1,
+    operationId: operation.operationId,
+    requestDigest: operation.requestDigest,
+    kind: "integrate",
+    repositoryId: operation.repositoryId,
+    bindingId: operation.bindingId,
+    deviceId: operation.deviceId,
+    state: "succeeded",
+    observedGeneration: operation.expectedGeneration,
+    checkpointId: null,
+    verificationId: null,
+    candidateCommit: operation.action.integrate!.candidateCommit,
+    candidateTree: operation.action.integrate!.candidateTree,
+    target: operation.action.integrate!.target,
+    providerObservationId: null,
+    errorCode: null,
+    recordedAt: now
+  };
+  const retained = await f.ok(
+    "POST",
+    "/api/bridge/integration-receipts",
+    receipt,
+    `Bearer ${f.credential.secret}`
+  );
+  assert.deepEqual(retained.receipt, receipt);
+  assert.match(retained.receiptDigest, /^[a-f0-9]{64}$/u);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM repository_integration_locks
+  `).get() as { n: number }).n, 0);
+  assert.throws(() => f.database.prepare(`
+    UPDATE integration_receipts SET state = 'failed' WHERE operation_id = ?
+  `).run(operation.operationId), /immutable/u);
+  assert.deepEqual(await f.ok(
+    "POST",
+    "/api/bridge/integration-receipts",
+    receipt,
+    `Bearer ${f.credential.secret}`
+  ), retained);
+  assert.deepEqual(await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/integration-approvals`,
+    command
+  ), approval);
+  const changed = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/integration-approvals`,
+    { ...command, candidateTree: "e".repeat(command.candidateTree.length) }
+  );
+  assert.equal(changed.statusCode, 409, changed.body);
+  assert.match(changed.body, /INTEGRATION_APPROVAL_OPERATION_CONFLICT/u);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
 test("independently verified predecessor output materializes and drives exact downstream bytes", {

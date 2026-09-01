@@ -18,6 +18,8 @@ import { ArtifactPreviewService } from
 import { ArtifactPublicationService } from
   "./artifact/artifact-publication-service.js";
 import { RepositoryCaptureService } from "./repository/repository-capture-service.js";
+import { RepositoryIntegrationService } from
+  "./repository/repository-integration-service.js";
 import { RepositoryVerificationService } from "./verification/repository-verification-service.js";
 import { IsolatedWorkspaceLeaseService } from "./workspace/isolated-workspace-lease-service.js";
 import { LocalArtifactBlobStore } from
@@ -516,6 +518,13 @@ export async function createServerApp(
   const repositoryVerifications = new RepositoryVerificationService(
     database, artifactRepository, artifactBlobs
   );
+  const repositoryIntegrations = new RepositoryIntegrationService(
+    database,
+    transactions,
+    auth,
+    executionMaterializations,
+    bridgeConnections
+  );
   const operationalMetrics = new OperationalMetrics(
     database, bridgeConnections, clock, options.buildIdentity
   );
@@ -965,6 +974,7 @@ export async function createServerApp(
     executionInputs,
     isolatedWorkspaces,
     repositoryCaptures,
+    repositoryIntegrations,
     repositoryVerifications,
     fakeAdapters,
     handoffs,
