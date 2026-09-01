@@ -95,21 +95,23 @@ export class ExecutionInputService {
       const external = definition.definition.externalInputs.find((entry) =>
         entry.nodeKey === node.nodeKey && entry.inputSlot === selection.inputSlot);
       if ((!edge && !external) || (edge && external)) return fail("EXECUTION_INPUT_PRODUCER_MISSING");
-      // REPO-002 must supply its own proof resolver. Never substitute either a
-      // ResultReview or VerificationReceipt set for an integrated commit.
-      if (edge?.gate === "integrated_commit") return fail("EXECUTION_INPUT_GATE_UNAVAILABLE");
       const sourceNode = edge && definition.definition.nodes.find((entry) => entry.nodeKey === edge.fromNodeKey);
       const sourceTask = sourceNode && plan.compiledTasks.find((entry) => entry.nodeKey === sourceNode.nodeKey);
       const sourceTaskId = sourceTask?.taskId ?? external?.sourceTaskId;
       if (!sourceTaskId || sourceTaskId === destination.task_id) return fail("EXECUTION_INPUT_SOURCE_INVALID");
-      const source = edge?.gate === "verified_output"
-        ? this.verifiedSource(
+      let materializedGate: "verified_output" | "integrated_commit" | undefined;
+      if (edge?.gate === "verified_output" || edge?.gate === "integrated_commit") {
+        materializedGate = edge.gate;
+      }
+      const source = materializedGate
+        ? this.materializedSource(
+          materializedGate,
           plan.planId,
           input.revision,
           sourceTaskId,
           selection.sourceResultId,
           selection.artifactId,
-          edge.bindings.find((entry) => entry.inputSlot === selection.inputSlot)!
+          edge!.bindings.find((entry) => entry.inputSlot === selection.inputSlot)!
             .outputSlot,
           plan.roomId
         )
@@ -133,10 +135,10 @@ export class ExecutionInputService {
         bindingId: `input_${executionOperationDigest({ runId: input.runId, inputSlot: selection.inputSlot })}`,
         planId: plan.planId, planRevision: input.revision, edgeKey: edge?.edgeKey ?? null,
         gate: edge?.gate ?? "accepted_result",
-        gateOperationId: edge?.gate === "verified_output"
+        gateOperationId: materializedGate
           ? (source as VerifiedSource).gate_operation_id
           : (source as AcceptedSource).operation_id,
-        gateDigest: edge?.gate === "verified_output"
+        gateDigest: materializedGate
           ? (source as VerifiedSource).materialization_digest
           : executionOperationDigest(source),
         sourceTaskId, sourceDefinitionRevision: source.definition_revision, sourceCriteriaRevision: source.criteria_revision,
@@ -144,10 +146,10 @@ export class ExecutionInputService {
         artifact: { artifactId: artifact.artifactId, artifactRevision: artifact.artifactRevision,
           contentDigest: artifact.contentSha256!, byteLength: artifact.contentSizeBytes!, kind: slot.kind },
         repositoryId: sourceNode?.repository?.repositoryId ?? null,
-        sourceCommit: edge?.gate === "verified_output"
+        sourceCommit: materializedGate
           ? (source as VerifiedSource).candidate_commit
           : null,
-        sourceTree: edge?.gate === "verified_output"
+        sourceTree: materializedGate
           ? (source as VerifiedSource).candidate_tree
           : null,
         destinationTaskId: destination.task_id, destinationRunId: input.runId,
@@ -264,9 +266,10 @@ export class ExecutionInputService {
         scope.definitionRevision !== destination.definition_revision || scope.criteriaRevision !== destination.criteria_revision ||
         manifest.inputs.filter((entry) => entry.bindingId === bindingId).length !== 1 ||
         canonicalExecutionJSON(manifest.inputs.find((entry) => entry.bindingId === bindingId)) !== canonicalExecutionJSON(binding)) return deny();
-      if (binding.gate === "integrated_commit") return deny();
-      if (binding.gate === "verified_output") {
-        const source = this.verifiedSource(
+      if (binding.gate === "verified_output" ||
+        binding.gate === "integrated_commit") {
+        const source = this.materializedSource(
+          binding.gate,
           binding.planId,
           binding.planRevision,
           binding.sourceTaskId,
@@ -355,7 +358,8 @@ export class ExecutionInputService {
     return source ?? fail("EXECUTION_INPUT_SOURCE_UNAVAILABLE");
   }
 
-  private verifiedSource(
+  private materializedSource(
+    gate: "verified_output" | "integrated_commit",
     planId: string,
     planRevision: number,
     taskId: string,
@@ -370,7 +374,7 @@ export class ExecutionInputService {
         materialization.gate_operation_id,
         materialization.materialization_digest,
         materialization.candidate_commit, materialization.candidate_tree
-      FROM execution_verified_node_materializations materialization
+      FROM execution_dependency_materializations materialization
       JOIN execution_plan_nodes node ON node.plan_id = materialization.plan_id
         AND node.revision = materialization.plan_revision
         AND node.node_key = materialization.node_key
@@ -398,11 +402,12 @@ export class ExecutionInputService {
         AND evidence.artifact_id = output.artifact_id
       WHERE materialization.plan_id = @planId
         AND materialization.plan_revision = @planRevision
-        AND materialization.gate = 'verified_output'
+        AND materialization.gate = @gate
         AND result.result_id = @resultId
     `).get({
       planId,
       planRevision,
+      gate,
       taskId,
       resultId,
       artifactId,

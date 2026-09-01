@@ -55,9 +55,6 @@ export class ExecutionDependencyResolver {
     const selections: ExecutionInputSelection[] = [];
     const occupied = new Set<string>();
     for (const edge of incoming) {
-      if (edge.gate === "integrated_commit") {
-        return blocked("EXECUTION_DEPENDENCY_GATE_UNAVAILABLE");
-      }
       const source = validated.definition.nodes.find(
         (candidate) => candidate.nodeKey === edge.fromNodeKey
       );

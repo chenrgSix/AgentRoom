@@ -88,6 +88,8 @@ import { ExecutionMaterializationService } from
   "./execution/materialization/execution-materialization-service.js";
 import { VerifiedOutputMaterializer } from
   "./execution/materialization/verified-output-materializer.js";
+import { IntegratedCommitMaterializer } from
+  "./execution/materialization/integrated-commit-materializer.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
@@ -635,7 +637,8 @@ export async function createServerApp(
     executionNodeProjector,
     new ExecutionMaterializationService(
       new AcceptedResultMaterializer(database, executionMaterializations),
-      new VerifiedOutputMaterializer(database, executionMaterializations)
+      new VerifiedOutputMaterializer(database, executionMaterializations),
+      new IntegratedCommitMaterializer(database, executionMaterializations)
     )
   );
   const executionRecovery = new ExecutionRecoveryService(

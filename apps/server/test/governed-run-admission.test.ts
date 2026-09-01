@@ -777,6 +777,7 @@ async function reconcileVerifiedMaterializationConcurrently(
     import { AcceptedResultMaterializer } from ${JSON.stringify(new URL("../src/execution/materialization/accepted-result-materializer.ts", import.meta.url).href)};
     import { ExecutionMaterializationService } from ${JSON.stringify(new URL("../src/execution/materialization/execution-materialization-service.ts", import.meta.url).href)};
     import { VerifiedOutputMaterializer } from ${JSON.stringify(new URL("../src/execution/materialization/verified-output-materializer.ts", import.meta.url).href)};
+    import { IntegratedCommitMaterializer } from ${JSON.stringify(new URL("../src/execution/materialization/integrated-commit-materializer.ts", import.meta.url).href)};
     process.send({ ready: true });
     process.once("message", ({ databasePath, identity, now }) => {
       const database = openDatabase(databasePath);
@@ -789,7 +790,8 @@ async function reconcileVerifiedMaterializationConcurrently(
           new ExecutionNodeProjector(nodes),
           new ExecutionMaterializationService(
             new AcceptedResultMaterializer(database, materializations),
-            new VerifiedOutputMaterializer(database, materializations)
+            new VerifiedOutputMaterializer(database, materializations),
+            new IntegratedCommitMaterializer(database, materializations)
           )
         );
         process.send({ state: settlement.reconcileOne(identity, now) });
@@ -1271,8 +1273,176 @@ test("exact human integration approval admits one immutable serialized operation
   );
   assert.equal(changed.statusCode, 409, changed.body);
   assert.match(changed.body, /INTEGRATION_APPROVAL_OPERATION_CONFLICT/u);
+  await f.restart(100);
+  const downstream = await reconnectGovernedAgent(t, f, 3);
+  let consumeRequest: BridgeMessage;
+  try {
+    consumeRequest = await downstream.delivery!;
+  } catch (error) {
+    const state = f.database.prepare(`
+      SELECT state, blocker_code FROM execution_node_states
+      WHERE plan_id = ? AND node_key = 'Consume'
+    `).get(f.plan.planId);
+    const integratedCount = (f.database.prepare(`
+      SELECT count(*) AS n FROM execution_integrated_node_materializations
+    `).get() as { n: number }).n;
+    const dispatches = f.database.prepare(`
+      SELECT node_key, run_id FROM execution_dispatch_intents
+      WHERE plan_id = ? ORDER BY node_key
+    `).all(f.plan.planId);
+    throw new Error(`Consume was not scheduled: ${JSON.stringify({
+      state,
+      integratedCount,
+      dispatches
+    })}`, { cause: error });
+  }
+  const consumeManifest = (consumeRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  assert.equal(consumeManifest.scope.nodeKey, "Consume");
+  assert.equal(consumeManifest.inputs.length, 1);
+  assert.equal(consumeManifest.inputs[0]!.gate, "integrated_commit");
+  assert.equal(consumeManifest.inputs[0]!.gateOperationId, operation.operationId);
+  assert.equal(consumeManifest.inputs[0]!.sourceCommit,
+    operation.action.integrate!.candidateCommit);
+  assert.equal(consumeManifest.inputs[0]!.sourceTree,
+    operation.action.integrate!.candidateTree);
+  const content = await f.request(
+    "GET",
+    `/api/bridge/runs/${consumeManifest.scope.runId}/execution-inputs/${consumeManifest.inputs[0]!.bindingId}/content`,
+    undefined,
+    `Bearer ${f.credential.secret}`
+  );
+  assert.equal(content.statusCode, 200, content.body);
+  assert.deepEqual(content.rawPayload, dependencyBytes);
+  const integrated = new ExecutionNodeMaterializationRepository(
+    f.database
+  ).get({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build"
+  }, "integrated_commit");
+  assert.ok(integrated?.gate === "integrated_commit");
+  assert.equal(integrated.integrationReceiptDigest, retained.receiptDigest);
+  assert.equal(integrated.verifiedMaterializationDigest,
+    materialization.materializationDigest);
+  assert.throws(() => f.database.prepare(`
+    UPDATE execution_integrated_node_materializations
+    SET integration_receipt_digest = ?
+  `).run("0".repeat(64)), /immutable/u);
+  assert.throws(() => f.database.prepare(`
+    DELETE FROM execution_integrated_node_materializations
+  `).run(), /retained evidence/u);
+  assert.deepEqual(new ExecutionDependencyResolver(
+    new ExecutionPlanRepository(f.database),
+    new ExecutionNodeMaterializationRepository(f.database)
+  ).resolve({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Consume"
+  }), {
+    ready: true,
+    selections: [{
+      inputSlot: "patch",
+      sourceResultId: materialization.sourceResultId,
+      artifactId: materialization.artifactPins[0]!.artifactId
+    }]
+  });
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
+
+for (const terminal of ["failed", "canceled", "outcome_unknown"] as const) {
+  test(`${terminal} integration receipts never materialize integrated_commit`, {
+    timeout: 30_000
+  }, async (t) => {
+    const { f, manifest, captured } =
+      await prepareVerifiedDependencySource(t, true);
+    await retainIndependentVerification(f, manifest, captured);
+    await f.restart(0);
+    await reconnectGovernedAgent(t, f, 2, false);
+    await waitFor(() => Boolean(f.database.prepare(`
+      SELECT 1 FROM execution_verified_node_materializations
+      WHERE plan_id = ? AND node_key = 'Build'
+    `).get(f.plan.planId)));
+    const materialization = new ExecutionNodeMaterializationRepository(
+      f.database
+    ).get({
+      planId: f.plan.planId,
+      planRevision: f.plan.current.revision,
+      nodeKey: "Build"
+    }, "verified_output");
+    assert.ok(materialization?.gate === "verified_output");
+    const target = f.plan.current.definition.policy.integrationTargets[0];
+    assert.ok(target);
+    const approval = await f.ok(
+      "POST",
+      `/api/execution-plans/${f.plan.planId}/integration-approvals`,
+      {
+        operationId: "op_integration_terminal0001",
+        planId: f.plan.planId,
+        planRevision: f.plan.current.revision,
+        nodeKey: "Build",
+        materializationDigest: materialization.materializationDigest,
+        candidateCommit: materialization.candidateCommit,
+        candidateTree: materialization.candidateTree,
+        inputDigest: materialization.inputDigest,
+        target,
+        verificationReceipts: materialization.verificationReceipts.map((pin) => ({
+          verificationId: pin.verificationId,
+          receiptDigest: pin.receiptDigest
+        })),
+        deadline: "2026-08-31T12:30:00.000Z"
+      }
+    );
+    const admission = await f.ok(
+      "GET",
+      `/api/bridge/repository-integrations/${approval.integrationOperationId}`,
+      undefined,
+      `Bearer ${f.credential.secret}`
+    );
+    const operation = admission.operation as RepositoryOperationRequest;
+    const receipt: RepositoryOperationReceipt = {
+      version: 1,
+      operationId: operation.operationId,
+      requestDigest: operation.requestDigest,
+      kind: "integrate",
+      repositoryId: operation.repositoryId,
+      bindingId: operation.bindingId,
+      deviceId: operation.deviceId,
+      state: terminal,
+      observedGeneration: operation.expectedGeneration,
+      checkpointId: admission.checkpoint.checkpointId,
+      verificationId: null,
+      candidateCommit: operation.action.integrate!.candidateCommit,
+      candidateTree: operation.action.integrate!.candidateTree,
+      target: operation.action.integrate!.target,
+      providerObservationId: null,
+      errorCode: `INTEGRATION_${terminal.toUpperCase()}`,
+      recordedAt: now
+    };
+    await f.ok(
+      "POST",
+      "/api/bridge/integration-receipts",
+      receipt,
+      `Bearer ${f.credential.secret}`
+    );
+    await f.restart(0);
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM execution_integrated_node_materializations
+    `).get() as { n: number }).n, 0);
+    assert.deepEqual(new ExecutionDependencyResolver(
+      new ExecutionPlanRepository(f.database),
+      new ExecutionNodeMaterializationRepository(f.database)
+    ).resolve({
+      planId: f.plan.planId,
+      planRevision: f.plan.current.revision,
+      nodeKey: "Consume"
+    }), {
+      ready: false,
+      blocker: "EXECUTION_DEPENDENCY_NOT_MATERIALIZED"
+    });
+  });
+}
 
 test("independently verified predecessor output materializes and drives exact downstream bytes", {
   timeout: 30_000
