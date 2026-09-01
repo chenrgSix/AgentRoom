@@ -268,9 +268,9 @@ Ordinary `RuntimeExecutor.Recover` now rejects mixed governed inventory before
 mutating any record. `GovernedRecovery.RecoverAll` is the only reviewed ordering
 that can recover governed state first and then skip it in ordinary recovery.
 Admission resources expose a restricted recovery view that can list and close
-but cannot claim or start. A concrete durable process identity and
-`FenceAndWait` implementation is still missing, so managed-core construction,
-production recovery and capability publication remain closed.
+but cannot claim or start. They now also own one owner-scoped governed process
+store and expose separate restricted tracker/fencer views. Managed-core
+construction, production recovery and capability publication remain closed.
 
 The Runtime layer now provides the launch half of that missing process proof as
 an optional `GovernedProcessTracker`; ordinary Codex, Pi and generic adapters
@@ -284,7 +284,21 @@ signaling its caller. On Windows, the existing process starts suspended inside
 the kill-on-close Job Object; PID plus process creation time is observed and
 accepted before the first thread resumes. Failed observation kills the blocked
 tree on both paths. The owner-scoped journal, restart PID/lock validation and
-concrete fencer are still absent, so this primitive is not yet injected.
+concrete fencer are described below; this primitive is still not injected.
+
+The governed process store durably writes `prepared` before any helper/child
+exists, then `active` from the blocked/suspended PID observation, and finally
+one `finished` or `abandoned` record only after absence is proved. Records bind
+the exact Run, admission digest and start digest and contain no command,
+environment or local path. Unix active recovery requires both the recorded
+process-group identity and its owner-only inherited lock, group-kills it, waits
+for the lock to release and only then closes. Windows compares stored process
+creation time before terminating a matching PID, so a reused PID is not killed;
+the kill-on-close Job is still authoritative for descendants. `FenceAll` runs
+before Inbox/admission inventory recovery and cleans every nonterminal process
+record, including prepared-only and upper-layer orphan cases. The Runtime runner
+now passes the exact process identity and restricted tracker into its Codex
+adapter factory. Production core does not yet construct that runner/recovery.
 
 The internal `delivery.GovernedHandler` now defines the reviewed connection to
 the existing delivery lifecycle without activating it. `delivery.Handler`
@@ -333,11 +347,11 @@ and start digests. It does not create a Task Result, verification receipt or
 completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
-The Inbox/fence recovery ordering and cancellation reuse are now implemented
-behind an injected process-fencing contract. Durable process identity and the
-concrete surviving-process proof, production resource/Handler construction,
-capability advertisement and real Runtime evidence remain open. The production
-governed no-start rejection is unchanged. See the
+The Inbox/fence recovery ordering, cancellation reuse, durable process identity
+and concrete platform fencer are now implemented behind the unopened governed
+resource bundle. Production resource/Handler construction, readiness and
+capability advertisement, owner-visible cleanup and real Runtime evidence remain
+open. The production governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 
 ## Codex Local Boundary Probe

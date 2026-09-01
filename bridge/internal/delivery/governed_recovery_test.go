@@ -41,8 +41,8 @@ func TestGovernedRecoveryFencesPossibleStartBeforeClosingInboxUnknown(t *testing
 	if err := recovery.Recover(context.Background(), collectGoverned(&sent)); err != nil {
 		t.Fatal(err)
 	}
-	if processes.calls != 1 || fence.stopCalls != 1 || len(sent) != 3 {
-		t.Fatalf("process=%d stop=%d sent=%d", processes.calls, fence.stopCalls, len(sent))
+	if processes.allCalls != 1 || processes.calls != 1 || fence.stopCalls != 1 || len(sent) != 3 {
+		t.Fatalf("all=%d process=%d stop=%d sent=%d", processes.allCalls, processes.calls, fence.stopCalls, len(sent))
 	}
 	latest, err := inbox.Get(record.RunID)
 	if err != nil || latest.State != StateOutcomeUnknown || latest.LastSequence != 3 {
@@ -57,8 +57,8 @@ func TestGovernedRecoveryFencesPossibleStartBeforeClosingInboxUnknown(t *testing
 	if err := recovery.Recover(context.Background(), collectGoverned(&sent)); err != nil {
 		t.Fatal(err)
 	}
-	if processes.calls != 1 || fence.stopCalls != 1 || len(sent) != 3 {
-		t.Fatalf("replay process=%d stop=%d sent=%d", processes.calls, fence.stopCalls, len(sent))
+	if processes.allCalls != 2 || processes.calls != 1 || fence.stopCalls != 1 || len(sent) != 3 {
+		t.Fatalf("replay all=%d process=%d stop=%d sent=%d", processes.allCalls, processes.calls, fence.stopCalls, len(sent))
 	}
 }
 
@@ -69,8 +69,10 @@ func TestGovernedRecoveryLeavesNoStartClaimForExactRedelivery(t *testing.T) {
 		t.Fatal(err)
 	}
 	record, err := inbox.Get(request.RunID)
-	if err != nil || record.State != StateAccepted || len(sent) != 0 || processes.calls != 0 || fence.stopCalls != 0 {
-		t.Fatalf("record=%+v err=%v sent=%d process=%d stop=%d", record, err, len(sent), processes.calls, fence.stopCalls)
+	if err != nil || record.State != StateAccepted || len(sent) != 0 || processes.allCalls != 1 ||
+		processes.calls != 0 || fence.stopCalls != 0 {
+		t.Fatalf("record=%+v err=%v sent=%d all=%d process=%d stop=%d", record, err, len(sent),
+			processes.allCalls, processes.calls, fence.stopCalls)
 	}
 }
 
@@ -129,6 +131,18 @@ func TestGovernedRecoveryNeverClosesFenceUntilProcessAbsenceIsProved(t *testing.
 	}
 }
 
+func TestGovernedRecoveryFencesProcessInventoryBeforeReadingAdmission(t *testing.T) {
+	recovery, inbox, fence, processes, request := governedRecoveryFixture(t, admission.RuntimeAdmissionClaimed)
+	processes.allErr = errors.New("process inventory could not be fenced")
+	if err := recovery.Recover(context.Background(), func(context.Context, any) error { return nil }); !errors.Is(err, processes.allErr) {
+		t.Fatalf("error=%v", err)
+	}
+	record, err := inbox.Get(request.RunID)
+	if err != nil || record.State != StateAccepted || processes.allCalls != 1 || fence.listCalls != 0 {
+		t.Fatalf("record=%+v err=%v all=%d list=%d", record, err, processes.allCalls, fence.listCalls)
+	}
+}
+
 func TestGovernedRecoveryFencesOrphanPossibleStartAndKeepsBridgeOffline(t *testing.T) {
 	request := governedRecoveryRequest(t)
 	view := governedRecoveryView(t, request, admission.RuntimeAdmissionStarting)
@@ -175,10 +189,12 @@ func TestOrdinaryRecoveryRejectsGovernedInventoryBeforeMutation(t *testing.T) {
 
 type governedRecoveryFenceStub struct {
 	views     []admission.RuntimeAdmissionView
+	listCalls int
 	stopCalls int
 }
 
 func (s *governedRecoveryFenceStub) List() ([]admission.RuntimeAdmissionView, error) {
+	s.listCalls++
 	return append([]admission.RuntimeAdmissionView{}, s.views...), nil
 }
 
@@ -203,8 +219,15 @@ func (s *governedRecoveryFenceStub) Stop(runID, admissionDigest, startDigest str
 }
 
 type governedProcessFencerStub struct {
-	calls int
-	err   error
+	allCalls int
+	calls    int
+	allErr   error
+	err      error
+}
+
+func (s *governedProcessFencerStub) FenceAll(context.Context) error {
+	s.allCalls++
+	return s.allErr
 }
 
 func (s *governedProcessFencerStub) FenceAndWait(_ context.Context, view admission.RuntimeAdmissionView) error {

@@ -19,7 +19,8 @@ func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resources.Coordinator() == nil || resources.RecoveryFence() == nil {
+	if resources.Coordinator() == nil || resources.RecoveryFence() == nil ||
+		resources.ProcessTracker() == nil || resources.ProcessFencer() == nil {
 		t.Fatal("resources did not construct admission and restricted recovery")
 	}
 	if second, err := ownership.Acquire(dataDir); err == nil {
@@ -39,6 +40,9 @@ func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *test
 	}
 	if resources.RecoveryFence() != nil {
 		t.Fatal("closed resources retained the recovery fence")
+	}
+	if resources.ProcessTracker() != nil || resources.ProcessFencer() != nil {
+		t.Fatal("closed resources retained process lifecycle access")
 	}
 	if err := resources.Close(); err != nil {
 		t.Fatalf("close replay failed: %v", err)

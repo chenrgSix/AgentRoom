@@ -120,10 +120,12 @@ permission to retry.
   process-tree `FenceAndWait` proof before the exact start digest can close as
   unknown. Ordinary recovery refuses governed inventory unless this pass has
   completed; claim-only records remain available for exact redelivery.
-- Admission resources expose a restricted recovery fence with only inventory
-  and exact closure operations. It cannot claim or start a Runtime. The concrete
-  surviving-process identity/fencer is still absent, so production cannot yet
-  construct this recovery branch or advertise governed execution.
+- Admission resources expose restricted admission recovery, process tracker and
+  process fencer views. None can claim or start a Runtime. The owner-scoped
+  process store writes path-free `prepared`, `active` and append-only terminal
+  `finished`/`abandoned` records bound to exact admission/start digests. Startup
+  recovery calls `FenceAll` before reading Inbox or admission inventory, so a
+  corrupt or missing upper record cannot leave a journaled child alive.
 - The Runtime package now has an optional governed process lease and OS launch
   gate without changing ordinary adapters. On Unix, the exact running Bridge
   becomes a private process-group supervisor: the configured Runtime cannot run
@@ -133,6 +135,14 @@ permission to retry.
   its creation-time identity is observed and durably accepted before resume.
   Observation failure terminates the still-blocked/suspended tree and never
   releases the configured Runtime.
+- On Unix, restart fencing requires the exact active PID/group identity and a
+  still-held owner-only inherited lock before sending group `SIGKILL`; it then
+  waits for lock release before appending `finished`. Prepared-only records can
+  only become `abandoned` after their lock is absent. On Windows, the stored PID
+  and process creation time distinguish the original child from PID reuse;
+  kill-on-close Job ownership remains the descendant guarantee. The governed
+  runner now passes its exact admission/start identity and restricted tracker to
+  the Codex adapter factory.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -186,6 +196,11 @@ completion, and the group supervisor returns only after cleanup. These cases
 pass normally and for three focused race runs; Runtime vet and Windows/Linux
 amd64 compilation pass. Windows behavior remains cross-compiled, not physically
 executed on native Windows in this increment.
+The process-store cases prove path-free prepared state, exact changed-identity
+rejection, prepared-only restart abandonment, real inherited-lock/process-group
+termination after owner-store restart, exact finished replay, ordinary exit
+closure, orphan active-stage rejection and pinned-root replacement rejection.
+They pass for three focused native runs and under focused race detection.
 
 The contract package passes 78 Node checks, generated/current TypeScript, Go
 round trips and 243 shared positive/negative fixtures. The Bridge admission
@@ -201,9 +216,9 @@ acceptance.
 
 - let the managed core open the reviewed resource bundle, inject this exact
   governed delivery branch and publish capability only after readiness;
-- implement the owner-scoped durable process lease store and concrete
-  `FenceAndWait` proof over this OS launch gate, then connect it to the
-  Inbox/fence recovery branch, stopped-Run, revocation and owner-visible cleanup;
+- let managed core open the reviewed resource/process bundle, construct the
+  tracker-backed runner, fencer-backed recovery and governed Handler only after
+  complete readiness; connect stopped-Run, revocation and owner-visible cleanup;
 - expose owner setup/state without leaking local details;
 - obtain actual no-start and positive-start evidence before advertising the
   governed capability.

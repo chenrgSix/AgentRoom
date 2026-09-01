@@ -22,6 +22,7 @@ type GovernedRecoveryFence interface {
 // process tree is absent. A missing or unverifiable process identity is an
 // error, not proof that the process stopped.
 type GovernedProcessFencer interface {
+	FenceAll(context.Context) error
 	FenceAndWait(context.Context, admission.RuntimeAdmissionView) error
 }
 
@@ -48,6 +49,9 @@ func (r *GovernedRecovery) Recover(ctx context.Context, send Sender) error {
 	if r == nil || r.Inbox == nil || r.Fence == nil || r.Processes == nil || r.Executor == nil ||
 		r.Executor.Inbox != r.Inbox || send == nil {
 		return ErrGovernedExecutionUnsupported
+	}
+	if err := r.Processes.FenceAll(ctx); err != nil {
+		return err
 	}
 	records, err := r.Inbox.List()
 	if err != nil {

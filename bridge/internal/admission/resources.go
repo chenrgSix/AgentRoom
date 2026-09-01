@@ -14,6 +14,7 @@ import (
 	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/repository"
+	bridgeruntime "convenewire.dev/bridge/internal/runtime"
 )
 
 const governedPreparationDirectory = "governed-preparation"
@@ -27,6 +28,7 @@ type GovernedAdmissionResources struct {
 	preparer     *repository.Preparer
 	profiles     *ProfileStore
 	fence        *RuntimeFenceStore
+	processes    *GovernedProcessStore
 	releaseOwner func() error
 	closed       bool
 }
@@ -79,6 +81,10 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 	if err != nil {
 		return fail(err)
 	}
+	resources.processes, err = OpenGovernedProcessStore(ownedContext, dataDir, owner)
+	if err != nil {
+		return fail(err)
+	}
 	resources.coordinator, err = NewGovernedAdmissionCoordinator(resources.bindings,
 		NewExecutionInputClient(cfg, credential), resources.preparer, resources.profiles, resources.fence,
 		NewRuntimeAuthorityClient(cfg, credential), agents)
@@ -112,6 +118,30 @@ func (r *GovernedAdmissionResources) RecoveryFence() *RuntimeRecoveryFence {
 	return &RuntimeRecoveryFence{store: r.fence}
 }
 
+func (r *GovernedAdmissionResources) ProcessTracker() bridgeruntime.GovernedProcessTracker {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.processes == nil {
+		return nil
+	}
+	return &RuntimeProcessTracker{store: r.processes}
+}
+
+func (r *GovernedAdmissionResources) ProcessFencer() *RuntimeProcessFencer {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed || r.processes == nil {
+		return nil
+	}
+	return &RuntimeProcessFencer{store: r.processes}
+}
+
 func (r *GovernedAdmissionResources) Close() error {
 	if r == nil {
 		return nil
@@ -124,6 +154,9 @@ func (r *GovernedAdmissionResources) Close() error {
 	r.closed = true
 	r.coordinator = nil
 	var result error
+	if r.processes != nil {
+		result = errors.Join(result, r.processes.Close())
+	}
 	if r.fence != nil {
 		result = errors.Join(result, r.fence.Close())
 	}

@@ -11,7 +11,8 @@ import (
 	contracts "convenewire.dev/contracts/generated/go"
 )
 
-type governedAdapterFactory func(config.AgentConfig, bridgeruntime.RuntimeSessionStore) bridgeruntime.Adapter
+type governedAdapterFactory func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+	bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter
 
 var ErrRuntimeOutcomeMissing = errors.New("governed Runtime returned without a terminal outcome")
 
@@ -22,21 +23,27 @@ type GovernedRuntimeRunner struct {
 	coordinator *GovernedAdmissionCoordinator
 	agents      map[string]config.AgentConfig
 	sessions    bridgeruntime.RuntimeSessionStore
+	processes   bridgeruntime.GovernedProcessTracker
 	newAdapter  governedAdapterFactory
 	now         func() time.Time
 }
 
 func NewGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents map[string]config.AgentConfig,
-	sessions bridgeruntime.RuntimeSessionStore) (*GovernedRuntimeRunner, error) {
-	return newGovernedRuntimeRunner(coordinator, agents, sessions,
-		func(agent config.AgentConfig, store bridgeruntime.RuntimeSessionStore) bridgeruntime.Adapter {
-			return bridgeruntime.CodexAdapter{Config: agent, Sessions: store}
+	sessions bridgeruntime.RuntimeSessionStore,
+	processes bridgeruntime.GovernedProcessTracker) (*GovernedRuntimeRunner, error) {
+	return newGovernedRuntimeRunner(coordinator, agents, sessions, processes,
+		func(agent config.AgentConfig, store bridgeruntime.RuntimeSessionStore,
+			tracker bridgeruntime.GovernedProcessTracker,
+			identity bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
+			return bridgeruntime.CodexAdapter{Config: agent, Sessions: store,
+				ProcessTracker: tracker, ProcessIdentity: identity}
 		})
 }
 
 func newGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents map[string]config.AgentConfig,
-	sessions bridgeruntime.RuntimeSessionStore, factory governedAdapterFactory) (*GovernedRuntimeRunner, error) {
-	if coordinator == nil || len(agents) == 0 || factory == nil {
+	sessions bridgeruntime.RuntimeSessionStore, processes bridgeruntime.GovernedProcessTracker,
+	factory governedAdapterFactory) (*GovernedRuntimeRunner, error) {
+	if coordinator == nil || len(agents) == 0 || processes == nil || factory == nil {
 		return nil, ErrAdmissionInvalid
 	}
 	cloned := make(map[string]config.AgentConfig, len(agents))
@@ -48,7 +55,7 @@ func newGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents 
 		agent.EnvAllowlist = append([]string{}, agent.EnvAllowlist...)
 		cloned[id] = agent
 	}
-	return &GovernedRuntimeRunner{coordinator: coordinator, agents: cloned, sessions: sessions,
+	return &GovernedRuntimeRunner{coordinator: coordinator, agents: cloned, sessions: sessions, processes: processes,
 		newAdapter: factory, now: time.Now}, nil
 }
 
@@ -69,7 +76,12 @@ func (r *GovernedRuntimeRunner) Run(ctx context.Context, ticket GovernedAdmissio
 		return r.stopUnknown(ticket, decision, ErrProfileDenied)
 	}
 	agent.Workspace = decision.workspace
-	adapter := r.newAdapter(agent, r.sessions)
+	processIdentity := bridgeruntime.GovernedProcessIdentity{RunID: decision.View.Spec.RunID,
+		AdmissionDigest: decision.View.AdmissionDigest, StartDigest: *decision.View.StartDigest}
+	if bridgeruntime.ValidateGovernedProcessIdentity(processIdentity) != nil {
+		return r.stopUnknown(ticket, decision, ErrAdmissionChanged)
+	}
+	adapter := r.newAdapter(agent, r.sessions, r.processes, processIdentity)
 	if adapter == nil || adapter.Name() != CodexRuntimeKind {
 		return r.stopUnknown(ticket, decision, ErrProfileDenied)
 	}

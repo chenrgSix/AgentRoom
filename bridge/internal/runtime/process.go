@@ -73,3 +73,10 @@ func validGovernedProcessIdentity(identity GovernedProcessIdentity) bool {
 		governedProcessDigest.MatchString(identity.AdmissionDigest) &&
 		governedProcessDigest.MatchString(identity.StartDigest)
 }
+
+func ValidateGovernedProcessIdentity(identity GovernedProcessIdentity) error {
+	if !validGovernedProcessIdentity(identity) {
+		return ErrGovernedProcessInvalid
+	}
+	return nil
+}
