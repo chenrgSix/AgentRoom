@@ -206,7 +206,7 @@ test("capture lease migration preserves populated legacy publications, blobs and
     const oldLease = database.prepare("SELECT * FROM workspace_leases").get();
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
-    assert.deepEqual(migrated.appliedVersions, [62, 63, 64]);
+    assert.deepEqual(migrated.appliedVersions, [62, 63, 64, 65]);
     database = openDatabase(f.databasePath);
     assert.deepEqual(tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all()), before);
     assert.deepEqual(database.prepare("SELECT * FROM workspace_leases").get(), { ...oldLease!, capture_operation_id: null });
@@ -263,7 +263,7 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     assert.deepEqual(database.pragma("foreign_key_check"), []);
     database.close();
     const result = await migrateDatabase(f.databasePath);
-    assert.deepEqual(result.appliedVersions, [63, 64]);
+    assert.deepEqual(result.appliedVersions, [63, 64, 65]);
     database = openDatabase(f.databasePath);
     assert.deepEqual(snapshot(), before);
     const admissionObjects = new Set([
@@ -272,7 +272,13 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_run_admissions_require_exact_scope_insert",
       "execution_run_admissions_seal_manifest_update",
       "execution_run_deliveries_require_sealed_admission_insert",
-      "execution_runs_require_admitted_manifest_update"
+      "execution_runs_require_admitted_manifest_update",
+      "execution_dispatch_intents",
+      "execution_dispatch_intents_immutable_delete",
+      "execution_dispatch_intents_immutable_update",
+      "execution_dispatch_intents_require_exact_scope_insert",
+      "execution_node_states",
+      "execution_node_states_state_idx"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))

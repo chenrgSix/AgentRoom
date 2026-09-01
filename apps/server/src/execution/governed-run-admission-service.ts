@@ -11,13 +11,17 @@ import {
 } from "@convene-wire/contracts/execution-validation";
 import type { BridgeConnectionRegistry } from
   "../bridge/bridge-connection-registry.js";
-import type { MessageRecord } from "../data/core-repository.js";
+import type { CoreRepository, MessageRecord } from
+  "../data/core-repository.js";
 import type { SqliteTransactionBoundary } from
   "../data/sqlite-transaction-boundary.js";
 import { createOpaqueId } from "../domain/identifiers.js";
 import type { RunRecord, RunRepository } from "../run/run-repository.js";
 import { defaultRunDurationMilliseconds } from "../run/run-service.js";
-import type { AgentTaskRecord } from "../task/task-repository.js";
+import type {
+  AgentTaskRecord,
+  AgentTaskRepository
+} from "../task/task-repository.js";
 import {
   planIsolatedWorkspace,
   type IsolatedWorkspaceLeaseService
@@ -25,6 +29,12 @@ import {
 import type { ExecutionApprovalRepository } from
   "./execution-approval-repository.js";
 import { ExecutionError } from "./execution-error.js";
+import {
+  evaluateExecutionReadiness,
+  type ExecutionReadiness
+} from "./execution-readiness-evaluator.js";
+import type { ExecutionNodeIdentity } from
+  "./execution-node-state-repository.js";
 import type { ExecutionInputService } from "./execution-input-service.js";
 import type { ExecutionPlanRepository } from
   "./execution-plan-repository.js";
@@ -53,6 +63,12 @@ interface GovernanceRow {
   revision: number;
 }
 
+type AdmissionSource = "member_message" | "scheduler";
+
+interface DispatchIntentRow {
+  run_id: string;
+}
+
 const fail = (code: string): never => {
   throw new ExecutionError(code, 409);
 };
@@ -70,6 +86,8 @@ implements GovernedMessageAdmissionPort {
   public constructor(
     private readonly database: Database.Database,
     private readonly transactions: SqliteTransactionBoundary,
+    private readonly core: CoreRepository,
+    private readonly tasks: AgentTaskRepository,
     private readonly plans: ExecutionPlanRepository,
     private readonly approvals: ExecutionApprovalRepository,
     private readonly inputs: ExecutionInputService,
@@ -87,20 +105,233 @@ implements GovernedMessageAdmissionPort {
       WHERE task_id = ?
     `).get(input.task.taskId) as GovernanceRow | undefined;
     if (!governance) return undefined;
-    return this.transactions.immediate(() => this.admit(input, governance));
+    return this.transactions.immediate(() =>
+      this.admit(input, governance, "member_message")
+    );
+  }
+
+  public readiness(
+    identity: ExecutionNodeIdentity,
+    now: string
+  ): ExecutionReadiness {
+    const plan = this.plans.get(identity.planId);
+    const approval = plan && this.approvals.get(
+      identity.planId,
+      identity.planRevision
+    );
+    const node = plan?.current.definition.nodes.find(
+      (candidate) => candidate.nodeKey === identity.nodeKey
+    );
+    const compiled = plan?.compiledTasks.find(
+      (candidate) => candidate.nodeKey === identity.nodeKey
+    );
+    const task = compiled ? this.tasks.get(compiled.taskId) : undefined;
+    const agent = node ? this.database.prepare(`
+      SELECT device_id, team_id, capabilities_json
+      FROM agents
+      WHERE agent_id = ? AND enabled = 1 AND integration_mode = 'managed'
+    `).get(node.agentId) as {
+      capabilities_json: string;
+      device_id: string | null;
+      team_id: string;
+    } | undefined : undefined;
+    let capabilityAvailable = false;
+    if (agent?.device_id && node) {
+      const current = this.connections.governedAgentExecutionCapability(
+        agent.device_id,
+        node.agentId
+      );
+      try {
+        const persisted = (JSON.parse(agent.capabilities_json) as {
+          governedExecution?: unknown;
+        }).governedExecution;
+        assertExecutionCommand("executionCapability", persisted);
+        capabilityAvailable = Boolean(
+          current &&
+          this.connections.supportsGovernedAgentExecution(
+            agent.device_id,
+            node.agentId
+          ) &&
+          equal(current, persisted)
+        );
+      } catch {
+        capabilityAvailable = false;
+      }
+    }
+    const usage = this.database.prepare(`
+      SELECT
+        count(*) AS attempts,
+        coalesce(sum(max(0, cast(
+          (julianday(CASE WHEN run.state IN (
+            'queued', 'delivered', 'working', 'input_required'
+          ) THEN run.deadline_at ELSE coalesce(run.terminal_at, run.updated_at) END) -
+            julianday(run.created_at)) * 86400 AS INTEGER
+        ))), 0) AS duration_seconds,
+        coalesce(sum(CASE WHEN run.state IN (
+          'queued', 'delivered', 'working', 'input_required'
+        ) THEN 1 ELSE 0 END), 0) AS active_runs
+      FROM execution_dispatch_intents intent
+      JOIN runs run ON run.run_id = intent.run_id
+      WHERE intent.plan_id = ? AND intent.plan_revision = ?
+    `).get(identity.planId, identity.planRevision) as {
+      active_runs: number;
+      attempts: number;
+      duration_seconds: number;
+    };
+    const activeAgentRuns = node ? (this.database.prepare(`
+      SELECT count(*) AS count
+      FROM execution_dispatch_intents intent
+      JOIN runs run ON run.run_id = intent.run_id
+      WHERE intent.agent_id = ? AND run.state IN (
+        'queued', 'delivered', 'working', 'input_required'
+      )
+    `).get(node.agentId) as { count: number }).count : 0;
+    const existingAttempt = Boolean(this.database.prepare(`
+      SELECT 1 FROM execution_dispatch_intents
+      WHERE plan_id = ? AND plan_revision = ? AND node_key = ?
+    `).get(identity.planId, identity.planRevision, identity.nodeKey));
+    const hasIncomingEdges = Boolean(this.database.prepare(`
+      SELECT 1 FROM execution_plan_edges
+      WHERE plan_id = ? AND revision = ? AND to_node_key = ? LIMIT 1
+    `).get(identity.planId, identity.planRevision, identity.nodeKey));
+    const reviewer = approval
+      ? this.core.getMember(approval.reviewedByMemberId)
+      : undefined;
+    const reviewerCurrent = Boolean(
+      reviewer && task &&
+      reviewer.teamId === task.teamId &&
+      this.core.isRoomMember(task.roomId, reviewer.memberId) &&
+      (reviewer.role === "owner" || reviewer.memberId === task.ownerMemberId)
+    );
+    const planCurrent = Boolean(
+      plan && approval && node && compiled &&
+      plan.current.revision === identity.planRevision &&
+      ["approved", "running"].includes(plan.state) &&
+      plan.current.digest === approval.digest &&
+      approval.decision === "approved" && reviewerCurrent
+    );
+    const agentAvailable = Boolean(
+      task && node && agent?.device_id && agent.team_id === task.teamId
+    );
+    const grants = plan && node && agent?.device_id
+      ? this.matchingGrants(plan.planId, node, agent.device_id, now)
+      : [];
+    const nowMs = Date.parse(now);
+    const grantExpiry = grants.length === 1
+      ? Date.parse(grants[0]!.grant.expiresAt)
+      : Number.NaN;
+    const nextRunReservationSeconds = Number.isFinite(nowMs) &&
+      Number.isFinite(grantExpiry)
+      ? Math.max(0, Math.ceil((Math.min(
+          nowMs + defaultRunDurationMilliseconds,
+          grantExpiry
+        ) - nowMs) / 1_000))
+      : 0;
+    const policy = plan?.current.definition.policy;
+    return evaluateExecutionReadiness({
+      activeAgentRuns,
+      activePlanRuns: usage.active_runs,
+      agentAvailable,
+      capabilityAvailable,
+      existingAttempt,
+      grantMatches: grants.length,
+      hasIncomingEdges,
+      hasRequiredInputs: node?.inputs.some((input) => input.required) ?? true,
+      nodeKind: node?.kind ?? "verification",
+      nextRunReservationSeconds,
+      outputsSupported: Boolean(node &&
+        !node.outputs.some((output) =>
+          output.required && !["patch", "commit"].includes(output.kind)
+        ) && node.outputs.some((output) =>
+          ["patch", "commit"].includes(output.kind)
+        )),
+      planAttempts: usage.attempts,
+      planCurrent,
+      planDurationSeconds: usage.duration_seconds,
+      planMaxConcurrency: policy?.maxConcurrency ?? 1,
+      planMaxDurationSeconds:
+        policy?.budget.maxExecutionDurationSeconds ?? 0,
+      planMaxRunAttempts: policy?.budget.maxRunAttempts ?? 0,
+      taskBudgetAvailable: Boolean(task &&
+        task.budgetUsage.runAttempts < task.budgetPolicy.maxRunAttempts &&
+        task.budgetUsage.executionDurationSeconds + nextRunReservationSeconds <=
+          task.budgetPolicy.maxExecutionDurationSeconds),
+      taskPinsCurrent: Boolean(task && node && compiled &&
+        compiled.taskId === task.taskId &&
+        compiled.definitionRevision === task.definitionRevision &&
+        compiled.criteriaRevision === task.criteriaRevision &&
+        task.assignments.some((assignment) =>
+          assignment.agentId === node.agentId
+        )),
+      taskRunnable: Boolean(task &&
+        ["ready", "active", "review"].includes(task.lifecycleState) &&
+        task.schedulingState === "enabled")
+    });
+  }
+
+  public admitScheduled(
+    identity: ExecutionNodeIdentity,
+    now: string
+  ): GovernedMessageAdmissionResult {
+    return this.transactions.immediate(() => {
+      const existing = this.findIntentRun(identity);
+      if (existing) return { created: false, runs: [existing] };
+      const readiness = this.readiness(identity, now);
+      if (!readiness.ready) fail(readiness.blocker);
+      const plan = this.plans.get(identity.planId)!;
+      const approval = this.approvals.get(
+        identity.planId,
+        identity.planRevision
+      )!;
+      const compiled = plan.compiledTasks.find(
+        (candidate) => candidate.nodeKey === identity.nodeKey
+      )!;
+      const task = this.tasks.get(compiled.taskId)!;
+      const member = this.core.getMember(approval.reviewedByMemberId);
+      if (!member) return fail("EXECUTION_DISPATCH_OWNER_REQUIRED");
+      const message = this.core.appendMessage({
+        messageId: createOpaqueId("msg"),
+        roomId: task.roomId,
+        taskId: task.taskId,
+        senderType: "system",
+        senderId: "execution-scheduler",
+        content: `Execution Plan ${plan.planId} scheduled node ${identity.nodeKey}.`,
+        mentions: [],
+        parentMessageId: null,
+        createdAt: now
+      });
+      return this.admit({
+        member: { memberId: member.memberId, role: member.role },
+        message,
+        now,
+        task
+      }, {
+        plan_id: identity.planId,
+        revision: identity.planRevision,
+        node_key: identity.nodeKey
+      }, "scheduler");
+    });
   }
 
   private admit(
     input: GovernedMessageAdmissionInput,
-    governance: GovernanceRow
+    governance: GovernanceRow,
+    source: AdmissionSource
   ): GovernedMessageAdmissionResult {
     const { member, message, now, task } = input;
     const existing = this.runs.findByTrigger(message.messageId);
     if (existing.length > 0) return { created: false, runs: existing };
-    if (member.role !== "owner" && member.memberId !== task.ownerMemberId) {
+    const intentRun = this.findIntentRun({
+      planId: governance.plan_id,
+      planRevision: governance.revision,
+      nodeKey: governance.node_key
+    });
+    if (intentRun) return { created: false, runs: [intentRun] };
+    if (source === "member_message" &&
+      member.role !== "owner" && member.memberId !== task.ownerMemberId) {
       return fail("EXECUTION_DISPATCH_OWNER_REQUIRED");
     }
-    if (message.mentions.length !== 1) {
+    if (source === "member_message" && message.mentions.length !== 1) {
       return fail("EXECUTION_DISPATCH_TARGET_INVALID");
     }
     const plan = this.plans.get(governance.plan_id);
@@ -129,7 +360,9 @@ implements GovernedMessageAdmissionPort {
     const compiled = plan.compiledTasks.find(
       (candidate) => candidate.nodeKey === governance.node_key
     );
-    const targetAgentId = message.mentions[0]?.targetAgentId;
+    const targetAgentId = source === "scheduler"
+      ? node?.agentId
+      : message.mentions[0]?.targetAgentId;
     if (
       !node ||
       !compiled ||
@@ -224,6 +457,9 @@ implements GovernedMessageAdmissionPort {
       plan.current.revision,
       node.nodeKey
     );
+    if (source === "scheduler" && dispatchGeneration !== 1) {
+      return fail("EXECUTION_AUTOMATIC_RETRY_FORBIDDEN");
+    }
     const runId = createOpaqueId("run");
     const run: RunRecord = {
       runId,
@@ -234,7 +470,7 @@ implements GovernedMessageAdmissionPort {
       requesterMemberId: member.memberId,
       targetAgentId: node.agentId,
       parentRunId: null,
-      instruction: message.content,
+      instruction: source === "scheduler" ? task.goal : message.content,
       state: "queued",
       lastSequence: 0,
       deadlineAt,
@@ -243,7 +479,8 @@ implements GovernedMessageAdmissionPort {
       terminalAt: null
     };
     const requestDigest = executionOperationDigest({
-      action: "governed_run_admission_v1",
+      action: "governed_run_admission_v2",
+      source,
       run,
       planId: plan.planId,
       planRevision: plan.current.revision,
@@ -254,6 +491,33 @@ implements GovernedMessageAdmissionPort {
       dispatchGeneration,
       grant
     });
+    this.database.prepare(`
+      INSERT INTO execution_dispatch_intents (
+        intent_id, source, plan_id, plan_revision, plan_digest,
+        plan_control_revision, approval_operation_id, node_key,
+        dispatch_generation, task_id, room_id, agent_id, device_id, run_id,
+        trace_message_id, requester_member_id, operation_digest, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      createOpaqueId("dispatch"),
+      source,
+      plan.planId,
+      plan.current.revision,
+      plan.current.digest,
+      plan.controlRevision,
+      approval.operationId,
+      node.nodeKey,
+      dispatchGeneration,
+      task.taskId,
+      task.roomId,
+      node.agentId,
+      agent.device_id,
+      runId,
+      message.messageId,
+      member.memberId,
+      requestDigest,
+      now
+    );
     this.database.prepare(`
       INSERT INTO execution_run_admissions (
         run_id, plan_id, plan_revision, plan_digest, plan_control_revision,
@@ -369,13 +633,28 @@ implements GovernedMessageAdmissionPort {
     deviceId: string,
     now: string
   ): GovernedExecutionCapabilityReadyGrant {
+    const matches = this.matchingGrants(planId, node, deviceId, now);
+    if (matches.length !== 1) {
+      return fail(matches.length === 0
+        ? "EXECUTION_DISPATCH_GRANT_UNAVAILABLE"
+        : "EXECUTION_DISPATCH_GRANT_AMBIGUOUS");
+    }
+    return matches[0]!;
+  }
+
+  private matchingGrants(
+    planId: string,
+    node: ReturnType<typeof validateExecutionPlanDefinition>["definition"]["nodes"][number],
+    deviceId: string,
+    now: string
+  ): GovernedExecutionCapabilityReadyGrant[] {
     const expectedProfiles = node.verificationProfiles.map((profile) => ({
       profileId: profile.profileId,
       revision: profile.revision,
       digest: profile.digest
     }));
     const nowMs = Date.parse(now);
-    const matches = this.connections.governedAgentReadyGrants(
+    return this.connections.governedAgentReadyGrants(
       deviceId,
       node.agentId
     ).filter((grant) =>
@@ -399,12 +678,21 @@ implements GovernedMessageAdmissionPort {
       Date.parse(grant.issuedAt) <= nowMs &&
       nowMs < Date.parse(grant.grant.expiresAt)
     );
-    if (matches.length !== 1) {
-      return fail(matches.length === 0
-        ? "EXECUTION_DISPATCH_GRANT_UNAVAILABLE"
-        : "EXECUTION_DISPATCH_GRANT_AMBIGUOUS");
-    }
-    return matches[0]!;
+  }
+
+  private findIntentRun(
+    identity: ExecutionNodeIdentity
+  ): RunRecord | undefined {
+    const row = this.database.prepare(`
+      SELECT run_id FROM execution_dispatch_intents
+      WHERE plan_id = ? AND plan_revision = ? AND node_key = ?
+      ORDER BY dispatch_generation DESC LIMIT 1
+    `).get(
+      identity.planId,
+      identity.planRevision,
+      identity.nodeKey
+    ) as DispatchIntentRow | undefined;
+    return row ? this.runs.getRun(row.run_id) : undefined;
   }
 
   private nextDispatchGeneration(
@@ -414,7 +702,7 @@ implements GovernedMessageAdmissionPort {
   ): number {
     const row = this.database.prepare(`
       SELECT COALESCE(MAX(dispatch_generation), 0) + 1 AS generation
-      FROM execution_run_admissions
+      FROM execution_dispatch_intents
       WHERE plan_id = ? AND plan_revision = ? AND node_key = ?
     `).get(planId, planRevision, nodeKey) as { generation: number };
     if (!Number.isSafeInteger(row.generation) || row.generation < 1) {

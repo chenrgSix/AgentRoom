@@ -20,7 +20,13 @@ const fixtures = JSON.parse(await readFile(new URL(
 const template = fixtures.cases.find((entry: { name: string }) =>
   entry.name === "execution: valid full plan").instance as ExecutionPlanDefinition;
 
-export async function fixture(t: TestContext, clock: () => string = () => now) {
+export async function fixture(
+  t: TestContext,
+  clock: () => string = () => now,
+  options: { executionSchedulerSweepMilliseconds?: number } = {}
+) {
+  const executionSchedulerSweepMilliseconds =
+    options.executionSchedulerSweepMilliseconds ?? 0;
   const directory = await mkdtemp(path.join(os.tmpdir(), "convene-wire-execution-history-"));
   let app: FastifyInstance | undefined;
   const connections: ReturnType<typeof openDatabase>[] = [];
@@ -35,7 +41,12 @@ export async function fixture(t: TestContext, clock: () => string = () => now) {
     }
   });
   const databasePath = path.join(directory, "server.sqlite");
-  app = await createServerApp({ databasePath, clock, logger: false });
+  app = await createServerApp({
+    databasePath,
+    clock,
+    logger: false,
+    executionSchedulerSweepMilliseconds
+  });
   let authorization = "";
   const request = (
     method: HTTPMethods, url: string, payload?: unknown, token = authorization
@@ -104,22 +115,34 @@ export async function fixture(t: TestContext, clock: () => string = () => now) {
   ].map((table) => [table, (database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n]));
   return {
     app,
-    request, ok, create, command, database, counts, root: currentRoot, roomId,
+    request, ok, create, command, database, databasePath, counts,
+    root: currentRoot, roomId,
     teamId, ownerMemberId, agentId, message, authorization,
     async restart() {
       for (const socket of app!.websocketServer.clients) socket.terminate();
       await app!.close();
       app = undefined;
-      app = await createServerApp({ databasePath, clock, logger: false });
+      app = await createServerApp({
+        databasePath,
+        clock,
+        logger: false,
+        executionSchedulerSweepMilliseconds
+      });
     },
     async restartTrusted() {
       for (const socket of app!.websocketServer.clients) socket.terminate();
       await app!.close();
       app = undefined;
-      app = await createServerApp({ databasePath, clock, logger: false, webAuth: {
+      app = await createServerApp({
+        databasePath,
+        clock,
+        logger: false,
+        executionSchedulerSweepMilliseconds,
+        webAuth: {
         mode: "trusted-team", publicOrigin: "https://central.example",
         ownerRecoveryToken: "execution-test-recovery-" + "r".repeat(32)
-      } });
+        }
+      });
       return app;
     },
     async participant() {

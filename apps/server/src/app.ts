@@ -66,6 +66,13 @@ import { ExecutionApprovalRepository } from "./execution/execution-approval-repo
 import { ExecutionPlanCompiler } from "./execution/execution-plan-compiler.js";
 import { GovernedRunAdmissionService } from
   "./execution/governed-run-admission-service.js";
+import { ExecutionNodeStateRepository } from
+  "./execution/execution-node-state-repository.js";
+import { ExecutionSettlementService } from
+  "./execution/execution-settlement-service.js";
+import { ExecutionRecoveryService } from
+  "./execution/execution-recovery-service.js";
+import { ExecutionScheduler } from "./execution/execution-scheduler.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
@@ -175,6 +182,7 @@ export interface ServerAppOptions {
   hostedFetch?: typeof fetch;
   memoryReducer?: MemoryReducerRunner;
   memoryReducerSweepMilliseconds?: number;
+  executionSchedulerSweepMilliseconds?: number;
   trustProxyHops?: number;
   webAuth?: WebAuthConfiguration;
   webRoot?: string;
@@ -185,6 +193,19 @@ export async function createServerApp(
 ): Promise<FastifyInstance> {
   const memoryReducerSweepMilliseconds =
     options.memoryReducerSweepMilliseconds ?? 1_000;
+  const executionSchedulerSweepMilliseconds =
+    options.executionSchedulerSweepMilliseconds ?? 1_000;
+  if (
+    !Number.isSafeInteger(executionSchedulerSweepMilliseconds) ||
+    executionSchedulerSweepMilliseconds < 0 ||
+    executionSchedulerSweepMilliseconds > 60_000 ||
+    (executionSchedulerSweepMilliseconds > 0 &&
+      executionSchedulerSweepMilliseconds < 100)
+  ) {
+    throw new Error(
+      "Execution scheduler sweep interval must be 0 or between 100 and 60000 milliseconds"
+    );
+  }
   if (
     options.memoryReducer &&
     (!Number.isSafeInteger(memoryReducerSweepMilliseconds) ||
@@ -449,16 +470,19 @@ export async function createServerApp(
   const isolatedWorkspaces = new IsolatedWorkspaceLeaseService(
     database, new ExecutionPlanRepository(database), bridgeConnections
   );
-  runs.configureGovernedAdmission(new GovernedRunAdmissionService(
+  const governedAdmission = new GovernedRunAdmissionService(
     database,
     transactions,
+    core,
+    taskRepository,
     new ExecutionPlanRepository(database),
     executionApprovals,
     executionInputs,
     isolatedWorkspaces,
     bridgeConnections,
     runRepository
-  ));
+  );
+  runs.configureGovernedAdmission(governedAdmission);
   const repositoryCaptures = new RepositoryCaptureService(database,
     isolatedWorkspaces,
     artifactRepository, artifactPublicationRepository, artifactBlobs);
@@ -504,6 +528,7 @@ export async function createServerApp(
   let discussionSweepTimer: ReturnType<typeof setInterval> | undefined;
   let discussionSweepInFlight = false;
   let cancellationSweepTimer: ReturnType<typeof setInterval> | undefined;
+  let executionSchedulerSweepTimer: ReturnType<typeof setInterval> | undefined;
   let memoryReducerSweepTimer: ReturnType<typeof setInterval> | undefined;
   let memoryReducerSweepInFlight = false;
   let hostedScheduler: HostedRunScheduler;
@@ -560,6 +585,34 @@ export async function createServerApp(
       hostedScheduler.enqueue(run.runId);
     }
     return runRepository.getRun(run.runId) ?? run;
+  };
+  const executionNodeStates = new ExecutionNodeStateRepository(database);
+  const executionSettlement = new ExecutionSettlementService(
+    database,
+    transactions,
+    executionNodeStates
+  );
+  const executionRecovery = new ExecutionRecoveryService(
+    database,
+    executionSettlement,
+    runRepository
+  );
+  const executionScheduler = new ExecutionScheduler(
+    transactions,
+    executionNodeStates,
+    executionSettlement,
+    governedAdmission,
+    clock
+  );
+  let executionSweepInFlight = false;
+  const sweepExecution = async (): Promise<void> => {
+    if (executionSweepInFlight) return;
+    executionSweepInFlight = true;
+    try {
+      for (const run of executionScheduler.sweep()) await dispatchRun(run);
+    } finally {
+      executionSweepInFlight = false;
+    }
   };
   const dispatchDiscussionRuns = async (
     runs: NonNullable<ReturnType<RunRepository["getRun"]>>[]
@@ -776,6 +829,9 @@ export async function createServerApp(
   app.addHook("onClose", async () => {
     if (discussionSweepTimer) clearInterval(discussionSweepTimer);
     if (cancellationSweepTimer) clearInterval(cancellationSweepTimer);
+    if (executionSchedulerSweepTimer) {
+      clearInterval(executionSchedulerSweepTimer);
+    }
     if (memoryReducerSweepTimer) clearInterval(memoryReducerSweepTimer);
     await hostedScheduler.shutdown();
     database.close();
@@ -977,8 +1033,15 @@ export async function createServerApp(
       reconciledRunIds: hostedRecovery.reconciledRunIds
     }, "Hosted Run invocation intents were recovered");
   }
-  for (const run of projectionRecovery.queuedRuns) {
+  const executionRecoveryRuns = executionRecovery.recover(clock());
+  for (const run of new Map([
+    ...projectionRecovery.queuedRuns,
+    ...executionRecoveryRuns
+  ].map((candidate) => [candidate.runId, candidate])).values()) {
     await dispatchRun(run);
+  }
+  if (executionSchedulerSweepMilliseconds > 0) {
+    await sweepExecution();
   }
   await dispatchDiscussionRuns(discussions.recover());
   for (const runId of new Set(
@@ -1016,6 +1079,18 @@ export async function createServerApp(
     }
   }, 1_000);
   cancellationSweepTimer.unref();
+
+  if (executionSchedulerSweepMilliseconds > 0) {
+    executionSchedulerSweepTimer = setInterval(() => {
+      void sweepExecution().catch((error: unknown) => {
+        app.log.error({
+          event: "execution.scheduler.sweep_failed",
+          error: error instanceof Error ? error.message : "Unexpected error"
+        }, "Execution scheduler sweep failed");
+      });
+    }, executionSchedulerSweepMilliseconds);
+    executionSchedulerSweepTimer.unref();
+  }
 
   if (memoryReducer) {
     memoryReducer.enableAllRooms();
