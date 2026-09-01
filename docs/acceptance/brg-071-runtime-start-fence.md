@@ -93,6 +93,12 @@ permission to retry.
   shell-borrowed process owner available to its derived lifetime context.
   Matching local stores can borrow without dropping that lease; another data
   root cannot. No governed store is opened by this increment.
+- `OpenGovernedAdmissionResources` composes the three owner-namespaced stores,
+  independent preparation owner, both authenticated clients and the coordinator
+  as one idempotently closable lifetime. It accepts only a canonical private
+  root, exact paired owner/token, absolute Git executable and stable Agent map.
+  Failure at any stage rolls back every acquired resource without deleting
+  retained records or prepared workspaces.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -122,6 +128,9 @@ manifest/device/origin/duplicate/destination/kind/limit negatives. Response
 status, redirect, metadata, media, length and actual-content drift all fail
 closed. The review caught and repaired a partial-read ordering bug by moving
 whole-manifest preflight before the first HTTP request.
+The resource cases prove both fresh-owner and shell-owner composition,
+preparation-lock exclusion, idempotent close, borrowed-owner preservation and
+full lock release after a deliberately failed late-stage construction.
 
 The contract package passes 78 Node checks, generated/current TypeScript, Go
 round trips and 243 shared positive/negative fixtures. The Bridge admission
@@ -137,9 +146,8 @@ acceptance.
 
 - wire the exact governed manifest through the existing inbox without opening a
   second Runtime-start path;
-- open the governed stores and construct the reviewed coordinator under the
-  propagated Bridge process-owner context, then route only exact governed
-  delivery into it;
+- let the managed core open the reviewed resource bundle and route only exact
+  governed delivery into it;
 - retain/terminate the process handle and connect stopped-Run, revocation and
   owner-visible cleanup;
 - expose owner setup/state without leaking local details;

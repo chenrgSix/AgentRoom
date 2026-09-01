@@ -61,6 +61,16 @@ releasing it, while another data directory still requires its own lock. This is
 only lifecycle plumbing: the core does not yet open the governed stores or
 construct the coordinator, and the production governed rejection is unchanged.
 
+`OpenGovernedAdmissionResources` now defines the complete local composition
+lifetime without enabling it. Under one acquired or borrowed data-root owner it
+opens the owner-namespaced Binding/Grant, Runtime-profile and possible-start
+stores, plus one independently locked private preparation root, then constructs
+the exact input and Server-authority clients and the reviewed coordinator.
+Partial construction closes every opened store and both locks in reverse order;
+normal close is idempotent. The bundle requires a canonical private data root,
+exact paired origin/owner identifiers, Device token, absolute Git executable and
+stable Agent map. The managed core does not call this constructor yet.
+
 Local runtime/verifier profiles, enforced startup, owner UI, production cleanup
 and RUN-018 delivery remain required. Registration alone is
 not a grant and never replaces the existing governed no-start checks. See the
@@ -253,8 +263,8 @@ completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
 That explicit surviving-process cleanup, inbox/cancellation integration,
-production store/coordinator construction, capability advertisement and real
-Runtime evidence remain open. The production
+production resource opening/routing, capability advertisement and real Runtime
+evidence remain open. The production
 governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 
