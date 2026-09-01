@@ -238,7 +238,7 @@ func TestPublisherRejectsIncompleteOrConflictingBindReceipts(t *testing.T) {
 			client := NewClient(config.Config{ServerURL: server.URL}, pairing.Credential{})
 			_, err := client.publishSource(context.Background(), PublishInput{RunID: input.Manifest.Scope.RunID,
 				AgentID: input.Manifest.Scope.AgentID, ArtifactType: "patch", Title: input.Title, Summary: input.Summary},
-				input.Source, nil, "lease_capture0001", "test")
+				input.Source, nil, "lease_capture0001", "test", "")
 			if err == nil {
 				t.Fatal("accepted inconsistent bind receipt")
 			}

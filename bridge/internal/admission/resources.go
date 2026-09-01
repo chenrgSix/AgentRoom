@@ -18,6 +18,7 @@ import (
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/repository"
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	"convenewire.dev/bridge/internal/verification"
 	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
@@ -29,9 +30,12 @@ type GovernedAdmissionResources struct {
 	mu           sync.Mutex
 	coordinator  *GovernedAdmissionCoordinator
 	capture      *GovernedCaptureCoordinator
+	verification *GovernedVerificationCoordinator
 	bindings     *repository.BindingStore
 	preparer     *repository.Preparer
 	profiles     *ProfileStore
+	verifiers    *verification.ProfileStore
+	journal      *verification.Journal
 	fence        *RuntimeFenceStore
 	processes    *GovernedProcessStore
 	agents       map[string]config.AgentConfig
@@ -81,6 +85,17 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 	if err != nil {
 		return fail(err)
 	}
+	verificationOwner := verification.Owner{ServerURL: owner.ServerURL,
+		TeamID: owner.TeamID, DeviceID: owner.DeviceID,
+		OwnerMemberID: owner.OwnerMemberID}
+	resources.verifiers, err = verification.OpenProfileStore(dataDir, verificationOwner)
+	if err != nil {
+		return fail(err)
+	}
+	resources.journal, err = verification.OpenJournal(dataDir, verificationOwner)
+	if err != nil {
+		return fail(err)
+	}
 	resources.fence, err = OpenRuntimeFenceStore(ownedContext, dataDir, owner)
 	if err != nil {
 		return fail(err)
@@ -112,8 +127,26 @@ func OpenGovernedAdmissionResources(ctx context.Context, cfg config.Config, cred
 		if err != nil {
 			return fail(err)
 		}
+		resources.verification, err = NewGovernedVerificationCoordinator(resources.bindings,
+			resources.preparer, resources.verifiers, resources.journal, resources.fence,
+			resources.processes, verification.NewClient(cfg, credential))
+		if err != nil {
+			return fail(err)
+		}
 	}
 	return resources, nil
+}
+
+func (r *GovernedAdmissionResources) VerificationCoordinator() *GovernedVerificationCoordinator {
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.closed {
+		return nil
+	}
+	return r.verification
 }
 
 func (r *GovernedAdmissionResources) CaptureCoordinator() *GovernedCaptureCoordinator {
@@ -230,6 +263,9 @@ func (r *GovernedAdmissionResources) ReadyAgentGrants(ctx context.Context, now t
 	if _, err := r.profiles.List(); err != nil {
 		return nil, err
 	}
+	if _, err := r.verifiers.List(); err != nil {
+		return nil, err
+	}
 	if r.coordinator == nil || r.preparer == nil {
 		return ready, nil
 	}
@@ -249,6 +285,22 @@ func (r *GovernedAdmissionResources) ReadyAgentGrants(ctx context.Context, now t
 		}
 		if _, err := r.profiles.ResolveRuntime(grant.Spec.RuntimeProfile, grant.Spec.AgentID, agent); err != nil {
 			continue
+		}
+		if len(grant.Spec.VerificationProfiles) > 0 {
+			if !slices.Contains(grant.Spec.Operations, execution.Verify) {
+				continue
+			}
+			resolved := true
+			for _, profile := range grant.Spec.VerificationProfiles {
+				if _, err := r.verifiers.Resolve(verification.Reference{ProfileID: profile.ProfileID,
+					Revision: profile.Revision, Digest: profile.Digest}); err != nil {
+					resolved = false
+					break
+				}
+			}
+			if !resolved {
+				continue
+			}
 		}
 		if _, err := r.bindings.ResolveSource(ctx, grant.Spec.BindingID, grant.Spec.RepositoryID,
 			grant.Spec.BindingRevision); err != nil {
@@ -282,6 +334,7 @@ func (r *GovernedAdmissionResources) Close() error {
 	r.closed = true
 	r.coordinator = nil
 	r.capture = nil
+	r.verification = nil
 	r.agents = nil
 	var result error
 	if r.processes != nil {
@@ -292,6 +345,12 @@ func (r *GovernedAdmissionResources) Close() error {
 	}
 	if r.profiles != nil {
 		result = errors.Join(result, r.profiles.Close())
+	}
+	if r.verifiers != nil {
+		result = errors.Join(result, r.verifiers.Close())
+	}
+	if r.journal != nil {
+		result = errors.Join(result, r.journal.Close())
 	}
 	if r.bindings != nil {
 		result = errors.Join(result, r.bindings.Close())

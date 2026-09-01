@@ -154,14 +154,14 @@ func (c *Client) Publish(
 	if err := validateSource(source, input.ArtifactType); err != nil {
 		return PublishResult{}, err
 	}
-	return c.publishSource(ctx, input, source, relations, lease.LeaseID, "")
+	return c.publishSource(ctx, input, source, relations, lease.LeaseID, "", "")
 }
 
 // publishSource uploads already captured immutable bytes. Legacy callers obtain
 // read_source first; repository callers must obtain their exact read_capture
 // lease instead. Neither path refreshes or substitutes the other's workspace.
 func (c *Client) publishSource(ctx context.Context, input PublishInput, source Source,
-	relations []PublishRelation, leaseID, namespace string,
+	relations []PublishRelation, leaseID, namespace, verificationOperationID string,
 ) (PublishResult, error) {
 	publicationKey := idempotencyKey(
 		"publication", input.RunID, input.AgentID,
@@ -187,6 +187,9 @@ func (c *Client) publishSource(ctx context.Context, input PublishInput, source S
 	}
 	if len(relations) > 0 {
 		prepareRequest["relations"] = relations
+	}
+	if verificationOperationID != "" {
+		prepareRequest["verificationOperationId"] = verificationOperationID
 	}
 	var publication publicationView
 	if err := c.retrySameRequest(

@@ -179,6 +179,11 @@ func RunObservedWithProvisioning(
 		if runnerErr != nil {
 			return runnerErr
 		}
+		if verifier := governedResources.VerificationCoordinator(); verifier != nil {
+			if runnerErr := runner.UseVerification(verifier); runnerErr != nil {
+				return runnerErr
+			}
+		}
 		runHandler.Governed = &delivery.GovernedHandler{Inbox: inbox, Gate: runHandler.Gate,
 			Admission: coordinator, Runner: runner, Executor: executor, AllowsAgent: readiness.allows,
 			IsExplicitCancel: runHandler.IsExplicitCancel}

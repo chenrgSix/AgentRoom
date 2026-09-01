@@ -46,6 +46,10 @@ func TestRunnerClassifiesPassFailureTimeoutAndCleansOwnedRoot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	executableSHA, err := executableDigest(executable)
+	if err != nil {
+		t.Fatal(err)
+	}
 	runner := Runner{TemporaryParent: temporaryParent}
 	for name, expected := range map[string]Outcome{
 		"pass": OutcomePassed, "fail": OutcomeFailed,
@@ -61,9 +65,9 @@ func TestRunnerClassifiesPassFailureTimeoutAndCleansOwnedRoot(t *testing.T) {
 				limit = 1024
 			}
 			result, err := runner.Run(context.Background(), ResolvedProfile{
-				Executable: executable,
-				Arguments:  []string{"-test.run=TestVerificationHelperProcess", "--", name, workspace, temporaryParent},
-				Timeout:    timeout, OutputLimitBytes: limit,
+				Executable: executable, ExecutableDigest: executableSHA,
+				Arguments: []string{"-test.run=TestVerificationHelperProcess", "--", name, workspace, temporaryParent},
+				Timeout:   timeout, OutputLimitBytes: limit,
 			}, workspace)
 			if err != nil {
 				t.Fatal(err)
@@ -101,11 +105,13 @@ func TestRunnerCancellationCannotPass(t *testing.T) {
 		t.Fatal(err)
 	}
 	executable, _ := os.Executable()
+	executableSHA, _ := executableDigest(executable)
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	result, err := (Runner{TemporaryParent: t.TempDir()}).Run(ctx, ResolvedProfile{Executable: executable,
-		Arguments: []string{"-test.run=TestVerificationHelperProcess", "--", "pass", workspace, workspace},
-		Timeout:   time.Second, OutputLimitBytes: 4096}, workspace)
+		ExecutableDigest: executableSHA,
+		Arguments:        []string{"-test.run=TestVerificationHelperProcess", "--", "pass", workspace, workspace},
+		Timeout:          time.Second, OutputLimitBytes: 4096}, workspace)
 	if err != nil {
 		t.Fatal(err)
 	}

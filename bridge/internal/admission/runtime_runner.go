@@ -8,6 +8,7 @@ import (
 
 	"convenewire.dev/bridge/internal/config"
 	bridgeruntime "convenewire.dev/bridge/internal/runtime"
+	"convenewire.dev/bridge/internal/verification"
 	contracts "convenewire.dev/contracts/generated/go"
 	execution "convenewire.dev/contracts/generated/go/execution"
 )
@@ -19,19 +20,33 @@ type governedCapture interface {
 	CaptureCompleted(context.Context, GovernedAdmissionTicket, GovernedStartDecision) (execution.RepositoryCheckpoint, error)
 }
 
+type governedVerification interface {
+	VerifyCaptured(context.Context, GovernedAdmissionTicket, GovernedStartDecision,
+		execution.RepositoryCheckpoint) ([]verification.RetainedReceipt, error)
+}
+
 var ErrRuntimeOutcomeMissing = errors.New("governed Runtime returned without a terminal outcome")
 
 // GovernedRuntimeRunner is the sole consumer of an invoke=true decision. It
 // runs one exact Codex adapter in the prepared workspace and closes the local
 // possible-start fence from the observed terminal process outcome.
 type GovernedRuntimeRunner struct {
-	coordinator *GovernedAdmissionCoordinator
-	agents      map[string]config.AgentConfig
-	sessions    bridgeruntime.RuntimeSessionStore
-	processes   bridgeruntime.GovernedProcessTracker
-	capture     governedCapture
-	newAdapter  governedAdapterFactory
-	now         func() time.Time
+	coordinator  *GovernedAdmissionCoordinator
+	agents       map[string]config.AgentConfig
+	sessions     bridgeruntime.RuntimeSessionStore
+	processes    bridgeruntime.GovernedProcessTracker
+	capture      governedCapture
+	verification governedVerification
+	newAdapter   governedAdapterFactory
+	now          func() time.Time
+}
+
+func (r *GovernedRuntimeRunner) UseVerification(value *GovernedVerificationCoordinator) error {
+	if r == nil || value == nil || r.verification != nil {
+		return ErrAdmissionInvalid
+	}
+	r.verification = value
+	return nil
 }
 
 func NewGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents map[string]config.AgentConfig,
@@ -121,8 +136,14 @@ func (r *GovernedRuntimeRunner) Run(ctx context.Context, ticket GovernedAdmissio
 		executeErr = ErrRuntimeOutcomeMissing
 	}
 	if terminal && executeErr == nil && outcome == RuntimeOutcomeCompleted {
-		if _, captureErr := r.capture.CaptureCompleted(ctx, ticket, decision); captureErr != nil {
+		if checkpoint, captureErr := r.capture.CaptureCompleted(ctx, ticket, decision); captureErr != nil {
 			terminalEvent = captureOutcomeUnknownEvent(terminalEvent)
+		} else if r.verification != nil {
+			// Verification is an independent gate. A retained failed/timed-out
+			// receipt blocks downstream work without rewriting the Agent Run.
+			// Transport absence likewise leaves the gate closed and the durable
+			// local journal available for exact receipt resubmission.
+			_, _ = r.verification.VerifyCaptured(ctx, ticket, decision, checkpoint)
 		}
 	}
 	view, stopErr := r.coordinator.Stop(ticket, decision, outcome, r.now().UTC())

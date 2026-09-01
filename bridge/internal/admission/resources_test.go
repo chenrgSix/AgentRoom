@@ -13,6 +13,7 @@ import (
 	"convenewire.dev/bridge/internal/ownership"
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/repository"
+	"convenewire.dev/bridge/internal/verification"
 	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
@@ -22,7 +23,8 @@ func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	if resources.Coordinator() == nil || resources.RecoveryFence() == nil ||
+	if resources.Coordinator() == nil || resources.VerificationCoordinator() == nil ||
+		resources.RecoveryFence() == nil ||
 		resources.ProcessTracker() == nil || resources.ProcessFencer() == nil {
 		t.Fatal("resources did not construct admission and restricted recovery")
 	}
@@ -40,6 +42,9 @@ func TestGovernedAdmissionResourcesOwnAndReleaseCompleteLocalComposition(t *test
 	}
 	if resources.Coordinator() != nil {
 		t.Fatal("closed resources retained the coordinator")
+	}
+	if resources.VerificationCoordinator() != nil {
+		t.Fatal("closed resources retained the verification coordinator")
 	}
 	if resources.RecoveryFence() != nil {
 		t.Fatal("closed resources retained the recovery fence")
@@ -166,6 +171,14 @@ func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBindin
 	if err != nil {
 		t.Fatal(err)
 	}
+	verifier, err := resources.verifiers.Register(verification.ProfileSpec{
+		ProfileID: "profile_verify0001", Revision: 1,
+		Command: []string{git, "--version"}, EnvironmentNames: []string{"PATH"},
+		TimeoutMilliseconds: 5_000, OutputLimitBytes: 4_096,
+	}, now)
+	if err != nil {
+		t.Fatal(err)
+	}
 	grantSpec := repository.TaskGrantSpec{
 		GrantID: "grant_ready0001", BindingID: binding.BindingID, BindingRevision: binding.Revision,
 		SourceFingerprint: binding.SourceFingerprint, RepositoryID: binding.RepositoryID, BaseCommit: base,
@@ -175,7 +188,7 @@ func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBindin
 		Operations: []execution.KindElement{execution.Prepare}, RuntimeProfile: execution.ExecutionGrantSummaryRuntimeProfile{
 			ProfileID: profile.Spec.ProfileID, Revision: profile.Spec.Revision, Digest: profile.Digest},
 		VerificationProfiles: []execution.ExecutionGrantSummaryVerificationProfile{{
-			ProfileID: "profile_verify0001", Revision: 1, Digest: strings.Repeat("b", 64),
+			ProfileID: verifier.ProfileID, Revision: verifier.Revision, Digest: verifier.Digest,
 		}},
 		ScopePolicy: execution.ExecutionGrantSummaryScopePolicy{Access: execution.IsolatedWrite,
 			AllowedPaths: []string{"src"}, ForbiddenPaths: []string{}},
@@ -187,7 +200,7 @@ func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBindin
 		t.Fatalf("prepare-only grant reported capture readiness: %#v %v", ready, err)
 	}
 	grantSpec.GrantID = "grant_ready0002"
-	grantSpec.Operations = []execution.KindElement{execution.Prepare, execution.Capture}
+	grantSpec.Operations = []execution.KindElement{execution.Prepare, execution.Capture, execution.Verify}
 	grant, err := resources.bindings.IssueTaskGrant(context.Background(), grantSpec, now)
 	if err != nil {
 		t.Fatal(err)

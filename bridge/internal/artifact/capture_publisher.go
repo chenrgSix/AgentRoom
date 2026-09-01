@@ -3,6 +3,8 @@ package artifact
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -22,6 +24,16 @@ type CapturePublishInput struct {
 	Operation               execution.RepositoryOperationRequest
 	SlotKey, Title, Summary string
 	Source                  Source
+}
+
+// VerificationLogPublishInput is a local transport adapter. The log bytes are
+// already bounded and sanitized by the independent verifier runner; this path
+// never reads the verifier workspace or grants verification authority.
+type VerificationLogPublishInput struct {
+	Manifest                execution.GovernedExecutionManifest
+	CaptureOperation        execution.RepositoryOperationRequest
+	VerificationOperationID string
+	Log                     []byte
 }
 
 // This is a projection of the existing WorkspaceLeaseRecord HTTP response.
@@ -154,18 +166,56 @@ func (c *Client) PublishCapture(ctx context.Context, input CapturePublishInput) 
 		source.WorkspaceGeneration != input.Operation.ExpectedGeneration {
 		return PublishResult{}, fmt.Errorf("Capture source does not match its frozen workspace")
 	}
-	var raw json.RawMessage
-	if err := c.retrySameRequest(ctx, http.MethodPost, "/api/bridge/repository-captures", input.Operation, &raw); err != nil {
+	lease, err := c.captureLease(ctx, input.Manifest, input.Operation)
+	if err != nil {
 		return PublishResult{}, err
+	}
+	scope := input.Manifest.Scope
+	return c.publishSource(ctx, PublishInput{RunID: scope.RunID, AgentID: scope.AgentID,
+		ArtifactType: kind, Title: input.Title, Summary: input.Summary}, source, nil, lease.LeaseID,
+		input.Operation.OperationID+":"+input.SlotKey, "")
+}
+
+func (c *Client) PublishVerificationLog(ctx context.Context,
+	input VerificationLogPublishInput) (PublishResult, error) {
+	if err := ValidateCaptureContext(input.Manifest, input.CaptureOperation); err != nil {
+		return PublishResult{}, err
+	}
+	if !validWireID(input.VerificationOperationID, "op_") || len(input.Log) == 0 ||
+		len(input.Log) > MaximumSourceBytes {
+		return PublishResult{}, fmt.Errorf("Verification log input is invalid")
+	}
+	lease, err := c.captureLease(ctx, input.Manifest, input.CaptureOperation)
+	if err != nil {
+		return PublishResult{}, err
+	}
+	hash := sha256.Sum256(input.Log)
+	source := Source{Bytes: bytes.Clone(input.Log), FileName: "verification.json",
+		MediaType: "application/json", SHA256: hex.EncodeToString(hash[:]),
+		WorkspaceRef:        input.Manifest.Workspace.WorkspaceRef,
+		WorkspaceGeneration: input.Manifest.Workspace.WorkspaceGeneration}
+	scope := input.Manifest.Scope
+	return c.publishSource(ctx, PublishInput{RunID: scope.RunID, AgentID: scope.AgentID,
+		ArtifactType: "test_result", Title: "Independent verification log",
+		Summary: "Bounded output from the admitted Bridge verifier"}, source, nil,
+		lease.LeaseID, "verification:"+input.VerificationOperationID,
+		input.VerificationOperationID)
+}
+
+func (c *Client) captureLease(ctx context.Context, manifest execution.GovernedExecutionManifest,
+	operation execution.RepositoryOperationRequest) (captureLeaseView, error) {
+	var raw json.RawMessage
+	if err := c.retrySameRequest(ctx, http.MethodPost, "/api/bridge/repository-captures", operation, &raw); err != nil {
+		return captureLeaseView{}, err
 	}
 	canonical, err := wire.CanonicalExecutionJSON(raw)
 	if err != nil {
-		return PublishResult{}, err
+		return captureLeaseView{}, err
 	}
 	var lease captureLeaseView
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(canonical, &fields); err != nil {
-		return PublishResult{}, err
+		return captureLeaseView{}, err
 	}
 	// Project only exact field spellings. Extra Server lease metadata may remain,
 	// but encoding/json case aliases cannot override an authoritative pin.
@@ -174,20 +224,18 @@ func (c *Client) PublishCapture(ctx context.Context, input CapturePublishInput) 
 		"runId": &lease.RunID, "agentId": &lease.AgentID, "deviceId": &lease.DeviceID,
 		"workspaceRef": &lease.WorkspaceRef, "workspaceGeneration": &lease.WorkspaceGeneration, "expiresAt": &lease.ExpiresAt} {
 		if err := json.Unmarshal(fields[key], target); err != nil {
-			return PublishResult{}, fmt.Errorf("Capture lease field is invalid")
+			return captureLeaseView{}, fmt.Errorf("Capture lease field is invalid")
 		}
 	}
-	scope := input.Manifest.Scope
+	scope := manifest.Scope
 	if !validWireID(lease.LeaseID, "lease_") || lease.Mode != "read_capture" || lease.State != "active" ||
-		lease.CaptureOperationID != input.Operation.OperationID || lease.RoomID != scope.RoomID || lease.TaskID != scope.TaskID ||
+		lease.CaptureOperationID != operation.OperationID || lease.RoomID != scope.RoomID || lease.TaskID != scope.TaskID ||
 		lease.RunID != scope.RunID || lease.AgentID != scope.AgentID || lease.DeviceID != scope.DeviceID ||
-		lease.WorkspaceRef != source.WorkspaceRef || lease.WorkspaceGeneration != source.WorkspaceGeneration ||
-		lease.ExpiresAt != input.Operation.Deadline {
-		return PublishResult{}, fmt.Errorf("Capture lease does not match the authorized operation")
+		lease.WorkspaceRef != manifest.Workspace.WorkspaceRef ||
+		lease.WorkspaceGeneration != manifest.Workspace.WorkspaceGeneration || lease.ExpiresAt != operation.Deadline {
+		return captureLeaseView{}, fmt.Errorf("Capture lease does not match the authorized operation")
 	}
-	return c.publishSource(ctx, PublishInput{RunID: scope.RunID, AgentID: scope.AgentID,
-		ArtifactType: kind, Title: input.Title, Summary: input.Summary}, source, nil, lease.LeaseID,
-		input.Operation.OperationID+":"+input.SlotKey)
+	return lease, nil
 }
 
 func validWireID(value, prefix string) bool {
