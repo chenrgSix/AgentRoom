@@ -318,6 +318,22 @@ bytes inside destination admission. A verified edge never falls back to an
 accepted Result, and verified materialization does not change the source node's
 runtime state to a generic success state.
 
+### Exact Integrated-Commit Increment
+
+REPO-002 is frozen by the
+[exact-target integration goal](../acceptance/repo-002-exact-target-integration-goal.md).
+It first separates gate proof reconciliation from Run settlement, then consumes
+the existing CON-021 `integrate` operation and repository receipt. A receipt is
+an IntegrationReceipt only when it is an authenticated successful
+`kind = integrate` receipt for the exact approved candidate, target old object,
+verification set and human integration-approval operation.
+
+`integrated_commit` remains a revision-local materialization. It pins the
+successful receipt digest and resulting commit in addition to the source
+checkpoint, Result identity, verified receipt set and canonical Artifact pins.
+The resolver and destination input service never substitute `verified_output`
+when an edge requires `integrated_commit`.
+
 ## APIs and Agent Tools
 
 The typed HTTP surface includes Room-scoped proposal/plan listing and creation,

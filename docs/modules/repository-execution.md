@@ -488,6 +488,16 @@ PR state. Task acceptance is not itself merge approval. A plan's chosen
 integration policy is explicit: reviewed local candidate, local integration or
 configured remote PR/merge observation, with distinct completion evidence.
 
+The bounded REPO-002 implementation is frozen by the
+[exact-target integration goal](../acceptance/repo-002-exact-target-integration-goal.md).
+It uses the existing CON-021 `RepositoryOperationRequest(kind=integrate)` and
+`RepositoryOperationReceipt`; Central retains the latter's canonical digest as
+the immutable IntegrationReceipt. The local adapter accepts only a strict
+fast-forward candidate and executes Git's atomic expected-old `update-ref`.
+Targets checked out in any worktree fail closed rather than leaving owner files
+or an index inconsistent. Remote transport and physical two-Bridge handoff stay
+outside this slice.
+
 ## Remote Git, CI and PR
 
 Remote operations are opt-in owner-local bindings. The first adapter has a
