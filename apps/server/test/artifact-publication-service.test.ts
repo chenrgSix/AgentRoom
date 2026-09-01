@@ -206,7 +206,8 @@ test("capture lease migration preserves populated legacy publications, blobs and
     const oldLease = database.prepare("SELECT * FROM workspace_leases").get();
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
-    assert.deepEqual(migrated.appliedVersions, [62, 63, 64, 65, 66, 67, 68]);
+    assert.deepEqual(migrated.appliedVersions,
+      [62, 63, 64, 65, 66, 67, 68, 69, 70]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -271,7 +272,8 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     assert.deepEqual(database.pragma("foreign_key_check"), []);
     database.close();
     const result = await migrateDatabase(f.databasePath);
-    assert.deepEqual(result.appliedVersions, [63, 64, 65, 66, 67, 68]);
+    assert.deepEqual(result.appliedVersions,
+      [63, 64, 65, 66, 67, 68, 69, 70]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -311,7 +313,27 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_verified_node_materializations",
       "execution_verified_materializations_require_scope_insert",
       "execution_verified_materializations_immutable_update",
-      "execution_verified_materializations_immutable_delete"
+      "execution_verified_materializations_immutable_delete",
+      "execution_integration_approvals",
+      "repository_integration_operations",
+      "repository_integration_locks",
+      "integration_receipts",
+      "execution_integration_approvals_operation_unique_insert",
+      "repository_integration_operations_operation_unique_insert",
+      "repository_integration_locks_exact_scope_insert",
+      "repository_integration_locks_receipt_release_delete",
+      "execution_integration_approvals_immutable_update",
+      "execution_integration_approvals_immutable_delete",
+      "repository_integration_operations_immutable_update",
+      "repository_integration_operations_immutable_delete",
+      "repository_integration_locks_immutable_update",
+      "integration_receipts_immutable_update",
+      "integration_receipts_immutable_delete",
+      "execution_integrated_node_materializations",
+      "execution_integrated_materializations_require_scope_insert",
+      "execution_integrated_materializations_immutable_update",
+      "execution_integrated_materializations_immutable_delete",
+      "execution_dependency_materializations"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))
