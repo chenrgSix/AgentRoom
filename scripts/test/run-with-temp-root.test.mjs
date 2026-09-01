@@ -1,10 +1,11 @@
 import assert from "node:assert/strict";
-import { spawn } from "node:child_process";
-import { access, mkdtemp, mkdir, readFile, readdir, rm, writeFile } from "node:fs/promises";
-import os from "node:os";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
+
+import { spawnTestProcess } from "./child-process.mjs";
+import { createTestResources } from "./resources.mjs";
 
 const directory = path.dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = path.resolve(directory, "../..");
@@ -25,7 +26,11 @@ async function exists(target) {
 async function waitForFile(filePath, timeoutMs = 5_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await exists(filePath)) return JSON.parse(await readFile(filePath, "utf8"));
+    try {
+      return JSON.parse(await readFile(filePath, "utf8"));
+    } catch (error) {
+      if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
+    }
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
   throw new Error(`Timed out waiting for ${filePath}`);
@@ -38,11 +43,12 @@ function isolatedEnvironment(base) {
   return environment;
 }
 
-function startRunner(base, arguments_, environmentOverrides = {}) {
-  const child = spawn(process.execPath, [runner, ...arguments_], {
+function startRunner(resources, base, arguments_, environmentOverrides = {}) {
+  const handle = spawnTestProcess(resources, process.execPath, [runner, ...arguments_], {
     env: { ...isolatedEnvironment(base), ...environmentOverrides },
     stdio: ["ignore", "pipe", "pipe"]
   });
+  const child = handle.process;
   let stdout = "";
   let stderr = "";
   child.stdout.on("data", (chunk) => { stdout += chunk; });
@@ -50,11 +56,11 @@ function startRunner(base, arguments_, environmentOverrides = {}) {
   const result = new Promise((resolve) => {
     child.once("close", (code, signal) => resolve({ code, signal, stdout, stderr }));
   });
-  return { child, result };
+  return { ...handle, child, result };
 }
 
-async function runRunner(base, arguments_) {
-  return (await startRunner(base, arguments_).result);
+async function runRunner(resources, base, arguments_) {
+  return (await startRunner(resources, base, arguments_).result);
 }
 
 function createdRoot(stderr) {
@@ -68,12 +74,12 @@ function command(mode, reportPath) {
 }
 
 async function fixture(t) {
-  const base = await mkdtemp(path.join(os.tmpdir(), "cw-test-runner-"));
-  t.after(async () => rm(base, { recursive: true, force: true }));
+  const resources = await createTestResources(t, "cw-test-runner-");
+  const base = resources.directory;
   const sentinel = path.join(base, "foreign-sibling");
   await mkdir(sentinel);
   await writeFile(path.join(sentinel, "keep.txt"), "keep\n", "utf8");
-  return { base, sentinel };
+  return { base, resources, sentinel };
 }
 
 async function assertClean(result, sentinel) {
@@ -94,9 +100,9 @@ function processAlive(processId) {
 }
 
 test("runner removes the exact root after success and reuses it when nested", async (t) => {
-  const { base, sentinel } = await fixture(t);
+  const { base, resources, sentinel } = await fixture(t);
   const reportPath = path.join(base, "success.json");
-  const result = await runRunner(base, [
+  const result = await runRunner(resources, base, [
     "--",
     process.execPath,
     runner,
@@ -120,24 +126,24 @@ test("runner removes the exact root after success and reuses it when nested", as
 });
 
 test("runner removes the exact root after an assertion failure", async (t) => {
-  const { base, sentinel } = await fixture(t);
-  const result = await runRunner(base, command("assertion-failure", path.join(base, "failure.json")));
+  const { base, resources, sentinel } = await fixture(t);
+  const result = await runRunner(resources, base, command("assertion-failure", path.join(base, "failure.json")));
   assert.equal(result.code, 1, result.stderr);
   assert.equal(result.signal, null);
   await assertClean(result, sentinel);
 });
 
 test("runner removes the exact root when child startup fails", async (t) => {
-  const { base, sentinel } = await fixture(t);
-  const result = await runRunner(base, ["--", "convenewire-command-that-does-not-exist"]);
+  const { base, resources, sentinel } = await fixture(t);
+  const result = await runRunner(resources, base, ["--", "convenewire-command-that-does-not-exist"]);
   assert.equal(result.code, 127, result.stderr);
   assert.match(result.stderr, /spawn failed/u);
   await assertClean(result, sentinel);
 });
 
 test("runner rejects an unowned inherited path without deleting it", async (t) => {
-  const { base, sentinel } = await fixture(t);
-  const result = await startRunner(base, command("success", path.join(base, "unsafe.json")), {
+  const { base, resources, sentinel } = await fixture(t);
+  const result = await startRunner(resources, base, command("success", path.join(base, "unsafe.json")), {
     CONVENE_WIRE_TEST_RUN_ROOT: sentinel,
     CONVENE_WIRE_TEST_RUN_OWNER: "not-the-owner"
   }).result;
@@ -147,9 +153,9 @@ test("runner rejects an unowned inherited path without deleting it", async (t) =
 });
 
 test("runner terminates descendants and removes the root after timeout", async (t) => {
-  const { base, sentinel } = await fixture(t);
+  const { base, resources, sentinel } = await fixture(t);
   const reportPath = path.join(base, "timeout.json");
-  const result = await runRunner(base, ["--timeout-ms", "250", "--grace-ms", "250", ...command("hold", reportPath)]);
+  const result = await runRunner(resources, base, ["--timeout-ms", "250", "--grace-ms", "250", ...command("hold", reportPath)]);
   assert.equal(result.code, 124, result.stderr);
   const report = JSON.parse(await readFile(reportPath, "utf8"));
   assert.equal(processAlive(report.processId), false);
@@ -159,9 +165,9 @@ test("runner terminates descendants and removes the root after timeout", async (
 
 for (const signal of ["SIGINT", "SIGTERM"]) {
   test(`runner removes the root after ${signal}`, async (t) => {
-    const { base, sentinel } = await fixture(t);
+    const { base, resources, sentinel } = await fixture(t);
     const reportPath = path.join(base, `${signal}.json`);
-    const active = startRunner(base, ["--grace-ms", "250", ...command("hold", reportPath)]);
+    const active = startRunner(resources, base, ["--grace-ms", "250", ...command("hold", reportPath)]);
     const report = await waitForFile(reportPath);
     active.child.kill(signal);
     const result = await active.result;
@@ -173,11 +179,11 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
 }
 
 test("parallel owners never remove one another", async (t) => {
-  const { base, sentinel } = await fixture(t);
+  const { base, resources, sentinel } = await fixture(t);
   const firstReportPath = path.join(base, "parallel-first.json");
   const secondReportPath = path.join(base, "parallel-second.json");
-  const first = startRunner(base, ["--grace-ms", "250", ...command("hold", firstReportPath)]);
-  const second = startRunner(base, ["--grace-ms", "250", ...command("hold", secondReportPath)]);
+  const first = startRunner(resources, base, ["--grace-ms", "250", ...command("hold", firstReportPath)]);
+  const second = startRunner(resources, base, ["--grace-ms", "250", ...command("hold", secondReportPath)]);
   const [firstReport, secondReport] = await Promise.all([
     waitForFile(firstReportPath),
     waitForFile(secondReportPath)
@@ -199,10 +205,10 @@ test("parallel owners never remove one another", async (t) => {
 });
 
 test("three consecutive runs leave no four-prefix directory", async (t) => {
-  const { base, sentinel } = await fixture(t);
+  const { base, resources, sentinel } = await fixture(t);
   for (let iteration = 0; iteration < 3; iteration += 1) {
     const reportPath = path.join(base, `repeat-${iteration}.json`);
-    const result = await runRunner(base, command("success", reportPath));
+    const result = await runRunner(resources, base, command("success", reportPath));
     assert.equal(result.code, 0, result.stderr);
     await assertClean(result, sentinel);
     const matches = (await readdir(base)).filter((name) =>
