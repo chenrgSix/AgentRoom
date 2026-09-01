@@ -579,6 +579,8 @@ async function verifyManagedBridge(t: TestContext, shareReasoningSummaries: bool
 
 for (const shareReasoningSummaries of [false, true]) {
   test(`Web Mention and managed Result complete through a paired Go Bridge with reasoning sharing ${shareReasoningSummaries ? "enabled" : "disabled by default"}`, {
-    timeout: 60_000
+    // The first case performs a cold Go build inside the run-scoped cache. Keep
+    // the behavioral deadline above that one-time compile cost.
+    timeout: 120_000
   }, (t) => verifyManagedBridge(t, shareReasoningSummaries));
 }
