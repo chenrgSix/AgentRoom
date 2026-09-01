@@ -67,17 +67,24 @@ func WithOwner(ctx context.Context, owner *Lock) context.Context {
 	return context.WithValue(ctx, contextKey{}, owner)
 }
 
-// AcquireForContext either borrows the exact owner carried by ctx or acquires a
-// new process lock. The returned release is always safe to defer.
-func AcquireForContext(ctx context.Context, dataDir string) (func() error, error) {
+// AcquireContext returns a context carrying the exact owner for dataDir. It
+// borrows a matching shell owner or acquires one and retains it until release.
+func AcquireContext(ctx context.Context, dataDir string) (context.Context, func() error, error) {
 	if owner, ok := ctx.Value(contextKey{}).(*Lock); ok && owner.owns(dataDir) {
-		return func() error { return nil }, nil
+		return ctx, func() error { return nil }, nil
 	}
 	owner, err := Acquire(dataDir)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return owner.Release, nil
+	return WithOwner(ctx, owner), owner.Release, nil
+}
+
+// AcquireForContext either borrows the exact owner carried by ctx or acquires a
+// new process lock. The returned release is always safe to defer.
+func AcquireForContext(ctx context.Context, dataDir string) (func() error, error) {
+	_, release, err := AcquireContext(ctx, dataDir)
+	return release, err
 }
 
 func (l *Lock) owns(dataDir string) bool {

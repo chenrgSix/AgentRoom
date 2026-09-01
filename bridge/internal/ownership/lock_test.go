@@ -76,6 +76,41 @@ func TestAcquireForContextBorrowsOnlyTheExactOwner(t *testing.T) {
 	}
 }
 
+func TestAcquireContextPublishesNewOwnerUntilRelease(t *testing.T) {
+	directory := t.TempDir()
+	marker := struct{}{}
+	type markerKey struct{}
+	parent := context.WithValue(context.Background(), markerKey{}, marker)
+	owned, release, err := AcquireContext(parent, directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if owned.Value(markerKey{}) != marker {
+		t.Fatal("owner context discarded its parent values")
+	}
+	borrowedRelease, err := AcquireForContext(owned, directory)
+	if err != nil {
+		t.Fatalf("published owner could not be borrowed: %v", err)
+	}
+	if err := borrowedRelease(); err != nil {
+		t.Fatal(err)
+	}
+	if second, err := Acquire(directory); err == nil {
+		_ = second.Release()
+		t.Fatal("borrow release dropped the acquired core owner")
+	}
+	if err := release(); err != nil {
+		t.Fatal(err)
+	}
+	second, err := Acquire(directory)
+	if err != nil {
+		t.Fatalf("owner context release retained the lock: %v", err)
+	}
+	if err := second.Release(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestAcquireExcludesAnotherProcessUntilExit(t *testing.T) {
 	directory := t.TempDir()
 	command := exec.Command(os.Args[0], "-test.run=^TestOwnershipLockHelperProcess$")

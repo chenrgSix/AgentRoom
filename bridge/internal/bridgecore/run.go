@@ -54,11 +54,12 @@ func RunObservedWithProvisioning(
 	observer operations.Observer,
 	handleProvision connection.ProvisionHandler,
 ) error {
-	releaseOwner, err := ownership.AcquireForContext(ctx, loaded.DataDir)
+	ownedContext, releaseOwner, err := ownership.AcquireContext(ctx, loaded.DataDir)
 	if err != nil {
 		return err
 	}
 	defer releaseOwner()
+	ctx = ownedContext
 	inbox, err := delivery.Open(filepath.Join(loaded.DataDir, "inbox"))
 	if err != nil {
 		return err

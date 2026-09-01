@@ -89,6 +89,10 @@ permission to retry.
   patch inputs within the Server's 4 MiB limit. Each bounded response must
   reproduce the no-cache/sniffing/media, binding, length and digest metadata;
   the actual bytes are SHA-256 checked and never cached.
+- `ownership.AcquireContext` now makes the managed core's exact acquired or
+  shell-borrowed process owner available to its derived lifetime context.
+  Matching local stores can borrow without dropping that lease; another data
+  root cannot. No governed store is opened by this increment.
 - Orphan stages, malformed/linked/permissive records, directory replacement,
   non-canonical records and inventory overflow fail closed through the shared
   strict owner-state primitives.
@@ -133,8 +137,9 @@ acceptance.
 
 - wire the exact governed manifest through the existing inbox without opening a
   second Runtime-start path;
-- construct the reviewed coordinator under the Bridge process-owner context
-  and route only exact governed delivery into it;
+- open the governed stores and construct the reviewed coordinator under the
+  propagated Bridge process-owner context, then route only exact governed
+  delivery into it;
 - retain/terminate the process handle and connect stopped-Run, revocation and
   owner-visible cleanup;
 - expose owner setup/state without leaking local details;

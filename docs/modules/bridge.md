@@ -54,6 +54,13 @@ uses private Unix permissions, pinned directories and immutable fsynced files;
 malformed, duplicate-key, linked or foreign records fail closed. Windows ACL and
 native UI acceptance remain separate from cross-compilation.
 
+The managed Bridge core now carries the exact acquired or shell-borrowed owner
+in its derived process context for the full connection lifetime. Local stores
+opened from that context can borrow the same OS lease without reacquiring or
+releasing it, while another data directory still requires its own lock. This is
+only lifecycle plumbing: the core does not yet open the governed stores or
+construct the coordinator, and the production governed rejection is unchanged.
+
 Local runtime/verifier profiles, enforced startup, owner UI, production cleanup
 and RUN-018 delivery remain required. Registration alone is
 not a grant and never replaces the existing governed no-start checks. See the
@@ -246,8 +253,8 @@ completion decision. `RecoverUnknown` converts unresolved possible-start
 records to `outcome_unknown` only after its future production caller has fenced
 or terminated any surviving process; claim-only records remain claim-only.
 That explicit surviving-process cleanup, inbox/cancellation integration,
-production coordinator/owner-context construction, capability advertisement
-and real Runtime evidence remain open. The production
+production store/coordinator construction, capability advertisement and real
+Runtime evidence remain open. The production
 governed no-start rejection is unchanged. See the
 [possible-start evidence](../acceptance/brg-071-runtime-start-fence.md).
 
