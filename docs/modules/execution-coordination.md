@@ -40,8 +40,8 @@ The accepted-result admission port is an independently testable prerequisite
 owned by EXEC-006: atomic input freezing, exact manifests, current authorization,
 sealed content reads and destination Artifact provenance. RUN-018 may connect
 that port to ordinary Run Delivery without waiting for all graph gate producers.
-Unavailable `verified_output` and `integrated_commit` gates remain explicit
-errors; accepted Results cannot stand in for their independent proofs.
+`verified_output` and `integrated_commit` remain distinct explicit proof paths;
+accepted Results cannot stand in for either independent proof.
 
 EXEC-003 retains the full EX-04 outcome after VER-001 and REPO-002 expose their
 immutable receipt lookups: gate-specific bindings and actual authorized
@@ -309,7 +309,7 @@ The accepted-result and verified-output gates have separate proof authorities:
 | --- | --- |
 | `accepted_result` | exact accepted `ResultReview` |
 | `verified_output` | exact required `VerificationReceipt` set |
-| `integrated_commit` | unavailable until exact `IntegrationReceipt` is implemented |
+| `integrated_commit` | exact successful authenticated `IntegrationReceipt` |
 
 The dependency resolver remains deliberately mechanical: read the edge gate,
 load the corresponding retained materialization and map approved slots to

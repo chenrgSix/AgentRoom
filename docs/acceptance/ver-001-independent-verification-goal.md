@@ -156,7 +156,8 @@ VER-001 is delivered by commits `6c4b057`, `5bb0862`, `84513a2`, `24a87f0`,
 Central admission and immutable receipt/log authority, real isolated verifier
 execution, revision-local `verified_output` materialization, exact dependency
 selection and final sealed-byte authorization. `accepted_result` remains a
-separate proof path and `integrated_commit` still fails closed.
+separate proof path. At the VER-001 acceptance boundary, `integrated_commit`
+still failed closed and remained assigned to REPO-002.
 
 The Central regression set proves that a proposed Agent Result and one passed
 profile do not release the edge, a failed receipt stays blocked across restart,
@@ -191,12 +192,13 @@ The final commands and results were:
   Every run passed 6 tests, emitted its own cleaned run root, and the four
   historical leak-name snapshots were `before=0` and `after=0`.
 
-This evidence does not claim live-model verification, remote CI authority,
-repository integration or a physical two-Bridge verified Git handoff.
+This VER-001 evidence does not claim live-model verification, remote CI
+authority, repository integration or a physical two-Bridge verified Git
+handoff. Later tasks may independently close those boundaries.
 
 ## Explicit Non-goals
 
-This slice does not implement `integrated_commit`, repository target mutation,
+VER-001 itself did not implement `integrated_commit`, repository target mutation,
 remote CI/PR authority, independent human review admission, generation 2, plan
 supersession, scheduler modes, Web graph UX, live-model acceptance or physical
 two-Bridge Git handoff. It does not change the source node to a generic

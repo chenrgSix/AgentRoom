@@ -1,12 +1,15 @@
 # REPO-002 Exact-Target Integration Goal
 
+Date: 2026-09-02
+
 ## Status and Authority
 
-This document freezes the bounded `REPO-002` delivery target before code is
+This document froze the bounded `REPO-002` delivery target before code was
 changed. `docs/TASKS.md` remains the sole delivery-state register. The existing
 CON-021 `RepositoryOperationRequest` with `action.kind = integrate` and
 `RepositoryOperationReceipt` are the wire authority; this slice does not add a
-second IntegrationReceipt schema.
+second IntegrationReceipt schema. The target remains unchanged; delivery and
+physical acceptance are recorded below.
 
 The generic receipt is an IntegrationReceipt when `kind = integrate`. Central
 retains its canonical bytes and digest as immutable evidence. A successful
@@ -151,6 +154,72 @@ only return values:
 Completion evidence records the focused commands, full Server/Bridge/schema/
 build/E2E gates, exact before/after ref values, SQLite receipt/materialization
 rows and isolated temporary-directory snapshots.
+
+## Delivery Evidence
+
+REPO-002 is delivered by commits `bbcc251`, `b00e7dd`, `4bb8cbe`, `f745b5d`,
+`c3bd675`, `67c5c26`, `c589c98`, `48e34b8`, `5029f9a`, `e9938c0` and
+`d6532dd`. Together they separate gate materialization from Run settlement,
+retain exact human integration approvals and serialized Central operations,
+enforce a distinct owner-local integration grant, execute atomic Git old-object
+CAS, recover durable local outcomes, retain immutable IntegrationReceipts and
+derive revision-local `integrated_commit` materialization for the existing
+mechanical dependency resolver.
+
+The successful Server acceptance starts with a `verified_output`
+materialization, retains one exact approval and operation, authenticates one
+successful receipt, restarts reconciliation and physically observes one
+immutable integrated materialization. The downstream Run is scheduled only
+then, and its Device-authenticated input endpoint returns the exact sealed bytes.
+Changed approval content conflicts; SQL update/delete attempts fail; failed,
+canceled and `outcome_unknown` receipts remain blocked across restart.
+
+The real Git acceptance imports the sealed candidate without moving any shared
+ref, validates its exact tree and strict fast-forward ancestry, rejects targets
+checked out in any worktree, then uses `git update-ref <target> <candidate>
+<expected>`. One verbose acceptance run recorded:
+
+- SHA-1 `refs/heads/release`:
+  `b594a9570d112d0033dad1c5d796d102ac8aef89` to
+  `316761e97027d0f5df43f1eeffd7b347f9fff07e`, tree
+  `490c3f5f4aede04069729baa7ac853a6215449d1`;
+- SHA-256 `refs/heads/release`:
+  `099d85e09a82304672363e34140dfb8fea4d189d5b05f806d50893f449fc3025`
+  to
+  `872036696664f25b0001f1ab2995b19c13bb0a7b474d6bb7950d1430c28f4dfb`,
+  tree
+  `266d2810a8fe5437ce523a73c7f324646fdae1c75466e8b1b23e4e5d7eda9eb7`.
+
+Moved-target, non-fast-forward, wrong-tree, checked-out-target and canceled
+cases leave the target and owner checkout unchanged. Two concurrent attempts
+produce exactly one success and one moved-target result. A durable intent with a
+lost Central response is looked up and replayed without a second CAS; restart
+classifies exact candidate as success, exact expected as retryable and any third
+object as `outcome_unknown`.
+
+The final commands and results were:
+
+- `npm test --workspace @convene-wire/server` — 503 tests passed, including
+  physical SQLite/materialization/input-byte assertions.
+- `npm run test:bridge` — every Bridge package passed, including real SHA-1 and
+  SHA-256 repository integration and durable recovery.
+- focused `go test -race` — repository integration, integration coordinator and
+  integration admission passed; `go vet ./...` passed.
+- `npm run test:e2e` — seven deterministic E2E cases passed; the opt-in live
+  model case remained skipped and is not claimed.
+- `npm run validate` — 11 schemas and 243 fixtures passed.
+- `npm run build` — Server, Web and generated contract checks passed.
+- `npm run test:temp-lifecycle` passed three consecutive outer runs, each with
+  24 tests covering success, assertion failure, spawn failure, timeout, signals
+  and parallel owners. Every owned run root printed a matching `cleaned` line.
+- Read-only snapshots across `/private/tmp` and the macOS user temporary
+  directory contained 64 pre-existing four-prefix directories both before and
+  after acceptance: `added=[]`, `removed=[]`. REPO-002 did not scan, glob-delete
+  or modify those unrelated paths.
+
+This evidence closes owner-local exact-target integration and its
+`integrated_commit` dependency proof. It does not claim remote publication or a
+physical two-Bridge Git chain.
 
 ## Explicit Non-goals
 
