@@ -27,9 +27,19 @@ interface Destination {
   room_id: string; team_id: string; definition_revision: number; criteria_revision: number;
   task_revision: number; deadline_at: string; context_manifest_json: string | null;
 }
-interface Source {
+interface AcceptedSource {
   task_id: string; result_version: number; definition_revision: number; criteria_revision: number;
   operation_id: string; reviewed_by_member_id: string; reviewed_at: string;
+}
+interface VerifiedSource {
+  candidate_commit: string;
+  candidate_tree: string;
+  criteria_revision: number;
+  definition_revision: number;
+  gate_operation_id: string;
+  materialization_digest: string;
+  result_version: number;
+  task_id: string;
 }
 const binary = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const fail = (code: string): never => { throw new ExecutionError(code, 409); };
@@ -85,14 +95,30 @@ export class ExecutionInputService {
       const external = definition.definition.externalInputs.find((entry) =>
         entry.nodeKey === node.nodeKey && entry.inputSlot === selection.inputSlot);
       if ((!edge && !external) || (edge && external)) return fail("EXECUTION_INPUT_PRODUCER_MISSING");
-      // VER-001 and REPO-002 must supply their independent proof resolvers. Never
-      // substitute an accepted Result for a verified-output or integrated gate.
-      if (edge && edge.gate !== "accepted_result") return fail("EXECUTION_INPUT_GATE_UNAVAILABLE");
+      // REPO-002 must supply its own proof resolver. Never substitute either a
+      // ResultReview or VerificationReceipt set for an integrated commit.
+      if (edge?.gate === "integrated_commit") return fail("EXECUTION_INPUT_GATE_UNAVAILABLE");
       const sourceNode = edge && definition.definition.nodes.find((entry) => entry.nodeKey === edge.fromNodeKey);
       const sourceTask = sourceNode && plan.compiledTasks.find((entry) => entry.nodeKey === sourceNode.nodeKey);
       const sourceTaskId = sourceTask?.taskId ?? external?.sourceTaskId;
       if (!sourceTaskId || sourceTaskId === destination.task_id) return fail("EXECUTION_INPUT_SOURCE_INVALID");
-      const source = this.acceptedSource(sourceTaskId, selection.sourceResultId, selection.artifactId, plan.roomId);
+      const source = edge?.gate === "verified_output"
+        ? this.verifiedSource(
+          plan.planId,
+          input.revision,
+          sourceTaskId,
+          selection.sourceResultId,
+          selection.artifactId,
+          edge.bindings.find((entry) => entry.inputSlot === selection.inputSlot)!
+            .outputSlot,
+          plan.roomId
+        )
+        : this.acceptedSource(
+          sourceTaskId,
+          selection.sourceResultId,
+          selection.artifactId,
+          plan.roomId
+        );
       if (sourceTask && (source.definition_revision !== sourceTask.definitionRevision ||
         source.criteria_revision !== sourceTask.criteriaRevision)) return fail("EXECUTION_INPUT_SOURCE_STALE");
       const artifact = this.sealedArtifact(selection.artifactId, sourceTaskId, plan.roomId);
@@ -106,13 +132,24 @@ export class ExecutionInputService {
       const binding: ExecutionInputBinding = {
         bindingId: `input_${executionOperationDigest({ runId: input.runId, inputSlot: selection.inputSlot })}`,
         planId: plan.planId, planRevision: input.revision, edgeKey: edge?.edgeKey ?? null,
-        gate: "accepted_result", gateOperationId: source.operation_id, gateDigest: executionOperationDigest(source),
+        gate: edge?.gate ?? "accepted_result",
+        gateOperationId: edge?.gate === "verified_output"
+          ? (source as VerifiedSource).gate_operation_id
+          : (source as AcceptedSource).operation_id,
+        gateDigest: edge?.gate === "verified_output"
+          ? (source as VerifiedSource).materialization_digest
+          : executionOperationDigest(source),
         sourceTaskId, sourceDefinitionRevision: source.definition_revision, sourceCriteriaRevision: source.criteria_revision,
         sourceResultId: selection.sourceResultId, sourceResultVersion: source.result_version, sourceOutputSlot: outputSlot,
         artifact: { artifactId: artifact.artifactId, artifactRevision: artifact.artifactRevision,
           contentDigest: artifact.contentSha256!, byteLength: artifact.contentSizeBytes!, kind: slot.kind },
         repositoryId: sourceNode?.repository?.repositoryId ?? null,
-        sourceCommit: null, sourceTree: null,
+        sourceCommit: edge?.gate === "verified_output"
+          ? (source as VerifiedSource).candidate_commit
+          : null,
+        sourceTree: edge?.gate === "verified_output"
+          ? (source as VerifiedSource).candidate_tree
+          : null,
         destinationTaskId: destination.task_id, destinationRunId: input.runId,
         destinationAgentId: destination.target_agent_id, destinationDeviceId: input.deviceId,
         inputSlot: selection.inputSlot, issuedAt: now, expiresAt: input.expiresAt
@@ -227,8 +264,36 @@ export class ExecutionInputService {
         scope.definitionRevision !== destination.definition_revision || scope.criteriaRevision !== destination.criteria_revision ||
         manifest.inputs.filter((entry) => entry.bindingId === bindingId).length !== 1 ||
         canonicalExecutionJSON(manifest.inputs.find((entry) => entry.bindingId === bindingId)) !== canonicalExecutionJSON(binding)) return deny();
-      const source = this.acceptedSource(binding.sourceTaskId, binding.sourceResultId!, binding.artifact.artifactId, plan.roomId);
-      if (executionOperationDigest(source) !== binding.gateDigest || source.operation_id !== binding.gateOperationId) return deny();
+      if (binding.gate === "integrated_commit") return deny();
+      if (binding.gate === "verified_output") {
+        const source = this.verifiedSource(
+          binding.planId,
+          binding.planRevision,
+          binding.sourceTaskId,
+          binding.sourceResultId!,
+          binding.artifact.artifactId,
+          binding.sourceOutputSlot,
+          plan.roomId
+        );
+        if (
+          source.materialization_digest !== binding.gateDigest ||
+          source.gate_operation_id !== binding.gateOperationId ||
+          source.candidate_commit !== binding.sourceCommit ||
+          source.candidate_tree !== binding.sourceTree
+        ) return deny();
+      } else {
+        const source = this.acceptedSource(
+          binding.sourceTaskId,
+          binding.sourceResultId!,
+          binding.artifact.artifactId,
+          plan.roomId
+        );
+        if (
+          executionOperationDigest(source) !== binding.gateDigest ||
+          source.operation_id !== binding.gateOperationId ||
+          binding.sourceCommit !== null || binding.sourceTree !== null
+        ) return deny();
+      }
       artifact = this.sealedArtifact(binding.artifact.artifactId, binding.sourceTaskId, plan.roomId);
       if (artifact.contentId !== input.contentId || artifact.artifactRevision !== binding.artifact.artifactRevision ||
         artifact.contentSha256 !== binding.artifact.contentDigest || artifact.contentSizeBytes !== binding.artifact.byteLength ||
@@ -275,7 +340,7 @@ export class ExecutionInputService {
     return row ?? fail("EXECUTION_INPUT_DESTINATION_UNAVAILABLE");
   }
 
-  private acceptedSource(taskId: string, resultId: string, artifactId: string, roomId: string): Source {
+  private acceptedSource(taskId: string, resultId: string, artifactId: string, roomId: string): AcceptedSource {
     const source = this.database.prepare(`SELECT result.task_id, result.result_version, result.definition_revision,
       result.criteria_revision, review.operation_id, review.reviewed_by_member_id, review.reviewed_at
       FROM task_results result JOIN result_reviews review ON review.result_id = result.result_id
@@ -286,7 +351,64 @@ export class ExecutionInputService {
       WHERE result.result_id = @resultId AND result.task_id = @taskId AND result.room_id = @roomId
         AND result.state = 'accepted' AND review.decision = 'accepted' AND task.lifecycle_state <> 'canceled'
         AND task.definition_revision = result.definition_revision AND task.criteria_revision = result.criteria_revision
-    `).get({ taskId, resultId, artifactId, roomId }) as Source | undefined;
+    `).get({ taskId, resultId, artifactId, roomId }) as AcceptedSource | undefined;
+    return source ?? fail("EXECUTION_INPUT_SOURCE_UNAVAILABLE");
+  }
+
+  private verifiedSource(
+    planId: string,
+    planRevision: number,
+    taskId: string,
+    resultId: string,
+    artifactId: string,
+    outputSlot: string,
+    roomId: string
+  ): VerifiedSource {
+    const source = this.database.prepare(`
+      SELECT result.task_id, result.result_version,
+        result.definition_revision, result.criteria_revision,
+        materialization.gate_operation_id,
+        materialization.materialization_digest,
+        materialization.candidate_commit, materialization.candidate_tree
+      FROM execution_verified_node_materializations materialization
+      JOIN execution_plan_nodes node ON node.plan_id = materialization.plan_id
+        AND node.revision = materialization.plan_revision
+        AND node.node_key = materialization.node_key
+        AND node.task_id = @taskId
+      JOIN task_results result ON result.result_id = materialization.source_result_id
+        AND result.task_id = node.task_id
+        AND result.result_version = materialization.source_result_version
+        AND result.definition_revision = node.definition_revision
+        AND result.criteria_revision = node.criteria_revision
+        AND result.room_id = @roomId
+      JOIN agent_tasks task ON task.task_id = result.task_id
+        AND task.room_id = result.room_id
+        AND task.lifecycle_state <> 'canceled'
+        AND task.definition_revision = result.definition_revision
+        AND task.criteria_revision = result.criteria_revision
+      JOIN json_each(materialization.artifact_pins_json) pin
+        ON json_extract(pin.value, '$.artifactId') = @artifactId
+        AND json_extract(pin.value, '$.outputSlot') = @outputSlot
+      JOIN repository_checkpoint_outputs output
+        ON output.checkpoint_id = materialization.checkpoint_id
+        AND output.artifact_id = @artifactId
+        AND output.slot_key = @outputSlot
+      JOIN result_evidence_refs evidence ON evidence.result_id = result.result_id
+        AND evidence.evidence_kind = 'artifact'
+        AND evidence.artifact_id = output.artifact_id
+      WHERE materialization.plan_id = @planId
+        AND materialization.plan_revision = @planRevision
+        AND materialization.gate = 'verified_output'
+        AND result.result_id = @resultId
+    `).get({
+      planId,
+      planRevision,
+      taskId,
+      resultId,
+      artifactId,
+      outputSlot,
+      roomId
+    }) as VerifiedSource | undefined;
     return source ?? fail("EXECUTION_INPUT_SOURCE_UNAVAILABLE");
   }
 

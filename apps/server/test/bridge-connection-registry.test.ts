@@ -76,6 +76,9 @@ test("governed Run transport requires the current exact execution capability", (
   const agentId = manifest.scope.agentId;
   const capability = { version: 1, workspaceBoundary: "enforced", preventivePathEnforcement: false,
     operations: ["prepare", "capture", "verify"] };
+  const requiredOperations = manifest.verificationProfiles.some((profile) =>
+    profile.required
+  ) ? ["prepare", "capture", "verify"] : ["prepare", "capture"];
   const readyGrant = {
     grant: structuredClone(manifest.grant),
     repositoryId: manifest.repository.repositoryId,
@@ -84,7 +87,7 @@ test("governed Run transport requires the current exact execution capability", (
     agentId,
     planId: manifest.scope.planId,
     nodeKey: manifest.scope.nodeKey,
-    operations: ["prepare", "capture"], runtimeProfile: {
+    operations: requiredOperations, runtimeProfile: {
       profileId: manifest.repository.runtimeProfileId,
       revision: 1,
       digest: manifest.repository.runtimeProfileDigest

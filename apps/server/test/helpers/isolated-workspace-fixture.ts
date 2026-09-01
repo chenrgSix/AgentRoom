@@ -19,7 +19,8 @@ export const expiresAt = "2026-08-31T12:05:00.000Z";
 const wire = JSON.parse(await readFile(new URL("../../../../packages/contracts/fixtures/execution-runtime-cases.json", import.meta.url), "utf8"))
   .cases.find((entry: { name: string }) => entry.name === "execution runtime: valid governed wire delivery").instance.payload;
 export const capability = { version: 1 as const, workspaceBoundary: "enforced" as const,
-  preventivePathEnforcement: false, operations: ["prepare", "capture"] as const };
+  preventivePathEnforcement: false,
+  operations: ["prepare", "capture", "verify"] as const };
 
 export function capabilityForManifest(
   manifest: GovernedExecutionManifest
@@ -34,7 +35,9 @@ export function capabilityForManifest(
       agentId: manifest.scope.agentId,
       planId: manifest.scope.planId,
       nodeKey: manifest.scope.nodeKey,
-      operations: ["prepare", "capture"],
+      operations: manifest.verificationProfiles.some((profile) => profile.required)
+        ? ["prepare", "capture", "verify"]
+        : ["prepare", "capture"],
       runtimeProfile: {
         profileId: manifest.repository.runtimeProfileId,
         revision: 1,

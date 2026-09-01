@@ -294,6 +294,11 @@ function exactGrantMatchesManifest(
     revision: profile.revision,
     digest: profile.digest
   }));
+  const expectedOperations = manifest.verificationProfiles.some(
+    (profile) => profile.required
+  )
+    ? ["prepare", "capture", "verify"] as const
+    : ["prepare", "capture"] as const;
   return grant.deviceId === manifest.scope.deviceId &&
     grant.agentId === manifest.scope.agentId &&
     grant.planId === manifest.scope.planId &&
@@ -308,9 +313,10 @@ function exactGrantMatchesManifest(
     grant.runtimeProfile.revision === 1 &&
     grant.runtimeProfile.digest === manifest.repository.runtimeProfileDigest &&
     grant.revokedAt === null &&
-    grant.operations.length === 2 &&
-    grant.operations.includes("prepare") &&
-    grant.operations.includes("capture") &&
+    grant.operations.length === expectedOperations.length &&
+    expectedOperations.every((operation) =>
+      grant.operations.includes(operation)
+    ) &&
     grant.integrationTargets.length === 0 &&
     canonicalExecutionJSON(grant.scopePolicy) ===
       canonicalExecutionJSON(manifest.scopePolicy) &&

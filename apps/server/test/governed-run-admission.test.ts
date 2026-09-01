@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createHash } from "node:crypto";
 import test, { type TestContext } from "node:test";
 import type { FastifyInstance } from "fastify";
@@ -6,7 +7,8 @@ import type {
   GovernedExecutionCapabilityReadyGrant,
   GovernedExecutionManifest,
   RepositoryCheckpoint,
-  RepositoryOperationRequest
+  RepositoryOperationRequest,
+  VerificationReceipt
 } from "@convene-wire/contracts/execution-plan";
 import {
   assertExecutionCommand,
@@ -38,7 +40,7 @@ const capability = {
   version: 1 as const,
   workspaceBoundary: "enforced" as const,
   preventivePathEnforcement: false,
-  operations: ["prepare", "capture"] as const
+  operations: ["prepare", "capture", "verify"] as const
 };
 
 function envelope(
@@ -99,6 +101,8 @@ async function admissionFixture(
   grantChange?: (grant: GovernedExecutionCapabilityReadyGrant) => void,
   options: {
     acceptedDependency?: boolean;
+    requiredVerificationProfiles?: number;
+    verifiedDependency?: boolean;
     captureScheduledDelivery?: boolean;
     schedulerMilliseconds?: number;
   } = {}
@@ -155,7 +159,17 @@ async function admissionFixture(
 
   const command = f.command();
   for (const node of command.definition.nodes) node.agentId = agent.agentId;
-  if (options.acceptedDependency) {
+  if ((options.requiredVerificationProfiles ?? 1) > 1) {
+    const build = command.definition.nodes.find((node) => node.nodeKey === "Build");
+    assert.ok(build);
+    build.verificationProfiles.push({
+      profileId: "profile_governed_secondary0001",
+      revision: 1,
+      digest: "f".repeat(64),
+      required: true
+    });
+  }
+  if (options.acceptedDependency || options.verifiedDependency) {
     const build = command.definition.nodes.find((node) => node.nodeKey === "Build");
     const consume = command.definition.nodes.find((node) => node.nodeKey === "Review");
     assert.ok(build?.repository);
@@ -164,8 +178,8 @@ async function admissionFixture(
     consume.kind = "implementation";
     consume.task = {
       mode: "new",
-      title: "Consume accepted patch",
-      goal: "Consume only the exact accepted predecessor output",
+      title: "Consume governed patch",
+      goal: "Consume only the exact retained predecessor output",
       ownerMemberId: f.ownerMemberId,
       criteria: structuredClone(build.task.criteria)
     };
@@ -180,7 +194,7 @@ async function admissionFixture(
       edgeKey: "build_consume",
       fromNodeKey: "Build",
       toNodeKey: "Consume",
-      gate: "accepted_result",
+      gate: options.verifiedDependency ? "verified_output" : "accepted_result",
       bindings: [{ outputSlot: "output", inputSlot: "patch" }]
     }];
     command.definition.policy.maxConcurrency = 1;
@@ -235,7 +249,11 @@ async function admissionFixture(
         agentId: agent.agentId,
         planId: plan.planId,
         nodeKey: candidate.nodeKey,
-        operations: ["prepare", "capture"],
+        operations: candidate.verificationProfiles.some(
+          (profile: { required: boolean }) => profile.required
+        )
+          ? ["prepare", "capture", "verify"]
+          : ["prepare", "capture"],
         runtimeProfile: {
           profileId: candidate.repository.runtimeProfileId,
           revision: 1,
@@ -433,7 +451,227 @@ async function publishCanonicalDependency(
   await f.ok(
     "POST", "/api/bridge/repository-checkpoints", checkpoint, authorization
   );
-  return { artifact, checkpoint, request };
+  return { artifact, checkpoint, lease, request };
+}
+
+async function retainIndependentVerification(
+  f: AdmissionFixture,
+  manifest: GovernedExecutionManifest,
+  captured: Awaited<ReturnType<typeof publishCanonicalDependency>>,
+  profileIndex = 0,
+  outcome: "passed" | "failed" = "passed"
+) {
+  const profile = manifest.verificationProfiles.filter(
+    (entry) => entry.required
+  )[profileIndex];
+  assert.ok(profile);
+  const suffix = profileIndex + 1;
+  const authorization = `Bearer ${f.credential.secret}`;
+  const request = digestRequest({
+    version: 1,
+    operationId: `op_governed_verification000${suffix}`,
+    requestDigest: "0".repeat(64),
+    plan: {
+      planId: manifest.scope.planId,
+      revision: manifest.scope.planRevision,
+      digest: manifest.scope.planDigest,
+      approvalOperationId: manifest.scope.approvalOperationId,
+      roomId: manifest.scope.roomId,
+      rootTaskId: manifest.capture!.rootTaskId
+    },
+    execution: manifest.scope,
+    repositoryId: manifest.repository.repositoryId,
+    bindingId: manifest.repository.bindingId,
+    deviceId: manifest.scope.deviceId,
+    grant: manifest.grant,
+    expectedGeneration: manifest.workspace.workspaceGeneration,
+    deadline: manifest.deadline,
+    action: {
+      kind: "verify",
+      verify: {
+        candidateCommit: captured.checkpoint.candidateCommit,
+        candidateTree: captured.checkpoint.candidateTree,
+        inputDigest: captured.checkpoint.inputDigest,
+        profile: {
+          profileId: profile.profileId,
+          revision: profile.revision,
+          digest: profile.digest
+        }
+      }
+    }
+  });
+  await f.ok(
+    "POST",
+    "/api/bridge/repository-verifications",
+    request,
+    authorization
+  );
+  const logBytes = Buffer.from(JSON.stringify({
+    version: 1,
+    stdout: outcome === "passed" ? "independent verification passed" : "",
+    stderr: outcome === "failed" ? "independent verification failed" : "",
+    truncated: false,
+    spawned: true
+  }));
+  const logDigest = createHash("sha256").update(logBytes).digest("hex");
+  const publication = await f.ok(
+    "POST",
+    "/api/bridge/artifact-publications",
+    {
+      leaseId: captured.lease.leaseId,
+      runId: manifest.scope.runId,
+      agentId: manifest.scope.agentId,
+      workspaceRef: captured.lease.workspaceRef,
+      workspaceGeneration: captured.lease.workspaceGeneration,
+      verificationOperationId: request.operationId,
+      idempotencyKey: `idem_governed_verification_log000${suffix}`,
+      artifactType: "test_result",
+      fileName: "verification.json",
+      mediaType: "application/json",
+      title: "Independent verification log",
+      summary: "Exact output from the admitted verifier profile",
+      sizeBytes: logBytes.length,
+      sha256: logDigest
+    },
+    authorization
+  );
+  await f.ok(
+    "POST",
+    `/api/bridge/artifact-publications/${publication.publicationId}/chunks`,
+    {
+      offset: 0,
+      chunkBase64: logBytes.toString("base64"),
+      chunkSha256: logDigest
+    },
+    authorization
+  );
+  await f.ok(
+    "POST",
+    `/api/bridge/artifact-publications/${publication.publicationId}/seal`,
+    {},
+    authorization
+  );
+  const logArtifact = (await f.ok(
+    "POST",
+    `/api/bridge/artifact-publications/${publication.publicationId}/bind`,
+    {},
+    authorization
+  )).artifact;
+  const receipt: VerificationReceipt = {
+    version: 1,
+    verificationId: `verification_governed000${suffix}`,
+    operationId: request.operationId,
+    requestDigest: request.requestDigest,
+    plan: request.plan,
+    execution: manifest.scope,
+    integrationOperationId: null,
+    repositoryId: request.repositoryId,
+    bindingId: request.bindingId,
+    authority: { kind: "bridge", deviceId: f.device.deviceId },
+    candidateCommit: captured.checkpoint.candidateCommit,
+    candidateTree: captured.checkpoint.candidateTree,
+    inputDigest: captured.checkpoint.inputDigest,
+    profile: request.action.verify!.profile,
+    startedAt: now,
+    finishedAt: now,
+    outcome,
+    exitCode: outcome === "passed" ? 0 : 1,
+    durationMilliseconds: 0,
+    logArtifact: {
+      artifactId: logArtifact.artifactId,
+      artifactRevision: logArtifact.artifactRevision,
+      contentDigest: logDigest,
+      byteLength: logBytes.length,
+      kind: "test_result"
+    }
+  };
+  return f.ok(
+    "POST",
+    "/api/bridge/verification-receipts",
+    receipt,
+    authorization
+  );
+}
+
+async function prepareVerifiedDependencySource(t: TestContext) {
+  const f = await admissionFixture(t, undefined, {
+    verifiedDependency: true,
+    captureScheduledDelivery: true,
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { n: number }).n === 1);
+  const buildRequest = await f.scheduledDelivery!;
+  const manifest = (buildRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  await sendAndFlush(f.socket, envelope("run.accepted", {
+    runId: manifest.scope.runId,
+    traceId: buildRequest.payload.traceId,
+    agentId: f.agent.agentId,
+    sequence: 1
+  }, "failed_verification_build_accepted0001"));
+  await waitFor(() => new RunRepository(f.database)
+    .getRun(manifest.scope.runId)?.state === "delivered");
+  const runs = new RunRepository(f.database);
+  runs.applyEvent(manifest.scope.runId, {
+    type: "status",
+    sequence: 2,
+    status: "working"
+  }, "2026-08-31T12:00:01.000Z");
+  let task = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
+  task = await f.ok("POST", `/api/tasks/${f.task.taskId}/control`, {
+    operationId: "op_failed_verification_build_active0001",
+    expectedTaskRevision: task.taskRevision,
+    lifecycleState: "active"
+  });
+  const captured = await publishCanonicalDependency(f, manifest);
+  runs.applyEvent(manifest.scope.runId, {
+    type: "status",
+    sequence: 3,
+    status: "completed"
+  }, "2026-08-31T12:00:02.000Z");
+  const criterion = task.criteria.find(
+    (candidate: { required: boolean }) => candidate.required
+  );
+  assert.ok(criterion);
+  const result = await f.ok("POST", "/api/bridge/results", {
+    actorKind: "managed_agent",
+    agentId: f.agent.agentId,
+    runId: manifest.scope.runId,
+    proposal: {
+      operationId: "op_failed_verification_result0001",
+      taskId: task.taskId,
+      definitionRevision: task.definitionRevision,
+      criteriaRevision: task.criteriaRevision,
+      proposedAtTaskRevision: task.taskRevision,
+      supersedesResultId: null,
+      outcome: "satisfied",
+      summary: "The candidate still requires independent verification.",
+      risks: [],
+      openQuestions: [],
+      nextActions: [],
+      sources: [{
+        evidenceRefId: "evidence_failed_verification_artifact0001",
+        kind: "artifact",
+        artifactId: captured.artifact.artifactId
+      }, {
+        evidenceRefId: "evidence_failed_verification_run0001",
+        kind: "run_event",
+        runId: manifest.scope.runId,
+        sequence: 3
+      }],
+      criterionClaims: [{
+        criterionKey: criterion.criterionKey,
+        coverage: "satisfied",
+        explanation: "The exact candidate is available to the verifier.",
+        evidenceRefIds: ["evidence_failed_verification_artifact0001"]
+      }]
+    }
+  }, `Bearer ${f.credential.secret}`);
+  return { f, manifest, captured, result };
 }
 
 async function reconnectGovernedAgent(
@@ -480,6 +718,94 @@ async function reconnectGovernedAgent(
     workspaceAlias: "Governed dependency workspace"
   }, `dependency_publish${epoch}`));
   return { socket, delivery };
+}
+
+async function reconcileVerifiedMaterializationConcurrently(
+  t: TestContext,
+  f: AdmissionFixture,
+  identity: { planId: string; planRevision: number; nodeKey: string }
+): Promise<void> {
+  const children: ChildProcess[] = [];
+  t.after(async () => {
+    await Promise.all(children.map(async (child) => {
+      if (child.exitCode !== null || child.signalCode !== null) return;
+      const closed = new Promise<void>((resolve) =>
+        child.once("close", () => resolve())
+      );
+      child.kill("SIGKILL");
+      await closed;
+    }));
+  });
+  const code = `
+    import { openDatabase } from ${JSON.stringify(new URL("../src/data/database.ts", import.meta.url).href)};
+    import { SqliteTransactionBoundary } from ${JSON.stringify(new URL("../src/data/sqlite-transaction-boundary.ts", import.meta.url).href)};
+    import { ExecutionNodeMaterializationRepository } from ${JSON.stringify(new URL("../src/execution/execution-node-materialization-repository.ts", import.meta.url).href)};
+    import { ExecutionNodeProjector } from ${JSON.stringify(new URL("../src/execution/execution-node-projector.ts", import.meta.url).href)};
+    import { ExecutionNodeStateRepository } from ${JSON.stringify(new URL("../src/execution/execution-node-state-repository.ts", import.meta.url).href)};
+    import { ExecutionSettlementService } from ${JSON.stringify(new URL("../src/execution/execution-settlement-service.ts", import.meta.url).href)};
+    process.send({ ready: true });
+    process.once("message", ({ databasePath, identity, now }) => {
+      const database = openDatabase(databasePath);
+      try {
+        const nodes = new ExecutionNodeStateRepository(database);
+        const settlement = new ExecutionSettlementService(
+          database,
+          new SqliteTransactionBoundary(database),
+          new ExecutionNodeProjector(nodes),
+          new ExecutionNodeMaterializationRepository(database)
+        );
+        process.send({ state: settlement.reconcileOne(identity, now) });
+      } catch (error) {
+        process.send({ error: error instanceof Error ? error.message : String(error) });
+      } finally {
+        database.close();
+        process.disconnect();
+      }
+    });
+  `;
+  const workers = await Promise.all([0, 1].map(() => new Promise<{
+    child: ChildProcess;
+    result: Promise<{ error?: string; state?: unknown }>;
+  }>((resolve, reject) => {
+    const child = spawn(process.execPath, [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "-e",
+      code
+    ], { stdio: ["ignore", "ignore", "pipe", "ipc"] });
+    children.push(child);
+    let stderr = "";
+    let value: { error?: string; state?: unknown } | undefined;
+    child.stderr!.on("data", (chunk) => { stderr += String(chunk); });
+    child.once("error", reject);
+    const result = new Promise<{ error?: string; state?: unknown }>(
+      (resolveResult, rejectResult) => {
+        child.on("message", (message: { ready?: boolean; error?: string; state?: unknown }) => {
+          if (message.ready) resolve({ child, result });
+          else value = message;
+        });
+        child.once("close", (exitCode) => {
+          if (exitCode !== 0 || !value) {
+            rejectResult(new Error(
+              `Settlement worker failed: ${exitCode} ${stderr}`
+            ));
+          } else {
+            resolveResult(value);
+          }
+        });
+      }
+    );
+    result.catch(() => {});
+  })));
+  for (const worker of workers) {
+    worker.child.send!({ databasePath: f.databasePath, identity, now });
+  }
+  const results = await Promise.all(workers.map((worker) => worker.result));
+  assert.ok(results.some((result) => result.state), JSON.stringify(results));
+  assert.ok(results.every((result) =>
+    result.state || /locked|busy/u.test(result.error ?? "")
+  ), JSON.stringify(results));
 }
 
 test("approved governed Build dispatch seals and delivers one exact capture manifest", {
@@ -720,7 +1046,7 @@ test("scheduler creates one system-traced DispatchIntent and ordinary Run", {
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
-test("dependency resolver keeps verified_output outside the accepted-result slice", async (t) => {
+test("dependency resolver keeps verified_output closed until retained verification", async (t) => {
   const f = await admissionFixture(t);
   const resolver = new ExecutionDependencyResolver(
     new ExecutionPlanRepository(f.database),
@@ -732,8 +1058,299 @@ test("dependency resolver keeps verified_output outside the accepted-result slic
     nodeKey: "Review"
   }), {
     ready: false,
-    blocker: "EXECUTION_DEPENDENCY_GATE_UNAVAILABLE"
+    blocker: "EXECUTION_DEPENDENCY_NOT_MATERIALIZED"
   });
+});
+
+test("a failed independent verification receipt leaves the dependency gate closed", {
+  timeout: 30_000
+}, async (t) => {
+  const { f, manifest, captured, result } =
+    await prepareVerifiedDependencySource(t);
+  const retained = await retainIndependentVerification(
+    f,
+    manifest,
+    captured,
+    0,
+    "failed"
+  );
+  assert.equal(retained.receipt.outcome, "failed");
+  assert.equal(result.state, "proposed");
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_verified_node_materializations
+  `).get() as { n: number }).n, 0);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { n: number }).n, 0);
+  assert.equal((f.database.prepare(`
+    SELECT blocker_code FROM execution_node_states
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { blocker_code: string }).blocker_code,
+  "EXECUTION_DEPENDENCY_NOT_MATERIALIZED");
+  await f.restart(0);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_verified_node_materializations
+  `).get() as { n: number }).n, 0,
+  "restart cannot reinterpret a failed receipt as passed proof");
+  assert.equal((f.database.prepare(`
+    SELECT outcome FROM verification_receipts
+    WHERE verification_id = ?
+  `).get(retained.receipt.verificationId) as { outcome: string }).outcome,
+  "failed");
+});
+
+test("independently verified predecessor output materializes and drives exact downstream bytes", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    verifiedDependency: true,
+    requiredVerificationProfiles: 2,
+    captureScheduledDelivery: true,
+    schedulerMilliseconds: 100
+  });
+  try {
+    await waitFor(() => (f.database.prepare(`
+      SELECT count(*) AS n FROM execution_dispatch_intents
+      WHERE plan_id = ? AND node_key = 'Build'
+    `).get(f.plan.planId) as { n: number }).n === 1);
+  } catch (error) {
+    const state = f.database.prepare(`
+      SELECT state, blocker_code FROM execution_node_states
+      WHERE plan_id = ? AND node_key = 'Build'
+    `).get(f.plan.planId);
+    throw new Error(`Build was not scheduled: ${JSON.stringify(state)}`, {
+      cause: error
+    });
+  }
+  const buildRequest = await f.scheduledDelivery!;
+  const buildManifest = (buildRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  const buildRunId = buildManifest.scope.runId;
+  await sendAndFlush(f.socket, envelope("run.accepted", {
+    runId: buildRunId,
+    traceId: buildRequest.payload.traceId,
+    agentId: f.agent.agentId,
+    sequence: 1
+  }, "verified_build_accepted0001"));
+  await waitFor(() => new RunRepository(f.database).getRun(buildRunId)?.state === "delivered");
+  const runs = new RunRepository(f.database);
+  assert.equal(runs.applyEvent(buildRunId, {
+    type: "status",
+    sequence: 2,
+    status: "working"
+  }, "2026-08-31T12:00:01.000Z").applied, true);
+  let buildTask = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
+  buildTask = await f.ok("POST", `/api/tasks/${f.task.taskId}/control`, {
+    operationId: "op_verified_build_active0001",
+    expectedTaskRevision: buildTask.taskRevision,
+    lifecycleState: "active"
+  });
+  const captured = await publishCanonicalDependency(f, buildManifest);
+  assert.equal(runs.applyEvent(buildRunId, {
+    type: "status",
+    sequence: 3,
+    status: "completed"
+  }, "2026-08-31T12:00:02.000Z").applied, true);
+  const criterion = buildTask.criteria.find(
+    (candidate: { required: boolean }) => candidate.required
+  );
+  assert.ok(criterion);
+  const result = await f.ok("POST", "/api/bridge/results", {
+    actorKind: "managed_agent",
+    agentId: f.agent.agentId,
+    runId: buildRunId,
+    proposal: {
+      operationId: "op_verified_result_canonical0001",
+      taskId: buildTask.taskId,
+      definitionRevision: buildTask.definitionRevision,
+      criteriaRevision: buildTask.criteriaRevision,
+      proposedAtTaskRevision: buildTask.taskRevision,
+      supersedesResultId: null,
+      outcome: "satisfied",
+      summary: "The managed Run proposes the exact captured candidate.",
+      risks: [],
+      openQuestions: [],
+      nextActions: [],
+      sources: [{
+        evidenceRefId: "evidence_verified_artifact0001",
+        kind: "artifact",
+        artifactId: captured.artifact.artifactId
+      }, {
+        evidenceRefId: "evidence_verified_run0001",
+        kind: "run_event",
+        runId: buildRunId,
+        sequence: 3
+      }],
+      criterionClaims: [{
+        criterionKey: criterion.criterionKey,
+        coverage: "satisfied",
+        explanation: "The exact candidate is independently verifiable.",
+        evidenceRefIds: ["evidence_verified_artifact0001"]
+      }]
+    }
+  }, `Bearer ${f.credential.secret}`);
+  assert.equal(result.state, "proposed", "verification does not accept a Result");
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM result_reviews WHERE result_id = ?
+  `).get(result.resultId) as { n: number }).n, 0);
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_verified_node_materializations
+  `).get() as { n: number }).n, 0, "a Result claim is not verification authority");
+  assert.equal((f.database.prepare(`
+    SELECT blocker_code FROM execution_node_states
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { blocker_code: string }).blocker_code,
+  "EXECUTION_DEPENDENCY_NOT_MATERIALIZED");
+
+  await f.restart(0);
+  const firstReceipt = await retainIndependentVerification(
+    f,
+    buildManifest,
+    captured,
+    0
+  );
+  assert.equal(firstReceipt.receipt.outcome, "passed");
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_verified_node_materializations
+  `).get() as { n: number }).n, 0,
+  "one passed receipt cannot substitute for the complete required profile set");
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { n: number }).n, 0);
+  const secondReceipt = await retainIndependentVerification(
+    f,
+    buildManifest,
+    captured,
+    1
+  );
+  assert.equal(secondReceipt.receipt.outcome, "passed");
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_verified_node_materializations
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { n: number }).n, 0,
+  "receipt retention alone cannot bypass settlement authority");
+  await reconcileVerifiedMaterializationConcurrently(t, f, {
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build"
+  });
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_verified_node_materializations
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { n: number }).n, 1,
+  "concurrent reconciliation created more than one materialization");
+  const materialization = f.database.prepare(`
+    SELECT * FROM execution_verified_node_materializations
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    artifact_pins_json: string;
+    candidate_commit: string;
+    candidate_tree: string;
+    checkpoint_id: string;
+    gate: string;
+    gate_operation_id: string;
+    materialization_digest: string;
+    source_result_id: string;
+    verification_receipts_json: string;
+  };
+  assert.equal(materialization.gate, "verified_output");
+  assert.equal(materialization.source_result_id, result.resultId);
+  assert.equal(materialization.checkpoint_id, captured.checkpoint.checkpointId);
+  assert.equal(materialization.candidate_commit, captured.checkpoint.candidateCommit);
+  assert.equal(materialization.candidate_tree, captured.checkpoint.candidateTree);
+  assert.match(materialization.gate_operation_id, /^op_verified_materialization_[a-f0-9]{64}$/u);
+  assert.deepEqual(
+    JSON.parse(materialization.verification_receipts_json),
+    [firstReceipt, secondReceipt].map((retained) => ({
+      verificationId: retained.receipt.verificationId,
+      operationId: retained.receipt.operationId,
+      receiptDigest: retained.receiptDigest,
+      profileId: retained.receipt.profile.profileId,
+      profileRevision: retained.receipt.profile.revision,
+      profileDigest: retained.receipt.profile.digest
+    })).sort((left, right) => left.profileId.localeCompare(right.profileId))
+  );
+  assert.deepEqual(JSON.parse(materialization.artifact_pins_json), [{
+    outputSlot: "output",
+    artifactId: captured.artifact.artifactId,
+    artifactRevision: captured.artifact.artifactRevision,
+    kind: "patch",
+    contentDigest: dependencySha256,
+    byteLength: dependencyBytes.length
+  }]);
+
+  await f.restart(100);
+  const { delivery: consumeDelivery } = await reconnectGovernedAgent(t, f, 2);
+  assert.ok(consumeDelivery);
+  let consumeRequest: BridgeMessage;
+  try {
+    consumeRequest = await consumeDelivery;
+  } catch (error) {
+    const state = f.database.prepare(`
+      SELECT state, blocker_code FROM execution_node_states
+      WHERE plan_id = ? AND node_key = 'Consume'
+    `).get(f.plan.planId);
+    const intent = f.database.prepare(`
+      SELECT run_id FROM execution_dispatch_intents
+      WHERE plan_id = ? AND node_key = 'Consume'
+    `).get(f.plan.planId);
+    const deliveries = f.database.prepare(`
+      SELECT count(*) AS n FROM run_deliveries
+      WHERE run_id = (SELECT run_id FROM execution_dispatch_intents
+        WHERE plan_id = ? AND node_key = 'Consume')
+    `).get(f.plan.planId);
+    throw new Error(`Consume delivery unavailable: ${JSON.stringify({
+      state,
+      intent,
+      deliveries
+    })}`, { cause: error });
+  }
+  const consumeManifest = (consumeRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  assert.equal(consumeManifest.scope.nodeKey, "Consume");
+  assert.equal(consumeManifest.inputs.length, 1);
+  const input = consumeManifest.inputs[0]!;
+  assert.equal(input.gate, "verified_output");
+  assert.equal(input.gateOperationId, materialization.gate_operation_id);
+  assert.equal(input.gateDigest, materialization.materialization_digest);
+  assert.equal(input.sourceResultId, result.resultId);
+  assert.equal(input.artifact.artifactId, captured.artifact.artifactId);
+  assert.equal(input.sourceCommit, captured.checkpoint.candidateCommit);
+  assert.equal(input.sourceTree, captured.checkpoint.candidateTree);
+  const exactBytes = await f.request(
+    "GET",
+    `/api/bridge/runs/${consumeManifest.scope.runId}/execution-inputs/${input.bindingId}/content`,
+    undefined,
+    `Bearer ${f.credential.secret}`
+  );
+  assert.equal(exactBytes.statusCode, 200, exactBytes.body);
+  assert.deepEqual(exactBytes.rawPayload, dependencyBytes);
+  assert.equal(exactBytes.headers["x-convenewire-content-sha256"], dependencySha256);
+  assert.throws(() => f.database.prepare(`
+    UPDATE execution_verified_node_materializations SET created_at = created_at
+  `).run(), /immutable/u);
+  assert.throws(() => f.database.prepare(`
+    DELETE FROM execution_verified_node_materializations
+  `).run(), /retained evidence/u);
+  await f.restart(0);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_verified_node_materializations
+  `).get() as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_input_bindings
+  `).get() as { n: number }).n, 1);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
 test("accepted predecessor output materializes once and drives exact downstream input", {

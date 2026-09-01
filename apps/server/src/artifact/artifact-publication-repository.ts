@@ -131,7 +131,7 @@ function mapPublication(row: ArtifactPublicationRow): ArtifactPublicationRecord 
     relations: normalizeArtifactRelations(
       JSON.parse(row.relations_json) as ArtifactRelationInput[]
     ),
-    verificationOperationId: row.verification_operation_id
+    verificationOperationId: row.verification_operation_id ?? null
   };
 }
 
@@ -189,6 +189,19 @@ export class ArtifactPublicationRepository {
         record.idempotencyKey
       );
       if (existing) return existing;
+      const verificationColumn = this.database.prepare(`
+        SELECT 1 FROM pragma_table_info('artifact_publications')
+        WHERE name = 'verification_operation_id'
+      `).get();
+      if (!verificationColumn && record.verificationOperationId !== null) {
+        throw new Error("Verification operation storage is unavailable");
+      }
+      const verificationFields = verificationColumn
+        ? ", verification_operation_id"
+        : "";
+      const verificationValue = verificationColumn
+        ? ", @verificationOperationId"
+        : "";
       this.database.prepare(`
         INSERT INTO artifact_publications (
           publication_id, request_fingerprint, idempotency_key, team_id,
@@ -196,16 +209,16 @@ export class ArtifactPublicationRepository {
           workspace_ref, workspace_generation, artifact_type, file_name,
           media_type, title, summary, declared_size, declared_sha256,
           received_size, state, temp_storage_key, content_id, artifact_id,
-          failure_code, expires_at, created_at, updated_at, relations_json,
-          verification_operation_id
+          failure_code, expires_at, created_at, updated_at, relations_json
+          ${verificationFields}
         ) VALUES (
           @publicationId, @requestFingerprint, @idempotencyKey, @teamId,
           @deviceId, @leaseId, @roomId, @taskId, @runId, @agentId,
           @workspaceRef, @workspaceGeneration, @artifactType, @fileName,
           @mediaType, @title, @summary, @declaredSize, @declaredSha256,
           @receivedSize, @state, @tempStorageKey, @contentId, @artifactId,
-          @failureCode, @expiresAt, @createdAt, @updatedAt, @relationsJson,
-          @verificationOperationId
+          @failureCode, @expiresAt, @createdAt, @updatedAt, @relationsJson
+          ${verificationValue}
         )
       `).run({ ...record, relationsJson: JSON.stringify(record.relations) });
       return record;

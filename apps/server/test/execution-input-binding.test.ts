@@ -296,7 +296,12 @@ for (const gate of ["verified_output", "integrated_commit"] as const) {
   test(`accepted Results cannot substitute for independent ${gate} gates`, async (t) => {
     const f = await inputFixture(t, { gate });
     assert.equal(f.plan.current.definition.edges[0]!.gate, gate);
-    assert.throws(() => f.freeze(), /EXECUTION_INPUT_GATE_UNAVAILABLE/u);
+    assert.throws(
+      () => f.freeze(),
+      gate === "verified_output"
+        ? /EXECUTION_INPUT_SOURCE_UNAVAILABLE/u
+        : /EXECUTION_INPUT_GATE_UNAVAILABLE/u
+    );
     assert.equal(f.count(), 0);
   });
 }

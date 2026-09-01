@@ -659,6 +659,11 @@ implements GovernedMessageAdmissionPort {
       revision: profile.revision,
       digest: profile.digest
     }));
+    const expectedOperations = node.verificationProfiles.some(
+      (profile) => profile.required
+    )
+      ? ["prepare", "capture", "verify"]
+      : ["prepare", "capture"];
     const nowMs = Date.parse(now);
     return this.connections.governedAgentReadyGrants(
       deviceId,
@@ -674,9 +679,10 @@ implements GovernedMessageAdmissionPort {
       grant.runtimeProfile.revision === 1 &&
       grant.runtimeProfile.digest === node.repository.runtimeProfileDigest &&
       grant.revokedAt === null &&
-      grant.operations.length === 2 &&
-      grant.operations.includes("prepare") &&
-      grant.operations.includes("capture") &&
+      grant.operations.length === expectedOperations.length &&
+      expectedOperations.every((operation) =>
+        grant.operations.includes(operation as "prepare" | "capture" | "verify")
+      ) &&
       grant.integrationTargets.length === 0 &&
       equal(grant.scopePolicy, node.scope) &&
       equal(grant.verificationProfiles, expectedProfiles) &&

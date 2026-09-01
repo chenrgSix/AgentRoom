@@ -71,6 +71,29 @@ const fail = (code: string, status: 400 | 404 | 409 = 409): never => {
 };
 const equal = (left: unknown, right: unknown): boolean =>
   canonicalExecutionJSON(left) === canonicalExecutionJSON(right);
+const instantNanoseconds = (value: string): bigint | undefined => {
+  const match = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d{1,9}))?Z$/u
+    .exec(value);
+  if (!match) return undefined;
+  const milliseconds = Date.parse(`${match[1]}.000Z`);
+  if (!Number.isFinite(milliseconds)) return undefined;
+  const fraction = BigInt((match[2] ?? "").padEnd(9, "0"));
+  return BigInt(milliseconds) * 1_000_000n + fraction;
+};
+const elapsedMilliseconds = (
+  startedAt: string,
+  finishedAt: string
+): number | undefined => {
+  const started = instantNanoseconds(startedAt);
+  const finished = instantNanoseconds(finishedAt);
+  if (started === undefined || finished === undefined || finished < started) {
+    return undefined;
+  }
+  const duration = (finished - started) / 1_000_000n;
+  return duration <= BigInt(Number.MAX_SAFE_INTEGER)
+    ? Number(duration)
+    : undefined;
+};
 
 /** Central admission/receipt authority; it never executes a verifier command. */
 export class RepositoryVerificationService {
@@ -318,7 +341,7 @@ export class RepositoryVerificationService {
     const started = Date.parse(receipt.startedAt);
     const finished = Date.parse(receipt.finishedAt);
     const recorded = Date.parse(now);
-    const duration = finished - started;
+    const duration = elapsedMilliseconds(receipt.startedAt, receipt.finishedAt);
     if (
       receipt.version !== request.version ||
       receipt.operationId !== request.operationId ||
@@ -332,7 +355,7 @@ export class RepositoryVerificationService {
       !Number.isFinite(started) || !Number.isFinite(finished) ||
       !Number.isFinite(recorded) || started < Date.parse(operation.admitted_at) ||
       finished < started || finished > recorded || finished > Date.parse(operation.deadline) ||
-      receipt.durationMilliseconds !== duration ||
+      duration === undefined || receipt.durationMilliseconds !== duration ||
       (receipt.outcome === "passed" && receipt.exitCode !== 0) ||
       (receipt.outcome === "failed" && receipt.exitCode === 0) ||
       (!["passed", "failed"].includes(receipt.outcome) && receipt.exitCode !== null) ||

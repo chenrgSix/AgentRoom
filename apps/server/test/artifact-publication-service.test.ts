@@ -206,9 +206,17 @@ test("capture lease migration preserves populated legacy publications, blobs and
     const oldLease = database.prepare("SELECT * FROM workspace_leases").get();
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
-    assert.deepEqual(migrated.appliedVersions, [62, 63, 64, 65, 66]);
+    assert.deepEqual(migrated.appliedVersions, [62, 63, 64, 65, 66, 67, 68]);
     database = openDatabase(f.databasePath);
-    assert.deepEqual(tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all()), before);
+    const expected = structuredClone(before);
+    expected[0] = expected[0]!.map((row) => ({
+      ...row,
+      verification_operation_id: null
+    }));
+    assert.deepEqual(
+      tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all()),
+      expected
+    );
     assert.deepEqual(database.prepare("SELECT * FROM workspace_leases").get(), { ...oldLease!, capture_operation_id: null });
     const content = new ArtifactPublicationRepository(database).getContent(
       (before[0]![0] as { content_id: string }).content_id)!;
@@ -263,9 +271,14 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     assert.deepEqual(database.pragma("foreign_key_check"), []);
     database.close();
     const result = await migrateDatabase(f.databasePath);
-    assert.deepEqual(result.appliedVersions, [63, 64, 65, 66]);
+    assert.deepEqual(result.appliedVersions, [63, 64, 65, 66, 67, 68]);
     database = openDatabase(f.databasePath);
-    assert.deepEqual(snapshot(), before);
+    const expected = structuredClone(before);
+    expected[0] = expected[0]!.map((row) => ({
+      ...row,
+      verification_operation_id: null
+    }));
+    assert.deepEqual(snapshot(), expected);
     const admissionObjects = new Set([
       "execution_run_admissions",
       "execution_run_admissions_immutable_delete",
@@ -285,7 +298,20 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_node_materializations_immutable_update",
       "execution_node_materializations_require_exact_scope_insert",
       "execution_results_require_verified_review_insert",
-      "execution_results_require_materializable_review_insert"
+      "execution_results_require_materializable_review_insert",
+      "repository_verification_operations",
+      "repository_verification_operations_immutable_update",
+      "repository_verification_operations_immutable_delete",
+      "artifact_publications_verification_log_idx",
+      "artifact_publications_verification_log_scope_insert",
+      "artifact_publications_verification_operation_immutable",
+      "verification_receipts",
+      "verification_receipts_immutable_update",
+      "verification_receipts_immutable_delete",
+      "execution_verified_node_materializations",
+      "execution_verified_materializations_require_scope_insert",
+      "execution_verified_materializations_immutable_update",
+      "execution_verified_materializations_immutable_delete"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))

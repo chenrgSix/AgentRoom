@@ -55,7 +55,7 @@ export class ExecutionDependencyResolver {
     const selections: ExecutionInputSelection[] = [];
     const occupied = new Set<string>();
     for (const edge of incoming) {
-      if (edge.gate !== "accepted_result") {
+      if (edge.gate === "integrated_commit") {
         return blocked("EXECUTION_DEPENDENCY_GATE_UNAVAILABLE");
       }
       const source = validated.definition.nodes.find(
@@ -64,8 +64,8 @@ export class ExecutionDependencyResolver {
       const materialization = this.materializations.get({
         ...identity,
         nodeKey: edge.fromNodeKey
-      });
-      if (!source || !materialization) {
+      }, edge.gate);
+      if (!source || !materialization || materialization.gate !== edge.gate) {
         return blocked("EXECUTION_DEPENDENCY_NOT_MATERIALIZED");
       }
       for (const binding of [...edge.bindings].sort((left, right) =>
