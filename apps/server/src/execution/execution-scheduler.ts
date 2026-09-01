@@ -4,6 +4,7 @@ import type { RunRecord } from "../run/run-repository.js";
 import { ExecutionError } from "./execution-error.js";
 import type { ExecutionNodeStateRepository } from
   "./execution-node-state-repository.js";
+import type { ExecutionNodeProjector } from "./execution-node-projector.js";
 import type { ExecutionSettlementService } from
   "./execution-settlement-service.js";
 import type { GovernedRunAdmissionService } from
@@ -15,6 +16,7 @@ export class ExecutionScheduler {
   public constructor(
     private readonly transactions: SqliteTransactionBoundary,
     private readonly nodes: ExecutionNodeStateRepository,
+    private readonly projector: ExecutionNodeProjector,
     private readonly settlement: ExecutionSettlementService,
     private readonly admission: GovernedRunAdmissionService,
     private readonly clock: () => string
@@ -30,15 +32,7 @@ export class ExecutionScheduler {
       for (const identity of this.nodes.listCandidates()) {
         const readiness = this.admission.readiness(identity, now);
         this.transactions.immediate(() => {
-          this.nodes.project({
-            ...identity,
-            state: readiness.ready ? "ready" : "blocked",
-            blockerCode: readiness.blocker,
-            dispatchGeneration: null,
-            runId: null,
-            lastRunState: null,
-            updatedAt: now
-          });
+          this.projector.projectReadiness(identity, readiness, now);
         });
         if (!readiness.ready) continue;
         try {
@@ -48,15 +42,10 @@ export class ExecutionScheduler {
         } catch (error) {
           if (!(error instanceof ExecutionError)) throw error;
           this.transactions.immediate(() => {
-            this.nodes.project({
-              ...identity,
-              state: "blocked",
-              blockerCode: error.code,
-              dispatchGeneration: null,
-              runId: null,
-              lastRunState: null,
-              updatedAt: now
-            });
+            this.projector.projectReadiness(identity, {
+              ready: false,
+              blocker: error.code
+            }, now);
           });
         }
       }

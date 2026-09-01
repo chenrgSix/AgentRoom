@@ -136,6 +136,46 @@ build, schema validation and deterministic E2E suite must pass. Three isolated
 temp-lifecycle runs must leave no new `agentroom-*`, `agent-room-*`,
 `convenewire-*` or `convene-wire-*` directory.
 
+## Completion Evidence
+
+Migration 0066 and the focused Server acceptance now retain and inspect the
+physical A-to-B chain. The test observes A as the only initial Run, keeps B on
+`EXECUTION_DEPENDENCY_NOT_MATERIALIZED`, rejects acceptance without the exact
+checkpoint Artifact, and then joins the accepted managed Result and human
+review to one immutable materialization. It injects an input-binding failure
+and proves that B has no Message, intent, Run or binding, then separately
+injects a Delivery failure after B's intent and frozen binding commit. Restart
+replays that same B Run, whose sealed manifest pins the exact edge, slots,
+Result, Artifact revision, digest and byte length. The Device endpoint returns
+the captured patch bytes byte-for-byte and rejects the wrong Run and an invalid
+Device credential. Final SQLite counts remain one materialization, one B
+intent and one input binding; the source Task has no completion Result.
+
+The following final gates passed on 2026-09-01:
+
+- `npm test --workspace @convene-wire/server`: 495 passed, zero failed; the
+  owned `/private/tmp/convene-wire-test-run-9v64sV` root was deleted.
+- `node --import tsx --test ...governed-run-admission.test.ts`: the focused
+  accepted-result chain and unsupported `verified_output` resolver boundary
+  passed, including immutable-row and physical-byte assertions.
+- `go test ./internal/admission ./internal/repository` under the shared owned
+  runner: both Bridge packages passed and
+  `/private/tmp/convene-wire-test-run-baUCiQ` was deleted.
+- `npm run validate && npm run build`: 11 schemas and 243 fixtures validated;
+  Server, Web and generated contract builds passed.
+- `npm run test:e2e`: seven deterministic scenarios passed, zero failed, and
+  the explicitly live Codex/Pi scenario was skipped; its owned run root was
+  deleted.
+- `npm run test:temp-lifecycle` ran three times with
+  `CONVENE_WIRE_TEST_RUN_BASE=/private/tmp/exec007-isolated-PVbF1KyZ`;
+  each run passed 24 assertions including success, assertion failure, spawn
+  error, timeout, signals, nesting and parallel ownership. The final physical
+  snapshot of that isolated base was empty before the base itself was removed.
+
+No result above claims independent verification, repository integration,
+commit-bundle preparation, live-model acceptance or a physical two-Bridge
+accepted-result handoff.
+
 ## Explicit Remainder
 
 This increment does not implement `verified_output`, `integrated_commit`,

@@ -114,11 +114,15 @@ export async function fixture(
     "task_result_sources", "agent_tasks", "runs"
   ].map((table) => [table, (database.prepare(`SELECT count(*) AS n FROM ${table}`).get() as { n: number }).n]));
   return {
-    app,
+    get app() {
+      return app!;
+    },
     request, ok, create, command, database, databasePath, counts,
     root: currentRoot, roomId,
     teamId, ownerMemberId, agentId, message, authorization,
-    async restart() {
+    async restart(
+      schedulerMilliseconds = executionSchedulerSweepMilliseconds
+    ) {
       for (const socket of app!.websocketServer.clients) socket.terminate();
       await app!.close();
       app = undefined;
@@ -126,7 +130,7 @@ export async function fixture(
         databasePath,
         clock,
         logger: false,
-        executionSchedulerSweepMilliseconds
+        executionSchedulerSweepMilliseconds: schedulerMilliseconds
       });
     },
     async restartTrusted() {

@@ -3,7 +3,9 @@ export type ExecutionReadinessBlocker =
   | "EXECUTION_AGENT_UNAVAILABLE"
   | "EXECUTION_ATTEMPT_ALREADY_EXISTS"
   | "EXECUTION_CAPABILITY_UNAVAILABLE"
+  | "EXECUTION_DEPENDENCY_GATE_UNAVAILABLE"
   | "EXECUTION_DEPENDENCY_NOT_MATERIALIZED"
+  | "EXECUTION_DEPENDENCY_SELECTION_INVALID"
   | "EXECUTION_GRANT_AMBIGUOUS"
   | "EXECUTION_GRANT_UNAVAILABLE"
   | "EXECUTION_NODE_KIND_UNSUPPORTED"
@@ -21,10 +23,9 @@ export interface ExecutionReadinessSnapshot {
   activePlanRuns: number;
   agentAvailable: boolean;
   capabilityAvailable: boolean;
+  dependencyBlocker: ExecutionReadinessBlocker | null;
   existingAttempt: boolean;
   grantMatches: number;
-  hasIncomingEdges: boolean;
-  hasRequiredInputs: boolean;
   nodeKind: "implementation" | "review" | "verification";
   nextRunReservationSeconds: number;
   outputsSupported: boolean;
@@ -56,14 +57,8 @@ export function evaluateExecutionReadiness(
   if (snapshot.nodeKind !== "implementation") {
     return { ready: false, blocker: "EXECUTION_NODE_KIND_UNSUPPORTED" };
   }
-  if (snapshot.hasIncomingEdges) {
-    return {
-      ready: false,
-      blocker: "EXECUTION_DEPENDENCY_NOT_MATERIALIZED"
-    };
-  }
-  if (snapshot.hasRequiredInputs) {
-    return { ready: false, blocker: "EXECUTION_REQUIRED_INPUT_UNSUPPORTED" };
+  if (snapshot.dependencyBlocker) {
+    return { ready: false, blocker: snapshot.dependencyBlocker };
   }
   if (!snapshot.taskPinsCurrent) {
     return { ready: false, blocker: "EXECUTION_TASK_STALE" };

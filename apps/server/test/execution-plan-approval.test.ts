@@ -538,7 +538,10 @@ test("execution adoption fences pre-existing Result acceptance but preserves hum
     expectedReviewRevision: 0, decision: "accepted", reason: "Legacy acceptance", completeTask: false };
   const denied = await f.request("POST", `/api/results/${result.resultId}/review-decisions`, review);
   assert.equal(denied.statusCode, 400);
-  assert.match(denied.json().error.message, /verified execution review/u);
+  assert.match(
+    denied.json().error.message,
+    /exact canonical Run output evidence/u
+  );
   assert.equal((await f.ok("GET", `/api/results/${result.resultId}`)).state, "proposed");
   await f.ok("POST", `/api/results/${result.resultId}/review-decisions`, { ...review, decision: "rejected" });
   assert.equal((await f.ok("GET", `/api/results/${result.resultId}`)).state, "rejected");

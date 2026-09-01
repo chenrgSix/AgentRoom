@@ -206,7 +206,7 @@ test("capture lease migration preserves populated legacy publications, blobs and
     const oldLease = database.prepare("SELECT * FROM workspace_leases").get();
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
-    assert.deepEqual(migrated.appliedVersions, [62, 63, 64, 65]);
+    assert.deepEqual(migrated.appliedVersions, [62, 63, 64, 65, 66]);
     database = openDatabase(f.databasePath);
     assert.deepEqual(tables.map((table) => database.prepare(`SELECT * FROM ${table}`).all()), before);
     assert.deepEqual(database.prepare("SELECT * FROM workspace_leases").get(), { ...oldLease!, capture_operation_id: null });
@@ -263,7 +263,7 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     assert.deepEqual(database.pragma("foreign_key_check"), []);
     database.close();
     const result = await migrateDatabase(f.databasePath);
-    assert.deepEqual(result.appliedVersions, [63, 64, 65]);
+    assert.deepEqual(result.appliedVersions, [63, 64, 65, 66]);
     database = openDatabase(f.databasePath);
     assert.deepEqual(snapshot(), before);
     const admissionObjects = new Set([
@@ -278,12 +278,21 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_dispatch_intents_immutable_update",
       "execution_dispatch_intents_require_exact_scope_insert",
       "execution_node_states",
-      "execution_node_states_state_idx"
+      "execution_node_states_state_idx",
+      "execution_node_materializations",
+      "execution_node_materializations_source_idx",
+      "execution_node_materializations_immutable_delete",
+      "execution_node_materializations_immutable_update",
+      "execution_node_materializations_require_exact_scope_insert",
+      "execution_results_require_verified_review_insert",
+      "execution_results_require_materializable_review_insert"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))
       .map(({ type, name, tbl_name }) => ({ type, name, tbl_name })),
-      beforeObjects.map(({ type, name, tbl_name }) => ({ type, name, tbl_name })));
+      beforeObjects
+        .filter(({ name }) => !admissionObjects.has(name))
+        .map(({ type, name, tbl_name }) => ({ type, name, tbl_name })));
     assert.equal(database.pragma("foreign_keys", { simple: true }), 1);
     assert.deepEqual(database.pragma("foreign_key_check"), []);
     for (const [table, reason] of [["task_artifact_refs", /immutable/u], ["artifact_publications", /retained evidence/u]] as const) {

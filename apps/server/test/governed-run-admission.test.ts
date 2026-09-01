@@ -1,9 +1,12 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import test, { type TestContext } from "node:test";
 import type { FastifyInstance } from "fastify";
 import type {
   GovernedExecutionCapabilityReadyGrant,
-  GovernedExecutionManifest
+  GovernedExecutionManifest,
+  RepositoryCheckpoint,
+  RepositoryOperationRequest
 } from "@convene-wire/contracts/execution-plan";
 import {
   assertExecutionCommand,
@@ -16,6 +19,12 @@ import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { RunRepository } from "../src/run/run-repository.js";
 import { AuthService } from "../src/security/auth-service.js";
+import { ExecutionDependencyResolver } from
+  "../src/execution/execution-dependency-resolver.js";
+import { ExecutionNodeMaterializationRepository } from
+  "../src/execution/execution-node-materialization-repository.js";
+import { ExecutionPlanRepository } from
+  "../src/execution/execution-plan-repository.js";
 import { fixture, now } from "./helpers/execution-plan-fixture.js";
 
 type BridgeSocket = Awaited<ReturnType<FastifyInstance["injectWS"]>>;
@@ -57,11 +66,18 @@ async function sendAndFlush(socket: BridgeSocket, value: object): Promise<void> 
 
 function nextMessage(socket: BridgeSocket): Promise<BridgeMessage> {
   return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      socket.off("message", onMessage);
+      socket.off("close", onClose);
+      reject(new Error("Timed out waiting for Bridge delivery"));
+    }, 5_000);
     const onMessage = (source: { toString(): string }): void => {
+      clearTimeout(timer);
       socket.off("close", onClose);
       resolve(JSON.parse(source.toString()) as BridgeMessage);
     };
     const onClose = (code: number, reason: Buffer): void => {
+      clearTimeout(timer);
       socket.off("message", onMessage);
       reject(new Error(`Bridge closed before delivery: ${code} ${reason.toString()}`));
     };
@@ -82,6 +98,7 @@ async function admissionFixture(
   t: TestContext,
   grantChange?: (grant: GovernedExecutionCapabilityReadyGrant) => void,
   options: {
+    acceptedDependency?: boolean;
     captureScheduledDelivery?: boolean;
     schedulerMilliseconds?: number;
   } = {}
@@ -138,6 +155,36 @@ async function admissionFixture(
 
   const command = f.command();
   for (const node of command.definition.nodes) node.agentId = agent.agentId;
+  if (options.acceptedDependency) {
+    const build = command.definition.nodes.find((node) => node.nodeKey === "Build");
+    const consume = command.definition.nodes.find((node) => node.nodeKey === "Review");
+    assert.ok(build?.repository);
+    assert.ok(consume);
+    consume.nodeKey = "Consume";
+    consume.kind = "implementation";
+    consume.task = {
+      mode: "new",
+      title: "Consume accepted patch",
+      goal: "Consume only the exact accepted predecessor output",
+      ownerMemberId: f.ownerMemberId,
+      criteria: structuredClone(build.task.criteria)
+    };
+    consume.repository = {
+      ...structuredClone(build.repository),
+      grantId: "grant_governed_consume0001"
+    };
+    consume.scope = structuredClone(build.scope);
+    consume.inputs = [{ slotKey: "patch", kind: "patch", required: true }];
+    consume.outputs = [{ slotKey: "output", kind: "patch", required: true }];
+    command.definition.edges = [{
+      edgeKey: "build_consume",
+      fromNodeKey: "Build",
+      toNodeKey: "Consume",
+      gate: "accepted_result",
+      bindings: [{ outputSlot: "output", inputSlot: "patch" }]
+    }];
+    command.definition.policy.maxConcurrency = 1;
+  }
   const draft = await f.create(command);
   const plan = (await f.ok(
     "POST",
@@ -151,53 +198,66 @@ async function admissionFixture(
       reason: "Authorize one bounded governed capture"
     }
   )).plan;
-  const compiled = plan.compiledTasks.find(
-    (candidate: { nodeKey: string }) => candidate.nodeKey === "Build"
-  );
-  assert.ok(compiled);
-  let task = await f.ok("GET", `/api/tasks/${compiled.taskId}`);
-  task = await f.ok("POST", `/api/tasks/${task.taskId}/control`, {
-    operationId: "op_governed_task_ready0001",
-    expectedTaskRevision: task.taskRevision,
-    lifecycleState: "ready"
-  });
+  const tasksByNode = new Map<string, any>();
+  for (const compiled of plan.compiledTasks as Array<{ nodeKey: string; taskId: string }>) {
+    const definitionNode = plan.current.definition.nodes.find(
+      (candidate: { nodeKey: string }) => candidate.nodeKey === compiled.nodeKey
+    );
+    if (definitionNode?.kind !== "implementation") continue;
+    let compiledTask = await f.ok("GET", `/api/tasks/${compiled.taskId}`);
+    compiledTask = await f.ok("POST", `/api/tasks/${compiledTask.taskId}/control`, {
+      operationId: `op_governed_task_ready_${compiled.nodeKey.toLowerCase()}0001`,
+      expectedTaskRevision: compiledTask.taskRevision,
+      lifecycleState: "ready"
+    });
+    tasksByNode.set(compiled.nodeKey, compiledTask);
+  }
+  const task = tasksByNode.get("Build");
+  assert.ok(task);
   const node = plan.current.definition.nodes.find(
     (candidate: { nodeKey: string }) => candidate.nodeKey === "Build"
   );
   assert.ok(node?.repository);
-  const grant: GovernedExecutionCapabilityReadyGrant = {
-    grant: {
-      grantId: node.repository.grantId,
-      revision: node.repository.grantRevision,
-      digest: "d".repeat(64),
-      expiresAt: "2026-08-31T13:00:00.000Z"
-    },
-    repositoryId: node.repository.repositoryId,
-    bindingId: node.repository.bindingId,
-    deviceId: device.deviceId,
-    agentId: agent.agentId,
-    planId: plan.planId,
-    nodeKey: node.nodeKey,
-    operations: ["prepare", "capture"],
-    runtimeProfile: {
-      profileId: node.repository.runtimeProfileId,
-      revision: 1,
-      digest: node.repository.runtimeProfileDigest
-    },
-    verificationProfiles: node.verificationProfiles.map(
-      (profile: { profileId: string; revision: number; digest: string }) => ({
-        profileId: profile.profileId,
-        revision: profile.revision,
-        digest: profile.digest
-      })
-    ),
-    scopePolicy: structuredClone(node.scope),
-    integrationTargets: [],
-    issuedAt: now,
-    revokedAt: null
-  };
+  const grants = plan.current.definition.nodes
+    .filter((candidate: { kind: string }) => candidate.kind === "implementation")
+    .map((candidate: typeof node): GovernedExecutionCapabilityReadyGrant => {
+      assert.ok(candidate.repository);
+      return {
+        grant: {
+          grantId: candidate.repository.grantId,
+          revision: candidate.repository.grantRevision,
+          digest: candidate.nodeKey === "Build" ? "d".repeat(64) : "e".repeat(64),
+          expiresAt: "2026-08-31T13:00:00.000Z"
+        },
+        repositoryId: candidate.repository.repositoryId,
+        bindingId: candidate.repository.bindingId,
+        deviceId: device.deviceId,
+        agentId: agent.agentId,
+        planId: plan.planId,
+        nodeKey: candidate.nodeKey,
+        operations: ["prepare", "capture"],
+        runtimeProfile: {
+          profileId: candidate.repository.runtimeProfileId,
+          revision: 1,
+          digest: candidate.repository.runtimeProfileDigest
+        },
+        verificationProfiles: candidate.verificationProfiles.map(
+          (profile: { profileId: string; revision: number; digest: string }) => ({
+            profileId: profile.profileId,
+            revision: profile.revision,
+            digest: profile.digest
+          })
+        ),
+        scopePolicy: structuredClone(candidate.scope),
+        integrationTargets: [],
+        issuedAt: now,
+        revokedAt: null
+      };
+    });
+  const grant = grants.find((candidate) => candidate.nodeKey === "Build");
+  assert.ok(grant);
   grantChange?.(grant);
-  const agentCapability = { ...capability, readyGrants: [grant] };
+  const agentCapability = { ...capability, readyGrants: grants };
   const scheduledDelivery = options.captureScheduledDelivery
     ? nextMessage(socket)
     : undefined;
@@ -229,10 +289,13 @@ async function admissionFixture(
     const persisted = row && JSON.parse(row.capabilities_json) as {
       governedExecution?: { readyGrants?: unknown[] };
     };
-    return persisted?.governedExecution?.readyGrants?.length === 1;
+    return persisted?.governedExecution?.readyGrants?.length === grants.length;
   });
   return {
     ...f,
+    get app() {
+      return f.app;
+    },
     socket,
     device,
     credential,
@@ -240,12 +303,183 @@ async function admissionFixture(
     plan,
     node,
     task,
+    tasksByNode,
     grant,
+    grants,
     agentCapability,
     workspaceRef,
     workspaceGeneration,
     scheduledDelivery
   };
+}
+
+type AdmissionFixture = Awaited<ReturnType<typeof admissionFixture>>;
+const dependencyBytes = Buffer.from(
+  "diff --git a/src/dependency.ts b/src/dependency.ts\n" +
+  "--- a/src/dependency.ts\n+++ b/src/dependency.ts\n@@ -1 +1 @@\n" +
+  "-export const state = 'old';\n+export const state = 'accepted';\n"
+);
+const dependencySha256 = createHash("sha256")
+  .update(dependencyBytes)
+  .digest("hex");
+
+function digestRequest(request: RepositoryOperationRequest): RepositoryOperationRequest {
+  const { requestDigest: _, ...unsigned } = request;
+  request.requestDigest = executionOperationDigest(unsigned);
+  return request;
+}
+
+function digestCheckpoint(checkpoint: RepositoryCheckpoint): RepositoryCheckpoint {
+  const { digest: _, ...unsigned } = checkpoint;
+  checkpoint.digest = executionOperationDigest(unsigned);
+  return checkpoint;
+}
+
+async function publishCanonicalDependency(
+  f: AdmissionFixture,
+  manifest: GovernedExecutionManifest
+) {
+  assert.ok(manifest.capture);
+  const authorization = `Bearer ${f.credential.secret}`;
+  const request = digestRequest({
+    version: 1,
+    operationId: manifest.capture.operationId,
+    requestDigest: "0".repeat(64),
+    plan: {
+      planId: manifest.scope.planId,
+      revision: manifest.scope.planRevision,
+      digest: manifest.scope.planDigest,
+      approvalOperationId: manifest.scope.approvalOperationId,
+      roomId: manifest.scope.roomId,
+      rootTaskId: manifest.capture.rootTaskId
+    },
+    execution: manifest.scope,
+    repositoryId: manifest.repository.repositoryId,
+    bindingId: manifest.repository.bindingId,
+    deviceId: manifest.scope.deviceId,
+    grant: manifest.grant,
+    expectedGeneration: manifest.workspace.workspaceGeneration,
+    deadline: manifest.deadline,
+    action: {
+      kind: "capture",
+      capture: { manifestDigest: manifest.manifestDigest }
+    }
+  });
+  const lease = await f.ok(
+    "POST", "/api/bridge/repository-captures", request, authorization
+  );
+  const publication = await f.ok("POST", "/api/bridge/artifact-publications", {
+    leaseId: lease.leaseId,
+    runId: manifest.scope.runId,
+    agentId: manifest.scope.agentId,
+    workspaceRef: lease.workspaceRef,
+    workspaceGeneration: lease.workspaceGeneration,
+    idempotencyKey: "idem_governed_dependency_patch0001",
+    artifactType: "patch",
+    fileName: "accepted.patch",
+    mediaType: "text/x-diff",
+    title: "Accepted predecessor patch",
+    summary: "Canonical captured output for the accepted_result edge",
+    sizeBytes: dependencyBytes.length,
+    sha256: dependencySha256
+  }, authorization);
+  await f.ok(
+    "POST",
+    `/api/bridge/artifact-publications/${publication.publicationId}/chunks`,
+    {
+      offset: 0,
+      chunkBase64: dependencyBytes.toString("base64"),
+      chunkSha256: dependencySha256
+    },
+    authorization
+  );
+  await f.ok(
+    "POST",
+    `/api/bridge/artifact-publications/${publication.publicationId}/seal`,
+    {},
+    authorization
+  );
+  const artifact = (await f.ok(
+    "POST",
+    `/api/bridge/artifact-publications/${publication.publicationId}/bind`,
+    {},
+    authorization
+  )).artifact;
+  const checkpoint = digestCheckpoint({
+    checkpointId: "checkpoint_governed_dependency0001",
+    operationId: request.operationId,
+    scope: manifest.scope,
+    repositoryId: manifest.repository.repositoryId,
+    bindingId: manifest.repository.bindingId,
+    baseCommit: manifest.repository.baseCommit,
+    candidateCommit: "c".repeat(manifest.repository.baseCommit.length),
+    candidateTree: "d".repeat(manifest.repository.baseCommit.length),
+    inputDigest: manifest.inputDigest,
+    workspaceRef: lease.workspaceRef,
+    workspaceGeneration: lease.workspaceGeneration,
+    outputs: [{
+      slotKey: "output",
+      artifact: {
+        artifactId: artifact.artifactId,
+        artifactRevision: artifact.artifactRevision,
+        kind: "patch",
+        byteLength: dependencyBytes.length,
+        contentDigest: dependencySha256
+      }
+    }],
+    capturedAt: now,
+    digest: "0".repeat(64)
+  });
+  await f.ok(
+    "POST", "/api/bridge/repository-checkpoints", checkpoint, authorization
+  );
+  return { artifact, checkpoint, request };
+}
+
+async function reconnectGovernedAgent(
+  t: TestContext,
+  f: AdmissionFixture,
+  epoch: number,
+  expectDelivery = true
+) {
+  await f.app.ready();
+  const socket = await f.app.injectWS("/ws/bridge", {
+    headers: {
+      authorization: `Bearer ${f.credential.secret}`,
+      host: "127.0.0.1"
+    }
+  });
+  t.after(() => socket.terminate());
+  const delivery = expectDelivery ? nextMessage(socket) : undefined;
+  await sendAndFlush(socket, envelope("bridge.hello", {
+    bridgeVersion: "v0.4.0-test.1",
+    connectionEpoch: epoch,
+    deviceId: f.device.deviceId,
+    supportedProtocolVersions: ["1.0"],
+    governedExecution: capability
+  }, `dependency_hello${epoch}`));
+  await sendAndFlush(socket, envelope("agent.publish", {
+    teamId: f.teamId,
+    agentId: f.agent.agentId,
+    ownerMemberId: f.ownerMemberId,
+    deviceId: f.device.deviceId,
+    name: f.agent.name,
+    role: f.agent.role,
+    capabilities: {
+      invocationMode: "managed",
+      supportsStart: true,
+      supportsResume: false,
+      supportsStreaming: true,
+      supportsInterrupt: true,
+      supportsHandoff: false,
+      supportsWorkspaceLeases: true,
+      governedExecution: f.agentCapability
+    },
+    workspaceRef: f.workspaceRef,
+    workspaceGeneration: f.workspaceGeneration,
+    workspaceAlias: "Governed dependency workspace"
+  }, `dependency_publish${epoch}`));
+  return { socket, delivery };
 }
 
 test("approved governed Build dispatch seals and delivers one exact capture manifest", {
@@ -483,6 +717,341 @@ test("scheduler creates one system-traced DispatchIntent and ordinary Run", {
   assert.equal(nodeState.state, "dispatched");
   assert.equal(nodeState.run_id, row.run_id);
   assert.equal(nodeState.dispatch_generation, 1);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("dependency resolver keeps verified_output outside the accepted-result slice", async (t) => {
+  const f = await admissionFixture(t);
+  const resolver = new ExecutionDependencyResolver(
+    new ExecutionPlanRepository(f.database),
+    new ExecutionNodeMaterializationRepository(f.database)
+  );
+  assert.deepEqual(resolver.resolve({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Review"
+  }), {
+    ready: false,
+    blocker: "EXECUTION_DEPENDENCY_GATE_UNAVAILABLE"
+  });
+});
+
+test("accepted predecessor output materializes once and drives exact downstream input", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    acceptedDependency: true,
+    captureScheduledDelivery: true,
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { n: number }).n === 1);
+  const buildRequest = await f.scheduledDelivery!;
+  assert.equal(buildRequest.type, "run.requested");
+  const buildManifest = (buildRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  const buildRunId = buildManifest.scope.runId;
+  assert.equal(buildManifest.inputs.length, 0);
+  await sendAndFlush(f.socket, envelope("run.accepted", {
+    runId: buildRunId,
+    traceId: buildRequest.payload.traceId,
+    agentId: f.agent.agentId,
+    sequence: 1
+  }, "dependency_build_accepted0001"));
+  await waitFor(() => new RunRepository(f.database).getRun(buildRunId)?.state === "delivered");
+  const runs = new RunRepository(f.database);
+  assert.equal(runs.applyEvent(buildRunId, {
+    type: "status",
+    sequence: 2,
+    status: "working"
+  }, "2026-08-31T12:00:01.000Z").applied, true);
+
+  let buildTask = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
+  buildTask = await f.ok("POST", `/api/tasks/${f.task.taskId}/control`, {
+    operationId: "op_dependency_build_active0001",
+    expectedTaskRevision: buildTask.taskRevision,
+    lifecycleState: "active"
+  });
+  const captured = await publishCanonicalDependency(f, buildManifest);
+  assert.equal(runs.applyEvent(buildRunId, {
+    type: "status",
+    sequence: 3,
+    status: "completed"
+  }, "2026-08-31T12:00:02.000Z").applied, true);
+  await waitFor(() => {
+    const state = f.database.prepare(`
+      SELECT state, blocker_code FROM execution_node_states
+      WHERE plan_id = ? AND node_key = 'Build'
+    `).get(f.plan.planId) as { blocker_code: string | null; state: string };
+    return state.state === "awaiting_result" &&
+      state.blocker_code === "EXECUTION_RESULT_REQUIRED";
+  });
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { n: number }).n, 0);
+  assert.equal((f.database.prepare(`
+    SELECT blocker_code FROM execution_node_states
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { blocker_code: string }).blocker_code,
+  "EXECUTION_DEPENDENCY_NOT_MATERIALIZED");
+
+  const badProposal = {
+    operationId: "op_dependency_result_missing_artifact0001",
+    taskId: buildTask.taskId,
+    definitionRevision: buildTask.definitionRevision,
+    criteriaRevision: buildTask.criteriaRevision,
+    proposedAtTaskRevision: buildTask.taskRevision,
+    supersedesResultId: null,
+    outcome: "informational",
+    summary: "This Result intentionally omits the canonical Artifact.",
+    risks: [],
+    openQuestions: [],
+    nextActions: [],
+    sources: [{
+      evidenceRefId: "evidence_dependency_bad_run0001",
+      kind: "run_event",
+      runId: buildRunId,
+      sequence: 3
+    }],
+    criterionClaims: []
+  };
+  const bad = await f.ok("POST", "/api/bridge/results", {
+    actorKind: "managed_agent",
+    agentId: f.agent.agentId,
+    runId: buildRunId,
+    proposal: badProposal
+  }, `Bearer ${f.credential.secret}`);
+  let currentTask = await f.ok("GET", `/api/tasks/${buildTask.taskId}`);
+  const rejected = await f.request(
+    "POST",
+    `/api/results/${bad.resultId}/review-decisions`,
+    {
+      operationId: "op_dependency_bad_accept0001",
+      decision: "accepted",
+      expectedTaskRevision: currentTask.taskRevision,
+      expectedReviewRevision: 0,
+      reason: "This must fail without canonical Artifact evidence.",
+      completeTask: false
+    }
+  );
+  assert.equal(rejected.statusCode, 400, rejected.body);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_node_materializations
+  `).get() as { n: number }).n, 0);
+
+  const criterion = currentTask.criteria.find(
+    (candidate: { required: boolean }) => candidate.required
+  );
+  assert.ok(criterion);
+  const good = await f.ok("POST", "/api/bridge/results", {
+    actorKind: "managed_agent",
+    agentId: f.agent.agentId,
+    runId: buildRunId,
+    proposal: {
+      operationId: "op_dependency_result_canonical0001",
+      taskId: currentTask.taskId,
+      definitionRevision: currentTask.definitionRevision,
+      criteriaRevision: currentTask.criteriaRevision,
+      proposedAtTaskRevision: currentTask.taskRevision,
+      supersedesResultId: bad.resultId,
+      outcome: "satisfied",
+      summary: "The managed Run proposes its exact canonical checkpoint output.",
+      risks: [],
+      openQuestions: [],
+      nextActions: [],
+      sources: [{
+        evidenceRefId: "evidence_dependency_artifact0001",
+        kind: "artifact",
+        artifactId: captured.artifact.artifactId
+      }, {
+        evidenceRefId: "evidence_dependency_run0001",
+        kind: "run_event",
+        runId: buildRunId,
+        sequence: 3
+      }],
+      criterionClaims: [{
+        criterionKey: criterion.criterionKey,
+        coverage: "satisfied",
+        explanation: "The canonical captured patch satisfies this criterion.",
+        evidenceRefIds: ["evidence_dependency_artifact0001"]
+      }]
+    }
+  }, `Bearer ${f.credential.secret}`);
+
+  await f.restart(0);
+  currentTask = await f.ok("GET", `/api/tasks/${buildTask.taskId}`);
+  const accepted = await f.ok(
+    "POST",
+    `/api/results/${good.resultId}/review-decisions`,
+    {
+      operationId: "op_dependency_accept_canonical0001",
+      decision: "accepted",
+      expectedTaskRevision: currentTask.taskRevision,
+      expectedReviewRevision: 0,
+      reason: "Accept the canonical output without completing the Task.",
+      completeTask: false
+    }
+  );
+  assert.equal(accepted.result.state, "accepted");
+  assert.equal(accepted.completedTask, false);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_node_materializations
+  `).get() as { n: number }).n, 0, "review and materialization remain separate commits");
+
+  f.database.exec(`
+    CREATE TRIGGER fail_dependency_input
+    BEFORE INSERT ON execution_input_bindings
+    BEGIN SELECT RAISE(ABORT, 'injected downstream input failure'); END
+  `);
+  const schedulerDisabledApp = f.app;
+  await f.restart(100);
+  assert.notEqual(f.app, schedulerDisabledApp);
+  const materialization = f.database.prepare(`
+    SELECT * FROM execution_node_materializations
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    artifact_pins_json: string;
+    dispatch_generation: number;
+    gate: string;
+    gate_operation_id: string;
+    source_result_id: string;
+    source_run_id: string;
+  };
+  assert.equal(materialization.gate, "accepted_result");
+  assert.equal(materialization.dispatch_generation, 1);
+  assert.equal(materialization.source_run_id, buildRunId);
+  assert.equal(materialization.source_result_id, good.resultId);
+  assert.equal(materialization.gate_operation_id, "op_dependency_accept_canonical0001");
+  assert.deepEqual(JSON.parse(materialization.artifact_pins_json), [{
+    outputSlot: "output",
+    artifactId: captured.artifact.artifactId,
+    artifactRevision: captured.artifact.artifactRevision,
+    kind: "patch",
+    contentDigest: dependencySha256,
+    byteLength: dependencyBytes.length
+  }]);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { n: number }).n, 0);
+
+  const reconnected = await reconnectGovernedAgent(t, f, 2, false);
+  await waitFor(() => (f.database.prepare(`
+    SELECT state FROM execution_node_states
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { state: string }).state === "ready");
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { n: number }).n, 0);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_input_bindings
+  `).get() as { n: number }).n, 0,
+  "failed admission rolls back its frozen input and every downstream side effect");
+  f.database.exec(`
+    CREATE TRIGGER fail_dependency_delivery
+    BEFORE INSERT ON run_deliveries
+    BEGIN SELECT RAISE(ABORT, 'injected downstream delivery failure'); END
+  `);
+  f.database.exec("DROP TRIGGER fail_dependency_input");
+
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { n: number }).n === 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_input_bindings
+  `).get() as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM run_deliveries
+    WHERE run_id = (
+      SELECT run_id FROM execution_dispatch_intents
+      WHERE plan_id = ? AND node_key = 'Consume'
+    )
+  `).get(f.plan.planId) as { n: number }).n, 0,
+  "the B intent and frozen input commit before Delivery");
+  reconnected.socket.terminate();
+  f.database.exec("DROP TRIGGER fail_dependency_delivery");
+  await f.restart(0);
+  const recovered = await reconnectGovernedAgent(t, f, 3);
+  const consumeRequest = await recovered.delivery!;
+  assert.equal(consumeRequest.type, "run.requested");
+  const consumeManifest = (consumeRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  assert.equal(consumeManifest.scope.nodeKey, "Consume");
+  assert.equal(consumeManifest.scope.dispatchGeneration, 1);
+  assert.equal(consumeManifest.inputs.length, 1);
+  const input = consumeManifest.inputs[0]!;
+  assert.equal(input.edgeKey, "build_consume");
+  assert.equal(input.gate, "accepted_result");
+  assert.equal(input.gateOperationId, materialization.gate_operation_id);
+  assert.equal(input.sourceOutputSlot, "output");
+  assert.equal(input.inputSlot, "patch");
+  assert.equal(input.sourceResultId, good.resultId);
+  assert.equal(input.artifact.artifactId, captured.artifact.artifactId);
+  assert.equal(input.artifact.artifactRevision, captured.artifact.artifactRevision);
+  assert.equal(input.artifact.contentDigest, dependencySha256);
+  assert.equal(input.artifact.byteLength, dependencyBytes.length);
+  const exactBytes = await f.request(
+    "GET",
+    `/api/bridge/runs/${consumeManifest.scope.runId}/execution-inputs/${input.bindingId}/content`,
+    undefined,
+    `Bearer ${f.credential.secret}`
+  );
+  assert.equal(exactBytes.statusCode, 200, exactBytes.body);
+  assert.deepEqual(exactBytes.rawPayload, dependencyBytes);
+  assert.equal(
+    exactBytes.headers["x-convenewire-content-sha256"],
+    dependencySha256
+  );
+  const forbidden = await f.request(
+    "GET",
+    `/api/bridge/runs/${buildRunId}/execution-inputs/${input.bindingId}/content`,
+    undefined,
+    `Bearer ${f.credential.secret}`
+  );
+  assert.equal(forbidden.statusCode, 403);
+  assert.equal((await f.request(
+    "GET",
+    `/api/bridge/runs/${consumeManifest.scope.runId}/execution-inputs/${input.bindingId}/content`,
+    undefined,
+    "Bearer invalid-device-secret"
+  )).statusCode, 401);
+
+  await sendAndFlush(recovered.socket, envelope("run.accepted", {
+    runId: consumeManifest.scope.runId,
+    traceId: consumeRequest.payload.traceId,
+    agentId: f.agent.agentId,
+    sequence: 1
+  }, "dependency_consume_accepted0001"));
+  await waitFor(() => new RunRepository(f.database)
+    .getRun(consumeManifest.scope.runId)?.state === "delivered");
+  await f.restart(0);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_node_materializations
+  `).get() as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Consume'
+  `).get(f.plan.planId) as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_input_bindings
+  `).get() as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT completion_result_id FROM agent_tasks WHERE task_id = ?
+  `).get(buildTask.taskId) as { completion_result_id: string | null })
+    .completion_result_id, null);
+  assert.throws(() => f.database.prepare(`
+    UPDATE execution_node_materializations SET created_at = created_at
+  `).run(), /immutable/u);
+  assert.throws(() => f.database.prepare(`
+    DELETE FROM execution_node_materializations
+  `).run(), /retained evidence/u);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 

@@ -28,6 +28,8 @@ import {
 } from "../workspace/isolated-workspace-lease-service.js";
 import type { ExecutionApprovalRepository } from
   "./execution-approval-repository.js";
+import type { ExecutionDependencyResolver } from
+  "./execution-dependency-resolver.js";
 import { ExecutionError } from "./execution-error.js";
 import {
   evaluateExecutionReadiness,
@@ -91,6 +93,7 @@ implements GovernedMessageAdmissionPort {
     private readonly plans: ExecutionPlanRepository,
     private readonly approvals: ExecutionApprovalRepository,
     private readonly inputs: ExecutionInputService,
+    private readonly dependencies: ExecutionDependencyResolver,
     private readonly workspaces: IsolatedWorkspaceLeaseService,
     private readonly connections: BridgeConnectionRegistry,
     private readonly runs: RunRepository
@@ -126,6 +129,7 @@ implements GovernedMessageAdmissionPort {
       (candidate) => candidate.nodeKey === identity.nodeKey
     );
     const task = compiled ? this.tasks.get(compiled.taskId) : undefined;
+    const dependency = this.dependencies.resolve(identity);
     const agent = node ? this.database.prepare(`
       SELECT device_id, team_id, capabilities_json
       FROM agents
@@ -190,10 +194,6 @@ implements GovernedMessageAdmissionPort {
       SELECT 1 FROM execution_dispatch_intents
       WHERE plan_id = ? AND plan_revision = ? AND node_key = ?
     `).get(identity.planId, identity.planRevision, identity.nodeKey));
-    const hasIncomingEdges = Boolean(this.database.prepare(`
-      SELECT 1 FROM execution_plan_edges
-      WHERE plan_id = ? AND revision = ? AND to_node_key = ? LIMIT 1
-    `).get(identity.planId, identity.planRevision, identity.nodeKey));
     const reviewer = approval
       ? this.core.getMember(approval.reviewedByMemberId)
       : undefined;
@@ -233,10 +233,9 @@ implements GovernedMessageAdmissionPort {
       activePlanRuns: usage.active_runs,
       agentAvailable,
       capabilityAvailable,
+      dependencyBlocker: dependency.ready ? null : dependency.blocker,
       existingAttempt,
       grantMatches: grants.length,
-      hasIncomingEdges,
-      hasRequiredInputs: node?.inputs.some((input) => input.required) ?? true,
       nodeKind: node?.kind ?? "verification",
       nextRunReservationSeconds,
       outputsSupported: Boolean(node &&
@@ -378,6 +377,12 @@ implements GovernedMessageAdmissionPort {
     ) {
       return fail("EXECUTION_DISPATCH_SCOPE_INVALID");
     }
+    const dependency = this.dependencies.resolve({
+      planId: plan.planId,
+      planRevision: plan.current.revision,
+      nodeKey: node.nodeKey
+    });
+    if (!dependency.ready) return fail(dependency.blocker);
     const agent = this.database.prepare(`
       SELECT device_id, team_id, capabilities_json
       FROM agents
@@ -489,6 +494,7 @@ implements GovernedMessageAdmissionPort {
       approvalOperationId: approval.operationId,
       nodeKey: node.nodeKey,
       dispatchGeneration,
+      inputSelections: dependency.selections,
       grant
     });
     this.database.prepare(`
@@ -556,7 +562,7 @@ implements GovernedMessageAdmissionPort {
         nodeKey: node.nodeKey,
         runId,
         deviceId: agent.device_id!,
-        selections: [],
+        selections: dependency.selections,
         expiresAt: deadlineAt
       }, now);
       const scope: GovernedExecutionManifest["scope"] = {

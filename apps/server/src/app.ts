@@ -62,6 +62,12 @@ import { ExecutionSourceRepository } from "./execution/execution-source-reposito
 import { ExecutionPlanService } from "./execution/execution-plan-service.js";
 import { ExecutionInputRepository } from "./execution/execution-input-repository.js";
 import { ExecutionInputService } from "./execution/execution-input-service.js";
+import { ExecutionDependencyResolver } from
+  "./execution/execution-dependency-resolver.js";
+import { ExecutionNodeMaterializationRepository } from
+  "./execution/execution-node-materialization-repository.js";
+import { ExecutionNodeProjector } from
+  "./execution/execution-node-projector.js";
 import { ExecutionApprovalRepository } from "./execution/execution-approval-repository.js";
 import { ExecutionPlanCompiler } from "./execution/execution-plan-compiler.js";
 import { GovernedRunAdmissionService } from
@@ -404,13 +410,20 @@ export async function createServerApp(
   );
   const resultRepository = new ResultRepository(database);
   const executionApprovals = new ExecutionApprovalRepository(database);
+  const executionPlanRepository = new ExecutionPlanRepository(database);
+  const executionMaterializations =
+    new ExecutionNodeMaterializationRepository(database);
+  const executionDependencies = new ExecutionDependencyResolver(
+    executionPlanRepository,
+    executionMaterializations
+  );
   const executionInputs = new ExecutionInputService(
-    database, new ExecutionInputRepository(database), new ExecutionPlanRepository(database),
+    database, new ExecutionInputRepository(database), executionPlanRepository,
     executionApprovals, artifactRepository, artifactPublicationRepository, artifactBlobs, auth
   );
   const executionPlans = new ExecutionPlanService(
     transactions,
-    new ExecutionPlanRepository(database),
+    executionPlanRepository,
     new ExecutionSourceRepository(database),
     taskRepository,
     core,
@@ -478,6 +491,7 @@ export async function createServerApp(
     new ExecutionPlanRepository(database),
     executionApprovals,
     executionInputs,
+    executionDependencies,
     isolatedWorkspaces,
     bridgeConnections,
     runRepository
@@ -587,10 +601,14 @@ export async function createServerApp(
     return runRepository.getRun(run.runId) ?? run;
   };
   const executionNodeStates = new ExecutionNodeStateRepository(database);
+  const executionNodeProjector = new ExecutionNodeProjector(
+    executionNodeStates
+  );
   const executionSettlement = new ExecutionSettlementService(
     database,
     transactions,
-    executionNodeStates
+    executionNodeProjector,
+    executionMaterializations
   );
   const executionRecovery = new ExecutionRecoveryService(
     database,
@@ -600,6 +618,7 @@ export async function createServerApp(
   const executionScheduler = new ExecutionScheduler(
     transactions,
     executionNodeStates,
+    executionNodeProjector,
     executionSettlement,
     governedAdmission,
     clock

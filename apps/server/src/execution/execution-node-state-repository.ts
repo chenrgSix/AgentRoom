@@ -127,7 +127,8 @@ export class ExecutionNodeStateRepository {
     }));
   }
 
-  public project(input: ExecutionNodeIdentity & {
+  /** Internal persistence port used only by ExecutionNodeProjector. */
+  public writeProjection(input: ExecutionNodeIdentity & {
     blockerCode: string | null;
     dispatchGeneration: number | null;
     lastRunState: RunState | null;

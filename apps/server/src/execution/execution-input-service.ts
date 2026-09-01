@@ -12,10 +12,15 @@ import type { ExecutionPlanRepository } from "./execution-plan-repository.js";
 import { ExecutionInputRepository, type StoredExecutionInput } from "./execution-input-repository.js";
 import { ExecutionError } from "./execution-error.js";
 
-type Selection = { inputSlot: string; sourceResultId: string; artifactId: string };
+export interface ExecutionInputSelection {
+  artifactId: string;
+  inputSlot: string;
+  sourceResultId: string;
+}
 export interface FreezeExecutionInputs {
   planId: string; revision: number; expectedDigest: string; expectedControlRevision: number;
-  nodeKey: string; runId: string; deviceId: string; selections: Selection[]; expiresAt: string;
+  nodeKey: string; runId: string; deviceId: string;
+  selections: ExecutionInputSelection[]; expiresAt: string;
 }
 interface Destination {
   task_id: string; target_agent_id: string; device_id: string; owner_member_id: string;
