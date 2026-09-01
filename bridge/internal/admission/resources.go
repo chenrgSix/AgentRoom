@@ -243,7 +243,7 @@ func (r *GovernedAdmissionResources) ReadyAgentGrants(ctx context.Context, now t
 		if issuedErr != nil || expiresErr != nil || now.Before(issuedAt) || !now.Before(expiresAt) ||
 			grant.Summary.RevokedAt != nil || grant.Summary.Grant.Revision != 1 || !configured ||
 			!slices.Contains(grant.Spec.Operations, execution.Prepare) ||
-			!slices.Contains(grant.Spec.Operations, execution.Capture) || len(grant.Spec.VerificationProfiles) != 0 ||
+			!slices.Contains(grant.Spec.Operations, execution.Capture) ||
 			grant.Spec.ScopePolicy.RequirePreventivePathEnforcement {
 			continue
 		}

@@ -541,11 +541,13 @@ finished-process record, derives the signed capture operation from the frozen
 manifest, publishes the canonical checkpoint, writes the local stopped outcome,
 and only then emits the terminal status. Capture uncertainty emits
 `outcome_unknown` and retains the workspace; it never fabricates a Result. The
-Bridge still advertises `prepare` only; Central requires both `prepare` and
-`capture`, so actual frozen Run Delivery remains closed until Server manifest
-validation and the full declaration are complete. Commit inputs stay fail-closed until
-their separate materializer exists. `RUN-018` connects the completed capability
-to ordinary frozen Run Delivery.
+Bridge advertises `prepare` plus `capture` only with a current exact grant.
+RUN-018 now derives a capture manifest from one approved implementation node,
+matches its current grant at admission and send, and connects that bounded
+manifest to ordinary frozen Run Delivery. Verifier pins remain exact downstream
+requirements and grant no verifier authority. Commit inputs stay fail-closed
+until their separate materializer exists; required predecessor selection remains
+an open EXEC-003/RUN-018 gate.
 `REPO-001` retains the full owner-local lifecycle acceptance using these actual
 production adapters, and is a prerequisite of QA-052 rather than of its own
 BRG-071 implementation. Local fixtures alone cannot satisfy that closure.

@@ -253,8 +253,8 @@ test("execution new governed Tasks cannot dispatch through legacy messages or Di
   const routed = await f.request("POST", `/api/rooms/${f.roomId}/messages`, {
     taskId: task.taskId, content: "Bypass the graph via mention", mentionAgentId: f.agentId
   });
-  assert.equal(routed.statusCode, 400);
-  assert.match(routed.json().error.message, /execution admission/u);
+  assert.equal(routed.statusCode, 409);
+  assert.equal(routed.json().error.code, "EXECUTION_DISPATCH_CAPABILITY_UNAVAILABLE");
   assert.deepEqual(f.database.prepare("SELECT count(*) AS n FROM messages").get(), messagesBefore);
   const discussion = await f.request("POST", `/api/rooms/${f.roomId}/discussions`, {
     taskId: task.taskId, goal: "Bypass graph admission", participantAgentIds: [f.agentId]

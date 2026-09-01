@@ -140,9 +140,6 @@ func TestRepositoryGrantCLIHasExactOwnerConsentAndOfflineRevocation(t *testing.T
 	for name, change := range map[string]func(*repository.TaskGrantSpec){
 		"profile revision": func(value *repository.TaskGrantSpec) { value.RuntimeProfile.Revision = 2 },
 		"profile digest":   func(value *repository.TaskGrantSpec) { value.RuntimeProfile.Digest = strings.Repeat("f", 64) },
-		"unresolved verifier": func(value *repository.TaskGrantSpec) {
-			value.VerificationProfiles = []execution.ExecutionGrantSummaryVerificationProfile{{ProfileID: "profile_verifier0001", Revision: 1, Digest: strings.Repeat("e", 64)}}
-		},
 	} {
 		t.Run(name, func(t *testing.T) {
 			candidate := spec
@@ -157,6 +154,9 @@ func TestRepositoryGrantCLIHasExactOwnerConsentAndOfflineRevocation(t *testing.T
 		})
 	}
 	spec.RuntimeProfile = validProfile
+	spec.VerificationProfiles = []execution.ExecutionGrantSummaryVerificationProfile{{
+		ProfileID: "profile_verifier0001", Revision: 1, Digest: strings.Repeat("e", 64),
+	}}
 	originalCommand := append([]string{}, cfg.Agents[0].Command...)
 	cfg.Agents[0].Command = append(cfg.Agents[0].Command, "--changed")
 	if err := config.Replace(configPath, cfg); err != nil {
@@ -182,6 +182,10 @@ func TestRepositoryGrantCLIHasExactOwnerConsentAndOfflineRevocation(t *testing.T
 	var view repository.TaskGrantView
 	if json.Unmarshal([]byte(first), &view) != nil {
 		t.Fatal(first)
+	}
+	if len(view.Spec.VerificationProfiles) != 1 ||
+		view.Spec.VerificationProfiles[0] != spec.VerificationProfiles[0] {
+		t.Fatalf("verifier pins were not retained: %#v", view.Spec.VerificationProfiles)
 	}
 	listed, err := invoke("grant", "list")
 	if err != nil || !strings.Contains(listed, view.Summary.Grant.Digest) {

@@ -64,13 +64,12 @@ func TestGovernedCoordinatorFailsClosedBeforePossibleStart(t *testing.T) {
 		}
 	})
 
-	t.Run("verification authority unavailable", func(t *testing.T) {
-		coordinator, rig, _ := governedCoordinatorFixture(t)
-		request := governedDeliveryFixture(t)
-		if _, err := coordinator.Prepare(context.Background(), request); !errors.Is(err, ErrProfileUnsupported) {
+	t.Run("verification pins do not grant verifier authority", func(t *testing.T) {
+		coordinator, rig, request := governedCoordinatorFixture(t)
+		if _, err := coordinator.Prepare(context.Background(), request); err != nil {
 			t.Fatalf("error=%v", err)
 		}
-		if len(rig.calls) != 0 {
+		if !reflect.DeepEqual(rig.calls, []string{"grant", "inputs", "source", "prepare", "profile", "claim"}) {
 			t.Fatalf("calls=%v", rig.calls)
 		}
 	})
@@ -372,7 +371,6 @@ func governedCoordinatorFixture(t *testing.T) (*GovernedAdmissionCoordinator, *c
 		t.Fatal(err)
 	}
 	manifest.Inputs = []execution.GovernedExecutionManifestInput{}
-	manifest.VerificationProfiles = []execution.GovernedExecutionManifestVerificationProfile{}
 	manifest.InputDigest, err = executionDigest(manifest.Inputs, "")
 	if err != nil {
 		t.Fatal(err)

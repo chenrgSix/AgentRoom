@@ -97,6 +97,47 @@ func TestRuntimePromptProjectsFrozenContextManifest(t *testing.T) {
 	}
 }
 
+func TestRuntimePromptProjectsGovernedScopeWithoutGrantingAcceptanceAuthority(t *testing.T) {
+	prompt := runtimePrompt(contracts.RunRequestedPayload{
+		Instruction: "Implement the approved node.",
+		ContextManifest: &contracts.ContextManifest{
+			TaskRevision: 4, DefinitionRevision: 2, CriteriaRevision: 3,
+			Goal:        "Ship a bounded change.",
+			Permissions: contracts.Permissions{},
+			Execution: &contracts.Execution{
+				Scope: contracts.ScopeClass{PlanID: "plan_runtime0001", PlanRevision: 2,
+					NodeKey: "Build", DispatchGeneration: 3},
+				Repository: contracts.Repository{RepositoryID: "repo_runtime0001",
+					BaseCommit: strings.Repeat("a", 40)},
+				Workspace: contracts.Workspace{Mode: contracts.Mode("isolated_worktree")},
+				ScopePolicy: contracts.ExecutionScopePolicy{Access: contracts.Access("isolated_write"),
+					AllowedPaths: []string{"src", "tests"}, ForbiddenPaths: []string{"secrets"}},
+				Outputs: []contracts.ExecutionOutput{{SlotKey: "patch", Kind: contracts.Kind("patch"), Required: true}},
+				VerificationProfiles: []contracts.ExecutionVerificationProfile{{
+					ProfileID: "profile_verify0001", Revision: 1, Required: true,
+				}},
+				Capture:  &contracts.CaptureClass{Outputs: []contracts.CaptureOutput{{SlotKey: "patch"}}},
+				Deadline: "2026-09-01T11:00:00Z",
+			},
+		},
+	})
+	for _, expected := range []string{
+		"approved plan plan_runtime0001 revision 2, node Build, dispatch generation 3",
+		"repo_runtime0001 at base commit " + strings.Repeat("a", 40),
+		"Allowed relative paths: src, tests.",
+		"Forbidden relative paths: secrets.",
+		"Declared outputs: patch:patch:required.",
+		"profile_verify0001@1:required",
+		"no independent verification or Result acceptance authority",
+		"capture boundary will collect output slots: patch",
+		"Do not claim that capture is review, verification, integration, or Task completion",
+	} {
+		if !strings.Contains(prompt, expected) {
+			t.Fatalf("governed prompt omitted %q:\n%s", expected, prompt)
+		}
+	}
+}
+
 func TestRuntimePromptProjectsProvenancePreservingSharedMemory(t *testing.T) {
 	commitSHA := "21f9e8c"
 	deliveryKind := contracts.Delta

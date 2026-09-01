@@ -20,7 +20,10 @@ import { ArtifactRepository } from "../src/task/artifact-repository.js";
 import { fixture, now } from "./helpers/execution-plan-fixture.js";
 import { BridgeConnectionRegistry } from "../src/bridge/bridge-connection-registry.js";
 import { IsolatedWorkspaceLeaseService, planIsolatedWorkspace } from "../src/workspace/isolated-workspace-lease-service.js";
-import { capability } from "./helpers/isolated-workspace-fixture.js";
+import {
+  capability,
+  capabilityForManifest
+} from "./helpers/isolated-workspace-fixture.js";
 
 const expiresAt = "2026-08-31T12:05:00.000Z";
 const bytes = Buffer.from("diff --git a/src/file b/src/file\n+accepted input\n");
@@ -333,7 +336,8 @@ test("input bindings never enable ordinary Mention execution on a governed Task"
   const rejected = await f.request("POST", `/api/rooms/${f.roomId}/messages`, {
     taskId: f.tasks[1].taskId, content: "Bypass the plan", mentionAgentId: f.destination.agent.agentId
   });
-  assert.equal(rejected.statusCode, 400, rejected.body);
+  assert.equal(rejected.statusCode, 409, rejected.body);
+  assert.match(rejected.body, /EXECUTION_DISPATCH_SCOPE_INVALID/u);
   assert.equal(f.counts().runs, before.runs);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
@@ -469,6 +473,9 @@ for (const scope of ["room", "team"] as const) {
 }
 
 async function prepareDerived(f: Awaited<ReturnType<typeof inputFixture>>, relations?: unknown[]) {
+  const manifest = (new RunRepository(f.database).getContextManifest(f.runId) as {
+    execution: GovernedExecutionManifest;
+  }).execution;
   const socket = await f.app.injectWS("/ws/bridge", { headers: { authorization: f.destination.authorization, host: "127.0.0.1" } });
   const ready = new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => reject(new Error("Derived fixture handshake timeout")), 3_000);
@@ -487,7 +494,7 @@ async function prepareDerived(f: Awaited<ReturnType<typeof inputFixture>>, relat
       agentId: f.destination.agent.agentId,
       capabilities: {
         ...f.destination.agent.capabilities,
-        governedExecution: capability,
+        governedExecution: capabilityForManifest(manifest),
         invocationMode: "managed"
       },
       deviceId: f.destination.device.deviceId,
@@ -497,9 +504,8 @@ async function prepareDerived(f: Awaited<ReturnType<typeof inputFixture>>, relat
       teamId: f.teamId,
       workspaceRef: f.destination.agent.workspaceRef,
       workspaceGeneration: f.destination.agent.workspaceGeneration
-    } }));
+  } }));
   await ready;
-  const manifest = (new RunRepository(f.database).getContextManifest(f.runId) as { execution: GovernedExecutionManifest }).execution;
   const operation: RepositoryOperationRequest = { version: 1, operationId: "op_derived_capture0001", requestDigest: "a".repeat(64),
     plan: { planId: f.plan.planId, revision: f.plan.current.revision, digest: f.plan.current.digest,
       approvalOperationId: manifest.scope.approvalOperationId, roomId: f.roomId, rootTaskId: f.root.taskId },

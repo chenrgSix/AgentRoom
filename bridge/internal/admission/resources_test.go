@@ -174,7 +174,9 @@ func TestGovernedAdmissionResourcesReadinessRequiresCurrentProfileGrantAndBindin
 		AgentID: agentID, ExpiresAt: now.Add(time.Hour).Format(time.RFC3339Nano),
 		Operations: []execution.KindElement{execution.Prepare}, RuntimeProfile: execution.ExecutionGrantSummaryRuntimeProfile{
 			ProfileID: profile.Spec.ProfileID, Revision: profile.Spec.Revision, Digest: profile.Digest},
-		VerificationProfiles: []execution.ExecutionGrantSummaryVerificationProfile{},
+		VerificationProfiles: []execution.ExecutionGrantSummaryVerificationProfile{{
+			ProfileID: "profile_verify0001", Revision: 1, Digest: strings.Repeat("b", 64),
+		}},
 		ScopePolicy: execution.ExecutionGrantSummaryScopePolicy{Access: execution.IsolatedWrite,
 			AllowedPaths: []string{"src"}, ForbiddenPaths: []string{}},
 		IntegrationTargets: []execution.ExecutionGrantSummaryIntegrationTarget{}}

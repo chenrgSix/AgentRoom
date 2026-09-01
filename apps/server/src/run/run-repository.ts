@@ -1,4 +1,6 @@
 import type Database from "better-sqlite3";
+import type { GovernedExecutionManifest } from
+  "@convene-wire/contracts/execution-plan";
 
 import { exceedsUnicodeCodePointLimit } from "../domain/unicode-length.js";
 import { SqliteTransactionBoundary } from
@@ -39,6 +41,7 @@ export interface RunRecord {
 }
 
 export interface RunContextManifest {
+  execution?: GovernedExecutionManifest;
   manifestVersion: "1.0";
   runId: string;
   taskId: string;
@@ -515,38 +518,36 @@ export class RunRepository {
   ) {}
 
   public createRuns(runs: RunRecord[]): RunRecord[] {
-    const insert = this.database.prepare(`
-      INSERT INTO runs (
-        run_id, trace_id, room_id, task_id, trigger_message_id,
-        requester_member_id, target_agent_id, parent_run_id, instruction,
-        state, last_sequence, deadline_at, created_at, updated_at, terminal_at,
-        orchestration_key, attempt_number, retry_of_run_id, context_manifest_json
-      ) VALUES (
-        @runId, @traceId, @roomId, @taskId, @triggerMessageId,
-        @requesterMemberId, @targetAgentId, @parentRunId, @instruction,
-        @state, @lastSequence, @deadlineAt, @createdAt, @updatedAt,
-        @terminalAt, @orchestrationKey, @attemptNumber, @retryOfRunId, NULL
-      )
-    `);
     this.transactions.immediate(() => {
       for (const run of runs) {
-        const attemptNumber = run.attemptNumber ?? this.nextAttemptNumber(run.taskId);
-        insert.run({
-          ...run,
-          attemptNumber,
-          retryOfRunId: run.retryOfRunId ?? null,
-          orchestrationKey: run.orchestrationKey ?? null
-        });
-        const manifest = this.buildContextManifest(run.runId);
-        this.database.prepare(`
-          UPDATE runs SET context_manifest_json = ? WHERE run_id = ?
-        `).run(JSON.stringify(manifest), run.runId);
+        this.insertRunIdentity(run);
+        this.freezeContextManifest(run.runId);
       }
       for (const roomId of new Set(runs.map((run) => run.roomId))) {
         this.scheduleCommittedChange(roomId, "run");
       }
     });
     return runs.map(({ runId }) => this.getRun(runId)!);
+  }
+
+  /**
+   * Internal governed admission port. The caller owns the surrounding
+   * immediate transaction, stages the exact admission before this call, and
+   * builds the execution manifest only after the Run identity/context fence
+   * exists but before the Context Manifest's sole write.
+   */
+  public createGovernedRun(
+    run: RunRecord,
+    buildExecution: () => GovernedExecutionManifest
+  ): RunRecord {
+    if (!this.database.inTransaction) {
+      throw new Error("Governed Run creation requires an owned transaction");
+    }
+    this.insertRunIdentity(run);
+    const execution = buildExecution();
+    this.freezeContextManifest(run.runId, execution);
+    this.scheduleCommittedChange(run.roomId, "run");
+    return this.getRun(run.runId)!;
   }
 
   public getContextManifest(runId: string): RunContextManifest | undefined {
@@ -1632,6 +1633,43 @@ export class RunRepository {
       SELECT COALESCE(MAX(attempt_number), 0) + 1 AS next
       FROM runs WHERE task_id = ?
     `).get(taskId) as { next: number }).next;
+  }
+
+  private insertRunIdentity(run: RunRecord): void {
+    const attemptNumber = run.attemptNumber ?? this.nextAttemptNumber(run.taskId);
+    this.database.prepare(`
+      INSERT INTO runs (
+        run_id, trace_id, room_id, task_id, trigger_message_id,
+        requester_member_id, target_agent_id, parent_run_id, instruction,
+        state, last_sequence, deadline_at, created_at, updated_at, terminal_at,
+        orchestration_key, attempt_number, retry_of_run_id, context_manifest_json
+      ) VALUES (
+        @runId, @traceId, @roomId, @taskId, @triggerMessageId,
+        @requesterMemberId, @targetAgentId, @parentRunId, @instruction,
+        @state, @lastSequence, @deadlineAt, @createdAt, @updatedAt,
+        @terminalAt, @orchestrationKey, @attemptNumber, @retryOfRunId, NULL
+      )
+    `).run({
+      ...run,
+      attemptNumber,
+      retryOfRunId: run.retryOfRunId ?? null,
+      orchestrationKey: run.orchestrationKey ?? null
+    });
+  }
+
+  private freezeContextManifest(
+    runId: string,
+    execution?: GovernedExecutionManifest
+  ): void {
+    const manifest = this.buildContextManifest(runId);
+    if (execution) manifest.execution = execution;
+    const updated = this.database.prepare(`
+      UPDATE runs SET context_manifest_json = ?
+      WHERE run_id = ? AND context_manifest_json IS NULL
+    `).run(JSON.stringify(manifest), runId);
+    if (updated.changes !== 1) {
+      throw new Error("Run Context Manifest is already frozen");
+    }
   }
 
   private buildContextManifest(runId: string): RunContextManifest {

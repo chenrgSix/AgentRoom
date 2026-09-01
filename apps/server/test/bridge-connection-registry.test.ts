@@ -1,5 +1,10 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
+import type { GovernedExecutionManifest } from
+  "@convene-wire/contracts/execution-plan";
+import { executionOperationDigest } from
+  "@convene-wire/contracts/execution-validation";
 
 import {
   BridgeConnectionRegistry,
@@ -18,6 +23,13 @@ class FakeSocket implements BridgeSocket {
     this.sent.push(data);
   }
 }
+
+const governedWire = JSON.parse(await readFile(new URL(
+  "../../../packages/contracts/fixtures/execution-runtime-cases.json",
+  import.meta.url
+), "utf8")).cases.find((entry: { name: string }) =>
+  entry.name === "execution runtime: valid governed wire delivery"
+).instance.payload;
 
 test("only the newest authenticated Bridge epoch remains active", () => {
   const registry = new BridgeConnectionRegistry();
@@ -51,105 +63,135 @@ test("Bridge capabilities belong to the active connection epoch", () => {
 });
 
 test("governed Run transport requires the current exact execution capability", () => {
-  const registry = new BridgeConnectionRegistry();
+  const registry = new BridgeConnectionRegistry(
+    () => new Date("2026-08-31T10:05:00Z")
+  );
   const legacy = new FakeSocket();
   const capable = new FakeSocket();
   const downgraded = new FakeSocket();
+  const manifest = structuredClone(
+    governedWire.contextManifest.execution
+  ) as GovernedExecutionManifest;
+  const deviceId = manifest.scope.deviceId;
+  const agentId = manifest.scope.agentId;
   const capability = { version: 1, workspaceBoundary: "enforced", preventivePathEnforcement: false,
     operations: ["prepare", "capture", "verify"] };
   const readyGrant = {
-    grant: { grantId: "grant_execution0001", revision: 1, digest: "a".repeat(64),
-      expiresAt: "2026-09-01T12:00:00Z" },
-    repositoryId: "repo_execution0001", bindingId: "repobind_execution0001",
-    deviceId: "device_execution", agentId: "agent_execution",
-    planId: "plan_execution0001", nodeKey: "build",
+    grant: structuredClone(manifest.grant),
+    repositoryId: manifest.repository.repositoryId,
+    bindingId: manifest.repository.bindingId,
+    deviceId,
+    agentId,
+    planId: manifest.scope.planId,
+    nodeKey: manifest.scope.nodeKey,
     operations: ["prepare", "capture"], runtimeProfile: {
-      profileId: "profile_execution0001", revision: 1, digest: "b".repeat(64)
-    }, verificationProfiles: [], scopePolicy: { access: "isolated_write",
-      allowedPaths: ["src"], forbiddenPaths: [], requirePreventivePathEnforcement: false },
-    integrationTargets: [], issuedAt: "2026-09-01T10:00:00Z", revokedAt: null
+      profileId: manifest.repository.runtimeProfileId,
+      revision: 1,
+      digest: manifest.repository.runtimeProfileDigest
+    },
+    verificationProfiles: manifest.verificationProfiles.map((profile) => ({
+      profileId: profile.profileId,
+      revision: profile.revision,
+      digest: profile.digest
+    })),
+    scopePolicy: structuredClone(manifest.scopePolicy),
+    integrationTargets: [],
+    issuedAt: manifest.workspace.issuedAt,
+    revokedAt: null
   };
   const agentCapability = { ...capability, readyGrants: [readyGrant] };
-  const governed = { type: "run.requested", payload: {
-    targetAgentId: "agent_execution", contextManifest: { execution: {} }
-  } };
+  const governed = (execution: GovernedExecutionManifest = manifest) => ({
+    type: "run.requested", payload: {
+      targetAgentId: agentId,
+      contextManifest: { execution }
+    }
+  });
   const ordinary = { type: "run.requested", payload: {} };
-  registry.register("device_execution", 1, legacy);
-  assert.equal(registry.send("device_execution", governed), false);
-  assert.equal(registry.send("device_execution", ordinary), true);
+  registry.register(deviceId, 1, legacy);
+  assert.equal(registry.send(deviceId, governed()), false);
+  assert.equal(registry.send(deviceId, ordinary), true);
   assert.equal(legacy.sent.length, 1);
   for (const invalid of [{ ...capability, version: 2 }, { ...capability, workspaceBoundary: "prompt_only" }, true]) {
-    assert.throws(() => registry.register("device_execution", 2, capable, { governedExecution: invalid }), /PLAN_SCHEMA_INVALID/u);
-    assert.equal(registry.activeEpoch("device_execution"), 1);
+    assert.throws(() => registry.register(deviceId, 2, capable, { governedExecution: invalid }), /PLAN_SCHEMA_INVALID/u);
+    assert.equal(registry.activeEpoch(deviceId), 1);
     assert.equal(legacy.closes.length, 0);
   }
-  registry.register("device_execution", 2, capable, { governedExecution: capability });
-  assert.equal(registry.supportsGovernedExecution("device_execution"), true);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", agentCapability), true);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", {
+  registry.register(deviceId, 2, capable, { governedExecution: capability });
+  assert.equal(registry.supportsGovernedExecution(deviceId), true);
+  assert.equal(registry.supportsGovernedAgentCapability(deviceId, agentId, agentCapability), true);
+  assert.equal(registry.supportsGovernedAgentCapability(deviceId, agentId, {
     ...capability, operations: ["prepare"]
   }), true);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", {
+  assert.equal(registry.supportsGovernedAgentCapability(deviceId, agentId, {
     ...capability, preventivePathEnforcement: true
   }), false);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", {
+  assert.equal(registry.supportsGovernedAgentCapability(deviceId, agentId, {
     ...capability, operations: ["publish"]
   }), false);
-  assert.equal(registry.supportsGovernedAgentCapability("device_execution", "agent_execution", {
+  assert.equal(registry.supportsGovernedAgentCapability(deviceId, agentId, {
     ...agentCapability,
     readyGrants: [{ ...readyGrant, deviceId: "device_foreign0001" }]
   }), false, "a foreign Device grant was accepted");
-  assert.equal(registry.send("device_execution", governed), false,
+  assert.equal(registry.send(deviceId, governed()), false,
     "Device hello cannot stand in for current Agent publication");
   assert.equal(registry.recordGovernedAgentCapability(
-    "device_execution", 1, "agent_execution", agentCapability
+    deviceId, 1, agentId, agentCapability
   ), false, "a stale epoch recorded Agent capability");
   assert.equal(registry.recordGovernedAgentCapability(
-    "device_execution", 2, "agent_execution", {
+    deviceId, 2, agentId, {
       ...capability, operations: ["prepare"]
     }
   ), true);
-  assert.equal(registry.send("device_execution", governed), false,
+  assert.equal(registry.send(deviceId, governed()), false,
     "prepare-only Agent publication enabled complete governed transport");
   assert.equal(registry.recordGovernedAgentCapability(
-    "device_execution", 2, "agent_execution", agentCapability
+    deviceId, 2, agentId, agentCapability
   ), true);
   const agentSnapshot = registry.governedAgentExecutionCapability(
-    "device_execution", "agent_execution"
+    deviceId, agentId
   )!;
   assert.deepEqual(agentSnapshot.operations, capability.operations);
   assert.equal(registry.governedAgentReadyGrants(
-    "device_execution", "agent_execution"
+    deviceId, agentId
   )[0]?.grant.grantId, readyGrant.grant.grantId);
   agentSnapshot.operations.splice(0);
   assert.equal(registry.supportsGovernedAgentExecution(
-    "device_execution", "agent_execution"
+    deviceId, agentId
   ), true);
-  assert.equal(registry.send("device_execution", governed), true);
+  const invalidDigest = structuredClone(manifest);
+  invalidDigest.scopePolicy.allowedPaths.push("foreign");
+  assert.equal(registry.send(deviceId, governed(invalidDigest)), false,
+    "a changed manifest reused its digest");
+  const changedScope = structuredClone(invalidDigest);
+  const { manifestDigest: _, ...unsigned } = changedScope;
+  changedScope.manifestDigest = executionOperationDigest(unsigned);
+  assert.equal(registry.send(deviceId, governed(changedScope)), false,
+    "a rehashed manifest exceeded the current grant");
+  assert.equal(registry.send(deviceId, governed()), true);
   assert.equal(registry.recordGovernedAgentCapability(
-    "device_execution", 2, "agent_execution", undefined
+    deviceId, 2, agentId, undefined
   ), true);
-  assert.equal(registry.send("device_execution", governed), false,
+  assert.equal(registry.send(deviceId, governed()), false,
     "same-epoch Agent downgrade retained its prior declaration");
   assert.equal(registry.recordGovernedAgentCapability(
-    "device_execution", 2, "agent_execution", agentCapability
+    deviceId, 2, agentId, agentCapability
   ), true);
-  registry.register("device_execution", 3, downgraded);
-  assert.equal(registry.supportsGovernedExecution("device_execution"), false);
+  registry.register(deviceId, 3, downgraded);
+  assert.equal(registry.supportsGovernedExecution(deviceId), false);
   assert.equal(registry.supportsGovernedAgentCapability(
-    "device_execution", "agent_execution", agentCapability
+    deviceId, agentId, agentCapability
   ), false);
   assert.equal(registry.governedAgentExecutionCapability(
-    "device_execution", "agent_execution"
+    deviceId, agentId
   ), undefined, "a new hello retained an older Agent declaration");
-  assert.equal(registry.send("device_execution", governed), false);
-  assert.equal(registry.send("device_execution", ordinary), true);
+  assert.equal(registry.send(deviceId, governed()), false);
+  assert.equal(registry.send(deviceId, ordinary), true);
   assert.equal(capable.sent.length, 1);
   const observing = { ...capability, operations: ["observe"] };
   registry.register("device_observer", 1, new FakeSocket(), { governedExecution: observing });
   observing.operations.push("prepare", "capture");
   assert.equal(registry.supportsGovernedExecution("device_observer"), false);
-  assert.equal(registry.send("device_observer", governed), false);
+  assert.equal(registry.send("device_observer", governed()), false);
   const snapshot = registry.governedExecutionCapability("device_observer")!;
   assert.deepEqual(snapshot.operations, ["observe"]);
   snapshot.operations.push("prepare", "capture");

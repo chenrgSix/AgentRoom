@@ -69,9 +69,6 @@ func repositoryGrantCommand(args []string, output io.Writer, clock func() time.T
 			return profileErr
 		}
 		defer profiles.Close()
-		if len(spec.VerificationProfiles) != 0 {
-			return admission.ErrProfileUnsupported
-		}
 		if _, err := profiles.ResolveRuntime(spec.RuntimeProfile, spec.AgentID, agent); err != nil {
 			return err
 		}

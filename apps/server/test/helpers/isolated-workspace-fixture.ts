@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import type { TestContext } from "node:test";
-import type { ExecutionPlanDefinition, GovernedExecutionManifest } from "@convene-wire/contracts/execution-plan";
+import type {
+  ExecutionPlanDefinition,
+  GovernedExecutionCapability,
+  GovernedExecutionManifest
+} from "@convene-wire/contracts/execution-plan";
 import { executionOperationDigest } from "@convene-wire/contracts/execution-validation";
 import { BridgeConnectionRegistry } from "../../src/bridge/bridge-connection-registry.js";
 import { CoreRepository } from "../../src/data/core-repository.js";
@@ -16,6 +20,38 @@ const wire = JSON.parse(await readFile(new URL("../../../../packages/contracts/f
   .cases.find((entry: { name: string }) => entry.name === "execution runtime: valid governed wire delivery").instance.payload;
 export const capability = { version: 1 as const, workspaceBoundary: "enforced" as const,
   preventivePathEnforcement: false, operations: ["prepare", "capture"] as const };
+
+export function capabilityForManifest(
+  manifest: GovernedExecutionManifest
+): GovernedExecutionCapability {
+  return {
+    ...capability,
+    readyGrants: [{
+      grant: structuredClone(manifest.grant),
+      repositoryId: manifest.repository.repositoryId,
+      bindingId: manifest.repository.bindingId,
+      deviceId: manifest.scope.deviceId,
+      agentId: manifest.scope.agentId,
+      planId: manifest.scope.planId,
+      nodeKey: manifest.scope.nodeKey,
+      operations: ["prepare", "capture"],
+      runtimeProfile: {
+        profileId: manifest.repository.runtimeProfileId,
+        revision: 1,
+        digest: manifest.repository.runtimeProfileDigest
+      },
+      verificationProfiles: manifest.verificationProfiles.map((profile) => ({
+        profileId: profile.profileId,
+        revision: profile.revision,
+        digest: profile.digest
+      })),
+      scopePolicy: structuredClone(manifest.scopePolicy),
+      integrationTargets: [],
+      issuedAt: manifest.workspace.issuedAt,
+      revokedAt: null
+    }]
+  };
+}
 
 export async function workspaceFixture(t: TestContext, preventivePathEnforcement = false, options: {
   now?: string; clock?: () => string; configurePlan?: (definition: ExecutionPlanDefinition) => void;

@@ -126,10 +126,12 @@ or generation-write endpoint. Local repository enrollment, grant authentication,
 actual worktree creation, runtime enforcement and cleanup stay with REPO-001,
 BRG-071 and RUN-018. The production Bridge now advertises `prepare` plus
 `capture` only after recovery and attaches path-free current grant summaries to
-the same-epoch exact-Agent publication. This coordination layer still does not
-derive a manifest or treat that summary as authority. Governed coding remains
-closed until RUN-018 validates an approved plan, freezes the exact capture
-intent and matches the manifest to one current summary.
+the same-epoch exact-Agent publication. RUN-018 now validates one approved
+implementation node, freezes its exact capture manifest, matches it to one
+current summary at admission and again at socket send, and reserves the lease
+in the same transaction. The summary remains evidence rather than authority;
+the Bridge must still pass every owner-local check. Nodes with unresolved
+required predecessor inputs remain closed pending EXEC-003.
 
 Repository Capture derives a separate `read_capture` content lease from one
 authenticated capture operation and its frozen isolated generation. Migration

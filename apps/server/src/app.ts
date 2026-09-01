@@ -64,6 +64,8 @@ import { ExecutionInputRepository } from "./execution/execution-input-repository
 import { ExecutionInputService } from "./execution/execution-input-service.js";
 import { ExecutionApprovalRepository } from "./execution/execution-approval-repository.js";
 import { ExecutionPlanCompiler } from "./execution/execution-plan-compiler.js";
+import { GovernedRunAdmissionService } from
+  "./execution/governed-run-admission-service.js";
 import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
@@ -441,10 +443,22 @@ export async function createServerApp(
     clock
   );
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
-  const bridgeConnections = new BridgeConnectionRegistry();
+  const bridgeConnections = new BridgeConnectionRegistry(
+    () => new Date(clock())
+  );
   const isolatedWorkspaces = new IsolatedWorkspaceLeaseService(
     database, new ExecutionPlanRepository(database), bridgeConnections
   );
+  runs.configureGovernedAdmission(new GovernedRunAdmissionService(
+    database,
+    transactions,
+    new ExecutionPlanRepository(database),
+    executionApprovals,
+    executionInputs,
+    isolatedWorkspaces,
+    bridgeConnections,
+    runRepository
+  ));
   const repositoryCaptures = new RepositoryCaptureService(database,
     isolatedWorkspaces,
     artifactRepository, artifactPublicationRepository, artifactBlobs);

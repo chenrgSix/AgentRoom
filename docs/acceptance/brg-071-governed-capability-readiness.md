@@ -31,9 +31,10 @@ Result, verify output, integrate code or authorize cleanup.
   future manifest admission service. A new hello clears the prior Agent set.
 
 The published summary is routing and admission evidence, not bearer authority.
-The future Server adapter must match it to the approved plan and freeze the
-exact manifest. The Bridge will still recheck its immutable local grant,
-repository, profile and current Server authority immediately around effects.
+The RUN-018 Server adapter now matches it to one approved implementation node,
+freezes the exact manifest and repeats exact current matching at socket send.
+The Bridge still rechecks its immutable local grant, repository, runtime
+profile, verifier pins and current Server authority immediately around effects.
 
 ## Verification
 
@@ -50,6 +51,9 @@ Every focused command used a unique run-scoped temporary root. The runner
 printed cleanup for each exact root, including interrupted diagnostic runs, and
 no test used or cleared the user's real temporary directories by glob.
 
-Server plan-to-manifest derivation, an exact manifest-to-grant send fence,
-prompt scope projection, actual governed delivery, Result/verification,
-owner-visible cleanup and physical Runtime acceptance remain open.
+Server plan-to-manifest derivation, the exact manifest-to-grant send fence and
+prompt scope projection are now covered by
+[RUN-018 governed delivery evidence](run-018-governed-capture-delivery.md).
+Required predecessor input selection, a real same-Run Server/Go Bridge/Runtime
+acceptance, Result/verification, owner-visible cleanup and physical Runtime
+acceptance remain open.

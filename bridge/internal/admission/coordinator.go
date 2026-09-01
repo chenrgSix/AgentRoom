@@ -239,9 +239,6 @@ func (c *GovernedAdmissionCoordinator) recheckLocal(ctx context.Context, manifes
 	if now.IsZero() {
 		return nil, repository.PreparedWorkspace{}, RuntimeProfileView{}, RuntimeAdmissionSpec{}, ErrAdmissionInvalid
 	}
-	if len(manifest.VerificationProfiles) != 0 {
-		return nil, repository.PreparedWorkspace{}, RuntimeProfileView{}, RuntimeAdmissionSpec{}, ErrProfileUnsupported
-	}
 	agent, ok := c.agents[manifest.Scope.AgentID]
 	if !ok {
 		return nil, repository.PreparedWorkspace{}, RuntimeProfileView{}, RuntimeAdmissionSpec{}, ErrProfileDenied

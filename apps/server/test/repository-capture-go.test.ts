@@ -18,7 +18,11 @@ import { ContextPlanner } from "../src/task/context-planner.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
 import { inspectCommitBundleEnvelope } from "../src/artifact/commit-bundle-envelope.js";
 import { planIsolatedWorkspace } from "../src/workspace/isolated-workspace-lease-service.js";
-import { capability, workspaceFixture } from "./helpers/isolated-workspace-fixture.js";
+import {
+  capability,
+  capabilityForManifest,
+  workspaceFixture
+} from "./helpers/isolated-workspace-fixture.js";
 
 const exec = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -118,7 +122,8 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
       socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_real_capture_agentpub0001", timestamp: now,
         type: "agent.publish", payload: {
           agentId: f.agent.agentId,
-          capabilities: { ...f.agent.capabilities, governedExecution: capability, invocationMode: "managed" },
+          capabilities: { ...f.agent.capabilities,
+            governedExecution: capabilityForManifest(f.manifest), invocationMode: "managed" },
           deviceId: f.device.deviceId,
           name: f.agent.name,
           ownerMemberId: f.agent.ownerMemberId,
@@ -129,6 +134,12 @@ test("real Go capture publication seals actual Git bytes and reconciles lost res
         } }));
       const [frame] = await ready;
       assert.equal(JSON.parse(String(frame)).type, "run.requested");
+      assert.equal(f.connections.recordGovernedAgentCapability(
+        f.device.deviceId,
+        1,
+        f.agent.agentId,
+        capabilityForManifest(f.manifest)
+      ), true);
       const initialRun = f.database.prepare("SELECT state FROM runs WHERE run_id = ?").get(f.manifest.scope.runId);
       const initialTask = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
       assert.ok(["ready", "active", "review"].includes(initialTask.lifecycleState));

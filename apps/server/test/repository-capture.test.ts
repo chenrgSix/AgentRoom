@@ -13,7 +13,11 @@ import { RunRepository } from "../src/run/run-repository.js";
 import { planIsolatedWorkspace } from "../src/workspace/isolated-workspace-lease-service.js";
 import { openDatabase } from "../src/data/database.js";
 import { now } from "./helpers/execution-plan-fixture.js";
-import { workspaceFixture, capability } from "./helpers/isolated-workspace-fixture.js";
+import {
+  workspaceFixture,
+  capability,
+  capabilityForManifest
+} from "./helpers/isolated-workspace-fixture.js";
 import { syntheticCommitBundle } from "./helpers/commit-bundle-fixture.js";
 
 const bytes = Buffer.from("diff --git a/src/a b/src/a\n--- a/src/a\n+++ b/src/a\n@@ -1 +1 @@\n-old\n+new\n");
@@ -53,7 +57,8 @@ async function captureFixture(t: TestContext, commitOutput = false) {
   socket.send(JSON.stringify({ protocolVersion: "1.0", messageId: "msg_capture_agentpub0001", timestamp: now,
     type: "agent.publish", payload: {
       agentId: f.agent.agentId,
-      capabilities: { ...f.agent.capabilities, governedExecution: capability, invocationMode: "managed" },
+      capabilities: { ...f.agent.capabilities,
+        governedExecution: capabilityForManifest(f.manifest), invocationMode: "managed" },
       deviceId: f.device.deviceId,
       name: f.agent.name,
       ownerMemberId: f.agent.ownerMemberId,
@@ -61,8 +66,14 @@ async function captureFixture(t: TestContext, commitOutput = false) {
       teamId: f.teamId,
       workspaceRef: f.agent.workspaceRef,
       workspaceGeneration: f.agent.workspaceGeneration
-    } }));
+  } }));
   await ready;
+  assert.equal(f.connections.recordGovernedAgentCapability(
+    f.device.deviceId,
+    1,
+    f.agent.agentId,
+    capabilityForManifest(f.manifest)
+  ), true);
   const initialRunState = new RunRepository(f.database).getRun(f.manifest.scope.runId)!.state;
   const request = hashRequest({ version: 1, operationId: "op_capture_publication0001", requestDigest: "a".repeat(64),
     plan: { planId: f.manifest.scope.planId, revision: f.manifest.scope.planRevision, digest: f.manifest.scope.planDigest,

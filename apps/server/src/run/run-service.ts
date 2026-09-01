@@ -5,6 +5,8 @@ import type {
   AgentTaskRecord,
   AgentTaskRepository
 } from "../task/task-repository.js";
+import type { GovernedMessageAdmissionPort } from
+  "../execution/governed-run-admission-service.js";
 import type {
   RunAmbiguityAcknowledgement,
   RunContextManifest,
@@ -29,12 +31,23 @@ export function runDeadlineAt(createdAt: string): string {
 }
 
 export class RunService {
+  private governedAdmission?: GovernedMessageAdmissionPort;
+
   public constructor(
     private readonly core: CoreRepository,
     private readonly runs: RunRepository,
     private readonly auth: AuthService,
     private readonly tasks: AgentTaskRepository
   ) {}
+
+  public configureGovernedAdmission(
+    admission: GovernedMessageAdmissionPort
+  ): void {
+    if (this.governedAdmission) {
+      throw new Error("Governed Run admission is already configured");
+    }
+    this.governedAdmission = admission;
+  }
 
   public createRunsForMessage(
     principal: WebPrincipal,
@@ -68,6 +81,13 @@ export class RunService {
     ) {
       throw new Error("Run Task must be runnable in the Message Room");
     }
+    const governed = this.governedAdmission?.createRunsForMessage({
+      member,
+      message,
+      now,
+      task
+    });
+    if (governed) return governed;
     const deadlineAt = runDeadlineAt(now);
     this.runs.createRuns(message.mentions.map((mention) => ({
       runId: createOpaqueId("run"),

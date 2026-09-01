@@ -147,6 +147,76 @@ func projectedContextManifest(manifest *contracts.ContextManifest) string {
 		}
 		lines = append(lines, "Intentionally omitted context categories: "+strings.Join(omitted, ", ")+".")
 	}
+	if execution := projectedGovernedExecution(manifest.Execution); execution != "" {
+		lines = append(lines, execution)
+	}
+	return strings.Join(lines, "\n")
+}
+
+func projectedGovernedExecution(execution *contracts.Execution) string {
+	if execution == nil {
+		return ""
+	}
+	allowed := "none"
+	if len(execution.ScopePolicy.AllowedPaths) > 0 {
+		allowed = strings.Join(execution.ScopePolicy.AllowedPaths, ", ")
+	}
+	forbidden := "none"
+	if len(execution.ScopePolicy.ForbiddenPaths) > 0 {
+		forbidden = strings.Join(execution.ScopePolicy.ForbiddenPaths, ", ")
+	}
+	outputs := make([]string, 0, len(execution.Outputs))
+	for _, output := range execution.Outputs {
+		requirement := "optional"
+		if output.Required {
+			requirement = "required"
+		}
+		outputs = append(outputs, fmt.Sprintf("%s:%s:%s", output.SlotKey, output.Kind, requirement))
+	}
+	verifiers := make([]string, 0, len(execution.VerificationProfiles))
+	for _, profile := range execution.VerificationProfiles {
+		requirement := "optional"
+		if profile.Required {
+			requirement = "required"
+		}
+		verifiers = append(verifiers, fmt.Sprintf("%s@%d:%s", profile.ProfileID, profile.Revision, requirement))
+	}
+	lines := []string{
+		fmt.Sprintf(
+			"Governed execution scope: approved plan %s revision %d, node %s, dispatch generation %d.",
+			execution.Scope.PlanID,
+			execution.Scope.PlanRevision,
+			execution.Scope.NodeKey,
+			execution.Scope.DispatchGeneration,
+		),
+		fmt.Sprintf(
+			"Repository input: %s at base commit %s; workspace mode=%s; access=%s.",
+			execution.Repository.RepositoryID,
+			execution.Repository.BaseCommit,
+			execution.Workspace.Mode,
+			execution.ScopePolicy.Access,
+		),
+		"Allowed relative paths: " + allowed + ".",
+		"Forbidden relative paths: " + forbidden + ".",
+		"Declared outputs: " + strings.Join(outputs, ", ") + ".",
+		"Execution deadline: " + execution.Deadline + ".",
+	}
+	if len(verifiers) > 0 {
+		lines = append(lines,
+			"Pinned verification profiles: "+strings.Join(verifiers, ", ")+". "+
+				"These are downstream acceptance requirements; this Runtime has no independent verification or Result acceptance authority.",
+		)
+	}
+	if execution.Capture != nil {
+		captureSlots := make([]string, 0, len(execution.Capture.Outputs))
+		for _, output := range execution.Capture.Outputs {
+			captureSlots = append(captureSlots, output.SlotKey)
+		}
+		lines = append(lines,
+			"After the Runtime stops, the governed capture boundary will collect output slots: "+
+				strings.Join(captureSlots, ", ")+". Do not claim that capture is review, verification, integration, or Task completion.",
+		)
+	}
 	return strings.Join(lines, "\n")
 }
 

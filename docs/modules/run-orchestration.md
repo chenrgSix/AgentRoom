@@ -9,11 +9,13 @@ without degrading it to a prompt-only ordinary Run.
 
 The additive wire carrier is `contextManifest.execution`, defined by CON-021.
 It freezes one exact version-1 manifest rather than duplicating execution fields
-beside the existing context snapshot. Capability-aware transport rejection and
-Bridge no-start prerequisites are present before the scheduler is enabled;
-they do not implement frozen-input creation or execution admission. RUN-018 and
-EXEC-004 own that integration and must preserve ordinary Run identity, inbox
-deduplication, cancellation and explicit unknown-outcome retry.
+beside the existing context snapshot. RUN-018 now admits one owner-dispatched,
+approved implementation node with no unresolved required inputs, stages an
+immutable SQL admission, freezes its exact capture manifest and isolated lease,
+and sends it through the ordinary durable Delivery path. EXEC-004 still owns
+automatic scheduling, while EXEC-003 owns predecessor input selection. Both
+must preserve ordinary Run identity, inbox deduplication, cancellation and
+explicit unknown-outcome retry.
 
 RUN-018 now has its first additive delivery field: a governed execution manifest
 may freeze one `capture` intent containing the stable repository operation ID,
@@ -22,8 +24,9 @@ bounded title/summary text and either a portable repository-relative report path
 or `null` for patch/commit content. The intent is covered by the manifest digest
 and remains optional for old manifests; its presence is data, not local Git
 permission, process-stop proof, Artifact publication authority or a Result. The
-production Bridge and Server must still validate it against approved slots and
-current Run authority before they can advertise or consume `capture`.
+production Server derives it only from approved patch/commit slots and the
+production Bridge still requires its independent local grant, process-stop and
+current Server checks before consuming `capture`.
 
 - Prefix: `RUN`
 - Planned location: `apps/server/`
@@ -177,13 +180,20 @@ restarts and reconnects retain one intent and one terminal Run history.
 
 ## Delivery Contract
 
-1. Persist Run and delivery record.
-2. Select the currently active target Bridge connection.
-3. Send `run.requested` with Run ID, delivery attempt ID, and the exact stored
+1. For a governed Task, validate the exact approved node and current
+   same-epoch Agent grant, then atomically persist the immutable admission, Run,
+   one-time manifest seal and isolated workspace lease. Ordinary Runs retain
+   their existing creation path.
+2. Persist the delivery record only after the governed admission is sealed.
+3. Select the currently active target Bridge connection.
+4. Immediately revalidate the governed manifest digest against one exact
+   current Agent grant; a downgrade, expiry or scope drift remains pending and
+   is not sent.
+5. Send `run.requested` with Run ID, delivery attempt ID, and the exact stored
    Context Manifest when present.
-4. Bridge durably records Run ID before returning `run.accepted`.
-5. Retry on missing ACK without changing Run ID.
-6. Stop retrying after acceptance, cancellation, expiry, or Agent revocation.
+6. Bridge durably records Run ID before returning `run.accepted`.
+7. Retry on missing ACK without changing Run ID.
+8. Stop retrying after acceptance, cancellation, expiry, or Agent revocation.
 
 Delivery is at least once; execution is idempotent through the Bridge inbox.
 Reported Runtime scope is validated against that Run's immutable Delivery

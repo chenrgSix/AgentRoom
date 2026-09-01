@@ -37,6 +37,9 @@ Production Bridge capture composition, finished-process fencing and canonical
 checkpoint publication are now covered by
 [BRG-071 governed capture evidence](brg-071-governed-capture-publication.md).
 Server plan-to-manifest validation, exact summary matching, prompt scope
-projection, owner cleanup and actual governed Run delivery remain explicit open
-gates. Full capability publication is recorded separately in
+projection and the initial approved zero-input implementation delivery are now
+covered by [RUN-018 governed delivery evidence](run-018-governed-capture-delivery.md).
+Required predecessor input selection, owner cleanup and a real same-Run
+Server/Go Bridge/Runtime acceptance remain explicit open gates. Full capability
+publication is recorded separately in
 [BRG-071 readiness evidence](brg-071-governed-capability-readiness.md).
