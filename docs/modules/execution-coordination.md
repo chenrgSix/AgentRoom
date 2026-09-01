@@ -67,7 +67,7 @@ the actual RUN-018/EXEC-003 delivery and materialization gates.
 | PlanApproval | operationId, exact revision/digest, actor, root Task revision, decision, timestamp |
 | PlanNode | stable nodeKey, taskId, definition/criteria pins, Agent, repository and verifier requirements |
 | PlanEdge | edgeKey, source/target node keys, gate, selected output/input slots |
-| NodeMaterialization | plan revision/node/gate, exact source Run/Result/review and canonical checkpoint Artifact pins |
+| NodeMaterialization | plan revision/node/gate, exact source Run/Result, gate-specific proof authority and canonical checkpoint Artifact pins |
 | TaskInputBinding | bindingId, plan revision/edge, source receipt, destination Task/Run, immutable content pins |
 | DispatchIntent | plan revision/node/generation, unique Run ID, exact inputs, operation digest |
 | PlanControlEvent | operationId, expected execution revision, actor, pause/resume/cancel reason |
@@ -292,6 +292,31 @@ The bounded first edge uses the existing production-supported patch input. The
 defines the physical A-to-B provenance, restart and concurrency evidence. Commit
 bundle preparation, `verified_output`, `integrated_commit` and generation 2
 remain fail-closed.
+
+### Independent Verified-Output Increment
+
+VER-001 is frozen by the
+[independent verification target](../acceptance/ver-001-independent-verification-goal.md).
+It adds no LLM decision and does not reinterpret Result acceptance. The exact
+canonical checkpoint is verified by a separate Bridge child process admitted
+under an owner-local profile and `verify` grant. Central retains the authenticated
+immutable receipt; only the complete required `passed` receipt set may create a
+`verified_output` NodeMaterialization.
+
+The accepted-result and verified-output gates have separate proof authorities:
+
+| Gate | Required proof authority |
+| --- | --- |
+| `accepted_result` | exact accepted `ResultReview` |
+| `verified_output` | exact required `VerificationReceipt` set |
+| `integrated_commit` | unavailable until exact `IntegrationReceipt` is implemented |
+
+The dependency resolver remains deliberately mechanical: read the edge gate,
+load the corresponding retained materialization and map approved slots to
+selections. `freezeForRun()` must validate the matching gate proof and sealed
+bytes inside destination admission. A verified edge never falls back to an
+accepted Result, and verified materialization does not change the source node's
+runtime state to a generic success state.
 
 ## APIs and Agent Tools
 

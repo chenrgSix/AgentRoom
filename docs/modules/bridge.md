@@ -111,8 +111,9 @@ The Runtime profile pin must resolve during issuance to one current owner-local
 immutable registration for that exact Agent and current execution-bearing local
 configuration. A changed profile revision/digest, Agent identity, command,
 sandbox, safe environment-name set or session conflict policy fails closed.
-Verification profiles are rejected until VER-001 supplies their independent
-registry and resolver. This issuance prerequisite still is not startup proof:
+Verification profiles remain unusable until the active VER-001 slice supplies
+their independent registry, just-in-time resolver and process runner. This
+issuance prerequisite still is not startup proof:
 no grant is advertised until production admission reruns the physical boundary
 and all remaining gates independently pass.
 

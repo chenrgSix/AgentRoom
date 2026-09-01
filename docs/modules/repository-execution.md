@@ -565,3 +565,27 @@ Build/test Server through its existing npm workspace commands. Bridge code uses
 Cross-platform compilation is not native Windows/macOS behavioral acceptance;
 report those gates independently. New APIs and wire data require generated
 TypeScript/Go contract checks and interoperability tests.
+
+### Independent Verification Vertical Slice
+
+The accepted VER-001 target is
+[`ver-001-independent-verification-goal.md`](../acceptance/ver-001-independent-verification-goal.md).
+The Bridge owns an immutable owner-local verification profile registry distinct
+from Agent Runtime profiles. A profile pins executable identity, argv,
+environment-name allowlist, timeout and output limit; its values and paths stay
+local. Registration grants no Task authority. The exact Task grant must also
+name the profile pin and include `verify`.
+
+After canonical capture, the Bridge asks Central to retain the exact verify
+operation before starting a separate verifier process in the isolated candidate
+worktree. Central accepts a terminal receipt only from the operation's paired
+Device. Agent Results, uploaded reports and ordinary member calls cannot mint
+that receipt. Lost responses are recovered by exact operation lookup, never a
+blind command rerun. Only `passed` receipts can satisfy a verified-output gate;
+failed, timed-out, canceled and outcome-unknown receipts remain immutable
+diagnostic evidence.
+
+Verification logs are bounded and sanitized before publication. They contain no
+local workspace path, credential, unrestricted environment or unbounded process
+output. Physical acceptance must inspect retained bytes and the absence of the
+owned process group and temporary root, not merely assert a returned outcome.
