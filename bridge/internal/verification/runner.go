@@ -193,6 +193,9 @@ func (r Runner) RunInRoot(ctx context.Context, profile ResolvedProfile,
 	} else {
 		result.Outcome = OutcomeFailed
 	}
+	if result.Outcome != OutcomePassed && result.Outcome != OutcomeFailed {
+		result.ExitCode = nil
+	}
 	return result, nil
 }
 

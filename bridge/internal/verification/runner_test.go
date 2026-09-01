@@ -81,6 +81,9 @@ func TestRunnerClassifiesPassFailureTimeoutAndCleansOwnedRoot(t *testing.T) {
 			if name == "fail" && (result.ExitCode == nil || *result.ExitCode != 7) {
 				t.Fatalf("failing exit code missing: %#v", result.ExitCode)
 			}
+			if name == "timeout" && result.ExitCode != nil {
+				t.Fatalf("timeout leaked process termination code: %#v", result.ExitCode)
+			}
 			var log logEnvelope
 			if err := json.Unmarshal(result.Log, &log); err != nil {
 				t.Fatal(err)
@@ -117,5 +120,53 @@ func TestRunnerCancellationCannotPass(t *testing.T) {
 	}
 	if result.Outcome == OutcomePassed {
 		t.Fatal("canceled verification passed")
+	}
+	if result.ExitCode != nil {
+		t.Fatalf("canceled verification leaked process termination code: %#v", result.ExitCode)
+	}
+}
+
+func TestRunnerSpawnFailureRetainsFailureEvidenceAndCleansOwnedRoot(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("native Windows process startup failure is covered by the process package")
+	}
+	workspace := filepath.Join(t.TempDir(), "candidate")
+	if err := os.Mkdir(workspace, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	nonExecutable := filepath.Join(t.TempDir(), "verifier")
+	if err := os.WriteFile(nonExecutable, []byte("not executable\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	digest, err := executableDigest(nonExecutable)
+	if err != nil {
+		t.Fatal(err)
+	}
+	temporaryParent := t.TempDir()
+	result, err := (Runner{TemporaryParent: temporaryParent}).Run(
+		context.Background(),
+		ResolvedProfile{
+			Executable:       nonExecutable,
+			ExecutableDigest: digest,
+			Timeout:          time.Second,
+			OutputLimitBytes: 4096,
+		},
+		workspace,
+	)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Outcome != OutcomeFailed || result.ExitCode != nil || len(result.Log) == 0 {
+		t.Fatalf("spawn failure was not retained safely: %#v", result)
+	}
+	var log logEnvelope
+	if err := json.Unmarshal(result.Log, &log); err != nil {
+		t.Fatal(err)
+	}
+	if log.Spawned {
+		t.Fatalf("failed process was reported as spawned: %s", result.Log)
+	}
+	if entries, err := os.ReadDir(temporaryParent); err != nil || len(entries) != 0 {
+		t.Fatalf("spawn failure leaked verification root: %#v %v", entries, err)
 	}
 }
