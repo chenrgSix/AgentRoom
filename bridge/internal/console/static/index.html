@@ -20,6 +20,9 @@
         <button class="nav-item" type="button" data-page-target="agents">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><circle cx="10" cy="7" r="3"/><path d="M4.5 16.2c.7-2.8 2.5-4.2 5.5-4.2s4.8 1.4 5.5 4.2"/></svg></span><span>本机 Agent</span>
         </button>
+        <button class="nav-item" type="button" data-page-target="governed">
+          <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M10 2.8 16 5v4.5c0 3.7-2.2 6.2-6 7.7-3.8-1.5-6-4-6-7.7V5Z"/><path d="m7.3 9.8 1.7 1.7 3.8-4"/></svg></span><span>受控开发</span>
+        </button>
         <button class="nav-item" type="button" data-page-target="settings">
           <span class="nav-icon" aria-hidden="true"><svg viewBox="0 0 20 20"><path d="M4 5h12M4 10h12M4 15h12"/><circle cx="8" cy="5" r="1.6"/><circle cx="13" cy="10" r="1.6"/><circle cx="7" cy="15" r="1.6"/></svg></span><span>设置</span>
         </button>
@@ -116,6 +119,19 @@
               <button class="primary" id="add-agent" type="button">添加 Agent</button>
             </div>
             <div class="agent-list detailed-agents" id="agent-list"></div>
+          </section>
+
+          <section class="app-page hidden" data-page-panel="governed" id="governed-page">
+            <div class="page-heading">
+              <div><p class="eyebrow">Owner 本机授权</p><h2 tabindex="-1">受控软件开发</h2><p>这里只显示无路径的授权与证明身份；Central 不能读取本机命令、环境或工作区路径。</p></div>
+              <button class="secondary" id="refresh-governed-state" type="button">刷新状态</button>
+            </div>
+            <section class="settings-card">
+              <div class="setting-heading"><div><h3>本机授权链</h3><p id="governed-state-summary">尚未读取。</p></div></div>
+              <div class="governed-inventory" id="governed-inventory"></div>
+              <p class="runtime-policy">创建 repository binding、Runtime/verification profile、Task grant 与 cleanup grant 仍使用本机 Bridge 命令。撤销运行授权会先停止并等待当前 Bridge 与受控进程退出，写入不可逆 tombstone，再按原状态重新连接；它不会删除 Git 数据。</p>
+              <p class="tool-result" id="governed-action-result" role="status"></p>
+            </section>
           </section>
 
           <section class="app-page hidden" data-page-panel="settings" id="settings-page">

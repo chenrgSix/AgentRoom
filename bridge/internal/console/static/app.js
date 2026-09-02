@@ -16,6 +16,7 @@ import { createSessionGuideController } from "./session-guide.mjs";
 import { agentPresentation, connectionPresentation } from "./bridge-presentation.mjs";
 import { reasoningConsentView } from "./reasoning-consent-view.mjs";
 import { initializeWorkspacePickers } from "./workspace-picker.mjs";
+import { governedOwnerPresentation } from "./governed-owner-view.mjs";
 
 const elements = Object.fromEntries([
   "open-client-team", "load-client-rooms", "open-client-room", "client-room", "client-entry-status", "client-entry-help",
@@ -70,7 +71,8 @@ const elements = Object.fromEntries([
   "connection-server-url", "connection-server-token", "clear-server-token-field", "clear-server-token",
   "connection-trust-mode", "connection-fingerprint-field",
   "connection-fingerprint", "save-connection",
-  "codex-session-guide", "close-codex-session-guide", "acknowledge-codex-session-guide"
+  "codex-session-guide", "close-codex-session-guide", "acknowledge-codex-session-guide",
+  "refresh-governed-state", "governed-state-summary", "governed-inventory", "governed-action-result"
 ].map((id) => [id, document.getElementById(id)]));
 
 const sessionGuide = createSessionGuideController(
@@ -124,6 +126,7 @@ function consumePairingLaunchHash() {
 const pageCopy = {
   overview: {context: "本机执行环境", title: "概览"},
   agents: {context: "Runtime 与权限", title: "本机 Agent"},
+  governed: {context: "只保存在这台设备", title: "受控开发"},
   settings: {context: "只保存在这台设备", title: "设置"}
 };
 
@@ -142,6 +145,91 @@ function setPage(page, focus = false) {
   elements["page-context"].textContent = pageCopy[page].context;
   elements["page-title"].textContent = pageCopy[page].title;
   if (focus) document.querySelector(`[data-page-panel="${page}"] h2`)?.focus?.();
+  if (page === "governed") void refreshGovernedState();
+}
+
+function governedInventoryGroup(title, entries, renderEntry) {
+  const section = document.createElement("section");
+  section.className = "governed-inventory-group";
+  const heading = document.createElement("h4");
+  heading.textContent = `${title} · ${entries.length}`;
+  section.append(heading);
+  if (entries.length === 0) {
+    const empty = document.createElement("p");
+    empty.textContent = "暂无记录";
+    section.append(empty);
+    return section;
+  }
+  for (const entry of entries) section.append(renderEntry(entry));
+  return section;
+}
+
+function governedIdentityRow(primary, secondary, status, action) {
+  const row = document.createElement("div");
+  row.className = "governed-identity-row";
+  const copy = document.createElement("div");
+  const strong = document.createElement("strong");
+  strong.textContent = primary;
+  const small = document.createElement("small");
+  small.textContent = secondary;
+  copy.append(strong, small);
+  const state = document.createElement("span");
+  state.textContent = status;
+  row.append(copy, state);
+  if (action) row.append(action);
+  return row;
+}
+
+function renderGovernedState(state) {
+  const presentation = governedOwnerPresentation(state);
+  elements["governed-state-summary"].textContent = presentation.summary;
+  elements["governed-inventory"].replaceChildren(...presentation.groups.map((group) =>
+    governedInventoryGroup(group.title, group.rows, (row) => {
+      let button;
+      if (row.revocation) {
+        button = document.createElement("button");
+        button.type = "button";
+        button.className = "secondary compact-action";
+        button.textContent = "撤销";
+        button.addEventListener("click", () => void revokeGovernedGrant(row, button));
+      }
+      return governedIdentityRow(row.primary, row.secondary, row.status, button);
+    })));
+}
+
+async function refreshGovernedState() {
+  if (!token || !currentState?.configured || !currentState?.paired) return;
+  elements["refresh-governed-state"].disabled = true;
+  elements["governed-action-result"].textContent = "正在读取本机授权…";
+  try {
+    renderGovernedState(await request("/api/governed-owner-state"));
+    elements["governed-action-result"].textContent = "已读取；列表不包含本机路径、命令或环境值。";
+  } catch (error) {
+    elements["governed-action-result"].textContent = "读取失败。";
+    showError(error);
+  } finally {
+    elements["refresh-governed-state"].disabled = false;
+  }
+}
+
+async function revokeGovernedGrant(row, button) {
+  const confirmed = window.confirm(`撤销 ${row.primary}？当前 Bridge 和受控 Runtime 会先安全停止。`);
+  if (!confirmed) return;
+  button.disabled = true;
+  elements["governed-action-result"].textContent = "正在停止当前执行并撤销授权…";
+  try {
+    await request(row.revocation.path, {
+      method: "POST",
+      body: JSON.stringify(row.revocation.body)
+    });
+    await refresh();
+    await refreshGovernedState();
+    elements["governed-action-result"].textContent = "授权已不可逆撤销；原有 Git 数据未删除。";
+  } catch (error) {
+    button.disabled = false;
+    elements["governed-action-result"].textContent = "撤销失败，未假定授权状态。";
+    showError(error);
+  }
 }
 
 const labels = {
@@ -695,6 +783,8 @@ async function refresh() {
 for (const target of document.querySelectorAll("[data-page-target]")) {
   target.addEventListener("click", () => setPage(target.dataset.pageTarget, true));
 }
+
+elements["refresh-governed-state"].addEventListener("click", () => void refreshGovernedState());
 
 elements["connection-fix"].addEventListener("click", () => {
   setPage("settings");

@@ -84,8 +84,10 @@ separate change.
 
 ## Remaining gates
 
-BRG-071 still requires the owner console surface, in-flight startup revocation
-policy, explicit Result proposal in the physical flow and actual no-start/start
-evidence. REPO-001 still requires the complete real Server/Bridge/Git lifecycle
-and recovery cuts. RUN-018/EXEC-003 remain open until Bridge B physically
-consumes the exact integrated predecessor bytes.
+The separate [owner Console and in-flight revocation](brg-071-owner-console-revocation.md)
+increment now supplies the path-free local inventory surface and stop-before-
+tombstone policy. BRG-071 still requires explicit Result proposal in the
+physical flow and actual no-start/start evidence. REPO-001 still requires the
+complete real Server/Bridge/Git lifecycle and recovery cuts. RUN-018/EXEC-003
+remain open until Bridge B physically consumes the exact integrated predecessor
+bytes.

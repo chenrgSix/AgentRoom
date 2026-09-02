@@ -319,6 +319,51 @@ body.configured-mode .app-shell { grid-template-columns: var(--sidebar-width) mi
   border-radius: 14px;
   background: var(--surface);
 }
+
+.governed-inventory {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  margin: 18px 0;
+}
+
+.governed-inventory-group {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.governed-inventory-group h4,
+.governed-inventory-group p {
+  margin: 0 0 10px;
+}
+
+.governed-identity-row {
+  align-items: center;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 10px 0;
+}
+
+.governed-identity-row div,
+.governed-identity-row strong,
+.governed-identity-row small {
+  display: block;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.governed-identity-row small,
+.governed-identity-row > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.compact-action {
+  padding: 7px 10px;
+}
 .setting-heading { align-items: center; }
 .setting-heading p { margin: 0; color: var(--muted); font-size: 11px; }
 .setting-actions { display: flex; align-items: center; flex-wrap: wrap; justify-content: flex-end; gap: 7px; }

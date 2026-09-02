@@ -185,9 +185,22 @@ type Dependencies struct {
 		operations.Observer,
 		connection.ProvisionHandler,
 	) error
-	LoginStartup  autostart.Controller
-	UpdateChecker updatecheck.Service
-	ProbeRuntime  func(context.Context, config.AgentConfig) RuntimeProbeResult
+	LoginStartup              autostart.Controller
+	UpdateChecker             updatecheck.Service
+	ProbeRuntime              func(context.Context, config.AgentConfig) RuntimeProbeResult
+	InspectGovernedOwnerState func(
+		context.Context,
+		config.Config,
+		pairing.Credential,
+	) (GovernedOwnerState, error)
+	RevokeGovernedTaskGrant func(
+		context.Context,
+		config.Config,
+		pairing.Credential,
+		string,
+		GovernedGrantRevocationInput,
+		time.Time,
+	) (GovernedGrantView, error)
 }
 
 type Options struct {
@@ -213,6 +226,9 @@ type Service struct {
 	bridgeCancel           context.CancelFunc
 	bridgeDone             chan struct{}
 	bridgeRestartPending   bool
+	governedMutation       bool
+	governedOwnerState     GovernedOwnerState
+	governedStateLoaded    bool
 	bridgeEpoch            uint64
 	bridgeWorkers          int
 	closed                 bool
@@ -245,6 +261,12 @@ func New(options Options, dependencies Dependencies) (*Service, error) {
 				ctx, credential, targetOrigin, time.Now(),
 			)
 		}
+	}
+	if dependencies.InspectGovernedOwnerState == nil {
+		dependencies.InspectGovernedOwnerState = inspectGovernedOwnerState
+	}
+	if dependencies.RevokeGovernedTaskGrant == nil {
+		dependencies.RevokeGovernedTaskGrant = revokeGovernedTaskGrant
 	}
 	if dependencies.Enroll == nil || dependencies.SaveConfig == nil || dependencies.ReplaceConfig == nil ||
 		dependencies.SaveCredential == nil || dependencies.RunBridge == nil {
@@ -430,6 +452,8 @@ func (s *Service) Handler() http.Handler {
 	mux.HandleFunc("POST /api/runtime-preflight", s.authorize(s.preflightRuntime))
 	mux.HandleFunc("POST /api/bridge/start", s.authorize(s.startBridge))
 	mux.HandleFunc("POST /api/bridge/stop", s.authorize(s.stopBridge))
+	mux.HandleFunc("GET /api/governed-owner-state", s.authorize(s.getGovernedOwnerState))
+	mux.HandleFunc("POST /api/governed-task-grants/{grantId}/revoke", s.authorize(s.revokeGovernedTaskGrant))
 	mux.HandleFunc("POST /api/reasoning-consent/prepare", s.authorize(s.prepareReasoningConsent))
 	mux.HandleFunc("PUT /api/login-startup", s.authorize(s.updateLoginStartup))
 	mux.HandleFunc("POST /api/diagnostics/export", s.authorize(s.exportDiagnostics))
@@ -1033,12 +1057,23 @@ func (s *Service) startBridgeLocked() error {
 	if s.joinCancel != nil {
 		return fmt.Errorf("Finish or cancel Team enrollment before starting the Bridge")
 	}
+	if s.governedMutation {
+		return fmt.Errorf("Finish the local governed-authority change before starting the Bridge")
+	}
 	if s.bridgeCancel != nil {
 		return nil
 	}
 	if s.configuration == nil || s.credential == nil {
 		return fmt.Errorf("Bridge must be configured and paired before start")
 	}
+	governedState, err := s.dependencies.InspectGovernedOwnerState(
+		ownership.WithOwner(context.Background(), s.owner), *s.configuration, *s.credential,
+	)
+	if err != nil {
+		return fmt.Errorf("inspect local governed-authority state: %w", err)
+	}
+	s.governedOwnerState = cloneGovernedOwnerState(governedState)
+	s.governedStateLoaded = true
 	ctx, cancel := context.WithCancel(ownership.WithOwner(context.Background(), s.owner))
 	done := make(chan struct{})
 	s.bridgeEpoch++

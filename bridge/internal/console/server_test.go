@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"convenewire.dev/bridge/internal/admission"
 	"convenewire.dev/bridge/internal/autostart"
 	"convenewire.dev/bridge/internal/config"
 	"convenewire.dev/bridge/internal/connection"
@@ -27,8 +28,11 @@ import (
 	"convenewire.dev/bridge/internal/operations"
 	"convenewire.dev/bridge/internal/pairing"
 	"convenewire.dev/bridge/internal/provisioning"
+	"convenewire.dev/bridge/internal/repository"
 	"convenewire.dev/bridge/internal/updatecheck"
+	"convenewire.dev/bridge/internal/verification"
 	contracts "convenewire.dev/contracts/generated/go"
+	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
 type fakeLoginStartup struct {
@@ -87,6 +91,13 @@ func inertDependencies() Dependencies {
 			<-ctx.Done()
 			return ctx.Err()
 		},
+		InspectGovernedOwnerState: func(context.Context, config.Config,
+			pairing.Credential) (GovernedOwnerState, error) {
+			return GovernedOwnerState{Bindings: []repository.BindingView{}, Grants: []GovernedGrantView{},
+				RuntimeProfiles:      []admission.RuntimeProfileView{},
+				VerificationProfiles: []verification.ProfileView{},
+				CleanupGrants:        []repository.CleanupGrantView{}}, nil
+		},
 	}
 }
 
@@ -104,6 +115,7 @@ func TestConsoleServesEmbeddedUIAndRequiresBearerTokenForAPI(t *testing.T) {
 	if response.StatusCode != http.StatusOK ||
 		!bytes.Contains(source, []byte(`id="setup-intro"`)) ||
 		!bytes.Contains(source, []byte(`id="configured-view"`)) ||
+		!bytes.Contains(source, []byte(`id="governed-page"`)) ||
 		!bytes.Contains(source, []byte("地址迁移只接受由当前 CA 签发")) ||
 		!bytes.Contains(source, []byte(`id="agent-provisioning-form"`)) {
 		t.Fatalf("unexpected Console page: %d %s", response.StatusCode, source)
@@ -137,6 +149,114 @@ func TestConsoleServesEmbeddedUIAndRequiresBearerTokenForAPI(t *testing.T) {
 	}
 	if !bytes.Contains(body, []byte(`"agents":[]`)) {
 		t.Fatalf("Console must serialize an empty Agent list as an array: %s", body)
+	}
+}
+
+func TestGovernedOwnerConsoleProjectsPathFreeStateAndStopsBeforeIrreversibleRevocation(t *testing.T) {
+	directory := t.TempDir()
+	configPath := filepath.Join(directory, "bridge.json")
+	dataDir := filepath.Join(directory, "data")
+	configuration := config.Config{SchemaVersion: config.CurrentSchemaVersion,
+		ServerURL: "http://127.0.0.1:3000", DeviceName: "Owner Bridge", DataDir: dataDir,
+		Agents: []config.AgentConfig{{Name: "Builder", Role: "Implementation", Adapter: "generic",
+			RuntimeKind: "generic", Command: []string{"runtime"}, Workspace: directory}}}
+	if err := config.Save(configPath, configuration); err != nil {
+		t.Fatal(err)
+	}
+	credential := pairing.Credential{ServerURL: configuration.ServerURL, Token: "device-secret",
+		DeviceID: "device_governed_console", TeamID: "team_governed_console",
+		OwnerMemberID: "member_governed_console"}
+	if err := pairing.Save(dataDir, credential); err != nil {
+		t.Fatal(err)
+	}
+
+	started := make(chan struct{}, 2)
+	var stopped atomic.Bool
+	var starts atomic.Int32
+	dependencies := inertDependencies()
+	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential,
+		_ operations.Observer) error {
+		starts.Add(1)
+		started <- struct{}{}
+		<-ctx.Done()
+		stopped.Store(true)
+		return ctx.Err()
+	}
+	digest := strings.Repeat("a", 64)
+	dependencies.InspectGovernedOwnerState = func(context.Context, config.Config,
+		pairing.Credential) (GovernedOwnerState, error) {
+		return GovernedOwnerState{Bindings: []repository.BindingView{{BindingID: "repobind_console0001",
+			RepositoryID: "repo_console0001", Alias: "Project", Revision: 1,
+			SourceFingerprint: strings.Repeat("b", 64), RegisteredAt: "2026-09-02T00:00:00Z"}},
+			Grants: []GovernedGrantView{{GrantID: "grant_console0001", Revision: 1, Digest: digest,
+				AgentID: "agent_console0001", TaskID: "task_console0001", NodeKey: "Build",
+				Operations: []execution.KindElement{execution.Prepare, execution.Capture},
+				ExpiresAt:  "2026-09-03T00:00:00Z"}},
+			RuntimeProfiles:      []admission.RuntimeProfileView{},
+			VerificationProfiles: []verification.ProfileView{},
+			CleanupGrants:        []repository.CleanupGrantView{}}, nil
+	}
+	dependencies.RevokeGovernedTaskGrant = func(_ context.Context, _ config.Config,
+		_ pairing.Credential, grantID string, input GovernedGrantRevocationInput,
+		_ time.Time) (GovernedGrantView, error) {
+		if !stopped.Load() {
+			return GovernedGrantView{}, errors.New("revocation raced the active Bridge")
+		}
+		if grantID != "grant_console0001" || !input.Confirm || input.ExpectedRevision != 1 ||
+			input.ExpectedDigest != digest {
+			return GovernedGrantView{}, errors.New("revocation identity changed")
+		}
+		revokedAt := "2026-09-02T00:01:00Z"
+		return GovernedGrantView{GrantID: grantID, Revision: 2, Digest: digest, RevokedAt: &revokedAt}, nil
+	}
+	service, err := New(Options{ConfigPath: configPath, DataDir: dataDir, Workspace: directory,
+		Token: "test-console-token"}, dependencies)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if err := service.StartConfiguredBridge(); err != nil {
+		t.Fatal(err)
+	}
+	waitSignal(t, started, "initial Bridge start")
+	server := httptest.NewServer(service.Handler())
+	defer server.Close()
+
+	stateResponse := consoleRequest(t, server.URL, service.Token(), http.MethodGet,
+		"/api/governed-owner-state", nil)
+	stateBody, _ := io.ReadAll(stateResponse.Body)
+	stateResponse.Body.Close()
+	if stateResponse.StatusCode != http.StatusOK ||
+		!bytes.Contains(stateBody, []byte(`"grantId":"grant_console0001"`)) ||
+		bytes.Contains(stateBody, []byte(directory)) || bytes.Contains(stateBody, []byte(credential.Token)) {
+		t.Fatalf("governed owner state was missing or exposed local details: %d %s",
+			stateResponse.StatusCode, stateBody)
+	}
+
+	unconfirmed := consoleRequest(t, server.URL, service.Token(), http.MethodPost,
+		"/api/governed-task-grants/grant_console0001/revoke",
+		GovernedGrantRevocationInput{ExpectedRevision: 1, ExpectedDigest: digest})
+	unconfirmed.Body.Close()
+	if unconfirmed.StatusCode != http.StatusBadRequest || stopped.Load() {
+		t.Fatal("unconfirmed revocation stopped the Bridge or entered local mutation")
+	}
+
+	revokedResponse := consoleRequest(t, server.URL, service.Token(), http.MethodPost,
+		"/api/governed-task-grants/grant_console0001/revoke",
+		GovernedGrantRevocationInput{ExpectedRevision: 1, ExpectedDigest: digest, Confirm: true})
+	var revoked GovernedGrantView
+	if err := json.NewDecoder(revokedResponse.Body).Decode(&revoked); err != nil {
+		revokedResponse.Body.Close()
+		t.Fatal(err)
+	}
+	revokedResponse.Body.Close()
+	if revokedResponse.StatusCode != http.StatusOK || revoked.RevokedAt == nil || !stopped.Load() {
+		t.Fatalf("governed revocation did not converge safely: status=%d view=%#v",
+			revokedResponse.StatusCode, revoked)
+	}
+	waitSignal(t, started, "Bridge restart after grant revocation")
+	if starts.Load() != 2 || !service.State().BridgeRunning {
+		t.Fatalf("Bridge was not restarted exactly once: starts=%d state=%#v", starts.Load(), service.State())
 	}
 }
 
@@ -624,35 +744,31 @@ func TestEnrollmentUsesStrictRuntimePresetsAndStartsManagedBridge(t *testing.T) 
 	approved := make(chan struct{})
 	bridgeStarted := make(chan struct{}, 1)
 	bridgeStopped := make(chan struct{}, 1)
-	dependencies := Dependencies{
-		Enroll: func(ctx context.Context, _ config.Config, show func(enrollment.Challenge)) (pairing.Credential, error) {
-			show(enrollment.Challenge{
-				JoinRequestID: "join_test",
-				UserCode:      "ABCD-EFGH",
-				ExpiresAt:     time.Now().Add(time.Minute),
-			})
-			select {
-			case <-ctx.Done():
-				return pairing.Credential{}, ctx.Err()
-			case <-approved:
-				return pairing.Credential{
-					ServerURL:     "http://127.0.0.1:3000",
-					DeviceID:      "device_test",
-					TeamID:        "team_test",
-					OwnerMemberID: "member_test",
-					Token:         "credential-secret",
-				}, nil
-			}
-		},
-		SaveConfig:     config.Save,
-		ReplaceConfig:  config.Replace,
-		SaveCredential: pairing.Save,
-		RunBridge: func(ctx context.Context, _ config.Config, _ pairing.Credential, _ operations.Observer) error {
-			bridgeStarted <- struct{}{}
-			<-ctx.Done()
-			bridgeStopped <- struct{}{}
-			return ctx.Err()
-		},
+	dependencies := inertDependencies()
+	dependencies.Enroll = func(ctx context.Context, _ config.Config, show func(enrollment.Challenge)) (pairing.Credential, error) {
+		show(enrollment.Challenge{
+			JoinRequestID: "join_test",
+			UserCode:      "ABCD-EFGH",
+			ExpiresAt:     time.Now().Add(time.Minute),
+		})
+		select {
+		case <-ctx.Done():
+			return pairing.Credential{}, ctx.Err()
+		case <-approved:
+			return pairing.Credential{
+				ServerURL:     "http://127.0.0.1:3000",
+				DeviceID:      "device_test",
+				TeamID:        "team_test",
+				OwnerMemberID: "member_test",
+				Token:         "credential-secret",
+			}, nil
+		}
+	}
+	dependencies.RunBridge = func(ctx context.Context, _ config.Config, _ pairing.Credential, _ operations.Observer) error {
+		bridgeStarted <- struct{}{}
+		<-ctx.Done()
+		bridgeStopped <- struct{}{}
+		return ctx.Err()
 	}
 	service, directory, configPath := newTestService(t, dependencies)
 	server := httptest.NewServer(service.Handler())

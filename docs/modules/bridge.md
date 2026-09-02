@@ -27,6 +27,30 @@ and the existing stopped-Run fence. REPO-001 verifies that complete lifecycle
 after RUN-018 connects ordinary Delivery; it is not an implementation prerequisite
 of BRG-071. Foundation acceptance never enables a public governed capability.
 
+## Owner Governed-Authority Console
+
+The loopback Console's **受控开发** page is the owner-visible setup/state
+surface for repository bindings, Task grants, Runtime profiles, verifier
+profiles and cleanup grants. It projects only their existing path-free inventory
+views. Creation keeps the exact-input local CLI commands below; neither the Web
+page nor Central receives a selected root, prepared-worktree path, command,
+environment value or credential.
+
+Before managed Bridge startup the Console inspects and clones this inventory.
+While the managed core owns the stores, UI reads use that frozen clone instead
+of opening a competing mutable store. A stopped and fully drained Bridge may
+reopen the stores under the Console's existing process-owner lease. Invalid or
+foreign inventory prevents startup rather than disappearing from the view.
+
+The page can irreversibly revoke one active Task grant by exact ID, issuance
+revision and digest. Its version-1 in-flight policy is stop-first: the Console
+cancels and waits for the complete managed Bridge worker and governed process
+group, appends the tombstone only after that boundary, then restores the prior
+running choice. Restart re-inspects readiness, so the revoked grant cannot
+authorize a replacement writer. Unconfirmed/stale requests do nothing, Git data
+is never deleted, and a committed revocation plus failed restart is reported as
+a split outcome. See the [owner Console and in-flight revocation evidence](../acceptance/brg-071-owner-console-revocation.md).
+
 ## Explicit Local Repository Registration
 
 The `repository bind`, `repository list` and `repository revoke` CLI subcommands
