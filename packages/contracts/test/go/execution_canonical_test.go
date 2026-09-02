@@ -121,31 +121,38 @@ func TestExecutionStandaloneNormalizationAndRawGuards(t *testing.T) {
 }
 
 func TestExecutionStandaloneSchemaFixtures(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join(packageRoot(t), "fixtures", "execution-runtime-cases.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var suite fixtureSuite
-	if err := json.Unmarshal(raw, &suite); err != nil {
-		t.Fatal(err)
+	var suites []fixtureSuite
+	for _, name := range []string{"execution-runtime-cases.json", "evidence-adoption-cases.json"} {
+		raw, err := os.ReadFile(filepath.Join(packageRoot(t), "fixtures", name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var suite fixtureSuite
+		if err := json.Unmarshal(raw, &suite); err != nil {
+			t.Fatal(err)
+		}
+		suites = append(suites, suite)
 	}
 	kinds := map[string]string{"manifest": "executionManifest", "inputBinding": "executionInputBinding",
 		"capability": "executionCapability", "bindingSummary": "repositoryBinding", "grantSummary": "executionGrant",
 		"operationRequest": "repositoryOperation", "operationReceipt": "repositoryReceipt", "checkpoint": "executionCheckpoint",
-		"verificationReceipt": "verificationReceipt"}
+		"verificationReceipt": "verificationReceipt", "sourceEvidence": "sourceEvidence", "gateProofRef": "gateProofRef",
+		"evidenceAdoption": "evidenceAdoption"}
 	checked := 0
-	for _, entry := range suite.Cases {
-		fragment := strings.Split(entry.SchemaID, "#/$defs/")
-		if len(fragment) != 2 || kinds[fragment[1]] == "" {
-			continue
-		}
-		checked++
-		t.Run(entry.Name, func(t *testing.T) {
-			err := runtimecontracts.ValidateExecutionCommand(kinds[fragment[1]], entry.Instance)
-			if (err == nil) != entry.Valid {
-				t.Fatalf("valid=%v err=%v", entry.Valid, err)
+	for _, suite := range suites {
+		for _, entry := range suite.Cases {
+			fragment := strings.Split(entry.SchemaID, "#/$defs/")
+			if len(fragment) != 2 || kinds[fragment[1]] == "" {
+				continue
 			}
-		})
+			checked++
+			t.Run(entry.Name, func(t *testing.T) {
+				err := runtimecontracts.ValidateExecutionCommand(kinds[fragment[1]], entry.Instance)
+				if (err == nil) != entry.Valid {
+					t.Fatalf("valid=%v err=%v", entry.Valid, err)
+				}
+			})
+		}
 	}
 	if checked == 0 {
 		t.Fatal("no standalone schema fixtures checked")
@@ -153,6 +160,122 @@ func TestExecutionStandaloneSchemaFixtures(t *testing.T) {
 	if runtimecontracts.ValidateExecutionCommand("unknown", []byte(`{}`)) == nil {
 		t.Fatal("unknown schema accepted")
 	}
+}
+
+func TestEvidenceSemanticOrderingAndDigests(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(packageRoot(t), "fixtures", "evidence-adoption-cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var suite fixtureSuite
+	if err := json.Unmarshal(raw, &suite); err != nil {
+		t.Fatal(err)
+	}
+	var adoption map[string]any
+	for _, entry := range suite.Cases {
+		if entry.Name == "evidence adoption: valid accepted Result adoption" {
+			if err := json.Unmarshal(entry.Instance, &adoption); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+	}
+	if adoption == nil {
+		t.Fatal("accepted adoption fixture is missing")
+	}
+	proof := map[string]any{
+		"kind": "verification_receipt", "operationId": "op_verify_evidence01",
+		"verificationId": "verification_evidence01", "profileId": "profile_evidence01",
+		"profileRevision": 1, "profileDigest": strings.Repeat("1", 64),
+		"proofDigest": strings.Repeat("2", 64),
+	}
+	second := map[string]any{}
+	for key, value := range proof {
+		second[key] = value
+	}
+	second["operationId"] = "op_verify_evidence02"
+	second["verificationId"] = "verification_evidence02"
+	second["profileId"] = "profile_evidence02"
+	second["proofDigest"] = strings.Repeat("3", 64)
+	adoption["gate"] = "verified_output"
+	adoption["proofs"] = []any{proof, second}
+	sealEvidenceAdoption(t, adoption)
+	valid := encodeJSON(t, adoption)
+	if err := runtimecontracts.ValidateExecutionCommand("evidenceAdoption", valid); err != nil {
+		t.Fatalf("valid multi-proof adoption rejected: %v", err)
+	}
+
+	unordered := decodeMap(t, valid)
+	proofs := unordered["proofs"].([]any)
+	proofs[0], proofs[1] = proofs[1], proofs[0]
+	sealEvidenceAdoption(t, unordered)
+	if runtimecontracts.ValidateExecutionCommand("evidenceAdoption", encodeJSON(t, unordered)) == nil {
+		t.Fatal("unordered proof set accepted")
+	}
+
+	duplicate := decodeMap(t, valid)
+	duplicateProofs := duplicate["proofs"].([]any)
+	duplicateProofs[1].(map[string]any)["operationId"] =
+		duplicateProofs[0].(map[string]any)["operationId"]
+	sealEvidenceAdoption(t, duplicate)
+	if runtimecontracts.ValidateExecutionCommand("evidenceAdoption", encodeJSON(t, duplicate)) == nil {
+		t.Fatal("duplicate proof operation accepted")
+	}
+
+	tampered := decodeMap(t, valid)
+	tampered["adoptionDigest"] = strings.Repeat("0", 64)
+	if runtimecontracts.ValidateExecutionCommand("evidenceAdoption", encodeJSON(t, tampered)) == nil {
+		t.Fatal("tampered adoption digest accepted")
+	}
+}
+
+func encodeJSON(t *testing.T, value any) []byte {
+	t.Helper()
+	encoded, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return encoded
+}
+
+func decodeMap(t *testing.T, source []byte) map[string]any {
+	t.Helper()
+	var value map[string]any
+	if err := json.Unmarshal(source, &value); err != nil {
+		t.Fatal(err)
+	}
+	return value
+}
+
+func executionDigest(t *testing.T, value any) string {
+	t.Helper()
+	digest, err := runtimecontracts.ExecutionDigest(encodeJSON(t, value))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return digest
+}
+
+func withoutFields(value map[string]any, fields ...string) map[string]any {
+	excluded := map[string]bool{}
+	for _, field := range fields {
+		excluded[field] = true
+	}
+	result := map[string]any{}
+	for key, entry := range value {
+		if !excluded[key] {
+			result[key] = entry
+		}
+	}
+	return result
+}
+
+func sealEvidenceAdoption(t *testing.T, value map[string]any) {
+	t.Helper()
+	value["proofSetDigest"] = executionDigest(t, value["proofs"])
+	value["operationDigest"] = executionDigest(t,
+		withoutFields(value, "operationDigest", "adoptionDigest", "createdAt"))
+	value["adoptionDigest"] = executionDigest(t, withoutFields(value, "adoptionDigest"))
 }
 
 func TestExecutionFractionalUTCStringsSurviveTypedWireRoundTrip(t *testing.T) {

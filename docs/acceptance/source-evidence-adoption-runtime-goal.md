@@ -1,7 +1,7 @@
 # Source-Evidence Adoption Runtime Goal
 
-Status: frozen and active on 2026-09-02. This document is the acceptance
-authority for `CON-023` and `EXEC-009`. ADR-0038 remains the architecture
+Status: frozen on 2026-09-02. `CON-023` is accepted and `EXEC-009` is active.
+This document is their acceptance authority. ADR-0038 remains the architecture
 decision; `docs/TASKS.md` remains the sole delivery-state register.
 
 ## Goal
@@ -141,3 +141,23 @@ content and provenance.
 Completion does not claim remote Git/PR/CI, live providers, semantic
 carry-forward, plan supersession, removal of legacy tables, scheduler modes or
 multi-machine physical acceptance.
+
+## CON-023 Acceptance Checkpoint
+
+The contract increment adds schema 12 and brings the shared corpus to 257
+fixtures. Eight positive evidence variants cover Task Result, local and remote-
+origin repository commits, all four gate proofs and accepted adoption; schema
+and semantic negatives cover unknown source, nullable fake Result, injected
+provider URL/credential material and a substituted proof gate. Focused Node
+tests additionally reseal and reject source/proof ordering, duplicate output or
+proof identities, Git object-format mismatch and source/proof-set/operation/
+adoption digest changes.
+
+Deterministic generation exposes `SourceEvidence`, `GateProofRef` and
+`EvidenceAdoption` in both TypeScript and Go. The Go raw validator uses the same
+canonical semantic rules and its tests independently reseal a valid multi-proof
+adoption before rejecting reversed, duplicate and tampered variants. All 84
+Node checks, strict generated types, generated-tree comparison and Go package
+tests pass. The owned contract-test roots were physically removed. No Server
+table, materializer, reader or remote-provider capability changed in this
+checkpoint.

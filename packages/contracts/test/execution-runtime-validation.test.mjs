@@ -13,7 +13,8 @@ const kinds = {
   runtimeAuthorityRequest: "runtimeAuthorityRequest", runtimeAuthorityView: "runtimeAuthorityView",
   grantSummary: "executionGrant", operationRequest: "repositoryOperation",
   operationReceipt: "repositoryReceipt", checkpoint: "executionCheckpoint",
-  verificationReceipt: "verificationReceipt"
+  verificationReceipt: "verificationReceipt", sourceEvidence: "sourceEvidence",
+  gateProofRef: "gateProofRef", evidenceAdoption: "evidenceAdoption"
 };
 
 test("shared execution admission validates every runtime shape without granting authority", () => {

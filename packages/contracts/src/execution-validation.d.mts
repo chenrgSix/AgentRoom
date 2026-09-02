@@ -10,6 +10,10 @@ export class ExecutionContractError extends Error {
 
 export function canonicalExecutionJSON(value: unknown): string;
 export function executionOperationDigest(value: unknown): string;
+export function sourceEvidenceDigest(value: unknown): string;
+export function evidenceProofSetDigest(proofs: unknown): string;
+export function evidenceAdoptionOperationDigest(value: unknown): string;
+export function evidenceAdoptionDigest(value: unknown): string;
 export function assertExecutionCommand(
   kind: "planDefinition" | "proposalCommand" | "discussionPlanProposalDraft" |
     "revisionCommand" |
@@ -18,7 +22,8 @@ export function assertExecutionCommand(
     "executionManifest" | "executionInputBinding" | "executionCapability" |
     "runtimeAuthorityRequest" | "runtimeAuthorityView" |
     "repositoryBinding" | "executionGrant" | "repositoryOperation" |
-    "repositoryReceipt" | "executionCheckpoint" | "verificationReceipt",
+    "repositoryReceipt" | "executionCheckpoint" | "verificationReceipt" |
+    "sourceEvidence" | "gateProofRef" | "evidenceAdoption",
   value: unknown
 ): void;
 export function validateExecutionDecision(value: unknown): ExecutionDecisionContent;

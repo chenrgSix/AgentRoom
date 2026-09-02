@@ -1,0 +1,334 @@
+{
+  "fixtureVersion": "1.0",
+  "cases": [
+    {
+      "name": "evidence adoption: valid task Result source",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/sourceEvidence",
+      "valid": true,
+      "instance": {
+        "version": 1,
+        "sourceEvidenceId": "source_taskresult01",
+        "kind": "task_result",
+        "roomId": "room_evidence01",
+        "taskId": "task_evidence01",
+        "definitionRevision": 2,
+        "criteriaRevision": 3,
+        "sourceRunId": "run_evidence001",
+        "dispatchGeneration": 1,
+        "agentId": "agent_evidence01",
+        "deviceId": "device_evidence01",
+        "resultId": "result_evidence01",
+        "resultVersion": 1,
+        "artifactPins": [
+          {
+            "outputSlot": "patch",
+            "artifactId": "artifact_evidence01",
+            "artifactRevision": 1,
+            "contentDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "byteLength": 42,
+            "kind": "patch"
+          }
+        ],
+        "sourceDigest": "a9d6368a1f26b8bc560c025fc925057d203f5f9c6ebab602509172c3c310c90e",
+        "createdAt": "2026-09-02T01:00:00.123Z"
+      }
+    },
+    {
+      "name": "evidence adoption: valid local repository commit source",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/sourceEvidence",
+      "valid": true,
+      "instance": {
+        "version": 1,
+        "sourceEvidenceId": "source_repository01",
+        "kind": "repository_commit",
+        "repositoryId": "repo_evidence001",
+        "objectFormat": "sha1",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "inputDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "artifactPins": [
+          {
+            "outputSlot": "commit",
+            "artifactId": "artifact_evidence02",
+            "artifactRevision": 1,
+            "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "byteLength": 84,
+            "kind": "commit"
+          }
+        ],
+        "origin": {
+          "kind": "local_checkpoint",
+          "checkpointId": "checkpoint_evidence01",
+          "checkpointDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "captureOperationId": "op_capture_evidence01",
+          "sourceRunId": "run_evidence001",
+          "dispatchGeneration": 1,
+          "deviceId": "device_evidence01",
+          "bindingId": "repobind_evidence01",
+          "companionSourceEvidenceId": "source_taskresult01",
+          "companionSourceDigest": "a9d6368a1f26b8bc560c025fc925057d203f5f9c6ebab602509172c3c310c90e"
+        },
+        "sourceDigest": "d46afa240b9d196bf59f4cd791aa11e3107a253fa9226a2bbef60ba424f79456",
+        "createdAt": "2026-09-02T01:01:00.123Z"
+      }
+    },
+    {
+      "name": "evidence adoption: valid remote repository commit source contract",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/sourceEvidence",
+      "valid": true,
+      "instance": {
+        "version": 1,
+        "sourceEvidenceId": "source_remote0001",
+        "kind": "repository_commit",
+        "repositoryId": "repo_evidence001",
+        "objectFormat": "sha256",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "inputDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "artifactPins": [
+          {
+            "outputSlot": "commit",
+            "artifactId": "artifact_evidence03",
+            "artifactRevision": 1,
+            "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "byteLength": 84,
+            "kind": "commit"
+          }
+        ],
+        "origin": {
+          "kind": "remote_observation",
+          "providerBindingId": "provider_evidence01",
+          "providerRepositoryId": "owner/project",
+          "observationId": "observation_evidence01",
+          "observationDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "commitBundleArtifactId": "artifact_evidence03"
+        },
+        "sourceDigest": "68d366f087c5e6baa72ca5343e0afaf3e52db94c2c0d0c0590ba4f229d317b84",
+        "createdAt": "2026-09-02T01:01:00.123Z"
+      }
+    },
+    {
+      "name": "evidence adoption: source kind is closed",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/sourceEvidence",
+      "valid": false,
+      "instance": {
+        "version": 1,
+        "sourceEvidenceId": "source_unknown001",
+        "kind": "verification_receipt",
+        "sourceDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "createdAt": "2026-09-02T01:00:00Z"
+      }
+    },
+    {
+      "name": "evidence adoption: task Result cannot be nullable",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/sourceEvidence",
+      "valid": false,
+      "instance": {
+        "version": 1,
+        "sourceEvidenceId": "source_taskresult02",
+        "kind": "task_result",
+        "roomId": "room_evidence01",
+        "taskId": "task_evidence01",
+        "definitionRevision": 2,
+        "criteriaRevision": 3,
+        "sourceRunId": "run_evidence001",
+        "dispatchGeneration": 1,
+        "agentId": "agent_evidence01",
+        "deviceId": "device_evidence01",
+        "resultId": null,
+        "resultVersion": null,
+        "artifactPins": [],
+        "sourceDigest": "a9d6368a1f26b8bc560c025fc925057d203f5f9c6ebab602509172c3c310c90e",
+        "createdAt": "2026-09-02T01:00:00Z"
+      }
+    },
+    {
+      "name": "evidence adoption: remote source rejects provider URL and credentials",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/sourceEvidence",
+      "valid": false,
+      "instance": {
+        "version": 1,
+        "sourceEvidenceId": "source_remote0002",
+        "kind": "repository_commit",
+        "repositoryId": "repo_evidence001",
+        "objectFormat": "sha1",
+        "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "tree": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "inputDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "artifactPins": [
+          {
+            "outputSlot": "commit",
+            "artifactId": "artifact_evidence03",
+            "artifactRevision": 1,
+            "contentDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+            "byteLength": 84,
+            "kind": "commit"
+          }
+        ],
+        "origin": {
+          "kind": "remote_observation",
+          "providerBindingId": "provider_evidence01",
+          "providerRepositoryId": "owner/project",
+          "observationId": "observation_evidence01",
+          "observationDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+          "commitBundleArtifactId": "artifact_evidence03",
+          "url": "https://token@example.invalid/owner/project"
+        },
+        "sourceDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "createdAt": "2026-09-02T01:01:00Z"
+      }
+    },
+    {
+      "name": "evidence adoption: valid Result review proof",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/gateProofRef",
+      "valid": true,
+      "instance": {
+        "kind": "result_review",
+        "operationId": "op_review_evidence01",
+        "resultId": "result_evidence01",
+        "resultVersion": 1,
+        "proofDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "name": "evidence adoption: valid verification proof",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/gateProofRef",
+      "valid": true,
+      "instance": {
+        "kind": "verification_receipt",
+        "operationId": "op_verify_evidence01",
+        "verificationId": "verification_evidence01",
+        "profileId": "profile_evidence01",
+        "profileRevision": 1,
+        "profileDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "proofDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+    },
+    {
+      "name": "evidence adoption: valid CI observation proof contract",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/gateProofRef",
+      "valid": true,
+      "instance": {
+        "kind": "ci_observation_receipt",
+        "operationId": "op_ci_evidence000001",
+        "providerBindingId": "provider_evidence01",
+        "observationId": "observation_evidence01",
+        "checkKey": "required-ci",
+        "attempt": 1,
+        "proofDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      }
+    },
+    {
+      "name": "evidence adoption: valid integration proof",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/gateProofRef",
+      "valid": true,
+      "instance": {
+        "kind": "integration_receipt",
+        "operationId": "op_integrate_evidence1",
+        "repositoryId": "repo_evidence001",
+        "resultingCommit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "proofDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    },
+    {
+      "name": "evidence adoption: valid accepted Result adoption",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/evidenceAdoption",
+      "valid": true,
+      "instance": {
+        "version": 1,
+        "adoptionId": "adoption_evidence01",
+        "operationId": "op_adopt_evidence001",
+        "operationDigest": "8e9b7256ee3a83b5511e9a1661227b52de78f3a76832903af7cf1aa1af538c5a",
+        "planId": "plan_evidence001",
+        "planRevision": 1,
+        "nodeKey": "Build",
+        "gate": "accepted_result",
+        "sourceEvidenceId": "source_taskresult01",
+        "sourceDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sourceExecution": {
+          "runId": "run_evidence001",
+          "dispatchGeneration": 1
+        },
+        "proofs": [
+          {
+            "kind": "result_review",
+            "operationId": "op_review_evidence01",
+            "resultId": "result_evidence01",
+            "resultVersion": 1,
+            "proofDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+          }
+        ],
+        "proofSetDigest": "45012b2f671be20911439ff2129246196b44f31a445c24cd09c5443a6ba02fb0",
+        "nodeContractDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "resolvedInputSetDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "authority": {
+          "service": "execution_materialization",
+          "approvalOperationId": "op_approve_evidence01",
+          "planDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "roomId": "room_evidence01",
+          "taskId": "task_evidence01",
+          "definitionRevision": 2,
+          "criteriaRevision": 3,
+          "agentId": "agent_evidence01",
+          "deviceId": "device_evidence01",
+          "grantId": "grant_evidence001",
+          "grantRevision": 1,
+          "grantDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "adoptionDigest": "5ed372d4226bcd81b18997253b14bdd240793e30267ce98438893474d8ecf1d0",
+        "createdAt": "2026-09-02T01:02:00.123Z"
+      }
+    },
+    {
+      "name": "evidence adoption: accepted gate rejects verification proof",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/evidenceAdoption",
+      "valid": false,
+      "instance": {
+        "version": 1,
+        "adoptionId": "adoption_evidence02",
+        "operationId": "op_adopt_evidence002",
+        "operationDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "planId": "plan_evidence001",
+        "planRevision": 1,
+        "nodeKey": "Build",
+        "gate": "accepted_result",
+        "sourceEvidenceId": "source_taskresult01",
+        "sourceDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "sourceExecution": {
+          "runId": "run_evidence001",
+          "dispatchGeneration": 1
+        },
+        "proofs": [
+          {
+            "kind": "verification_receipt",
+            "operationId": "op_verify_evidence01",
+            "verificationId": "verification_evidence01",
+            "profileId": "profile_evidence01",
+            "profileRevision": 1,
+            "profileDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "proofDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          }
+        ],
+        "proofSetDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "nodeContractDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+        "resolvedInputSetDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "authority": {
+          "service": "execution_materialization",
+          "approvalOperationId": "op_approve_evidence01",
+          "planDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "roomId": "room_evidence01",
+          "taskId": "task_evidence01",
+          "definitionRevision": 2,
+          "criteriaRevision": 3,
+          "agentId": "agent_evidence01",
+          "deviceId": "device_evidence01",
+          "grantId": "grant_evidence001",
+          "grantRevision": 1,
+          "grantDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        },
+        "adoptionDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "createdAt": "2026-09-02T01:02:00Z"
+      }
+    }
+  ]
+}

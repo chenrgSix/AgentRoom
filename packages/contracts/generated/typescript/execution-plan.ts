@@ -3024,7 +3024,7 @@ export interface RepositoryCheckpointScope {
 }
 
 export interface VerificationReceipt {
-  authority:            Authority;
+  authority:            VerificationReceiptAuthority;
   bindingId:            null | string;
   candidateCommit:      string;
   candidateTree:        string;
@@ -3054,7 +3054,7 @@ export interface VerificationReceipt {
   version:        number;
 }
 
-export interface Authority {
+export interface VerificationReceiptAuthority {
   deviceId?:          string;
   kind:               AuthorityKind;
   attempt?:           number;
@@ -3105,4 +3105,151 @@ export interface VerificationReceiptProfile {
   digest:    string;
   profileId: string;
   revision:  number;
+}
+
+export interface SourceEvidence {
+  agentId?:     string;
+  artifactPins: [ArtifactPin, ...ArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             Origin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface ArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export type SourceEvidenceKind = "task_result" | "repository_commit";
+
+export type ObjectFormat = "sha1" | "sha256";
+
+export interface Origin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export type OriginKind = "local_checkpoint" | "remote_observation";
+
+export interface GateProofRef {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export type GateProofRefKind = "result_review" | "verification_receipt" | "ci_observation_receipt" | "integration_receipt";
+
+export interface EvidenceAdoption {
+  adoptionDigest: string;
+  adoptionId:     string;
+  authority:      EvidenceAdoptionAuthority;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:              string;
+  gate:                   Gate;
+  nodeContractDigest:     string;
+  nodeKey:                string;
+  operationDigest:        string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  proofs:                 [Proof, ...Proof[]];
+  proofSetDigest:         string;
+  resolvedInputSetDigest: string;
+  sourceDigest:           string;
+  sourceEvidenceId:       string;
+  sourceExecution:        SourceExecution | null;
+  version:                number;
+}
+
+export interface EvidenceAdoptionAuthority {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  grantDigest:         string;
+  grantId:             string;
+  grantRevision:       number;
+  planDigest:          string;
+  roomId:              string;
+  service:             Service;
+  taskId:              string;
+}
+
+export type Service = "execution_materialization";
+
+export interface Proof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface SourceExecution {
+  dispatchGeneration: number;
+  runId:              string;
 }

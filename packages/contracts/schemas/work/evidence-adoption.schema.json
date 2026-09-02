@@ -1,0 +1,706 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json",
+  "title": "ConveneWire Execution Evidence Adoption Contracts",
+  "description": "Closed source, proof and revision-local adoption records. Structural validity grants no runtime, repository, provider or plan authority.",
+  "$ref": "#/$defs/sourceEvidence",
+  "$defs": {
+    "version": {
+      "type": "integer",
+      "const": 1,
+      "minimum": 1,
+      "maximum": 1
+    },
+    "sourceEvidenceId": {
+      "type": "string",
+      "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+    },
+    "adoptionId": {
+      "type": "string",
+      "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
+    },
+    "observationId": {
+      "type": "string",
+      "pattern": "^observation_[A-Za-z0-9_-]{8,128}$"
+    },
+    "artifactPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outputSlot",
+        "artifactId",
+        "artifactRevision",
+        "contentDigest",
+        "byteLength",
+        "kind"
+      ],
+      "properties": {
+        "outputSlot": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
+        },
+        "artifactId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
+        },
+        "artifactRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "contentDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "byteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 67108864
+        },
+        "kind": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/artifactKind"
+        }
+      }
+    },
+    "taskResultSourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "sourceEvidenceId",
+        "kind",
+        "roomId",
+        "taskId",
+        "definitionRevision",
+        "criteriaRevision",
+        "sourceRunId",
+        "dispatchGeneration",
+        "agentId",
+        "deviceId",
+        "resultId",
+        "resultVersion",
+        "artifactPins",
+        "sourceDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "sourceEvidenceId": {
+          "$ref": "#/$defs/sourceEvidenceId"
+        },
+        "kind": {
+          "const": "task_result"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "taskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "definitionRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "criteriaRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "sourceRunId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "dispatchGeneration": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "resultId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/resultId"
+        },
+        "resultVersion": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "artifactPins": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/artifactPin"
+          }
+        },
+        "sourceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "localCheckpointOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "checkpointId",
+        "checkpointDigest",
+        "captureOperationId",
+        "sourceRunId",
+        "dispatchGeneration",
+        "deviceId",
+        "bindingId",
+        "companionSourceEvidenceId",
+        "companionSourceDigest"
+      ],
+      "properties": {
+        "kind": {
+          "const": "local_checkpoint"
+        },
+        "checkpointId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/checkpointId"
+        },
+        "checkpointDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "captureOperationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "sourceRunId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "dispatchGeneration": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "bindingId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/bindingId"
+        },
+        "companionSourceEvidenceId": {
+          "$ref": "#/$defs/sourceEvidenceId"
+        },
+        "companionSourceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "remoteObservationOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "providerBindingId",
+        "providerRepositoryId",
+        "observationId",
+        "observationDigest",
+        "commitBundleArtifactId"
+      ],
+      "properties": {
+        "kind": {
+          "const": "remote_observation"
+        },
+        "providerBindingId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/providerBindingId"
+        },
+        "providerRepositoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "observationId": {
+          "$ref": "#/$defs/observationId"
+        },
+        "observationDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "commitBundleArtifactId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
+        }
+      }
+    },
+    "repositoryCommitSourceEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "sourceEvidenceId",
+        "kind",
+        "repositoryId",
+        "objectFormat",
+        "commit",
+        "tree",
+        "inputDigest",
+        "artifactPins",
+        "origin",
+        "sourceDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "sourceEvidenceId": {
+          "$ref": "#/$defs/sourceEvidenceId"
+        },
+        "kind": {
+          "const": "repository_commit"
+        },
+        "repositoryId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryId"
+        },
+        "objectFormat": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ]
+        },
+        "commit": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/gitObjectId"
+        },
+        "tree": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/gitObjectId"
+        },
+        "inputDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "artifactPins": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/artifactPin"
+          }
+        },
+        "origin": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/localCheckpointOrigin"
+            },
+            {
+              "$ref": "#/$defs/remoteObservationOrigin"
+            }
+          ]
+        },
+        "sourceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "sourceEvidence": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/taskResultSourceEvidence"
+        },
+        {
+          "$ref": "#/$defs/repositoryCommitSourceEvidence"
+        }
+      ]
+    },
+    "resultReviewProofRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "operationId",
+        "resultId",
+        "resultVersion",
+        "proofDigest"
+      ],
+      "properties": {
+        "kind": {
+          "const": "result_review"
+        },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "resultId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/resultId"
+        },
+        "resultVersion": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "proofDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "verificationReceiptProofRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "operationId",
+        "verificationId",
+        "profileId",
+        "profileRevision",
+        "profileDigest",
+        "proofDigest"
+      ],
+      "properties": {
+        "kind": {
+          "const": "verification_receipt"
+        },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "verificationId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/verificationId"
+        },
+        "profileId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/profileId"
+        },
+        "profileRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "profileDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "proofDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "ciObservationReceiptProofRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "operationId",
+        "providerBindingId",
+        "observationId",
+        "checkKey",
+        "attempt",
+        "proofDigest"
+      ],
+      "properties": {
+        "kind": {
+          "const": "ci_observation_receipt"
+        },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "providerBindingId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/providerBindingId"
+        },
+        "observationId": {
+          "$ref": "#/$defs/observationId"
+        },
+        "checkKey": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
+        },
+        "attempt": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "proofDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "integrationReceiptProofRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "operationId",
+        "repositoryId",
+        "resultingCommit",
+        "proofDigest"
+      ],
+      "properties": {
+        "kind": {
+          "const": "integration_receipt"
+        },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "repositoryId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryId"
+        },
+        "resultingCommit": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/gitObjectId"
+        },
+        "proofDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "gateProofRef": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/resultReviewProofRef"
+        },
+        {
+          "$ref": "#/$defs/verificationReceiptProofRef"
+        },
+        {
+          "$ref": "#/$defs/ciObservationReceiptProofRef"
+        },
+        {
+          "$ref": "#/$defs/integrationReceiptProofRef"
+        }
+      ]
+    },
+    "sourceExecutionLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "dispatchGeneration"
+      ],
+      "properties": {
+        "runId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "dispatchGeneration": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        }
+      }
+    },
+    "adoptionAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service",
+        "approvalOperationId",
+        "planDigest",
+        "roomId",
+        "taskId",
+        "definitionRevision",
+        "criteriaRevision",
+        "agentId",
+        "deviceId",
+        "grantId",
+        "grantRevision",
+        "grantDigest"
+      ],
+      "properties": {
+        "service": {
+          "const": "execution_materialization"
+        },
+        "approvalOperationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "planDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "taskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "definitionRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "criteriaRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "deviceId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/deviceId"
+        },
+        "grantId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/grantId"
+        },
+        "grantRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "grantDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "evidenceAdoptionBase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "adoptionId",
+        "operationId",
+        "operationDigest",
+        "planId",
+        "planRevision",
+        "nodeKey",
+        "gate",
+        "sourceEvidenceId",
+        "sourceDigest",
+        "sourceExecution",
+        "proofs",
+        "proofSetDigest",
+        "nodeContractDigest",
+        "resolvedInputSetDigest",
+        "authority",
+        "adoptionDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "adoptionId": {
+          "$ref": "#/$defs/adoptionId"
+        },
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "operationDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "planId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planId"
+        },
+        "planRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "nodeKey": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
+        },
+        "gate": {
+          "enum": [
+            "accepted_result",
+            "verified_output",
+            "integrated_commit"
+          ]
+        },
+        "sourceEvidenceId": {
+          "$ref": "#/$defs/sourceEvidenceId"
+        },
+        "sourceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "sourceExecution": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/sourceExecutionLineage"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "proofs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/gateProofRef"
+          }
+        },
+        "proofSetDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "nodeContractDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "resolvedInputSetDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "authority": {
+          "$ref": "#/$defs/adoptionAuthority"
+        },
+        "adoptionDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
+    "acceptedResultEvidenceAdoption": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/evidenceAdoptionBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gate": {
+              "const": "accepted_result"
+            },
+            "proofs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/resultReviewProofRef"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "verifiedOutputEvidenceAdoption": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/evidenceAdoptionBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gate": {
+              "const": "verified_output"
+            },
+            "proofs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 16,
+              "items": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/verificationReceiptProofRef"
+                  },
+                  {
+                    "$ref": "#/$defs/ciObservationReceiptProofRef"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "integratedCommitEvidenceAdoption": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/evidenceAdoptionBase"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "gate": {
+              "const": "integrated_commit"
+            },
+            "proofs": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 1,
+              "items": {
+                "$ref": "#/$defs/integrationReceiptProofRef"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "evidenceAdoption": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/acceptedResultEvidenceAdoption"
+        },
+        {
+          "$ref": "#/$defs/verifiedOutputEvidenceAdoption"
+        },
+        {
+          "$ref": "#/$defs/integratedCommitEvidenceAdoption"
+        }
+      ]
+    }
+  }
+}

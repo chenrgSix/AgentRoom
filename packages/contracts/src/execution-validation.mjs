@@ -88,11 +88,95 @@ export function executionOperationDigest(value) {
   return createHash("sha256").update(canonicalExecutionJSON(value)).digest("hex");
 }
 
+const evidenceProofKinds = {
+  accepted_result: new Set(["result_review"]),
+  verified_output: new Set([
+    "ci_observation_receipt",
+    "verification_receipt"
+  ]),
+  integrated_commit: new Set(["integration_receipt"])
+};
+
+function ordered(entries, compare, code) {
+  requireCondition(entries.every((entry, index) =>
+    index === 0 || compare(entries[index - 1], entry) < 0
+  ), code);
+}
+
+function artifactOrder(left, right) {
+  return binaryCompare(left.outputSlot, right.outputSlot) ||
+    binaryCompare(left.artifactId, right.artifactId);
+}
+
+function proofOrder(left, right) {
+  return binaryCompare(left.kind, right.kind) ||
+    binaryCompare(left.operationId, right.operationId);
+}
+
+export function sourceEvidenceDigest(value) {
+  const {
+    sourceEvidenceId: _sourceEvidenceId,
+    sourceDigest: _sourceDigest,
+    createdAt: _createdAt,
+    ...identity
+  } = value;
+  return executionOperationDigest(identity);
+}
+
+export function evidenceProofSetDigest(proofs) {
+  return executionOperationDigest(proofs);
+}
+
+export function evidenceAdoptionOperationDigest(value) {
+  const {
+    operationDigest: _operationDigest,
+    adoptionDigest: _adoptionDigest,
+    createdAt: _createdAt,
+    ...operation
+  } = value;
+  return executionOperationDigest(operation);
+}
+
+export function evidenceAdoptionDigest(value) {
+  const { adoptionDigest: _adoptionDigest, ...record } = value;
+  return executionOperationDigest(record);
+}
+
+function assertSourceEvidenceSemantics(value) {
+  ordered(value.artifactPins, artifactOrder, "EVIDENCE_ARTIFACT_ORDER");
+  unique(value.artifactPins, "outputSlot", "EVIDENCE_DUPLICATE_OUTPUT_SLOT");
+  unique(value.artifactPins, "artifactId", "EVIDENCE_DUPLICATE_ARTIFACT");
+  requireCondition(value.sourceDigest === sourceEvidenceDigest(value),
+    "EVIDENCE_SOURCE_DIGEST_MISMATCH");
+  if (value.kind === "repository_commit") {
+    requireCondition(value.commit.length === (value.objectFormat === "sha1" ? 40 : 64) &&
+      value.tree.length === (value.objectFormat === "sha1" ? 40 : 64),
+    "EVIDENCE_OBJECT_FORMAT_MISMATCH");
+  }
+}
+
+function assertEvidenceAdoptionSemantics(value) {
+  const allowed = evidenceProofKinds[value.gate];
+  requireCondition(Boolean(allowed) && value.proofs.every((proof) =>
+    allowed.has(proof.kind)), "EVIDENCE_PROOF_GATE_MISMATCH");
+  ordered(value.proofs, proofOrder, "EVIDENCE_PROOF_ORDER");
+  unique(value.proofs, "operationId", "EVIDENCE_DUPLICATE_PROOF");
+  requireCondition(value.proofSetDigest === evidenceProofSetDigest(value.proofs),
+    "EVIDENCE_PROOF_SET_DIGEST_MISMATCH");
+  requireCondition(value.operationDigest ===
+    evidenceAdoptionOperationDigest(value),
+  "EVIDENCE_ADOPTION_OPERATION_DIGEST_MISMATCH");
+  requireCondition(value.adoptionDigest === evidenceAdoptionDigest(value),
+    "EVIDENCE_ADOPTION_DIGEST_MISMATCH");
+}
+
 export function assertExecutionCommand(kind, value) {
   canonicalExecutionJSON(value);
   const validator = Object.hasOwn(validators, kind) ? validators[kind] : undefined;
   requireCondition(typeof validator === "function" && validator(value),
     "PLAN_SCHEMA_INVALID");
+  if (kind === "sourceEvidence") assertSourceEvidenceSemantics(value);
+  if (kind === "evidenceAdoption") assertEvidenceAdoptionSemantics(value);
 }
 
 function unique(entries, key, code) {

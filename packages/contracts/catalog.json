@@ -55,6 +55,11 @@
       "id": "https://agentroom.dev/schemas/work/execution-runtime.schema.json",
       "kind": "work",
       "path": "schemas/work/execution-runtime.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json",
+      "kind": "work",
+      "path": "schemas/work/evidence-adoption.schema.json"
     }
   ]
 }

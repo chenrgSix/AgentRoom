@@ -35,7 +35,7 @@ func compileExecutionSchemas() map[string]*jsonschema.Schema {
   result := map[string]*jsonschema.Schema{}
   for _, kind := range []string{"executionManifest", "executionInputBinding", "executionCapability", "repositoryBinding",
     "runtimeAuthorityRequest", "runtimeAuthorityView", "executionGrant", "repositoryOperation", "repositoryReceipt",
-    "executionCheckpoint", "verificationReceipt"} {
+    "executionCheckpoint", "verificationReceipt", "sourceEvidence", "gateProofRef", "evidenceAdoption"} {
     schema, err := compiler.Compile(id+"#/$defs/"+kind)
     if err != nil { panic(err) }
     result[kind] = schema
@@ -58,10 +58,109 @@ func ValidateAndNormalizeExecutionCommand(kind string, source []byte) ([]byte, e
   schema := executionSchemas[kind]
   if schema == nil { return nil, ErrInvalidExecutionJSON }
   value, err := executionJSONValue(source)
-  if err != nil || schema.Validate(value) != nil { return nil, ErrInvalidExecutionJSON }
+  if err != nil || schema.Validate(value) != nil || !validateEvidenceSemantics(kind, value) {
+    return nil, ErrInvalidExecutionJSON
+  }
   var output bytes.Buffer
   if err := appendExecutionJSON(&output, value); err != nil { return nil, err }
   return output.Bytes(), nil
+}
+
+func validateEvidenceSemantics(kind string, value any) bool {
+  record, ok := value.(map[string]any)
+  if !ok { return kind != "sourceEvidence" && kind != "evidenceAdoption" }
+  switch kind {
+  case "sourceEvidence":
+    pins, ok := record["artifactPins"].([]any)
+    if !ok || !strictlyOrderedArtifactPins(pins) { return false }
+    unsigned := withoutExecutionFields(record, "sourceEvidenceId", "sourceDigest", "createdAt")
+    if executionValueDigest(unsigned) != executionString(record, "sourceDigest") { return false }
+    if executionString(record, "kind") == "repository_commit" {
+      size := 64
+      if executionString(record, "objectFormat") == "sha1" { size = 40 }
+      if len(executionString(record, "commit")) != size || len(executionString(record, "tree")) != size {
+        return false
+      }
+    }
+  case "evidenceAdoption":
+    proofs, ok := record["proofs"].([]any)
+    if !ok || !strictlyOrderedProofs(proofs) { return false }
+    allowed := map[string]map[string]bool{
+      "accepted_result": {"result_review": true},
+      "verified_output": {"ci_observation_receipt": true, "verification_receipt": true},
+      "integrated_commit": {"integration_receipt": true},
+    }[executionString(record, "gate")]
+    if allowed == nil { return false }
+    seenOperations := map[string]bool{}
+    for _, entry := range proofs {
+      proof, ok := entry.(map[string]any)
+      operationID := executionString(proof, "operationId")
+      if !ok || !allowed[executionString(proof, "kind")] || seenOperations[operationID] { return false }
+      seenOperations[operationID] = true
+    }
+    if executionValueDigest(proofs) != executionString(record, "proofSetDigest") { return false }
+    operation := withoutExecutionFields(record, "operationDigest", "adoptionDigest", "createdAt")
+    if executionValueDigest(operation) != executionString(record, "operationDigest") { return false }
+    adoption := withoutExecutionFields(record, "adoptionDigest")
+    if executionValueDigest(adoption) != executionString(record, "adoptionDigest") { return false }
+  }
+  return true
+}
+
+func executionString(record map[string]any, key string) string {
+  value, _ := record[key].(string)
+  return value
+}
+
+func withoutExecutionFields(record map[string]any, fields ...string) map[string]any {
+  excluded := map[string]bool{}
+  for _, field := range fields { excluded[field] = true }
+  clone := make(map[string]any, len(record))
+  for key, value := range record {
+    if !excluded[key] { clone[key] = value }
+  }
+  return clone
+}
+
+func executionValueDigest(value any) string {
+  var canonical bytes.Buffer
+  if appendExecutionJSON(&canonical, value) != nil { return "" }
+  hash := sha256.Sum256(canonical.Bytes())
+  return hex.EncodeToString(hash[:])
+}
+
+func strictlyOrderedArtifactPins(entries []any) bool {
+  previous := ""
+  first := true
+  seenSlots := map[string]bool{}
+  seenArtifacts := map[string]bool{}
+  for _, entry := range entries {
+    record, ok := entry.(map[string]any)
+    if !ok { return false }
+    slot := executionString(record, "outputSlot")
+    artifact := executionString(record, "artifactId")
+    current := slot + "\x00" + artifact
+    if (!first && previous >= current) || seenSlots[slot] || seenArtifacts[artifact] { return false }
+    previous, first = current, false
+    seenSlots[slot], seenArtifacts[artifact] = true, true
+  }
+  return true
+}
+
+func strictlyOrderedProofs(entries []any) bool {
+  previous := ""
+  first := true
+  seenOperations := map[string]bool{}
+  for _, entry := range entries {
+    record, ok := entry.(map[string]any)
+    if !ok { return false }
+    operation := executionString(record, "operationId")
+    current := executionString(record, "kind") + "\x00" + operation
+    if (!first && previous >= current) || seenOperations[operation] { return false }
+    previous, first = current, false
+    seenOperations[operation] = true
+  }
+  return true
 }
 
 // CanonicalExecutionJSON matches executionOperationDigest's integer-only JSON

@@ -2896,7 +2896,7 @@ type RepositoryCheckpointScope struct {
 }
 
 type VerificationReceipt struct {
-	Authority            Authority                     `json:"authority"`
+	Authority            VerificationReceiptAuthority  `json:"authority"`
 	BindingID            *string                       `json:"bindingId"`
 	CandidateCommit      string                        `json:"candidateCommit"`
 	CandidateTree        string                        `json:"candidateTree"`
@@ -2922,7 +2922,7 @@ type VerificationReceipt struct {
 	Version        int64  `json:"version"`
 }
 
-type Authority struct {
+type VerificationReceiptAuthority struct {
 	DeviceID          *string       `json:"deviceId,omitempty"`
 	Kind              AuthorityKind `json:"kind"`
 	Attempt           *int64        `json:"attempt,omitempty"`
@@ -2969,6 +2969,139 @@ type VerificationReceiptProfile struct {
 	Digest    string `json:"digest"`
 	ProfileID string `json:"profileId"`
 	Revision  int64  `json:"revision"`
+}
+
+type SourceEvidence struct {
+	AgentID      *string       `json:"agentId,omitempty"`
+	ArtifactPins []ArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *Origin            `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type ArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type Origin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type GateProofRef struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type EvidenceAdoption struct {
+	AdoptionDigest string                    `json:"adoptionDigest"`
+	AdoptionID     string                    `json:"adoptionId"`
+	Authority      EvidenceAdoptionAuthority `json:"authority"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt              string           `json:"createdAt"`
+	Gate                   Gate             `json:"gate"`
+	NodeContractDigest     string           `json:"nodeContractDigest"`
+	NodeKey                string           `json:"nodeKey"`
+	OperationDigest        string           `json:"operationDigest"`
+	OperationID            string           `json:"operationId"`
+	PlanID                 string           `json:"planId"`
+	PlanRevision           int64            `json:"planRevision"`
+	Proofs                 []Proof          `json:"proofs"`
+	ProofSetDigest         string           `json:"proofSetDigest"`
+	ResolvedInputSetDigest string           `json:"resolvedInputSetDigest"`
+	SourceDigest           string           `json:"sourceDigest"`
+	SourceEvidenceID       string           `json:"sourceEvidenceId"`
+	SourceExecution        *SourceExecution `json:"sourceExecution"`
+	Version                int64            `json:"version"`
+}
+
+type EvidenceAdoptionAuthority struct {
+	AgentID             string  `json:"agentId"`
+	ApprovalOperationID string  `json:"approvalOperationId"`
+	CriteriaRevision    int64   `json:"criteriaRevision"`
+	DefinitionRevision  int64   `json:"definitionRevision"`
+	DeviceID            string  `json:"deviceId"`
+	GrantDigest         string  `json:"grantDigest"`
+	GrantID             string  `json:"grantId"`
+	GrantRevision       int64   `json:"grantRevision"`
+	PlanDigest          string  `json:"planDigest"`
+	RoomID              string  `json:"roomId"`
+	Service             Service `json:"service"`
+	TaskID              string  `json:"taskId"`
+}
+
+type Proof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type SourceExecution struct {
+	DispatchGeneration int64  `json:"dispatchGeneration"`
+	RunID              string `json:"runId"`
 }
 
 type AuthorKind string
@@ -3140,4 +3273,40 @@ const (
 	OutcomeOutcomeUnknown Outcome = "outcome_unknown"
 	Passed                Outcome = "passed"
 	TimedOut              Outcome = "timed_out"
+)
+
+type SourceEvidenceKind string
+
+const (
+	RepositoryCommit SourceEvidenceKind = "repository_commit"
+	TaskResult       SourceEvidenceKind = "task_result"
+)
+
+type ObjectFormat string
+
+const (
+	Sha1   ObjectFormat = "sha1"
+	Sha256 ObjectFormat = "sha256"
+)
+
+type OriginKind string
+
+const (
+	LocalCheckpoint   OriginKind = "local_checkpoint"
+	RemoteObservation OriginKind = "remote_observation"
+)
+
+type GateProofRefKind string
+
+const (
+	CiObservationReceipt    GateProofRefKind = "ci_observation_receipt"
+	IntegrationReceipt      GateProofRefKind = "integration_receipt"
+	KindVerificationReceipt GateProofRefKind = "verification_receipt"
+	ResultReview            GateProofRefKind = "result_review"
+)
+
+type Service string
+
+const (
+	ExecutionMaterialization Service = "execution_materialization"
 )

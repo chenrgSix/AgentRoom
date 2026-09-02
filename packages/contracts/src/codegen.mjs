@@ -22,6 +22,8 @@ const EXECUTION_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/execution-plan.schema.json";
 const EXECUTION_RUNTIME_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/execution-runtime.schema.json";
+const EVIDENCE_ADOPTION_SCHEMA_ID =
+  "https://agentroom.dev/schemas/work/evidence-adoption.schema.json";
 
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
@@ -428,7 +430,10 @@ function renderExecutionValidators(schemas) {
     repositoryOperation: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/operationRequest`,
     repositoryReceipt: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/operationReceipt`,
     executionCheckpoint: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/checkpoint`,
-    verificationReceipt: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/verificationReceipt`
+    verificationReceipt: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/verificationReceipt`,
+    sourceEvidence: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/sourceEvidence`,
+    gateProofRef: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/gateProofRef`,
+    evidenceAdoption: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/evidenceAdoption`
   }).trimEnd()}\n`;
 }
 
@@ -1339,6 +1344,7 @@ export async function generateContractTypes(packageRoot) {
   const workSchema = schemas.get(WORK_SCHEMA_ID);
   const executionSchema = schemas.get(EXECUTION_SCHEMA_ID);
   const executionRuntimeSchema = schemas.get(EXECUTION_RUNTIME_SCHEMA_ID);
+  const evidenceAdoptionSchema = schemas.get(EVIDENCE_ADOPTION_SCHEMA_ID);
 
   if (!bridgeSchema) {
     throw new Error(`Missing code generation schema: ${BRIDGE_SCHEMA_ID}`);
@@ -1354,6 +1360,9 @@ export async function generateContractTypes(packageRoot) {
   }
   if (!executionRuntimeSchema) {
     throw new Error(`Missing code generation schema: ${EXECUTION_RUNTIME_SCHEMA_ID}`);
+  }
+  if (!evidenceAdoptionSchema) {
+    throw new Error(`Missing code generation schema: ${EVIDENCE_ADOPTION_SCHEMA_ID}`);
   }
 
   const bridgeCodegen = createBridgeCodegenSchemas(bridgeSchema);
@@ -1428,6 +1437,11 @@ export async function generateContractTypes(packageRoot) {
     ["RepositoryOperationReceipt", "operationReceipt"],
     ["RepositoryCheckpoint", "checkpoint"],
     ["VerificationReceipt", "verificationReceipt"]
+  ]));
+  executionCodegen.push(...createDefinitionCodegenSchemas(evidenceAdoptionSchema, [
+    ["SourceEvidence", "sourceEvidence"],
+    ["GateProofRef", "gateProofRef"],
+    ["EvidenceAdoption", "evidenceAdoption"]
   ]));
   const bridgeSchemas = bridgeCodegen.types.map((entry) => ({
     ...entry,
@@ -1569,13 +1583,20 @@ export async function generateContractTypes(packageRoot) {
     goExecutionSchema: `${JSON.stringify({
       $schema: "https://json-schema.org/draft/2020-12/schema",
       $id: "https://agentroom.dev/schemas/runtime/go-execution.json",
-      $defs: Object.fromEntries(Object.entries({
-        executionManifest: "manifest", executionInputBinding: "inputBinding", executionCapability: "capability",
-        runtimeAuthorityRequest: "runtimeAuthorityRequest", runtimeAuthorityView: "runtimeAuthorityView",
-        repositoryBinding: "bindingSummary", executionGrant: "grantSummary", repositoryOperation: "operationRequest",
-        repositoryReceipt: "operationReceipt", executionCheckpoint: "checkpoint", verificationReceipt: "verificationReceipt"
-      }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
-        dereference(executionRuntimeSchema.$defs[definition], executionRuntimeSchema, schemas), false)]))
+      $defs: {
+        ...Object.fromEntries(Object.entries({
+          executionManifest: "manifest", executionInputBinding: "inputBinding", executionCapability: "capability",
+          runtimeAuthorityRequest: "runtimeAuthorityRequest", runtimeAuthorityView: "runtimeAuthorityView",
+          repositoryBinding: "bindingSummary", executionGrant: "grantSummary", repositoryOperation: "operationRequest",
+          repositoryReceipt: "operationReceipt", executionCheckpoint: "checkpoint", verificationReceipt: "verificationReceipt"
+        }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
+          dereference(executionRuntimeSchema.$defs[definition], executionRuntimeSchema, schemas), false)])),
+        ...Object.fromEntries(Object.entries({
+          sourceEvidence: "sourceEvidence", gateProofRef: "gateProofRef",
+          evidenceAdoption: "evidenceAdoption"
+        }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
+          dereference(evidenceAdoptionSchema.$defs[definition], evidenceAdoptionSchema, schemas), false)]))
+      }
     }, null, 2)}\n`,
     goExecutionRuntime: formatGo(await readFile(path.join(packageRoot, "src/go-execution-runtime.go.template"), "utf8")),
     executionTypescript,
