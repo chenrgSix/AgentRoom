@@ -220,7 +220,7 @@
         "bundleByteLength": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 67108864
+          "maximum": 4194304
         },
         "pullRequest": {
           "oneOf": [
@@ -318,7 +318,7 @@
         "bundleByteLength": {
           "type": "integer",
           "minimum": 1,
-          "maximum": 67108864
+          "maximum": 4194304
         },
         "patchArtifactId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/artifactId"
