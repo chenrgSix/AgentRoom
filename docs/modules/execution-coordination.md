@@ -271,6 +271,33 @@ admission and ordinary Delivery replay; bounded single-flight wakeups cover
 state changes. Concurrent Server processes rely on immediate transactions plus
 unique plan/revision/node/generation and Run constraints, then reread the winner.
 
+### Generation-2 Retry and Scheduler Task Split
+
+The next `EXEC-004` increment is an explicit retry of an ExecutionNode, not a
+legacy retry of its Run. The frozen target is the
+[Execution Product Loop Goal](../acceptance/execution-product-loop-goal.md).
+`ExecutionNodeRetryAuthorization` owns the human-supervised permission and exact
+previous-attempt lineage. A new immutable DispatchIntent owns generation 2, a
+new Run ID, newly frozen inputs and deadline; the Run remains one Agent attempt
+and Workspace owns its new isolated writer generation.
+
+Failed, canceled and expired current attempts are eligible only through the
+explicit control. `outcome_unknown` additionally requires the existing exact
+ambiguity acknowledgement. A completed attempt or a generation with retained
+gate proof is not eligible. One immediate transaction must retain the retry
+authorization and the new plan-owned admission facts. Stable operation replay,
+restart and concurrent Servers return the one winner rather than accidentally
+creating another generation. Old DispatchIntents, Runs, Results, receipts and
+materializations remain immutable, and late old-generation evidence cannot
+advance the current generation.
+
+Settlement, accepted/verified/integrated materializers, dependency resolution
+and input freezing become exact-generation aware as part of this increment.
+Automatic retry remains fail-closed. `EXEC-008` separately owns explicit
+manual/supervised/automatic scheduler modes, broader multi-node capacity,
+fairness and systematic graph fault injection. `WEB-063` waits on the bounded
+`EXEC-004` control slice; parallel `QA-053` additionally waits on `EXEC-008`.
+
 ### First Accepted-Result Dependency Increment
 
 EXEC-007 adds no separate materialization engine. A thin read-only
@@ -279,9 +306,10 @@ retained NodeMaterialization evidence to the existing input `Selection[]` port.
 `ExecutionInputService.freezeForRun()` remains the final authority validation
 and persistence boundary inside the destination admission transaction.
 
-NodeMaterialization is immutable evidence, not a new transient node state. It
-pins the exact generation-1 completed Run, its accepted managed Result and human
-review, and canonical checkpoint output Artifacts. A completed node therefore
+NodeMaterialization is immutable evidence, not a new transient node state. The
+accepted first increment pins the exact generation-1 completed Run, its accepted
+managed Result and human review, and canonical checkpoint output Artifacts. A
+completed node therefore
 remains `awaiting_result`; a separate materialization record releases eligible
 downstream edges. Governed Result acceptance is allowed only for this exact
 canonical shape, never completes the Task and never stands in for independent
@@ -290,8 +318,9 @@ verification or integration.
 The bounded first edge uses the existing production-supported patch input. The
 [frozen acceptance record](../acceptance/exec-007-accepted-result-dependency-runtime.md)
 defines the physical A-to-B provenance, restart and concurrency evidence. Commit
-bundle preparation, `verified_output`, `integrated_commit` and generation 2
-remain fail-closed.
+bundle preparation, `verified_output` and `integrated_commit` were fail-closed in
+that historical increment. Generation 2 remains fail-closed until `EXEC-004`
+earns the new control and proof-chain evidence above.
 
 ### Independent Verified-Output Increment
 

@@ -573,7 +573,8 @@ BRG-071 implementation. Local fixtures alone cannot satisfy that closure.
 later lifecycle acceptance; it runs actual
 bounded commands with pass/fail/timeout and forged-receipt negatives;
 `REPO-002` exercises overlapping branches, conflicts and target CAS;
-`REPO-003` validates authenticated provider IO and ambiguous external effects.
+`REPO-003` validates authenticated provider IO and ambiguous external effects,
+but may not start until `GOV-026` accepts the source-evidence authority below.
 `QA-052` through `QA-055` combine these with actual Server and Go Bridge
 processes, browser entry and direction auditing. Delivery state stays in TASKS.
 
@@ -582,6 +583,20 @@ Build/test Server through its existing npm workspace commands. Bridge code uses
 Cross-platform compilation is not native Windows/macOS behavioral acceptance;
 report those gates independently. New APIs and wire data require generated
 TypeScript/Go contract checks and interoperability tests.
+
+### Future Source-Evidence Authority
+
+Current local accepted, verified and integrated materializations intentionally
+retain an exact `sourceResultId` and Result version. That remains the delivered
+model for local Agent-produced candidates. Before `REPO-003` adds remote Git,
+PR or CI observations, `GOV-026` must accept an ADR that decides a closed
+source-evidence anchor or source-proof/adoption model, including exact
+provenance, digest/CAS, replay, plan-revision adoption and supersession rules.
+
+The future decision must not grant an observation authority it did not already
+have, and must not require CI or another non-Agent producer to fabricate an
+Agent Result. No migration, remote-provider adapter or new materialization gate
+is implied by recording this prerequisite.
 
 ### Independent Verification Vertical Slice
 
