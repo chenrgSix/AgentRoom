@@ -43,6 +43,18 @@ loopback-only databases and simulated provider responses; it neither forwards
 network model calls nor reads the user's application data. The harness is not
 a deployment command and removes its exact temporary data on normal shutdown.
 
+`QA-052` joins the separately accepted product-entry and physical execution
+boundaries in one deterministic acceptance. It must create a real
+`decision_record` Discussion through authenticated Bridge delivery, retain its
+immutable plan draft, revise it through the exact assigned manual Tech Lead
+Remote MCP Run, replay one response-lost exact human approval, and then carry
+that same approved graph through the actual two-Bridge Git/verification/
+integration path. The acceptance inspects public projections, SQLite, Git
+objects/refs, worktree bytes and physical cleanup. Its synthetic Codex
+app-server crosses production Bridge/process boundaries but is not a live
+provider or multi-machine claim. The frozen topology and replay matrix live in
+[`QA-052`](../acceptance/qa-052-controlled-product-loop-goal.md).
+
 ## Scope
 
 - Prefixes: `QA` and `OPS`
