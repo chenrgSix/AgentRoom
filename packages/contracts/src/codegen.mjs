@@ -257,15 +257,37 @@ function preserveExecutionAuthorityCompatibility(source, language) {
       "export type Authority = VerificationReceiptAuthority;\n\n" + marker
     );
   }
-  if (/^type Authority struct \{/mu.test(source)) return source;
-  const marker = "type VerificationReceiptAuthority struct {";
-  if (!source.includes(marker)) {
-    throw new Error("Generated Go VerificationReceipt authority type is missing");
+  let compatible = source;
+  if (!/^type Authority struct \{/mu.test(compatible) &&
+    !/^type Authority = VerificationReceiptAuthority$/mu.test(compatible)) {
+    const marker = "type VerificationReceiptAuthority struct {";
+    if (!compatible.includes(marker)) {
+      throw new Error("Generated Go VerificationReceipt authority type is missing");
+    }
+    compatible = compatible.replace(
+      marker,
+      "type Authority = VerificationReceiptAuthority\n\n" + marker
+    );
   }
-  return source.replace(
-    marker,
-    "type Authority = VerificationReceiptAuthority\n\n" + marker
-  );
+  if (!/^type Outcome string$/mu.test(compatible) &&
+    !/^type Outcome = VerificationReceiptOutcome$/mu.test(compatible)) {
+    const marker = "type VerificationReceiptOutcome string";
+    if (!compatible.includes(marker)) {
+      throw new Error("Generated Go VerificationReceipt outcome type is missing");
+    }
+    compatible = compatible.replace(
+      marker,
+      "type Outcome = VerificationReceiptOutcome\n\n" + marker
+    );
+    const constants = "const (\n" +
+      '\tOutcomeCanceled Outcome = "canceled"\n' +
+      '\tOutcomeFailed Outcome = "failed"\n' +
+      '\tOutcomeOutcomeUnknown Outcome = "outcome_unknown"\n' +
+      '\tPassed Outcome = "passed"\n' +
+      ")\n\n";
+    compatible = compatible.replace(marker, constants + marker);
+  }
+  return compatible;
 }
 
 function preserveTypeScriptWireStrings(value) {

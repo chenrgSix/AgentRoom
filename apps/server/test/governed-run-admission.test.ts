@@ -2095,6 +2095,14 @@ test("generation-2 verified output admits one immutable serialized integration",
   assert.throws(() => f.database.prepare(`
     DELETE FROM execution_integrated_node_materializations
   `).run(), /retained evidence/u);
+  const adoptedIntegrated = new ExecutionNodeMaterializationRepository(
+    f.database
+  ).getAdopted({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build"
+  }, "integrated_commit");
+  assert.ok(adoptedIntegrated);
   assert.deepEqual(new ExecutionDependencyResolver(
     new ExecutionPlanRepository(f.database),
     new ExecutionNodeMaterializationRepository(f.database)
@@ -2107,6 +2115,12 @@ test("generation-2 verified output admits one immutable serialized integration",
     selections: [{
       inputSlot: "patch",
       sourceResultId: materialization.sourceResultId,
+      sourceAuthority: {
+        sourceEvidenceId: adoptedIntegrated.sourceEvidenceId,
+        sourceDigest: adoptedIntegrated.sourceDigest,
+        adoptionId: adoptedIntegrated.adoptionId,
+        adoptionDigest: adoptedIntegrated.adoptionDigest
+      },
       artifactId: materialization.artifactPins[0]!.artifactId
     }]
   });

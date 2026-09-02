@@ -3598,6 +3598,15 @@ const (
 	Ci     AuthorityKind = "ci"
 )
 
+type Outcome = VerificationReceiptOutcome
+
+const (
+	OutcomeCanceled       Outcome = "canceled"
+	OutcomeFailed         Outcome = "failed"
+	OutcomeOutcomeUnknown Outcome = "outcome_unknown"
+	Passed                Outcome = "passed"
+)
+
 type VerificationReceiptOutcome string
 
 const (
