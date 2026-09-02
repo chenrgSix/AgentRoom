@@ -215,8 +215,8 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 .work-back { padding: 8px 10px; }
 .work-detail-badges { display: flex; max-width: 260px; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .work-detail-badges span { padding: 5px 8px; border: 1px solid #465139; border-radius: 999px; color: #acb99a; font-size: 8px; font-weight: 800; text-transform: uppercase; }
-.work-tabs { display: flex; overflow-x: auto; gap: 4px; padding: 4px; border: 1px solid #30372c; border-radius: 11px; background: #11140f; }
-.work-tabs button { flex: 0 0 auto; padding: 8px 12px; border: 0; border-radius: 7px; background: transparent; color: #7f8877; font-size: 10px; font-weight: 750; cursor: pointer; }
+.work-tabs { display: flex; min-height: 38px; align-items: center; overflow-x: auto; gap: 4px; padding: 4px; border: 1px solid #30372c; border-radius: 11px; background: #11140f; }
+.work-tabs button { flex: 0 0 auto; min-height: 28px; padding: 8px 12px; border: 0; border-radius: 7px; background: transparent; color: #7f8877; font-size: 10px; font-weight: 750; cursor: pointer; }
 .work-tabs button[aria-selected="true"] { background: #2a331f; color: #d7eb9c; }
 .work-command-error { margin: 0; padding: 11px 13px; border: 1px solid #765d38; border-radius: 9px; background: #2d2719; color: #e1c17f; font-size: 10px; line-height: 1.5; }
 .work-detail-panel { min-width: 0; }
@@ -920,6 +920,14 @@ button:disabled { cursor: not-allowed; opacity: .45; }
 :root[data-theme="light"] .work-card-open strong, :root[data-theme="light"] .work-group > header h4, :root[data-theme="light"] .work-empty strong { color: #303b2a; }
 :root[data-theme="light"] .work-card-open small, :root[data-theme="light"] .work-facts dt, :root[data-theme="light"] .work-card footer { color: #697364; }
 :root[data-theme="light"] .work-facts dd { color: #35402e; }
+:root[data-theme="light"] .work-detail-header h3 { color: #303b2a; }
+:root[data-theme="light"] .work-detail-header > div:nth-child(2) > p:last-child { color: #65705f; }
+:root[data-theme="light"] .work-back,
+:root[data-theme="light"] .work-inline-link { border-color: #aeba94; background: #f3f7ed; color: #506a26; }
+:root[data-theme="light"] .work-detail-badges span { border-color: #cbd5c0; color: #5c6854; }
+:root[data-theme="light"] .work-tabs { border-color: #c9d3bd; background: #eef3e8; }
+:root[data-theme="light"] .work-tabs button { color: #5c6854; }
+:root[data-theme="light"] .work-tabs button[aria-selected="true"] { background: #dfe8cc; color: #3f541c; }
 :root[data-theme="light"] .metric-card strong,
 :root[data-theme="light"] .panel-empty strong,
 :root[data-theme="light"] .agent-card-copy h4,
