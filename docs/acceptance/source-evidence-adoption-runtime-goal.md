@@ -1,0 +1,143 @@
+# Source-Evidence Adoption Runtime Goal
+
+Status: frozen and active on 2026-09-02. This document is the acceptance
+authority for `CON-023` and `EXEC-009`. ADR-0038 remains the architecture
+decision; `docs/TASKS.md` remains the sole delivery-state register.
+
+## Goal
+
+Replace the local execution graph's universal Result anchor with three exact,
+separately owned facts while preserving every delivered local behavior:
+
+```text
+SourceEvidence + GateProofRef + EvidenceAdoption
+                         |
+                         v
+              NodeMaterialization projection
+                         |
+                         v
+          dependency and frozen input readers
+```
+
+The change must be additive and reversible until reader cutover. Existing
+accepted, verified and integrated local rows remain immutable compatibility
+projections. No remote provider, plan supersession or repository mutation is
+authorized by this goal.
+
+## Stable Work Split
+
+- `CON-023` owns schema-v1 closed wire contracts, canonical identity rules,
+  generated TypeScript/Go types and interoperability fixtures.
+- `EXEC-009` owns append-only persistence, deterministic local backfill,
+  transactional dual-write, shadow equality, adoption-authoritative readers
+  and the versioned materialization/input projection.
+- `REPO-003` starts only after `EXEC-009` is accepted and owns remote provider
+  bindings and observations. It may not redefine the local evidence model.
+
+## Contract Boundary
+
+The first contract version has these closed discriminators:
+
+- `SourceEvidence.kind`: `task_result | repository_commit`;
+- `RepositoryCommitSource.origin.kind`:
+  `local_checkpoint | remote_observation`;
+- `GateProofRef.kind`:
+  `result_review | verification_receipt | ci_observation_receipt |
+  integration_receipt`;
+- `EvidenceAdoption.gate`:
+  `accepted_result | verified_output | integrated_commit`.
+
+The schema enforces the ADR-0038 gate matrix. Unknown kinds, a proof for the
+wrong gate, unordered/duplicate proof identities, nullable Result semantics,
+paths, credentials, mutable refs and display-only remote identifiers fail
+closed. Digests use the existing canonical execution JSON rules and exclude
+`createdAt` from source identity.
+
+`task_result` pins the exact Task, source Run/generation, Result ID/version and
+ordered sealed Artifact pins. `repository_commit` pins the logical repository,
+Git object format, exact commit/tree, canonical input/content identity, ordered
+sealed Artifact pins and its closed origin. A local origin also pins checkpoint,
+Device/binding/capture lineage and its companion task-result source. A remote
+origin exists in the contract only; no local runtime may mint it in this goal.
+
+An adoption pins one exact plan/revision/node/gate, source ID/digest, ordered
+proof set/digest, dispatch lineage, approved node-contract digest, resolved
+input-set digest, current authority pins, operation identity/digest and adoption
+digest. Its authoritative uniqueness is target-local plus operation-local; no
+source evidence is globally unique to one adoption.
+
+## Migration Stages
+
+### Stage A: additive persistence and backfill
+
+Add immutable `execution_source_evidence`, `execution_gate_proof_refs` and
+`execution_evidence_adoptions` tables without weakening legacy constraints.
+Migration derives exact local evidence/adoptions for all retained legacy
+materializations. It aborts on a missing join, malformed canonical JSON, digest
+mismatch, proof substitution, integrated target mismatch or count mismatch.
+Reopening the database repeats no facts and produces byte-identical digests.
+
+Before cutover, an older application can use the unchanged legacy tables; the
+new tables are ignored. Migration rollback evidence is a verified pre-cutover
+database/application pair, never partial deletion from a live database.
+
+### Stage B: transactional dual-write and shadow equality
+
+Every new local accepted, verified or integrated materialization is produced by
+one materialization transaction. The transaction retains source evidence,
+proof references, adoption and the legacy projection, then compares their
+normalized projections. Any mismatch rolls back all four facts. Replay and two
+concurrent writers return the one identical winner.
+
+Only owning services may mint evidence or adoption. Historical evidence is not
+a bearer token: every new adoption and replay rejoins current plan, Task, Room,
+Agent, grant/profile, repository and proof authority.
+
+### Stage C: adoption-authoritative readers
+
+After deterministic shadow equality succeeds, dependency resolution, retry
+fencing, integration admission and input binding select only a current
+`EvidenceAdoption` and its joined source/proof records. Legacy rows remain
+write-only compatibility projections during this release and cannot release a
+dependency on their own. Deleting or corrupting an adoption in a fault-injected
+fixture must fail closed even when a valid legacy row remains.
+
+A versioned projection exposes generalized source evidence without emitting
+`sourceResultId: null`. Version 1 retains the exact Result-bearing local shape;
+version 2 carries source-evidence/adoption identity and an optional companion
+Result only when one exists. Existing local clients receive byte-equivalent
+content and provenance.
+
+## Required Tests and Evidence
+
+`CON-023` is complete only when:
+
+1. schema validation, deterministic generation and generated-tree cleanliness
+   pass;
+2. TypeScript and Go round-trip every closed positive variant;
+3. both languages reject unknown kinds, wrong-gate proofs, duplicate/unordered
+   proof sets, malformed digests, paths, credentials and nullable fake Results;
+4. canonical digest fixtures agree byte-for-byte across languages.
+
+`EXEC-009` is complete only when physical SQLite tests prove:
+
+1. empty, accepted-only, verified and integrated databases backfill exact
+   counts/digests and reopen idempotently;
+2. a deliberately broken join/digest/subject/count aborts without a partial
+   adoption;
+3. accepted, verified and integrated success paths dual-write equal facts;
+4. assertion/fault injection between each write rolls the whole transaction
+   back;
+5. response loss, restart and concurrent writers return one source/adoption;
+6. foreign plan/Task/Room/Run/Result/checkpoint/repository/proof, stale current
+   authority and substituted proof kinds fail closed;
+7. adoption-only dependency and input readers deliver the same physical bytes;
+8. a legacy-only row cannot advance the graph after cutover;
+9. version-1 local and version-2 generalized projections are both valid, while
+   a non-Result source never fabricates a Result;
+10. migration, backup/reopen, Server build, full regression and three isolated
+    temporary-root runs leave no owned directory behind.
+
+Completion does not claim remote Git/PR/CI, live providers, semantic
+carry-forward, plan supersession, removal of legacy tables, scheduler modes or
+multi-machine physical acceptance.

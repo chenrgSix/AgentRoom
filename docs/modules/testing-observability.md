@@ -58,11 +58,12 @@ matrix live in [`QA-052`](../acceptance/qa-052-controlled-product-loop-goal.md).
 GOV-026 accepts only the pre-provider architecture in
 [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md). Its
 design review audits current materialization SQL/readers against closed source,
-proof and plan-adoption boundaries. `REPO-003` must still provide generated
-contract fixtures, migration/backfill/reopen/rollback and shadow-equality tests,
-proof-substitution/current-authority/concurrent-adoption negatives, real local
-authenticated provider HTTP fault injection and physical canonical-content
-delivery. Documentation acceptance is never provider acceptance.
+proof and plan-adoption boundaries. `CON-023` must provide generated contract
+fixtures; `EXEC-009` must provide migration/backfill/reopen/rollback,
+shadow-equality, proof-substitution/current-authority/concurrent-adoption and
+physical local-content tests. Only then may `REPO-003` add real local
+authenticated-provider HTTP fault injection and remote canonical-content
+delivery. Documentation acceptance is never runtime or provider acceptance.
 
 ## Scope
 

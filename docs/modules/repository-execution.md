@@ -597,11 +597,14 @@ Task Result or an exact repository commit with local-checkpoint/authenticated-
 remote origin; CI, verification and integration receipts remain gate proofs,
 not candidate-content owners.
 
-`REPO-003` owns the actual contracts, migration/backfill, transactional local
-dual-write, shadow-read equality, reader cutover, versioned non-Result input
-projection and remote adapter. It may not make legacy Result fields nullable,
-invent Results, accept a URL/hash without canonical content, or treat an
-observation as authority for another gate. Design acceptance alone adds no
+`CON-023` owns the actual closed contracts. `EXEC-009` owns additive
+migration/backfill, transactional local dual-write, shadow-read equality,
+reader cutover and the versioned non-Result input projection under the frozen
+[runtime goal](../acceptance/source-evidence-adoption-runtime-goal.md).
+`REPO-003` begins only after that local authority is accepted and owns the
+remote adapter/provider observations. None may make legacy Result fields
+nullable, invent Results, accept a URL/hash without canonical content, or treat
+an observation as authority for another gate. Design acceptance alone adds no
 provider, migration or materialization capability.
 
 ### Independent Verification Vertical Slice

@@ -322,10 +322,26 @@ restoring all immutable/exact-scope triggers plus the dependency view. The
 resolver and input freezer consume the selected immutable proof without
 guessing a generation.
 
-Automatic retry remains fail-closed. `EXEC-008` separately owns explicit
-manual/supervised/automatic scheduler modes, broader multi-node capacity,
-fairness and systematic graph fault injection. `WEB-063` waits on the bounded
-`EXEC-004` control slice; parallel `QA-053` additionally waits on `EXEC-008`.
+Automatic retry remains fail-closed. `EXEC-008` now owns only deterministic
+broader multi-node capacity, fairness and systematic graph fault injection.
+`EXEC-010` separately owns any explicit manual/supervised/automatic scheduler
+mode so capacity cannot silently widen execution authority. `WEB-063` waits on
+the bounded `EXEC-004` control slice; parallel `QA-053` additionally waits on
+`EXEC-008`.
+
+CON-023 and EXEC-009 implement the accepted ADR-0038 source/proof/adoption model
+before remote provider work. Their frozen acceptance authority is
+[`source-evidence-adoption-runtime-goal.md`](../acceptance/source-evidence-adoption-runtime-goal.md).
+The local migration is additive: contracts first, then backfill and
+transactional dual-write under the unchanged legacy reader, then shadow-equal
+adoption-authoritative dependency/input readers. REPO-003 begins only after
+that cutover and may not hide local migration inside provider enablement.
+
+The broader scheduler capacity target is frozen independently in
+[`exec-008-multi-node-scheduler-capacity-goal.md`](../acceptance/exec-008-multi-node-scheduler-capacity-goal.md).
+Candidate order follows plan approval, binary plan identity, approved
+topological ordinal and binary node identity, with one candidate per plan per
+round. Durable DispatchIntent/Run facts remain the only capacity counters.
 
 ### First Accepted-Result Dependency Increment
 
