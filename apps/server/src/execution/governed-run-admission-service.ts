@@ -1,5 +1,6 @@
 import type Database from "better-sqlite3";
 import type {
+  ExecutionNodeRetryAuthorization,
   GovernedExecutionCapabilityReadyGrant,
   GovernedExecutionManifest
 } from "@convene-wire/contracts/execution-plan";
@@ -67,6 +68,11 @@ interface GovernanceRow {
 
 type AdmissionSource = "member_message" | "scheduler";
 
+interface GovernedNodeRetryAdmissionInput extends GovernedMessageAdmissionInput {
+  authorization: ExecutionNodeRetryAuthorization;
+  previousRun: RunRecord;
+}
+
 interface DispatchIntentRow {
   run_id: string;
 }
@@ -116,6 +122,21 @@ implements GovernedMessageAdmissionPort {
   public readiness(
     identity: ExecutionNodeIdentity,
     now: string
+  ): ExecutionReadiness {
+    return this.evaluateReadiness(identity, now, false);
+  }
+
+  public retryReadiness(
+    identity: ExecutionNodeIdentity,
+    now: string
+  ): ExecutionReadiness {
+    return this.evaluateReadiness(identity, now, true);
+  }
+
+  private evaluateReadiness(
+    identity: ExecutionNodeIdentity,
+    now: string,
+    ignoreExistingAttempt: boolean
   ): ExecutionReadiness {
     const plan = this.plans.get(identity.planId);
     const approval = plan && this.approvals.get(
@@ -234,7 +255,7 @@ implements GovernedMessageAdmissionPort {
       agentAvailable,
       capabilityAvailable,
       dependencyBlocker: dependency.ready ? null : dependency.blocker,
-      existingAttempt,
+      existingAttempt: ignoreExistingAttempt ? false : existingAttempt,
       grantMatches: grants.length,
       nodeKind: node?.kind ?? "verification",
       nextRunReservationSeconds,
@@ -266,6 +287,19 @@ implements GovernedMessageAdmissionPort {
         ["ready", "active", "review"].includes(task.lifecycleState) &&
         task.schedulingState === "enabled")
     });
+  }
+
+  public admitRetry(
+    input: GovernedNodeRetryAdmissionInput
+  ): GovernedMessageAdmissionResult {
+    if (!this.database.inTransaction) {
+      throw new Error("Execution retry admission requires an owned transaction");
+    }
+    return this.admit(input, {
+      plan_id: input.authorization.planId,
+      revision: input.authorization.planRevision,
+      node_key: input.authorization.nodeKey
+    }, "member_message", input);
   }
 
   public admitScheduled(
@@ -315,17 +349,20 @@ implements GovernedMessageAdmissionPort {
   private admit(
     input: GovernedMessageAdmissionInput,
     governance: GovernanceRow,
-    source: AdmissionSource
+    source: AdmissionSource,
+    retry?: GovernedNodeRetryAdmissionInput
   ): GovernedMessageAdmissionResult {
     const { member, message, now, task } = input;
     const existing = this.runs.findByTrigger(message.messageId);
     if (existing.length > 0) return { created: false, runs: existing };
-    const intentRun = this.findIntentRun({
-      planId: governance.plan_id,
-      planRevision: governance.revision,
-      nodeKey: governance.node_key
-    });
-    if (intentRun) return { created: false, runs: [intentRun] };
+    if (!retry) {
+      const intentRun = this.findIntentRun({
+        planId: governance.plan_id,
+        planRevision: governance.revision,
+        nodeKey: governance.node_key
+      });
+      if (intentRun) return { created: false, runs: [intentRun] };
+    }
     if (source === "member_message" &&
       member.role !== "owner" && member.memberId !== task.ownerMemberId) {
       return fail("EXECUTION_DISPATCH_OWNER_REQUIRED");
@@ -457,15 +494,25 @@ implements GovernedMessageAdmissionPort {
       firstCaptureOutput,
       ...captureOutputCandidates.slice(1)
     ];
-    const dispatchGeneration = this.nextDispatchGeneration(
+    const nextDispatchGeneration = this.nextDispatchGeneration(
       plan.planId,
       plan.current.revision,
       node.nodeKey
     );
+    const dispatchGeneration = retry?.authorization.newGeneration ??
+      nextDispatchGeneration;
+    if (retry && (
+      retry.authorization.newRunId === retry.previousRun.runId ||
+      retry.authorization.previousRunId !== retry.previousRun.runId ||
+      retry.authorization.previousGeneration + 1 !== dispatchGeneration ||
+      nextDispatchGeneration !== dispatchGeneration
+    )) {
+      return fail("EXECUTION_NODE_RETRY_GENERATION_CONFLICT");
+    }
     if (source === "scheduler" && dispatchGeneration !== 1) {
       return fail("EXECUTION_AUTOMATIC_RETRY_FORBIDDEN");
     }
-    const runId = createOpaqueId("run");
+    const runId = retry?.authorization.newRunId ?? createOpaqueId("run");
     const run: RunRecord = {
       runId,
       traceId: message.traceId,
@@ -475,7 +522,8 @@ implements GovernedMessageAdmissionPort {
       requesterMemberId: member.memberId,
       targetAgentId: node.agentId,
       parentRunId: null,
-      instruction: source === "scheduler" ? task.goal : message.content,
+      retryOfRunId: retry?.previousRun.runId ?? null,
+      instruction: source === "scheduler" || retry ? task.goal : message.content,
       state: "queued",
       lastSequence: 0,
       deadlineAt,
@@ -485,7 +533,7 @@ implements GovernedMessageAdmissionPort {
     };
     const requestDigest = executionOperationDigest({
       action: "governed_run_admission_v2",
-      source,
+      source: retry ? "node_retry" : source,
       run,
       planId: plan.planId,
       planRevision: plan.current.revision,
@@ -495,17 +543,19 @@ implements GovernedMessageAdmissionPort {
       nodeKey: node.nodeKey,
       dispatchGeneration,
       inputSelections: dependency.selections,
-      grant
+      grant,
+      retryOperationId: retry?.authorization.operationId ?? null
     });
     this.database.prepare(`
       INSERT INTO execution_dispatch_intents (
         intent_id, source, plan_id, plan_revision, plan_digest,
         plan_control_revision, approval_operation_id, node_key,
         dispatch_generation, task_id, room_id, agent_id, device_id, run_id,
-        trace_message_id, requester_member_id, operation_digest, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        trace_message_id, requester_member_id, operation_digest, created_at,
+        retry_operation_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      createOpaqueId("dispatch"),
+      retry?.authorization.newDispatchIntentId ?? createOpaqueId("dispatch"),
       source,
       plan.planId,
       plan.current.revision,
@@ -522,7 +572,8 @@ implements GovernedMessageAdmissionPort {
       message.messageId,
       member.memberId,
       requestDigest,
-      now
+      now,
+      retry?.authorization.operationId ?? null
     );
     this.database.prepare(`
       INSERT INTO execution_run_admissions (

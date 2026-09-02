@@ -63,6 +63,10 @@ import { ExecutionError } from "./execution/execution-error.js";
 import { ExecutionPlanRepository } from "./execution/execution-plan-repository.js";
 import { ExecutionSourceRepository } from "./execution/execution-source-repository.js";
 import { ExecutionPlanService } from "./execution/execution-plan-service.js";
+import { ExecutionNodeControlService } from
+  "./execution/execution-node-control-service.js";
+import { ExecutionNodeRetryRepository } from
+  "./execution/execution-node-retry-repository.js";
 import { ExecutionInputRepository } from "./execution/execution-input-repository.js";
 import { ExecutionInputService } from "./execution/execution-input-service.js";
 import { ExecutionDependencyResolver } from
@@ -654,6 +658,18 @@ export async function createServerApp(
     governedAdmission,
     clock
   );
+  const executionNodeControls = new ExecutionNodeControlService(
+    transactions,
+    core,
+    auth,
+    executionPlanRepository,
+    taskRepository,
+    executionNodeStates,
+    new ExecutionNodeRetryRepository(database),
+    executionSettlement,
+    governedAdmission,
+    runRepository
+  );
   let executionSweepInFlight = false;
   const sweepExecution = async (): Promise<void> => {
     if (executionSweepInFlight) return;
@@ -975,6 +991,7 @@ export async function createServerApp(
     executor,
     executionPlans,
     executionInputs,
+    executionNodeControls,
     isolatedWorkspaces,
     repositoryCaptures,
     repositoryIntegrations,

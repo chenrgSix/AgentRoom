@@ -849,6 +849,68 @@ async function reconcileVerifiedMaterializationConcurrently(
   ), JSON.stringify(results));
 }
 
+async function prepareRetryableNode(
+  t: TestContext,
+  terminalState: "failed" | "canceled" | "expired" | "outcome_unknown" |
+    "completed"
+) {
+  const f = await admissionFixture(t, undefined, {
+    captureScheduledDelivery: true,
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { n: number }).n === 1);
+  const requested = await f.scheduledDelivery!;
+  const manifest = (requested.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  new RunRepository(f.database).applyEvent(manifest.scope.runId, {
+    type: "status",
+    sequence: 1,
+    status: terminalState,
+    ...(terminalState === "completed" ? {} : {
+      error: {
+        code: `TEST_${terminalState.toUpperCase()}`,
+        message: `Test terminal state ${terminalState}.`,
+        retryable: false
+      }
+    })
+  }, "2026-08-31T12:00:01.000Z");
+  await waitFor(() => (f.database.prepare(`
+    SELECT last_run_state FROM execution_node_states
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    last_run_state: string | null;
+  } | undefined)?.last_run_state === terminalState);
+  const state = f.database.prepare(`
+    SELECT projection_revision, dispatch_generation, run_id
+    FROM execution_node_states
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    dispatch_generation: number;
+    projection_revision: number;
+    run_id: string;
+  };
+  return {
+    f,
+    manifest,
+    command: {
+      operationId: `op_execution_${terminalState}_retry0001`,
+      expectedPlanRevision: f.plan.current.revision,
+      expectedPlanDigest: f.plan.current.digest,
+      expectedControlRevision: f.plan.controlRevision,
+      nodeKey: "Build",
+      expectedNodeProjectionRevision: state.projection_revision,
+      expectedPreviousGeneration: state.dispatch_generation,
+      expectedPreviousRunId: state.run_id,
+      ambiguityAcknowledgementOperationId: null,
+      reason: `Retry the ${terminalState} implementation attempt.`
+    }
+  };
+}
+
 test("approved governed Build dispatch seals and delivers one exact capture manifest", {
   timeout: 30_000
 }, async (t) => {
@@ -928,6 +990,283 @@ test("approved governed Build dispatch seals and delivers one exact capture mani
     SELECT count(*) AS n FROM execution_run_admissions
   `).get() as { n: number }).n, 1);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("explicit node retry retains one immutable generation-2 admission and replays after restart", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    captureScheduledDelivery: true,
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { n: number }).n === 1);
+  const firstRequest = await f.scheduledDelivery!;
+  const firstManifest = (firstRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  const runs = new RunRepository(f.database);
+  runs.applyEvent(firstManifest.scope.runId, {
+    type: "status",
+    sequence: 1,
+    status: "failed",
+    error: {
+      code: "IMPLEMENTATION_FAILED",
+      message: "The bounded implementation attempt failed.",
+      retryable: false
+    }
+  }, "2026-08-31T12:00:01.000Z");
+  await waitFor(() => (f.database.prepare(`
+    SELECT last_run_state FROM execution_node_states
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    last_run_state: string | null;
+  } | undefined)?.last_run_state === "failed");
+  const previousState = f.database.prepare(`
+    SELECT projection_revision, dispatch_generation, run_id
+    FROM execution_node_states
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    dispatch_generation: number;
+    projection_revision: number;
+    run_id: string;
+  };
+  const command = {
+    operationId: "op_execution_node_retry0001",
+    expectedPlanRevision: f.plan.current.revision,
+    expectedPlanDigest: f.plan.current.digest,
+    expectedControlRevision: f.plan.controlRevision,
+    nodeKey: "Build",
+    expectedNodeProjectionRevision: previousState.projection_revision,
+    expectedPreviousGeneration: previousState.dispatch_generation,
+    expectedPreviousRunId: previousState.run_id,
+    ambiguityAcknowledgementOperationId: null,
+    reason: "Retry the failed implementation with a new isolated attempt."
+  };
+  const secondDelivery = nextMessage(f.socket);
+  const response = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+    command
+  );
+  assert.equal(response.statusCode, 200, response.body);
+  const retained = response.json();
+  assert.equal(retained.created, true);
+  assert.equal(retained.authorization.previousRunId, firstManifest.scope.runId);
+  assert.equal(retained.authorization.previousGeneration, 1);
+  assert.equal(retained.authorization.previousRunState, "failed");
+  assert.equal(retained.authorization.newGeneration, 2);
+  assert.equal(retained.run.retryOfRunId, firstManifest.scope.runId);
+  assert.equal(retained.run.attemptNumber, 2);
+  assert.equal(runs.getRun(firstManifest.scope.runId)?.state, "failed");
+  const requested = await secondDelivery;
+  const secondManifest = (requested.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  assert.equal(secondManifest.scope.runId, retained.authorization.newRunId);
+  assert.equal(secondManifest.scope.dispatchGeneration, 2);
+  assert.notEqual(
+    secondManifest.workspace.workspaceGeneration,
+    firstManifest.workspace.workspaceGeneration
+  );
+  assert.deepEqual(secondManifest.inputs, firstManifest.inputs);
+  const {
+    authorizationDigest,
+    ...unsignedAuthorization
+  } = retained.authorization;
+  assert.equal(
+    executionOperationDigest(unsignedAuthorization),
+    authorizationDigest
+  );
+  assert.deepEqual(f.database.prepare(`
+    SELECT dispatch_generation, run_id, retry_operation_id
+    FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Build'
+    ORDER BY dispatch_generation
+  `).all(f.plan.planId), [{
+    dispatch_generation: 1,
+    run_id: firstManifest.scope.runId,
+    retry_operation_id: null
+  }, {
+    dispatch_generation: 2,
+    run_id: retained.authorization.newRunId,
+    retry_operation_id: command.operationId
+  }]);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_node_retry_authorizations
+  `).get() as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM isolated_workspace_leases
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { n: number }).n, 2);
+
+  await f.restart(0);
+  const replay = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+    command
+  );
+  assert.equal(replay.statusCode, 200, replay.body);
+  assert.equal(replay.json().created, false);
+  assert.deepEqual(replay.json().authorization, retained.authorization);
+  const conflict = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+    { ...command, reason: "Changed retry request must not replay." }
+  );
+  assert.equal(conflict.statusCode, 409, conflict.body);
+  assert.equal(
+    conflict.json().error.code,
+    "EXECUTION_NODE_RETRY_OPERATION_CONFLICT"
+  );
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { n: number }).n, 2);
+});
+
+test("explicit node retry admits canceled and expired attempts without automatic retry", {
+  timeout: 30_000
+}, async (t) => {
+  for (const state of ["canceled", "expired"] as const) {
+    await t.test(state, async (child) => {
+      const { f, command } = await prepareRetryableNode(child, state);
+      const response = await f.request(
+        "POST",
+        `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+        command
+      );
+      assert.equal(response.statusCode, 200, response.body);
+      assert.equal(response.json().authorization.previousRunState, state);
+      assert.equal(response.json().authorization.newGeneration, 2);
+      assert.equal((f.database.prepare(`
+        SELECT count(*) AS n FROM execution_node_retry_authorizations
+      `).get() as { n: number }).n, 1);
+    });
+  }
+});
+
+test("outcome-unknown node retry requires the exact retained acknowledgement", {
+  timeout: 30_000
+}, async (t) => {
+  const { f, command, manifest } = await prepareRetryableNode(
+    t,
+    "outcome_unknown"
+  );
+  const missing = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+    command
+  );
+  assert.equal(missing.statusCode, 409, missing.body);
+  assert.equal(
+    missing.json().error.code,
+    "EXECUTION_NODE_RETRY_AMBIGUITY_ACK_REQUIRED"
+  );
+  const task = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
+  const acknowledgement = await f.ok(
+    "POST",
+    `/api/runs/${manifest.scope.runId}/ambiguity-acknowledgement`,
+    {
+      operationId: "op_execution_unknown_ack0001",
+      expectedTaskRevision: task.taskRevision,
+      reason: "The owner reviewed the ambiguous attempt before another writer."
+    }
+  );
+  const wrong = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+    {
+      ...command,
+      operationId: "op_execution_unknown_retry_wrong0001",
+      ambiguityAcknowledgementOperationId: "op_execution_wrong_ack0001"
+    }
+  );
+  assert.equal(wrong.statusCode, 409, wrong.body);
+  assert.equal(
+    wrong.json().error.code,
+    "EXECUTION_NODE_RETRY_AMBIGUITY_ACK_REQUIRED"
+  );
+  const admitted = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+    {
+      ...command,
+      operationId: "op_execution_unknown_retry_exact0001",
+      ambiguityAcknowledgementOperationId: acknowledgement.operationId
+    }
+  );
+  assert.equal(admitted.statusCode, 200, admitted.body);
+  assert.equal(
+    admitted.json().authorization.ambiguityAcknowledgementOperationId,
+    acknowledgement.operationId
+  );
+});
+
+test("node retry rejects completed attempts and non-owner control", {
+  timeout: 30_000
+}, async (t) => {
+  await t.test("completed", async (child) => {
+    const { f, command } = await prepareRetryableNode(child, "completed");
+    const response = await f.request(
+      "POST",
+      `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+      command
+    );
+    assert.equal(response.statusCode, 409, response.body);
+    assert.equal(
+      response.json().error.code,
+      "EXECUTION_NODE_RETRY_STATE_CONFLICT"
+    );
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM execution_node_retry_authorizations
+    `).get() as { n: number }).n, 0);
+  });
+  await t.test("member", async (child) => {
+    const { f, command } = await prepareRetryableNode(child, "failed");
+    const participant = await f.participant();
+    const response = await f.request(
+      "POST",
+      `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+      command,
+      participant.authorization
+    );
+    assert.equal(response.statusCode, 403, response.body);
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM execution_node_retry_authorizations
+    `).get() as { n: number }).n, 0);
+  });
+});
+
+test("concurrent explicit retry controls retain one generation-2 winner", {
+  timeout: 30_000
+}, async (t) => {
+  const { f, command } = await prepareRetryableNode(t, "failed");
+  const responses = await Promise.all([1, 2].map((suffix) => f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+    {
+      ...command,
+      operationId: `op_execution_concurrent_retry000${suffix}`
+    }
+  )));
+  assert.deepEqual(
+    responses.map((response) => response.statusCode).sort(),
+    [200, 409]
+  );
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_node_retry_authorizations
+  `).get() as { n: number }).n, 1);
+  assert.deepEqual(f.database.prepare(`
+    SELECT dispatch_generation FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Build'
+    ORDER BY dispatch_generation
+  `).all(f.plan.planId), [
+    { dispatch_generation: 1 },
+    { dispatch_generation: 2 }
+  ]);
 });
 
 test("missing exact current grant rolls back governed Message and Run state", {

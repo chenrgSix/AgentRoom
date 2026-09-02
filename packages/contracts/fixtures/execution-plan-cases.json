@@ -2153,6 +2153,49 @@
         "evidenceRefId": "evidence_00000001"
       },
       "valid": false
+    },
+    {
+      "name": "execution: valid node retry command",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/nodeRetryCommand",
+      "instance": {
+        "operationId": "op_execution_retry0001",
+        "expectedPlanRevision": 1,
+        "expectedPlanDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "expectedControlRevision": 2,
+        "nodeKey": "Build",
+        "expectedNodeProjectionRevision": 4,
+        "expectedPreviousGeneration": 1,
+        "expectedPreviousRunId": "run_execution_retry_old0001",
+        "ambiguityAcknowledgementOperationId": null,
+        "reason": "Retry after the failed bounded implementation attempt."
+      },
+      "valid": true
+    },
+    {
+      "name": "execution: valid node retry authorization",
+      "schemaId": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/nodeRetryAuthorization",
+      "instance": {
+        "operationId": "op_execution_retry0001",
+        "planId": "plan_execution_retry0001",
+        "planRevision": 1,
+        "planDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "planControlRevision": 2,
+        "nodeKey": "Build",
+        "previousNodeProjectionRevision": 4,
+        "previousGeneration": 1,
+        "previousRunId": "run_execution_retry_old0001",
+        "previousRunState": "failed",
+        "ambiguityAcknowledgementOperationId": null,
+        "newGeneration": 2,
+        "newRunId": "run_execution_retry_new0001",
+        "newDispatchIntentId": "dispatch_execution_retry0001",
+        "requestedByMemberId": "member_execution_retry0001",
+        "reason": "Retry after the failed bounded implementation attempt.",
+        "requestDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "authorizationDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "createdAt": "2026-09-02T00:00:00Z"
+      },
+      "valid": true
     }
   ]
 }

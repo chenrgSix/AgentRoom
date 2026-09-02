@@ -207,7 +207,7 @@ test("capture lease migration preserves populated legacy publications, blobs and
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
     assert.deepEqual(migrated.appliedVersions,
-      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71]);
+      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -273,7 +273,7 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     database.close();
     const result = await migrateDatabase(f.databasePath);
     assert.deepEqual(result.appliedVersions,
-      [63, 64, 65, 66, 67, 68, 69, 70, 71]);
+      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -333,7 +333,12 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_integrated_materializations_require_scope_insert",
       "execution_integrated_materializations_immutable_update",
       "execution_integrated_materializations_immutable_delete",
-      "execution_dependency_materializations"
+      "execution_dependency_materializations",
+      "execution_node_retry_authorizations",
+      "execution_dispatch_intents_require_retry_authorization_insert",
+      "execution_node_retry_authorizations_require_scope_insert",
+      "execution_node_retry_authorizations_immutable_update",
+      "execution_node_retry_authorizations_immutable_delete"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))

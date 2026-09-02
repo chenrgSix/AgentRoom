@@ -1637,6 +1637,47 @@ export interface ExecutionPlanControlCommand {
 
 export type ActionEnum = "pause" | "resume" | "cancel";
 
+export interface ExecutionNodeRetryCommand {
+  ambiguityAcknowledgementOperationId: null | string;
+  expectedControlRevision:             number;
+  expectedNodeProjectionRevision:      number;
+  expectedPlanDigest:                  string;
+  expectedPlanRevision:                number;
+  expectedPreviousGeneration:          number;
+  expectedPreviousRunId:               string;
+  nodeKey:                             string;
+  operationId:                         string;
+  reason:                              string;
+}
+
+export interface ExecutionNodeRetryAuthorization {
+  ambiguityAcknowledgementOperationId: null | string;
+  authorizationDigest:                 string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:                      string;
+  newDispatchIntentId:            string;
+  newGeneration:                  number;
+  newRunId:                       string;
+  nodeKey:                        string;
+  operationId:                    string;
+  planControlRevision:            number;
+  planDigest:                     string;
+  planId:                         string;
+  planRevision:                   number;
+  previousGeneration:             number;
+  previousNodeProjectionRevision: number;
+  previousRunId:                  string;
+  previousRunState:               PreviousRunState;
+  reason:                         string;
+  requestDigest:                  string;
+  requestedByMemberId:            string;
+}
+
+export type PreviousRunState = "failed" | "canceled" | "expired" | "outcome_unknown";
+
 export interface ExecutionPlanRevision {
   author: ExecutionPlanRevisionAuthor;
   /**

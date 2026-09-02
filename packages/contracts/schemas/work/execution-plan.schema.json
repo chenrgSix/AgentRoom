@@ -836,6 +836,121 @@
         }
       }
     },
+    "nodeRetryCommand": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "expectedPlanRevision",
+        "expectedPlanDigest",
+        "expectedControlRevision",
+        "nodeKey",
+        "expectedNodeProjectionRevision",
+        "expectedPreviousGeneration",
+        "expectedPreviousRunId",
+        "ambiguityAcknowledgementOperationId",
+        "reason"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "expectedPlanRevision": { "$ref": "#/$defs/revision" },
+        "expectedPlanDigest": { "$ref": "#/$defs/digest" },
+        "expectedControlRevision": { "$ref": "#/$defs/revision" },
+        "nodeKey": { "$ref": "#/$defs/stableKey" },
+        "expectedNodeProjectionRevision": { "$ref": "#/$defs/revision" },
+        "expectedPreviousGeneration": { "$ref": "#/$defs/revision" },
+        "expectedPreviousRunId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "ambiguityAcknowledgementOperationId": {
+          "oneOf": [
+            {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+            },
+            { "type": "null" }
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        }
+      }
+    },
+    "nodeRetryAuthorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "planId",
+        "planRevision",
+        "planDigest",
+        "planControlRevision",
+        "nodeKey",
+        "previousNodeProjectionRevision",
+        "previousGeneration",
+        "previousRunId",
+        "previousRunState",
+        "ambiguityAcknowledgementOperationId",
+        "newGeneration",
+        "newRunId",
+        "newDispatchIntentId",
+        "requestedByMemberId",
+        "reason",
+        "requestDigest",
+        "authorizationDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "operationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "planId": { "$ref": "#/$defs/planId" },
+        "planRevision": { "$ref": "#/$defs/revision" },
+        "planDigest": { "$ref": "#/$defs/digest" },
+        "planControlRevision": { "$ref": "#/$defs/revision" },
+        "nodeKey": { "$ref": "#/$defs/stableKey" },
+        "previousNodeProjectionRevision": { "$ref": "#/$defs/revision" },
+        "previousGeneration": { "$ref": "#/$defs/revision" },
+        "previousRunId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "previousRunState": {
+          "enum": ["failed", "canceled", "expired", "outcome_unknown"]
+        },
+        "ambiguityAcknowledgementOperationId": {
+          "oneOf": [
+            {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+            },
+            { "type": "null" }
+          ]
+        },
+        "newGeneration": { "$ref": "#/$defs/revision" },
+        "newRunId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/runId"
+        },
+        "newDispatchIntentId": {
+          "type": "string",
+          "pattern": "^dispatch_[A-Za-z0-9_-]{8,128}$"
+        },
+        "requestedByMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "requestDigest": { "$ref": "#/$defs/digest" },
+        "authorizationDigest": { "$ref": "#/$defs/digest" },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
+    },
     "compiledTask": {
       "type": "object",
       "additionalProperties": false,

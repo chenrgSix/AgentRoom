@@ -12,7 +12,8 @@ export function canonicalExecutionJSON(value: unknown): string;
 export function executionOperationDigest(value: unknown): string;
 export function assertExecutionCommand(
   kind: "planDefinition" | "proposalCommand" | "revisionCommand" |
-    "approvalCommand" | "controlCommand" | "decisionContent" |
+    "approvalCommand" | "controlCommand" | "nodeRetryCommand" |
+    "nodeRetryAuthorization" | "decisionContent" |
     "executionManifest" | "executionInputBinding" | "executionCapability" |
     "runtimeAuthorityRequest" | "runtimeAuthorityView" |
     "repositoryBinding" | "executionGrant" | "repositoryOperation" |

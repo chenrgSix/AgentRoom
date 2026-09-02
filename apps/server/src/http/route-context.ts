@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { ExecutionPlanService } from "../execution/execution-plan-service.js";
 import type { ExecutionInputService } from "../execution/execution-input-service.js";
+import type { ExecutionNodeControlService } from
+  "../execution/execution-node-control-service.js";
 import type { RepositoryCaptureService } from "../repository/repository-capture-service.js";
 import type { RepositoryIntegrationService } from
   "../repository/repository-integration-service.js";
@@ -98,6 +100,7 @@ export interface ServerRouteContext {
   executor: InProcessRunExecutor;
   executionPlans: ExecutionPlanService;
   executionInputs: ExecutionInputService;
+  executionNodeControls: ExecutionNodeControlService;
   isolatedWorkspaces: IsolatedWorkspaceLeaseService;
   repositoryCaptures: RepositoryCaptureService;
   repositoryIntegrations: RepositoryIntegrationService;

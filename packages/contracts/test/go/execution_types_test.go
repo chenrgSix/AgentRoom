@@ -56,6 +56,8 @@ func TestExecutionGeneratedTypesPreserveWireFixtures(t *testing.T) {
 		"execution: valid human proposal":               func() any { return &execution.ExecutionPlanProposalCommand{} },
 		"execution: valid exact approval":               func() any { return &execution.ExecutionPlanApprovalCommand{} },
 		"execution: valid control command":              func() any { return &execution.ExecutionPlanControlCommand{} },
+		"execution: valid node retry command":           func() any { return &execution.ExecutionNodeRetryCommand{} },
+		"execution: valid node retry authorization":     func() any { return &execution.ExecutionNodeRetryAuthorization{} },
 		"execution: valid revision command":             func() any { return &execution.ExecutionPlanRevisionCommand{} },
 		"execution: valid attributed decision":          func() any { return &execution.ExecutionDecisionContent{} },
 		"execution: valid scoped Agent proposal":        func() any { return &execution.ExecutionAgentPlanProposalCommand{} },

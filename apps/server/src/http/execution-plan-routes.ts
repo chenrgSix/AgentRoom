@@ -7,7 +7,8 @@ import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
   app, auth, clock, executionPlans, executionInputs, isolatedWorkspaces,
-  repositoryCaptures, repositoryIntegrations, repositoryVerifications, principal
+  executionNodeControls, repositoryCaptures, repositoryIntegrations,
+  repositoryVerifications, dispatchRun, principal
 }: ServerRouteContext): void {
   const options = {
     bodyLimit: 512 * 1024,
@@ -60,6 +61,21 @@ export function registerExecutionPlanRoutes({
     async (request) => execute(() => repositoryIntegrations.approve(
       principal(request), request.params.planId, request.body, clock()
     ))
+  );
+  app.post<{ Params: { planId: string; nodeKey: string } }>(
+    "/api/execution-plans/:planId/nodes/:nodeKey/retries",
+    options,
+    async (request) => execute(async () => {
+      const result = executionNodeControls.retry(
+        principal(request),
+        request.params.planId,
+        request.params.nodeKey,
+        request.body,
+        clock()
+      );
+      const run = await dispatchRun(result.run);
+      return { ...result, run };
+    })
   );
   app.get<{ Params: { operationId: string } }>(
     "/api/bridge/repository-integrations/:operationId",

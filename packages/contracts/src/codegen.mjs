@@ -414,6 +414,8 @@ function renderExecutionValidators(schemas) {
     revisionCommand: `${EXECUTION_SCHEMA_ID}#/$defs/revisionCommand`,
     approvalCommand: `${EXECUTION_SCHEMA_ID}#/$defs/approvalCommand`,
     controlCommand: `${EXECUTION_SCHEMA_ID}#/$defs/controlCommand`,
+    nodeRetryCommand: `${EXECUTION_SCHEMA_ID}#/$defs/nodeRetryCommand`,
+    nodeRetryAuthorization: `${EXECUTION_SCHEMA_ID}#/$defs/nodeRetryAuthorization`,
     decisionContent: `${EXECUTION_SCHEMA_ID}#/$defs/decisionContent`,
     executionManifest: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/manifest`,
     executionInputBinding: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/inputBinding`,
@@ -1407,6 +1409,8 @@ export async function generateContractTypes(packageRoot) {
     ["ExecutionPlanApprovalReceipt", "approvalReceipt"],
     ["ExecutionPlanApprovalPage", "approvalPage"],
     ["ExecutionPlanControlCommand", "controlCommand"],
+    ["ExecutionNodeRetryCommand", "nodeRetryCommand"],
+    ["ExecutionNodeRetryAuthorization", "nodeRetryAuthorization"],
     ["ExecutionPlanRevision", "planRevision"],
     ["ExecutionAgentPlanProposalCommand", "agentProposalCommand"]
   ]);

@@ -1585,6 +1585,43 @@ type ExecutionPlanControlCommand struct {
 	Reason                  string     `json:"reason"`
 }
 
+type ExecutionNodeRetryCommand struct {
+	AmbiguityAcknowledgementOperationID *string `json:"ambiguityAcknowledgementOperationId"`
+	ExpectedControlRevision             int64   `json:"expectedControlRevision"`
+	ExpectedNodeProjectionRevision      int64   `json:"expectedNodeProjectionRevision"`
+	ExpectedPlanDigest                  string  `json:"expectedPlanDigest"`
+	ExpectedPlanRevision                int64   `json:"expectedPlanRevision"`
+	ExpectedPreviousGeneration          int64   `json:"expectedPreviousGeneration"`
+	ExpectedPreviousRunID               string  `json:"expectedPreviousRunId"`
+	NodeKey                             string  `json:"nodeKey"`
+	OperationID                         string  `json:"operationId"`
+	Reason                              string  `json:"reason"`
+}
+
+type ExecutionNodeRetryAuthorization struct {
+	AmbiguityAcknowledgementOperationID *string `json:"ambiguityAcknowledgementOperationId"`
+	AuthorizationDigest                 string  `json:"authorizationDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt                      string           `json:"createdAt"`
+	NewDispatchIntentID            string           `json:"newDispatchIntentId"`
+	NewGeneration                  int64            `json:"newGeneration"`
+	NewRunID                       string           `json:"newRunId"`
+	NodeKey                        string           `json:"nodeKey"`
+	OperationID                    string           `json:"operationId"`
+	PlanControlRevision            int64            `json:"planControlRevision"`
+	PlanDigest                     string           `json:"planDigest"`
+	PlanID                         string           `json:"planId"`
+	PlanRevision                   int64            `json:"planRevision"`
+	PreviousGeneration             int64            `json:"previousGeneration"`
+	PreviousNodeProjectionRevision int64            `json:"previousNodeProjectionRevision"`
+	PreviousRunID                  string           `json:"previousRunId"`
+	PreviousRunState               PreviousRunState `json:"previousRunState"`
+	Reason                         string           `json:"reason"`
+	RequestDigest                  string           `json:"requestDigest"`
+	RequestedByMemberID            string           `json:"requestedByMemberId"`
+}
+
 type ExecutionPlanRevision struct {
 	Author ExecutionPlanRevisionAuthor `json:"author"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -2881,6 +2918,15 @@ const (
 	Cancel ActionEnum = "cancel"
 	Pause  ActionEnum = "pause"
 	Resume ActionEnum = "resume"
+)
+
+type PreviousRunState string
+
+const (
+	Expired                        PreviousRunState = "expired"
+	PreviousRunStateCanceled       PreviousRunState = "canceled"
+	PreviousRunStateFailed         PreviousRunState = "failed"
+	PreviousRunStateOutcomeUnknown PreviousRunState = "outcome_unknown"
 )
 
 type WorkspaceMode string
