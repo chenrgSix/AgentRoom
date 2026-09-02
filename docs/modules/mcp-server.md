@@ -85,7 +85,7 @@ before allocating an immutable Result version.
 
 ### Assigned Tech Lead plan drafts
 
-`MCP-007` uses no Agent persona or free-text role as authority. A Tech Lead
+The completed `MCP-007` surface uses no Agent persona or free-text role as authority. A Tech Lead
 delegation is an enabled manual Agent's current `primary` assignment to one
 top-level Task plus that Agent's exact persisted Run and immutable Context
 Manifest for the same Task revisions. Mutations require the Run to be
@@ -102,6 +102,12 @@ and expose no Result review, ambiguity acknowledgement, budget, repository,
 verification, integration or local Runtime port. The full authority and
 acceptance matrix is frozen in
 [`MCP-007`](../acceptance/mcp-007-tech-lead-plan-tools.md).
+
+Focused acceptance uses the real MCP transport and physical SQLite rows. It
+proves exact create/read/revise replay and Agent/Run attribution, then rejects
+role-only, contributor, substituted/terminal Run, stale manifest, lost Room,
+identity-mode and cross-root access. Proposal writes leave approval, compiled
+node, verification and integration counts at zero and add no Task or work Run.
 
 ## Participation Modes
 

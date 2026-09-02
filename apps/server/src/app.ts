@@ -105,6 +105,8 @@ import { DiscussionPlanProposalService } from
 import { TeamWaitService } from "./mcp/team-wait-service.js";
 import { ManualTaskWorkService } from
   "./mcp/manual-task-work-service.js";
+import { ManualExecutionPlanService } from
+  "./mcp/manual-execution-plan-service.js";
 import { OperationalMetrics } from "./observability/operational-metrics.js";
 import type { BuildIdentity } from "./observability/build-identity.js";
 import { TraceRepository } from "./observability/trace-repository.js";
@@ -487,6 +489,13 @@ export async function createServerApp(
     runRepository,
     resultRepository,
     results
+  );
+  const manualExecutionPlans = new ManualExecutionPlanService(
+    core,
+    taskRepository,
+    runRepository,
+    executionPlanRepository,
+    executionDraftWriter
   );
   const workbench = new WorkbenchService(
     core,
@@ -1026,6 +1035,7 @@ export async function createServerApp(
     longTermMemory,
     memoryCandidates,
     manualRuns,
+    manualExecutionPlans,
     manualTaskWork,
     memberMessageRuns,
     messages,

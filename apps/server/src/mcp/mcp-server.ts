@@ -9,6 +9,8 @@ import type { RunRecord } from "../run/run-repository.js";
 import type { McpPrincipal } from "../security/auth-service.js";
 import type { MessageService } from "../team-room/message-service.js";
 import type { ManualTaskWorkService } from "./manual-task-work-service.js";
+import type { ManualExecutionPlanService } from
+  "./manual-execution-plan-service.js";
 import type { TeamWaitService } from "./team-wait-service.js";
 import type { TaskArtifactService } from "../task/task-artifact-service.js";
 
@@ -18,6 +20,7 @@ interface TeamMcpDependencies {
   dispatchRun: (run: RunRecord) => Promise<RunRecord>;
   handoffs: HandoffService;
   manualRuns: ManualRunService;
+  manualExecutionPlans: ManualExecutionPlanService;
   manualTaskWork: ManualTaskWorkService;
   messages: MessageService;
   taskArtifacts: TaskArtifactService;
@@ -81,6 +84,17 @@ const resultProposal = z.object({
     explanation: z.string().min(1).max(4_000),
     evidenceRefIds: z.array(evidenceRefId).max(100)
   }).strict()).max(100)
+}).strict();
+const executionProposalCommand = z.object({
+  operationId: opaqueId("op"),
+  expectedRootTaskRevision: z.number().int().positive(),
+  definition: z.unknown()
+}).strict();
+const executionRevisionCommand = z.object({
+  operationId: opaqueId("op"),
+  expectedRevision: z.number().int().positive(),
+  expectedRootTaskRevision: z.number().int().positive(),
+  definition: z.unknown()
 }).strict();
 
 function toolResult(value: Record<string, unknown>) {
@@ -222,6 +236,45 @@ export function createTeamMcpServer(
       principal,
       runId,
       proposal as ResultProposal,
+      dependencies.clock()
+    )
+  }));
+  server.registerTool("team.propose_plan", {
+    description: "Create one unapproved plan draft within this Agent's exact working Tech Lead Run.",
+    inputSchema: {
+      runId: opaqueId("run"),
+      command: executionProposalCommand
+    }
+  }, async ({ runId, command }) => toolResult({
+    plan: dependencies.manualExecutionPlans.propose(
+      principal,
+      runId,
+      command,
+      dependencies.clock()
+    )
+  }));
+  server.registerTool("team.get_plan", {
+    description: "Read one exact plan within this Agent's current Tech Lead Run scope.",
+    inputSchema: {
+      runId: opaqueId("run"),
+      planId: opaqueId("plan")
+    }
+  }, async ({ runId, planId }) => toolResult({
+    plan: dependencies.manualExecutionPlans.get(principal, runId, planId)
+  }));
+  server.registerTool("team.propose_plan_revision", {
+    description: "Append one unapproved revision within this Agent's exact working Tech Lead Run.",
+    inputSchema: {
+      runId: opaqueId("run"),
+      planId: opaqueId("plan"),
+      command: executionRevisionCommand
+    }
+  }, async ({ runId, planId, command }) => toolResult({
+    plan: dependencies.manualExecutionPlans.revise(
+      principal,
+      runId,
+      planId,
+      command,
       dependencies.clock()
     )
   }));

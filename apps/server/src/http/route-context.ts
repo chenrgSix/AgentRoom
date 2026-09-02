@@ -23,6 +23,8 @@ import type { HostedAgentConfigurationService } from
 import type { TeamWaitService } from "../mcp/team-wait-service.js";
 import type { ManualTaskWorkService } from
   "../mcp/manual-task-work-service.js";
+import type { ManualExecutionPlanService } from
+  "../mcp/manual-execution-plan-service.js";
 import type { OperationalMetrics } from "../observability/operational-metrics.js";
 import type { TraceRepository } from "../observability/trace-repository.js";
 import type { AgentService } from "../registry/agent-service.js";
@@ -110,6 +112,7 @@ export interface ServerRouteContext {
   hostedAgents: HostedAgentConfigurationService;
   limitAnonymous: (request: FastifyRequest, bucket: string) => void;
   manualRuns: ManualRunService;
+  manualExecutionPlans: ManualExecutionPlanService;
   manualTaskWork: ManualTaskWorkService;
   memberMessageRuns: MemberMessageRunService;
   longTermMemory: LongTermMemoryService;

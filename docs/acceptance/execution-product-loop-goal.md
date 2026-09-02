@@ -133,10 +133,18 @@ Turn-derived operation without duplication. The full Server suite passes 517
 tests, the shared contract suite passes 81 tests, both builds pass, and the
 isolated test runner reports physical removal of its owned temporary roots.
 
-`MCP-007` may let an Agent propose, read and revise only plans within its exact
+`MCP-007` lets an Agent propose, read and revise only plans within its exact
 assigned Tech Lead Run/context. A role label is not authority. The MCP surface
 cannot approve a plan, dispatch work, review Results, verify candidates or
 integrate repository state.
+
+Its accepted implementation requires the current primary Task assignment,
+working/non-terminal own Run as appropriate, exact Context Manifest revisions,
+current Member/Agent Room access and a source from that exact Run context.
+Create/read/revise replay is stable; stale, substituted, terminal, role-only,
+cross-root and unavailable identities fail closed. Physical SQLite evidence
+shows no approval, compiled node, verification, integration, extra Task or
+extra work Run is created.
 
 `WEB-063` is the human control surface for Server-backed proposal inspection,
 dependency and policy blockers, version diff/edit and exact approval. Approval

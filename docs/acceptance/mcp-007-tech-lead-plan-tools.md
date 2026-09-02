@@ -1,7 +1,6 @@
 # MCP-007 Assigned Tech Lead Plan Tools
 
-Status: frozen implementation goal; delivery evidence is appended only after
-the implementation and physical database assertions pass.
+Status: accepted implementation and verification evidence.
 
 ## Goal
 
@@ -68,3 +67,34 @@ The completion regression must prove:
   verification or integration tool is exposed; and
 - physical SQLite counts prove proposal/revision persistence adds no approval,
   compiled node, Task, work Run, verification or integration fact.
+
+## Completion Evidence
+
+`ManualExecutionPlanService` now rechecks the exact durable conjunction before
+every read or mutation and delegates only immutable writes to
+`ExecutionPlanDraftWriter`. The MCP server exposes the three named tools with
+strict wrapper schemas; proposal/revision bodies still pass the shared contract
+validator. The Server supplies Agent/Run attribution and no human-authority
+tool was added.
+
+Focused MCP tests exercise one real Web-created top-level Task, manual Agent
+credential, assigned Run, Context Manifest, trigger Message and SQLite
+database. The Agent claims the Run, creates and exactly replays revision 1,
+reads it, appends and exactly replays revision 2, then loses read authority when
+the Run becomes terminal. Both revisions remain `draft` and retain the exact
+same `{ kind: "agent", agentId, runId }` author.
+
+Negative cases reject an injected approval field, changed operation replay,
+Tech Lead display role with only contributor assignment, substitution of a
+different own Run, stale Task/manifest revisions, removed Room access,
+non-manual and disabled identities, and a plan rooted outside the delegated
+Run. Tool discovery confirms there is no plan approval, Result review,
+ambiguity acknowledgement, budget, repository grant, verification or
+integration tool.
+
+Physical database assertions retain one plan, two Decisions/Proposals/revisions
+and two operations while approval, compiled node, verification and integration
+receipt counts remain zero. Agent Task and work Run counts do not increase.
+The focused MCP pair passes 8 tests, the full Server suite passes 524 tests,
+Server build succeeds, and every isolated test runner reports removal of its
+owned temporary root.
