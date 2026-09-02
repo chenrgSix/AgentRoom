@@ -3054,6 +3054,8 @@ export interface VerificationReceipt {
   version:        number;
 }
 
+export type Authority = VerificationReceiptAuthority;
+
 export interface VerificationReceiptAuthority {
   deviceId?:          string;
   kind:               AuthorityKind;

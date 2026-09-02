@@ -2922,6 +2922,8 @@ type VerificationReceipt struct {
 	Version        int64  `json:"version"`
 }
 
+type Authority = VerificationReceiptAuthority
+
 type VerificationReceiptAuthority struct {
 	DeviceID          *string       `json:"deviceId,omitempty"`
 	Kind              AuthorityKind `json:"kind"`

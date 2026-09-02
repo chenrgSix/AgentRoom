@@ -243,6 +243,29 @@ function preserveGoOpenErrorDetails(source) {
   );
 }
 
+function preserveExecutionAuthorityCompatibility(source, language) {
+  if (language === "typescript") {
+    if (/^export interface Authority \{/mu.test(source)) return source;
+    const marker = "export interface VerificationReceiptAuthority {";
+    if (!source.includes(marker)) {
+      throw new Error("Generated VerificationReceipt authority type is missing");
+    }
+    return source.replace(
+      marker,
+      "export type Authority = VerificationReceiptAuthority;\n\n" + marker
+    );
+  }
+  if (/^type Authority struct \{/mu.test(source)) return source;
+  const marker = "type VerificationReceiptAuthority struct {";
+  if (!source.includes(marker)) {
+    throw new Error("Generated Go VerificationReceipt authority type is missing");
+  }
+  return source.replace(
+    marker,
+    "type Authority = VerificationReceiptAuthority\n\n" + marker
+  );
+}
+
 function preserveTypeScriptWireStrings(value) {
   if (Array.isArray(value)) {
     return value.map(preserveTypeScriptWireStrings);
@@ -1574,9 +1597,13 @@ export async function generateContractTypes(packageRoot) {
   );
   const executionTypescript =
     "// Code generated from JSON Schema; DO NOT EDIT.\n\n" +
-    formatTypeScript(renderedExecutionTypeScript).trimEnd() + "\n";
+    formatTypeScript(preserveExecutionAuthorityCompatibility(
+      renderedExecutionTypeScript,
+      "typescript"
+    )).trimEnd() + "\n";
   const executionGo = formatGo(
-    "// Code generated from JSON Schema; DO NOT EDIT.\n\n" + renderedExecutionGo
+    "// Code generated from JSON Schema; DO NOT EDIT.\n\n" +
+      preserveExecutionAuthorityCompatibility(renderedExecutionGo, "go")
   );
 
   return {
