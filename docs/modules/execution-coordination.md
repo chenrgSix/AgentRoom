@@ -371,8 +371,8 @@ when an edge requires `integrated_commit`.
 
 ## APIs and Agent Tools
 
-The typed HTTP surface includes Room-scoped proposal/plan listing and creation,
-proposal revision and compilation, exact revision approval, plan detail,
+The typed HTTP surface includes Room- and root-Task-scoped plan listing,
+proposal creation, revision and compilation, exact revision approval, plan detail,
 pause/resume/cancel, node retry, input inspection, verification and integration
 receipt reads. Routes use current Web authentication, Origin protection,
 bounded payloads, safe errors, no-store and Team change wakeups.
@@ -405,6 +405,7 @@ Multiple alternative drafts may coexist; they confer no execution authority.
 | HTTP operation | Resource |
 | --- | --- |
 | POST human proposal | `/api/tasks/:taskId/execution-plans` |
+| GET exact root-Task drafts/plans | `/api/tasks/:taskId/execution-plans` |
 | GET Room drafts/plans | `/api/rooms/:roomId/execution-plans` |
 | GET exact current projection | `/api/execution-plans/:planId` |
 | POST append a draft revision | `/api/execution-plans/:planId/revisions` |
@@ -412,7 +413,11 @@ Multiple alternative drafts may coexist; they confer no execution authority.
 | GET immutable decision | `/api/execution-decisions/:decisionId` |
 | GET frozen decision-source records | `/api/execution-decisions/:decisionId/sources` |
 
-Listing uses a binary `afterPlanId` cursor; revision history uses an integer
+Both listing scopes use a binary `afterPlanId` cursor; the Task route first
+authorizes the requested Task's current Room and selects only durable plans
+whose `rootTaskId` is that exact Task. It does not mutate or compile a plan and
+allows the Web detail to avoid incomplete client-side Room filtering. Revision
+history uses an integer
 `afterRevision`. Both return a next cursor or null and accept limits 1–50
 (default 20). Start a fresh listing on a Room change notification. Every route,
 including authorization errors, uses `no-store`. Mutation bodies are at most

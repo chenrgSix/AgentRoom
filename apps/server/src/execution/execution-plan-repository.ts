@@ -92,6 +92,23 @@ export class ExecutionPlanRepository {
     };
   }
 
+  public listForRootTask(
+    rootTaskId: string,
+    afterPlanId: string,
+    limit: number
+  ): ExecutionPlanPage {
+    const rows = this.database.prepare(`
+      SELECT plan_id FROM execution_plans
+      WHERE root_task_id = ? AND plan_id > ?
+      ORDER BY plan_id LIMIT ?
+    `).all(rootTaskId, afterPlanId, limit + 1) as Array<{ plan_id: string }>;
+    const page = rows.slice(0, limit);
+    return {
+      plans: page.map(({ plan_id }) => this.get(plan_id)!),
+      nextAfterPlanId: rows.length > limit ? page.at(-1)!.plan_id : null
+    };
+  }
+
   public revision(planId: string, revision: number): ExecutionPlanRevision | undefined {
     const row = this.database.prepare(`
       SELECT proposal.* FROM execution_plan_revisions revision

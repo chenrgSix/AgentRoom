@@ -376,6 +376,65 @@ test("execution history/list pagination and no-store errors remain bounded and u
   }
 });
 
+test("execution Task listing is exact authorized bounded and read-only", async (t) => {
+  const f = await fixture(t);
+  const first = await f.create();
+  const second = await f.create({
+    ...f.command(), operationId: "op_task_page_plan0001"
+  });
+  const otherRoot = await f.ok("POST", `/api/rooms/${f.roomId}/tasks`, {
+    title: "Other root", goal: "Keep Task-scoped plan discovery exact"
+  });
+  const otherTask = await f.ok("GET", `/api/tasks/${otherRoot.taskId}`);
+  const otherCommand = f.command();
+  otherCommand.operationId = "op_other_task_plan0001";
+  otherCommand.expectedRootTaskRevision = otherTask.taskRevision;
+  otherCommand.definition.rootTaskId = otherTask.taskId;
+  await f.ok(
+    "POST", `/api/tasks/${otherTask.taskId}/execution-plans`, otherCommand
+  );
+  const before = f.counts();
+
+  const page = await f.ok(
+    "GET", `/api/tasks/${f.root.taskId}/execution-plans?limit=1`
+  );
+  const next = await f.ok(
+    "GET",
+    `/api/tasks/${f.root.taskId}/execution-plans?limit=1&afterPlanId=${page.nextAfterPlanId}`
+  );
+  assert.equal(page.plans.length, 1);
+  assert.equal(next.plans.length, 1);
+  assert.deepEqual(
+    [page.plans[0].planId, next.plans[0].planId].sort(),
+    [first.planId, second.planId].sort()
+  );
+  assert.equal(next.nextAfterPlanId, null);
+  assert.deepEqual(f.counts(), before);
+
+  const participant = await f.participant();
+  assert.equal((await f.request(
+    "GET", `/api/tasks/${f.root.taskId}/execution-plans`, undefined,
+    participant.authorization
+  )).statusCode, 200);
+  await f.ok("PUT", `/api/rooms/${f.roomId}/participants`, {
+    memberIds: [f.ownerMemberId], agentIds: [f.agentId]
+  });
+  assert.equal((await f.request(
+    "GET", `/api/tasks/${f.root.taskId}/execution-plans`, undefined,
+    participant.authorization
+  )).statusCode, 403);
+  assert.equal((await f.request(
+    "GET", "/api/tasks/task_missing_root0001/execution-plans"
+  )).statusCode, 404);
+  for (const query of ["limit=0", "limit=51", "afterPlanId=wrong_0001"]) {
+    const response = await f.request(
+      "GET", `/api/tasks/${f.root.taskId}/execution-plans?${query}`
+    );
+    assert.equal(response.statusCode, 400, query);
+    assert.equal(response.headers["cache-control"], "no-store");
+  }
+});
+
 test("execution trusted mutations require the exact Web Origin before replaying receipts", async (t) => {
   const f = await fixture(t);
   const plan = await f.create();

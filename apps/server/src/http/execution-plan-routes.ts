@@ -133,6 +133,15 @@ export function registerExecutionPlanRoutes({
       principal(request), request.params.taskId, request.body, clock()
     ))
   );
+  app.get<{
+    Params: { taskId: string }; Querystring: { afterPlanId?: string; limit?: string }
+  }>(
+    "/api/tasks/:taskId/execution-plans", options,
+    async (request) => execute(() => executionPlans.listForTask(
+      principal(request), request.params.taskId, request.query.afterPlanId,
+      integer(request.query.limit, 20)
+    ))
+  );
   app.get<{ Params: { roomId: string }; Querystring: { afterPlanId?: string; limit?: string } }>(
     "/api/rooms/:roomId/execution-plans", options,
     async (request) => execute(() => executionPlans.list(

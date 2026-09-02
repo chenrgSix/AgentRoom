@@ -52,10 +52,22 @@ export class ExecutionPlanService {
   public list(principal: WebPrincipal, roomId: string, afterPlanId = "", limit = 20) {
     this.auth.requireRoomMember(principal, roomId);
     this.requirePageLimit(limit);
-    if (afterPlanId && !/^plan_[A-Za-z0-9_-]{8,128}$/u.test(afterPlanId)) {
-      throw new ExecutionError("EXECUTION_INVALID_CURSOR");
-    }
+    this.requirePlanCursor(afterPlanId);
     return this.plans.list(roomId, afterPlanId, limit);
+  }
+
+  public listForTask(
+    principal: WebPrincipal,
+    taskId: string,
+    afterPlanId = "",
+    limit = 20
+  ) {
+    const root = this.tasks.get(taskId);
+    if (!root) throw new ExecutionError("EXECUTION_ROOT_NOT_FOUND", 404);
+    this.auth.requireRoomMember(principal, root.roomId);
+    this.requirePageLimit(limit);
+    this.requirePlanCursor(afterPlanId);
+    return this.plans.listForRootTask(taskId, afterPlanId, limit);
   }
 
   public history(principal: WebPrincipal, planId: string, afterRevision = 0, limit = 20) {
@@ -245,6 +257,12 @@ export class ExecutionPlanService {
   private requirePageLimit(limit: number): void {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > 50) {
       throw new ExecutionError("EXECUTION_INVALID_PAGE_LIMIT");
+    }
+  }
+
+  private requirePlanCursor(afterPlanId: string): void {
+    if (afterPlanId && !/^plan_[A-Za-z0-9_-]{8,128}$/u.test(afterPlanId)) {
+      throw new ExecutionError("EXECUTION_INVALID_CURSOR");
     }
   }
 }
