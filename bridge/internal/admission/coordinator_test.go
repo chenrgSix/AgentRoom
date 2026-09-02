@@ -132,6 +132,7 @@ func TestGovernedCoordinatorFailsClosedBeforePossibleStart(t *testing.T) {
 		change func(*coordinatorRig)
 		want   error
 	}{
+		{"grant revoked after preparation", func(rig *coordinatorRig) { rig.grantErr = repository.ErrGrantRevoked }, repository.ErrGrantRevoked},
 		{"prepared identity drift", func(rig *coordinatorRig) { rig.changePreparedAt = 2 }, ErrAdmissionChanged},
 		{"profile drift", func(rig *coordinatorRig) { rig.changeProfileAt = 2 }, ErrAdmissionChanged},
 		{"Server rejection", func(rig *coordinatorRig) { rig.authorityErr = ErrAdmissionNotCurrent }, ErrAdmissionNotCurrent},
