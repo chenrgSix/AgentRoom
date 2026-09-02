@@ -3770,7 +3770,7 @@ export type ActorKind = "none" | "agent" | "bridge" | "provider_operator" | "tas
 
 export type NextActionKind = "none" | "produce_candidate" | "wait_for_verification" | "inspect_verification" | "adopt_remote_evidence" | "approve_integration" | "wait_for_integration" | "resolve_target_conflict" | "investigate_outcome_unknown" | "retry_node";
 
-export type ReasonCode = "NO_ACTION" | "CANDIDATE_MISSING" | "VERIFICATION_PENDING" | "VERIFICATION_FAILED" | "REMOTE_ADOPTION_READY" | "INTEGRATION_APPROVAL_READY" | "INTEGRATION_PENDING" | "INTEGRATION_TARGET_CONFLICT" | "INTEGRATION_OUTCOME_UNKNOWN" | "NODE_RETRY_AVAILABLE" | "REMOTE_INPUT_ATTESTATION_REQUIRED";
+export type ReasonCode = "NO_ACTION" | "CANDIDATE_MISSING" | "VERIFICATION_PENDING" | "VERIFICATION_FAILED" | "REMOTE_ADOPTION_READY" | "INTEGRATION_APPROVAL_READY" | "INTEGRATION_PENDING" | "INTEGRATION_TARGET_CONFLICT" | "INTEGRATION_OUTCOME_UNKNOWN" | "NODE_RETRY_AVAILABLE" | "NODE_BLOCKED" | "REMOTE_INPUT_ATTESTATION_REQUIRED";
 
 export interface PurpleRemote {
   adoptionState:     AdoptionState;

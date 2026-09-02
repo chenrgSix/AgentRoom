@@ -2363,6 +2363,15 @@ for (const terminal of ["failed", "canceled", "outcome_unknown"] as const) {
       terminal === "failed" ? "conflict" : terminal);
     assert.equal(buildEvidence.integration.blockerCode, receipt.errorCode);
     assert.equal(buildEvidence.integration.commandTemplate, null);
+    const consumeEvidence = proofPage.plans[0].nodes.find(
+      (node: { nodeKey: string }) => node.nodeKey === "Consume"
+    );
+    assert.equal(consumeEvidence.runtime.state, "blocked");
+    assert.deepEqual(consumeEvidence.nextAction, {
+      kind: "none",
+      actorKind: "none",
+      reasonCode: "NODE_BLOCKED"
+    });
     assert.equal((f.database.prepare(`
       SELECT count(*) AS n FROM execution_integrated_node_materializations
     `).get() as { n: number }).n, 0);

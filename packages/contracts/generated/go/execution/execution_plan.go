@@ -5817,6 +5817,7 @@ const (
 	IntegrationPending                       ReasonCode = "INTEGRATION_PENDING"
 	IntegrationTargetConflict                ReasonCode = "INTEGRATION_TARGET_CONFLICT"
 	NoAction                                 ReasonCode = "NO_ACTION"
+	NodeBlocked                              ReasonCode = "NODE_BLOCKED"
 	NodeRetryAvailable                       ReasonCode = "NODE_RETRY_AVAILABLE"
 	ReasonCodeREMOTEINPUTATTESTATIONREQUIRED ReasonCode = "REMOTE_INPUT_ATTESTATION_REQUIRED"
 	RemoteAdoptionReady                      ReasonCode = "REMOTE_ADOPTION_READY"

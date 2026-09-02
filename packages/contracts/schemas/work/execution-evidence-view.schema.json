@@ -614,6 +614,7 @@
             "INTEGRATION_TARGET_CONFLICT",
             "INTEGRATION_OUTCOME_UNKNOWN",
             "NODE_RETRY_AVAILABLE",
+            "NODE_BLOCKED",
             "REMOTE_INPUT_ATTESTATION_REQUIRED"
           ]
         }

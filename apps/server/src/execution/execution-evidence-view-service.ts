@@ -410,6 +410,9 @@ export class ExecutionEvidenceViewService {
       return { kind: "none", actorKind: "none",
         reasonCode: "REMOTE_INPUT_ATTESTATION_REQUIRED" };
     }
+    if (runtimeState === "blocked") return {
+      kind: "none", actorKind: "none", reasonCode: "NODE_BLOCKED"
+    };
     if (remote?.adoptionState === "ready") return {
       kind: "adopt_remote_evidence", actorKind: "team_owner",
       reasonCode: "REMOTE_ADOPTION_READY"
