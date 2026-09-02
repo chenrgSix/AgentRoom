@@ -83,6 +83,26 @@ ambiguity acknowledgement, budget extension, path or copied evidence field.
 The shared Result service rechecks the current assignment and exact Run event
 before allocating an immutable Result version.
 
+### Assigned Tech Lead plan drafts
+
+`MCP-007` uses no Agent persona or free-text role as authority. A Tech Lead
+delegation is an enabled manual Agent's current `primary` assignment to one
+top-level Task plus that Agent's exact persisted Run and immutable Context
+Manifest for the same Task revisions. Mutations require the Run to be
+`working`; reads require it to remain non-terminal. Current Member/Agent Room
+access and the frozen Task/definition/criteria revisions are rechecked on every
+call. Each definition must cite the Run's trigger Message or one of the Run's
+own persisted events with its exact source revision.
+
+`team.propose_plan`, `team.get_plan`, and `team.propose_plan_revision` carry the
+Run ID on every request. Create/revise use the shared closed commands and the
+same draft writer as Web and Discussion entry points; the Server supplies the
+Agent/Run author. Exact replay is stable. The tools cannot approve or compile,
+and expose no Result review, ambiguity acknowledgement, budget, repository,
+verification, integration or local Runtime port. The full authority and
+acceptance matrix is frozen in
+[`MCP-007`](../acceptance/mcp-007-tech-lead-plan-tools.md).
+
 ## Participation Modes
 
 In manual mode, a client calls `team.get_mentions` or `team.wait`, then decides
@@ -117,7 +137,7 @@ a non-timeout wake, and disconnect aborts the pending wait.
 
 Contract tests cover every tool and resource, while integration tests cover
 authorization, long polling, retries, and capability downgrade. Delivery work
-is tracked by `MCP-001` through `MCP-006` in `docs/TASKS.md`.
+is tracked by `MCP-001` through `MCP-007` in `docs/TASKS.md`.
 
 Manual Agents use `team.get_mentions` and `team.get_run` to inspect assigned
 Runs, `team.claim_run` before longer work, and `team.complete_run` or
