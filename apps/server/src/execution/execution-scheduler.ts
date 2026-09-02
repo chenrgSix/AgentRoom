@@ -4,6 +4,8 @@ import type { RunRecord } from "../run/run-repository.js";
 import { ExecutionError } from "./execution-error.js";
 import type { ExecutionNodeStateRepository } from
   "./execution-node-state-repository.js";
+import type { ExecutionSchedulerCandidate } from
+  "./execution-node-state-repository.js";
 import type { ExecutionNodeProjector } from "./execution-node-projector.js";
 import type { ExecutionSettlementService } from
   "./execution-settlement-service.js";
@@ -19,7 +21,8 @@ export class ExecutionScheduler {
     private readonly projector: ExecutionNodeProjector,
     private readonly settlement: ExecutionSettlementService,
     private readonly admission: GovernedRunAdmissionService,
-    private readonly clock: () => string
+    private readonly clock: () => string,
+    private readonly maxCandidateEvaluations = 256
   ) {}
 
   public sweep(): RunRecord[] {
@@ -27,31 +30,69 @@ export class ExecutionScheduler {
     this.sweeping = true;
     try {
       const now = this.clock();
-      this.settlement.reconcile(now);
       const admitted: RunRecord[] = [];
-      for (const identity of this.nodes.listCandidates()) {
-        const readiness = this.admission.readiness(identity, now);
-        this.transactions.immediate(() => {
-          this.projector.projectReadiness(identity, readiness, now);
-        });
-        if (!readiness.ready) continue;
-        try {
-          const result = this.admission.admitScheduled(identity, now);
-          admitted.push(...result.runs);
-          this.settlement.reconcileOne(identity, now);
-        } catch (error) {
-          if (!(error instanceof ExecutionError)) throw error;
-          this.transactions.immediate(() => {
-            this.projector.projectReadiness(identity, {
-              ready: false,
-              blocker: error.code
-            }, now);
-          });
+      const queues = this.planQueues(this.nodes.listCandidates());
+      let evaluated = 0;
+      while (evaluated < this.maxCandidateEvaluations) {
+        this.settlement.reconcile(now);
+        let progressed = false;
+        for (const queue of queues) {
+          const candidatesThisRound = queue.length;
+          for (
+            let index = 0;
+            index < candidatesThisRound &&
+              evaluated < this.maxCandidateEvaluations;
+            index += 1
+          ) {
+            const identity = queue.shift()!;
+            evaluated += 1;
+            const readiness = this.admission.readiness(identity, now);
+            this.transactions.immediate(() => {
+              this.projector.projectReadiness(identity, readiness, now);
+            });
+            if (!readiness.ready) {
+              queue.push(identity);
+              continue;
+            }
+            try {
+              const result = this.admission.admitScheduled(identity, now);
+              admitted.push(...result.runs);
+              this.settlement.reconcileOne(identity, now);
+              progressed = true;
+              break;
+            } catch (error) {
+              if (!(error instanceof ExecutionError)) throw error;
+              this.transactions.immediate(() => {
+                this.projector.projectReadiness(identity, {
+                  ready: false,
+                  blocker: error.code
+                }, now);
+              });
+              queue.push(identity);
+            }
+          }
         }
+        if (!progressed || queues.every((queue) => queue.length === 0)) break;
       }
       return [...new Map(admitted.map((run) => [run.runId, run])).values()];
     } finally {
       this.sweeping = false;
     }
+  }
+
+  private planQueues(
+    candidates: ExecutionSchedulerCandidate[]
+  ): ExecutionSchedulerCandidate[][] {
+    const queues = new Map<string, ExecutionSchedulerCandidate[]>();
+    for (const candidate of candidates) {
+      const key = `${candidate.planApprovedAt}\0${candidate.planId}`;
+      const queue = queues.get(key);
+      if (queue) {
+        queue.push(candidate);
+      } else {
+        queues.set(key, [candidate]);
+      }
+    }
+    return [...queues.values()];
   }
 }

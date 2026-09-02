@@ -1,4 +1,6 @@
 import type Database from "better-sqlite3";
+import { validateExecutionPlanDefinition } from
+  "@convene-wire/contracts/execution-validation";
 import type { RunState } from "../run/run-repository.js";
 import type { ExecutionReadinessBlocker } from
   "./execution-readiness-evaluator.js";
@@ -17,6 +19,11 @@ export interface ExecutionNodeIdentity {
   nodeKey: string;
   planId: string;
   planRevision: number;
+}
+
+export interface ExecutionSchedulerCandidate extends ExecutionNodeIdentity {
+  planApprovedAt: string;
+  topologicalOrdinal: number;
 }
 
 export interface ExecutionNodeState extends ExecutionNodeIdentity {
@@ -88,24 +95,51 @@ export class ExecutionNodeStateRepository {
     return row && map(row);
   }
 
-  public listCandidates(): ExecutionNodeIdentity[] {
-    return (this.database.prepare(`
-      SELECT state.plan_id, state.plan_revision, state.node_key
+  public listCandidates(): ExecutionSchedulerCandidate[] {
+    const rows = this.database.prepare(`
+      SELECT state.plan_id, state.plan_revision, state.node_key,
+        approval.reviewed_at, proposal.definition_json
       FROM execution_node_states state
       JOIN execution_plans plan ON plan.plan_id = state.plan_id
         AND plan.current_revision = state.plan_revision
+      JOIN execution_plan_approvals approval
+        ON approval.plan_id = state.plan_id
+        AND approval.revision = state.plan_revision
+        AND approval.decision = 'approved'
+      JOIN execution_plan_proposals proposal
+        ON proposal.plan_id = state.plan_id
+        AND proposal.revision = state.plan_revision
       WHERE plan.state IN ('approved', 'running')
         AND state.run_id IS NULL
-      ORDER BY state.plan_id, state.node_key
     `).all() as Array<{
+      definition_json: string;
       node_key: string;
       plan_id: string;
       plan_revision: number;
-    }>).map((row) => ({
-      planId: row.plan_id,
-      planRevision: row.plan_revision,
-      nodeKey: row.node_key
-    }));
+      reviewed_at: string;
+    }>;
+    const topologies = new Map<string, string[]>();
+    return rows.map((row) => {
+      const key = `${row.plan_id}\0${row.plan_revision}`;
+      let topology = topologies.get(key);
+      if (!topology) {
+        topology = validateExecutionPlanDefinition(
+          JSON.parse(row.definition_json)
+        ).topologicalOrder;
+        topologies.set(key, topology);
+      }
+      const ordinal = topology.indexOf(row.node_key);
+      if (ordinal < 0) {
+        throw new Error("Execution scheduler candidate is outside topology");
+      }
+      return {
+        planId: row.plan_id,
+        planRevision: row.plan_revision,
+        nodeKey: row.node_key,
+        planApprovedAt: row.reviewed_at,
+        topologicalOrdinal: ordinal
+      };
+    }).sort(compareExecutionSchedulerCandidates);
   }
 
   public listAllCurrent(): ExecutionNodeIdentity[] {
@@ -157,4 +191,17 @@ export class ExecutionNodeStateRepository {
     if (!state) throw new Error("Execution node state is unavailable");
     return state;
   }
+}
+
+const binary = (left: string, right: string): number =>
+  left < right ? -1 : left > right ? 1 : 0;
+
+export function compareExecutionSchedulerCandidates(
+  left: ExecutionSchedulerCandidate,
+  right: ExecutionSchedulerCandidate
+): number {
+  return binary(left.planApprovedAt, right.planApprovedAt) ||
+    binary(left.planId, right.planId) ||
+    left.topologicalOrdinal - right.topologicalOrdinal ||
+    binary(left.nodeKey, right.nodeKey);
 }

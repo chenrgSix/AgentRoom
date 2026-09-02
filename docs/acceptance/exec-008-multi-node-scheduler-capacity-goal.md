@@ -76,3 +76,39 @@ Physical SQLite and public scheduling tests must prove:
 
 `EXEC-008` becomes `DONE` only when those facts exist. A passing unit test alone
 is not capacity acceptance.
+
+## Implementation Checkpoint
+
+`ExecutionNodeStateRepository.listCandidates()` now derives each current
+candidate's ordinal from the validated approved topology and applies the frozen
+approval-time, binary plan, topology and binary node tuple in process. SQL row
+order is not observable authority. `ExecutionScheduler` freezes those ordered
+candidates into per-plan queues, admits at most one winner per plan per round,
+requeues a blocked candidate only for a later bounded round, and stops on a
+complete no-progress round or its 256-evaluation ceiling. Every attempt still
+calls the existing live readiness and transactional admission boundaries.
+
+Focused scheduler tests prove stable output across input permutations, fair
+`A1, B1, A2, B2` rounds, later-round release of a newly ready node, one-candidate
+admission-fault isolation and the evaluation ceiling. Public Server, Bridge and
+physical SQLite tests additionally prove:
+
+- three independent Agents create exactly three topology-ordered generation-1
+  intents, Runs and distinct isolated workspace leases at `maxConcurrency=3`;
+- two approved two-node plans on one shared sweep retain physical intent order
+  `A1, B1, A2, B2` using the documented plan tuple;
+- two nodes assigned to one Agent serialize while a different Agent consumes
+  remaining plan capacity;
+- a two-source fan-in retains no destination intent after only one adopted
+  predecessor, then freezes both exact input bindings and schedules once after
+  the second adoption, including after Server restart;
+- two Server schedulers with the same three live Agent capabilities converge on
+  three unique intents, Runs, trace Messages and isolated workspace generations;
+- the pre-existing readiness matrix and fault fixtures retain deterministic
+  stale-plan, missing-adoption, budget, capability, grant and transactional
+  admission blockers without partial side effects or automatic retry.
+
+The complete governed-admission file and full Server workspace regression pass
+under owned temporary roots. `EXEC-008` remains ACTIVE until the repository
+build, deterministic E2E and required three-run physical zero-residue evidence
+are recorded in this document and `docs/TASKS.md`.

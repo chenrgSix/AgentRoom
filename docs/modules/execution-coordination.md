@@ -356,7 +356,12 @@ The broader scheduler capacity target is frozen independently in
 [`exec-008-multi-node-scheduler-capacity-goal.md`](../acceptance/exec-008-multi-node-scheduler-capacity-goal.md).
 Candidate order follows plan approval, binary plan identity, approved
 topological ordinal and binary node identity, with one candidate per plan per
-round. Durable DispatchIntent/Run facts remain the only capacity counters.
+round. Blocked candidates may be revisited only in a later bounded round, and a
+complete no-progress round ends the sweep. Durable DispatchIntent/Run facts
+remain the only capacity counters. The implementation checkpoint now has
+physical fan-out, fan-in, same-Agent serialization, two-plan fairness,
+concurrent-Server uniqueness and restart evidence; `EXEC-008` remains ACTIVE
+until the full build, E2E and three-run cleanup gates are recorded.
 
 ### First Accepted-Result Dependency Increment
 

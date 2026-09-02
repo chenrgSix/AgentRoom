@@ -150,8 +150,11 @@ function nextMessage(socket: BridgeSocket): Promise<BridgeMessage> {
   });
 }
 
-async function waitFor(check: () => boolean): Promise<void> {
-  for (let attempt = 0; attempt < 100; attempt += 1) {
+async function waitFor(
+  check: () => boolean,
+  maxAttempts = 100
+): Promise<void> {
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (check()) return;
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
@@ -166,7 +169,11 @@ async function admissionFixture(
     integratedDependency?: boolean;
     requiredVerificationProfiles?: number;
     verifiedDependency?: boolean;
+    agentCount?: number;
     captureScheduledDelivery?: boolean;
+    fanInDependency?: boolean;
+    independentAgentIndexes?: number[];
+    maxConcurrency?: number;
     schedulerMilliseconds?: number;
   } = {}
 ) {
@@ -179,30 +186,39 @@ async function admissionFixture(
   const devices = new MemberDeviceService(core, auth);
   const device = devices.registerOwnDevice(owner, f.teamId, "Governed runner", now);
   const credential = auth.issueDeviceCredential(device.deviceId, now);
-  const agents = new AgentService(core, auth);
-  const workspaceRef = `workspace_${"e".repeat(64)}`;
-  const workspaceGeneration = "e".repeat(64);
-  const agent = agents.publishAgent(owner, {
-    teamId: f.teamId,
-    deviceId: device.deviceId,
-    name: "Governed builder",
-    role: "Builder",
-    integrationMode: "managed",
-    capabilities: {
-      supportsStart: true,
-      supportsResume: false,
-      supportsStreaming: true,
-      supportsInterrupt: true,
-      supportsHandoff: false,
-      supportsWorkspaceLeases: true
-    },
-    workspaceRef,
-    workspaceGeneration,
-    now
+  const agentService = new AgentService(core, auth);
+  const agentIndexes = options.independentAgentIndexes ?? [0];
+  const agentCount = options.agentCount ?? Math.max(...agentIndexes) + 1;
+  assert.ok(agentCount > Math.max(...agentIndexes));
+  const managedAgents = Array.from({ length: agentCount }, (_, index) => {
+    const token = "efcba9876543210d"[index] ?? "d";
+    const workspaceRef = `workspace_${token.repeat(64)}`;
+    const workspaceGeneration = token.repeat(64);
+    const agent = agentService.publishAgent(owner, {
+      teamId: f.teamId,
+      deviceId: device.deviceId,
+      name: `Governed builder ${index + 1}`,
+      role: "Builder",
+      integrationMode: "managed",
+      capabilities: {
+        supportsStart: true,
+        supportsResume: false,
+        supportsStreaming: true,
+        supportsInterrupt: true,
+        supportsHandoff: false,
+        supportsWorkspaceLeases: true
+      },
+      workspaceRef,
+      workspaceGeneration,
+      now
+    });
+    return { agent, workspaceRef, workspaceGeneration };
   });
+  const primary = managedAgents[0]!;
+  const { agent, workspaceRef, workspaceGeneration } = primary;
   await f.ok("PUT", `/api/rooms/${f.roomId}/participants`, {
     memberIds: [f.ownerMemberId],
-    agentIds: [agent.agentId]
+    agentIds: managedAgents.map((entry) => entry.agent.agentId)
   });
 
   const socket = await f.app.injectWS("/ws/bridge", {
@@ -221,7 +237,61 @@ async function admissionFixture(
   }, "hello0001"));
 
   const command = f.command();
-  for (const node of command.definition.nodes) node.agentId = agent.agentId;
+  if (options.independentAgentIndexes) {
+    const build = command.definition.nodes.find((node) =>
+      node.nodeKey === "Build"
+    );
+    assert.ok(build?.repository);
+    command.definition.nodes = agentIndexes.map((agentIndex, index) => {
+      const node = structuredClone(build);
+      node.nodeKey = `Node${index + 1}`;
+      node.agentId = managedAgents[agentIndex]!.agent.agentId;
+      node.task = {
+        mode: "new",
+        title: `Independent node ${index + 1}`,
+        goal: `Produce independently schedulable output ${index + 1}`,
+        ownerMemberId: f.ownerMemberId,
+        criteria: structuredClone(build.task.criteria)
+      };
+      node.repository = {
+        ...node.repository,
+        grantId: `grant_capacity_node${index + 1}0001`
+      };
+      return node;
+    });
+    command.definition.edges = [];
+    command.definition.policy.maxConcurrency = options.maxConcurrency ??
+      agentIndexes.length;
+  } else {
+    for (const node of command.definition.nodes) node.agentId = agent.agentId;
+  }
+  if (options.fanInDependency) {
+    const [first, second, destination] = command.definition.nodes;
+    assert.ok(first && second && destination);
+    first.inputs = [];
+    second.inputs = [];
+    first.outputs = [{ slotKey: "output", kind: "patch", required: true }];
+    second.outputs = [{ slotKey: "output", kind: "patch", required: true }];
+    destination.inputs = [
+      { slotKey: "patch1", kind: "patch", required: true },
+      { slotKey: "patch2", kind: "patch", required: true }
+    ];
+    destination.outputs = [{ slotKey: "output", kind: "patch", required: true }];
+    command.definition.edges = [{
+      edgeKey: "node1_node3",
+      fromNodeKey: first.nodeKey,
+      toNodeKey: destination.nodeKey,
+      gate: "accepted_result",
+      bindings: [{ outputSlot: "output", inputSlot: "patch1" }]
+    }, {
+      edgeKey: "node2_node3",
+      fromNodeKey: second.nodeKey,
+      toNodeKey: destination.nodeKey,
+      gate: "accepted_result",
+      bindings: [{ outputSlot: "output", inputSlot: "patch2" }]
+    }];
+    command.definition.policy.maxConcurrency = options.maxConcurrency ?? 2;
+  }
   if ((options.requiredVerificationProfiles ?? 1) > 1) {
     const build = command.definition.nodes.find((node) => node.nodeKey === "Build");
     assert.ok(build);
@@ -300,27 +370,35 @@ async function admissionFixture(
     });
     tasksByNode.set(compiled.nodeKey, compiledTask);
   }
-  const task = tasksByNode.get("Build");
+  const primaryNodeKey = options.independentAgentIndexes ? "Node1" : "Build";
+  const task = tasksByNode.get(primaryNodeKey);
   assert.ok(task);
   const node = plan.current.definition.nodes.find(
-    (candidate: { nodeKey: string }) => candidate.nodeKey === "Build"
+    (candidate: { nodeKey: string }) => candidate.nodeKey === primaryNodeKey
   );
   assert.ok(node?.repository);
   const grants = plan.current.definition.nodes
     .filter((candidate: { kind: string }) => candidate.kind === "implementation")
     .map((candidate: typeof node): GovernedExecutionCapabilityReadyGrant => {
       assert.ok(candidate.repository);
+      const grantIndex = plan.current.definition.nodes.findIndex(
+        (entry: { nodeKey: string }) => entry.nodeKey === candidate.nodeKey
+      );
       return {
         grant: {
           grantId: candidate.repository.grantId,
           revision: candidate.repository.grantRevision,
-          digest: candidate.nodeKey === "Build" ? "d".repeat(64) : "e".repeat(64),
+          digest: options.independentAgentIndexes
+            ? "abcdef0123456789"[grantIndex]!.repeat(64)
+            : candidate.nodeKey === "Build"
+              ? "d".repeat(64)
+              : "e".repeat(64),
           expiresAt: "2026-08-31T13:00:00.000Z"
         },
         repositoryId: candidate.repository.repositoryId,
         bindingId: candidate.repository.bindingId,
         deviceId: device.deviceId,
-        agentId: agent.agentId,
+        agentId: candidate.agentId,
         planId: plan.planId,
         nodeKey: candidate.nodeKey,
         operations: candidate.verificationProfiles.some(
@@ -346,7 +424,9 @@ async function admissionFixture(
         revokedAt: null
       };
     });
-  const grant = grants.find((candidate) => candidate.nodeKey === "Build");
+  const grant = grants.find((candidate) =>
+    candidate.nodeKey === primaryNodeKey
+  );
   assert.ok(grant);
   if (options.integratedDependency) {
     grants.push({
@@ -363,40 +443,52 @@ async function admissionFixture(
     });
   }
   grantChange?.(grant);
-  const agentCapability = { ...capability, readyGrants: grants };
+  const agentCapability = {
+    ...capability,
+    readyGrants: grants.filter((candidate) =>
+      candidate.agentId === agent.agentId
+    )
+  };
   const scheduledDelivery = options.captureScheduledDelivery
     ? nextMessage(socket)
     : undefined;
-  await sendAndFlush(socket, envelope("agent.publish", {
-    teamId: f.teamId,
-    agentId: agent.agentId,
-    ownerMemberId: f.ownerMemberId,
-    deviceId: device.deviceId,
-    name: agent.name,
-    role: agent.role,
-    capabilities: {
-      invocationMode: "managed",
-      supportsStart: true,
-      supportsResume: false,
-      supportsStreaming: true,
-      supportsInterrupt: true,
-      supportsHandoff: false,
-      supportsWorkspaceLeases: true,
-      governedExecution: agentCapability
-    },
-    workspaceRef,
-    workspaceGeneration,
-    workspaceAlias: "Governed test workspace"
-  }, "publish0001"));
-  await waitFor(() => {
-    const row = f.database.prepare(`
-      SELECT capabilities_json FROM agents WHERE agent_id = ?
-    `).get(agent.agentId) as { capabilities_json: string } | undefined;
-    const persisted = row && JSON.parse(row.capabilities_json) as {
-      governedExecution?: { readyGrants?: unknown[] };
-    };
-    return persisted?.governedExecution?.readyGrants?.length === grants.length;
-  });
+  for (const [index, managed] of managedAgents.entries()) {
+    const readyGrants = grants.filter((candidate) =>
+      candidate.agentId === managed.agent.agentId
+    );
+    if (readyGrants.length === 0) continue;
+    await sendAndFlush(socket, envelope("agent.publish", {
+      teamId: f.teamId,
+      agentId: managed.agent.agentId,
+      ownerMemberId: f.ownerMemberId,
+      deviceId: device.deviceId,
+      name: managed.agent.name,
+      role: managed.agent.role,
+      capabilities: {
+        invocationMode: "managed",
+        supportsStart: true,
+        supportsResume: false,
+        supportsStreaming: true,
+        supportsInterrupt: true,
+        supportsHandoff: false,
+        supportsWorkspaceLeases: true,
+        governedExecution: { ...capability, readyGrants }
+      },
+      workspaceRef: managed.workspaceRef,
+      workspaceGeneration: managed.workspaceGeneration,
+      workspaceAlias: `Governed test workspace ${index + 1}`
+    }, `publish000${index + 1}`));
+    await waitFor(() => {
+      const row = f.database.prepare(`
+        SELECT capabilities_json FROM agents WHERE agent_id = ?
+      `).get(managed.agent.agentId) as { capabilities_json: string } | undefined;
+      const persisted = row && JSON.parse(row.capabilities_json) as {
+        governedExecution?: { readyGrants?: unknown[] };
+      };
+      return persisted?.governedExecution?.readyGrants?.length ===
+        readyGrants.length;
+    });
+  }
   return {
     ...f,
     get app() {
@@ -406,6 +498,7 @@ async function admissionFixture(
     device,
     credential,
     agent,
+    managedAgents,
     plan,
     node,
     task,
@@ -446,6 +539,7 @@ async function publishCanonicalDependency(
   manifest: GovernedExecutionManifest
 ) {
   assert.ok(manifest.capture);
+  const nodeSuffix = manifest.scope.nodeKey.toLowerCase();
   const authorization = `Bearer ${f.credential.secret}`;
   const request = digestRequest({
     version: 1,
@@ -480,7 +574,7 @@ async function publishCanonicalDependency(
     agentId: manifest.scope.agentId,
     workspaceRef: lease.workspaceRef,
     workspaceGeneration: lease.workspaceGeneration,
-    idempotencyKey: "idem_governed_dependency_patch0001",
+    idempotencyKey: `idem_governed_dependency_${nodeSuffix}_patch0001`,
     artifactType: "patch",
     fileName: "accepted.patch",
     mediaType: "text/x-diff",
@@ -512,7 +606,7 @@ async function publishCanonicalDependency(
     authorization
   )).artifact;
   const checkpoint = digestCheckpoint({
-    checkpointId: "checkpoint_governed_dependency0001",
+    checkpointId: `checkpoint_governed_dependency_${nodeSuffix}0001`,
     operationId: request.operationId,
     scope: manifest.scope,
     repositoryId: manifest.repository.repositoryId,
@@ -540,6 +634,104 @@ async function publishCanonicalDependency(
     "POST", "/api/bridge/repository-checkpoints", checkpoint, authorization
   );
   return { artifact, checkpoint, lease, request };
+}
+
+async function completeAndAcceptScheduledNode(
+  f: AdmissionFixture,
+  nodeKey: string
+) {
+  const suffix = nodeKey.toLowerCase();
+  const intent = f.database.prepare(`
+    SELECT run_id FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = ?
+  `).get(f.plan.planId, nodeKey) as { run_id: string } | undefined;
+  assert.ok(intent);
+  const runs = new RunRepository(f.database);
+  const manifest = runs.getContextManifest(intent.run_id)?.execution;
+  assert.ok(manifest);
+  assert.equal(runs.applyEvent(intent.run_id, {
+    type: "status",
+    sequence: 1,
+    status: "delivered"
+  }, "2026-08-31T12:00:01.000Z").applied, true);
+  assert.equal(runs.applyEvent(intent.run_id, {
+    type: "status",
+    sequence: 2,
+    status: "working"
+  }, "2026-08-31T12:00:02.000Z").applied, true);
+  let task = await f.ok("GET", `/api/tasks/${f.tasksByNode.get(nodeKey).taskId}`);
+  task = await f.ok("POST", `/api/tasks/${task.taskId}/control`, {
+    operationId: `op_capacity_${suffix}_active0001`,
+    expectedTaskRevision: task.taskRevision,
+    lifecycleState: "active"
+  });
+  const captured = await publishCanonicalDependency(f, manifest);
+  assert.equal(runs.applyEvent(intent.run_id, {
+    type: "status",
+    sequence: 3,
+    status: "completed"
+  }, "2026-08-31T12:00:03.000Z").applied, true);
+  const criterion = task.criteria.find(
+    (candidate: { required: boolean }) => candidate.required
+  );
+  assert.ok(criterion);
+  const artifactEvidenceRef = `evidence_capacity_${suffix}_artifact0001`;
+  const result = await f.ok("POST", "/api/bridge/results", {
+    actorKind: "managed_agent",
+    agentId: manifest.scope.agentId,
+    runId: intent.run_id,
+    proposal: {
+      operationId: `op_capacity_${suffix}_result0001`,
+      taskId: task.taskId,
+      definitionRevision: task.definitionRevision,
+      criteriaRevision: task.criteriaRevision,
+      proposedAtTaskRevision: task.taskRevision,
+      supersedesResultId: null,
+      outcome: "satisfied",
+      summary: `The ${nodeKey} Run proposes its exact captured output.`,
+      risks: [],
+      openQuestions: [],
+      nextActions: [],
+      sources: [{
+        evidenceRefId: artifactEvidenceRef,
+        kind: "artifact",
+        artifactId: captured.artifact.artifactId
+      }, {
+        evidenceRefId: `evidence_capacity_${suffix}_run0001`,
+        kind: "run_event",
+        runId: intent.run_id,
+        sequence: 3
+      }],
+      criterionClaims: [{
+        criterionKey: criterion.criterionKey,
+        coverage: "satisfied",
+        explanation: `The exact ${nodeKey} output satisfies this criterion.`,
+        evidenceRefIds: [artifactEvidenceRef]
+      }]
+    }
+  }, `Bearer ${f.credential.secret}`);
+  task = await f.ok("GET", `/api/tasks/${task.taskId}`);
+  const accepted = await f.ok(
+    "POST",
+    `/api/results/${result.resultId}/review-decisions`,
+    {
+      operationId: `op_capacity_${suffix}_accept0001`,
+      decision: "accepted",
+      expectedTaskRevision: task.taskRevision,
+      expectedReviewRevision: 0,
+      reason: `Accept the canonical ${nodeKey} output.`,
+      completeTask: false
+    }
+  );
+  assert.equal(accepted.result.state, "accepted");
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_evidence_adoptions
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = ?
+      AND gate = 'accepted_result'
+  `).get(f.plan.planId, f.plan.current.revision, nodeKey) as {
+    n: number;
+  }).n === 1);
+  return { accepted, captured, manifest, result };
 }
 
 async function retainIndependentVerification(
@@ -2773,6 +2965,333 @@ test("restart and duplicate scheduler wakeups retain one generation and Run", {
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
+test("scheduler fills plan capacity with independent Agents in topology order", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    independentAgentIndexes: [0, 1, 2],
+    maxConcurrency: 3,
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n === 3);
+  const intents = f.database.prepare(`
+    SELECT node_key, agent_id, run_id, dispatch_generation
+    FROM execution_dispatch_intents
+    WHERE plan_id = ?
+    ORDER BY rowid
+  `).all(f.plan.planId) as Array<{
+    agent_id: string;
+    dispatch_generation: number;
+    node_key: string;
+    run_id: string;
+  }>;
+  assert.deepEqual(intents.map((entry) => entry.node_key), [
+    "Node1",
+    "Node2",
+    "Node3"
+  ]);
+  assert.deepEqual(intents.map((entry) => entry.agent_id),
+    f.managedAgents.map((entry) => entry.agent.agentId));
+  assert.deepEqual(intents.map((entry) => entry.dispatch_generation), [1, 1, 1]);
+  assert.equal(new Set(intents.map((entry) => entry.run_id)).size, 3);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM runs
+    WHERE run_id IN (
+      SELECT run_id FROM execution_dispatch_intents WHERE plan_id = ?
+    ) AND state NOT IN ('completed', 'failed', 'canceled', 'expired',
+      'outcome_unknown')
+  `).get(f.plan.planId) as { n: number }).n, 3);
+  const manifests = intents.map((intent) =>
+    new RunRepository(f.database).getContextManifest(intent.run_id)?.execution
+  );
+  const isolatedWorkspaces = manifests.map(
+    (manifest) => manifest?.workspace.workspaceRef
+  );
+  assert.equal(new Set(isolatedWorkspaces).size, 3);
+  assert.ok(isolatedWorkspaces.every((workspaceRef) =>
+    typeof workspaceRef === "string" &&
+    !f.managedAgents.some((entry) => entry.workspaceRef === workspaceRef)
+  ));
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("one shared sweep gives two approved plans fair physical progress", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    agentCount: 4,
+    independentAgentIndexes: [0, 1],
+    maxConcurrency: 2,
+    schedulerMilliseconds: 0
+  });
+  const root = await f.ok("POST", `/api/rooms/${f.roomId}/tasks`, {
+    title: "Ship a second scoped change",
+    goal: "Prove fair shared scheduler progress"
+  });
+  const source = (await f.ok("POST", `/api/rooms/${f.roomId}/messages`, {
+    taskId: root.taskId,
+    content: "Authorize the independent second plan."
+  })).message;
+  const currentRoot = await f.ok("GET", `/api/tasks/${root.taskId}`);
+  const definition = structuredClone(f.plan.current.definition);
+  definition.rootTaskId = root.taskId;
+  definition.title = "Independent fair scheduler plan";
+  definition.decision.sources = [{
+    evidenceRefId: "evidence_capacity_planb_source0001",
+    kind: "message",
+    messageId: source.messageId
+  }];
+  definition.decision.sourceRevisions = [{
+    evidenceRefId: "evidence_capacity_planb_source0001",
+    revision: source.sequence
+  }];
+  for (const [index, node] of definition.nodes.entries()) {
+    node.agentId = f.managedAgents[index + 2]!.agent.agentId;
+    node.repository.grantId = `grant_capacity_planb_node${index + 1}0001`;
+    node.task.title = `Second plan node ${index + 1}`;
+  }
+  const secondDraft = await f.ok(
+    "POST",
+    `/api/tasks/${root.taskId}/execution-plans`,
+    {
+      operationId: "op_capacity_planb_create0001",
+      expectedRootTaskRevision: currentRoot.taskRevision,
+      definition
+    }
+  );
+  const secondPlan = (await f.ok(
+    "POST",
+    `/api/execution-plans/${secondDraft.planId}/approvals`,
+    {
+      operationId: "op_capacity_planb_approval0001",
+      expectedRevision: secondDraft.current.revision,
+      expectedDigest: secondDraft.current.digest,
+      expectedRootTaskRevision: currentRoot.taskRevision,
+      decision: "approved",
+      reason: "Authorize the second independent capacity plan."
+    }
+  )).plan;
+  for (const compiled of secondPlan.compiledTasks as Array<{
+    nodeKey: string;
+    taskId: string;
+  }>) {
+    let task = await f.ok("GET", `/api/tasks/${compiled.taskId}`);
+    task = await f.ok("POST", `/api/tasks/${compiled.taskId}/control`, {
+      operationId: `op_capacity_planb_${compiled.nodeKey.toLowerCase()}_ready0001`,
+      expectedTaskRevision: task.taskRevision,
+      lifecycleState: "ready"
+    });
+    assert.equal(task.lifecycleState, "ready");
+  }
+  const secondPlanGrants = secondPlan.current.definition.nodes.map(
+    (node: typeof f.node, index: number): GovernedExecutionCapabilityReadyGrant => {
+      const sourceGrant = f.grants[index]!;
+      return {
+        ...structuredClone(sourceGrant),
+        grant: {
+          ...structuredClone(sourceGrant.grant),
+          grantId: node.repository.grantId,
+          digest: "89abcdef"[index]!.repeat(64)
+        },
+        agentId: node.agentId,
+        planId: secondPlan.planId,
+        nodeKey: node.nodeKey
+      };
+    }
+  );
+
+  const schedulerApp = await createServerApp({
+    databasePath: f.databasePath,
+    logger: false,
+    clock: () => now,
+    executionSchedulerSweepMilliseconds: 1_000
+  });
+  await schedulerApp.ready();
+  const socket = await schedulerApp.injectWS("/ws/bridge", {
+    headers: {
+      authorization: `Bearer ${f.credential.secret}`,
+      host: "127.0.0.1"
+    }
+  });
+  t.after(async () => {
+    socket.terminate();
+    await schedulerApp.close();
+  });
+  await sendAndFlush(socket, envelope("bridge.hello", {
+    bridgeVersion: "v0.4.0-test.1",
+    connectionEpoch: 2,
+    deviceId: f.device.deviceId,
+    supportedProtocolVersions: ["1.0"],
+    governedExecution: capability
+  }, "fair_scheduler_hello0001"));
+  for (const [index, managed] of f.managedAgents.entries()) {
+    const readyGrants = index < 2
+      ? f.grants.filter((grant) => grant.agentId === managed.agent.agentId)
+      : secondPlanGrants.filter(
+        (grant) => grant.agentId === managed.agent.agentId
+      );
+    await sendAndFlush(socket, envelope("agent.publish", {
+      teamId: f.teamId,
+      agentId: managed.agent.agentId,
+      ownerMemberId: f.ownerMemberId,
+      deviceId: f.device.deviceId,
+      name: managed.agent.name,
+      role: managed.agent.role,
+      capabilities: {
+        invocationMode: "managed",
+        supportsStart: true,
+        supportsResume: false,
+        supportsStreaming: true,
+        supportsInterrupt: true,
+        supportsHandoff: false,
+        supportsWorkspaceLeases: true,
+        governedExecution: { ...capability, readyGrants }
+      },
+      workspaceRef: managed.workspaceRef,
+      workspaceGeneration: managed.workspaceGeneration,
+      workspaceAlias: `Fair scheduler workspace ${index + 1}`
+    }, `fair_scheduler_publish000${index + 1}`));
+  }
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id IN (?, ?)
+  `).get(f.plan.planId, secondPlan.planId) as { n: number }).n === 4, 300);
+  const planOrder = [f.plan.planId, secondPlan.planId].sort();
+  assert.deepEqual(f.database.prepare(`
+    SELECT plan_id, node_key FROM execution_dispatch_intents
+    WHERE plan_id IN (?, ?) ORDER BY rowid
+  `).all(f.plan.planId, secondPlan.planId), [{
+    plan_id: planOrder[0],
+    node_key: "Node1"
+  }, {
+    plan_id: planOrder[1],
+    node_key: "Node1"
+  }, {
+    plan_id: planOrder[0],
+    node_key: "Node2"
+  }, {
+    plan_id: planOrder[1],
+    node_key: "Node2"
+  }]);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("same-Agent serialization leaves capacity for another Agent", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    independentAgentIndexes: [0, 0, 1],
+    maxConcurrency: 3,
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n === 2);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const intents = f.database.prepare(`
+    SELECT node_key, agent_id FROM execution_dispatch_intents
+    WHERE plan_id = ? ORDER BY rowid
+  `).all(f.plan.planId) as Array<{ agent_id: string; node_key: string }>;
+  assert.deepEqual(intents.map((entry) => entry.node_key), ["Node1", "Node3"]);
+  assert.equal(intents[0]!.agent_id, f.managedAgents[0]!.agent.agentId);
+  assert.equal(intents[1]!.agent_id, f.managedAgents[1]!.agent.agentId);
+  assert.deepEqual(f.database.prepare(`
+    SELECT state, blocker_code FROM execution_node_states
+    WHERE plan_id = ? AND node_key = 'Node2'
+  `).get(f.plan.planId), {
+    state: "blocked",
+    blocker_code: "EXECUTION_AGENT_CAPACITY_EXHAUSTED"
+  });
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("fan-in schedules once only after every adopted predecessor proof", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    fanInDependency: true,
+    independentAgentIndexes: [0, 1, 2],
+    maxConcurrency: 2,
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n === 2);
+  assert.deepEqual(f.database.prepare(`
+    SELECT node_key FROM execution_dispatch_intents
+    WHERE plan_id = ? ORDER BY rowid
+  `).all(f.plan.planId), [{ node_key: "Node1" }, { node_key: "Node2" }]);
+  assert.deepEqual(f.database.prepare(`
+    SELECT state, blocker_code FROM execution_node_states
+    WHERE plan_id = ? AND node_key = 'Node3'
+  `).get(f.plan.planId), {
+    state: "blocked",
+    blocker_code: "EXECUTION_DEPENDENCY_NOT_MATERIALIZED"
+  });
+
+  await completeAndAcceptScheduledNode(f, "Node1");
+  await new Promise((resolve) => setTimeout(resolve, 220));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Node3'
+  `).get(f.plan.planId) as { n: number }).n, 0,
+  "one adopted predecessor cannot release a two-input fan-in");
+
+  await completeAndAcceptScheduledNode(f, "Node2");
+  try {
+    await waitFor(() => (f.database.prepare(`
+      SELECT count(*) AS n FROM execution_dispatch_intents
+      WHERE plan_id = ? AND node_key = 'Node3'
+    `).get(f.plan.planId) as { n: number }).n === 1);
+  } catch (error) {
+    const state = f.database.prepare(`
+      SELECT state, blocker_code FROM execution_node_states
+      WHERE plan_id = ? AND node_key = 'Node3'
+    `).get(f.plan.planId);
+    const adoptions = f.database.prepare(`
+      SELECT node_key, gate FROM execution_evidence_adoptions
+      WHERE plan_id = ? ORDER BY node_key, gate
+    `).all(f.plan.planId);
+    throw new Error(`Fan-in destination was not scheduled: ${JSON.stringify({
+      state,
+      adoptions
+    })}`, { cause: error });
+  }
+  const destination = f.database.prepare(`
+    SELECT intent.run_id, run.context_manifest_json
+    FROM execution_dispatch_intents intent
+    JOIN runs run ON run.run_id = intent.run_id
+    WHERE intent.plan_id = ? AND intent.node_key = 'Node3'
+  `).get(f.plan.planId) as {
+    context_manifest_json: string;
+    run_id: string;
+  };
+  const manifest = JSON.parse(destination.context_manifest_json).execution as
+    GovernedExecutionManifest;
+  assert.equal(manifest.inputs.length, 2);
+  assert.deepEqual(manifest.inputs.map((input) => input.edgeKey).sort(), [
+    "node1_node3",
+    "node2_node3"
+  ]);
+  assert.ok(manifest.inputs.every((input) => input.gate === "accepted_result"));
+  await f.restart(100);
+  await new Promise((resolve) => setTimeout(resolve, 220));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Node3'
+  `).get(f.plan.planId) as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(DISTINCT run_id) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Node3'
+  `).get(f.plan.planId) as { n: number }).n, 1);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
 test("offline node stays blocked and reconnect releases the same generation", {
   timeout: 30_000
 }, async (t) => {
@@ -2780,7 +3299,11 @@ test("offline node stays blocked and reconnect releases the same generation", {
     schedulerMilliseconds: 500
   });
   f.socket.terminate();
-  await new Promise((resolve) => setTimeout(resolve, 650));
+  await waitFor(() => (f.database.prepare(`
+    SELECT blocker_code FROM execution_node_states
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId) as { blocker_code: string } | undefined)
+    ?.blocker_code === "EXECUTION_CAPABILITY_UNAVAILABLE");
   assert.equal((f.database.prepare(`
     SELECT count(*) AS n FROM execution_dispatch_intents
   `).get() as { n: number }).n, 0);
@@ -2890,10 +3413,12 @@ test("terminal Run settlement never creates an automatic retry", {
   }
 });
 
-test("two Server schedulers share the unique generation-1 winner", {
+test("two Server schedulers retain exact multi-node generation-1 winners", {
   timeout: 30_000
 }, async (t) => {
   const f = await admissionFixture(t, undefined, {
+    independentAgentIndexes: [0, 1, 2],
+    maxConcurrency: 3,
     schedulerMilliseconds: 1_000
   });
   const second = await createServerApp({
@@ -2902,16 +3427,90 @@ test("two Server schedulers share the unique generation-1 winner", {
     clock: () => now,
     executionSchedulerSweepMilliseconds: 1_000
   });
-  t.after(() => second.close());
-  await new Promise((resolve) => setTimeout(resolve, 1_100));
-  assert.equal((f.database.prepare(`
+  await second.ready();
+  const secondSocket = await second.injectWS("/ws/bridge", {
+    headers: {
+      authorization: `Bearer ${f.credential.secret}`,
+      host: "127.0.0.1"
+    }
+  });
+  t.after(async () => {
+    secondSocket.terminate();
+    await second.close();
+  });
+  await sendAndFlush(secondSocket, envelope("bridge.hello", {
+    bridgeVersion: "v0.4.0-test.1",
+    connectionEpoch: 2,
+    deviceId: f.device.deviceId,
+    supportedProtocolVersions: ["1.0"],
+    governedExecution: capability
+  }, "second_server_hello0001"));
+  for (const [index, managed] of f.managedAgents.entries()) {
+    const readyGrants = f.grants.filter((candidate) =>
+      candidate.agentId === managed.agent.agentId
+    );
+    await sendAndFlush(secondSocket, envelope("agent.publish", {
+      teamId: f.teamId,
+      agentId: managed.agent.agentId,
+      ownerMemberId: f.ownerMemberId,
+      deviceId: f.device.deviceId,
+      name: managed.agent.name,
+      role: managed.agent.role,
+      capabilities: {
+        invocationMode: "managed",
+        supportsStart: true,
+        supportsResume: false,
+        supportsStreaming: true,
+        supportsInterrupt: true,
+        supportsHandoff: false,
+        supportsWorkspaceLeases: true,
+        governedExecution: { ...capability, readyGrants }
+      },
+      workspaceRef: managed.workspaceRef,
+      workspaceGeneration: managed.workspaceGeneration,
+      workspaceAlias: `Second Server workspace ${index + 1}`
+    }, `second_server_publish000${index + 1}`));
+  }
+  await waitFor(() => (f.database.prepare(`
     SELECT count(*) AS n FROM execution_dispatch_intents
-  `).get() as { n: number }).n, 1);
+    WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n === 3);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  const intents = f.database.prepare(`
+    SELECT node_key, dispatch_generation, run_id, trace_message_id
+    FROM execution_dispatch_intents
+    WHERE plan_id = ? ORDER BY node_key
+  `).all(f.plan.planId) as Array<{
+    dispatch_generation: number;
+    node_key: string;
+    run_id: string;
+    trace_message_id: string;
+  }>;
+  assert.deepEqual(intents.map((entry) => entry.node_key), [
+    "Node1",
+    "Node2",
+    "Node3"
+  ]);
+  assert.ok(intents.every((entry) => entry.dispatch_generation === 1));
+  assert.equal(new Set(intents.map((entry) => entry.run_id)).size, 3);
+  assert.equal(new Set(intents.map((entry) => entry.trace_message_id)).size, 3);
   assert.equal((f.database.prepare(`
-    SELECT count(*) AS n FROM runs WHERE task_id = ?
-  `).get(f.task.taskId) as { n: number }).n, 1);
+    SELECT count(*) AS n FROM runs
+    WHERE run_id IN (
+      SELECT run_id FROM execution_dispatch_intents WHERE plan_id = ?
+    )
+  `).get(f.plan.planId) as { n: number }).n, 3);
   assert.equal((f.database.prepare(`
-    SELECT dispatch_generation FROM execution_dispatch_intents
-  `).get() as { dispatch_generation: number }).dispatch_generation, 1);
+    SELECT count(*) AS n FROM isolated_workspace_leases
+    WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n, 3);
+  assert.equal((f.database.prepare(`
+    SELECT count(DISTINCT workspace_ref) AS n FROM isolated_workspace_leases
+    WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n, 3);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_input_bindings
+    WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n, 0);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
