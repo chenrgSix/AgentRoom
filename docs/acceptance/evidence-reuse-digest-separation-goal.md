@@ -1,6 +1,6 @@
 # Evidence Reuse Digest Separation Goal
 
-Status: frozen and active on 2026-09-02. This document is the acceptance
+Status: frozen and accepted on 2026-09-02. This document is the acceptance
 authority for `CON-024` and `EXEC-011`; `docs/TASKS.md` remains the sole
 delivery-state register.
 
@@ -162,3 +162,67 @@ revision stability, semantic contract drift and substitution negatives; Go
 round-trip and semantic tests consume the same valid fixture. This checkpoint
 adds no persistence or carry-forward authority; those remain `EXEC-011` and
 `EXEC-005` respectively.
+
+## Persistence Checkpoint
+
+Migration 0076 adds one immutable `execution_evidence_reuse_contracts` row for
+each local adoption. Its primary and foreign keys make the relationship
+one-to-one; scope triggers rejoin the exact adoption, plan node, Task and
+integration policy, while update and delete triggers preserve retained proof.
+Migration-time backfill derives every companion inside one immediate
+transaction and checks the final row count. It executes only when 0076 is first
+applied. Ordinary startup and reads fail closed when a companion is missing and
+do not repair authority state.
+
+`ExecutionEvidenceAdoptionRepository` now derives the companion from the exact
+accepted, verified or integrated source/proof/adoption projection. New local
+materialization retains source, proof, adoption, legacy projection and reuse
+contract in the existing transaction. Stable operation replay requires the
+byte-identical companion. Injected failures prove both migration backfill and
+new dual-write roll back without partial source, proof, adoption,
+materialization or reuse rows.
+
+The retained aliases are checked directly:
+
+```text
+runtimeInputBindingDigest == EvidenceAdoption.resolvedInputSetDigest
+nodeExecutionDigest       == EvidenceAdoption.nodeContractDigest
+```
+
+The independent reuse digests are recomputed from the normalized logical
+inputs and semantic node/Task/integration contract. Dependency, input, retry
+and integration readers remain adoption-authoritative; the companion grants no
+current graph-progression or carry-forward authority.
+
+## Final Acceptance
+
+The final 2026-09-02 acceptance recorded these independent gates:
+
+- focused persistence tests passed 41 cases covering all three gates,
+  attempt-versus-reuse equality, immutable rows, missing-companion failure,
+  idempotent reopen/backfill and injected migration/dual-write rollback;
+- migration compatibility tests passed 11 cases from empty, version-14,
+  version-22, version-42 and version-51 databases through migration 0076;
+- `npm run validate` accepted 12 schemas and 258 shared fixtures, while the
+  contract suite passed all 86 checks and generated TypeScript/Go remained
+  current;
+- `npm run build` compiled every workspace, and `npm test` completed every
+  registered Server, Web, contract, Bridge UI, QA evidence, product, site and
+  lifecycle suite before physically removing its owned cache-bearing run root;
+- `npm run test:e2e` passed all eight deterministic scenarios, including the
+  controlled physical `integrated_commit` loop and two-Bridge recovery cuts;
+  only the explicitly live-provider scenario was skipped, and the run root was
+  removed;
+- `npm run test:bridge` passed every Go package, including the 225-second real
+  repository package, and removed its owned Go/npm cache-bearing run root;
+- one newly owned isolated base contained zero matching directories before the
+  test and after each of three consecutive `npm run test:temp-lifecycle` runs.
+  Every round passed 24 success, assertion-failure, spawn-failure, timeout,
+  cancellation, descendant and parallel-owner checks. Physical snapshots were
+  `before=0`, `after_round_1=0`, `after_round_2=0` and `after_round_3=0`; the
+  isolated base itself was then removed.
+
+This accepts `CON-024` and `EXEC-011`. It does not accept plan supersession,
+evidence carry-forward, remote CI/PR evidence, scheduler modes or durable
+cross-sweep shared-Agent fairness. Those remain separately owned by
+`EXEC-005`, `REPO-003` and `EXEC-010`.

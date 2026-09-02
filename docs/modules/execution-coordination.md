@@ -377,6 +377,14 @@ negative evidence are frozen in
 [`evidence-reuse-digest-separation-goal.md`](../acceptance/evidence-reuse-digest-separation-goal.md).
 `EXEC-005` may later consume only the new reuse digests for explicit
 carry-forward admission; no current scheduler or dependency reader infers reuse.
+Migration 0076 now retains one immutable reuse companion per local adoption,
+backfills only when that migration is first applied and dual-writes accepted,
+verified and integrated companions inside the existing materialization
+transaction. Replay requires byte equality, missing companions fail closed
+without runtime healing, and dependency/input readers remain
+adoption-authoritative. `CON-024` and `EXEC-011` are accepted by the full
+contract, migration, regression, E2E, Bridge and physical cleanup evidence in
+their frozen goal.
 
 ### First Accepted-Result Dependency Increment
 
