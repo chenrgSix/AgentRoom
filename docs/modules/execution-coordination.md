@@ -383,6 +383,15 @@ Run and current Room access. They cannot directly approve plans, accept Results,
 acknowledge ambiguity, expand budgets, grant local permissions or merge code.
 Decision finalization is a typed proposal adapter, not a prose parser.
 
+The Discussion adapter accepts only the shared closed
+`discussionPlanProposalDraft` extracted from one successful finalization reply.
+It supplies no caller-controlled author, root Task, evidence pins or operation
+ID. A shared internal draft writer applies the same graph normalization,
+root/Task/Agent/repository/source/external-input checks and immutable persistence
+used by human and, later, assigned-Agent entry points. The adapter adds exact
+terminal Discussion and final Message evidence, then persists a
+Discussion-authored draft; it exposes no approval, compilation or dispatch port.
+
 ### Draft History Surface and Source Pins
 
 Human draft create/revise commands require the current root Task Owner or Team

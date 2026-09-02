@@ -112,6 +112,14 @@ content through a stable operation identity. Missing or malformed structure
 keeps the existing final Message and creates no proposal. It grants no plan
 approval, Task completion, repository or local Runtime authority.
 
+The bounded payload is the closed shared `discussionPlanProposalDraft`, carried
+only in one exact final-line `<convenewire-plan-proposal>` envelope for a
+`decision_record` finalization. It omits root identity, sources, revisions,
+author and operation ID; the Server pins the terminal Discussion and immutable
+final Message and derives stable attribution. Finalization closure and valid
+draft persistence are atomic. Invalid topology or references are treated as an
+invalid draft rather than as authority to block the already-visible conclusion.
+
 `MCP-007` may let an Agent propose, read and revise only plans within its exact
 assigned Tech Lead Run/context. A role label is not authority. The MCP surface
 cannot approve a plan, dispatch work, review Results, verify candidates or

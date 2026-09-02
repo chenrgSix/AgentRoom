@@ -277,6 +277,41 @@ MVP finalization persists summaries, final answers, decision records, and
 unresolved issues as Messages. Selecting `artifact` asks the finalizer for a
 message representation; binary Artifact transport remains owned by `FUT-004`.
 
+### Structured Execution Proposal Finalization
+
+`DISC-010` adds one bounded adapter only when the frozen output mode is
+`decision_record`. The finalizer's visible conclusion remains the ordinary
+Agent reply Message. A proposal is considered only when that Message ends with
+exactly one final line of this form:
+
+```text
+<convenewire-plan-proposal>{"schemaVersion":"1.0",...}</convenewire-plan-proposal>
+```
+
+The JSON body must satisfy the closed shared `discussionPlanProposalDraft`
+schema. It contains title, decision summary/items/questions, nodes, edges,
+external inputs and policy. It cannot supply root Task identity, evidence
+sources, source revisions, author, operation identity, approval or execution
+state. The adapter never extracts a plan from prose, Markdown or a near-match.
+Missing, duplicate, oversized, malformed, trailing or schema-invalid envelopes
+leave the final Message intact and create no DecisionRecord or PlanProposal.
+
+The Server binds the draft to the Discussion's exact top-level Task and adds
+only two authoritative decision sources: the immutable final reply Message at
+its Room sequence and the terminal Discussion at its aggregate version. The
+author is `{ kind: "discussion", discussionId }`; the stable operation identity
+is derived by the Server from the finalization Turn. All ordinary graph,
+Task/Agent/repository reference, source-freeze and external-input validation
+still applies. A structurally valid draft that fails any domain check creates no
+plan and cannot prevent the Discussion and visible conclusion from finishing.
+
+Final Discussion closure and valid draft persistence share one immediate
+transaction. A crash cannot retain only one side. Reconciliation after restart
+recomputes the same operation and returns the one existing draft rather than
+creating another. The resulting plan remains `draft`: finalization cannot
+approve it, compile child Tasks, dispatch Runs, review Results, verify code,
+integrate repositories, enlarge budgets or grant local Runtime authority.
+
 ## User Experience
 
 The Room uses one composer. Two to five distinct structured Agent Mentions
