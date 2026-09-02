@@ -43,7 +43,8 @@ func compileExecutionSchemas() map[string]*jsonschema.Schema {
 		"executionCheckpoint", "verificationReceipt", "sourceEvidence", "gateProofRef", "evidenceAdoption",
 		"evidenceReuseContract", "remoteProviderBinding", "remoteProviderBindingRevocation",
 		"providerCommitObservation", "remoteCommitObservation", "providerCIObservation",
-		"remoteCIObservationReceipt"} {
+		"remoteCIObservationReceipt", "executionEvidencePage",
+		"remoteEvidenceAdoptionCommand", "integrationApprovalCommand"} {
 		schema, err := compiler.Compile(id + "#/$defs/" + kind)
 		if err != nil {
 			panic(err)

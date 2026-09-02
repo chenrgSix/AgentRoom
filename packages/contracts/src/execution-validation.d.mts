@@ -35,7 +35,8 @@ export function assertExecutionCommand(
     "evidenceReuseContract" | "remoteProviderBinding" |
     "remoteProviderBindingRevocation" | "providerCommitObservation" |
     "remoteCommitObservation" | "providerCIObservation" |
-    "remoteCIObservationReceipt",
+    "remoteCIObservationReceipt" | "executionEvidencePage" |
+    "remoteEvidenceAdoptionCommand" | "integrationApprovalCommand",
   value: unknown
 ): void;
 export function validateExecutionDecision(value: unknown): ExecutionDecisionContent;

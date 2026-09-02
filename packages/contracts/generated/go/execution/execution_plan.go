@@ -80,7 +80,7 @@ type PurpleSourceRevision struct {
 type PurpleSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -201,7 +201,7 @@ type PurpleVerificationProfile struct {
 
 type PurplePolicy struct {
 	Budget                          FluffyBudget              `json:"budget"`
-	Integration                     Integration               `json:"integration"`
+	Integration                     IntegrationEnum           `json:"integration"`
 	IntegrationTargets              []PurpleIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                     `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                      `json:"requireHumanIntegrationApproval"`
@@ -230,7 +230,7 @@ type ExecutionDecisionSourceSnapshot struct {
 type ExecutionDecisionSourceSnapshotSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -240,11 +240,11 @@ type ExecutionDecisionSourceSnapshotSource struct {
 }
 
 type ExecutionPlanPage struct {
-	NextAfterPlanID *string       `json:"nextAfterPlanId"`
-	Plans           []PlanElement `json:"plans"`
+	NextAfterPlanID *string                 `json:"nextAfterPlanId"`
+	Plans           []ExecutionPlanPagePlan `json:"plans"`
 }
 
-type PlanElement struct {
+type ExecutionPlanPagePlan struct {
 	CompiledTasks   []PurpleCompiledTask `json:"compiledTasks"`
 	ControlRevision int64                `json:"controlRevision"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -322,7 +322,7 @@ type FluffySourceRevision struct {
 type FluffySource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -443,7 +443,7 @@ type FluffyVerificationProfile struct {
 
 type FluffyPolicy struct {
 	Budget                          StickyBudget              `json:"budget"`
-	Integration                     Integration               `json:"integration"`
+	Integration                     IntegrationEnum           `json:"integration"`
 	IntegrationTargets              []FluffyIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                     `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                      `json:"requireHumanIntegrationApproval"`
@@ -518,7 +518,7 @@ type TentacledSourceRevision struct {
 type TentacledSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -639,7 +639,7 @@ type TentacledVerificationProfile struct {
 
 type TentacledPolicy struct {
 	Budget                          IndecentBudget               `json:"budget"`
-	Integration                     Integration                  `json:"integration"`
+	Integration                     IntegrationEnum              `json:"integration"`
 	IntegrationTargets              []TentacledIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                        `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                         `json:"requireHumanIntegrationApproval"`
@@ -697,7 +697,7 @@ type ContentSourceRevision struct {
 type ContentSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -733,7 +733,7 @@ type ExecutionDecisionContentSourceRevision struct {
 type ExecutionDecisionContentSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -780,7 +780,7 @@ type StickySourceRevision struct {
 type StickySource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -901,7 +901,7 @@ type StickyVerificationProfile struct {
 
 type ExecutionPlanDefinitionPolicy struct {
 	Budget                          AmbitiousBudget           `json:"budget"`
-	Integration                     Integration               `json:"integration"`
+	Integration                     IntegrationEnum           `json:"integration"`
 	IntegrationTargets              []StickyIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                     `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                      `json:"requireHumanIntegrationApproval"`
@@ -956,7 +956,7 @@ type IndigoSourceRevision struct {
 type IndigoSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -1077,7 +1077,7 @@ type IndigoVerificationProfile struct {
 
 type StickyPolicy struct {
 	Budget                          MagentaBudget             `json:"budget"`
-	Integration                     Integration               `json:"integration"`
+	Integration                     IntegrationEnum           `json:"integration"`
 	IntegrationTargets              []IndigoIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                     `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                      `json:"requireHumanIntegrationApproval"`
@@ -1227,7 +1227,7 @@ type IndecentVerificationProfile struct {
 
 type DiscussionPlanProposalDraftPolicy struct {
 	Budget                          MischievousBudget           `json:"budget"`
-	Integration                     Integration                 `json:"integration"`
+	Integration                     IntegrationEnum             `json:"integration"`
 	IntegrationTargets              []IndecentIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                       `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                        `json:"requireHumanIntegrationApproval"`
@@ -1283,7 +1283,7 @@ type IndecentSourceRevision struct {
 type IndecentSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -1404,7 +1404,7 @@ type HilariousVerificationProfile struct {
 
 type IndigoPolicy struct {
 	Budget                          Budget1                      `json:"budget"`
-	Integration                     Integration                  `json:"integration"`
+	Integration                     IntegrationEnum              `json:"integration"`
 	IntegrationTargets              []HilariousIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                        `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                         `json:"requireHumanIntegrationApproval"`
@@ -1561,7 +1561,7 @@ type HilariousSourceRevision struct {
 type HilariousSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -1682,7 +1682,7 @@ type AmbitiousVerificationProfile struct {
 
 type IndecentPolicy struct {
 	Budget                          Budget3                      `json:"budget"`
-	Integration                     Integration                  `json:"integration"`
+	Integration                     IntegrationEnum              `json:"integration"`
 	IntegrationTargets              []AmbitiousIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                        `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                         `json:"requireHumanIntegrationApproval"`
@@ -1825,7 +1825,7 @@ type AmbitiousSourceRevision struct {
 type AmbitiousSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -1946,7 +1946,7 @@ type CunningVerificationProfile struct {
 
 type HilariousPolicy struct {
 	Budget                          Budget5                    `json:"budget"`
-	Integration                     Integration                `json:"integration"`
+	Integration                     IntegrationEnum            `json:"integration"`
 	IntegrationTargets              []CunningIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                      `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                       `json:"requireHumanIntegrationApproval"`
@@ -2006,7 +2006,7 @@ type CunningSourceRevision struct {
 type CunningSource struct {
 	ArtifactID    *string    `json:"artifactId,omitempty"`
 	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          SourceKind `json:"kind"`
+	Kind          PurpleKind `json:"kind"`
 	RunID         *string    `json:"runId,omitempty"`
 	Sequence      *int64     `json:"sequence,omitempty"`
 	MessageID     *string    `json:"messageId,omitempty"`
@@ -2127,7 +2127,7 @@ type MagentaVerificationProfile struct {
 
 type AmbitiousPolicy struct {
 	Budget                          Budget7                    `json:"budget"`
-	Integration                     Integration                `json:"integration"`
+	Integration                     IntegrationEnum            `json:"integration"`
 	IntegrationTargets              []MagentaIntegrationTarget `json:"integrationTargets"`
 	MaxConcurrency                  int64                      `json:"maxConcurrency"`
 	RequireHumanIntegrationApproval bool                       `json:"requireHumanIntegrationApproval"`
@@ -2929,16 +2929,16 @@ type VerificationReceipt struct {
 	ExitCode             *int64                        `json:"exitCode"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	FinishedAt             string                     `json:"finishedAt"`
-	InputDigest            string                     `json:"inputDigest"`
-	IntegrationOperationID *string                    `json:"integrationOperationId"`
-	LogArtifact            *LogArtifact               `json:"logArtifact"`
-	OperationID            string                     `json:"operationId"`
-	Outcome                VerificationReceiptOutcome `json:"outcome"`
-	Plan                   VerificationReceiptPlan    `json:"plan"`
-	Profile                VerificationReceiptProfile `json:"profile"`
-	RepositoryID           string                     `json:"repositoryId"`
-	RequestDigest          string                     `json:"requestDigest"`
+	FinishedAt             string                          `json:"finishedAt"`
+	InputDigest            string                          `json:"inputDigest"`
+	IntegrationOperationID *string                         `json:"integrationOperationId"`
+	LogArtifact            *VerificationReceiptLogArtifact `json:"logArtifact"`
+	OperationID            string                          `json:"operationId"`
+	Outcome                VerificationReceiptOutcome      `json:"outcome"`
+	Plan                   VerificationReceiptPlan         `json:"plan"`
+	Profile                VerificationReceiptProfile      `json:"profile"`
+	RepositoryID           string                          `json:"repositoryId"`
+	RequestDigest          string                          `json:"requestDigest"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
 	StartedAt      string `json:"startedAt"`
@@ -2974,7 +2974,7 @@ type VerificationReceiptExecution struct {
 	TaskRevision        int64  `json:"taskRevision"`
 }
 
-type LogArtifact struct {
+type VerificationReceiptLogArtifact struct {
 	ArtifactID       string            `json:"artifactId"`
 	ArtifactRevision int64             `json:"artifactRevision"`
 	ByteLength       int64             `json:"byteLength"`
@@ -2998,33 +2998,33 @@ type VerificationReceiptProfile struct {
 }
 
 type SourceEvidence struct {
-	AgentID      *string       `json:"agentId,omitempty"`
-	ArtifactPins []ArtifactPin `json:"artifactPins"`
+	AgentID      *string                     `json:"agentId,omitempty"`
+	ArtifactPins []SourceEvidenceArtifactPin `json:"artifactPins"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	CreatedAt          string             `json:"createdAt"`
-	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
-	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
-	DeviceID           *string            `json:"deviceId,omitempty"`
-	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
-	Kind               SourceEvidenceKind `json:"kind"`
-	ResultID           *string            `json:"resultId,omitempty"`
-	ResultVersion      *int64             `json:"resultVersion,omitempty"`
-	RoomID             *string            `json:"roomId,omitempty"`
-	SourceDigest       string             `json:"sourceDigest"`
-	SourceEvidenceID   string             `json:"sourceEvidenceId"`
-	SourceRunID        *string            `json:"sourceRunId,omitempty"`
-	TaskID             *string            `json:"taskId,omitempty"`
-	Version            int64              `json:"version"`
-	Commit             *string            `json:"commit,omitempty"`
-	InputDigest        *string            `json:"inputDigest,omitempty"`
-	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
-	Origin             *Origin            `json:"origin,omitempty"`
-	RepositoryID       *string            `json:"repositoryId,omitempty"`
-	Tree               *string            `json:"tree,omitempty"`
+	CreatedAt          string                `json:"createdAt"`
+	CriteriaRevision   *int64                `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64                `json:"definitionRevision,omitempty"`
+	DeviceID           *string               `json:"deviceId,omitempty"`
+	DispatchGeneration *int64                `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind    `json:"kind"`
+	ResultID           *string               `json:"resultId,omitempty"`
+	ResultVersion      *int64                `json:"resultVersion,omitempty"`
+	RoomID             *string               `json:"roomId,omitempty"`
+	SourceDigest       string                `json:"sourceDigest"`
+	SourceEvidenceID   string                `json:"sourceEvidenceId"`
+	SourceRunID        *string               `json:"sourceRunId,omitempty"`
+	TaskID             *string               `json:"taskId,omitempty"`
+	Version            int64                 `json:"version"`
+	Commit             *string               `json:"commit,omitempty"`
+	InputDigest        *string               `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat         `json:"objectFormat,omitempty"`
+	Origin             *SourceEvidenceOrigin `json:"origin,omitempty"`
+	RepositoryID       *string               `json:"repositoryId,omitempty"`
+	Tree               *string               `json:"tree,omitempty"`
 }
 
-type ArtifactPin struct {
+type SourceEvidenceArtifactPin struct {
 	ArtifactID       string            `json:"artifactId"`
 	ArtifactRevision int64             `json:"artifactRevision"`
 	ByteLength       int64             `json:"byteLength"`
@@ -3033,7 +3033,7 @@ type ArtifactPin struct {
 	OutputSlot       string            `json:"outputSlot"`
 }
 
-type Origin struct {
+type SourceEvidenceOrigin struct {
 	BindingID                 *string    `json:"bindingId,omitempty"`
 	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
 	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
@@ -3075,21 +3075,21 @@ type EvidenceAdoption struct {
 	Authority      EvidenceAdoptionAuthority `json:"authority"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	CreatedAt              string           `json:"createdAt"`
-	Gate                   Gate             `json:"gate"`
-	NodeContractDigest     string           `json:"nodeContractDigest"`
-	NodeKey                string           `json:"nodeKey"`
-	OperationDigest        string           `json:"operationDigest"`
-	OperationID            string           `json:"operationId"`
-	PlanID                 string           `json:"planId"`
-	PlanRevision           int64            `json:"planRevision"`
-	Proofs                 []Proof          `json:"proofs"`
-	ProofSetDigest         string           `json:"proofSetDigest"`
-	ResolvedInputSetDigest string           `json:"resolvedInputSetDigest"`
-	SourceDigest           string           `json:"sourceDigest"`
-	SourceEvidenceID       string           `json:"sourceEvidenceId"`
-	SourceExecution        *SourceExecution `json:"sourceExecution"`
-	Version                int64            `json:"version"`
+	CreatedAt              string                           `json:"createdAt"`
+	Gate                   Gate                             `json:"gate"`
+	NodeContractDigest     string                           `json:"nodeContractDigest"`
+	NodeKey                string                           `json:"nodeKey"`
+	OperationDigest        string                           `json:"operationDigest"`
+	OperationID            string                           `json:"operationId"`
+	PlanID                 string                           `json:"planId"`
+	PlanRevision           int64                            `json:"planRevision"`
+	Proofs                 []EvidenceAdoptionProof          `json:"proofs"`
+	ProofSetDigest         string                           `json:"proofSetDigest"`
+	ResolvedInputSetDigest string                           `json:"resolvedInputSetDigest"`
+	SourceDigest           string                           `json:"sourceDigest"`
+	SourceEvidenceID       string                           `json:"sourceEvidenceId"`
+	SourceExecution        *EvidenceAdoptionSourceExecution `json:"sourceExecution"`
+	Version                int64                            `json:"version"`
 }
 
 type EvidenceAdoptionAuthority struct {
@@ -3110,7 +3110,7 @@ type EvidenceAdoptionAuthority struct {
 	ProviderBindingID   *string `json:"providerBindingId,omitempty"`
 }
 
-type Proof struct {
+type EvidenceAdoptionProof struct {
 	Kind              GateProofRefKind `json:"kind"`
 	OperationID       string           `json:"operationId"`
 	ProofDigest       string           `json:"proofDigest"`
@@ -3128,7 +3128,7 @@ type Proof struct {
 	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
 }
 
-type SourceExecution struct {
+type EvidenceAdoptionSourceExecution struct {
 	DispatchGeneration int64  `json:"dispatchGeneration"`
 	RunID              string `json:"runId"`
 }
@@ -3157,7 +3157,7 @@ type EvidenceReuseContract struct {
 }
 
 type IntegrationPolicy struct {
-	Integration                     Integration                          `json:"integration"`
+	Integration                     IntegrationEnum                      `json:"integration"`
 	IntegrationTargets              []IntegrationPolicyIntegrationTarget `json:"integrationTargets"`
 	RequireHumanIntegrationApproval bool                                 `json:"requireHumanIntegrationApproval"`
 }
@@ -3437,23 +3437,2105 @@ type RemoteCIObservationReceipt struct {
 	Version                   int64                        `json:"version"`
 }
 
+type ExecutionEvidencePage struct {
+	Plans   []ExecutionEvidencePagePlan `json:"plans"`
+	TaskID  string                      `json:"taskId"`
+	Version int64                       `json:"version"`
+}
+
+type ExecutionEvidencePagePlan struct {
+	ControlRevision int64                        `json:"controlRevision"`
+	Nodes           []PlanNode                   `json:"nodes"`
+	PlanDigest      string                       `json:"planDigest"`
+	PlanID          string                       `json:"planId"`
+	PlanRevision    int64                        `json:"planRevision"`
+	State           ExecutionPlanProjectionState `json:"state"`
+}
+
+type PlanNode struct {
+	Integration                  PurpleIntegration                   `json:"integration"`
+	NextAction                   PurpleNextAction                    `json:"nextAction"`
+	NodeKey                      string                              `json:"nodeKey"`
+	Remote                       *PurpleRemote                       `json:"remote"`
+	RequiredVerificationProfiles []PurpleRequiredVerificationProfile `json:"requiredVerificationProfiles"`
+	Runtime                      *PurpleRuntime                      `json:"runtime"`
+	Stages                       []PurpleStage                       `json:"stages"`
+	TaskID                       string                              `json:"taskId"`
+	Verifications                []PurpleVerification                `json:"verifications"`
+}
+
+type PurpleIntegration struct {
+	Approval        *PurpleApproval        `json:"approval"`
+	BlockerCode     *string                `json:"blockerCode"`
+	CommandTemplate *PurpleCommandTemplate `json:"commandTemplate"`
+	Receipt         *PurpleReceipt         `json:"receipt"`
+	State           IntegrationState       `json:"state"`
+	Target          *StickyTarget          `json:"target"`
+}
+
+type PurpleApproval struct {
+	ApprovalDigest string `json:"approvalDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ApprovedAt         string `json:"approvedAt"`
+	ApprovedByMemberID string `json:"approvedByMemberId"`
+	CandidateCommit    string `json:"candidateCommit"`
+	CandidateTree      string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline               string                      `json:"deadline"`
+	InputDigest            string                      `json:"inputDigest"`
+	IntegrationOperationID string                      `json:"integrationOperationId"`
+	MaterializationDigest  string                      `json:"materializationDigest"`
+	NodeKey                string                      `json:"nodeKey"`
+	OperationID            string                      `json:"operationId"`
+	PlanID                 string                      `json:"planId"`
+	PlanRevision           int64                       `json:"planRevision"`
+	Target                 PurpleTarget                `json:"target"`
+	VerificationReceipts   []PurpleVerificationReceipt `json:"verificationReceipts"`
+}
+
+type PurpleTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type PurpleVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type PurpleCommandTemplate struct {
+	CandidateCommit string `json:"candidateCommit"`
+	CandidateTree   string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline              string                      `json:"deadline"`
+	InputDigest           string                      `json:"inputDigest"`
+	MaterializationDigest string                      `json:"materializationDigest"`
+	NodeKey               string                      `json:"nodeKey"`
+	PlanID                string                      `json:"planId"`
+	PlanRevision          int64                       `json:"planRevision"`
+	Target                FluffyTarget                `json:"target"`
+	VerificationReceipts  []FluffyVerificationReceipt `json:"verificationReceipts"`
+}
+
+type FluffyTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type FluffyVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type PurpleReceipt struct {
+	Receipt       FluffyReceipt `json:"receipt"`
+	ReceiptDigest string        `json:"receiptDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt string `json:"recordedAt"`
+}
+
+type FluffyReceipt struct {
+	BindingID             string      `json:"bindingId"`
+	CandidateCommit       *string     `json:"candidateCommit"`
+	CandidateTree         *string     `json:"candidateTree"`
+	CheckpointID          *string     `json:"checkpointId"`
+	DeviceID              string      `json:"deviceId"`
+	ErrorCode             *string     `json:"errorCode"`
+	Kind                  KindElement `json:"kind"`
+	ObservedGeneration    *string     `json:"observedGeneration"`
+	OperationID           string      `json:"operationId"`
+	ProviderObservationID *string     `json:"providerObservationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt     string                          `json:"recordedAt"`
+	RepositoryID   string                          `json:"repositoryId"`
+	RequestDigest  string                          `json:"requestDigest"`
+	State          RepositoryOperationReceiptState `json:"state"`
+	Target         *TentacledTarget                `json:"target"`
+	VerificationID *string                         `json:"verificationId"`
+	Version        int64                           `json:"version"`
+}
+
+type TentacledTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type StickyTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type PurpleNextAction struct {
+	ActorKind  ActorKind      `json:"actorKind"`
+	Kind       NextActionKind `json:"kind"`
+	ReasonCode ReasonCode     `json:"reasonCode"`
+}
+
+type PurpleRemote struct {
+	AdoptionState     AdoptionState           `json:"adoptionState"`
+	BlockerCodes      []BlockerCode           `json:"blockerCodes"`
+	CiReceipts        []PurpleCiReceipt       `json:"ciReceipts"`
+	CommandTemplate   *FluffyCommandTemplate  `json:"commandTemplate"`
+	CommitObservation PurpleCommitObservation `json:"commitObservation"`
+	Source            MagentaSource           `json:"source"`
+}
+
+type PurpleCiReceipt struct {
+	Attempt       int64  `json:"attempt"`
+	CheckKey      string `json:"checkKey"`
+	Commit        string `json:"commit"`
+	ObservationID string `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                       `json:"observedAt"`
+	OperationID               string                       `json:"operationId"`
+	Outcome                   ProviderCIObservationOutcome `json:"outcome"`
+	ProfileDigest             string                       `json:"profileDigest"`
+	ProfileID                 string                       `json:"profileId"`
+	ProfileRevision           int64                        `json:"profileRevision"`
+	ProviderBindingID         string                       `json:"providerBindingId"`
+	ProviderObservationDigest string                       `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                       `json:"providerRepositoryId"`
+	ReceiptDigest             string                       `json:"receiptDigest"`
+	RepositoryID              string                       `json:"repositoryId"`
+	SourceEvidenceID          string                       `json:"sourceEvidenceId"`
+	Tree                      string                       `json:"tree"`
+	Version                   int64                        `json:"version"`
+}
+
+type FluffyCommandTemplate struct {
+	ExpectedControlRevision int64  `json:"expectedControlRevision"`
+	ExpectedPlanDigest      string `json:"expectedPlanDigest"`
+	NodeKey                 string `json:"nodeKey"`
+	PlanRevision            int64  `json:"planRevision"`
+	ProviderBindingID       string `json:"providerBindingId"`
+	SourceEvidenceID        string `json:"sourceEvidenceId"`
+}
+
+type PurpleCommitObservation struct {
+	BaseCommit        string       `json:"baseCommit"`
+	BundleArtifactID  string       `json:"bundleArtifactId"`
+	BundleByteLength  int64        `json:"bundleByteLength"`
+	BundleDigest      string       `json:"bundleDigest"`
+	Commit            string       `json:"commit"`
+	InputDigest       string       `json:"inputDigest"`
+	ObjectFormat      ObjectFormat `json:"objectFormat"`
+	ObservationDigest string       `json:"observationDigest"`
+	ObservationID     string       `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string             `json:"observedAt"`
+	OperationID               string             `json:"operationId"`
+	PatchArtifactID           string             `json:"patchArtifactId"`
+	PatchArtifactRevision     int64              `json:"patchArtifactRevision"`
+	PatchByteLength           int64              `json:"patchByteLength"`
+	PatchDigest               string             `json:"patchDigest"`
+	PatchOutputSlot           string             `json:"patchOutputSlot"`
+	ProviderBindingID         string             `json:"providerBindingId"`
+	ProviderObservationDigest string             `json:"providerObservationDigest"`
+	ProviderRepositoryID      string             `json:"providerRepositoryId"`
+	PullRequest               *PurplePullRequest `json:"pullRequest"`
+	RepositoryID              string             `json:"repositoryId"`
+	TaskID                    string             `json:"taskId"`
+	Tree                      string             `json:"tree"`
+	Version                   int64              `json:"version"`
+}
+
+type PurplePullRequest struct {
+	BaseRef string `json:"baseRef"`
+	HeadRef string `json:"headRef"`
+	Number  int64  `json:"number"`
+}
+
+type MagentaSource struct {
+	AgentID      *string             `json:"agentId,omitempty"`
+	ArtifactPins []PurpleArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *PurpleOrigin      `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type PurpleArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type PurpleOrigin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type PurpleRequiredVerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type PurpleRuntime struct {
+	BlockerCode        *string       `json:"blockerCode"`
+	DispatchGeneration *int64        `json:"dispatchGeneration"`
+	LastRunState       *LastRunState `json:"lastRunState"`
+	ProjectionRevision int64         `json:"projectionRevision"`
+	RunID              *string       `json:"runId"`
+	State              RuntimeState  `json:"state"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type PurpleStage struct {
+	Adoption              PurpleAdoption `json:"adoption"`
+	Gate                  Gate           `json:"gate"`
+	MaterializationDigest string         `json:"materializationDigest"`
+	Proofs                []FluffyProof  `json:"proofs"`
+	Source                FriskySource   `json:"source"`
+}
+
+type PurpleAdoption struct {
+	AdoptionDigest string          `json:"adoptionDigest"`
+	AdoptionID     string          `json:"adoptionId"`
+	Authority      PurpleAuthority `json:"authority"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt              string                 `json:"createdAt"`
+	Gate                   Gate                   `json:"gate"`
+	NodeContractDigest     string                 `json:"nodeContractDigest"`
+	NodeKey                string                 `json:"nodeKey"`
+	OperationDigest        string                 `json:"operationDigest"`
+	OperationID            string                 `json:"operationId"`
+	PlanID                 string                 `json:"planId"`
+	PlanRevision           int64                  `json:"planRevision"`
+	Proofs                 []PurpleProof          `json:"proofs"`
+	ProofSetDigest         string                 `json:"proofSetDigest"`
+	ResolvedInputSetDigest string                 `json:"resolvedInputSetDigest"`
+	SourceDigest           string                 `json:"sourceDigest"`
+	SourceEvidenceID       string                 `json:"sourceEvidenceId"`
+	SourceExecution        *PurpleSourceExecution `json:"sourceExecution"`
+	Version                int64                  `json:"version"`
+}
+
+type PurpleAuthority struct {
+	AgentID             *string `json:"agentId,omitempty"`
+	ApprovalOperationID string  `json:"approvalOperationId"`
+	CriteriaRevision    int64   `json:"criteriaRevision"`
+	DefinitionRevision  int64   `json:"definitionRevision"`
+	DeviceID            *string `json:"deviceId,omitempty"`
+	GrantDigest         *string `json:"grantDigest,omitempty"`
+	GrantID             *string `json:"grantId,omitempty"`
+	GrantRevision       *int64  `json:"grantRevision,omitempty"`
+	PlanDigest          string  `json:"planDigest"`
+	RoomID              string  `json:"roomId"`
+	Service             Service `json:"service"`
+	TaskID              string  `json:"taskId"`
+	ActorMemberID       *string `json:"actorMemberId,omitempty"`
+	BindingDigest       *string `json:"bindingDigest,omitempty"`
+	ProviderBindingID   *string `json:"providerBindingId,omitempty"`
+}
+
+type PurpleProof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type PurpleSourceExecution struct {
+	DispatchGeneration int64  `json:"dispatchGeneration"`
+	RunID              string `json:"runId"`
+}
+
+type FluffyProof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type FriskySource struct {
+	AgentID      *string             `json:"agentId,omitempty"`
+	ArtifactPins []FluffyArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *FluffyOrigin      `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type FluffyArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type FluffyOrigin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type PurpleVerification struct {
+	Kind          VerificationKind `json:"kind"`
+	Receipt       TentacledReceipt `json:"receipt"`
+	ReceiptDigest *string          `json:"receiptDigest,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt *string `json:"recordedAt,omitempty"`
+}
+
+type TentacledReceipt struct {
+	Authority            *FluffyAuthority `json:"authority,omitempty"`
+	BindingID            *string          `json:"bindingId"`
+	CandidateCommit      *string          `json:"candidateCommit,omitempty"`
+	CandidateTree        *string          `json:"candidateTree,omitempty"`
+	DurationMilliseconds *int64           `json:"durationMilliseconds,omitempty"`
+	Execution            *PurpleExecution `json:"execution"`
+	ExitCode             *int64           `json:"exitCode"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	FinishedAt             *string            `json:"finishedAt,omitempty"`
+	InputDigest            *string            `json:"inputDigest,omitempty"`
+	IntegrationOperationID *string            `json:"integrationOperationId"`
+	LogArtifact            *PurpleLogArtifact `json:"logArtifact"`
+	OperationID            string             `json:"operationId"`
+	Outcome                ReceiptOutcome     `json:"outcome"`
+	Plan                   *PurplePlan        `json:"plan,omitempty"`
+	Profile                *PurpleProfile     `json:"profile,omitempty"`
+	RepositoryID           string             `json:"repositoryId"`
+	RequestDigest          *string            `json:"requestDigest,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	StartedAt      *string `json:"startedAt,omitempty"`
+	VerificationID *string `json:"verificationId,omitempty"`
+	Version        int64   `json:"version"`
+	Attempt        *int64  `json:"attempt,omitempty"`
+	CheckKey       *string `json:"checkKey,omitempty"`
+	Commit         *string `json:"commit,omitempty"`
+	ObservationID  *string `json:"observationId,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                *string `json:"observedAt,omitempty"`
+	ProfileDigest             *string `json:"profileDigest,omitempty"`
+	ProfileID                 *string `json:"profileId,omitempty"`
+	ProfileRevision           *int64  `json:"profileRevision,omitempty"`
+	ProviderBindingID         *string `json:"providerBindingId,omitempty"`
+	ProviderObservationDigest *string `json:"providerObservationDigest,omitempty"`
+	ProviderRepositoryID      *string `json:"providerRepositoryId,omitempty"`
+	ReceiptDigest             *string `json:"receiptDigest,omitempty"`
+	SourceEvidenceID          *string `json:"sourceEvidenceId,omitempty"`
+	Tree                      *string `json:"tree,omitempty"`
+}
+
+type FluffyAuthority struct {
+	DeviceID          *string       `json:"deviceId,omitempty"`
+	Kind              AuthorityKind `json:"kind"`
+	Attempt           *int64        `json:"attempt,omitempty"`
+	CheckKey          *string       `json:"checkKey,omitempty"`
+	ProviderBindingID *string       `json:"providerBindingId,omitempty"`
+}
+
+type PurpleExecution struct {
+	AgentID             string `json:"agentId"`
+	ApprovalOperationID string `json:"approvalOperationId"`
+	CriteriaRevision    int64  `json:"criteriaRevision"`
+	DefinitionRevision  int64  `json:"definitionRevision"`
+	DeviceID            string `json:"deviceId"`
+	DispatchGeneration  int64  `json:"dispatchGeneration"`
+	NodeKey             string `json:"nodeKey"`
+	PlanControlRevision int64  `json:"planControlRevision"`
+	PlanDigest          string `json:"planDigest"`
+	PlanID              string `json:"planId"`
+	PlanRevision        int64  `json:"planRevision"`
+	RoomID              string `json:"roomId"`
+	RunID               string `json:"runId"`
+	TaskID              string `json:"taskId"`
+	TaskRevision        int64  `json:"taskRevision"`
+}
+
+type PurpleLogArtifact struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+}
+
+type PurplePlan struct {
+	ApprovalOperationID string `json:"approvalOperationId"`
+	Digest              string `json:"digest"`
+	PlanID              string `json:"planId"`
+	Revision            int64  `json:"revision"`
+	RoomID              string `json:"roomId"`
+	RootTaskID          string `json:"rootTaskId"`
+}
+
+type PurpleProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type ExecutionEvidencePlan struct {
+	ControlRevision int64                        `json:"controlRevision"`
+	Nodes           []ExecutionEvidencePlanNode  `json:"nodes"`
+	PlanDigest      string                       `json:"planDigest"`
+	PlanID          string                       `json:"planId"`
+	PlanRevision    int64                        `json:"planRevision"`
+	State           ExecutionPlanProjectionState `json:"state"`
+}
+
+type ExecutionEvidencePlanNode struct {
+	Integration                  FluffyIntegration                   `json:"integration"`
+	NextAction                   FluffyNextAction                    `json:"nextAction"`
+	NodeKey                      string                              `json:"nodeKey"`
+	Remote                       *FluffyRemote                       `json:"remote"`
+	RequiredVerificationProfiles []FluffyRequiredVerificationProfile `json:"requiredVerificationProfiles"`
+	Runtime                      *FluffyRuntime                      `json:"runtime"`
+	Stages                       []FluffyStage                       `json:"stages"`
+	TaskID                       string                              `json:"taskId"`
+	Verifications                []FluffyVerification                `json:"verifications"`
+}
+
+type FluffyIntegration struct {
+	Approval        *FluffyApproval           `json:"approval"`
+	BlockerCode     *string                   `json:"blockerCode"`
+	CommandTemplate *TentacledCommandTemplate `json:"commandTemplate"`
+	Receipt         *StickyReceipt            `json:"receipt"`
+	State           IntegrationState          `json:"state"`
+	Target          *AmbitiousTarget          `json:"target"`
+}
+
+type FluffyApproval struct {
+	ApprovalDigest string `json:"approvalDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ApprovedAt         string `json:"approvedAt"`
+	ApprovedByMemberID string `json:"approvedByMemberId"`
+	CandidateCommit    string `json:"candidateCommit"`
+	CandidateTree      string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline               string                         `json:"deadline"`
+	InputDigest            string                         `json:"inputDigest"`
+	IntegrationOperationID string                         `json:"integrationOperationId"`
+	MaterializationDigest  string                         `json:"materializationDigest"`
+	NodeKey                string                         `json:"nodeKey"`
+	OperationID            string                         `json:"operationId"`
+	PlanID                 string                         `json:"planId"`
+	PlanRevision           int64                          `json:"planRevision"`
+	Target                 IndigoTarget                   `json:"target"`
+	VerificationReceipts   []TentacledVerificationReceipt `json:"verificationReceipts"`
+}
+
+type IndigoTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type TentacledVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type TentacledCommandTemplate struct {
+	CandidateCommit string `json:"candidateCommit"`
+	CandidateTree   string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline              string                      `json:"deadline"`
+	InputDigest           string                      `json:"inputDigest"`
+	MaterializationDigest string                      `json:"materializationDigest"`
+	NodeKey               string                      `json:"nodeKey"`
+	PlanID                string                      `json:"planId"`
+	PlanRevision          int64                       `json:"planRevision"`
+	Target                IndecentTarget              `json:"target"`
+	VerificationReceipts  []StickyVerificationReceipt `json:"verificationReceipts"`
+}
+
+type IndecentTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type StickyVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type StickyReceipt struct {
+	Receipt       IndigoReceipt `json:"receipt"`
+	ReceiptDigest string        `json:"receiptDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt string `json:"recordedAt"`
+}
+
+type IndigoReceipt struct {
+	BindingID             string      `json:"bindingId"`
+	CandidateCommit       *string     `json:"candidateCommit"`
+	CandidateTree         *string     `json:"candidateTree"`
+	CheckpointID          *string     `json:"checkpointId"`
+	DeviceID              string      `json:"deviceId"`
+	ErrorCode             *string     `json:"errorCode"`
+	Kind                  KindElement `json:"kind"`
+	ObservedGeneration    *string     `json:"observedGeneration"`
+	OperationID           string      `json:"operationId"`
+	ProviderObservationID *string     `json:"providerObservationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt     string                          `json:"recordedAt"`
+	RepositoryID   string                          `json:"repositoryId"`
+	RequestDigest  string                          `json:"requestDigest"`
+	State          RepositoryOperationReceiptState `json:"state"`
+	Target         *HilariousTarget                `json:"target"`
+	VerificationID *string                         `json:"verificationId"`
+	Version        int64                           `json:"version"`
+}
+
+type HilariousTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type AmbitiousTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type FluffyNextAction struct {
+	ActorKind  ActorKind      `json:"actorKind"`
+	Kind       NextActionKind `json:"kind"`
+	ReasonCode ReasonCode     `json:"reasonCode"`
+}
+
+type FluffyRemote struct {
+	AdoptionState     AdoptionState           `json:"adoptionState"`
+	BlockerCodes      []BlockerCode           `json:"blockerCodes"`
+	CiReceipts        []FluffyCiReceipt       `json:"ciReceipts"`
+	CommandTemplate   *StickyCommandTemplate  `json:"commandTemplate"`
+	CommitObservation FluffyCommitObservation `json:"commitObservation"`
+	Source            MischievousSource       `json:"source"`
+}
+
+type FluffyCiReceipt struct {
+	Attempt       int64  `json:"attempt"`
+	CheckKey      string `json:"checkKey"`
+	Commit        string `json:"commit"`
+	ObservationID string `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                       `json:"observedAt"`
+	OperationID               string                       `json:"operationId"`
+	Outcome                   ProviderCIObservationOutcome `json:"outcome"`
+	ProfileDigest             string                       `json:"profileDigest"`
+	ProfileID                 string                       `json:"profileId"`
+	ProfileRevision           int64                        `json:"profileRevision"`
+	ProviderBindingID         string                       `json:"providerBindingId"`
+	ProviderObservationDigest string                       `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                       `json:"providerRepositoryId"`
+	ReceiptDigest             string                       `json:"receiptDigest"`
+	RepositoryID              string                       `json:"repositoryId"`
+	SourceEvidenceID          string                       `json:"sourceEvidenceId"`
+	Tree                      string                       `json:"tree"`
+	Version                   int64                        `json:"version"`
+}
+
+type StickyCommandTemplate struct {
+	ExpectedControlRevision int64  `json:"expectedControlRevision"`
+	ExpectedPlanDigest      string `json:"expectedPlanDigest"`
+	NodeKey                 string `json:"nodeKey"`
+	PlanRevision            int64  `json:"planRevision"`
+	ProviderBindingID       string `json:"providerBindingId"`
+	SourceEvidenceID        string `json:"sourceEvidenceId"`
+}
+
+type FluffyCommitObservation struct {
+	BaseCommit        string       `json:"baseCommit"`
+	BundleArtifactID  string       `json:"bundleArtifactId"`
+	BundleByteLength  int64        `json:"bundleByteLength"`
+	BundleDigest      string       `json:"bundleDigest"`
+	Commit            string       `json:"commit"`
+	InputDigest       string       `json:"inputDigest"`
+	ObjectFormat      ObjectFormat `json:"objectFormat"`
+	ObservationDigest string       `json:"observationDigest"`
+	ObservationID     string       `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string             `json:"observedAt"`
+	OperationID               string             `json:"operationId"`
+	PatchArtifactID           string             `json:"patchArtifactId"`
+	PatchArtifactRevision     int64              `json:"patchArtifactRevision"`
+	PatchByteLength           int64              `json:"patchByteLength"`
+	PatchDigest               string             `json:"patchDigest"`
+	PatchOutputSlot           string             `json:"patchOutputSlot"`
+	ProviderBindingID         string             `json:"providerBindingId"`
+	ProviderObservationDigest string             `json:"providerObservationDigest"`
+	ProviderRepositoryID      string             `json:"providerRepositoryId"`
+	PullRequest               *FluffyPullRequest `json:"pullRequest"`
+	RepositoryID              string             `json:"repositoryId"`
+	TaskID                    string             `json:"taskId"`
+	Tree                      string             `json:"tree"`
+	Version                   int64              `json:"version"`
+}
+
+type FluffyPullRequest struct {
+	BaseRef string `json:"baseRef"`
+	HeadRef string `json:"headRef"`
+	Number  int64  `json:"number"`
+}
+
+type MischievousSource struct {
+	AgentID      *string                `json:"agentId,omitempty"`
+	ArtifactPins []TentacledArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *TentacledOrigin   `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type TentacledArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type TentacledOrigin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type FluffyRequiredVerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type FluffyRuntime struct {
+	BlockerCode        *string       `json:"blockerCode"`
+	DispatchGeneration *int64        `json:"dispatchGeneration"`
+	LastRunState       *LastRunState `json:"lastRunState"`
+	ProjectionRevision int64         `json:"projectionRevision"`
+	RunID              *string       `json:"runId"`
+	State              RuntimeState  `json:"state"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type FluffyStage struct {
+	Adoption              FluffyAdoption      `json:"adoption"`
+	Gate                  Gate                `json:"gate"`
+	MaterializationDigest string              `json:"materializationDigest"`
+	Proofs                []StickyProof       `json:"proofs"`
+	Source                BraggadociousSource `json:"source"`
+}
+
+type FluffyAdoption struct {
+	AdoptionDigest string             `json:"adoptionDigest"`
+	AdoptionID     string             `json:"adoptionId"`
+	Authority      TentacledAuthority `json:"authority"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt              string                 `json:"createdAt"`
+	Gate                   Gate                   `json:"gate"`
+	NodeContractDigest     string                 `json:"nodeContractDigest"`
+	NodeKey                string                 `json:"nodeKey"`
+	OperationDigest        string                 `json:"operationDigest"`
+	OperationID            string                 `json:"operationId"`
+	PlanID                 string                 `json:"planId"`
+	PlanRevision           int64                  `json:"planRevision"`
+	Proofs                 []TentacledProof       `json:"proofs"`
+	ProofSetDigest         string                 `json:"proofSetDigest"`
+	ResolvedInputSetDigest string                 `json:"resolvedInputSetDigest"`
+	SourceDigest           string                 `json:"sourceDigest"`
+	SourceEvidenceID       string                 `json:"sourceEvidenceId"`
+	SourceExecution        *FluffySourceExecution `json:"sourceExecution"`
+	Version                int64                  `json:"version"`
+}
+
+type TentacledAuthority struct {
+	AgentID             *string `json:"agentId,omitempty"`
+	ApprovalOperationID string  `json:"approvalOperationId"`
+	CriteriaRevision    int64   `json:"criteriaRevision"`
+	DefinitionRevision  int64   `json:"definitionRevision"`
+	DeviceID            *string `json:"deviceId,omitempty"`
+	GrantDigest         *string `json:"grantDigest,omitempty"`
+	GrantID             *string `json:"grantId,omitempty"`
+	GrantRevision       *int64  `json:"grantRevision,omitempty"`
+	PlanDigest          string  `json:"planDigest"`
+	RoomID              string  `json:"roomId"`
+	Service             Service `json:"service"`
+	TaskID              string  `json:"taskId"`
+	ActorMemberID       *string `json:"actorMemberId,omitempty"`
+	BindingDigest       *string `json:"bindingDigest,omitempty"`
+	ProviderBindingID   *string `json:"providerBindingId,omitempty"`
+}
+
+type TentacledProof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type FluffySourceExecution struct {
+	DispatchGeneration int64  `json:"dispatchGeneration"`
+	RunID              string `json:"runId"`
+}
+
+type StickyProof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type BraggadociousSource struct {
+	AgentID      *string             `json:"agentId,omitempty"`
+	ArtifactPins []StickyArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *StickyOrigin      `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type StickyArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type StickyOrigin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type FluffyVerification struct {
+	Kind          VerificationKind `json:"kind"`
+	Receipt       IndecentReceipt  `json:"receipt"`
+	ReceiptDigest *string          `json:"receiptDigest,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt *string `json:"recordedAt,omitempty"`
+}
+
+type IndecentReceipt struct {
+	Authority            *StickyAuthority `json:"authority,omitempty"`
+	BindingID            *string          `json:"bindingId"`
+	CandidateCommit      *string          `json:"candidateCommit,omitempty"`
+	CandidateTree        *string          `json:"candidateTree,omitempty"`
+	DurationMilliseconds *int64           `json:"durationMilliseconds,omitempty"`
+	Execution            *FluffyExecution `json:"execution"`
+	ExitCode             *int64           `json:"exitCode"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	FinishedAt             *string            `json:"finishedAt,omitempty"`
+	InputDigest            *string            `json:"inputDigest,omitempty"`
+	IntegrationOperationID *string            `json:"integrationOperationId"`
+	LogArtifact            *FluffyLogArtifact `json:"logArtifact"`
+	OperationID            string             `json:"operationId"`
+	Outcome                ReceiptOutcome     `json:"outcome"`
+	Plan                   *FluffyPlan        `json:"plan,omitempty"`
+	Profile                *FluffyProfile     `json:"profile,omitempty"`
+	RepositoryID           string             `json:"repositoryId"`
+	RequestDigest          *string            `json:"requestDigest,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	StartedAt      *string `json:"startedAt,omitempty"`
+	VerificationID *string `json:"verificationId,omitempty"`
+	Version        int64   `json:"version"`
+	Attempt        *int64  `json:"attempt,omitempty"`
+	CheckKey       *string `json:"checkKey,omitempty"`
+	Commit         *string `json:"commit,omitempty"`
+	ObservationID  *string `json:"observationId,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                *string `json:"observedAt,omitempty"`
+	ProfileDigest             *string `json:"profileDigest,omitempty"`
+	ProfileID                 *string `json:"profileId,omitempty"`
+	ProfileRevision           *int64  `json:"profileRevision,omitempty"`
+	ProviderBindingID         *string `json:"providerBindingId,omitempty"`
+	ProviderObservationDigest *string `json:"providerObservationDigest,omitempty"`
+	ProviderRepositoryID      *string `json:"providerRepositoryId,omitempty"`
+	ReceiptDigest             *string `json:"receiptDigest,omitempty"`
+	SourceEvidenceID          *string `json:"sourceEvidenceId,omitempty"`
+	Tree                      *string `json:"tree,omitempty"`
+}
+
+type StickyAuthority struct {
+	DeviceID          *string       `json:"deviceId,omitempty"`
+	Kind              AuthorityKind `json:"kind"`
+	Attempt           *int64        `json:"attempt,omitempty"`
+	CheckKey          *string       `json:"checkKey,omitempty"`
+	ProviderBindingID *string       `json:"providerBindingId,omitempty"`
+}
+
+type FluffyExecution struct {
+	AgentID             string `json:"agentId"`
+	ApprovalOperationID string `json:"approvalOperationId"`
+	CriteriaRevision    int64  `json:"criteriaRevision"`
+	DefinitionRevision  int64  `json:"definitionRevision"`
+	DeviceID            string `json:"deviceId"`
+	DispatchGeneration  int64  `json:"dispatchGeneration"`
+	NodeKey             string `json:"nodeKey"`
+	PlanControlRevision int64  `json:"planControlRevision"`
+	PlanDigest          string `json:"planDigest"`
+	PlanID              string `json:"planId"`
+	PlanRevision        int64  `json:"planRevision"`
+	RoomID              string `json:"roomId"`
+	RunID               string `json:"runId"`
+	TaskID              string `json:"taskId"`
+	TaskRevision        int64  `json:"taskRevision"`
+}
+
+type FluffyLogArtifact struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+}
+
+type FluffyPlan struct {
+	ApprovalOperationID string `json:"approvalOperationId"`
+	Digest              string `json:"digest"`
+	PlanID              string `json:"planId"`
+	Revision            int64  `json:"revision"`
+	RoomID              string `json:"roomId"`
+	RootTaskID          string `json:"rootTaskId"`
+}
+
+type FluffyProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type ExecutionEvidenceNode struct {
+	Integration                  ExecutionEvidenceNodeIntegration                   `json:"integration"`
+	NextAction                   ExecutionEvidenceNodeNextAction                    `json:"nextAction"`
+	NodeKey                      string                                             `json:"nodeKey"`
+	Remote                       *ExecutionEvidenceNodeRemote                       `json:"remote"`
+	RequiredVerificationProfiles []ExecutionEvidenceNodeRequiredVerificationProfile `json:"requiredVerificationProfiles"`
+	Runtime                      *ExecutionEvidenceNodeRuntime                      `json:"runtime"`
+	Stages                       []ExecutionEvidenceNodeStage                       `json:"stages"`
+	TaskID                       string                                             `json:"taskId"`
+	Verifications                []ExecutionEvidenceNodeVerification                `json:"verifications"`
+}
+
+type ExecutionEvidenceNodeIntegration struct {
+	Approval        *TentacledApproval     `json:"approval"`
+	BlockerCode     *string                `json:"blockerCode"`
+	CommandTemplate *IndigoCommandTemplate `json:"commandTemplate"`
+	Receipt         *HilariousReceipt      `json:"receipt"`
+	State           IntegrationState       `json:"state"`
+	Target          *MischievousTarget     `json:"target"`
+}
+
+type TentacledApproval struct {
+	ApprovalDigest string `json:"approvalDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ApprovedAt         string `json:"approvedAt"`
+	ApprovedByMemberID string `json:"approvedByMemberId"`
+	CandidateCommit    string `json:"candidateCommit"`
+	CandidateTree      string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline               string                      `json:"deadline"`
+	InputDigest            string                      `json:"inputDigest"`
+	IntegrationOperationID string                      `json:"integrationOperationId"`
+	MaterializationDigest  string                      `json:"materializationDigest"`
+	NodeKey                string                      `json:"nodeKey"`
+	OperationID            string                      `json:"operationId"`
+	PlanID                 string                      `json:"planId"`
+	PlanRevision           int64                       `json:"planRevision"`
+	Target                 CunningTarget               `json:"target"`
+	VerificationReceipts   []IndigoVerificationReceipt `json:"verificationReceipts"`
+}
+
+type CunningTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type IndigoVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type IndigoCommandTemplate struct {
+	CandidateCommit string `json:"candidateCommit"`
+	CandidateTree   string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline              string                        `json:"deadline"`
+	InputDigest           string                        `json:"inputDigest"`
+	MaterializationDigest string                        `json:"materializationDigest"`
+	NodeKey               string                        `json:"nodeKey"`
+	PlanID                string                        `json:"planId"`
+	PlanRevision          int64                         `json:"planRevision"`
+	Target                MagentaTarget                 `json:"target"`
+	VerificationReceipts  []IndecentVerificationReceipt `json:"verificationReceipts"`
+}
+
+type MagentaTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type IndecentVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type HilariousReceipt struct {
+	Receipt       AmbitiousReceipt `json:"receipt"`
+	ReceiptDigest string           `json:"receiptDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt string `json:"recordedAt"`
+}
+
+type AmbitiousReceipt struct {
+	BindingID             string      `json:"bindingId"`
+	CandidateCommit       *string     `json:"candidateCommit"`
+	CandidateTree         *string     `json:"candidateTree"`
+	CheckpointID          *string     `json:"checkpointId"`
+	DeviceID              string      `json:"deviceId"`
+	ErrorCode             *string     `json:"errorCode"`
+	Kind                  KindElement `json:"kind"`
+	ObservedGeneration    *string     `json:"observedGeneration"`
+	OperationID           string      `json:"operationId"`
+	ProviderObservationID *string     `json:"providerObservationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt     string                          `json:"recordedAt"`
+	RepositoryID   string                          `json:"repositoryId"`
+	RequestDigest  string                          `json:"requestDigest"`
+	State          RepositoryOperationReceiptState `json:"state"`
+	Target         *FriskyTarget                   `json:"target"`
+	VerificationID *string                         `json:"verificationId"`
+	Version        int64                           `json:"version"`
+}
+
+type FriskyTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type MischievousTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type ExecutionEvidenceNodeNextAction struct {
+	ActorKind  ActorKind      `json:"actorKind"`
+	Kind       NextActionKind `json:"kind"`
+	ReasonCode ReasonCode     `json:"reasonCode"`
+}
+
+type ExecutionEvidenceNodeRemote struct {
+	AdoptionState     AdoptionState              `json:"adoptionState"`
+	BlockerCodes      []BlockerCode              `json:"blockerCodes"`
+	CiReceipts        []TentacledCiReceipt       `json:"ciReceipts"`
+	CommandTemplate   *IndecentCommandTemplate   `json:"commandTemplate"`
+	CommitObservation TentacledCommitObservation `json:"commitObservation"`
+	Source            Source1                    `json:"source"`
+}
+
+type TentacledCiReceipt struct {
+	Attempt       int64  `json:"attempt"`
+	CheckKey      string `json:"checkKey"`
+	Commit        string `json:"commit"`
+	ObservationID string `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                       `json:"observedAt"`
+	OperationID               string                       `json:"operationId"`
+	Outcome                   ProviderCIObservationOutcome `json:"outcome"`
+	ProfileDigest             string                       `json:"profileDigest"`
+	ProfileID                 string                       `json:"profileId"`
+	ProfileRevision           int64                        `json:"profileRevision"`
+	ProviderBindingID         string                       `json:"providerBindingId"`
+	ProviderObservationDigest string                       `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                       `json:"providerRepositoryId"`
+	ReceiptDigest             string                       `json:"receiptDigest"`
+	RepositoryID              string                       `json:"repositoryId"`
+	SourceEvidenceID          string                       `json:"sourceEvidenceId"`
+	Tree                      string                       `json:"tree"`
+	Version                   int64                        `json:"version"`
+}
+
+type IndecentCommandTemplate struct {
+	ExpectedControlRevision int64  `json:"expectedControlRevision"`
+	ExpectedPlanDigest      string `json:"expectedPlanDigest"`
+	NodeKey                 string `json:"nodeKey"`
+	PlanRevision            int64  `json:"planRevision"`
+	ProviderBindingID       string `json:"providerBindingId"`
+	SourceEvidenceID        string `json:"sourceEvidenceId"`
+}
+
+type TentacledCommitObservation struct {
+	BaseCommit        string       `json:"baseCommit"`
+	BundleArtifactID  string       `json:"bundleArtifactId"`
+	BundleByteLength  int64        `json:"bundleByteLength"`
+	BundleDigest      string       `json:"bundleDigest"`
+	Commit            string       `json:"commit"`
+	InputDigest       string       `json:"inputDigest"`
+	ObjectFormat      ObjectFormat `json:"objectFormat"`
+	ObservationDigest string       `json:"observationDigest"`
+	ObservationID     string       `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                `json:"observedAt"`
+	OperationID               string                `json:"operationId"`
+	PatchArtifactID           string                `json:"patchArtifactId"`
+	PatchArtifactRevision     int64                 `json:"patchArtifactRevision"`
+	PatchByteLength           int64                 `json:"patchByteLength"`
+	PatchDigest               string                `json:"patchDigest"`
+	PatchOutputSlot           string                `json:"patchOutputSlot"`
+	ProviderBindingID         string                `json:"providerBindingId"`
+	ProviderObservationDigest string                `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                `json:"providerRepositoryId"`
+	PullRequest               *TentacledPullRequest `json:"pullRequest"`
+	RepositoryID              string                `json:"repositoryId"`
+	TaskID                    string                `json:"taskId"`
+	Tree                      string                `json:"tree"`
+	Version                   int64                 `json:"version"`
+}
+
+type TentacledPullRequest struct {
+	BaseRef string `json:"baseRef"`
+	HeadRef string `json:"headRef"`
+	Number  int64  `json:"number"`
+}
+
+type Source1 struct {
+	AgentID      *string             `json:"agentId,omitempty"`
+	ArtifactPins []IndigoArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *IndigoOrigin      `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type IndigoArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type IndigoOrigin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type ExecutionEvidenceNodeRequiredVerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type ExecutionEvidenceNodeRuntime struct {
+	BlockerCode        *string       `json:"blockerCode"`
+	DispatchGeneration *int64        `json:"dispatchGeneration"`
+	LastRunState       *LastRunState `json:"lastRunState"`
+	ProjectionRevision int64         `json:"projectionRevision"`
+	RunID              *string       `json:"runId"`
+	State              RuntimeState  `json:"state"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type ExecutionEvidenceNodeStage struct {
+	Adoption              TentacledAdoption `json:"adoption"`
+	Gate                  Gate              `json:"gate"`
+	MaterializationDigest string            `json:"materializationDigest"`
+	Proofs                []IndecentProof   `json:"proofs"`
+	Source                Source2           `json:"source"`
+}
+
+type TentacledAdoption struct {
+	AdoptionDigest string          `json:"adoptionDigest"`
+	AdoptionID     string          `json:"adoptionId"`
+	Authority      IndigoAuthority `json:"authority"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt              string                    `json:"createdAt"`
+	Gate                   Gate                      `json:"gate"`
+	NodeContractDigest     string                    `json:"nodeContractDigest"`
+	NodeKey                string                    `json:"nodeKey"`
+	OperationDigest        string                    `json:"operationDigest"`
+	OperationID            string                    `json:"operationId"`
+	PlanID                 string                    `json:"planId"`
+	PlanRevision           int64                     `json:"planRevision"`
+	Proofs                 []IndigoProof             `json:"proofs"`
+	ProofSetDigest         string                    `json:"proofSetDigest"`
+	ResolvedInputSetDigest string                    `json:"resolvedInputSetDigest"`
+	SourceDigest           string                    `json:"sourceDigest"`
+	SourceEvidenceID       string                    `json:"sourceEvidenceId"`
+	SourceExecution        *TentacledSourceExecution `json:"sourceExecution"`
+	Version                int64                     `json:"version"`
+}
+
+type IndigoAuthority struct {
+	AgentID             *string `json:"agentId,omitempty"`
+	ApprovalOperationID string  `json:"approvalOperationId"`
+	CriteriaRevision    int64   `json:"criteriaRevision"`
+	DefinitionRevision  int64   `json:"definitionRevision"`
+	DeviceID            *string `json:"deviceId,omitempty"`
+	GrantDigest         *string `json:"grantDigest,omitempty"`
+	GrantID             *string `json:"grantId,omitempty"`
+	GrantRevision       *int64  `json:"grantRevision,omitempty"`
+	PlanDigest          string  `json:"planDigest"`
+	RoomID              string  `json:"roomId"`
+	Service             Service `json:"service"`
+	TaskID              string  `json:"taskId"`
+	ActorMemberID       *string `json:"actorMemberId,omitempty"`
+	BindingDigest       *string `json:"bindingDigest,omitempty"`
+	ProviderBindingID   *string `json:"providerBindingId,omitempty"`
+}
+
+type IndigoProof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type TentacledSourceExecution struct {
+	DispatchGeneration int64  `json:"dispatchGeneration"`
+	RunID              string `json:"runId"`
+}
+
+type IndecentProof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type Source2 struct {
+	AgentID      *string               `json:"agentId,omitempty"`
+	ArtifactPins []IndecentArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *IndecentOrigin    `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type IndecentArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type IndecentOrigin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type ExecutionEvidenceNodeVerification struct {
+	Kind          VerificationKind `json:"kind"`
+	Receipt       CunningReceipt   `json:"receipt"`
+	ReceiptDigest *string          `json:"receiptDigest,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt *string `json:"recordedAt,omitempty"`
+}
+
+type CunningReceipt struct {
+	Authority            *IndecentAuthority  `json:"authority,omitempty"`
+	BindingID            *string             `json:"bindingId"`
+	CandidateCommit      *string             `json:"candidateCommit,omitempty"`
+	CandidateTree        *string             `json:"candidateTree,omitempty"`
+	DurationMilliseconds *int64              `json:"durationMilliseconds,omitempty"`
+	Execution            *TentacledExecution `json:"execution"`
+	ExitCode             *int64              `json:"exitCode"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	FinishedAt             *string               `json:"finishedAt,omitempty"`
+	InputDigest            *string               `json:"inputDigest,omitempty"`
+	IntegrationOperationID *string               `json:"integrationOperationId"`
+	LogArtifact            *TentacledLogArtifact `json:"logArtifact"`
+	OperationID            string                `json:"operationId"`
+	Outcome                ReceiptOutcome        `json:"outcome"`
+	Plan                   *TentacledPlan        `json:"plan,omitempty"`
+	Profile                *TentacledProfile     `json:"profile,omitempty"`
+	RepositoryID           string                `json:"repositoryId"`
+	RequestDigest          *string               `json:"requestDigest,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	StartedAt      *string `json:"startedAt,omitempty"`
+	VerificationID *string `json:"verificationId,omitempty"`
+	Version        int64   `json:"version"`
+	Attempt        *int64  `json:"attempt,omitempty"`
+	CheckKey       *string `json:"checkKey,omitempty"`
+	Commit         *string `json:"commit,omitempty"`
+	ObservationID  *string `json:"observationId,omitempty"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                *string `json:"observedAt,omitempty"`
+	ProfileDigest             *string `json:"profileDigest,omitempty"`
+	ProfileID                 *string `json:"profileId,omitempty"`
+	ProfileRevision           *int64  `json:"profileRevision,omitempty"`
+	ProviderBindingID         *string `json:"providerBindingId,omitempty"`
+	ProviderObservationDigest *string `json:"providerObservationDigest,omitempty"`
+	ProviderRepositoryID      *string `json:"providerRepositoryId,omitempty"`
+	ReceiptDigest             *string `json:"receiptDigest,omitempty"`
+	SourceEvidenceID          *string `json:"sourceEvidenceId,omitempty"`
+	Tree                      *string `json:"tree,omitempty"`
+}
+
+type IndecentAuthority struct {
+	DeviceID          *string       `json:"deviceId,omitempty"`
+	Kind              AuthorityKind `json:"kind"`
+	Attempt           *int64        `json:"attempt,omitempty"`
+	CheckKey          *string       `json:"checkKey,omitempty"`
+	ProviderBindingID *string       `json:"providerBindingId,omitempty"`
+}
+
+type TentacledExecution struct {
+	AgentID             string `json:"agentId"`
+	ApprovalOperationID string `json:"approvalOperationId"`
+	CriteriaRevision    int64  `json:"criteriaRevision"`
+	DefinitionRevision  int64  `json:"definitionRevision"`
+	DeviceID            string `json:"deviceId"`
+	DispatchGeneration  int64  `json:"dispatchGeneration"`
+	NodeKey             string `json:"nodeKey"`
+	PlanControlRevision int64  `json:"planControlRevision"`
+	PlanDigest          string `json:"planDigest"`
+	PlanID              string `json:"planId"`
+	PlanRevision        int64  `json:"planRevision"`
+	RoomID              string `json:"roomId"`
+	RunID               string `json:"runId"`
+	TaskID              string `json:"taskId"`
+	TaskRevision        int64  `json:"taskRevision"`
+}
+
+type TentacledLogArtifact struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+}
+
+type TentacledPlan struct {
+	ApprovalOperationID string `json:"approvalOperationId"`
+	Digest              string `json:"digest"`
+	PlanID              string `json:"planId"`
+	Revision            int64  `json:"revision"`
+	RoomID              string `json:"roomId"`
+	RootTaskID          string `json:"rootTaskId"`
+}
+
+type TentacledProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Revision  int64  `json:"revision"`
+}
+
+type ExecutionEvidenceStage struct {
+	Adoption              ExecutionEvidenceStageAdoption `json:"adoption"`
+	Gate                  Gate                           `json:"gate"`
+	MaterializationDigest string                         `json:"materializationDigest"`
+	Proofs                []ExecutionEvidenceStageProof  `json:"proofs"`
+	Source                ExecutionEvidenceStageSource   `json:"source"`
+}
+
+type ExecutionEvidenceStageAdoption struct {
+	AdoptionDigest string             `json:"adoptionDigest"`
+	AdoptionID     string             `json:"adoptionId"`
+	Authority      HilariousAuthority `json:"authority"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt              string                 `json:"createdAt"`
+	Gate                   Gate                   `json:"gate"`
+	NodeContractDigest     string                 `json:"nodeContractDigest"`
+	NodeKey                string                 `json:"nodeKey"`
+	OperationDigest        string                 `json:"operationDigest"`
+	OperationID            string                 `json:"operationId"`
+	PlanID                 string                 `json:"planId"`
+	PlanRevision           int64                  `json:"planRevision"`
+	Proofs                 []HilariousProof       `json:"proofs"`
+	ProofSetDigest         string                 `json:"proofSetDigest"`
+	ResolvedInputSetDigest string                 `json:"resolvedInputSetDigest"`
+	SourceDigest           string                 `json:"sourceDigest"`
+	SourceEvidenceID       string                 `json:"sourceEvidenceId"`
+	SourceExecution        *StickySourceExecution `json:"sourceExecution"`
+	Version                int64                  `json:"version"`
+}
+
+type HilariousAuthority struct {
+	AgentID             *string `json:"agentId,omitempty"`
+	ApprovalOperationID string  `json:"approvalOperationId"`
+	CriteriaRevision    int64   `json:"criteriaRevision"`
+	DefinitionRevision  int64   `json:"definitionRevision"`
+	DeviceID            *string `json:"deviceId,omitempty"`
+	GrantDigest         *string `json:"grantDigest,omitempty"`
+	GrantID             *string `json:"grantId,omitempty"`
+	GrantRevision       *int64  `json:"grantRevision,omitempty"`
+	PlanDigest          string  `json:"planDigest"`
+	RoomID              string  `json:"roomId"`
+	Service             Service `json:"service"`
+	TaskID              string  `json:"taskId"`
+	ActorMemberID       *string `json:"actorMemberId,omitempty"`
+	BindingDigest       *string `json:"bindingDigest,omitempty"`
+	ProviderBindingID   *string `json:"providerBindingId,omitempty"`
+}
+
+type HilariousProof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type StickySourceExecution struct {
+	DispatchGeneration int64  `json:"dispatchGeneration"`
+	RunID              string `json:"runId"`
+}
+
+type ExecutionEvidenceStageProof struct {
+	Kind              GateProofRefKind `json:"kind"`
+	OperationID       string           `json:"operationId"`
+	ProofDigest       string           `json:"proofDigest"`
+	ResultID          *string          `json:"resultId,omitempty"`
+	ResultVersion     *int64           `json:"resultVersion,omitempty"`
+	ProfileDigest     *string          `json:"profileDigest,omitempty"`
+	ProfileID         *string          `json:"profileId,omitempty"`
+	ProfileRevision   *int64           `json:"profileRevision,omitempty"`
+	VerificationID    *string          `json:"verificationId,omitempty"`
+	Attempt           *int64           `json:"attempt,omitempty"`
+	CheckKey          *string          `json:"checkKey,omitempty"`
+	ObservationID     *string          `json:"observationId,omitempty"`
+	ProviderBindingID *string          `json:"providerBindingId,omitempty"`
+	RepositoryID      *string          `json:"repositoryId,omitempty"`
+	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
+}
+
+type ExecutionEvidenceStageSource struct {
+	AgentID      *string                `json:"agentId,omitempty"`
+	ArtifactPins []HilariousArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *HilariousOrigin   `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type HilariousArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type HilariousOrigin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type ExecutionEvidenceNextAction struct {
+	ActorKind  ActorKind      `json:"actorKind"`
+	Kind       NextActionKind `json:"kind"`
+	ReasonCode ReasonCode     `json:"reasonCode"`
+}
+
+type RemoteEvidenceView struct {
+	AdoptionState     AdoptionState                       `json:"adoptionState"`
+	BlockerCodes      []BlockerCode                       `json:"blockerCodes"`
+	CiReceipts        []RemoteEvidenceViewCiReceipt       `json:"ciReceipts"`
+	CommandTemplate   *RemoteEvidenceViewCommandTemplate  `json:"commandTemplate"`
+	CommitObservation RemoteEvidenceViewCommitObservation `json:"commitObservation"`
+	Source            RemoteEvidenceViewSource            `json:"source"`
+}
+
+type RemoteEvidenceViewCiReceipt struct {
+	Attempt       int64  `json:"attempt"`
+	CheckKey      string `json:"checkKey"`
+	Commit        string `json:"commit"`
+	ObservationID string `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                       `json:"observedAt"`
+	OperationID               string                       `json:"operationId"`
+	Outcome                   ProviderCIObservationOutcome `json:"outcome"`
+	ProfileDigest             string                       `json:"profileDigest"`
+	ProfileID                 string                       `json:"profileId"`
+	ProfileRevision           int64                        `json:"profileRevision"`
+	ProviderBindingID         string                       `json:"providerBindingId"`
+	ProviderObservationDigest string                       `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                       `json:"providerRepositoryId"`
+	ReceiptDigest             string                       `json:"receiptDigest"`
+	RepositoryID              string                       `json:"repositoryId"`
+	SourceEvidenceID          string                       `json:"sourceEvidenceId"`
+	Tree                      string                       `json:"tree"`
+	Version                   int64                        `json:"version"`
+}
+
+type RemoteEvidenceViewCommandTemplate struct {
+	ExpectedControlRevision int64  `json:"expectedControlRevision"`
+	ExpectedPlanDigest      string `json:"expectedPlanDigest"`
+	NodeKey                 string `json:"nodeKey"`
+	PlanRevision            int64  `json:"planRevision"`
+	ProviderBindingID       string `json:"providerBindingId"`
+	SourceEvidenceID        string `json:"sourceEvidenceId"`
+}
+
+type RemoteEvidenceViewCommitObservation struct {
+	BaseCommit        string       `json:"baseCommit"`
+	BundleArtifactID  string       `json:"bundleArtifactId"`
+	BundleByteLength  int64        `json:"bundleByteLength"`
+	BundleDigest      string       `json:"bundleDigest"`
+	Commit            string       `json:"commit"`
+	InputDigest       string       `json:"inputDigest"`
+	ObjectFormat      ObjectFormat `json:"objectFormat"`
+	ObservationDigest string       `json:"observationDigest"`
+	ObservationID     string       `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string             `json:"observedAt"`
+	OperationID               string             `json:"operationId"`
+	PatchArtifactID           string             `json:"patchArtifactId"`
+	PatchArtifactRevision     int64              `json:"patchArtifactRevision"`
+	PatchByteLength           int64              `json:"patchByteLength"`
+	PatchDigest               string             `json:"patchDigest"`
+	PatchOutputSlot           string             `json:"patchOutputSlot"`
+	ProviderBindingID         string             `json:"providerBindingId"`
+	ProviderObservationDigest string             `json:"providerObservationDigest"`
+	ProviderRepositoryID      string             `json:"providerRepositoryId"`
+	PullRequest               *StickyPullRequest `json:"pullRequest"`
+	RepositoryID              string             `json:"repositoryId"`
+	TaskID                    string             `json:"taskId"`
+	Tree                      string             `json:"tree"`
+	Version                   int64              `json:"version"`
+}
+
+type StickyPullRequest struct {
+	BaseRef string `json:"baseRef"`
+	HeadRef string `json:"headRef"`
+	Number  int64  `json:"number"`
+}
+
+type RemoteEvidenceViewSource struct {
+	AgentID      *string                `json:"agentId,omitempty"`
+	ArtifactPins []AmbitiousArtifactPin `json:"artifactPins"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt          string             `json:"createdAt"`
+	CriteriaRevision   *int64             `json:"criteriaRevision,omitempty"`
+	DefinitionRevision *int64             `json:"definitionRevision,omitempty"`
+	DeviceID           *string            `json:"deviceId,omitempty"`
+	DispatchGeneration *int64             `json:"dispatchGeneration,omitempty"`
+	Kind               SourceEvidenceKind `json:"kind"`
+	ResultID           *string            `json:"resultId,omitempty"`
+	ResultVersion      *int64             `json:"resultVersion,omitempty"`
+	RoomID             *string            `json:"roomId,omitempty"`
+	SourceDigest       string             `json:"sourceDigest"`
+	SourceEvidenceID   string             `json:"sourceEvidenceId"`
+	SourceRunID        *string            `json:"sourceRunId,omitempty"`
+	TaskID             *string            `json:"taskId,omitempty"`
+	Version            int64              `json:"version"`
+	Commit             *string            `json:"commit,omitempty"`
+	InputDigest        *string            `json:"inputDigest,omitempty"`
+	ObjectFormat       *ObjectFormat      `json:"objectFormat,omitempty"`
+	Origin             *AmbitiousOrigin   `json:"origin,omitempty"`
+	RepositoryID       *string            `json:"repositoryId,omitempty"`
+	Tree               *string            `json:"tree,omitempty"`
+}
+
+type AmbitiousArtifactPin struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ByteLength       int64             `json:"byteLength"`
+	ContentDigest    string            `json:"contentDigest"`
+	Kind             ExternalInputKind `json:"kind"`
+	OutputSlot       string            `json:"outputSlot"`
+}
+
+type AmbitiousOrigin struct {
+	BindingID                 *string    `json:"bindingId,omitempty"`
+	CaptureOperationID        *string    `json:"captureOperationId,omitempty"`
+	CheckpointDigest          *string    `json:"checkpointDigest,omitempty"`
+	CheckpointID              *string    `json:"checkpointId,omitempty"`
+	CompanionSourceDigest     *string    `json:"companionSourceDigest,omitempty"`
+	CompanionSourceEvidenceID *string    `json:"companionSourceEvidenceId,omitempty"`
+	DeviceID                  *string    `json:"deviceId,omitempty"`
+	DispatchGeneration        *int64     `json:"dispatchGeneration,omitempty"`
+	Kind                      OriginKind `json:"kind"`
+	SourceRunID               *string    `json:"sourceRunId,omitempty"`
+	CommitBundleArtifactID    *string    `json:"commitBundleArtifactId,omitempty"`
+	ObservationDigest         *string    `json:"observationDigest,omitempty"`
+	ObservationID             *string    `json:"observationId,omitempty"`
+	ProviderBindingID         *string    `json:"providerBindingId,omitempty"`
+	ProviderRepositoryID      *string    `json:"providerRepositoryId,omitempty"`
+}
+
+type IntegrationView struct {
+	Approval        *IntegrationViewApproval        `json:"approval"`
+	BlockerCode     *string                         `json:"blockerCode"`
+	CommandTemplate *IntegrationViewCommandTemplate `json:"commandTemplate"`
+	Receipt         *IntegrationViewReceipt         `json:"receipt"`
+	State           IntegrationState                `json:"state"`
+	Target          *IntegrationViewTarget          `json:"target"`
+}
+
+type IntegrationViewApproval struct {
+	ApprovalDigest string `json:"approvalDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ApprovedAt         string `json:"approvedAt"`
+	ApprovedByMemberID string `json:"approvedByMemberId"`
+	CandidateCommit    string `json:"candidateCommit"`
+	CandidateTree      string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline               string                         `json:"deadline"`
+	InputDigest            string                         `json:"inputDigest"`
+	IntegrationOperationID string                         `json:"integrationOperationId"`
+	MaterializationDigest  string                         `json:"materializationDigest"`
+	NodeKey                string                         `json:"nodeKey"`
+	OperationID            string                         `json:"operationId"`
+	PlanID                 string                         `json:"planId"`
+	PlanRevision           int64                          `json:"planRevision"`
+	Target                 BraggadociousTarget            `json:"target"`
+	VerificationReceipts   []HilariousVerificationReceipt `json:"verificationReceipts"`
+}
+
+type BraggadociousTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type HilariousVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type IntegrationViewCommandTemplate struct {
+	CandidateCommit string `json:"candidateCommit"`
+	CandidateTree   string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline              string                         `json:"deadline"`
+	InputDigest           string                         `json:"inputDigest"`
+	MaterializationDigest string                         `json:"materializationDigest"`
+	NodeKey               string                         `json:"nodeKey"`
+	PlanID                string                         `json:"planId"`
+	PlanRevision          int64                          `json:"planRevision"`
+	Target                Target1                        `json:"target"`
+	VerificationReceipts  []AmbitiousVerificationReceipt `json:"verificationReceipts"`
+}
+
+type Target1 struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type AmbitiousVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type IntegrationViewReceipt struct {
+	Receipt       MagentaReceipt `json:"receipt"`
+	ReceiptDigest string         `json:"receiptDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt string `json:"recordedAt"`
+}
+
+type MagentaReceipt struct {
+	BindingID             string      `json:"bindingId"`
+	CandidateCommit       *string     `json:"candidateCommit"`
+	CandidateTree         *string     `json:"candidateTree"`
+	CheckpointID          *string     `json:"checkpointId"`
+	DeviceID              string      `json:"deviceId"`
+	ErrorCode             *string     `json:"errorCode"`
+	Kind                  KindElement `json:"kind"`
+	ObservedGeneration    *string     `json:"observedGeneration"`
+	OperationID           string      `json:"operationId"`
+	ProviderObservationID *string     `json:"providerObservationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RecordedAt     string                          `json:"recordedAt"`
+	RepositoryID   string                          `json:"repositoryId"`
+	RequestDigest  string                          `json:"requestDigest"`
+	State          RepositoryOperationReceiptState `json:"state"`
+	Target         *Target2                        `json:"target"`
+	VerificationID *string                         `json:"verificationId"`
+	Version        int64                           `json:"version"`
+}
+
+type Target2 struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type IntegrationViewTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type RemoteEvidenceAdoptionCommandTemplate struct {
+	ExpectedControlRevision int64  `json:"expectedControlRevision"`
+	ExpectedPlanDigest      string `json:"expectedPlanDigest"`
+	NodeKey                 string `json:"nodeKey"`
+	PlanRevision            int64  `json:"planRevision"`
+	ProviderBindingID       string `json:"providerBindingId"`
+	SourceEvidenceID        string `json:"sourceEvidenceId"`
+}
+
+type RemoteEvidenceAdoptionCommand struct {
+	ExpectedControlRevision int64  `json:"expectedControlRevision"`
+	ExpectedPlanDigest      string `json:"expectedPlanDigest"`
+	NodeKey                 string `json:"nodeKey"`
+	OperationID             string `json:"operationId"`
+	PlanRevision            int64  `json:"planRevision"`
+	ProviderBindingID       string `json:"providerBindingId"`
+	SourceEvidenceID        string `json:"sourceEvidenceId"`
+}
+
+type IntegrationApprovalCommandTemplate struct {
+	CandidateCommit string `json:"candidateCommit"`
+	CandidateTree   string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline              string                                                  `json:"deadline"`
+	InputDigest           string                                                  `json:"inputDigest"`
+	MaterializationDigest string                                                  `json:"materializationDigest"`
+	NodeKey               string                                                  `json:"nodeKey"`
+	PlanID                string                                                  `json:"planId"`
+	PlanRevision          int64                                                   `json:"planRevision"`
+	Target                IntegrationApprovalCommandTemplateTarget                `json:"target"`
+	VerificationReceipts  []IntegrationApprovalCommandTemplateVerificationReceipt `json:"verificationReceipts"`
+}
+
+type IntegrationApprovalCommandTemplateTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type IntegrationApprovalCommandTemplateVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type IntegrationApprovalCommand struct {
+	CandidateCommit string `json:"candidateCommit"`
+	CandidateTree   string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline              string                                          `json:"deadline"`
+	InputDigest           string                                          `json:"inputDigest"`
+	MaterializationDigest string                                          `json:"materializationDigest"`
+	NodeKey               string                                          `json:"nodeKey"`
+	OperationID           string                                          `json:"operationId"`
+	PlanID                string                                          `json:"planId"`
+	PlanRevision          int64                                           `json:"planRevision"`
+	Target                IntegrationApprovalCommandTarget                `json:"target"`
+	VerificationReceipts  []IntegrationApprovalCommandVerificationReceipt `json:"verificationReceipts"`
+}
+
+type IntegrationApprovalCommandTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type IntegrationApprovalCommandVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
+type IntegrationApprovalRecord struct {
+	ApprovalDigest string `json:"approvalDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ApprovedAt         string `json:"approvedAt"`
+	ApprovedByMemberID string `json:"approvedByMemberId"`
+	CandidateCommit    string `json:"candidateCommit"`
+	CandidateTree      string `json:"candidateTree"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	Deadline               string                                         `json:"deadline"`
+	InputDigest            string                                         `json:"inputDigest"`
+	IntegrationOperationID string                                         `json:"integrationOperationId"`
+	MaterializationDigest  string                                         `json:"materializationDigest"`
+	NodeKey                string                                         `json:"nodeKey"`
+	OperationID            string                                         `json:"operationId"`
+	PlanID                 string                                         `json:"planId"`
+	PlanRevision           int64                                          `json:"planRevision"`
+	Target                 IntegrationApprovalRecordTarget                `json:"target"`
+	VerificationReceipts   []IntegrationApprovalRecordVerificationReceipt `json:"verificationReceipts"`
+}
+
+type IntegrationApprovalRecordTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type IntegrationApprovalRecordVerificationReceipt struct {
+	ReceiptDigest  string `json:"receiptDigest"`
+	VerificationID string `json:"verificationId"`
+}
+
 type AuthorKind string
 
 const (
-	Agent            AuthorKind = "agent"
+	KindAgent        AuthorKind = "agent"
 	Member           AuthorKind = "member"
 	PurpleDiscussion AuthorKind = "discussion"
 )
 
-type SourceKind string
+type PurpleKind string
 
 const (
-	Artifact         SourceKind = "artifact"
-	FluffyDiscussion SourceKind = "discussion"
-	Memory           SourceKind = "memory"
-	Message          SourceKind = "message"
-	Result           SourceKind = "result"
-	RunEvent         SourceKind = "run_event"
+	Artifact         PurpleKind = "artifact"
+	FluffyDiscussion PurpleKind = "discussion"
+	Memory           PurpleKind = "memory"
+	Message          PurpleKind = "message"
+	Result           PurpleKind = "result"
+	RunEvent         PurpleKind = "run_event"
 )
 
 type Gate string
@@ -3495,12 +5577,12 @@ const (
 	New      TaskMode = "new"
 )
 
-type Integration string
+type IntegrationEnum string
 
 const (
-	LocalIntegration  Integration = "local_integration"
-	RemotePR          Integration = "remote_pr"
-	ReviewedCandidate Integration = "reviewed_candidate"
+	LocalIntegration  IntegrationEnum = "local_integration"
+	RemotePR          IntegrationEnum = "remote_pr"
+	ReviewedCandidate IntegrationEnum = "reviewed_candidate"
 )
 
 type SchemaVersion string
@@ -3512,12 +5594,12 @@ const (
 type ExecutionPlanProjectionState string
 
 const (
-	Completed      ExecutionPlanProjectionState = "completed"
 	Draft          ExecutionPlanProjectionState = "draft"
 	Paused         ExecutionPlanProjectionState = "paused"
 	PurpleCanceled ExecutionPlanProjectionState = "canceled"
 	Running        ExecutionPlanProjectionState = "running"
 	StateApproved  ExecutionPlanProjectionState = "approved"
+	StateCompleted ExecutionPlanProjectionState = "completed"
 	StateReview    ExecutionPlanProjectionState = "review"
 )
 
@@ -3539,8 +5621,8 @@ const (
 type PreviousRunState string
 
 const (
-	Expired                        PreviousRunState = "expired"
 	PreviousRunStateCanceled       PreviousRunState = "canceled"
+	PreviousRunStateExpired        PreviousRunState = "expired"
 	PreviousRunStateFailed         PreviousRunState = "failed"
 	PreviousRunStateOutcomeUnknown PreviousRunState = "outcome_unknown"
 )
@@ -3584,18 +5666,18 @@ const (
 type RepositoryOperationReceiptState string
 
 const (
-	FluffyCanceled      RepositoryOperationReceiptState = "canceled"
-	Prepared            RepositoryOperationReceiptState = "prepared"
-	StateFailed         RepositoryOperationReceiptState = "failed"
-	StateOutcomeUnknown RepositoryOperationReceiptState = "outcome_unknown"
-	Succeeded           RepositoryOperationReceiptState = "succeeded"
+	FluffyCanceled       RepositoryOperationReceiptState = "canceled"
+	Prepared             RepositoryOperationReceiptState = "prepared"
+	PurpleFailed         RepositoryOperationReceiptState = "failed"
+	PurpleOutcomeUnknown RepositoryOperationReceiptState = "outcome_unknown"
+	PurpleSucceeded      RepositoryOperationReceiptState = "succeeded"
 )
 
 type AuthorityKind string
 
 const (
-	Bridge AuthorityKind = "bridge"
-	Ci     AuthorityKind = "ci"
+	Ci         AuthorityKind = "ci"
+	KindBridge AuthorityKind = "bridge"
 )
 
 type Outcome = VerificationReceiptOutcome
@@ -3610,11 +5692,11 @@ const (
 type VerificationReceiptOutcome string
 
 const (
-	PurpleFailed         VerificationReceiptOutcome = "failed"
-	PurpleOutcomeUnknown VerificationReceiptOutcome = "outcome_unknown"
+	FluffyFailed         VerificationReceiptOutcome = "failed"
+	FluffyOutcomeUnknown VerificationReceiptOutcome = "outcome_unknown"
 	PurplePassed         VerificationReceiptOutcome = "passed"
+	PurpleTimedOut       VerificationReceiptOutcome = "timed_out"
 	TentacledCanceled    VerificationReceiptOutcome = "canceled"
-	TimedOut             VerificationReceiptOutcome = "timed_out"
 )
 
 type SourceEvidenceKind string
@@ -3679,9 +5761,130 @@ const (
 type ProviderCIObservationOutcome string
 
 const (
-	FluffyFailed         ProviderCIObservationOutcome = "failed"
-	FluffyOutcomeUnknown ProviderCIObservationOutcome = "outcome_unknown"
-	FluffyPassed         ProviderCIObservationOutcome = "passed"
-	StickyCanceled       ProviderCIObservationOutcome = "canceled"
-	Timeout              ProviderCIObservationOutcome = "timeout"
+	FluffyPassed            ProviderCIObservationOutcome = "passed"
+	PurpleTimeout           ProviderCIObservationOutcome = "timeout"
+	StickyCanceled          ProviderCIObservationOutcome = "canceled"
+	TentacledFailed         ProviderCIObservationOutcome = "failed"
+	TentacledOutcomeUnknown ProviderCIObservationOutcome = "outcome_unknown"
+)
+
+type IntegrationState string
+
+const (
+	ApprovalReady            IntegrationState = "approval_ready"
+	Conflict                 IntegrationState = "conflict"
+	FluffySucceeded          IntegrationState = "succeeded"
+	IndigoCanceled           IntegrationState = "canceled"
+	NotRequired              IntegrationState = "not_required"
+	Pending                  IntegrationState = "pending"
+	StickyFailed             IntegrationState = "failed"
+	StickyOutcomeUnknown     IntegrationState = "outcome_unknown"
+	WaitingForVerifiedOutput IntegrationState = "waiting_for_verified_output"
+)
+
+type ActorKind string
+
+const (
+	ActorKindAgent   ActorKind = "agent"
+	ActorKindBridge  ActorKind = "bridge"
+	ActorKindNone    ActorKind = "none"
+	ProviderOperator ActorKind = "provider_operator"
+	TaskOwner        ActorKind = "task_owner"
+	TeamOwner        ActorKind = "team_owner"
+)
+
+type NextActionKind string
+
+const (
+	AdoptRemoteEvidence       NextActionKind = "adopt_remote_evidence"
+	ApproveIntegration        NextActionKind = "approve_integration"
+	InspectVerification       NextActionKind = "inspect_verification"
+	InvestigateOutcomeUnknown NextActionKind = "investigate_outcome_unknown"
+	KindNone                  NextActionKind = "none"
+	ProduceCandidate          NextActionKind = "produce_candidate"
+	ResolveTargetConflict     NextActionKind = "resolve_target_conflict"
+	RetryNode                 NextActionKind = "retry_node"
+	WaitForIntegration        NextActionKind = "wait_for_integration"
+	WaitForVerification       NextActionKind = "wait_for_verification"
+)
+
+type ReasonCode string
+
+const (
+	CandidateMissing                         ReasonCode = "CANDIDATE_MISSING"
+	IntegrationApprovalReady                 ReasonCode = "INTEGRATION_APPROVAL_READY"
+	IntegrationOutcomeUnknown                ReasonCode = "INTEGRATION_OUTCOME_UNKNOWN"
+	IntegrationPending                       ReasonCode = "INTEGRATION_PENDING"
+	IntegrationTargetConflict                ReasonCode = "INTEGRATION_TARGET_CONFLICT"
+	NoAction                                 ReasonCode = "NO_ACTION"
+	NodeRetryAvailable                       ReasonCode = "NODE_RETRY_AVAILABLE"
+	ReasonCodeREMOTEINPUTATTESTATIONREQUIRED ReasonCode = "REMOTE_INPUT_ATTESTATION_REQUIRED"
+	RemoteAdoptionReady                      ReasonCode = "REMOTE_ADOPTION_READY"
+	VerificationFailed                       ReasonCode = "VERIFICATION_FAILED"
+	VerificationPending                      ReasonCode = "VERIFICATION_PENDING"
+)
+
+type AdoptionState string
+
+const (
+	Adopted              AdoptionState = "adopted"
+	AdoptionStateBlocked AdoptionState = "blocked"
+	AdoptionStateReady   AdoptionState = "ready"
+)
+
+type BlockerCode string
+
+const (
+	BlockerCodeREMOTEINPUTATTESTATIONREQUIRED BlockerCode = "REMOTE_INPUT_ATTESTATION_REQUIRED"
+	RemoteAdoptionAlreadyRetained             BlockerCode = "REMOTE_ADOPTION_ALREADY_RETAINED"
+	RemoteLocalAttemptExists                  BlockerCode = "REMOTE_LOCAL_ATTEMPT_EXISTS"
+	RemotePlanStale                           BlockerCode = "REMOTE_PLAN_STALE"
+	RemoteProviderRevoked                     BlockerCode = "REMOTE_PROVIDER_REVOKED"
+	RemoteRequiredCiMissing                   BlockerCode = "REMOTE_REQUIRED_CI_MISSING"
+	RemoteRequiredCiNotPassed                 BlockerCode = "REMOTE_REQUIRED_CI_NOT_PASSED"
+)
+
+type LastRunState string
+
+const (
+	Delivered                  LastRunState = "delivered"
+	InputRequired              LastRunState = "input_required"
+	LastRunStateCanceled       LastRunState = "canceled"
+	LastRunStateCompleted      LastRunState = "completed"
+	LastRunStateExpired        LastRunState = "expired"
+	LastRunStateFailed         LastRunState = "failed"
+	LastRunStateOutcomeUnknown LastRunState = "outcome_unknown"
+	LastRunStateWorking        LastRunState = "working"
+	Queued                     LastRunState = "queued"
+)
+
+type RuntimeState string
+
+const (
+	AwaitingResult       RuntimeState = "awaiting_result"
+	Dispatched           RuntimeState = "dispatched"
+	IndecentCanceled     RuntimeState = "canceled"
+	IndigoFailed         RuntimeState = "failed"
+	IndigoOutcomeUnknown RuntimeState = "outcome_unknown"
+	StateBlocked         RuntimeState = "blocked"
+	StateReady           RuntimeState = "ready"
+	StateWorking         RuntimeState = "working"
+)
+
+type VerificationKind string
+
+const (
+	LocalVerification VerificationKind = "local_verification"
+	RemoteCi          VerificationKind = "remote_ci"
+)
+
+type ReceiptOutcome string
+
+const (
+	FluffyTimedOut         ReceiptOutcome = "timed_out"
+	FluffyTimeout          ReceiptOutcome = "timeout"
+	HilariousCanceled      ReceiptOutcome = "canceled"
+	IndecentFailed         ReceiptOutcome = "failed"
+	IndecentOutcomeUnknown ReceiptOutcome = "outcome_unknown"
+	TentacledPassed        ReceiptOutcome = "passed"
 )

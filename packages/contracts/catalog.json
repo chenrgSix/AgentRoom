@@ -65,6 +65,11 @@
       "id": "https://agentroom.dev/schemas/work/remote-evidence.schema.json",
       "kind": "work",
       "path": "schemas/work/remote-evidence.schema.json"
+    },
+    {
+      "id": "https://agentroom.dev/schemas/work/execution-evidence-view.schema.json",
+      "kind": "work",
+      "path": "schemas/work/execution-evidence-view.schema.json"
     }
   ]
 }

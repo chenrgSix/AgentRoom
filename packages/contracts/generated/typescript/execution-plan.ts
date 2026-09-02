@@ -86,7 +86,7 @@ export interface PurpleSourceRevision {
 export interface PurpleSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -95,7 +95,7 @@ export interface PurpleSource {
   resultId?:     string;
 }
 
-export type SourceKind = "artifact" | "run_event" | "message" | "memory" | "discussion" | "result";
+export type PurpleKind = "artifact" | "run_event" | "message" | "memory" | "discussion" | "result";
 
 export interface PurpleUnresolvedQuestion {
   questionKey: string;
@@ -219,7 +219,7 @@ export interface PurpleVerificationProfile {
 
 export interface PurplePolicy {
   budget:                          FluffyBudget;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              PurpleIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -230,7 +230,7 @@ export interface FluffyBudget {
   maxRunAttempts:              number;
 }
 
-export type Integration = "reviewed_candidate" | "local_integration" | "remote_pr";
+export type IntegrationEnum = "reviewed_candidate" | "local_integration" | "remote_pr";
 
 export interface PurpleIntegrationTarget {
   expectedCommit: string;
@@ -256,7 +256,7 @@ export interface ExecutionDecisionSourceSnapshot {
 export interface ExecutionDecisionSourceSnapshotSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -267,10 +267,10 @@ export interface ExecutionDecisionSourceSnapshotSource {
 
 export interface ExecutionPlanPage {
   nextAfterPlanId: null | string;
-  plans:           PlanElement[];
+  plans:           ExecutionPlanPagePlan[];
 }
 
-export interface PlanElement {
+export interface ExecutionPlanPagePlan {
   compiledTasks:   PurpleCompiledTask[];
   controlRevision: number;
   /**
@@ -354,7 +354,7 @@ export interface FluffySourceRevision {
 export interface FluffySource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -475,7 +475,7 @@ export interface FluffyVerificationProfile {
 
 export interface FluffyPolicy {
   budget:                          StickyBudget;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              FluffyIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -552,7 +552,7 @@ export interface TentacledSourceRevision {
 export interface TentacledSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -673,7 +673,7 @@ export interface TentacledVerificationProfile {
 
 export interface TentacledPolicy {
   budget:                          IndecentBudget;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              TentacledIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -733,7 +733,7 @@ export interface ContentSourceRevision {
 export interface ContentSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -769,7 +769,7 @@ export interface ExecutionDecisionContentSourceRevision {
 export interface ExecutionDecisionContentSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -816,7 +816,7 @@ export interface StickySourceRevision {
 export interface StickySource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -937,7 +937,7 @@ export interface StickyVerificationProfile {
 
 export interface ExecutionPlanDefinitionPolicy {
   budget:                          AmbitiousBudget;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              StickyIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -992,7 +992,7 @@ export interface IndigoSourceRevision {
 export interface IndigoSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -1113,7 +1113,7 @@ export interface IndigoVerificationProfile {
 
 export interface StickyPolicy {
   budget:                          MagentaBudget;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              IndigoIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -1263,7 +1263,7 @@ export interface IndecentVerificationProfile {
 
 export interface DiscussionPlanProposalDraftPolicy {
   budget:                          MischievousBudget;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              IndecentIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -1319,7 +1319,7 @@ export interface IndecentSourceRevision {
 export interface IndecentSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -1440,7 +1440,7 @@ export interface HilariousVerificationProfile {
 
 export interface IndigoPolicy {
   budget:                          Budget1;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              HilariousIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -1609,7 +1609,7 @@ export interface HilariousSourceRevision {
 export interface HilariousSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -1730,7 +1730,7 @@ export interface AmbitiousVerificationProfile {
 
 export interface IndecentPolicy {
   budget:                          Budget3;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              AmbitiousIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -1883,7 +1883,7 @@ export interface AmbitiousSourceRevision {
 export interface AmbitiousSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -2004,7 +2004,7 @@ export interface CunningVerificationProfile {
 
 export interface HilariousPolicy {
   budget:                          Budget5;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              CunningIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -2064,7 +2064,7 @@ export interface CunningSourceRevision {
 export interface CunningSource {
   artifactId?:   string;
   evidenceRefId: string;
-  kind:          SourceKind;
+  kind:          PurpleKind;
   runId?:        string;
   sequence?:     number;
   messageId?:    string;
@@ -2185,7 +2185,7 @@ export interface MagentaVerificationProfile {
 
 export interface AmbitiousPolicy {
   budget:                          Budget7;
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              MagentaIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
@@ -3062,7 +3062,7 @@ export interface VerificationReceipt {
   finishedAt:             string;
   inputDigest:            string;
   integrationOperationId: null | string;
-  logArtifact:            LogArtifact | null;
+  logArtifact:            VerificationReceiptLogArtifact | null;
   operationId:            string;
   outcome:                VerificationReceiptOutcome;
   plan:                   VerificationReceiptPlan;
@@ -3108,7 +3108,7 @@ export interface VerificationReceiptExecution {
   taskRevision:        number;
 }
 
-export interface LogArtifact {
+export interface VerificationReceiptLogArtifact {
   artifactId:       string;
   artifactRevision: number;
   byteLength:       number;
@@ -3135,7 +3135,7 @@ export interface VerificationReceiptProfile {
 
 export interface SourceEvidence {
   agentId?:     string;
-  artifactPins: [ArtifactPin, ...ArtifactPin[]];
+  artifactPins: [SourceEvidenceArtifactPin, ...SourceEvidenceArtifactPin[]];
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -3157,12 +3157,12 @@ export interface SourceEvidence {
   commit?:             string;
   inputDigest?:        string;
   objectFormat?:       ObjectFormat;
-  origin?:             Origin;
+  origin?:             SourceEvidenceOrigin;
   repositoryId?:       string;
   tree?:               string;
 }
 
-export interface ArtifactPin {
+export interface SourceEvidenceArtifactPin {
   artifactId:       string;
   artifactRevision: number;
   byteLength:       number;
@@ -3175,7 +3175,7 @@ export type SourceEvidenceKind = "task_result" | "repository_commit";
 
 export type ObjectFormat = "sha1" | "sha256";
 
-export interface Origin {
+export interface SourceEvidenceOrigin {
   bindingId?:                 string;
   captureOperationId?:        string;
   checkpointDigest?:          string;
@@ -3231,12 +3231,12 @@ export interface EvidenceAdoption {
   operationId:            string;
   planId:                 string;
   planRevision:           number;
-  proofs:                 [Proof, ...Proof[]];
+  proofs:                 [EvidenceAdoptionProof, ...EvidenceAdoptionProof[]];
   proofSetDigest:         string;
   resolvedInputSetDigest: string;
   sourceDigest:           string;
   sourceEvidenceId:       string;
-  sourceExecution:        SourceExecution | null;
+  sourceExecution:        EvidenceAdoptionSourceExecution | null;
   version:                number;
 }
 
@@ -3260,7 +3260,7 @@ export interface EvidenceAdoptionAuthority {
 
 export type Service = "execution_materialization" | "remote_evidence_adoption";
 
-export interface Proof {
+export interface EvidenceAdoptionProof {
   kind:               GateProofRefKind;
   operationId:        string;
   proofDigest:        string;
@@ -3278,7 +3278,7 @@ export interface Proof {
   resultingCommit?:   string;
 }
 
-export interface SourceExecution {
+export interface EvidenceAdoptionSourceExecution {
   dispatchGeneration: number;
   runId:              string;
 }
@@ -3309,7 +3309,7 @@ export interface EvidenceReuseContract {
 }
 
 export interface IntegrationPolicy {
-  integration:                     Integration;
+  integration:                     IntegrationEnum;
   integrationTargets:              IntegrationPolicyIntegrationTarget[];
   requireHumanIntegrationApproval: boolean;
 }
@@ -3609,4 +3609,2224 @@ export interface RemoteCIObservationReceipt {
   sourceEvidenceId:          string;
   tree:                      string;
   version:                   number;
+}
+
+export interface ExecutionEvidencePage {
+  plans:   ExecutionEvidencePagePlan[];
+  taskId:  string;
+  version: number;
+}
+
+export interface ExecutionEvidencePagePlan {
+  controlRevision: number;
+  nodes:           [PlanNode, ...PlanNode[]];
+  planDigest:      string;
+  planId:          string;
+  planRevision:    number;
+  state:           ExecutionPlanProjectionState;
+}
+
+export interface PlanNode {
+  integration:                  PurpleIntegration;
+  nextAction:                   PurpleNextAction;
+  nodeKey:                      string;
+  remote:                       PurpleRemote | null;
+  requiredVerificationProfiles: PurpleRequiredVerificationProfile[];
+  runtime:                      PurpleRuntime | null;
+  stages:                       PurpleStage[];
+  taskId:                       string;
+  verifications:                PurpleVerification[];
+}
+
+export interface PurpleIntegration {
+  approval:        PurpleApproval | null;
+  blockerCode:     null | string;
+  commandTemplate: PurpleCommandTemplate | null;
+  receipt:         PurpleReceipt | null;
+  state:           IntegrationState;
+  target:          StickyTarget | null;
+}
+
+export interface PurpleApproval {
+  approvalDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  approvedAt:         string;
+  approvedByMemberId: string;
+  candidateCommit:    string;
+  candidateTree:      string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:               string;
+  inputDigest:            string;
+  integrationOperationId: string;
+  materializationDigest:  string;
+  nodeKey:                string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  target:                 PurpleTarget;
+  verificationReceipts:   [PurpleVerificationReceipt, ...PurpleVerificationReceipt[]];
+}
+
+export interface PurpleTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface PurpleVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface PurpleCommandTemplate {
+  candidateCommit: string;
+  candidateTree:   string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:              string;
+  inputDigest:           string;
+  materializationDigest: string;
+  nodeKey:               string;
+  planId:                string;
+  planRevision:          number;
+  target:                FluffyTarget;
+  verificationReceipts:  [FluffyVerificationReceipt, ...FluffyVerificationReceipt[]];
+}
+
+export interface FluffyTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface FluffyVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface PurpleReceipt {
+  receipt:       FluffyReceipt;
+  receiptDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt: string;
+}
+
+export interface FluffyReceipt {
+  bindingId:             string;
+  candidateCommit:       null | string;
+  candidateTree:         null | string;
+  checkpointId:          null | string;
+  deviceId:              string;
+  errorCode:             null | string;
+  kind:                  KindElement;
+  observedGeneration:    null | string;
+  operationId:           string;
+  providerObservationId: null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt:     string;
+  repositoryId:   string;
+  requestDigest:  string;
+  state:          RepositoryOperationReceiptState;
+  target:         TentacledTarget | null;
+  verificationId: null | string;
+  version:        number;
+}
+
+export interface TentacledTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export type IntegrationState = "not_required" | "waiting_for_verified_output" | "approval_ready" | "pending" | "succeeded" | "failed" | "canceled" | "outcome_unknown" | "conflict";
+
+export interface StickyTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface PurpleNextAction {
+  actorKind:  ActorKind;
+  kind:       NextActionKind;
+  reasonCode: ReasonCode;
+}
+
+export type ActorKind = "none" | "agent" | "bridge" | "provider_operator" | "task_owner" | "team_owner";
+
+export type NextActionKind = "none" | "produce_candidate" | "wait_for_verification" | "inspect_verification" | "adopt_remote_evidence" | "approve_integration" | "wait_for_integration" | "resolve_target_conflict" | "investigate_outcome_unknown" | "retry_node";
+
+export type ReasonCode = "NO_ACTION" | "CANDIDATE_MISSING" | "VERIFICATION_PENDING" | "VERIFICATION_FAILED" | "REMOTE_ADOPTION_READY" | "INTEGRATION_APPROVAL_READY" | "INTEGRATION_PENDING" | "INTEGRATION_TARGET_CONFLICT" | "INTEGRATION_OUTCOME_UNKNOWN" | "NODE_RETRY_AVAILABLE" | "REMOTE_INPUT_ATTESTATION_REQUIRED";
+
+export interface PurpleRemote {
+  adoptionState:     AdoptionState;
+  blockerCodes:      BlockerCode[];
+  ciReceipts:        PurpleCiReceipt[];
+  commandTemplate:   FluffyCommandTemplate | null;
+  commitObservation: PurpleCommitObservation;
+  source:            MagentaSource;
+}
+
+export type AdoptionState = "blocked" | "ready" | "adopted";
+
+export type BlockerCode = "REMOTE_INPUT_ATTESTATION_REQUIRED" | "REMOTE_PROVIDER_REVOKED" | "REMOTE_REQUIRED_CI_MISSING" | "REMOTE_REQUIRED_CI_NOT_PASSED" | "REMOTE_PLAN_STALE" | "REMOTE_LOCAL_ATTEMPT_EXISTS" | "REMOTE_ADOPTION_ALREADY_RETAINED";
+
+export interface PurpleCiReceipt {
+  attempt:       number;
+  checkKey:      string;
+  commit:        string;
+  observationId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  outcome:                   ProviderCIObservationOutcome;
+  profileDigest:             string;
+  profileId:                 string;
+  profileRevision:           number;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  receiptDigest:             string;
+  repositoryId:              string;
+  sourceEvidenceId:          string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface FluffyCommandTemplate {
+  expectedControlRevision: number;
+  expectedPlanDigest:      string;
+  nodeKey:                 string;
+  planRevision:            number;
+  providerBindingId:       string;
+  sourceEvidenceId:        string;
+}
+
+export interface PurpleCommitObservation {
+  baseCommit:        string;
+  bundleArtifactId:  string;
+  bundleByteLength:  number;
+  bundleDigest:      string;
+  commit:            string;
+  inputDigest:       string;
+  objectFormat:      ObjectFormat;
+  observationDigest: string;
+  observationId:     string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  patchArtifactId:           string;
+  patchArtifactRevision:     number;
+  patchByteLength:           number;
+  patchDigest:               string;
+  patchOutputSlot:           string;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  pullRequest:               PurplePullRequest | null;
+  repositoryId:              string;
+  taskId:                    string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface PurplePullRequest {
+  baseRef: string;
+  headRef: string;
+  number:  number;
+}
+
+export interface MagentaSource {
+  agentId?:     string;
+  artifactPins: [PurpleArtifactPin, ...PurpleArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             PurpleOrigin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface PurpleArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export interface PurpleOrigin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export interface PurpleRequiredVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface PurpleRuntime {
+  blockerCode:        null | string;
+  dispatchGeneration: number | null;
+  lastRunState:       LastRunState | null;
+  projectionRevision: number;
+  runId:              null | string;
+  state:              RuntimeState;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  updatedAt: string;
+}
+
+export type LastRunState = "queued" | "delivered" | "working" | "input_required" | "completed" | "failed" | "canceled" | "expired" | "outcome_unknown";
+
+export type RuntimeState = "blocked" | "ready" | "dispatched" | "working" | "awaiting_result" | "failed" | "canceled" | "outcome_unknown";
+
+export interface PurpleStage {
+  adoption:              PurpleAdoption;
+  gate:                  Gate;
+  materializationDigest: string;
+  proofs:                [FluffyProof, ...FluffyProof[]];
+  source:                FriskySource;
+}
+
+export interface PurpleAdoption {
+  adoptionDigest: string;
+  adoptionId:     string;
+  authority:      PurpleAuthority;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:              string;
+  gate:                   Gate;
+  nodeContractDigest:     string;
+  nodeKey:                string;
+  operationDigest:        string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  proofs:                 [PurpleProof, ...PurpleProof[]];
+  proofSetDigest:         string;
+  resolvedInputSetDigest: string;
+  sourceDigest:           string;
+  sourceEvidenceId:       string;
+  sourceExecution:        PurpleSourceExecution | null;
+  version:                number;
+}
+
+export interface PurpleAuthority {
+  agentId?:            string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId?:           string;
+  grantDigest?:        string;
+  grantId?:            string;
+  grantRevision?:      number;
+  planDigest:          string;
+  roomId:              string;
+  service:             Service;
+  taskId:              string;
+  actorMemberId?:      string;
+  bindingDigest?:      string;
+  providerBindingId?:  string;
+}
+
+export interface PurpleProof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface PurpleSourceExecution {
+  dispatchGeneration: number;
+  runId:              string;
+}
+
+export interface FluffyProof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface FriskySource {
+  agentId?:     string;
+  artifactPins: [FluffyArtifactPin, ...FluffyArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             FluffyOrigin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface FluffyArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export interface FluffyOrigin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export interface PurpleVerification {
+  kind:           VerificationKind;
+  receipt:        TentacledReceipt;
+  receiptDigest?: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt?: string;
+}
+
+export type VerificationKind = "local_verification" | "remote_ci";
+
+export interface TentacledReceipt {
+  authority?:            FluffyAuthority;
+  bindingId?:            null | string;
+  candidateCommit?:      string;
+  candidateTree?:        string;
+  durationMilliseconds?: number;
+  execution?:            PurpleExecution | null;
+  exitCode?:             number | null;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  finishedAt?:             string;
+  inputDigest?:            string;
+  integrationOperationId?: null | string;
+  logArtifact?:            PurpleLogArtifact | null;
+  operationId:             string;
+  outcome:                 ReceiptOutcome;
+  plan?:                   PurplePlan;
+  profile?:                PurpleProfile;
+  repositoryId:            string;
+  requestDigest?:          string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  startedAt?:      string;
+  verificationId?: string;
+  version:         number;
+  attempt?:        number;
+  checkKey?:       string;
+  commit?:         string;
+  observationId?:  string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt?:                string;
+  profileDigest?:             string;
+  profileId?:                 string;
+  profileRevision?:           number;
+  providerBindingId?:         string;
+  providerObservationDigest?: string;
+  providerRepositoryId?:      string;
+  receiptDigest?:             string;
+  sourceEvidenceId?:          string;
+  tree?:                      string;
+}
+
+export interface FluffyAuthority {
+  deviceId?:          string;
+  kind:               AuthorityKind;
+  attempt?:           number;
+  checkKey?:          string;
+  providerBindingId?: string;
+}
+
+export interface PurpleExecution {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface PurpleLogArtifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+}
+
+export type ReceiptOutcome = "passed" | "failed" | "timed_out" | "canceled" | "outcome_unknown" | "timeout";
+
+export interface PurplePlan {
+  approvalOperationId: string;
+  digest:              string;
+  planId:              string;
+  revision:            number;
+  roomId:              string;
+  rootTaskId:          string;
+}
+
+export interface PurpleProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface ExecutionEvidencePlan {
+  controlRevision: number;
+  nodes:           [ExecutionEvidencePlanNode, ...ExecutionEvidencePlanNode[]];
+  planDigest:      string;
+  planId:          string;
+  planRevision:    number;
+  state:           ExecutionPlanProjectionState;
+}
+
+export interface ExecutionEvidencePlanNode {
+  integration:                  FluffyIntegration;
+  nextAction:                   FluffyNextAction;
+  nodeKey:                      string;
+  remote:                       FluffyRemote | null;
+  requiredVerificationProfiles: FluffyRequiredVerificationProfile[];
+  runtime:                      FluffyRuntime | null;
+  stages:                       FluffyStage[];
+  taskId:                       string;
+  verifications:                FluffyVerification[];
+}
+
+export interface FluffyIntegration {
+  approval:        FluffyApproval | null;
+  blockerCode:     null | string;
+  commandTemplate: TentacledCommandTemplate | null;
+  receipt:         StickyReceipt | null;
+  state:           IntegrationState;
+  target:          AmbitiousTarget | null;
+}
+
+export interface FluffyApproval {
+  approvalDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  approvedAt:         string;
+  approvedByMemberId: string;
+  candidateCommit:    string;
+  candidateTree:      string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:               string;
+  inputDigest:            string;
+  integrationOperationId: string;
+  materializationDigest:  string;
+  nodeKey:                string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  target:                 IndigoTarget;
+  verificationReceipts:   [TentacledVerificationReceipt, ...TentacledVerificationReceipt[]];
+}
+
+export interface IndigoTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface TentacledVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface TentacledCommandTemplate {
+  candidateCommit: string;
+  candidateTree:   string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:              string;
+  inputDigest:           string;
+  materializationDigest: string;
+  nodeKey:               string;
+  planId:                string;
+  planRevision:          number;
+  target:                IndecentTarget;
+  verificationReceipts:  [StickyVerificationReceipt, ...StickyVerificationReceipt[]];
+}
+
+export interface IndecentTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface StickyVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface StickyReceipt {
+  receipt:       IndigoReceipt;
+  receiptDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt: string;
+}
+
+export interface IndigoReceipt {
+  bindingId:             string;
+  candidateCommit:       null | string;
+  candidateTree:         null | string;
+  checkpointId:          null | string;
+  deviceId:              string;
+  errorCode:             null | string;
+  kind:                  KindElement;
+  observedGeneration:    null | string;
+  operationId:           string;
+  providerObservationId: null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt:     string;
+  repositoryId:   string;
+  requestDigest:  string;
+  state:          RepositoryOperationReceiptState;
+  target:         HilariousTarget | null;
+  verificationId: null | string;
+  version:        number;
+}
+
+export interface HilariousTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface AmbitiousTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface FluffyNextAction {
+  actorKind:  ActorKind;
+  kind:       NextActionKind;
+  reasonCode: ReasonCode;
+}
+
+export interface FluffyRemote {
+  adoptionState:     AdoptionState;
+  blockerCodes:      BlockerCode[];
+  ciReceipts:        FluffyCiReceipt[];
+  commandTemplate:   StickyCommandTemplate | null;
+  commitObservation: FluffyCommitObservation;
+  source:            MischievousSource;
+}
+
+export interface FluffyCiReceipt {
+  attempt:       number;
+  checkKey:      string;
+  commit:        string;
+  observationId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  outcome:                   ProviderCIObservationOutcome;
+  profileDigest:             string;
+  profileId:                 string;
+  profileRevision:           number;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  receiptDigest:             string;
+  repositoryId:              string;
+  sourceEvidenceId:          string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface StickyCommandTemplate {
+  expectedControlRevision: number;
+  expectedPlanDigest:      string;
+  nodeKey:                 string;
+  planRevision:            number;
+  providerBindingId:       string;
+  sourceEvidenceId:        string;
+}
+
+export interface FluffyCommitObservation {
+  baseCommit:        string;
+  bundleArtifactId:  string;
+  bundleByteLength:  number;
+  bundleDigest:      string;
+  commit:            string;
+  inputDigest:       string;
+  objectFormat:      ObjectFormat;
+  observationDigest: string;
+  observationId:     string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  patchArtifactId:           string;
+  patchArtifactRevision:     number;
+  patchByteLength:           number;
+  patchDigest:               string;
+  patchOutputSlot:           string;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  pullRequest:               FluffyPullRequest | null;
+  repositoryId:              string;
+  taskId:                    string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface FluffyPullRequest {
+  baseRef: string;
+  headRef: string;
+  number:  number;
+}
+
+export interface MischievousSource {
+  agentId?:     string;
+  artifactPins: [TentacledArtifactPin, ...TentacledArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             TentacledOrigin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface TentacledArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export interface TentacledOrigin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export interface FluffyRequiredVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface FluffyRuntime {
+  blockerCode:        null | string;
+  dispatchGeneration: number | null;
+  lastRunState:       LastRunState | null;
+  projectionRevision: number;
+  runId:              null | string;
+  state:              RuntimeState;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  updatedAt: string;
+}
+
+export interface FluffyStage {
+  adoption:              FluffyAdoption;
+  gate:                  Gate;
+  materializationDigest: string;
+  proofs:                [StickyProof, ...StickyProof[]];
+  source:                BraggadociousSource;
+}
+
+export interface FluffyAdoption {
+  adoptionDigest: string;
+  adoptionId:     string;
+  authority:      TentacledAuthority;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:              string;
+  gate:                   Gate;
+  nodeContractDigest:     string;
+  nodeKey:                string;
+  operationDigest:        string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  proofs:                 [TentacledProof, ...TentacledProof[]];
+  proofSetDigest:         string;
+  resolvedInputSetDigest: string;
+  sourceDigest:           string;
+  sourceEvidenceId:       string;
+  sourceExecution:        FluffySourceExecution | null;
+  version:                number;
+}
+
+export interface TentacledAuthority {
+  agentId?:            string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId?:           string;
+  grantDigest?:        string;
+  grantId?:            string;
+  grantRevision?:      number;
+  planDigest:          string;
+  roomId:              string;
+  service:             Service;
+  taskId:              string;
+  actorMemberId?:      string;
+  bindingDigest?:      string;
+  providerBindingId?:  string;
+}
+
+export interface TentacledProof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface FluffySourceExecution {
+  dispatchGeneration: number;
+  runId:              string;
+}
+
+export interface StickyProof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface BraggadociousSource {
+  agentId?:     string;
+  artifactPins: [StickyArtifactPin, ...StickyArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             StickyOrigin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface StickyArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export interface StickyOrigin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export interface FluffyVerification {
+  kind:           VerificationKind;
+  receipt:        IndecentReceipt;
+  receiptDigest?: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt?: string;
+}
+
+export interface IndecentReceipt {
+  authority?:            StickyAuthority;
+  bindingId?:            null | string;
+  candidateCommit?:      string;
+  candidateTree?:        string;
+  durationMilliseconds?: number;
+  execution?:            FluffyExecution | null;
+  exitCode?:             number | null;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  finishedAt?:             string;
+  inputDigest?:            string;
+  integrationOperationId?: null | string;
+  logArtifact?:            FluffyLogArtifact | null;
+  operationId:             string;
+  outcome:                 ReceiptOutcome;
+  plan?:                   FluffyPlan;
+  profile?:                FluffyProfile;
+  repositoryId:            string;
+  requestDigest?:          string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  startedAt?:      string;
+  verificationId?: string;
+  version:         number;
+  attempt?:        number;
+  checkKey?:       string;
+  commit?:         string;
+  observationId?:  string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt?:                string;
+  profileDigest?:             string;
+  profileId?:                 string;
+  profileRevision?:           number;
+  providerBindingId?:         string;
+  providerObservationDigest?: string;
+  providerRepositoryId?:      string;
+  receiptDigest?:             string;
+  sourceEvidenceId?:          string;
+  tree?:                      string;
+}
+
+export interface StickyAuthority {
+  deviceId?:          string;
+  kind:               AuthorityKind;
+  attempt?:           number;
+  checkKey?:          string;
+  providerBindingId?: string;
+}
+
+export interface FluffyExecution {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface FluffyLogArtifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+}
+
+export interface FluffyPlan {
+  approvalOperationId: string;
+  digest:              string;
+  planId:              string;
+  revision:            number;
+  roomId:              string;
+  rootTaskId:          string;
+}
+
+export interface FluffyProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface ExecutionEvidenceNode {
+  integration:                  ExecutionEvidenceNodeIntegration;
+  nextAction:                   ExecutionEvidenceNodeNextAction;
+  nodeKey:                      string;
+  remote:                       ExecutionEvidenceNodeRemote | null;
+  requiredVerificationProfiles: ExecutionEvidenceNodeRequiredVerificationProfile[];
+  runtime:                      ExecutionEvidenceNodeRuntime | null;
+  stages:                       ExecutionEvidenceNodeStage[];
+  taskId:                       string;
+  verifications:                ExecutionEvidenceNodeVerification[];
+}
+
+export interface ExecutionEvidenceNodeIntegration {
+  approval:        TentacledApproval | null;
+  blockerCode:     null | string;
+  commandTemplate: IndigoCommandTemplate | null;
+  receipt:         HilariousReceipt | null;
+  state:           IntegrationState;
+  target:          MischievousTarget | null;
+}
+
+export interface TentacledApproval {
+  approvalDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  approvedAt:         string;
+  approvedByMemberId: string;
+  candidateCommit:    string;
+  candidateTree:      string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:               string;
+  inputDigest:            string;
+  integrationOperationId: string;
+  materializationDigest:  string;
+  nodeKey:                string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  target:                 CunningTarget;
+  verificationReceipts:   [IndigoVerificationReceipt, ...IndigoVerificationReceipt[]];
+}
+
+export interface CunningTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface IndigoVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface IndigoCommandTemplate {
+  candidateCommit: string;
+  candidateTree:   string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:              string;
+  inputDigest:           string;
+  materializationDigest: string;
+  nodeKey:               string;
+  planId:                string;
+  planRevision:          number;
+  target:                MagentaTarget;
+  verificationReceipts:  [IndecentVerificationReceipt, ...IndecentVerificationReceipt[]];
+}
+
+export interface MagentaTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface IndecentVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface HilariousReceipt {
+  receipt:       AmbitiousReceipt;
+  receiptDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt: string;
+}
+
+export interface AmbitiousReceipt {
+  bindingId:             string;
+  candidateCommit:       null | string;
+  candidateTree:         null | string;
+  checkpointId:          null | string;
+  deviceId:              string;
+  errorCode:             null | string;
+  kind:                  KindElement;
+  observedGeneration:    null | string;
+  operationId:           string;
+  providerObservationId: null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt:     string;
+  repositoryId:   string;
+  requestDigest:  string;
+  state:          RepositoryOperationReceiptState;
+  target:         FriskyTarget | null;
+  verificationId: null | string;
+  version:        number;
+}
+
+export interface FriskyTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface MischievousTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface ExecutionEvidenceNodeNextAction {
+  actorKind:  ActorKind;
+  kind:       NextActionKind;
+  reasonCode: ReasonCode;
+}
+
+export interface ExecutionEvidenceNodeRemote {
+  adoptionState:     AdoptionState;
+  blockerCodes:      BlockerCode[];
+  ciReceipts:        TentacledCiReceipt[];
+  commandTemplate:   IndecentCommandTemplate | null;
+  commitObservation: TentacledCommitObservation;
+  source:            Source1;
+}
+
+export interface TentacledCiReceipt {
+  attempt:       number;
+  checkKey:      string;
+  commit:        string;
+  observationId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  outcome:                   ProviderCIObservationOutcome;
+  profileDigest:             string;
+  profileId:                 string;
+  profileRevision:           number;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  receiptDigest:             string;
+  repositoryId:              string;
+  sourceEvidenceId:          string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface IndecentCommandTemplate {
+  expectedControlRevision: number;
+  expectedPlanDigest:      string;
+  nodeKey:                 string;
+  planRevision:            number;
+  providerBindingId:       string;
+  sourceEvidenceId:        string;
+}
+
+export interface TentacledCommitObservation {
+  baseCommit:        string;
+  bundleArtifactId:  string;
+  bundleByteLength:  number;
+  bundleDigest:      string;
+  commit:            string;
+  inputDigest:       string;
+  objectFormat:      ObjectFormat;
+  observationDigest: string;
+  observationId:     string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  patchArtifactId:           string;
+  patchArtifactRevision:     number;
+  patchByteLength:           number;
+  patchDigest:               string;
+  patchOutputSlot:           string;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  pullRequest:               TentacledPullRequest | null;
+  repositoryId:              string;
+  taskId:                    string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface TentacledPullRequest {
+  baseRef: string;
+  headRef: string;
+  number:  number;
+}
+
+export interface Source1 {
+  agentId?:     string;
+  artifactPins: [IndigoArtifactPin, ...IndigoArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             IndigoOrigin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface IndigoArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export interface IndigoOrigin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export interface ExecutionEvidenceNodeRequiredVerificationProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface ExecutionEvidenceNodeRuntime {
+  blockerCode:        null | string;
+  dispatchGeneration: number | null;
+  lastRunState:       LastRunState | null;
+  projectionRevision: number;
+  runId:              null | string;
+  state:              RuntimeState;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  updatedAt: string;
+}
+
+export interface ExecutionEvidenceNodeStage {
+  adoption:              TentacledAdoption;
+  gate:                  Gate;
+  materializationDigest: string;
+  proofs:                [IndecentProof, ...IndecentProof[]];
+  source:                Source2;
+}
+
+export interface TentacledAdoption {
+  adoptionDigest: string;
+  adoptionId:     string;
+  authority:      IndigoAuthority;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:              string;
+  gate:                   Gate;
+  nodeContractDigest:     string;
+  nodeKey:                string;
+  operationDigest:        string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  proofs:                 [IndigoProof, ...IndigoProof[]];
+  proofSetDigest:         string;
+  resolvedInputSetDigest: string;
+  sourceDigest:           string;
+  sourceEvidenceId:       string;
+  sourceExecution:        TentacledSourceExecution | null;
+  version:                number;
+}
+
+export interface IndigoAuthority {
+  agentId?:            string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId?:           string;
+  grantDigest?:        string;
+  grantId?:            string;
+  grantRevision?:      number;
+  planDigest:          string;
+  roomId:              string;
+  service:             Service;
+  taskId:              string;
+  actorMemberId?:      string;
+  bindingDigest?:      string;
+  providerBindingId?:  string;
+}
+
+export interface IndigoProof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface TentacledSourceExecution {
+  dispatchGeneration: number;
+  runId:              string;
+}
+
+export interface IndecentProof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface Source2 {
+  agentId?:     string;
+  artifactPins: [IndecentArtifactPin, ...IndecentArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             IndecentOrigin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface IndecentArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export interface IndecentOrigin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export interface ExecutionEvidenceNodeVerification {
+  kind:           VerificationKind;
+  receipt:        CunningReceipt;
+  receiptDigest?: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt?: string;
+}
+
+export interface CunningReceipt {
+  authority?:            IndecentAuthority;
+  bindingId?:            null | string;
+  candidateCommit?:      string;
+  candidateTree?:        string;
+  durationMilliseconds?: number;
+  execution?:            TentacledExecution | null;
+  exitCode?:             number | null;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  finishedAt?:             string;
+  inputDigest?:            string;
+  integrationOperationId?: null | string;
+  logArtifact?:            TentacledLogArtifact | null;
+  operationId:             string;
+  outcome:                 ReceiptOutcome;
+  plan?:                   TentacledPlan;
+  profile?:                TentacledProfile;
+  repositoryId:            string;
+  requestDigest?:          string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  startedAt?:      string;
+  verificationId?: string;
+  version:         number;
+  attempt?:        number;
+  checkKey?:       string;
+  commit?:         string;
+  observationId?:  string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt?:                string;
+  profileDigest?:             string;
+  profileId?:                 string;
+  profileRevision?:           number;
+  providerBindingId?:         string;
+  providerObservationDigest?: string;
+  providerRepositoryId?:      string;
+  receiptDigest?:             string;
+  sourceEvidenceId?:          string;
+  tree?:                      string;
+}
+
+export interface IndecentAuthority {
+  deviceId?:          string;
+  kind:               AuthorityKind;
+  attempt?:           number;
+  checkKey?:          string;
+  providerBindingId?: string;
+}
+
+export interface TentacledExecution {
+  agentId:             string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId:            string;
+  dispatchGeneration:  number;
+  nodeKey:             string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  roomId:              string;
+  runId:               string;
+  taskId:              string;
+  taskRevision:        number;
+}
+
+export interface TentacledLogArtifact {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+}
+
+export interface TentacledPlan {
+  approvalOperationId: string;
+  digest:              string;
+  planId:              string;
+  revision:            number;
+  roomId:              string;
+  rootTaskId:          string;
+}
+
+export interface TentacledProfile {
+  digest:    string;
+  profileId: string;
+  revision:  number;
+}
+
+export interface ExecutionEvidenceStage {
+  adoption:              ExecutionEvidenceStageAdoption;
+  gate:                  Gate;
+  materializationDigest: string;
+  proofs:                [ExecutionEvidenceStageProof, ...ExecutionEvidenceStageProof[]];
+  source:                ExecutionEvidenceStageSource;
+}
+
+export interface ExecutionEvidenceStageAdoption {
+  adoptionDigest: string;
+  adoptionId:     string;
+  authority:      HilariousAuthority;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:              string;
+  gate:                   Gate;
+  nodeContractDigest:     string;
+  nodeKey:                string;
+  operationDigest:        string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  proofs:                 [HilariousProof, ...HilariousProof[]];
+  proofSetDigest:         string;
+  resolvedInputSetDigest: string;
+  sourceDigest:           string;
+  sourceEvidenceId:       string;
+  sourceExecution:        StickySourceExecution | null;
+  version:                number;
+}
+
+export interface HilariousAuthority {
+  agentId?:            string;
+  approvalOperationId: string;
+  criteriaRevision:    number;
+  definitionRevision:  number;
+  deviceId?:           string;
+  grantDigest?:        string;
+  grantId?:            string;
+  grantRevision?:      number;
+  planDigest:          string;
+  roomId:              string;
+  service:             Service;
+  taskId:              string;
+  actorMemberId?:      string;
+  bindingDigest?:      string;
+  providerBindingId?:  string;
+}
+
+export interface HilariousProof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface StickySourceExecution {
+  dispatchGeneration: number;
+  runId:              string;
+}
+
+export interface ExecutionEvidenceStageProof {
+  kind:               GateProofRefKind;
+  operationId:        string;
+  proofDigest:        string;
+  resultId?:          string;
+  resultVersion?:     number;
+  profileDigest?:     string;
+  profileId?:         string;
+  profileRevision?:   number;
+  verificationId?:    string;
+  attempt?:           number;
+  checkKey?:          string;
+  observationId?:     string;
+  providerBindingId?: string;
+  repositoryId?:      string;
+  resultingCommit?:   string;
+}
+
+export interface ExecutionEvidenceStageSource {
+  agentId?:     string;
+  artifactPins: [HilariousArtifactPin, ...HilariousArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             HilariousOrigin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface HilariousArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export interface HilariousOrigin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export interface ExecutionEvidenceNextAction {
+  actorKind:  ActorKind;
+  kind:       NextActionKind;
+  reasonCode: ReasonCode;
+}
+
+export interface RemoteEvidenceView {
+  adoptionState:     AdoptionState;
+  blockerCodes:      BlockerCode[];
+  ciReceipts:        RemoteEvidenceViewCiReceipt[];
+  commandTemplate:   RemoteEvidenceViewCommandTemplate | null;
+  commitObservation: RemoteEvidenceViewCommitObservation;
+  source:            RemoteEvidenceViewSource;
+}
+
+export interface RemoteEvidenceViewCiReceipt {
+  attempt:       number;
+  checkKey:      string;
+  commit:        string;
+  observationId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  outcome:                   ProviderCIObservationOutcome;
+  profileDigest:             string;
+  profileId:                 string;
+  profileRevision:           number;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  receiptDigest:             string;
+  repositoryId:              string;
+  sourceEvidenceId:          string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface RemoteEvidenceViewCommandTemplate {
+  expectedControlRevision: number;
+  expectedPlanDigest:      string;
+  nodeKey:                 string;
+  planRevision:            number;
+  providerBindingId:       string;
+  sourceEvidenceId:        string;
+}
+
+export interface RemoteEvidenceViewCommitObservation {
+  baseCommit:        string;
+  bundleArtifactId:  string;
+  bundleByteLength:  number;
+  bundleDigest:      string;
+  commit:            string;
+  inputDigest:       string;
+  objectFormat:      ObjectFormat;
+  observationDigest: string;
+  observationId:     string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  patchArtifactId:           string;
+  patchArtifactRevision:     number;
+  patchByteLength:           number;
+  patchDigest:               string;
+  patchOutputSlot:           string;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  pullRequest:               StickyPullRequest | null;
+  repositoryId:              string;
+  taskId:                    string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface StickyPullRequest {
+  baseRef: string;
+  headRef: string;
+  number:  number;
+}
+
+export interface RemoteEvidenceViewSource {
+  agentId?:     string;
+  artifactPins: [AmbitiousArtifactPin, ...AmbitiousArtifactPin[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:           string;
+  criteriaRevision?:   number;
+  definitionRevision?: number;
+  deviceId?:           string;
+  dispatchGeneration?: number;
+  kind:                SourceEvidenceKind;
+  resultId?:           string;
+  resultVersion?:      number;
+  roomId?:             string;
+  sourceDigest:        string;
+  sourceEvidenceId:    string;
+  sourceRunId?:        string;
+  taskId?:             string;
+  version:             number;
+  commit?:             string;
+  inputDigest?:        string;
+  objectFormat?:       ObjectFormat;
+  origin?:             AmbitiousOrigin;
+  repositoryId?:       string;
+  tree?:               string;
+}
+
+export interface AmbitiousArtifactPin {
+  artifactId:       string;
+  artifactRevision: number;
+  byteLength:       number;
+  contentDigest:    string;
+  kind:             ExternalInputKind;
+  outputSlot:       string;
+}
+
+export interface AmbitiousOrigin {
+  bindingId?:                 string;
+  captureOperationId?:        string;
+  checkpointDigest?:          string;
+  checkpointId?:              string;
+  companionSourceDigest?:     string;
+  companionSourceEvidenceId?: string;
+  deviceId?:                  string;
+  dispatchGeneration?:        number;
+  kind:                       OriginKind;
+  sourceRunId?:               string;
+  commitBundleArtifactId?:    string;
+  observationDigest?:         string;
+  observationId?:             string;
+  providerBindingId?:         string;
+  providerRepositoryId?:      string;
+}
+
+export interface IntegrationView {
+  approval:        IntegrationViewApproval | null;
+  blockerCode:     null | string;
+  commandTemplate: IntegrationViewCommandTemplate | null;
+  receipt:         IntegrationViewReceipt | null;
+  state:           IntegrationState;
+  target:          IntegrationViewTarget | null;
+}
+
+export interface IntegrationViewApproval {
+  approvalDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  approvedAt:         string;
+  approvedByMemberId: string;
+  candidateCommit:    string;
+  candidateTree:      string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:               string;
+  inputDigest:            string;
+  integrationOperationId: string;
+  materializationDigest:  string;
+  nodeKey:                string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  target:                 BraggadociousTarget;
+  verificationReceipts:   [HilariousVerificationReceipt, ...HilariousVerificationReceipt[]];
+}
+
+export interface BraggadociousTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface HilariousVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface IntegrationViewCommandTemplate {
+  candidateCommit: string;
+  candidateTree:   string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:              string;
+  inputDigest:           string;
+  materializationDigest: string;
+  nodeKey:               string;
+  planId:                string;
+  planRevision:          number;
+  target:                Target1;
+  verificationReceipts:  [AmbitiousVerificationReceipt, ...AmbitiousVerificationReceipt[]];
+}
+
+export interface Target1 {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface AmbitiousVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface IntegrationViewReceipt {
+  receipt:       MagentaReceipt;
+  receiptDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt: string;
+}
+
+export interface MagentaReceipt {
+  bindingId:             string;
+  candidateCommit:       null | string;
+  candidateTree:         null | string;
+  checkpointId:          null | string;
+  deviceId:              string;
+  errorCode:             null | string;
+  kind:                  KindElement;
+  observedGeneration:    null | string;
+  operationId:           string;
+  providerObservationId: null | string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  recordedAt:     string;
+  repositoryId:   string;
+  requestDigest:  string;
+  state:          RepositoryOperationReceiptState;
+  target:         Target2 | null;
+  verificationId: null | string;
+  version:        number;
+}
+
+export interface Target2 {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface IntegrationViewTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface RemoteEvidenceAdoptionCommandTemplate {
+  expectedControlRevision: number;
+  expectedPlanDigest:      string;
+  nodeKey:                 string;
+  planRevision:            number;
+  providerBindingId:       string;
+  sourceEvidenceId:        string;
+}
+
+export interface RemoteEvidenceAdoptionCommand {
+  expectedControlRevision: number;
+  expectedPlanDigest:      string;
+  nodeKey:                 string;
+  operationId:             string;
+  planRevision:            number;
+  providerBindingId:       string;
+  sourceEvidenceId:        string;
+}
+
+export interface IntegrationApprovalCommandTemplate {
+  candidateCommit: string;
+  candidateTree:   string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:              string;
+  inputDigest:           string;
+  materializationDigest: string;
+  nodeKey:               string;
+  planId:                string;
+  planRevision:          number;
+  target:                IntegrationApprovalCommandTemplateTarget;
+  verificationReceipts:  [IntegrationApprovalCommandTemplateVerificationReceipt, ...IntegrationApprovalCommandTemplateVerificationReceipt[]];
+}
+
+export interface IntegrationApprovalCommandTemplateTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface IntegrationApprovalCommandTemplateVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface IntegrationApprovalCommand {
+  candidateCommit: string;
+  candidateTree:   string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:              string;
+  inputDigest:           string;
+  materializationDigest: string;
+  nodeKey:               string;
+  operationId:           string;
+  planId:                string;
+  planRevision:          number;
+  target:                IntegrationApprovalCommandTarget;
+  verificationReceipts:  [IntegrationApprovalCommandVerificationReceipt, ...IntegrationApprovalCommandVerificationReceipt[]];
+}
+
+export interface IntegrationApprovalCommandTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface IntegrationApprovalCommandVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
+}
+
+export interface IntegrationApprovalRecord {
+  approvalDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  approvedAt:         string;
+  approvedByMemberId: string;
+  candidateCommit:    string;
+  candidateTree:      string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  deadline:               string;
+  inputDigest:            string;
+  integrationOperationId: string;
+  materializationDigest:  string;
+  nodeKey:                string;
+  operationId:            string;
+  planId:                 string;
+  planRevision:           number;
+  target:                 IntegrationApprovalRecordTarget;
+  verificationReceipts:   [IntegrationApprovalRecordVerificationReceipt, ...IntegrationApprovalRecordVerificationReceipt[]];
+}
+
+export interface IntegrationApprovalRecordTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface IntegrationApprovalRecordVerificationReceipt {
+  receiptDigest:  string;
+  verificationId: string;
 }

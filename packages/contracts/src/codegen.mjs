@@ -26,6 +26,8 @@ const EVIDENCE_ADOPTION_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/evidence-adoption.schema.json";
 const REMOTE_EVIDENCE_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/remote-evidence.schema.json";
+const EXECUTION_EVIDENCE_VIEW_SCHEMA_ID =
+  "https://agentroom.dev/schemas/work/execution-evidence-view.schema.json";
 
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
@@ -500,7 +502,10 @@ function renderExecutionValidators(schemas) {
     providerCommitObservation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/providerCommitObservation`,
     remoteCommitObservation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteCommitObservation`,
     providerCIObservation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/providerCIObservation`,
-    remoteCIObservationReceipt: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteCIObservationReceipt`
+    remoteCIObservationReceipt: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteCIObservationReceipt`,
+    executionEvidencePage: `${EXECUTION_EVIDENCE_VIEW_SCHEMA_ID}#/$defs/executionEvidencePage`,
+    remoteEvidenceAdoptionCommand: `${EXECUTION_EVIDENCE_VIEW_SCHEMA_ID}#/$defs/remoteEvidenceAdoptionCommand`,
+    integrationApprovalCommand: `${EXECUTION_EVIDENCE_VIEW_SCHEMA_ID}#/$defs/integrationApprovalCommand`
   }).trimEnd()}\n`;
 }
 
@@ -1413,6 +1418,9 @@ export async function generateContractTypes(packageRoot) {
   const executionRuntimeSchema = schemas.get(EXECUTION_RUNTIME_SCHEMA_ID);
   const evidenceAdoptionSchema = schemas.get(EVIDENCE_ADOPTION_SCHEMA_ID);
   const remoteEvidenceSchema = schemas.get(REMOTE_EVIDENCE_SCHEMA_ID);
+  const executionEvidenceViewSchema = schemas.get(
+    EXECUTION_EVIDENCE_VIEW_SCHEMA_ID
+  );
 
   if (!bridgeSchema) {
     throw new Error(`Missing code generation schema: ${BRIDGE_SCHEMA_ID}`);
@@ -1434,6 +1442,11 @@ export async function generateContractTypes(packageRoot) {
   }
   if (!remoteEvidenceSchema) {
     throw new Error(`Missing code generation schema: ${REMOTE_EVIDENCE_SCHEMA_ID}`);
+  }
+  if (!executionEvidenceViewSchema) {
+    throw new Error(
+      `Missing code generation schema: ${EXECUTION_EVIDENCE_VIEW_SCHEMA_ID}`
+    );
   }
 
   const bridgeCodegen = createBridgeCodegenSchemas(bridgeSchema);
@@ -1523,6 +1536,23 @@ export async function generateContractTypes(packageRoot) {
     ["ProviderCIObservation", "providerCIObservation"],
     ["RemoteCIObservationReceipt", "remoteCIObservationReceipt"]
   ]));
+  executionCodegen.push(...createDefinitionCodegenSchemas(
+    executionEvidenceViewSchema,
+    [
+      ["ExecutionEvidencePage", "executionEvidencePage"],
+      ["ExecutionEvidencePlan", "executionEvidencePlan"],
+      ["ExecutionEvidenceNode", "executionEvidenceNode"],
+      ["ExecutionEvidenceStage", "evidenceStage"],
+      ["ExecutionEvidenceNextAction", "nextAction"],
+      ["RemoteEvidenceView", "remoteEvidenceView"],
+      ["IntegrationView", "integrationView"],
+      ["RemoteEvidenceAdoptionCommandTemplate", "remoteEvidenceAdoptionCommandTemplate"],
+      ["RemoteEvidenceAdoptionCommand", "remoteEvidenceAdoptionCommand"],
+      ["IntegrationApprovalCommandTemplate", "integrationApprovalCommandTemplate"],
+      ["IntegrationApprovalCommand", "integrationApprovalCommand"],
+      ["IntegrationApprovalRecord", "integrationApprovalRecord"]
+    ]
+  ));
   const bridgeSchemas = bridgeCodegen.types.map((entry) => ({
     ...entry,
     sourceSchema: bridgeSchema
@@ -1694,6 +1724,12 @@ export async function generateContractTypes(packageRoot) {
           remoteCIObservationReceipt: "remoteCIObservationReceipt"
         }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
           dereference(remoteEvidenceSchema.$defs[definition], remoteEvidenceSchema, schemas), false)]))
+        , ...Object.fromEntries(Object.entries({
+          executionEvidencePage: "executionEvidencePage",
+          remoteEvidenceAdoptionCommand: "remoteEvidenceAdoptionCommand",
+          integrationApprovalCommand: "integrationApprovalCommand"
+        }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
+          dereference(executionEvidenceViewSchema.$defs[definition], executionEvidenceViewSchema, schemas), false)]))
       }
     }, null, 2)}\n`,
     goExecutionRuntime: formatGo(await readFile(path.join(packageRoot, "src/go-execution-runtime.go.template"), "utf8")),

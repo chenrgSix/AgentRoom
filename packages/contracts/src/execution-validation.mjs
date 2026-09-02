@@ -309,6 +309,107 @@ function assertEvidenceReuseContractSemantics(value) {
   })}`, "EVIDENCE_REUSE_CONTRACT_ID_MISMATCH");
 }
 
+const evidenceGateOrder = new Map([
+  ["accepted_result", 0],
+  ["verified_output", 1],
+  ["integrated_commit", 2]
+]);
+
+function verificationOrderKey(value) {
+  return value.kind === "local_verification"
+    ? `${value.kind}\0${value.receipt.verificationId}`
+    : `${value.kind}\0${value.receipt.checkKey}\0${String(value.receipt.attempt).padStart(16, "0")}`;
+}
+
+function assertExecutionEvidencePageSemantics(value) {
+  ordered(value.plans, by("planId"), "EXECUTION_EVIDENCE_PLAN_ORDER");
+  for (const plan of value.plans) {
+    ordered(plan.nodes, by("nodeKey"), "EXECUTION_EVIDENCE_NODE_ORDER");
+    for (const node of plan.nodes) {
+      ordered(node.requiredVerificationProfiles, by("profileId"),
+        "EXECUTION_EVIDENCE_PROFILE_ORDER");
+      requireCondition(node.stages.every((stage, index) => index === 0 ||
+        evidenceGateOrder.get(node.stages[index - 1].gate) <
+          evidenceGateOrder.get(stage.gate)),
+      "EXECUTION_EVIDENCE_STAGE_ORDER");
+      ordered(node.verifications,
+        (left, right) => binaryCompare(verificationOrderKey(left),
+          verificationOrderKey(right)),
+        "EXECUTION_EVIDENCE_VERIFICATION_ORDER");
+      for (const stage of node.stages) {
+        assertSourceEvidenceSemantics(stage.source);
+        stage.proofs.forEach((proof) =>
+          assertExecutionCommand("gateProofRef", proof));
+        assertEvidenceAdoptionSemantics(stage.adoption);
+        requireCondition(
+          stage.adoption.planId === plan.planId &&
+          stage.adoption.planRevision === plan.planRevision &&
+          stage.adoption.nodeKey === node.nodeKey &&
+          stage.adoption.gate === stage.gate &&
+          stage.adoption.sourceEvidenceId === stage.source.sourceEvidenceId &&
+          stage.adoption.sourceDigest === stage.source.sourceDigest &&
+          canonicalExecutionJSON(stage.adoption.proofs) ===
+            canonicalExecutionJSON(stage.proofs),
+          "EXECUTION_EVIDENCE_STAGE_IDENTITY_MISMATCH"
+        );
+      }
+      if (node.remote) {
+        const { commitObservation, source, ciReceipts, blockerCodes } = node.remote;
+        assertRemoteCommitObservationSemantics(commitObservation);
+        assertSourceEvidenceSemantics(source);
+        ciReceipts.forEach((receipt) => {
+          requireCondition(receipt.receiptDigest ===
+            remoteCIObservationReceiptDigest(receipt),
+          "REMOTE_CI_RECEIPT_DIGEST_MISMATCH");
+        });
+        ordered(ciReceipts, (left, right) =>
+          binaryCompare(left.checkKey, right.checkKey) ||
+          left.attempt - right.attempt,
+        "EXECUTION_EVIDENCE_REMOTE_CI_ORDER");
+        requireCondition(blockerCodes.every((code, index) => index === 0 ||
+          binaryCompare(blockerCodes[index - 1], code) < 0),
+        "EXECUTION_EVIDENCE_BLOCKER_ORDER");
+        requireCondition(
+          source.kind === "repository_commit" &&
+          source.origin.kind === "remote_observation" &&
+          source.repositoryId === commitObservation.repositoryId &&
+          source.commit === commitObservation.commit &&
+          source.tree === commitObservation.tree &&
+          source.origin.providerBindingId ===
+            commitObservation.providerBindingId &&
+          source.origin.observationId === commitObservation.observationId &&
+          source.origin.observationDigest ===
+            commitObservation.observationDigest &&
+          ciReceipts.every((receipt) =>
+            receipt.sourceEvidenceId === source.sourceEvidenceId &&
+            receipt.providerBindingId === commitObservation.providerBindingId &&
+            receipt.repositoryId === source.repositoryId &&
+            receipt.commit === source.commit && receipt.tree === source.tree),
+        "EXECUTION_EVIDENCE_REMOTE_IDENTITY_MISMATCH"
+        );
+      }
+      if (node.remote?.commandTemplate) {
+        const template = node.remote.commandTemplate;
+        requireCondition(template.planRevision === plan.planRevision &&
+          template.nodeKey === node.nodeKey &&
+          template.expectedPlanDigest === plan.planDigest &&
+          template.expectedControlRevision === plan.controlRevision &&
+          template.sourceEvidenceId === node.remote.source.sourceEvidenceId &&
+          template.providerBindingId ===
+            node.remote.commitObservation.providerBindingId,
+        "EXECUTION_EVIDENCE_REMOTE_COMMAND_MISMATCH");
+      }
+      if (node.integration.commandTemplate) {
+        const template = node.integration.commandTemplate;
+        requireCondition(template.planId === plan.planId &&
+          template.planRevision === plan.planRevision &&
+          template.nodeKey === node.nodeKey,
+        "EXECUTION_EVIDENCE_INTEGRATION_COMMAND_MISMATCH");
+      }
+    }
+  }
+}
+
 export function assertExecutionCommand(kind, value) {
   canonicalExecutionJSON(value);
   const validator = Object.hasOwn(validators, kind) ? validators[kind] : undefined;
@@ -338,6 +439,9 @@ export function assertExecutionCommand(kind, value) {
     requireCondition(value.receiptDigest ===
       remoteCIObservationReceiptDigest(value),
     "REMOTE_CI_RECEIPT_DIGEST_MISMATCH");
+  }
+  if (kind === "executionEvidencePage") {
+    assertExecutionEvidencePageSemantics(value);
   }
 }
 

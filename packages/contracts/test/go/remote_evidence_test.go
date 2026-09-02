@@ -83,3 +83,37 @@ func TestRemoteEvidenceGoValidation(t *testing.T) {
 		t.Fatal("tampered remote CI receipt accepted")
 	}
 }
+
+func TestProofControlCommandsHaveClosedGoValidation(t *testing.T) {
+	digest := strings.Repeat("a", 64)
+	remote := map[string]any{
+		"operationId": "op_web_adopt00001", "providerBindingId": "provider_web00001",
+		"planRevision": 1, "nodeKey": "Build", "expectedPlanDigest": digest,
+		"expectedControlRevision": 2, "sourceEvidenceId": "source_web_remote01",
+	}
+	if err := runtimecontracts.ValidateExecutionCommand("remoteEvidenceAdoptionCommand", encodeJSON(t, remote)); err != nil {
+		t.Fatalf("valid remote adoption command rejected: %v", err)
+	}
+	remote["credential"] = "forbidden"
+	if runtimecontracts.ValidateExecutionCommand("remoteEvidenceAdoptionCommand", encodeJSON(t, remote)) == nil {
+		t.Fatal("remote adoption command accepted an undeclared credential")
+	}
+
+	integration := map[string]any{
+		"operationId": "op_web_integrate001", "candidateCommit": strings.Repeat("2", 40),
+		"candidateTree": strings.Repeat("3", 40), "deadline": "2026-09-03T01:05:00.000Z",
+		"inputDigest": digest, "materializationDigest": strings.Repeat("b", 64),
+		"nodeKey": "Build", "planId": "plan_web0000001", "planRevision": 1,
+		"target": map[string]any{
+			"repositoryId": "repo_web00001", "targetRef": "refs/heads/main",
+			"expectedCommit": strings.Repeat("1", 40),
+		},
+		"verificationReceipts": []any{map[string]any{
+			"receiptDigest": strings.Repeat("c", 64),
+			"verificationId": "verification_web00001",
+		}},
+	}
+	if err := runtimecontracts.ValidateExecutionCommand("integrationApprovalCommand", encodeJSON(t, integration)); err != nil {
+		t.Fatalf("valid integration approval command rejected: %v", err)
+	}
+}
