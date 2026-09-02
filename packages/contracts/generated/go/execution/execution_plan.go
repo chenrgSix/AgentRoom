@@ -2910,7 +2910,7 @@ type VerificationReceipt struct {
 	IntegrationOperationID *string                    `json:"integrationOperationId"`
 	LogArtifact            *LogArtifact               `json:"logArtifact"`
 	OperationID            string                     `json:"operationId"`
-	Outcome                Outcome                    `json:"outcome"`
+	Outcome                VerificationReceiptOutcome `json:"outcome"`
 	Plan                   VerificationReceiptPlan    `json:"plan"`
 	Profile                VerificationReceiptProfile `json:"profile"`
 	RepositoryID           string                     `json:"repositoryId"`
@@ -3277,6 +3277,139 @@ type FriskyCriterion struct {
 	Required     bool   `json:"required"`
 }
 
+type RemoteProviderBinding struct {
+	BindingDigest string    `json:"bindingDigest"`
+	CiChecks      []CiCheck `json:"ciChecks"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt            string `json:"createdAt"`
+	CreatedByMemberID    string `json:"createdByMemberId"`
+	ProviderBindingID    string `json:"providerBindingId"`
+	ProviderOrigin       string `json:"providerOrigin"`
+	ProviderRepositoryID string `json:"providerRepositoryId"`
+	RepositoryID         string `json:"repositoryId"`
+	TeamID               string `json:"teamId"`
+	Version              int64  `json:"version"`
+}
+
+type CiCheck struct {
+	CheckKey        string `json:"checkKey"`
+	ProfileDigest   string `json:"profileDigest"`
+	ProfileID       string `json:"profileId"`
+	ProfileRevision int64  `json:"profileRevision"`
+}
+
+type RemoteProviderBindingRevocation struct {
+	ExpectedBindingDigest string `json:"expectedBindingDigest"`
+	OperationID           string `json:"operationId"`
+	ProviderBindingID     string `json:"providerBindingId"`
+	Reason                string `json:"reason"`
+	RevocationDigest      string `json:"revocationDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RevokedAt         string `json:"revokedAt"`
+	RevokedByMemberID string `json:"revokedByMemberId"`
+	Version           int64  `json:"version"`
+}
+
+type ProviderCommitObservation struct {
+	BaseCommit       string       `json:"baseCommit"`
+	BundleByteLength int64        `json:"bundleByteLength"`
+	BundleDigest     string       `json:"bundleDigest"`
+	Commit           string       `json:"commit"`
+	ObjectFormat     ObjectFormat `json:"objectFormat"`
+	ObservationID    string       `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                                `json:"observedAt"`
+	OperationID               string                                `json:"operationId"`
+	ProviderObservationDigest string                                `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                                `json:"providerRepositoryId"`
+	PullRequest               *ProviderCommitObservationPullRequest `json:"pullRequest"`
+	Tree                      string                                `json:"tree"`
+	Version                   int64                                 `json:"version"`
+}
+
+type ProviderCommitObservationPullRequest struct {
+	BaseRef string `json:"baseRef"`
+	HeadRef string `json:"headRef"`
+	Number  int64  `json:"number"`
+}
+
+type RemoteCommitObservation struct {
+	BaseCommit        string       `json:"baseCommit"`
+	BundleArtifactID  string       `json:"bundleArtifactId"`
+	BundleByteLength  int64        `json:"bundleByteLength"`
+	BundleDigest      string       `json:"bundleDigest"`
+	Commit            string       `json:"commit"`
+	InputDigest       string       `json:"inputDigest"`
+	ObjectFormat      ObjectFormat `json:"objectFormat"`
+	ObservationDigest string       `json:"observationDigest"`
+	ObservationID     string       `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                              `json:"observedAt"`
+	OperationID               string                              `json:"operationId"`
+	PatchArtifactID           string                              `json:"patchArtifactId"`
+	PatchArtifactRevision     int64                               `json:"patchArtifactRevision"`
+	PatchByteLength           int64                               `json:"patchByteLength"`
+	PatchDigest               string                              `json:"patchDigest"`
+	PatchOutputSlot           string                              `json:"patchOutputSlot"`
+	ProviderBindingID         string                              `json:"providerBindingId"`
+	ProviderObservationDigest string                              `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                              `json:"providerRepositoryId"`
+	PullRequest               *RemoteCommitObservationPullRequest `json:"pullRequest"`
+	RepositoryID              string                              `json:"repositoryId"`
+	TaskID                    string                              `json:"taskId"`
+	Tree                      string                              `json:"tree"`
+	Version                   int64                               `json:"version"`
+}
+
+type RemoteCommitObservationPullRequest struct {
+	BaseRef string `json:"baseRef"`
+	HeadRef string `json:"headRef"`
+	Number  int64  `json:"number"`
+}
+
+type ProviderCIObservation struct {
+	Attempt       int64  `json:"attempt"`
+	CheckKey      string `json:"checkKey"`
+	Commit        string `json:"commit"`
+	ObservationID string `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                       `json:"observedAt"`
+	OperationID               string                       `json:"operationId"`
+	Outcome                   ProviderCIObservationOutcome `json:"outcome"`
+	ProviderObservationDigest string                       `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                       `json:"providerRepositoryId"`
+	Tree                      string                       `json:"tree"`
+	Version                   int64                        `json:"version"`
+}
+
+type RemoteCIObservationReceipt struct {
+	Attempt       int64  `json:"attempt"`
+	CheckKey      string `json:"checkKey"`
+	Commit        string `json:"commit"`
+	ObservationID string `json:"observationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ObservedAt                string                       `json:"observedAt"`
+	OperationID               string                       `json:"operationId"`
+	Outcome                   ProviderCIObservationOutcome `json:"outcome"`
+	ProfileDigest             string                       `json:"profileDigest"`
+	ProfileID                 string                       `json:"profileId"`
+	ProfileRevision           int64                        `json:"profileRevision"`
+	ProviderBindingID         string                       `json:"providerBindingId"`
+	ProviderObservationDigest string                       `json:"providerObservationDigest"`
+	ProviderRepositoryID      string                       `json:"providerRepositoryId"`
+	ReceiptDigest             string                       `json:"receiptDigest"`
+	RepositoryID              string                       `json:"repositoryId"`
+	SourceEvidenceID          string                       `json:"sourceEvidenceId"`
+	Tree                      string                       `json:"tree"`
+	Version                   int64                        `json:"version"`
+}
+
 type AuthorKind string
 
 const (
@@ -3438,14 +3571,14 @@ const (
 	Ci     AuthorityKind = "ci"
 )
 
-type Outcome string
+type VerificationReceiptOutcome string
 
 const (
-	OutcomeCanceled       Outcome = "canceled"
-	OutcomeFailed         Outcome = "failed"
-	OutcomeOutcomeUnknown Outcome = "outcome_unknown"
-	Passed                Outcome = "passed"
-	TimedOut              Outcome = "timed_out"
+	PurpleFailed         VerificationReceiptOutcome = "failed"
+	PurpleOutcomeUnknown VerificationReceiptOutcome = "outcome_unknown"
+	PurplePassed         VerificationReceiptOutcome = "passed"
+	TentacledCanceled    VerificationReceiptOutcome = "canceled"
+	TimedOut             VerificationReceiptOutcome = "timed_out"
 )
 
 type SourceEvidenceKind string
@@ -3504,4 +3637,14 @@ type CompletionPolicy string
 const (
 	AcceptedResultRequired CompletionPolicy = "accepted_result_required"
 	OwnerConfirmed         CompletionPolicy = "owner_confirmed"
+)
+
+type ProviderCIObservationOutcome string
+
+const (
+	FluffyFailed         ProviderCIObservationOutcome = "failed"
+	FluffyOutcomeUnknown ProviderCIObservationOutcome = "outcome_unknown"
+	FluffyPassed         ProviderCIObservationOutcome = "passed"
+	StickyCanceled       ProviderCIObservationOutcome = "canceled"
+	Timeout              ProviderCIObservationOutcome = "timeout"
 )

@@ -16,7 +16,7 @@ test("the checked-in contract package is internally consistent", async () => {
 
   assert.deepEqual(result, {
     catalogVersion: "0.1.0",
-    schemaCount: 12
+    schemaCount: 13
   });
 });
 

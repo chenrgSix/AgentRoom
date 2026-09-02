@@ -17,6 +17,11 @@ export function evidenceAdoptionDigest(value: unknown): string;
 export function evidenceReuseInputDigest(value: unknown): string;
 export function evidenceNodeReuseContractDigest(value: unknown): string;
 export function evidenceReuseContractDigest(value: unknown): string;
+export function remoteProviderBindingDigest(value: unknown): string;
+export function remoteProviderBindingRevocationDigest(value: unknown): string;
+export function providerObservationDigest(value: unknown): string;
+export function remoteCommitObservationDigest(value: unknown): string;
+export function remoteCIObservationReceiptDigest(value: unknown): string;
 export function assertExecutionCommand(
   kind: "planDefinition" | "proposalCommand" | "discussionPlanProposalDraft" |
     "revisionCommand" |
@@ -27,7 +32,10 @@ export function assertExecutionCommand(
     "repositoryBinding" | "executionGrant" | "repositoryOperation" |
     "repositoryReceipt" | "executionCheckpoint" | "verificationReceipt" |
     "sourceEvidence" | "gateProofRef" | "evidenceAdoption" |
-    "evidenceReuseContract",
+    "evidenceReuseContract" | "remoteProviderBinding" |
+    "remoteProviderBindingRevocation" | "providerCommitObservation" |
+    "remoteCommitObservation" | "providerCIObservation" |
+    "remoteCIObservationReceipt",
   value: unknown
 ): void;
 export function validateExecutionDecision(value: unknown): ExecutionDecisionContent;

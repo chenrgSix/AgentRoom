@@ -165,6 +165,71 @@ export function evidenceReuseContractDigest(value) {
   return executionOperationDigest(contract);
 }
 
+export function remoteProviderBindingDigest(value) {
+  const { bindingDigest: _bindingDigest, createdAt: _createdAt, ...binding } = value;
+  return executionOperationDigest(binding);
+}
+
+export function remoteProviderBindingRevocationDigest(value) {
+  const { revocationDigest: _revocationDigest, revokedAt: _revokedAt, ...record } = value;
+  return executionOperationDigest(record);
+}
+
+export function providerObservationDigest(value) {
+  const { providerObservationDigest: _digest, ...record } = value;
+  return executionOperationDigest(record);
+}
+
+export function remoteCommitObservationDigest(value) {
+  const { observationDigest: _digest, ...record } = value;
+  return executionOperationDigest(record);
+}
+
+export function remoteCIObservationReceiptDigest(value) {
+  const { receiptDigest: _digest, ...record } = value;
+  return executionOperationDigest(record);
+}
+
+function assertObjectFormat(objectFormat, ...objects) {
+  const length = objectFormat === "sha1" ? 40 : 64;
+  requireCondition(objects.every((object) => object.length === length),
+    "REMOTE_EVIDENCE_OBJECT_FORMAT_MISMATCH");
+}
+
+function assertProviderBindingSemantics(value) {
+  let origin;
+  try {
+    origin = new URL(value.providerOrigin);
+  } catch {
+    throw new ExecutionContractError("REMOTE_PROVIDER_ORIGIN_INVALID");
+  }
+  const loopback = origin.protocol === "http:" &&
+    (origin.hostname === "127.0.0.1" || origin.hostname === "[::1]");
+  requireCondition((origin.protocol === "https:" || loopback) &&
+    !origin.username && !origin.password && !origin.search && !origin.hash &&
+    origin.pathname === "/" && value.providerOrigin === origin.origin,
+  "REMOTE_PROVIDER_ORIGIN_INVALID");
+  ordered(value.ciChecks, by("checkKey"), "REMOTE_PROVIDER_CHECK_ORDER");
+  unique(value.ciChecks, "checkKey", "REMOTE_PROVIDER_DUPLICATE_CHECK");
+  unique(value.ciChecks, "profileId", "REMOTE_PROVIDER_DUPLICATE_PROFILE");
+  requireCondition(value.bindingDigest === remoteProviderBindingDigest(value),
+    "REMOTE_PROVIDER_BINDING_DIGEST_MISMATCH");
+}
+
+function assertProviderObservationSemantics(value, kind) {
+  if (kind === "providerCommitObservation") {
+    assertObjectFormat(value.objectFormat, value.baseCommit, value.commit, value.tree);
+  }
+  requireCondition(value.providerObservationDigest === providerObservationDigest(value),
+    "REMOTE_PROVIDER_OBSERVATION_DIGEST_MISMATCH");
+}
+
+function assertRemoteCommitObservationSemantics(value) {
+  assertObjectFormat(value.objectFormat, value.baseCommit, value.commit, value.tree);
+  requireCondition(value.observationDigest === remoteCommitObservationDigest(value),
+    "REMOTE_COMMIT_OBSERVATION_DIGEST_MISMATCH");
+}
+
 function assertSourceEvidenceSemantics(value) {
   ordered(value.artifactPins, artifactOrder, "EVIDENCE_ARTIFACT_ORDER");
   unique(value.artifactPins, "outputSlot", "EVIDENCE_DUPLICATE_OUTPUT_SLOT");
@@ -244,6 +309,23 @@ export function assertExecutionCommand(kind, value) {
   if (kind === "evidenceAdoption") assertEvidenceAdoptionSemantics(value);
   if (kind === "evidenceReuseContract") {
     assertEvidenceReuseContractSemantics(value);
+  }
+  if (kind === "remoteProviderBinding") assertProviderBindingSemantics(value);
+  if (kind === "remoteProviderBindingRevocation") {
+    requireCondition(value.revocationDigest ===
+      remoteProviderBindingRevocationDigest(value),
+    "REMOTE_PROVIDER_REVOCATION_DIGEST_MISMATCH");
+  }
+  if (kind === "providerCommitObservation" || kind === "providerCIObservation") {
+    assertProviderObservationSemantics(value, kind);
+  }
+  if (kind === "remoteCommitObservation") {
+    assertRemoteCommitObservationSemantics(value);
+  }
+  if (kind === "remoteCIObservationReceipt") {
+    requireCondition(value.receiptDigest ===
+      remoteCIObservationReceiptDigest(value),
+    "REMOTE_CI_RECEIPT_DIGEST_MISMATCH");
   }
 }
 

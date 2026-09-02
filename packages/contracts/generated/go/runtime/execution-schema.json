@@ -6391,6 +6391,623 @@
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
         }
       }
+    },
+    "remoteProviderBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "providerBindingId",
+        "teamId",
+        "repositoryId",
+        "providerOrigin",
+        "providerRepositoryId",
+        "ciChecks",
+        "createdByMemberId",
+        "bindingDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "providerBindingId": {
+          "type": "string",
+          "pattern": "^provider_[A-Za-z0-9_-]{8,128}$"
+        },
+        "teamId": {
+          "type": "string",
+          "pattern": "^team_[A-Za-z0-9_-]{8,128}$"
+        },
+        "repositoryId": {
+          "type": "string",
+          "pattern": "^repo_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerOrigin": {
+          "type": "string",
+          "format": "uri",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "providerRepositoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "ciChecks": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 16,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "checkKey",
+              "profileId",
+              "profileRevision",
+              "profileDigest"
+            ],
+            "properties": {
+              "checkKey": {
+                "type": "string",
+                "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+              },
+              "profileId": {
+                "type": "string",
+                "pattern": "^profile_[A-Za-z0-9_-]{8,128}$"
+              },
+              "profileRevision": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991
+              },
+              "profileDigest": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "createdByMemberId": {
+          "type": "string",
+          "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
+        },
+        "bindingDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "createdAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "remoteProviderBindingRevocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "providerBindingId",
+        "expectedBindingDigest",
+        "revokedByMemberId",
+        "reason",
+        "revocationDigest",
+        "revokedAt"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerBindingId": {
+          "type": "string",
+          "pattern": "^provider_[A-Za-z0-9_-]{8,128}$"
+        },
+        "expectedBindingDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "revokedByMemberId": {
+          "type": "string",
+          "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "revocationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "revokedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "providerCommitObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "observationId",
+        "providerRepositoryId",
+        "objectFormat",
+        "baseCommit",
+        "commit",
+        "tree",
+        "bundleDigest",
+        "bundleByteLength",
+        "pullRequest",
+        "providerObservationDigest",
+        "observedAt"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "observationId": {
+          "type": "string",
+          "pattern": "^observation_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerRepositoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "objectFormat": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ]
+        },
+        "baseCommit": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "bundleDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bundleByteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "pullRequest": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "number",
+                "headRef",
+                "baseRef"
+              ],
+              "properties": {
+                "number": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "headRef": {
+                  "type": "string",
+                  "pattern": "^refs/[A-Za-z0-9._/-]{1,240}$"
+                },
+                "baseRef": {
+                  "type": "string",
+                  "pattern": "^refs/[A-Za-z0-9._/-]{1,240}$"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providerObservationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "observedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "remoteCommitObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "providerBindingId",
+        "repositoryId",
+        "providerRepositoryId",
+        "taskId",
+        "observationId",
+        "objectFormat",
+        "baseCommit",
+        "commit",
+        "tree",
+        "inputDigest",
+        "bundleArtifactId",
+        "bundleDigest",
+        "bundleByteLength",
+        "patchArtifactId",
+        "patchArtifactRevision",
+        "patchOutputSlot",
+        "patchDigest",
+        "patchByteLength",
+        "pullRequest",
+        "providerObservationDigest",
+        "observationDigest",
+        "observedAt"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerBindingId": {
+          "type": "string",
+          "pattern": "^provider_[A-Za-z0-9_-]{8,128}$"
+        },
+        "repositoryId": {
+          "type": "string",
+          "pattern": "^repo_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerRepositoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "taskId": {
+          "type": "string",
+          "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+        },
+        "observationId": {
+          "type": "string",
+          "pattern": "^observation_[A-Za-z0-9_-]{8,128}$"
+        },
+        "objectFormat": {
+          "enum": [
+            "sha1",
+            "sha256"
+          ]
+        },
+        "baseCommit": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "inputDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bundleArtifactId": {
+          "type": "string",
+          "pattern": "^artifact_[A-Za-z0-9_-]{8,128}$"
+        },
+        "bundleDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bundleByteLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "patchArtifactId": {
+          "type": "string",
+          "pattern": "^artifact_[A-Za-z0-9_-]{8,128}$"
+        },
+        "patchArtifactRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "patchOutputSlot": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "patchDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "patchByteLength": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 4194304
+        },
+        "pullRequest": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "number",
+                "headRef",
+                "baseRef"
+              ],
+              "properties": {
+                "number": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 9007199254740991
+                },
+                "headRef": {
+                  "type": "string",
+                  "pattern": "^refs/[A-Za-z0-9._/-]{1,240}$"
+                },
+                "baseRef": {
+                  "type": "string",
+                  "pattern": "^refs/[A-Za-z0-9._/-]{1,240}$"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "providerObservationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "observationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "observedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "providerCIObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "observationId",
+        "providerRepositoryId",
+        "checkKey",
+        "attempt",
+        "commit",
+        "tree",
+        "outcome",
+        "providerObservationDigest",
+        "observedAt"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "observationId": {
+          "type": "string",
+          "pattern": "^observation_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerRepositoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "checkKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "outcome": {
+          "enum": [
+            "passed",
+            "failed",
+            "timeout",
+            "canceled",
+            "outcome_unknown"
+          ]
+        },
+        "providerObservationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "observedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
+    },
+    "remoteCIObservationReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "operationId",
+        "providerBindingId",
+        "repositoryId",
+        "providerRepositoryId",
+        "sourceEvidenceId",
+        "observationId",
+        "checkKey",
+        "attempt",
+        "commit",
+        "tree",
+        "profileId",
+        "profileRevision",
+        "profileDigest",
+        "outcome",
+        "providerObservationDigest",
+        "receiptDigest",
+        "observedAt"
+      ],
+      "properties": {
+        "version": {
+          "type": "integer",
+          "const": 1,
+          "minimum": 1,
+          "maximum": 1
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerBindingId": {
+          "type": "string",
+          "pattern": "^provider_[A-Za-z0-9_-]{8,128}$"
+        },
+        "repositoryId": {
+          "type": "string",
+          "pattern": "^repo_[A-Za-z0-9_-]{8,128}$"
+        },
+        "providerRepositoryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]*$"
+        },
+        "sourceEvidenceId": {
+          "type": "string",
+          "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+        },
+        "observationId": {
+          "type": "string",
+          "pattern": "^observation_[A-Za-z0-9_-]{8,128}$"
+        },
+        "checkKey": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "commit": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "tree": {
+          "type": "string",
+          "pattern": "^([a-f0-9]{40}|[a-f0-9]{64})$"
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^profile_[A-Za-z0-9_-]{8,128}$"
+        },
+        "profileRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "profileDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "outcome": {
+          "enum": [
+            "passed",
+            "failed",
+            "timeout",
+            "canceled",
+            "outcome_unknown"
+          ]
+        },
+        "providerObservationDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "receiptDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "observedAt": {
+          "title": "ConveneWire UTC Timestamp",
+          "description": "Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at most nanosecond precision.",
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-5][0-9](?:\\.[0-9]{1,9})?Z$"
+        }
+      }
     }
   }
 }

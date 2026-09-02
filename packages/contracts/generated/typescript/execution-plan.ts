@@ -3040,7 +3040,7 @@ export interface VerificationReceipt {
   integrationOperationId: null | string;
   logArtifact:            LogArtifact | null;
   operationId:            string;
-  outcome:                Outcome;
+  outcome:                VerificationReceiptOutcome;
   plan:                   VerificationReceiptPlan;
   profile:                VerificationReceiptProfile;
   repositoryId:           string;
@@ -3092,7 +3092,7 @@ export interface LogArtifact {
   kind:             ExternalInputKind;
 }
 
-export type Outcome = "passed" | "failed" | "timed_out" | "canceled" | "outcome_unknown";
+export type VerificationReceiptOutcome = "passed" | "failed" | "timed_out" | "canceled" | "outcome_unknown";
 
 export interface VerificationReceiptPlan {
   approvalOperationId: string;
@@ -3435,4 +3435,151 @@ export interface FriskyCriterion {
   description:  string;
   ordinal:      number;
   required:     boolean;
+}
+
+export interface RemoteProviderBinding {
+  bindingDigest: string;
+  ciChecks:      [CiCheck, ...CiCheck[]];
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:            string;
+  createdByMemberId:    string;
+  providerBindingId:    string;
+  providerOrigin:       string;
+  providerRepositoryId: string;
+  repositoryId:         string;
+  teamId:               string;
+  version:              number;
+}
+
+export interface CiCheck {
+  checkKey:        string;
+  profileDigest:   string;
+  profileId:       string;
+  profileRevision: number;
+}
+
+export interface RemoteProviderBindingRevocation {
+  expectedBindingDigest: string;
+  operationId:           string;
+  providerBindingId:     string;
+  reason:                string;
+  revocationDigest:      string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  revokedAt:         string;
+  revokedByMemberId: string;
+  version:           number;
+}
+
+export interface ProviderCommitObservation {
+  baseCommit:       string;
+  bundleByteLength: number;
+  bundleDigest:     string;
+  commit:           string;
+  objectFormat:     ObjectFormat;
+  observationId:    string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  pullRequest:               ProviderCommitObservationPullRequest | null;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface ProviderCommitObservationPullRequest {
+  baseRef: string;
+  headRef: string;
+  number:  number;
+}
+
+export interface RemoteCommitObservation {
+  baseCommit:        string;
+  bundleArtifactId:  string;
+  bundleByteLength:  number;
+  bundleDigest:      string;
+  commit:            string;
+  inputDigest:       string;
+  objectFormat:      ObjectFormat;
+  observationDigest: string;
+  observationId:     string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  patchArtifactId:           string;
+  patchArtifactRevision:     number;
+  patchByteLength:           number;
+  patchDigest:               string;
+  patchOutputSlot:           string;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  pullRequest:               RemoteCommitObservationPullRequest | null;
+  repositoryId:              string;
+  taskId:                    string;
+  tree:                      string;
+  version:                   number;
+}
+
+export interface RemoteCommitObservationPullRequest {
+  baseRef: string;
+  headRef: string;
+  number:  number;
+}
+
+export interface ProviderCIObservation {
+  attempt:       number;
+  checkKey:      string;
+  commit:        string;
+  observationId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  outcome:                   ProviderCIObservationOutcome;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  tree:                      string;
+  version:                   number;
+}
+
+export type ProviderCIObservationOutcome = "passed" | "failed" | "timeout" | "canceled" | "outcome_unknown";
+
+export interface RemoteCIObservationReceipt {
+  attempt:       number;
+  checkKey:      string;
+  commit:        string;
+  observationId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  observedAt:                string;
+  operationId:               string;
+  outcome:                   ProviderCIObservationOutcome;
+  profileDigest:             string;
+  profileId:                 string;
+  profileRevision:           number;
+  providerBindingId:         string;
+  providerObservationDigest: string;
+  providerRepositoryId:      string;
+  receiptDigest:             string;
+  repositoryId:              string;
+  sourceEvidenceId:          string;
+  tree:                      string;
+  version:                   number;
 }

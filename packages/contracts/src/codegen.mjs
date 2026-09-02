@@ -24,6 +24,8 @@ const EXECUTION_RUNTIME_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/execution-runtime.schema.json";
 const EVIDENCE_ADOPTION_SCHEMA_ID =
   "https://agentroom.dev/schemas/work/evidence-adoption.schema.json";
+const REMOTE_EVIDENCE_SCHEMA_ID =
+  "https://agentroom.dev/schemas/work/remote-evidence.schema.json";
 
 async function readJson(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
@@ -457,7 +459,13 @@ function renderExecutionValidators(schemas) {
     sourceEvidence: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/sourceEvidence`,
     gateProofRef: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/gateProofRef`,
     evidenceAdoption: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/evidenceAdoption`,
-    evidenceReuseContract: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/evidenceReuseContract`
+    evidenceReuseContract: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/evidenceReuseContract`,
+    remoteProviderBinding: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteProviderBinding`,
+    remoteProviderBindingRevocation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteProviderBindingRevocation`,
+    providerCommitObservation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/providerCommitObservation`,
+    remoteCommitObservation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteCommitObservation`,
+    providerCIObservation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/providerCIObservation`,
+    remoteCIObservationReceipt: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteCIObservationReceipt`
   }).trimEnd()}\n`;
 }
 
@@ -1369,6 +1377,7 @@ export async function generateContractTypes(packageRoot) {
   const executionSchema = schemas.get(EXECUTION_SCHEMA_ID);
   const executionRuntimeSchema = schemas.get(EXECUTION_RUNTIME_SCHEMA_ID);
   const evidenceAdoptionSchema = schemas.get(EVIDENCE_ADOPTION_SCHEMA_ID);
+  const remoteEvidenceSchema = schemas.get(REMOTE_EVIDENCE_SCHEMA_ID);
 
   if (!bridgeSchema) {
     throw new Error(`Missing code generation schema: ${BRIDGE_SCHEMA_ID}`);
@@ -1387,6 +1396,9 @@ export async function generateContractTypes(packageRoot) {
   }
   if (!evidenceAdoptionSchema) {
     throw new Error(`Missing code generation schema: ${EVIDENCE_ADOPTION_SCHEMA_ID}`);
+  }
+  if (!remoteEvidenceSchema) {
+    throw new Error(`Missing code generation schema: ${REMOTE_EVIDENCE_SCHEMA_ID}`);
   }
 
   const bridgeCodegen = createBridgeCodegenSchemas(bridgeSchema);
@@ -1467,6 +1479,14 @@ export async function generateContractTypes(packageRoot) {
     ["GateProofRef", "gateProofRef"],
     ["EvidenceAdoption", "evidenceAdoption"],
     ["EvidenceReuseContract", "evidenceReuseContract"]
+  ]));
+  executionCodegen.push(...createDefinitionCodegenSchemas(remoteEvidenceSchema, [
+    ["RemoteProviderBinding", "remoteProviderBinding"],
+    ["RemoteProviderBindingRevocation", "remoteProviderBindingRevocation"],
+    ["ProviderCommitObservation", "providerCommitObservation"],
+    ["RemoteCommitObservation", "remoteCommitObservation"],
+    ["ProviderCIObservation", "providerCIObservation"],
+    ["RemoteCIObservationReceipt", "remoteCIObservationReceipt"]
   ]));
   const bridgeSchemas = bridgeCodegen.types.map((entry) => ({
     ...entry,
@@ -1626,6 +1646,15 @@ export async function generateContractTypes(packageRoot) {
           evidenceReuseContract: "evidenceReuseContract"
         }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
           dereference(evidenceAdoptionSchema.$defs[definition], evidenceAdoptionSchema, schemas), false)]))
+        , ...Object.fromEntries(Object.entries({
+          remoteProviderBinding: "remoteProviderBinding",
+          remoteProviderBindingRevocation: "remoteProviderBindingRevocation",
+          providerCommitObservation: "providerCommitObservation",
+          remoteCommitObservation: "remoteCommitObservation",
+          providerCIObservation: "providerCIObservation",
+          remoteCIObservationReceipt: "remoteCIObservationReceipt"
+        }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
+          dereference(remoteEvidenceSchema.$defs[definition], remoteEvidenceSchema, schemas), false)]))
       }
     }, null, 2)}\n`,
     goExecutionRuntime: formatGo(await readFile(path.join(packageRoot, "src/go-execution-runtime.go.template"), "utf8")),

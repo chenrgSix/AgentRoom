@@ -10,6 +10,7 @@ import (
   "encoding/json"
   "errors"
   "math/big"
+  "net/url"
   "slices"
   "sort"
   "strconv"
@@ -36,7 +37,9 @@ func compileExecutionSchemas() map[string]*jsonschema.Schema {
   for _, kind := range []string{"executionManifest", "executionInputBinding", "executionCapability", "repositoryBinding",
     "runtimeAuthorityRequest", "runtimeAuthorityView", "executionGrant", "repositoryOperation", "repositoryReceipt",
     "executionCheckpoint", "verificationReceipt", "sourceEvidence", "gateProofRef", "evidenceAdoption",
-    "evidenceReuseContract"} {
+    "evidenceReuseContract", "remoteProviderBinding", "remoteProviderBindingRevocation",
+    "providerCommitObservation", "remoteCommitObservation", "providerCIObservation",
+    "remoteCIObservationReceipt"} {
     schema, err := compiler.Compile(id+"#/$defs/"+kind)
     if err != nil { panic(err) }
     result[kind] = schema
@@ -69,7 +72,10 @@ func ValidateAndNormalizeExecutionCommand(kind string, source []byte) ([]byte, e
 
 func validateEvidenceSemantics(kind string, value any) bool {
   record, ok := value.(map[string]any)
-  if !ok { return kind != "sourceEvidence" && kind != "evidenceAdoption" && kind != "evidenceReuseContract" }
+  if !ok { return kind != "sourceEvidence" && kind != "evidenceAdoption" && kind != "evidenceReuseContract" &&
+    kind != "remoteProviderBinding" && kind != "remoteProviderBindingRevocation" &&
+    kind != "providerCommitObservation" && kind != "remoteCommitObservation" &&
+    kind != "providerCIObservation" && kind != "remoteCIObservationReceipt" }
   switch kind {
   case "sourceEvidence":
     pins, ok := record["artifactPins"].([]any)
@@ -106,6 +112,56 @@ func validateEvidenceSemantics(kind string, value any) bool {
     if executionValueDigest(adoption) != executionString(record, "adoptionDigest") { return false }
   case "evidenceReuseContract":
     return validateEvidenceReuseContract(value)
+  case "remoteProviderBinding":
+    origin, err := url.Parse(executionString(record, "providerOrigin"))
+    loopback := err == nil && origin.Scheme == "http" &&
+      (origin.Hostname() == "127.0.0.1" || origin.Hostname() == "::1")
+    if err != nil || (origin.Scheme != "https" && !loopback) || origin.Host == "" ||
+      origin.User != nil || origin.RawQuery != "" || origin.Fragment != "" ||
+      origin.Path != "" || origin.RawPath != "" ||
+      executionString(record, "providerOrigin") != origin.Scheme+"://"+origin.Host {
+      return false
+    }
+    checks, ok := record["ciChecks"].([]any)
+    if !ok { return false }
+    previous := ""
+    seenProfiles := map[string]bool{}
+    for index, entry := range checks {
+      check, ok := entry.(map[string]any)
+      key := executionString(check, "checkKey")
+      profile := executionString(check, "profileId")
+      if !ok || (index > 0 && previous >= key) || seenProfiles[profile] { return false }
+      previous = key
+      seenProfiles[profile] = true
+    }
+    unsigned := withoutExecutionFields(record, "bindingDigest", "createdAt")
+    if executionValueDigest(unsigned) != executionString(record, "bindingDigest") { return false }
+  case "remoteProviderBindingRevocation":
+    unsigned := withoutExecutionFields(record, "revocationDigest", "revokedAt")
+    if executionValueDigest(unsigned) != executionString(record, "revocationDigest") { return false }
+  case "providerCommitObservation":
+    if !validRemoteObjectFormat(record, "baseCommit", "commit", "tree") { return false }
+    unsigned := withoutExecutionFields(record, "providerObservationDigest")
+    if executionValueDigest(unsigned) != executionString(record, "providerObservationDigest") { return false }
+  case "providerCIObservation":
+    unsigned := withoutExecutionFields(record, "providerObservationDigest")
+    if executionValueDigest(unsigned) != executionString(record, "providerObservationDigest") { return false }
+  case "remoteCommitObservation":
+    if !validRemoteObjectFormat(record, "baseCommit", "commit", "tree") { return false }
+    unsigned := withoutExecutionFields(record, "observationDigest")
+    if executionValueDigest(unsigned) != executionString(record, "observationDigest") { return false }
+  case "remoteCIObservationReceipt":
+    unsigned := withoutExecutionFields(record, "receiptDigest")
+    if executionValueDigest(unsigned) != executionString(record, "receiptDigest") { return false }
+  }
+  return true
+}
+
+func validRemoteObjectFormat(record map[string]any, keys ...string) bool {
+  size := 64
+  if executionString(record, "objectFormat") == "sha1" { size = 40 }
+  for _, key := range keys {
+    if len(executionString(record, key)) != size { return false }
   }
   return true
 }
