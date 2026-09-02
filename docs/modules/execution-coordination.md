@@ -102,13 +102,15 @@ backfill, dual-write, shadow-equality and adoption-authoritative local reader
 cutover; legacy local rows are compatibility projections rather than alternate
 authority.
 
-REPO-003 adds the first remote-only producer under the frozen
+REPO-003 adds the first accepted remote-only producer under the
 [remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
 Its provider observation and sealed commit/patch bytes create source evidence;
 configured CI receipts create verification proof; only a separate explicit
-revision-local adoption creates graph authority. Generalized dependency and
-input selections name adoption/source identity and carry a Result companion
-only when the source really is a Task Result. Neither provider success nor an
+revision-local adoption creates graph authority. Migrations 0079 and 0080
+retain that adoption and expose it through the adoption-authoritative
+materialization/input projection. Generalized dependency and input selections
+name adoption/source identity and carry a Result companion only when the source
+really is a Task Result. Neither provider success nor an
 EvidenceReuseContract can auto-adopt or carry authority to another revision.
 
 ## Plan Validation and Compilation
@@ -345,8 +347,8 @@ before remote provider work. Their frozen acceptance authority is
 [`source-evidence-adoption-runtime-goal.md`](../acceptance/source-evidence-adoption-runtime-goal.md).
 The local migration is additive: contracts first, then backfill and
 transactional dual-write under the unchanged legacy reader, then shadow-equal
-adoption-authoritative dependency/input readers. REPO-003 begins only after
-that cutover and may not hide local migration inside provider enablement.
+adoption-authoritative dependency/input readers. REPO-003 began only after that
+cutover and did not hide local migration inside provider enablement.
 Migration 0074 and the deterministic Stage-A backfill are now delivered: empty,
 accepted, verified and integrated local facts reconstruct inside one immediate
 transaction, reopen idempotently, and fail without partial generalized rows.
@@ -362,6 +364,8 @@ first applied, so runtime startup cannot heal a missing authority fact. The
 version-2 projection omits absent Result identity instead of emitting a null or
 invented Result. `EXEC-009` is accepted after the full regression, deterministic
 E2E, Bridge and three-run physical cleanup evidence recorded in its frozen goal.
+REPO-003 preserves that local compatibility while extending the same reader
+with a mandatory remote `sourceAuthority` and no fabricated companion Result.
 
 The broader scheduler capacity target is frozen independently in
 [`exec-008-multi-node-scheduler-capacity-goal.md`](../acceptance/exec-008-multi-node-scheduler-capacity-goal.md).

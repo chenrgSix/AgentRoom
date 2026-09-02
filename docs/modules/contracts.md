@@ -54,6 +54,18 @@ must still validate all fingerprints, expiry, source/destination authorization,
 grant enforcement, operation ownership and actual observations. Valid JSON does
 not establish any of those facts or enable execution.
 
+`CON-023` and the additive REPO-003 contract increment define the closed
+`SourceEvidence`, `GateProofRef`, `EvidenceAdoption`, remote provider binding,
+commit observation and CI receipt shapes. A remote `repository_commit` source
+pins exact repository/object-format/base/candidate/tree identity and sealed
+bundle/patch Artifacts; it has no Agent Result companion. Version-2 dependency
+and input selections therefore require `sourceAuthority` while
+`sourceResultId` and `sourceResultVersion` remain optional compatibility fields.
+Generated Go uses `omitempty` for absent source authority in legacy local wire
+shapes, preserving their canonical digest instead of emitting JSON `null`.
+Closed schema shape is not provider authentication, CI truth or plan-adoption
+authority; owning services rejoin every retained identity and current grant.
+
 An optional `governedExecution` declaration in authenticated `bridge.hello` and
 managed Agent capabilities names version 1, enforced workspace isolation,
 preventive path enforcement and exact supported operations. Manual capability

@@ -55,15 +55,18 @@ app-server crosses production Bridge/process boundaries but is not live-provider
 or multi-machine evidence. The accepted topology, counts, gates and replay
 matrix live in [`QA-052`](../acceptance/qa-052-controlled-product-loop-goal.md).
 
-GOV-026 accepts only the pre-provider architecture in
-[ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md). Its
-design review audits current materialization SQL/readers against closed source,
-proof and plan-adoption boundaries. `CON-023` must provide generated contract
-fixtures; `EXEC-009` must provide migration/backfill/reopen/rollback,
-shadow-equality, proof-substitution/current-authority/concurrent-adoption and
-physical local-content tests. Only then may `REPO-003` add real local
-authenticated-provider HTTP fault injection and remote canonical-content
-delivery. Documentation acceptance is never runtime or provider acceptance.
+GOV-026 accepts the pre-provider architecture in
+[ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md).
+`CON-023` supplies generated contract fixtures and `EXEC-009` supplies
+migration/backfill/reopen/rollback, shadow-equality, proof-substitution,
+current-authority, concurrent-adoption and physical local-content tests.
+REPO-003 is accepted only after adding real loopback authenticated-provider
+HTTP fault injection, real Git bundle import, canonical sealed-content delivery,
+exact CI proof, explicit Result-free adoption and a downstream Bridge byte read.
+Its [acceptance record](../acceptance/repo-003-remote-evidence-adoption-goal.md)
+also requires effect/row/object inspection and three isolated zero-residue
+rounds; documentation or contract acceptance alone is never provider
+acceptance.
 
 ## Scope
 

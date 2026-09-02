@@ -1,9 +1,10 @@
 # REPO-003 Remote Evidence Adoption Goal
 
-Status: frozen on 2026-09-02 before implementation. `docs/TASKS.md` remains
-the sole delivery-state register. ADR-0038 and the accepted CON-023/EXEC-009
-contracts remain the evidence authority; this goal may extend their remote
-producers but may not reinterpret local evidence or reuse semantics.
+Status: frozen on 2026-09-02 and accepted on 2026-09-03. `docs/TASKS.md`
+remains the sole delivery-state register. ADR-0038 and the accepted
+CON-023/EXEC-009 contracts remain the evidence authority; this delivery extends
+their remote producers without reinterpreting local evidence or reuse
+semantics.
 
 ## Goal
 
@@ -174,6 +175,64 @@ Completion requires physical evidence for all of the following:
 11. three isolated temporary-lifecycle runs add no `agentroom-*`,
     `agent-room-*`, `convenewire-*` or `convene-wire-*` directory and every
     operation-owned Git/import root is physically absent afterward.
+
+## Delivery Evidence
+
+The accepted implementation is split into single-purpose commits: `3c81444`
+freezes this goal, `d937c84` closes the remote wire contracts, `269c04d`
+retains and revokes provider bindings, `aeaa665` journals authenticated remote
+observations, and `5781e0a` imports/adopts evidence and cuts dependency readers
+over. Compatibility repairs `6b1ed95` and `8268c36` preserve the local reader
+shape and omit an absent Go `sourceAuthority` instead of serializing `null`.
+
+Migrations 0077 through 0080 retain immutable provider bindings, remote
+operation journals, commit/CI observations, remote evidence adoptions and the
+adoption-authoritative input projection. The HTTP surface is deliberately
+small:
+
+- `POST /api/teams/:teamId/remote-provider-bindings`;
+- `POST /api/remote-provider-bindings/:bindingId/revocations`;
+- `POST /api/execution-plans/:planId/remote-commit-observations`;
+- `POST /api/execution-plans/:planId/remote-ci-observations`;
+- `POST /api/execution-plans/:planId/remote-evidence-adoptions`.
+
+The physical Server acceptance uses a real loopback provider and real Git
+repositories. It proves authenticated GET-before-POST, one external effect
+under concurrent exact requests, restart/replay without new provider I/O,
+response-loss recovery, timeout/redirect/body bounds, missing credentials,
+revocation, changed-operation conflict, exact repository/base/commit/tree and
+SHA-1/SHA-256 object-format checks. Malformed/truncated bundles and Git spawn
+failure retain neither usable evidence nor owned temporary roots.
+
+Only a configured terminal CI pass creates a proof. Failed, timed-out,
+outcome-unknown, foreign, stale and duplicate checks cannot satisfy the exact
+profile set. Explicit adoption then creates one Result-free `verified_output`;
+without that adoption the graph remains blocked. With it, the real scheduler
+creates the downstream Run and the authenticated Bridge input endpoint returns
+the byte-exact canonical binary patch derived from the imported commit.
+
+The final verification record is:
+
+- `npm run validate` — 13 schemas and 258 fixtures pass;
+- `npm test --workspace @convene-wire/contracts` — 90 Node contract tests,
+  deterministic generated TypeScript/Go checks and Go tests pass;
+- `npm test --workspace @convene-wire/server` — 544 tests pass, including the
+  physical SQLite/HTTP/Git/Artifact/scheduler/Bridge-reader cases;
+- `npm run test:bridge` — every Go Bridge package passes and its owned root is
+  physically removed;
+- `npm run build` — Server, Web and generated-contract builds pass;
+- `npm run test:e2e` — eight deterministic cases pass and the opt-in live-model
+  case is skipped; the owned E2E root is physically removed;
+- `npm run test:temp-lifecycle` — three isolated rounds each pass all 24 tests.
+  For all four forbidden prefixes, every round records `before=0` and
+  `after=0`; the isolated base also contains zero entries after each round.
+
+`npm test` also passes the complete Server, Web, contracts, Bridge UI, QA
+evidence, product-experience, site and temporary-lifecycle workspace regression;
+its outer owned root reports a matching physical cleanup. `npm run lint:docs`
+reports zero issues. Passing tests are not the sole criterion: the tests inspect
+retained row/effect counts, exact Git objects and sealed bytes, and the
+lifecycle acceptance asserts the physical absence of operation and run roots.
 
 ## Explicit Non-goals
 

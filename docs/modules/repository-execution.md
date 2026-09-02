@@ -512,11 +512,11 @@ The bounded implementation target is frozen in the
 [REPO-003 remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
 Remote operations are opt-in owner-local bindings. The first adapter has a
 closed supported provider interface and fixed HTTPS origin/repository identity;
-no arbitrary URL supplied by Agent output is fetched. Credentials remain local.
-The operation records exact expected remote ref and object IDs before push.
-PR creation uses a stable operation marker and exact head/base identity; a lost
-response is reconciled by lookup before creation is retried. Ambiguous or
-multiple matches stop for a human. Never use force push to resolve uncertainty.
+no arbitrary URL supplied by Agent output is fetched. Credentials remain
+runtime-only and are resolved by binding ID. Every observation uses its stable
+operation identity for authenticated lookup before a missing effect may be
+created. Ambiguous outcomes remain `outcome_unknown`; an explicit retry starts
+with lookup and never blindly repeats the external effect.
 
 CI observations bind provider, repository identity, workflow/check identity,
 candidate commit, attempt and status. A URL or Agent claim is insufficient.
@@ -525,14 +525,20 @@ checks and different candidate commits cannot satisfy required verification.
 Provider adapters have real local HTTP acceptance with response-loss injection;
 live external execution is reported separately and is never implied by mocks.
 
-The first REPO-003 slice is observation-only. It retains an immutable
-metadata-only provider binding while resolving credentials at request time,
+REPO-003 is accepted as an observation-and-adoption-only slice. It retains an
+immutable metadata-only provider binding while resolving credentials at request time,
 uses authenticated operation lookup before any create retry, imports one
 bounded complete Git bundle, validates its exact base/candidate/tree and seals
 both bundle and canonical patch Artifacts. Configured passed CI observations
 are separate proof records. An explicit current-authority adoption—not the
 observation—releases `verified_output`. Optional PR identity is provenance only;
 remote push, PR creation/merge and callbacks remain closed.
+
+The imported commit is evidence, not a shared-ref mutation. Future remote push,
+pull-request creation/update/merge, webhook ingestion and deployment require
+their own provider operation contracts and acceptance. They cannot reuse the
+observation endpoint as an implicit mutation authority, and force push remains
+outside the control plane.
 
 ## Security and Failure Matrix
 
@@ -587,8 +593,10 @@ BRG-071 implementation. Local fixtures alone cannot satisfy that closure.
 later lifecycle acceptance; it runs actual
 bounded commands with pass/fail/timeout and forged-receipt negatives;
 `REPO-002` exercises overlapping branches, conflicts and target CAS;
-`REPO-003` must validate the accepted GOV-026 migration plus authenticated
-provider IO and ambiguous external effects before advertising remote behavior.
+`REPO-003` validates the accepted GOV-026 migration plus authenticated provider
+I/O and ambiguous external effects before advertising its bounded remote
+observation behavior. Its accepted evidence is recorded in the
+[remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
 `QA-052` through `QA-055` combine these with actual Server and Go Bridge
 processes, browser entry and direction auditing. Delivery state stays in TASKS.
 
@@ -612,11 +620,12 @@ not candidate-content owners.
 migration/backfill, transactional local dual-write, shadow-read equality,
 reader cutover and the versioned non-Result input projection under the frozen
 [runtime goal](../acceptance/source-evidence-adoption-runtime-goal.md).
-`REPO-003` begins only after that local authority is accepted and owns the
-remote adapter/provider observations. None may make legacy Result fields
-nullable, invent Results, accept a URL/hash without canonical content, or treat
-an observation as authority for another gate. Design acceptance alone adds no
-provider, migration or materialization capability.
+`REPO-003` started only after that local authority was accepted and now owns the
+remote adapter/provider observations plus explicit remote adoption. It does not
+make legacy Result fields nullable, invent Results, accept a URL/hash without
+canonical content, or treat an observation as authority for another gate. Its
+runtime acceptance, rather than the earlier design acceptance, is what adds
+this bounded provider capability.
 
 ### Independent Verification Vertical Slice
 
