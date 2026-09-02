@@ -85,7 +85,8 @@ test("ID validation matches the authoritative typed prefix and suffix boundaries
 
 test("only current view, tab, scope and lifecycle values are allowed", () => {
   for (const [key, values] of Object.entries({
-    view: ["work", "room", "agents", "members"], tab: ["overview", "runs", "results", "artifacts", "discussion", "audit"],
+    view: ["work", "room", "agents", "members"],
+    tab: ["overview", "plan", "runs", "results", "artifacts", "discussion", "audit"],
     scope: ["mine", "team"], state: ["draft", "ready", "active", "review", "completed", "canceled"]
   })) {
     for (const value of values) assert.equal(parseWorkspaceNavigation(`?${key}=${value}${key === "tab" ? "&workTask=task_01234567" : ""}`).error, null);

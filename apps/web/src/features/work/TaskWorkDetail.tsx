@@ -23,9 +23,10 @@ import type {
   TaskArtifactPage
 } from "../../models.js";
 import { ArtifactPreviewPanel, canPreviewArtifact } from "../task/ArtifactPreviewPanel.js";
+import { ExecutionPlanPanel } from "./ExecutionPlanPanel.js";
 import { RunRecoveryControls } from "./RunRecoveryControls.js";
 
-export const taskWorkDetailTabs = ["overview", "runs", "results", "artifacts", "discussion", "audit"] as const;
+export const taskWorkDetailTabs = ["overview", "plan", "runs", "results", "artifacts", "discussion", "audit"] as const;
 export type TaskWorkDetailTab = typeof taskWorkDetailTabs[number];
 
 interface DetailedRun {
@@ -345,6 +346,7 @@ export function TaskWorkDetail({
   ).length;
   const tabs = useMemo<Array<{ key: TaskWorkDetailTab; label: string }>>(() => [
     { key: "overview", label: text("概览", "Overview", locale) },
+    { key: "plan", label: text("计划", "Plan", locale) },
     { key: "runs", label: "Runs" },
     { key: "results", label: "Results" },
     { key: "artifacts", label: "Artifacts" },
@@ -637,6 +639,15 @@ export function TaskWorkDetail({
             </article>
           </div>
         )}
+
+        {tab === "plan" && <ExecutionPlanPanel
+          agentNames={agentNames}
+          currentMember={currentMember}
+          locale={locale}
+          onChanged={onChanged}
+          task={task}
+          token={token}
+        />}
 
         {tab === "results" && (
           <div className="work-result-list">

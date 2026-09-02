@@ -19,6 +19,59 @@
 .work-recovery .work-review-controls label:has(input) { display: flex; align-items: start; gap: 7px; }
 .work-recovery input[type="checkbox"] { flex: 0 0 auto; margin-top: 3px; }
 .work-recovery button { justify-self: start; }
+.work-plan-surface { display: grid; min-width: 0; gap: 18px; }
+.work-plan-toolbar { display: grid; grid-template-columns: minmax(0, 1fr) minmax(210px, 320px) auto; align-items: end; gap: 14px; }
+.work-plan-toolbar h4, .work-plan-toolbar p { margin: 0; }
+.work-plan-toolbar > div { display: grid; min-width: 0; gap: 6px; }
+.work-plan-toolbar label, .work-plan-editor label, .work-plan-review > label:first-of-type { display: grid; gap: 7px; color: #bac6ac; font-size: 12px; font-weight: 700; }
+.work-plan-toolbar select { box-sizing: border-box; width: 100%; min-width: 0; padding: 10px; border: 1px solid #46523a; border-radius: 8px; background: #171d13; color: #e0e8d8; font: inherit; }
+.work-plan-toolbar button, .work-plan-surface section button { min-height: 38px; padding: 8px 12px; border: 1px solid #566647; border-radius: 8px; background: #252d20; color: #dce7cf; cursor: pointer; font: inherit; font-weight: 700; }
+.work-plan-toolbar button:disabled, .work-plan-surface section button:disabled { cursor: default; opacity: .5; }
+.work-plan-toolbar button:focus-visible, .work-plan-surface button:focus-visible, .work-plan-surface select:focus-visible, .work-plan-surface textarea:focus-visible, .work-plan-surface input:focus-visible { outline: 2px solid #bfd27f; outline-offset: 3px; }
+.work-plan-facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.work-plan-facts article, .work-plan-blockers, .work-plan-graph, .work-plan-diff, .work-plan-editor, .work-plan-review, .work-plan-receipts, .work-plan-pending, .work-plan-empty, .work-plan-error { min-width: 0; padding: 16px; border: 1px solid #394434; border-radius: 12px; background: #1b2118; }
+.work-plan-surface h5 { margin: 0 0 10px; color: #e2ebda; font-size: 13px; }
+.work-plan-surface dl { display: grid; min-width: 0; gap: 7px; margin: 0; }
+.work-plan-surface dl > div { display: grid; grid-template-columns: minmax(100px, .7fr) minmax(0, 1.3fr); gap: 9px; }
+.work-plan-surface dt { color: #919f87; font-size: 11px; }
+.work-plan-surface dd { min-width: 0; margin: 0; overflow-wrap: anywhere; color: #dbe4d3; font-size: 12px; }
+.work-plan-surface p, .work-plan-surface li { overflow-wrap: anywhere; line-height: 1.55; }
+.work-plan-surface ul, .work-plan-surface ol { min-width: 0; padding-left: 20px; }
+.work-plan-digest { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+.work-plan-blockers { border-color: #65613d; background: #252418; }
+.work-plan-blockers p { margin-bottom: 0; color: #c9c9a2; }
+.work-plan-graph > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.work-plan-graph article { min-width: 0; padding: 13px; border: 1px solid #3b4635; border-radius: 10px; background: #20261d; }
+.work-plan-graph article header { display: flex; flex-wrap: wrap; gap: 8px; }
+.work-plan-graph article header span, .work-plan-graph > ol span { padding: 2px 6px; border-radius: 999px; background: #333d2b; color: #cbd9bc; font-size: 10px; }
+.work-plan-graph > ol li { display: grid; grid-template-columns: minmax(140px, 1fr) auto; gap: 4px 10px; margin: 8px 0; }
+.work-plan-graph > ol small { grid-column: 1 / -1; color: #9eaa95; }
+.work-plan-diff ol { display: grid; gap: 8px; padding: 0; list-style: none; }
+.work-plan-diff li { display: grid; grid-template-columns: auto minmax(150px, .7fr) minmax(0, 1fr) minmax(0, 1fr); align-items: start; gap: 8px; }
+.work-plan-diff code, .work-plan-diff del, .work-plan-diff ins { min-width: 0; padding: 5px 7px; overflow-wrap: anywhere; border-radius: 5px; background: #141811; color: #cbd6c2; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; text-decoration: none; }
+.work-plan-diff del { background: #361f1d; color: #f0bab4; }
+.work-plan-diff ins { background: #1d3320; color: #bfe3b6; }
+.work-plan-editor textarea { box-sizing: border-box; width: 100%; min-height: 360px; resize: vertical; padding: 12px; border: 1px solid #4b5841; border-radius: 8px; background: #11150f; color: #dfe9d8; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; tab-size: 2; }
+.work-plan-editor > div, .work-plan-review > div, .work-plan-pending { display: flex; flex-wrap: wrap; gap: 10px; }
+.work-plan-review textarea { box-sizing: border-box; width: 100%; min-height: 90px; padding: 10px; border: 1px solid #4b5841; border-radius: 8px; background: #151a12; color: #e1ead9; font: inherit; }
+.work-plan-confirm { display: flex; align-items: start; gap: 8px; margin: 12px 0; color: #d6dfcc; font-size: 12px; line-height: 1.5; }
+.work-plan-confirm input { flex: 0 0 auto; margin-top: 3px; }
+.work-plan-pending { align-items: center; border-color: #826c3c; background: #302818; }
+.work-plan-pending p { flex: 1 1 100%; margin: 0; }
+.work-plan-receipts > ol { display: grid; gap: 10px; padding: 0; list-style: none; }
+.work-plan-receipts > ol > li, .work-plan-latest-receipt { display: grid; gap: 8px; padding: 12px; border: 1px solid #3e4939; border-radius: 9px; background: #20261d; }
+.work-plan-receipts header, .work-plan-latest-receipt { grid-template-columns: minmax(0, 1fr) auto; }
+.work-plan-receipts header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
+.work-plan-receipts header span, .work-plan-latest-receipt span { overflow-wrap: anywhere; color: #9eaa95; font-size: 11px; }
+:root[data-theme="light"] .work-plan-toolbar label, :root[data-theme="light"] .work-plan-editor label, :root[data-theme="light"] .work-plan-review > label:first-of-type { color: #526443; }
+:root[data-theme="light"] .work-plan-toolbar select, :root[data-theme="light"] .work-plan-toolbar button, :root[data-theme="light"] .work-plan-surface section button { border-color: #bacba9; background: #f5f8ef; color: #354827; }
+:root[data-theme="light"] .work-plan-facts article, :root[data-theme="light"] .work-plan-blockers, :root[data-theme="light"] .work-plan-graph, :root[data-theme="light"] .work-plan-diff, :root[data-theme="light"] .work-plan-editor, :root[data-theme="light"] .work-plan-review, :root[data-theme="light"] .work-plan-receipts, :root[data-theme="light"] .work-plan-pending, :root[data-theme="light"] .work-plan-empty, :root[data-theme="light"] .work-plan-error { border-color: #cad7be; background: #fbfdf8; }
+:root[data-theme="light"] .work-plan-surface h5, :root[data-theme="light"] .work-plan-surface dd { color: #354827; }
+:root[data-theme="light"] .work-plan-surface dt { color: #607254; }
+:root[data-theme="light"] .work-plan-blockers, :root[data-theme="light"] .work-plan-pending { background: #fffbea; }
+:root[data-theme="light"] .work-plan-graph article, :root[data-theme="light"] .work-plan-receipts > ol > li, :root[data-theme="light"] .work-plan-latest-receipt { background: #f2f7ed; }
+:root[data-theme="light"] .work-plan-editor textarea, :root[data-theme="light"] .work-plan-review textarea { border-color: #b9c9ac; background: #fff; color: #27331e; }
+.work-result-card li .work-inline-link { display: inline-block; margin: 4px 0 4px 8px; }
 .work-result-card li .work-inline-link { display: inline-block; margin: 4px 0 4px 8px; }
 .task-delivery-options { display: grid; gap: 9px; margin: 8px 0; padding: 12px; border: 1px solid #3d4537; border-radius: 9px; }
 .task-delivery-options summary { cursor: pointer; color: #d2dfba; font-size: 12px; font-weight: 750; }
@@ -39,4 +92,10 @@
   .work-toolbar { justify-content: flex-start; }
   .work-detail-actions { justify-items: start; }
   .work-recovery .work-review-controls button { max-width: 100%; white-space: normal; }
+  .work-plan-toolbar, .work-plan-facts, .work-plan-graph > div { grid-template-columns: minmax(0, 1fr); }
+  .work-plan-toolbar button { justify-self: start; }
+  .work-plan-diff li { grid-template-columns: auto minmax(0, 1fr); }
+  .work-plan-diff del, .work-plan-diff ins { grid-column: 1 / -1; }
+  .work-plan-surface dl > div { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .work-plan-editor textarea { min-height: 280px; }
 }
