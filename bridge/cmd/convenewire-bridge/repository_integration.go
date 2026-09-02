@@ -85,7 +85,7 @@ func repositoryIntegrationCommand(args []string, output io.Writer, _ func() time
 	if err := json.NewEncoder(output).Encode(retained); err != nil {
 		return err
 	}
-	if retained.Receipt.State != execution.Succeeded {
+	if retained.Receipt.State != execution.PurpleSucceeded {
 		return fmt.Errorf("integration retained terminal state %s", retained.Receipt.State)
 	}
 	return nil

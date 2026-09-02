@@ -93,7 +93,7 @@ func (c *GovernedIntegrationCoordinator) Execute(ctx context.Context,
 		return c.recoverOrExecute(ctx, admission, source, sourceErr, now)
 	}
 	if sourceErr != nil || c.bindings.CheckIntegrationGrant(ctx, admission.Operation, now) != nil {
-		return c.retainTerminal(ctx, admission, execution.StateFailed,
+		return c.retainTerminal(ctx, admission, execution.PurpleFailed,
 			"INTEGRATION_LOCAL_AUTHORITY_UNAVAILABLE", now)
 	}
 	if err := c.journal.PutIntent(bridgeintegration.IntentRecord{Version: 1, Admission: admission}); err != nil {
@@ -106,20 +106,20 @@ func (c *GovernedIntegrationCoordinator) recoverOrExecute(ctx context.Context,
 	admission bridgeintegration.Admission, source repository.Source, sourceErr error,
 	now time.Time) (bridgeintegration.RetainedReceipt, error) {
 	if sourceErr != nil {
-		return c.retainTerminal(ctx, admission, execution.StateOutcomeUnknown,
+		return c.retainTerminal(ctx, admission, execution.PurpleOutcomeUnknown,
 			"INTEGRATION_RECOVERY_UNAVAILABLE", now)
 	}
 	action := admission.Operation.Action.Integrate
 	current, err := c.preparer.InspectIntegrationTarget(ctx, source, action.Target.TargetRef)
 	if err != nil {
-		return c.retainTerminal(ctx, admission, execution.StateOutcomeUnknown,
+		return c.retainTerminal(ctx, admission, execution.PurpleOutcomeUnknown,
 			"INTEGRATION_RECOVERY_UNAVAILABLE", now)
 	}
 	if current == action.CandidateCommit {
-		return c.retainTerminal(ctx, admission, execution.Succeeded, "", now)
+		return c.retainTerminal(ctx, admission, execution.PurpleSucceeded, "", now)
 	}
 	if current != action.Target.ExpectedCommit {
-		return c.retainTerminal(ctx, admission, execution.StateOutcomeUnknown,
+		return c.retainTerminal(ctx, admission, execution.PurpleOutcomeUnknown,
 			"INTEGRATION_TARGET_OUTCOME_UNKNOWN", now)
 	}
 	return c.executeCAS(ctx, admission, source, now)
@@ -129,12 +129,12 @@ func (c *GovernedIntegrationCoordinator) executeCAS(ctx context.Context,
 	admission bridgeintegration.Admission, source repository.Source,
 	now time.Time) (bridgeintegration.RetainedReceipt, error) {
 	if err := c.bindings.CheckIntegrationGrant(ctx, admission.Operation, now); err != nil {
-		return c.retainTerminal(ctx, admission, execution.StateFailed,
+		return c.retainTerminal(ctx, admission, execution.PurpleFailed,
 			"INTEGRATION_LOCAL_AUTHORITY_UNAVAILABLE", now)
 	}
 	_, err := c.preparer.IntegrateExactTarget(ctx, source, admission.Operation, admission.Checkpoint)
 	if err == nil {
-		return c.retainTerminal(ctx, admission, execution.Succeeded, "", c.now().UTC())
+		return c.retainTerminal(ctx, admission, execution.PurpleSucceeded, "", c.now().UTC())
 	}
 	state, code := integrationFailure(err)
 	return c.retainTerminal(ctx, admission, state, code, c.now().UTC())
@@ -145,15 +145,15 @@ func integrationFailure(err error) (execution.RepositoryOperationReceiptState, s
 	case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 		return execution.FluffyCanceled, "INTEGRATION_CANCELED"
 	case errors.Is(err, repository.ErrIntegrationTargetMoved):
-		return execution.StateFailed, "INTEGRATION_TARGET_MOVED"
+		return execution.PurpleFailed, "INTEGRATION_TARGET_MOVED"
 	case errors.Is(err, repository.ErrIntegrationTargetCheckedOut):
-		return execution.StateFailed, "INTEGRATION_TARGET_CHECKED_OUT"
+		return execution.PurpleFailed, "INTEGRATION_TARGET_CHECKED_OUT"
 	case errors.Is(err, repository.ErrIntegrationNonFastForward):
-		return execution.StateFailed, "INTEGRATION_NON_FAST_FORWARD"
+		return execution.PurpleFailed, "INTEGRATION_NON_FAST_FORWARD"
 	case errors.Is(err, repository.ErrIntegrationOutcomeUnknown):
-		return execution.StateOutcomeUnknown, "INTEGRATION_TARGET_OUTCOME_UNKNOWN"
+		return execution.PurpleOutcomeUnknown, "INTEGRATION_TARGET_OUTCOME_UNKNOWN"
 	default:
-		return execution.StateFailed, "INTEGRATION_LOCAL_EFFECT_FAILED"
+		return execution.PurpleFailed, "INTEGRATION_LOCAL_EFFECT_FAILED"
 	}
 }
 

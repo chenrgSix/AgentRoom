@@ -66,7 +66,7 @@ func TestGovernedIntegrationCoordinatorRetainsSuccessAndNeverRepeatsCAS(t *testi
 	}
 	coordinator.now = func() time.Time { return runtimeFenceNow }
 	retained, err := coordinator.Execute(context.Background(), admission.Operation.OperationID)
-	if err != nil || retained.Receipt.State != execution.Succeeded ||
+	if err != nil || retained.Receipt.State != execution.PurpleSucceeded ||
 		preparer.integrateCalls != 1 || bindings.checkCalls != 2 || journal.intent == nil || journal.receipt == nil {
 		t.Fatalf("retained=%+v error=%v preparer=%+v bindings=%+v journal=%+v",
 			retained, err, preparer, bindings, journal)
@@ -108,15 +108,15 @@ func TestGovernedIntegrationCoordinatorRecoversExactIntentWithoutBlindRetry(t *t
 			}
 			switch mode {
 			case "candidate":
-				if retained.Receipt.State != execution.Succeeded || preparer.integrateCalls != 0 {
+				if retained.Receipt.State != execution.PurpleSucceeded || preparer.integrateCalls != 0 {
 					t.Fatal("confirmed candidate was not recovered as success")
 				}
 			case "expected":
-				if retained.Receipt.State != execution.Succeeded || preparer.integrateCalls != 1 {
+				if retained.Receipt.State != execution.PurpleSucceeded || preparer.integrateCalls != 1 {
 					t.Fatal("unchanged expected target did not retry exact intent")
 				}
 			case "other":
-				if retained.Receipt.State != execution.StateOutcomeUnknown || preparer.integrateCalls != 0 ||
+				if retained.Receipt.State != execution.PurpleOutcomeUnknown || preparer.integrateCalls != 0 ||
 					retained.Receipt.ErrorCode == nil || *retained.Receipt.ErrorCode != "INTEGRATION_TARGET_OUTCOME_UNKNOWN" {
 					t.Fatal("foreign post-intent target was not retained as unknown")
 				}
@@ -137,7 +137,7 @@ func TestGovernedIntegrationCoordinatorRetainsCASFailure(t *testing.T) {
 	}
 	coordinator.now = func() time.Time { return runtimeFenceNow }
 	retained, err := coordinator.Execute(context.Background(), admission.Operation.OperationID)
-	if err != nil || retained.Receipt.State != execution.StateFailed || retained.Receipt.ErrorCode == nil ||
+	if err != nil || retained.Receipt.State != execution.PurpleFailed || retained.Receipt.ErrorCode == nil ||
 		*retained.Receipt.ErrorCode != "INTEGRATION_TARGET_MOVED" {
 		t.Fatalf("retained=%+v error=%v", retained, err)
 	}

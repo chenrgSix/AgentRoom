@@ -88,7 +88,7 @@ func integrationReceipt(admission Admission) execution.RepositoryOperationReceip
 		OperationID: operation.OperationID, RequestDigest: operation.RequestDigest,
 		Kind: execution.Integrate, RepositoryID: operation.RepositoryID,
 		BindingID: operation.BindingID, DeviceID: operation.DeviceID,
-		State: execution.Succeeded, ObservedGeneration: &generation,
+		State: execution.PurpleSucceeded, ObservedGeneration: &generation,
 		CheckpointID: &checkpointID, VerificationID: nil,
 		CandidateCommit: &candidate, CandidateTree: &tree, Target: &target,
 		ProviderObservationID: nil, ErrorCode: nil, RecordedAt: "2026-08-31T10:06:00Z"}
