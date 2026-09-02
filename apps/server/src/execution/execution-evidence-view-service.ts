@@ -86,9 +86,11 @@ export class ExecutionEvidenceViewService {
       version: 1,
       taskId,
       plans: page.plans.map((plan) => {
-        const nodes = plan.current.definition.nodes.map((node) =>
-          this.node(principal, plan, node, now)
-        ).sort((left, right) => binary(left.nodeKey, right.nodeKey));
+        const nodes = plan.state === "draft" && plan.compiledTasks.length === 0
+          ? []
+          : plan.current.definition.nodes.map((node) =>
+            this.node(principal, plan, node, now)
+          ).sort((left, right) => binary(left.nodeKey, right.nodeKey));
         return {
           planId: plan.planId,
           planRevision: plan.current.revision,

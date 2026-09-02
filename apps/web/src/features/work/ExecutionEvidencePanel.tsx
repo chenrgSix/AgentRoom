@@ -308,6 +308,11 @@ export function ExecutionEvidencePanel({
         <div><dt>{t("修订", "Revision", locale)}</dt><dd>r{selected.planRevision} · c{selected.controlRevision}</dd></div>
         <div><dt>Digest</dt><dd>{selected.planDigest}</dd></div>
       </dl>
+      {selected.nodes.length === 0 && <p>{t(
+        "当前 Plan 尚未获批，因此还没有 compiled Task 或执行证据。",
+        "This Plan is not approved yet, so it has no compiled Tasks or execution evidence.",
+        locale
+      )}</p>}
       <div className="work-evidence-nodes">
         {selected.nodes.map((node) => {
           const remoteKey = commandKey(selected.planId, node.nodeKey, "remote_adoption");

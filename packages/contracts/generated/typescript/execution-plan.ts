@@ -3619,7 +3619,7 @@ export interface ExecutionEvidencePage {
 
 export interface ExecutionEvidencePagePlan {
   controlRevision: number;
-  nodes:           [PlanNode, ...PlanNode[]];
+  nodes:           PlanNode[];
   planDigest:      string;
   planId:          string;
   planRevision:    number;
@@ -4199,7 +4199,7 @@ export interface PurpleProfile {
 
 export interface ExecutionEvidencePlan {
   controlRevision: number;
-  nodes:           [ExecutionEvidencePlanNode, ...ExecutionEvidencePlanNode[]];
+  nodes:           ExecutionEvidencePlanNode[];
   planDigest:      string;
   planId:          string;
   planRevision:    number;

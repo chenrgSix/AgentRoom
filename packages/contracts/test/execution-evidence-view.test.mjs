@@ -198,6 +198,17 @@ test("execution evidence page has deterministic plan and node order", () => {
     /EXECUTION_EVIDENCE_PLAN_ORDER/u);
 });
 
+test("draft execution plans may truthfully expose no compiled evidence nodes", () => {
+  const value = page();
+  value.plans[0].state = "draft";
+  value.plans[0].controlRevision = 1;
+  value.plans[0].nodes = [];
+  assert.equal(validators.executionEvidencePage(value), true,
+    JSON.stringify(validators.executionEvidencePage.errors));
+  assert.doesNotThrow(() =>
+    assertExecutionCommand("executionEvidencePage", value));
+});
+
 test("proof-control commands are closed exact payloads", () => {
   const remoteCommand = {
     operationId: "op_web_adopt00001",

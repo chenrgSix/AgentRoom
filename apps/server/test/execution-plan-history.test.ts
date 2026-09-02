@@ -13,6 +13,12 @@ test("execution drafts freeze attributed decisions and append history without Ta
   assert.equal(first.current.revision, 1);
   assert.deepEqual(first.current.author, { kind: "member", memberId: f.ownerMemberId });
   assert.deepEqual(first.compiledTasks, []);
+  const evidence = await f.ok(
+    "GET", `/api/tasks/${f.root.taskId}/execution-evidence`
+  );
+  assert.equal(evidence.plans[0].planId, first.planId);
+  assert.equal(evidence.plans[0].state, "draft");
+  assert.deepEqual(evidence.plans[0].nodes, []);
   const decision = await f.ok("GET", `/api/execution-decisions/${first.current.decisionId}`);
   assert.equal(decision.supersedesDecisionId, null);
   assert.deepEqual(decision.content, first.current.definition.decision);

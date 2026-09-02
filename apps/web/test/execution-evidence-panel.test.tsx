@@ -381,3 +381,23 @@ test("ordinary members can inspect proof but cannot see owner commands", async (
     dom.window.close();
   }
 });
+
+test("draft plans render an explicit no-compiled-evidence state", async () => {
+  const dom = installDom();
+  const draft = page();
+  draft.plans[0]!.state = "draft";
+  draft.plans[0]!.nodes = [];
+  globalThis.fetch = (async () => json(draft)) as typeof fetch;
+  const { cleanup, render, within } = await import("@testing-library/react");
+  try {
+    renderPanel(render);
+    const screen = within(dom.window.document.body);
+    await screen.findByText(
+      "This Plan is not approved yet, so it has no compiled Tasks or execution evidence."
+    );
+    assert.equal(screen.queryAllByRole("article").length, 0);
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
