@@ -57,6 +57,35 @@ for (const mode of ["local", "trusted-team"] as const) test(`product experience 
   const artifactId = results.json()[0].proposal.sources[0].artifactId as string;
   const preview = await app.inject({ method: "GET", url: `/api/tasks/${evidenceTask.taskId}/artifacts/${artifactId}/preview`, headers });
   assert.equal(preview.statusCode, 200);
+
+  const planTask = taskList.find(({ title }) =>
+    title === "QA · 审查精确执行计划");
+  assert.ok(planTask);
+  const planPage = await app.inject({
+    method: "GET",
+    url: `/api/tasks/${planTask.taskId}/execution-plans`,
+    headers
+  });
+  assert.equal(planPage.statusCode, 200);
+  const plan = planPage.json().plans[0];
+  assert.equal(plan.rootTaskId, planTask.taskId);
+  assert.equal(plan.current.revision, 2);
+  assert.equal(plan.current.definition.policy.maxConcurrency, 1);
+  assert.match(plan.current.definition.title, /已收紧/u);
+  const revisions = await app.inject({
+    method: "GET",
+    url: `/api/execution-plans/${plan.planId}/revisions`,
+    headers
+  });
+  assert.equal(revisions.statusCode, 200);
+  assert.equal(revisions.json().revisions.length, 2);
+  const approvals = await app.inject({
+    method: "GET",
+    url: `/api/execution-plans/${plan.planId}/approvals`,
+    headers
+  });
+  assert.equal(approvals.statusCode, 200);
+  assert.equal(approvals.json().approvals.length, 0);
   assert.equal(preview.json().integrity, "verified");
   assert.equal(preview.json().trust, "untrusted");
   assert.match(preview.json().text as string, /<script>window.qaUnsafeExecuted = true<\/script>/u);

@@ -1,10 +1,14 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { realpath } from "node:fs/promises";
+import { readFile, realpath } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 
 import type { TaskProjection } from "@convene-wire/contracts/task-result";
+import type {
+  ExecutionPlanDefinition,
+  ExecutionPlanProjection
+} from "@convene-wire/contracts/execution-plan";
 import type { FastifyInstance } from "fastify";
 
 import { CoreRepository } from "../../apps/server/src/data/core-repository.js";
@@ -183,6 +187,72 @@ export async function seedProductExperience(app: FastifyInstance, options: SeedO
       sources: [{ evidenceRefId: "evidence_qa_artifact_0001", kind: "artifact", artifactId: bound.artifact.artifactId }],
       criterionClaims: [{ criterionKey: "criterion_qa_verified_0001", coverage: "satisfied", explanation: "真实 sealed 快照的 SHA-256 与预览字节一致。", evidenceRefIds: ["evidence_qa_artifact_0001"] }]
     });
+
+    const planTask = await request<TaskProjection>(
+      "POST", `/api/rooms/${options.roomId}/tasks`, {
+        title: "QA · 审查精确执行计划",
+        goal: "检查版本差异、依赖门、策略和 digest，再由人类明确决定。",
+        ownerMemberId: options.ownerMemberId
+      }
+    );
+    const planMessage = await request<{ message: { messageId: string; sequence: number } }>(
+      "POST", `/api/rooms/${options.roomId}/messages`, {
+        taskId: planTask.taskId,
+        content: "QA 合成决策：使用受控双节点计划验证精确的人类批准界面。"
+      }
+    );
+    const planCases = JSON.parse(await readFile(new URL(
+      "../../packages/contracts/fixtures/execution-plan-cases.json",
+      import.meta.url
+    ), "utf8")) as {
+      cases: Array<{ name: string; instance: ExecutionPlanDefinition }>;
+    };
+    const planTemplate = planCases.cases.find(({ name }) =>
+      name === "execution: valid full plan")?.instance;
+    assert.ok(planTemplate);
+    const planDefinition = structuredClone(planTemplate);
+    planDefinition.rootTaskId = planTask.taskId;
+    planDefinition.title = "QA · 双节点验证交付计划";
+    planDefinition.decision.summary =
+      "先实现并独立验证，再让下游节点消费 verified_output。";
+    planDefinition.decision.sources = [{
+      evidenceRefId: "evidence_qa_plan_message0001",
+      kind: "message",
+      messageId: planMessage.message.messageId
+    }];
+    planDefinition.decision.sourceRevisions = [{
+      evidenceRefId: "evidence_qa_plan_message0001",
+      revision: planMessage.message.sequence
+    }];
+    for (const node of planDefinition.nodes) {
+      node.agentId = manual.agent.agentId;
+      node.task.ownerMemberId = options.ownerMemberId;
+    }
+    const currentPlanTask = await request<TaskProjection>(
+      "GET", `/api/tasks/${planTask.taskId}`
+    );
+    const firstPlan = await request<ExecutionPlanProjection>(
+      "POST", `/api/tasks/${planTask.taskId}/execution-plans`, {
+        operationId: `op_qa_plan_${randomUUID().replaceAll("-", "_")}`,
+        expectedRootTaskRevision: currentPlanTask.taskRevision,
+        definition: planDefinition
+      }
+    );
+    const revisedDefinition = structuredClone(planDefinition);
+    revisedDefinition.title = "QA · 双节点验证交付计划（已收紧）";
+    revisedDefinition.policy.maxConcurrency = 1;
+    revisedDefinition.decision.items.push({
+      itemKey: "human_control",
+      statement: "Only the exact retained revision may receive human approval."
+    });
+    await request(
+      "POST", `/api/execution-plans/${firstPlan.planId}/revisions`, {
+        operationId: `op_qa_plan_revision_${randomUUID().replaceAll("-", "_")}`,
+        expectedRevision: firstPlan.current.revision,
+        expectedRootTaskRevision: currentPlanTask.taskRevision,
+        definition: revisedDefinition
+      }
+    );
   } finally {
     database.close();
   }
