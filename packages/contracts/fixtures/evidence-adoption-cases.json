@@ -280,6 +280,147 @@
       }
     },
     {
+      "name": "evidence adoption: valid evidence reuse contract",
+      "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/evidenceReuseContract",
+      "valid": true,
+      "instance": {
+        "version": 1,
+        "reuseContractId": "reuse_3188052a70d10d983f99039d2ef23bd5005666c719516bac44bc5982ad82ed07",
+        "adoptionId": "adoption_evidence01",
+        "adoptionDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "planId": "plan_evidence001",
+        "planRevision": 2,
+        "nodeKey": "Build",
+        "gate": "verified_output",
+        "runtimeInputBindingDigest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "reuseInputs": [
+          {
+            "inputSlot": "source",
+            "producer": {
+              "kind": "adopted_evidence",
+              "edge": {
+                "edgeKey": "BuildSource",
+                "fromNodeKey": "Prepare",
+                "toNodeKey": "Build",
+                "gate": "verified_output",
+                "bindings": [
+                  {
+                    "outputSlot": "patch",
+                    "inputSlot": "source"
+                  }
+                ]
+              },
+              "sourceEvidenceId": "source_taskresult01",
+              "sourceDigest": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+              "proofSetDigest": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            },
+            "artifact": {
+              "contentDigest": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+              "kind": "patch"
+            }
+          }
+        ],
+        "reuseInputEvidenceDigest": "8e8803928375689487c2cbcc3e6ecbafbc372f36792ae82cca0ba46f57112540",
+        "nodeExecutionDigest": "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff",
+        "node": {
+          "nodeKey": "Build",
+          "kind": "implementation",
+          "required": true,
+          "agentId": "agent_evidence01",
+          "repository": {
+            "repositoryId": "repo_evidence001",
+            "bindingId": "repobind_evidence01",
+            "baseCommit": "1111111111111111111111111111111111111111",
+            "grantId": "grant_evidence001",
+            "grantRevision": 1,
+            "runtimeProfileId": "profile_evidence01",
+            "runtimeProfileDigest": "2222222222222222222222222222222222222222222222222222222222222222"
+          },
+          "scope": {
+            "access": "isolated_write",
+            "allowedPaths": [
+              "src"
+            ],
+            "forbiddenPaths": [
+              ".git"
+            ],
+            "requirePreventivePathEnforcement": true
+          },
+          "budget": {
+            "maxRunAttempts": 3,
+            "maxExecutionDurationSeconds": 3600
+          },
+          "verificationProfiles": [
+            {
+              "profileId": "profile_evidence01",
+              "revision": 1,
+              "digest": "3333333333333333333333333333333333333333333333333333333333333333",
+              "required": true
+            }
+          ],
+          "inputs": [
+            {
+              "slotKey": "source",
+              "kind": "patch",
+              "required": true
+            }
+          ],
+          "outputs": [
+            {
+              "slotKey": "commit",
+              "kind": "commit",
+              "required": true
+            }
+          ]
+        },
+        "task": {
+          "taskId": "task_evidence01",
+          "roomId": "room_evidence01",
+          "parentTaskId": "task_parent00001",
+          "title": "Build change",
+          "goal": "Produce the approved change",
+          "ownerMemberId": "member_evidence01",
+          "completionPolicy": "accepted_result_required",
+          "definitionRevision": 2,
+          "criteriaRevision": 3,
+          "criteria": [
+            {
+              "criterionKey": "criterion_evidence01",
+              "description": "Tests pass",
+              "required": true,
+              "ordinal": 1
+            }
+          ],
+          "assignments": [
+            {
+              "agentId": "agent_evidence01",
+              "role": "primary",
+              "assignedByMemberId": "member_evidence01",
+              "assignedAt": "2026-09-02T01:00:00.123Z"
+            }
+          ],
+          "budgetPolicy": {
+            "maxRunAttempts": 3,
+            "maxExecutionDurationSeconds": 3600
+          }
+        },
+        "integrationPolicy": {
+          "integration": "local_integration",
+          "requireHumanIntegrationApproval": true,
+          "integrationTargets": [
+            {
+              "repositoryId": "repo_evidence001",
+              "targetRef": "refs/heads/main",
+              "expectedCommit": "4444444444444444444444444444444444444444"
+            }
+          ]
+        },
+        "nodeReuseContractDigest": "104fe6edf1300a5adc8e4ede61e2a30d9c8d6519ff94381b0a742fcd7c69b690",
+        "contractDigest": "e9184955bd29b4bcf18809d0133222d4268968875cabcd94b32c43932f95933b",
+        "createdAt": "2026-09-02T01:03:00.123Z"
+      }
+    },
+    {
       "name": "evidence adoption: accepted gate rejects verification proof",
       "schemaId": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/evidenceAdoption",
       "valid": false,

@@ -69,6 +69,7 @@ func TestExecutionGeneratedTypesPreserveWireFixtures(t *testing.T) {
 		"evidence adoption: valid CI observation proof contract":            func() any { return &execution.GateProofRef{} },
 		"evidence adoption: valid integration proof":                        func() any { return &execution.GateProofRef{} },
 		"evidence adoption: valid accepted Result adoption":                 func() any { return &execution.EvidenceAdoption{} },
+		"evidence adoption: valid evidence reuse contract":                  func() any { return &execution.EvidenceReuseContract{} },
 	}
 	checked := 0
 	for _, fixture := range suite.Cases {

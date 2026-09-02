@@ -14,6 +14,9 @@ export function sourceEvidenceDigest(value: unknown): string;
 export function evidenceProofSetDigest(proofs: unknown): string;
 export function evidenceAdoptionOperationDigest(value: unknown): string;
 export function evidenceAdoptionDigest(value: unknown): string;
+export function evidenceReuseInputDigest(value: unknown): string;
+export function evidenceNodeReuseContractDigest(value: unknown): string;
+export function evidenceReuseContractDigest(value: unknown): string;
 export function assertExecutionCommand(
   kind: "planDefinition" | "proposalCommand" | "discussionPlanProposalDraft" |
     "revisionCommand" |
@@ -23,7 +26,8 @@ export function assertExecutionCommand(
     "runtimeAuthorityRequest" | "runtimeAuthorityView" |
     "repositoryBinding" | "executionGrant" | "repositoryOperation" |
     "repositoryReceipt" | "executionCheckpoint" | "verificationReceipt" |
-    "sourceEvidence" | "gateProofRef" | "evidenceAdoption",
+    "sourceEvidence" | "gateProofRef" | "evidenceAdoption" |
+    "evidenceReuseContract",
   value: unknown
 ): void;
 export function validateExecutionDecision(value: unknown): ExecutionDecisionContent;

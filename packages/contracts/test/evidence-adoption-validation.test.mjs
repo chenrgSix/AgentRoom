@@ -6,7 +6,11 @@ import {
   assertExecutionCommand,
   evidenceAdoptionDigest,
   evidenceAdoptionOperationDigest,
+  evidenceNodeReuseContractDigest,
   evidenceProofSetDigest,
+  evidenceReuseContractDigest,
+  evidenceReuseInputDigest,
+  executionOperationDigest,
   sourceEvidenceDigest
 } from "../src/execution-validation.mjs";
 
@@ -17,7 +21,8 @@ const suite = JSON.parse(await readFile(
 const kinds = {
   sourceEvidence: "sourceEvidence",
   gateProofRef: "gateProofRef",
-  evidenceAdoption: "evidenceAdoption"
+  evidenceAdoption: "evidenceAdoption",
+  evidenceReuseContract: "evidenceReuseContract"
 };
 
 function kindFor(fixture) {
@@ -114,5 +119,97 @@ test("adoption rejects wrong, duplicate, unordered and digest-substituted proof 
     const invalid = structuredClone(base);
     mutate(invalid);
     assert.throws(() => assertExecutionCommand("evidenceAdoption", invalid));
+  }
+});
+
+function sealReuseContract(value) {
+  value.reuseInputEvidenceDigest = evidenceReuseInputDigest(value.reuseInputs);
+  value.nodeReuseContractDigest = evidenceNodeReuseContractDigest(value);
+  value.contractDigest = evidenceReuseContractDigest(value);
+  value.reuseContractId = `reuse_${executionOperationDigest({
+    adoptionId: value.adoptionId,
+    contractDigest: value.contractDigest
+  })}`;
+  return value;
+}
+
+test("reuse contracts separate attempt identity from logical evidence", () => {
+  const base = structuredClone(suite.cases.find((entry) =>
+    entry.name === "evidence adoption: valid evidence reuse contract"
+  ).instance);
+  assert.doesNotThrow(() =>
+    assertExecutionCommand("evidenceReuseContract", base));
+
+  const bindingA = {
+    inputSlot: "source",
+    destinationRunId: "run_attempt0001",
+    destinationDeviceId: "device_attempt01",
+    bindingId: "input_attempt0001",
+    issuedAt: "2026-09-02T01:00:00Z",
+    expiresAt: "2026-09-02T02:00:00Z"
+  };
+  const bindingB = {
+    ...bindingA,
+    destinationRunId: "run_attempt0002",
+    destinationDeviceId: "device_attempt02",
+    bindingId: "input_attempt0002",
+    issuedAt: "2026-09-02T03:00:00Z",
+    expiresAt: "2026-09-02T04:00:00Z"
+  };
+  assert.notEqual(executionOperationDigest([bindingA]),
+    executionOperationDigest([bindingB]));
+  assert.equal(evidenceReuseInputDigest(base.reuseInputs),
+    evidenceReuseInputDigest(structuredClone(base.reuseInputs)));
+
+  const laterRevision = structuredClone(base);
+  laterRevision.planRevision += 1;
+  laterRevision.nodeExecutionDigest = "0".repeat(64);
+  sealReuseContract(laterRevision);
+  assert.notEqual(laterRevision.contractDigest, base.contractDigest);
+  assert.equal(laterRevision.nodeReuseContractDigest,
+    base.nodeReuseContractDigest);
+  assert.equal(laterRevision.reuseInputEvidenceDigest,
+    base.reuseInputEvidenceDigest);
+  assert.doesNotThrow(() =>
+    assertExecutionCommand("evidenceReuseContract", laterRevision));
+});
+
+test("reuse contracts reject changed semantics, substitution and digest drift", () => {
+  const base = structuredClone(suite.cases.find((entry) =>
+    entry.name === "evidence adoption: valid evidence reuse contract"
+  ).instance);
+  const mutations = [
+    (value) => { value.reuseInputs[0].inputSlot = "wrong"; },
+    (value) => { value.reuseInputs[0].producer.edge.toNodeKey = "Other"; },
+    (value) => { value.reuseInputs[0].artifact.kind = "document"; },
+    (value) => { value.nodeReuseContractDigest = "0".repeat(64); },
+    (value) => { value.contractDigest = "0".repeat(64); },
+    (value) => { value.reuseContractId = "reuse_substitute01"; }
+  ];
+  for (const mutate of mutations) {
+    const invalid = structuredClone(base);
+    mutate(invalid);
+    assert.throws(() =>
+      assertExecutionCommand("evidenceReuseContract", invalid));
+  }
+
+  for (const mutate of [
+    (value) => { value.task.criteria[0].description = "Different"; },
+    (value) => { value.node.repository.baseCommit = "9".repeat(40); },
+    (value) => { value.node.scope.allowedPaths = ["other"]; },
+    (value) => { value.node.outputs[0].kind = "patch"; },
+    (value) => { value.node.verificationProfiles[0].digest = "8".repeat(64); },
+    (value) => { value.integrationPolicy.integrationTargets[0].expectedCommit =
+      "7".repeat(40); },
+    (value) => { value.node.agentId = "agent_evidence02"; },
+    (value) => { value.node.repository.grantRevision += 1; },
+    (value) => { value.node.repository.runtimeProfileDigest = "6".repeat(64); },
+    (value) => { value.reuseInputs[0].artifact.contentDigest = "5".repeat(64); }
+  ]) {
+    const changed = structuredClone(base);
+    mutate(changed);
+    sealReuseContract(changed);
+    assert.notEqual(changed.nodeReuseContractDigest,
+      base.nodeReuseContractDigest);
   }
 });

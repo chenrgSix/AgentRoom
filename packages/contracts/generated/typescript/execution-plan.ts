@@ -3255,3 +3255,184 @@ export interface SourceExecution {
   dispatchGeneration: number;
   runId:              string;
 }
+
+export interface EvidenceReuseContract {
+  adoptionDigest: string;
+  adoptionId:     string;
+  contractDigest: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:                 string;
+  gate:                      Gate;
+  integrationPolicy:         IntegrationPolicy;
+  node:                      EvidenceReuseContractNode;
+  nodeExecutionDigest:       string;
+  nodeKey:                   string;
+  nodeReuseContractDigest:   string;
+  planId:                    string;
+  planRevision:              number;
+  reuseContractId:           string;
+  reuseInputEvidenceDigest:  string;
+  reuseInputs:               ReuseInput[];
+  runtimeInputBindingDigest: string;
+  task:                      EvidenceReuseContractTask;
+  version:                   number;
+}
+
+export interface IntegrationPolicy {
+  integration:                     Integration;
+  integrationTargets:              IntegrationPolicyIntegrationTarget[];
+  requireHumanIntegrationApproval: boolean;
+}
+
+export interface IntegrationPolicyIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface EvidenceReuseContractNode {
+  agentId:              string;
+  budget:               Budget8;
+  inputs:               FriskyInput[];
+  kind:                 NodeKind;
+  nodeKey:              string;
+  outputs:              [BraggadociousOutput, ...BraggadociousOutput[]];
+  repository:           FriskyRepository;
+  required:             boolean;
+  scope:                FriskyScope;
+  verificationProfiles: BraggadociousVerificationProfile[];
+}
+
+export interface Budget8 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface FriskyInput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface BraggadociousOutput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface FriskyRepository {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface FriskyScope {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface BraggadociousVerificationProfile {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface ReuseInput {
+  artifact:  ReuseInputArtifact;
+  inputSlot: string;
+  producer:  Producer;
+}
+
+export interface ReuseInputArtifact {
+  contentDigest: string;
+  kind:          ExternalInputKind;
+}
+
+export interface Producer {
+  edge?:              ProducerEdge;
+  kind:               ProducerKind;
+  proofSetDigest?:    string;
+  sourceDigest?:      string;
+  sourceEvidenceId?:  string;
+  externalInput?:     ProducerExternalInput;
+  reviewDigest?:      string;
+  reviewOperationId?: string;
+}
+
+export interface ProducerEdge {
+  bindings:    FriskyBinding[];
+  edgeKey:     string;
+  fromNodeKey: string;
+  gate:        Gate;
+  toNodeKey:   string;
+}
+
+export interface FriskyBinding {
+  inputSlot:  string;
+  outputSlot: string;
+}
+
+export interface ProducerExternalInput {
+  artifactId:       string;
+  artifactRevision: number;
+  contentDigest:    string;
+  inputSlot:        string;
+  kind:             ExternalInputKind;
+  nodeKey:          string;
+  sourceResultId:   string;
+  sourceTaskId:     string;
+}
+
+export type ProducerKind = "adopted_evidence" | "external_result";
+
+export interface EvidenceReuseContractTask {
+  assignments:        Assignment[];
+  budgetPolicy:       BudgetPolicy;
+  completionPolicy:   CompletionPolicy;
+  criteria:           FriskyCriterion[];
+  criteriaRevision:   number;
+  definitionRevision: number;
+  goal:               string;
+  ownerMemberId:      string;
+  parentTaskId:       null | string;
+  roomId:             string;
+  taskId:             string;
+  title:              string;
+}
+
+export interface Assignment {
+  agentId: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  assignedAt:         string;
+  assignedByMemberId: string;
+  role:               Role;
+}
+
+export type Role = "primary" | "contributor" | "reviewer";
+
+export interface BudgetPolicy {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export type CompletionPolicy = "owner_confirmed" | "accepted_result_required";
+
+export interface FriskyCriterion {
+  criterionKey: string;
+  description:  string;
+  ordinal:      number;
+  required:     boolean;
+}

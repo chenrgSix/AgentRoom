@@ -75,7 +75,7 @@ digest({
 
 ```text
 {
-  node: approved node definition,
+  node: approved node execution definition without its planning-time Task directive,
   task: {
     taskId, roomId, parentTaskId, title, goal, ownerMemberId,
     completionPolicy, definitionRevision, criteriaRevision,
@@ -149,3 +149,16 @@ execution-identity fields as reuse equivalence.
 This slice also does not add remote Git/PR/CI evidence, weaken any gate, infer a
 Result for a non-Agent producer, change scheduler mode or claim cross-sweep
 fairness.
+
+## Contract Checkpoint
+
+`CON-024` is accepted. Schema 12 now defines the closed
+`EvidenceReuseContract`, graph/external producer union, normalized execution
+node/Task/integration policy and the four distinct digest facts. The generated
+TypeScript and Go types plus both runtimes enforce input ordering, node/edge/
+external/artifact joins, canonical digest and derived-ID equality. The 258
+shared fixtures and 86 Node checks include exact attempt-versus-reuse identity,
+revision stability, semantic contract drift and substitution negatives; Go
+round-trip and semantic tests consume the same valid fixture. This checkpoint
+adds no persistence or carry-forward authority; those remain `EXEC-011` and
+`EXEC-005` respectively.

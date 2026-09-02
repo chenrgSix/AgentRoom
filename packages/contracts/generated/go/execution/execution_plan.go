@@ -3106,6 +3106,177 @@ type SourceExecution struct {
 	RunID              string `json:"runId"`
 }
 
+type EvidenceReuseContract struct {
+	AdoptionDigest string `json:"adoptionDigest"`
+	AdoptionID     string `json:"adoptionId"`
+	ContractDigest string `json:"contractDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	CreatedAt                 string                    `json:"createdAt"`
+	Gate                      Gate                      `json:"gate"`
+	IntegrationPolicy         IntegrationPolicy         `json:"integrationPolicy"`
+	Node                      EvidenceReuseContractNode `json:"node"`
+	NodeExecutionDigest       string                    `json:"nodeExecutionDigest"`
+	NodeKey                   string                    `json:"nodeKey"`
+	NodeReuseContractDigest   string                    `json:"nodeReuseContractDigest"`
+	PlanID                    string                    `json:"planId"`
+	PlanRevision              int64                     `json:"planRevision"`
+	ReuseContractID           string                    `json:"reuseContractId"`
+	ReuseInputEvidenceDigest  string                    `json:"reuseInputEvidenceDigest"`
+	ReuseInputs               []ReuseInput              `json:"reuseInputs"`
+	RuntimeInputBindingDigest string                    `json:"runtimeInputBindingDigest"`
+	Task                      EvidenceReuseContractTask `json:"task"`
+	Version                   int64                     `json:"version"`
+}
+
+type IntegrationPolicy struct {
+	Integration                     Integration                          `json:"integration"`
+	IntegrationTargets              []IntegrationPolicyIntegrationTarget `json:"integrationTargets"`
+	RequireHumanIntegrationApproval bool                                 `json:"requireHumanIntegrationApproval"`
+}
+
+type IntegrationPolicyIntegrationTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type EvidenceReuseContractNode struct {
+	AgentID              string                             `json:"agentId"`
+	Budget               Budget8                            `json:"budget"`
+	Inputs               []FriskyInput                      `json:"inputs"`
+	Kind                 NodeKind                           `json:"kind"`
+	NodeKey              string                             `json:"nodeKey"`
+	Outputs              []BraggadociousOutput              `json:"outputs"`
+	Repository           FriskyRepository                   `json:"repository"`
+	Required             bool                               `json:"required"`
+	Scope                FriskyScope                        `json:"scope"`
+	VerificationProfiles []BraggadociousVerificationProfile `json:"verificationProfiles"`
+}
+
+type Budget8 struct {
+	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
+	MaxRunAttempts              int64 `json:"maxRunAttempts"`
+}
+
+type FriskyInput struct {
+	Kind     ExternalInputKind `json:"kind"`
+	Required bool              `json:"required"`
+	SlotKey  string            `json:"slotKey"`
+}
+
+type BraggadociousOutput struct {
+	Kind     ExternalInputKind `json:"kind"`
+	Required bool              `json:"required"`
+	SlotKey  string            `json:"slotKey"`
+}
+
+type FriskyRepository struct {
+	BaseCommit           string `json:"baseCommit"`
+	BindingID            string `json:"bindingId"`
+	GrantID              string `json:"grantId"`
+	GrantRevision        int64  `json:"grantRevision"`
+	RepositoryID         string `json:"repositoryId"`
+	RuntimeProfileDigest string `json:"runtimeProfileDigest"`
+	RuntimeProfileID     string `json:"runtimeProfileId"`
+}
+
+type FriskyScope struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type BraggadociousVerificationProfile struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Required  bool   `json:"required"`
+	Revision  int64  `json:"revision"`
+}
+
+type ReuseInput struct {
+	Artifact  ReuseInputArtifact `json:"artifact"`
+	InputSlot string             `json:"inputSlot"`
+	Producer  Producer           `json:"producer"`
+}
+
+type ReuseInputArtifact struct {
+	ContentDigest string            `json:"contentDigest"`
+	Kind          ExternalInputKind `json:"kind"`
+}
+
+type Producer struct {
+	Edge              *ProducerEdge          `json:"edge,omitempty"`
+	Kind              ProducerKind           `json:"kind"`
+	ProofSetDigest    *string                `json:"proofSetDigest,omitempty"`
+	SourceDigest      *string                `json:"sourceDigest,omitempty"`
+	SourceEvidenceID  *string                `json:"sourceEvidenceId,omitempty"`
+	ExternalInput     *ProducerExternalInput `json:"externalInput,omitempty"`
+	ReviewDigest      *string                `json:"reviewDigest,omitempty"`
+	ReviewOperationID *string                `json:"reviewOperationId,omitempty"`
+}
+
+type ProducerEdge struct {
+	Bindings    []FriskyBinding `json:"bindings"`
+	EdgeKey     string          `json:"edgeKey"`
+	FromNodeKey string          `json:"fromNodeKey"`
+	Gate        Gate            `json:"gate"`
+	ToNodeKey   string          `json:"toNodeKey"`
+}
+
+type FriskyBinding struct {
+	InputSlot  string `json:"inputSlot"`
+	OutputSlot string `json:"outputSlot"`
+}
+
+type ProducerExternalInput struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ContentDigest    string            `json:"contentDigest"`
+	InputSlot        string            `json:"inputSlot"`
+	Kind             ExternalInputKind `json:"kind"`
+	NodeKey          string            `json:"nodeKey"`
+	SourceResultID   string            `json:"sourceResultId"`
+	SourceTaskID     string            `json:"sourceTaskId"`
+}
+
+type EvidenceReuseContractTask struct {
+	Assignments        []Assignment      `json:"assignments"`
+	BudgetPolicy       BudgetPolicy      `json:"budgetPolicy"`
+	CompletionPolicy   CompletionPolicy  `json:"completionPolicy"`
+	Criteria           []FriskyCriterion `json:"criteria"`
+	CriteriaRevision   int64             `json:"criteriaRevision"`
+	DefinitionRevision int64             `json:"definitionRevision"`
+	Goal               string            `json:"goal"`
+	OwnerMemberID      string            `json:"ownerMemberId"`
+	ParentTaskID       *string           `json:"parentTaskId"`
+	RoomID             string            `json:"roomId"`
+	TaskID             string            `json:"taskId"`
+	Title              string            `json:"title"`
+}
+
+type Assignment struct {
+	AgentID string `json:"agentId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	AssignedAt         string `json:"assignedAt"`
+	AssignedByMemberID string `json:"assignedByMemberId"`
+	Role               Role   `json:"role"`
+}
+
+type BudgetPolicy struct {
+	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
+	MaxRunAttempts              int64 `json:"maxRunAttempts"`
+}
+
+type FriskyCriterion struct {
+	CriterionKey string `json:"criterionKey"`
+	Description  string `json:"description"`
+	Ordinal      int64  `json:"ordinal"`
+	Required     bool   `json:"required"`
+}
+
 type AuthorKind string
 
 const (
@@ -3311,4 +3482,26 @@ type Service string
 
 const (
 	ExecutionMaterialization Service = "execution_materialization"
+)
+
+type ProducerKind string
+
+const (
+	AdoptedEvidence ProducerKind = "adopted_evidence"
+	ExternalResult  ProducerKind = "external_result"
+)
+
+type Role string
+
+const (
+	Contributor Role = "contributor"
+	Primary     Role = "primary"
+	Reviewer    Role = "reviewer"
+)
+
+type CompletionPolicy string
+
+const (
+	AcceptedResultRequired CompletionPolicy = "accepted_result_required"
+	OwnerConfirmed         CompletionPolicy = "owner_confirmed"
 )

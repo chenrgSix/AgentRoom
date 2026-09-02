@@ -137,7 +137,7 @@ func TestExecutionStandaloneSchemaFixtures(t *testing.T) {
 		"capability": "executionCapability", "bindingSummary": "repositoryBinding", "grantSummary": "executionGrant",
 		"operationRequest": "repositoryOperation", "operationReceipt": "repositoryReceipt", "checkpoint": "executionCheckpoint",
 		"verificationReceipt": "verificationReceipt", "sourceEvidence": "sourceEvidence", "gateProofRef": "gateProofRef",
-		"evidenceAdoption": "evidenceAdoption"}
+		"evidenceAdoption": "evidenceAdoption", "evidenceReuseContract": "evidenceReuseContract"}
 	checked := 0
 	for _, suite := range suites {
 		for _, entry := range suite.Cases {
@@ -276,6 +276,68 @@ func sealEvidenceAdoption(t *testing.T, value map[string]any) {
 	value["operationDigest"] = executionDigest(t,
 		withoutFields(value, "operationDigest", "adoptionDigest", "createdAt"))
 	value["adoptionDigest"] = executionDigest(t, withoutFields(value, "adoptionDigest"))
+}
+
+func sealEvidenceReuseContract(t *testing.T, value map[string]any) {
+	t.Helper()
+	value["reuseInputEvidenceDigest"] = executionDigest(t, value["reuseInputs"])
+	value["nodeReuseContractDigest"] = executionDigest(t, map[string]any{
+		"node": value["node"], "task": value["task"],
+		"integrationPolicy":        value["integrationPolicy"],
+		"reuseInputEvidenceDigest": value["reuseInputEvidenceDigest"],
+	})
+	value["contractDigest"] = executionDigest(t,
+		withoutFields(value, "reuseContractId", "contractDigest", "createdAt"))
+	value["reuseContractId"] = "reuse_" + executionDigest(t, map[string]any{
+		"adoptionId": value["adoptionId"], "contractDigest": value["contractDigest"],
+	})
+}
+
+func TestEvidenceReuseContractSeparatesRevisionAndAttemptIdentity(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(packageRoot(t), "fixtures", "evidence-adoption-cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var suite fixtureSuite
+	if err := json.Unmarshal(raw, &suite); err != nil {
+		t.Fatal(err)
+	}
+	var contract map[string]any
+	for _, entry := range suite.Cases {
+		if entry.Name == "evidence adoption: valid evidence reuse contract" {
+			if err := json.Unmarshal(entry.Instance, &contract); err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+	}
+	if contract == nil {
+		t.Fatal("evidence reuse contract fixture is missing")
+	}
+	if err := runtimecontracts.ValidateExecutionCommand("evidenceReuseContract", encodeJSON(t, contract)); err != nil {
+		t.Fatalf("valid reuse contract rejected: %v", err)
+	}
+	originalReuse := contract["nodeReuseContractDigest"]
+	later := decodeMap(t, encodeJSON(t, contract))
+	later["planRevision"] = json.Number("3")
+	later["nodeExecutionDigest"] = strings.Repeat("0", 64)
+	sealEvidenceReuseContract(t, later)
+	if later["nodeReuseContractDigest"] != originalReuse {
+		t.Fatal("plan revision changed semantic reuse digest")
+	}
+	if later["contractDigest"] == contract["contractDigest"] {
+		t.Fatal("plan revision did not change companion execution identity")
+	}
+	if err := runtimecontracts.ValidateExecutionCommand("evidenceReuseContract", encodeJSON(t, later)); err != nil {
+		t.Fatalf("valid later revision rejected: %v", err)
+	}
+	tampered := decodeMap(t, encodeJSON(t, contract))
+	inputs := tampered["reuseInputs"].([]any)
+	inputs[0].(map[string]any)["inputSlot"] = "wrong"
+	sealEvidenceReuseContract(t, tampered)
+	if runtimecontracts.ValidateExecutionCommand("evidenceReuseContract", encodeJSON(t, tampered)) == nil {
+		t.Fatal("substituted reuse input accepted")
+	}
 }
 
 func TestExecutionFractionalUTCStringsSurviveTypedWireRoundTrip(t *testing.T) {

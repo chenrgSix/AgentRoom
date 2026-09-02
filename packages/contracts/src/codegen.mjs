@@ -456,7 +456,8 @@ function renderExecutionValidators(schemas) {
     verificationReceipt: `${EXECUTION_RUNTIME_SCHEMA_ID}#/$defs/verificationReceipt`,
     sourceEvidence: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/sourceEvidence`,
     gateProofRef: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/gateProofRef`,
-    evidenceAdoption: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/evidenceAdoption`
+    evidenceAdoption: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/evidenceAdoption`,
+    evidenceReuseContract: `${EVIDENCE_ADOPTION_SCHEMA_ID}#/$defs/evidenceReuseContract`
   }).trimEnd()}\n`;
 }
 
@@ -1464,7 +1465,8 @@ export async function generateContractTypes(packageRoot) {
   executionCodegen.push(...createDefinitionCodegenSchemas(evidenceAdoptionSchema, [
     ["SourceEvidence", "sourceEvidence"],
     ["GateProofRef", "gateProofRef"],
-    ["EvidenceAdoption", "evidenceAdoption"]
+    ["EvidenceAdoption", "evidenceAdoption"],
+    ["EvidenceReuseContract", "evidenceReuseContract"]
   ]));
   const bridgeSchemas = bridgeCodegen.types.map((entry) => ({
     ...entry,
@@ -1620,7 +1622,8 @@ export async function generateContractTypes(packageRoot) {
           dereference(executionRuntimeSchema.$defs[definition], executionRuntimeSchema, schemas), false)])),
         ...Object.fromEntries(Object.entries({
           sourceEvidence: "sourceEvidence", gateProofRef: "gateProofRef",
-          evidenceAdoption: "evidenceAdoption"
+          evidenceAdoption: "evidenceAdoption",
+          evidenceReuseContract: "evidenceReuseContract"
         }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
           dereference(evidenceAdoptionSchema.$defs[definition], evidenceAdoptionSchema, schemas), false)]))
       }

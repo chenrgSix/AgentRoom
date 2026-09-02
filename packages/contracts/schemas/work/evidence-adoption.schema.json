@@ -19,6 +19,10 @@
       "type": "string",
       "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
     },
+    "reuseContractId": {
+      "type": "string",
+      "pattern": "^reuse_[A-Za-z0-9_-]{8,128}$"
+    },
     "observationId": {
       "type": "string",
       "pattern": "^observation_[A-Za-z0-9_-]{8,128}$"
@@ -701,6 +705,357 @@
           "$ref": "#/$defs/integratedCommitEvidenceAdoption"
         }
       ]
+    },
+    "reuseArtifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contentDigest",
+        "kind"
+      ],
+      "properties": {
+        "contentDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "kind": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/artifactKind"
+        }
+      }
+    },
+    "graphReuseProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "edge",
+        "sourceEvidenceId",
+        "sourceDigest",
+        "proofSetDigest"
+      ],
+      "properties": {
+        "kind": {
+          "const": "adopted_evidence"
+        },
+        "edge": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planEdge"
+        },
+        "sourceEvidenceId": {
+          "$ref": "#/$defs/sourceEvidenceId"
+        },
+        "sourceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "proofSetDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "externalReuseProducer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "externalInput",
+        "reviewOperationId",
+        "reviewDigest"
+      ],
+      "properties": {
+        "kind": {
+          "const": "external_result"
+        },
+        "externalInput": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/externalInput"
+        },
+        "reviewOperationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "reviewDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "reuseInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "inputSlot",
+        "producer",
+        "artifact"
+      ],
+      "properties": {
+        "inputSlot": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
+        },
+        "producer": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/graphReuseProducer"
+            },
+            {
+              "$ref": "#/$defs/externalReuseProducer"
+            }
+          ]
+        },
+        "artifact": {
+          "$ref": "#/$defs/reuseArtifact"
+        }
+      }
+    },
+    "reuseTask": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "taskId",
+        "roomId",
+        "parentTaskId",
+        "title",
+        "goal",
+        "ownerMemberId",
+        "completionPolicy",
+        "definitionRevision",
+        "criteriaRevision",
+        "criteria",
+        "assignments",
+        "budgetPolicy"
+      ],
+      "properties": {
+        "taskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "parentTaskId": {
+          "oneOf": [
+            {
+              "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 20000
+        },
+        "ownerMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "completionPolicy": {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/completionPolicy"
+        },
+        "definitionRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "criteriaRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "criteria": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/criterion"
+          }
+        },
+        "assignments": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/assignment"
+          }
+        },
+        "budgetPolicy": {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/budgetPolicy"
+        }
+      }
+    },
+    "reuseNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeKey",
+        "kind",
+        "required",
+        "agentId",
+        "repository",
+        "scope",
+        "budget",
+        "verificationProfiles",
+        "inputs",
+        "outputs"
+      ],
+      "properties": {
+        "nodeKey": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
+        },
+        "kind": {
+          "enum": [
+            "implementation",
+            "review",
+            "verification"
+          ]
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "agentId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
+        },
+        "repository": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/repositoryInput"
+        },
+        "scope": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/scopePolicy"
+        },
+        "budget": {
+          "$ref": "https://agentroom.dev/schemas/work/task-result.schema.json#/$defs/budgetPolicy"
+        },
+        "verificationProfiles": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/verificationProfile"
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/artifactSlot"
+          }
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/artifactSlot"
+          }
+        }
+      }
+    },
+    "reuseIntegrationPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "integration",
+        "requireHumanIntegrationApproval",
+        "integrationTargets"
+      ],
+      "properties": {
+        "integration": {
+          "enum": [
+            "reviewed_candidate",
+            "local_integration",
+            "remote_pr"
+          ]
+        },
+        "requireHumanIntegrationApproval": {
+          "const": true
+        },
+        "integrationTargets": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/integrationTarget"
+          }
+        }
+      }
+    },
+    "evidenceReuseContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "reuseContractId",
+        "adoptionId",
+        "adoptionDigest",
+        "planId",
+        "planRevision",
+        "nodeKey",
+        "gate",
+        "runtimeInputBindingDigest",
+        "reuseInputs",
+        "reuseInputEvidenceDigest",
+        "nodeExecutionDigest",
+        "node",
+        "task",
+        "integrationPolicy",
+        "nodeReuseContractDigest",
+        "contractDigest",
+        "createdAt"
+      ],
+      "properties": {
+        "version": {
+          "$ref": "#/$defs/version"
+        },
+        "reuseContractId": {
+          "$ref": "#/$defs/reuseContractId"
+        },
+        "adoptionId": {
+          "$ref": "#/$defs/adoptionId"
+        },
+        "adoptionDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "planId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/planId"
+        },
+        "planRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "nodeKey": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
+        },
+        "gate": {
+          "enum": [
+            "accepted_result",
+            "verified_output",
+            "integrated_commit"
+          ]
+        },
+        "runtimeInputBindingDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "reuseInputs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/reuseInput"
+          }
+        },
+        "reuseInputEvidenceDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "nodeExecutionDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "node": {
+          "$ref": "#/$defs/reuseNode"
+        },
+        "task": {
+          "$ref": "#/$defs/reuseTask"
+        },
+        "integrationPolicy": {
+          "$ref": "#/$defs/reuseIntegrationPolicy"
+        },
+        "nodeReuseContractDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "contractDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "createdAt": {
+          "$ref": "https://agentroom.dev/schemas/common/utc-timestamp.schema.json"
+        }
+      }
     }
   }
 }

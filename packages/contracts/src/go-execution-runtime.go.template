@@ -35,7 +35,8 @@ func compileExecutionSchemas() map[string]*jsonschema.Schema {
   result := map[string]*jsonschema.Schema{}
   for _, kind := range []string{"executionManifest", "executionInputBinding", "executionCapability", "repositoryBinding",
     "runtimeAuthorityRequest", "runtimeAuthorityView", "executionGrant", "repositoryOperation", "repositoryReceipt",
-    "executionCheckpoint", "verificationReceipt", "sourceEvidence", "gateProofRef", "evidenceAdoption"} {
+    "executionCheckpoint", "verificationReceipt", "sourceEvidence", "gateProofRef", "evidenceAdoption",
+    "evidenceReuseContract"} {
     schema, err := compiler.Compile(id+"#/$defs/"+kind)
     if err != nil { panic(err) }
     result[kind] = schema
@@ -68,7 +69,7 @@ func ValidateAndNormalizeExecutionCommand(kind string, source []byte) ([]byte, e
 
 func validateEvidenceSemantics(kind string, value any) bool {
   record, ok := value.(map[string]any)
-  if !ok { return kind != "sourceEvidence" && kind != "evidenceAdoption" }
+  if !ok { return kind != "sourceEvidence" && kind != "evidenceAdoption" && kind != "evidenceReuseContract" }
   switch kind {
   case "sourceEvidence":
     pins, ok := record["artifactPins"].([]any)
@@ -103,6 +104,8 @@ func validateEvidenceSemantics(kind string, value any) bool {
     if executionValueDigest(operation) != executionString(record, "operationDigest") { return false }
     adoption := withoutExecutionFields(record, "adoptionDigest")
     if executionValueDigest(adoption) != executionString(record, "adoptionDigest") { return false }
+  case "evidenceReuseContract":
+    return validateEvidenceReuseContract(value)
   }
   return true
 }
@@ -127,6 +130,73 @@ func executionValueDigest(value any) string {
   if appendExecutionJSON(&canonical, value) != nil { return "" }
   hash := sha256.Sum256(canonical.Bytes())
   return hex.EncodeToString(hash[:])
+}
+
+func validateEvidenceReuseContract(value any) bool {
+  record, ok := value.(map[string]any)
+  if !ok { return false }
+  inputs, ok := record["reuseInputs"].([]any)
+  if !ok { return false }
+  node, ok := record["node"].(map[string]any)
+  if !ok || executionString(node, "nodeKey") != executionString(record, "nodeKey") { return false }
+  nodeInputs, ok := node["inputs"].([]any)
+  if !ok { return false }
+  previous := ""
+  for index, entry := range inputs {
+    input, ok := entry.(map[string]any)
+    if !ok { return false }
+    inputSlot := executionString(input, "inputSlot")
+    if index > 0 && previous >= inputSlot { return false }
+    previous = inputSlot
+    artifact, ok := input["artifact"].(map[string]any)
+    if !ok { return false }
+    slotKind := ""
+    for _, candidate := range nodeInputs {
+      slot, ok := candidate.(map[string]any)
+      if ok && executionString(slot, "slotKey") == inputSlot {
+        slotKind = executionString(slot, "kind")
+      }
+    }
+    if slotKind == "" || slotKind != executionString(artifact, "kind") { return false }
+    producer, ok := input["producer"].(map[string]any)
+    if !ok { return false }
+    switch executionString(producer, "kind") {
+    case "adopted_evidence":
+      edge, ok := producer["edge"].(map[string]any)
+      if !ok || executionString(edge, "toNodeKey") != executionString(record, "nodeKey") { return false }
+      bindings, ok := edge["bindings"].([]any)
+      if !ok { return false }
+      matches := 0
+      for _, candidate := range bindings {
+        binding, ok := candidate.(map[string]any)
+        if ok && executionString(binding, "inputSlot") == inputSlot { matches++ }
+      }
+      if matches != 1 { return false }
+    case "external_result":
+      external, ok := producer["externalInput"].(map[string]any)
+      if !ok || executionString(external, "nodeKey") != executionString(record, "nodeKey") ||
+        executionString(external, "inputSlot") != inputSlot ||
+        executionString(external, "contentDigest") != executionString(artifact, "contentDigest") ||
+        executionString(external, "kind") != executionString(artifact, "kind") { return false }
+    default:
+      return false
+    }
+  }
+  if executionValueDigest(inputs) != executionString(record, "reuseInputEvidenceDigest") { return false }
+  reusable := map[string]any{
+    "node": record["node"],
+    "task": record["task"],
+    "integrationPolicy": record["integrationPolicy"],
+    "reuseInputEvidenceDigest": record["reuseInputEvidenceDigest"],
+  }
+  if executionValueDigest(reusable) != executionString(record, "nodeReuseContractDigest") { return false }
+  contract := withoutExecutionFields(record, "reuseContractId", "contractDigest", "createdAt")
+  if executionValueDigest(contract) != executionString(record, "contractDigest") { return false }
+  identity := map[string]any{
+    "adoptionId": record["adoptionId"],
+    "contractDigest": record["contractDigest"],
+  }
+  return executionString(record, "reuseContractId") == "reuse_"+executionValueDigest(identity)
 }
 
 func strictlyOrderedArtifactPins(entries []any) bool {

@@ -142,6 +142,29 @@ export function evidenceAdoptionDigest(value) {
   return executionOperationDigest(record);
 }
 
+export function evidenceReuseInputDigest(inputs) {
+  return executionOperationDigest(inputs);
+}
+
+export function evidenceNodeReuseContractDigest(value) {
+  return executionOperationDigest({
+    node: value.node,
+    task: value.task,
+    integrationPolicy: value.integrationPolicy,
+    reuseInputEvidenceDigest: value.reuseInputEvidenceDigest
+  });
+}
+
+export function evidenceReuseContractDigest(value) {
+  const {
+    reuseContractId: _reuseContractId,
+    contractDigest: _contractDigest,
+    createdAt: _createdAt,
+    ...contract
+  } = value;
+  return executionOperationDigest(contract);
+}
+
 function assertSourceEvidenceSemantics(value) {
   ordered(value.artifactPins, artifactOrder, "EVIDENCE_ARTIFACT_ORDER");
   unique(value.artifactPins, "outputSlot", "EVIDENCE_DUPLICATE_OUTPUT_SLOT");
@@ -170,6 +193,48 @@ function assertEvidenceAdoptionSemantics(value) {
     "EVIDENCE_ADOPTION_DIGEST_MISMATCH");
 }
 
+function assertEvidenceReuseContractSemantics(value) {
+  ordered(value.reuseInputs, by("inputSlot"), "EVIDENCE_REUSE_INPUT_ORDER");
+  unique(value.reuseInputs, "inputSlot", "EVIDENCE_REUSE_DUPLICATE_INPUT");
+  requireCondition(value.node.nodeKey === value.nodeKey,
+    "EVIDENCE_REUSE_NODE_MISMATCH");
+  for (const input of value.reuseInputs) {
+    const slot = value.node.inputs.find((entry) =>
+      entry.slotKey === input.inputSlot);
+    requireCondition(Boolean(slot) && slot.kind === input.artifact.kind,
+      "EVIDENCE_REUSE_INPUT_MISMATCH");
+    if (input.producer.kind === "adopted_evidence") {
+      const matches = input.producer.edge.bindings.filter((binding) =>
+        binding.inputSlot === input.inputSlot);
+      requireCondition(
+        input.producer.edge.toNodeKey === value.nodeKey &&
+        matches.length === 1,
+        "EVIDENCE_REUSE_EDGE_MISMATCH"
+      );
+    } else {
+      requireCondition(
+        input.producer.externalInput.nodeKey === value.nodeKey &&
+        input.producer.externalInput.inputSlot === input.inputSlot &&
+        input.producer.externalInput.contentDigest === input.artifact.contentDigest &&
+        input.producer.externalInput.kind === input.artifact.kind,
+        "EVIDENCE_REUSE_EXTERNAL_MISMATCH"
+      );
+    }
+  }
+  requireCondition(value.reuseInputEvidenceDigest ===
+    evidenceReuseInputDigest(value.reuseInputs),
+  "EVIDENCE_REUSE_INPUT_DIGEST_MISMATCH");
+  requireCondition(value.nodeReuseContractDigest ===
+    evidenceNodeReuseContractDigest(value),
+  "EVIDENCE_REUSE_NODE_DIGEST_MISMATCH");
+  requireCondition(value.contractDigest === evidenceReuseContractDigest(value),
+    "EVIDENCE_REUSE_CONTRACT_DIGEST_MISMATCH");
+  requireCondition(value.reuseContractId === `reuse_${executionOperationDigest({
+    adoptionId: value.adoptionId,
+    contractDigest: value.contractDigest
+  })}`, "EVIDENCE_REUSE_CONTRACT_ID_MISMATCH");
+}
+
 export function assertExecutionCommand(kind, value) {
   canonicalExecutionJSON(value);
   const validator = Object.hasOwn(validators, kind) ? validators[kind] : undefined;
@@ -177,6 +242,9 @@ export function assertExecutionCommand(kind, value) {
     "PLAN_SCHEMA_INVALID");
   if (kind === "sourceEvidence") assertSourceEvidenceSemantics(value);
   if (kind === "evidenceAdoption") assertEvidenceAdoptionSemantics(value);
+  if (kind === "evidenceReuseContract") {
+    assertEvidenceReuseContractSemantics(value);
+  }
 }
 
 function unique(entries, key, code) {
