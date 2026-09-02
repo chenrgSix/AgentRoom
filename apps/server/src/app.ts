@@ -63,6 +63,8 @@ import { ExecutionError } from "./execution/execution-error.js";
 import { ExecutionPlanRepository } from "./execution/execution-plan-repository.js";
 import { ExecutionSourceRepository } from "./execution/execution-source-repository.js";
 import { ExecutionPlanService } from "./execution/execution-plan-service.js";
+import { ExecutionPlanDraftWriter } from
+  "./execution/execution-plan-draft-writer.js";
 import { ExecutionNodeControlService } from
   "./execution/execution-node-control-service.js";
 import { ExecutionNodeRetryRepository } from
@@ -432,6 +434,19 @@ export async function createServerApp(
   const resultRepository = new ResultRepository(database);
   const executionApprovals = new ExecutionApprovalRepository(database);
   const executionPlanRepository = new ExecutionPlanRepository(database);
+  const executionSources = new ExecutionSourceRepository(database);
+  const notifyExecutionChanged = (roomId: string) => {
+    const room = core.getRoom(roomId);
+    if (room) teamChanges.notify(room.teamId, { kind: "room", roomId });
+  };
+  const executionDraftWriter = new ExecutionPlanDraftWriter(
+    transactions,
+    executionPlanRepository,
+    executionSources,
+    taskRepository,
+    core,
+    notifyExecutionChanged
+  );
   const executionMaterializations =
     new ExecutionNodeMaterializationRepository(database);
   const executionDependencies = new ExecutionDependencyResolver(
@@ -445,17 +460,15 @@ export async function createServerApp(
   const executionPlans = new ExecutionPlanService(
     transactions,
     executionPlanRepository,
-    new ExecutionSourceRepository(database),
+    executionSources,
     taskRepository,
     core,
     auth,
-    (roomId) => {
-      const room = core.getRoom(roomId);
-      if (room) teamChanges.notify(room.teamId, { kind: "room", roomId });
-    },
+    notifyExecutionChanged,
     executionApprovals,
     new ExecutionPlanCompiler(tasks, taskRepository, resultRepository, executionApprovals),
-    tasks
+    tasks,
+    executionDraftWriter
   );
   const results = new ResultService(
     database,

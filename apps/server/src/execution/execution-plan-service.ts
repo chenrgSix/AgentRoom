@@ -25,6 +25,7 @@ import type { ExecutionPlanRepository } from "./execution-plan-repository.js";
 import type { ExecutionSourceRepository } from "./execution-source-repository.js";
 import type { ExecutionApprovalRepository } from "./execution-approval-repository.js";
 import type { ExecutionPlanCompiler } from "./execution-plan-compiler.js";
+import type { ExecutionPlanDraftWriter } from "./execution-plan-draft-writer.js";
 
 export class ExecutionPlanService {
   public constructor(
@@ -37,7 +38,8 @@ export class ExecutionPlanService {
     private readonly onChanged: (roomId: string) => void,
     private readonly approvals: ExecutionApprovalRepository,
     private readonly compiler: ExecutionPlanCompiler,
-    private readonly taskService: AgentTaskService
+    private readonly taskService: AgentTaskService,
+    private readonly draftWriter: ExecutionPlanDraftWriter
   ) {}
 
   public get(principal: WebPrincipal, planId: string): ExecutionPlanProjection {
@@ -150,74 +152,59 @@ export class ExecutionPlanService {
   public create(principal: WebPrincipal, taskId: string, value: unknown, now: string) {
     assertExecutionCommand("proposalCommand", value);
     const command = value as ExecutionPlanProposalCommand;
-    return this.write(principal, taskId, undefined, command, now);
+    return this.draftWriter.write({
+      rootTaskId: taskId,
+      command,
+      author: this.draftMemberAuthor(principal, taskId),
+      authorize: (root) => this.requireDraftOwner(principal, root),
+      now
+    });
   }
 
   public revise(principal: WebPrincipal, planId: string, value: unknown, now: string) {
     assertExecutionCommand("revisionCommand", value);
     const command = value as ExecutionPlanRevisionCommand;
-    return this.transactions.immediate(() => {
-      const plan = this.get(principal, planId);
-      return this.write(principal, plan.rootTaskId, plan, command, now);
+    const plan = this.get(principal, planId);
+    return this.draftWriter.write({
+      rootTaskId: plan.rootTaskId,
+      planId,
+      command,
+      author: this.draftMemberAuthor(principal, plan.rootTaskId),
+      authorize: (root) => this.requireDraftOwner(principal, root),
+      now
     });
   }
 
-  private write(
-    principal: WebPrincipal,
-    rootTaskId: string,
-    plan: ExecutionPlanProjection | undefined,
-    command: ExecutionPlanProposalCommand | ExecutionPlanRevisionCommand,
-    now: string
-  ): ExecutionPlanProjection {
-    const validated = validateExecutionPlanDefinition(command.definition);
-    if (validated.definition.rootTaskId !== rootTaskId) {
-      throw new ExecutionError("EXECUTION_ROOT_MISMATCH");
+  private draftMemberAuthor(principal: WebPrincipal, taskId: string) {
+    const root = this.tasks.get(taskId);
+    if (!root) throw new ExecutionError("EXECUTION_ROOT_NOT_FOUND", 404);
+    const member = this.auth.requireRoomMember(principal, root.roomId);
+    if (member.memberId !== root.ownerMemberId && member.role !== "owner") {
+      throw new AuthorizationError(
+        "FORBIDDEN",
+        "Task Owner or Team Owner required"
+      );
     }
-    return this.transactions.immediate(() => {
-      const root = this.tasks.get(rootTaskId);
-      if (!root) throw new ExecutionError("EXECUTION_ROOT_NOT_FOUND", 404);
-      const member = this.auth.requireRoomMember(principal, root.roomId);
-      if (member.memberId !== root.ownerMemberId && member.role !== "owner") {
-        throw new AuthorizationError("FORBIDDEN", "Task Owner or Team Owner required");
-      }
-      const author = { kind: "member" as const, memberId: member.memberId };
-      const digest = executionOperationDigest({
-        action: plan ? "revise" : "create", author, rootTaskId,
-        planId: plan?.planId ?? null,
-        command: { ...command, definition: validated.definition }
-      });
-      // Replay follows current authorization, precedes stale source/task pins and
-      // returns the original projection even when the plan has advanced.
-      const replay = this.plans.replay(command.operationId, digest);
-      if (replay) return replay;
-      if (root.isDefault || root.parentTaskId !== null ||
-        root.lifecycleState === "completed" || root.lifecycleState === "canceled") {
-        throw new ExecutionError("EXECUTION_ROOT_UNAVAILABLE");
-      }
-      if (root.taskRevision !== command.expectedRootTaskRevision) {
-        throw new ExecutionError("EXECUTION_ROOT_REVISION_CONFLICT", 409);
-      }
-      if (plan && (plan.state !== "draft" ||
-        !("expectedRevision" in command) || command.expectedRevision !== plan.current.revision)) {
-        throw new ExecutionError("EXECUTION_REVISION_CONFLICT", 409);
-      }
-      this.requireReferences(validated.definition, root);
-      const snapshots = this.sources.freeze(validated.definition, root.roomId);
-      this.sources.requireExternalInputs(validated.definition, root.roomId);
-      const result = this.plans.append({
-        ...(plan ? { plan } : {}), rootTaskId, rootTaskRevision: root.taskRevision,
-        roomId: root.roomId, ownerMemberId: root.ownerMemberId,
-        definition: validated.definition, definitionDigest: validated.digest,
-        author, snapshots, operationId: command.operationId, operationDigest: digest, now
-      });
-      this.transactions.afterCommit(() => this.onChanged(root.roomId), {
-        key: `execution:${root.roomId}`
-      });
-      return result;
-    });
+    return { kind: "member" as const, memberId: member.memberId };
   }
 
-  private requireReferences(definition: ExecutionPlanDefinition, root: AgentTaskRecord): void {
+  private requireDraftOwner(
+    principal: WebPrincipal,
+    root: NonNullable<ReturnType<AgentTaskRepository["get"]>>
+  ): void {
+    const member = this.auth.requireRoomMember(principal, root.roomId);
+    if (member.memberId !== root.ownerMemberId && member.role !== "owner") {
+      throw new AuthorizationError(
+        "FORBIDDEN",
+        "Task Owner or Team Owner required"
+      );
+    }
+  }
+
+  private requireReferences(
+    definition: ExecutionPlanDefinition,
+    root: AgentTaskRecord
+  ): void {
     const requireOwner = (memberId: string | undefined) => {
       const member = memberId ? this.core.getMember(memberId) : undefined;
       if (!member || member.teamId !== root.teamId ||
@@ -248,7 +235,8 @@ export class ExecutionPlanService {
         task.criteriaRevision !== node.task.criteriaRevision) {
         throw new ExecutionError("EXECUTION_NODE_REVISION_CONFLICT", 409);
       }
-      if (!task.assignments.some((assignment) => assignment.agentId === node.agentId)) {
+      if (!task.assignments.some((assignment) =>
+        assignment.agentId === node.agentId)) {
         throw new ExecutionError("EXECUTION_NODE_ASSIGNMENT_REQUIRED");
       }
     }
