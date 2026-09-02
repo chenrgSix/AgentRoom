@@ -411,6 +411,7 @@ function renderExecutionValidators(schemas) {
   return `${standaloneCode(validator, {
     planDefinition: `${EXECUTION_SCHEMA_ID}#/$defs/planDefinition`,
     proposalCommand: `${EXECUTION_SCHEMA_ID}#/$defs/proposalCommand`,
+    discussionPlanProposalDraft: `${EXECUTION_SCHEMA_ID}#/$defs/discussionPlanProposalDraft`,
     revisionCommand: `${EXECUTION_SCHEMA_ID}#/$defs/revisionCommand`,
     approvalCommand: `${EXECUTION_SCHEMA_ID}#/$defs/approvalCommand`,
     controlCommand: `${EXECUTION_SCHEMA_ID}#/$defs/controlCommand`,
@@ -1403,6 +1404,7 @@ export async function generateContractTypes(packageRoot) {
     ["ExecutionDecisionContent", "decisionContent"],
     ["ExecutionPlanDefinition", "planDefinition"],
     ["ExecutionPlanProposalCommand", "proposalCommand"],
+    ["DiscussionPlanProposalDraft", "discussionPlanProposalDraft"],
     ["ExecutionPlanRevisionCommand", "revisionCommand"],
     ["ExecutionPlanApprovalCommand", "approvalCommand"],
     ["ExecutionPlanApprovalRecord", "approvalRecord"],

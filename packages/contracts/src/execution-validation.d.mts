@@ -11,7 +11,8 @@ export class ExecutionContractError extends Error {
 export function canonicalExecutionJSON(value: unknown): string;
 export function executionOperationDigest(value: unknown): string;
 export function assertExecutionCommand(
-  kind: "planDefinition" | "proposalCommand" | "revisionCommand" |
+  kind: "planDefinition" | "proposalCommand" | "discussionPlanProposalDraft" |
+    "revisionCommand" |
     "approvalCommand" | "controlCommand" | "nodeRetryCommand" |
     "nodeRetryAuthorization" | "decisionContent" |
     "executionManifest" | "executionInputBinding" | "executionCapability" |

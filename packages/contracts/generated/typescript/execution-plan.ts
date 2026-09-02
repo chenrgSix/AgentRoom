@@ -1130,28 +1130,18 @@ export interface IndigoIntegrationTarget {
   targetRef:      string;
 }
 
-export interface ExecutionPlanRevisionCommand {
-  definition:               ExecutionPlanRevisionCommandDefinition;
-  expectedRevision:         number;
-  expectedRootTaskRevision: number;
-  operationId:              string;
-}
-
-export interface ExecutionPlanRevisionCommandDefinition {
-  decision:       IndigoDecision;
-  edges:          IndigoEdge[];
-  externalInputs: IndigoExternalInput[];
-  nodes:          [IndigoNode, ...IndigoNode[]];
-  policy:         IndigoPolicy;
-  rootTaskId:     string;
+export interface DiscussionPlanProposalDraft {
+  decision:       DiscussionPlanProposalDraftDecision;
+  edges:          DiscussionPlanProposalDraftEdge[];
+  externalInputs: DiscussionPlanProposalDraftExternalInput[];
+  nodes:          [DiscussionPlanProposalDraftNode, ...DiscussionPlanProposalDraftNode[]];
+  policy:         DiscussionPlanProposalDraftPolicy;
   schemaVersion:  SchemaVersion;
   title:          string;
 }
 
-export interface IndigoDecision {
+export interface DiscussionPlanProposalDraftDecision {
   items:               IndecentItem[];
-  sourceRevisions:     [IndecentSourceRevision, ...IndecentSourceRevision[]];
-  sources:             [IndecentSource, ...IndecentSource[]];
   summary:             string;
   unresolvedQuestions: IndecentUnresolvedQuestion[];
 }
@@ -1161,30 +1151,13 @@ export interface IndecentItem {
   statement: string;
 }
 
-export interface IndecentSourceRevision {
-  evidenceRefId: string;
-  revision:      number;
-}
-
-export interface IndecentSource {
-  artifactId?:   string;
-  evidenceRefId: string;
-  kind:          SourceKind;
-  runId?:        string;
-  sequence?:     number;
-  messageId?:    string;
-  memoryId?:     string;
-  discussionId?: string;
-  resultId?:     string;
-}
-
 export interface IndecentUnresolvedQuestion {
   questionKey: string;
   required:    boolean;
   text:        string;
 }
 
-export interface IndigoEdge {
+export interface DiscussionPlanProposalDraftEdge {
   bindings:    IndecentBinding[];
   edgeKey:     string;
   fromNodeKey: string;
@@ -1197,7 +1170,7 @@ export interface IndecentBinding {
   outputSlot: string;
 }
 
-export interface IndigoExternalInput {
+export interface DiscussionPlanProposalDraftExternalInput {
   artifactId:       string;
   artifactRevision: number;
   contentDigest:    string;
@@ -1208,7 +1181,7 @@ export interface IndigoExternalInput {
   sourceTaskId:     string;
 }
 
-export interface IndigoNode {
+export interface DiscussionPlanProposalDraftNode {
   agentId:              string;
   budget:               FriskyBudget;
   inputs:               IndecentInput[];
@@ -1288,7 +1261,7 @@ export interface IndecentVerificationProfile {
   revision:  number;
 }
 
-export interface IndigoPolicy {
+export interface DiscussionPlanProposalDraftPolicy {
   budget:                          MischievousBudget;
   integration:                     Integration;
   integrationTargets:              IndecentIntegrationTarget[];
@@ -1302,6 +1275,183 @@ export interface MischievousBudget {
 }
 
 export interface IndecentIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface ExecutionPlanRevisionCommand {
+  definition:               ExecutionPlanRevisionCommandDefinition;
+  expectedRevision:         number;
+  expectedRootTaskRevision: number;
+  operationId:              string;
+}
+
+export interface ExecutionPlanRevisionCommandDefinition {
+  decision:       IndigoDecision;
+  edges:          IndigoEdge[];
+  externalInputs: IndigoExternalInput[];
+  nodes:          [IndigoNode, ...IndigoNode[]];
+  policy:         IndigoPolicy;
+  rootTaskId:     string;
+  schemaVersion:  SchemaVersion;
+  title:          string;
+}
+
+export interface IndigoDecision {
+  items:               HilariousItem[];
+  sourceRevisions:     [IndecentSourceRevision, ...IndecentSourceRevision[]];
+  sources:             [IndecentSource, ...IndecentSource[]];
+  summary:             string;
+  unresolvedQuestions: HilariousUnresolvedQuestion[];
+}
+
+export interface HilariousItem {
+  itemKey:   string;
+  statement: string;
+}
+
+export interface IndecentSourceRevision {
+  evidenceRefId: string;
+  revision:      number;
+}
+
+export interface IndecentSource {
+  artifactId?:   string;
+  evidenceRefId: string;
+  kind:          SourceKind;
+  runId?:        string;
+  sequence?:     number;
+  messageId?:    string;
+  memoryId?:     string;
+  discussionId?: string;
+  resultId?:     string;
+}
+
+export interface HilariousUnresolvedQuestion {
+  questionKey: string;
+  required:    boolean;
+  text:        string;
+}
+
+export interface IndigoEdge {
+  bindings:    HilariousBinding[];
+  edgeKey:     string;
+  fromNodeKey: string;
+  gate:        Gate;
+  toNodeKey:   string;
+}
+
+export interface HilariousBinding {
+  inputSlot:  string;
+  outputSlot: string;
+}
+
+export interface IndigoExternalInput {
+  artifactId:       string;
+  artifactRevision: number;
+  contentDigest:    string;
+  inputSlot:        string;
+  kind:             ExternalInputKind;
+  nodeKey:          string;
+  sourceResultId:   string;
+  sourceTaskId:     string;
+}
+
+export interface IndigoNode {
+  agentId:              string;
+  budget:               BraggadociousBudget;
+  inputs:               HilariousInput[];
+  kind:                 NodeKind;
+  nodeKey:              string;
+  outputs:              [HilariousOutput, ...HilariousOutput[]];
+  repository:           HilariousRepository;
+  required:             boolean;
+  scope:                HilariousScope;
+  task:                 HilariousTask;
+  verificationProfiles: HilariousVerificationProfile[];
+}
+
+export interface BraggadociousBudget {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface HilariousInput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface HilariousOutput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface HilariousRepository {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface HilariousScope {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface HilariousTask {
+  criteria?:             [HilariousCriterion, ...HilariousCriterion[]];
+  goal?:                 string;
+  mode:                  TaskMode;
+  ownerMemberId?:        string;
+  sourceAction?:         HilariousSourceAction;
+  title?:                string;
+  criteriaRevision?:     number;
+  definitionRevision?:   number;
+  expectedTaskRevision?: number;
+  taskId?:               string;
+}
+
+export interface HilariousCriterion {
+  criterionKey: string;
+  description:  string;
+  ordinal:      number;
+  required:     boolean;
+}
+
+export interface HilariousSourceAction {
+  nextActionKey: string;
+  resultId:      string;
+}
+
+export interface HilariousVerificationProfile {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface IndigoPolicy {
+  budget:                          Budget1;
+  integration:                     Integration;
+  integrationTargets:              HilariousIntegrationTarget[];
+  maxConcurrency:                  number;
+  requireHumanIntegrationApproval: boolean;
+}
+
+export interface Budget1 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface HilariousIntegrationTarget {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
@@ -1439,14 +1589,14 @@ export interface TentacledDefinition {
 }
 
 export interface IndecentDecision {
-  items:               HilariousItem[];
+  items:               AmbitiousItem[];
   sourceRevisions:     [HilariousSourceRevision, ...HilariousSourceRevision[]];
   sources:             [HilariousSource, ...HilariousSource[]];
   summary:             string;
-  unresolvedQuestions: HilariousUnresolvedQuestion[];
+  unresolvedQuestions: AmbitiousUnresolvedQuestion[];
 }
 
-export interface HilariousItem {
+export interface AmbitiousItem {
   itemKey:   string;
   statement: string;
 }
@@ -1468,21 +1618,21 @@ export interface HilariousSource {
   resultId?:     string;
 }
 
-export interface HilariousUnresolvedQuestion {
+export interface AmbitiousUnresolvedQuestion {
   questionKey: string;
   required:    boolean;
   text:        string;
 }
 
 export interface IndecentEdge {
-  bindings:    HilariousBinding[];
+  bindings:    AmbitiousBinding[];
   edgeKey:     string;
   fromNodeKey: string;
   gate:        Gate;
   toNodeKey:   string;
 }
 
-export interface HilariousBinding {
+export interface AmbitiousBinding {
   inputSlot:  string;
   outputSlot: string;
 }
@@ -1500,36 +1650,36 @@ export interface IndecentExternalInput {
 
 export interface IndecentNode {
   agentId:              string;
-  budget:               BraggadociousBudget;
-  inputs:               HilariousInput[];
+  budget:               Budget2;
+  inputs:               AmbitiousInput[];
   kind:                 NodeKind;
   nodeKey:              string;
-  outputs:              [HilariousOutput, ...HilariousOutput[]];
-  repository:           HilariousRepository;
+  outputs:              [AmbitiousOutput, ...AmbitiousOutput[]];
+  repository:           AmbitiousRepository;
   required:             boolean;
-  scope:                HilariousScope;
-  task:                 HilariousTask;
-  verificationProfiles: HilariousVerificationProfile[];
+  scope:                AmbitiousScope;
+  task:                 AmbitiousTask;
+  verificationProfiles: AmbitiousVerificationProfile[];
 }
 
-export interface BraggadociousBudget {
+export interface Budget2 {
   maxExecutionDurationSeconds: number;
   maxRunAttempts:              number;
 }
 
-export interface HilariousInput {
+export interface AmbitiousInput {
   kind:     ExternalInputKind;
   required: boolean;
   slotKey:  string;
 }
 
-export interface HilariousOutput {
+export interface AmbitiousOutput {
   kind:     ExternalInputKind;
   required: boolean;
   slotKey:  string;
 }
 
-export interface HilariousRepository {
+export interface AmbitiousRepository {
   baseCommit:           string;
   bindingId:            string;
   grantId:              string;
@@ -1539,19 +1689,19 @@ export interface HilariousRepository {
   runtimeProfileId:     string;
 }
 
-export interface HilariousScope {
+export interface AmbitiousScope {
   access:                           Access;
   allowedPaths:                     string[];
   forbiddenPaths:                   string[];
   requirePreventivePathEnforcement: boolean;
 }
 
-export interface HilariousTask {
-  criteria?:             [HilariousCriterion, ...HilariousCriterion[]];
+export interface AmbitiousTask {
+  criteria?:             [AmbitiousCriterion, ...AmbitiousCriterion[]];
   goal?:                 string;
   mode:                  TaskMode;
   ownerMemberId?:        string;
-  sourceAction?:         HilariousSourceAction;
+  sourceAction?:         AmbitiousSourceAction;
   title?:                string;
   criteriaRevision?:     number;
   definitionRevision?:   number;
@@ -1559,19 +1709,19 @@ export interface HilariousTask {
   taskId?:               string;
 }
 
-export interface HilariousCriterion {
+export interface AmbitiousCriterion {
   criterionKey: string;
   description:  string;
   ordinal:      number;
   required:     boolean;
 }
 
-export interface HilariousSourceAction {
+export interface AmbitiousSourceAction {
   nextActionKey: string;
   resultId:      string;
 }
 
-export interface HilariousVerificationProfile {
+export interface AmbitiousVerificationProfile {
   digest:    string;
   profileId: string;
   required:  boolean;
@@ -1579,19 +1729,19 @@ export interface HilariousVerificationProfile {
 }
 
 export interface IndecentPolicy {
-  budget:                          Budget1;
+  budget:                          Budget3;
   integration:                     Integration;
-  integrationTargets:              HilariousIntegrationTarget[];
+  integrationTargets:              AmbitiousIntegrationTarget[];
   maxConcurrency:                  number;
   requireHumanIntegrationApproval: boolean;
 }
 
-export interface Budget1 {
+export interface Budget3 {
   maxExecutionDurationSeconds: number;
   maxRunAttempts:              number;
 }
 
-export interface HilariousIntegrationTarget {
+export interface AmbitiousIntegrationTarget {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
@@ -1713,14 +1863,14 @@ export interface ExecutionPlanRevisionDefinition {
 }
 
 export interface HilariousDecision {
-  items:               AmbitiousItem[];
+  items:               CunningItem[];
   sourceRevisions:     [AmbitiousSourceRevision, ...AmbitiousSourceRevision[]];
   sources:             [AmbitiousSource, ...AmbitiousSource[]];
   summary:             string;
-  unresolvedQuestions: AmbitiousUnresolvedQuestion[];
+  unresolvedQuestions: CunningUnresolvedQuestion[];
 }
 
-export interface AmbitiousItem {
+export interface CunningItem {
   itemKey:   string;
   statement: string;
 }
@@ -1742,21 +1892,21 @@ export interface AmbitiousSource {
   resultId?:     string;
 }
 
-export interface AmbitiousUnresolvedQuestion {
+export interface CunningUnresolvedQuestion {
   questionKey: string;
   required:    boolean;
   text:        string;
 }
 
 export interface HilariousEdge {
-  bindings:    AmbitiousBinding[];
+  bindings:    CunningBinding[];
   edgeKey:     string;
   fromNodeKey: string;
   gate:        Gate;
   toNodeKey:   string;
 }
 
-export interface AmbitiousBinding {
+export interface CunningBinding {
   inputSlot:  string;
   outputSlot: string;
 }
@@ -1773,187 +1923,6 @@ export interface HilariousExternalInput {
 }
 
 export interface HilariousNode {
-  agentId:              string;
-  budget:               Budget2;
-  inputs:               AmbitiousInput[];
-  kind:                 NodeKind;
-  nodeKey:              string;
-  outputs:              [AmbitiousOutput, ...AmbitiousOutput[]];
-  repository:           AmbitiousRepository;
-  required:             boolean;
-  scope:                AmbitiousScope;
-  task:                 AmbitiousTask;
-  verificationProfiles: AmbitiousVerificationProfile[];
-}
-
-export interface Budget2 {
-  maxExecutionDurationSeconds: number;
-  maxRunAttempts:              number;
-}
-
-export interface AmbitiousInput {
-  kind:     ExternalInputKind;
-  required: boolean;
-  slotKey:  string;
-}
-
-export interface AmbitiousOutput {
-  kind:     ExternalInputKind;
-  required: boolean;
-  slotKey:  string;
-}
-
-export interface AmbitiousRepository {
-  baseCommit:           string;
-  bindingId:            string;
-  grantId:              string;
-  grantRevision:        number;
-  repositoryId:         string;
-  runtimeProfileDigest: string;
-  runtimeProfileId:     string;
-}
-
-export interface AmbitiousScope {
-  access:                           Access;
-  allowedPaths:                     string[];
-  forbiddenPaths:                   string[];
-  requirePreventivePathEnforcement: boolean;
-}
-
-export interface AmbitiousTask {
-  criteria?:             [AmbitiousCriterion, ...AmbitiousCriterion[]];
-  goal?:                 string;
-  mode:                  TaskMode;
-  ownerMemberId?:        string;
-  sourceAction?:         AmbitiousSourceAction;
-  title?:                string;
-  criteriaRevision?:     number;
-  definitionRevision?:   number;
-  expectedTaskRevision?: number;
-  taskId?:               string;
-}
-
-export interface AmbitiousCriterion {
-  criterionKey: string;
-  description:  string;
-  ordinal:      number;
-  required:     boolean;
-}
-
-export interface AmbitiousSourceAction {
-  nextActionKey: string;
-  resultId:      string;
-}
-
-export interface AmbitiousVerificationProfile {
-  digest:    string;
-  profileId: string;
-  required:  boolean;
-  revision:  number;
-}
-
-export interface HilariousPolicy {
-  budget:                          Budget3;
-  integration:                     Integration;
-  integrationTargets:              AmbitiousIntegrationTarget[];
-  maxConcurrency:                  number;
-  requireHumanIntegrationApproval: boolean;
-}
-
-export interface Budget3 {
-  maxExecutionDurationSeconds: number;
-  maxRunAttempts:              number;
-}
-
-export interface AmbitiousIntegrationTarget {
-  expectedCommit: string;
-  repositoryId:   string;
-  targetRef:      string;
-}
-
-export interface ExecutionAgentPlanProposalCommand {
-  command: Command;
-  runId:   string;
-}
-
-export interface Command {
-  definition:               CommandDefinition;
-  expectedRootTaskRevision: number;
-  operationId:              string;
-}
-
-export interface CommandDefinition {
-  decision:       AmbitiousDecision;
-  edges:          AmbitiousEdge[];
-  externalInputs: AmbitiousExternalInput[];
-  nodes:          [AmbitiousNode, ...AmbitiousNode[]];
-  policy:         AmbitiousPolicy;
-  rootTaskId:     string;
-  schemaVersion:  SchemaVersion;
-  title:          string;
-}
-
-export interface AmbitiousDecision {
-  items:               CunningItem[];
-  sourceRevisions:     [CunningSourceRevision, ...CunningSourceRevision[]];
-  sources:             [CunningSource, ...CunningSource[]];
-  summary:             string;
-  unresolvedQuestions: CunningUnresolvedQuestion[];
-}
-
-export interface CunningItem {
-  itemKey:   string;
-  statement: string;
-}
-
-export interface CunningSourceRevision {
-  evidenceRefId: string;
-  revision:      number;
-}
-
-export interface CunningSource {
-  artifactId?:   string;
-  evidenceRefId: string;
-  kind:          SourceKind;
-  runId?:        string;
-  sequence?:     number;
-  messageId?:    string;
-  memoryId?:     string;
-  discussionId?: string;
-  resultId?:     string;
-}
-
-export interface CunningUnresolvedQuestion {
-  questionKey: string;
-  required:    boolean;
-  text:        string;
-}
-
-export interface AmbitiousEdge {
-  bindings:    CunningBinding[];
-  edgeKey:     string;
-  fromNodeKey: string;
-  gate:        Gate;
-  toNodeKey:   string;
-}
-
-export interface CunningBinding {
-  inputSlot:  string;
-  outputSlot: string;
-}
-
-export interface AmbitiousExternalInput {
-  artifactId:       string;
-  artifactRevision: number;
-  contentDigest:    string;
-  inputSlot:        string;
-  kind:             ExternalInputKind;
-  nodeKey:          string;
-  sourceResultId:   string;
-  sourceTaskId:     string;
-}
-
-export interface AmbitiousNode {
   agentId:              string;
   budget:               Budget4;
   inputs:               CunningInput[];
@@ -2033,7 +2002,7 @@ export interface CunningVerificationProfile {
   revision:  number;
 }
 
-export interface AmbitiousPolicy {
+export interface HilariousPolicy {
   budget:                          Budget5;
   integration:                     Integration;
   integrationTargets:              CunningIntegrationTarget[];
@@ -2047,6 +2016,187 @@ export interface Budget5 {
 }
 
 export interface CunningIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface ExecutionAgentPlanProposalCommand {
+  command: Command;
+  runId:   string;
+}
+
+export interface Command {
+  definition:               CommandDefinition;
+  expectedRootTaskRevision: number;
+  operationId:              string;
+}
+
+export interface CommandDefinition {
+  decision:       AmbitiousDecision;
+  edges:          AmbitiousEdge[];
+  externalInputs: AmbitiousExternalInput[];
+  nodes:          [AmbitiousNode, ...AmbitiousNode[]];
+  policy:         AmbitiousPolicy;
+  rootTaskId:     string;
+  schemaVersion:  SchemaVersion;
+  title:          string;
+}
+
+export interface AmbitiousDecision {
+  items:               MagentaItem[];
+  sourceRevisions:     [CunningSourceRevision, ...CunningSourceRevision[]];
+  sources:             [CunningSource, ...CunningSource[]];
+  summary:             string;
+  unresolvedQuestions: MagentaUnresolvedQuestion[];
+}
+
+export interface MagentaItem {
+  itemKey:   string;
+  statement: string;
+}
+
+export interface CunningSourceRevision {
+  evidenceRefId: string;
+  revision:      number;
+}
+
+export interface CunningSource {
+  artifactId?:   string;
+  evidenceRefId: string;
+  kind:          SourceKind;
+  runId?:        string;
+  sequence?:     number;
+  messageId?:    string;
+  memoryId?:     string;
+  discussionId?: string;
+  resultId?:     string;
+}
+
+export interface MagentaUnresolvedQuestion {
+  questionKey: string;
+  required:    boolean;
+  text:        string;
+}
+
+export interface AmbitiousEdge {
+  bindings:    MagentaBinding[];
+  edgeKey:     string;
+  fromNodeKey: string;
+  gate:        Gate;
+  toNodeKey:   string;
+}
+
+export interface MagentaBinding {
+  inputSlot:  string;
+  outputSlot: string;
+}
+
+export interface AmbitiousExternalInput {
+  artifactId:       string;
+  artifactRevision: number;
+  contentDigest:    string;
+  inputSlot:        string;
+  kind:             ExternalInputKind;
+  nodeKey:          string;
+  sourceResultId:   string;
+  sourceTaskId:     string;
+}
+
+export interface AmbitiousNode {
+  agentId:              string;
+  budget:               Budget6;
+  inputs:               MagentaInput[];
+  kind:                 NodeKind;
+  nodeKey:              string;
+  outputs:              [MagentaOutput, ...MagentaOutput[]];
+  repository:           MagentaRepository;
+  required:             boolean;
+  scope:                MagentaScope;
+  task:                 MagentaTask;
+  verificationProfiles: MagentaVerificationProfile[];
+}
+
+export interface Budget6 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface MagentaInput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface MagentaOutput {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface MagentaRepository {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface MagentaScope {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface MagentaTask {
+  criteria?:             [MagentaCriterion, ...MagentaCriterion[]];
+  goal?:                 string;
+  mode:                  TaskMode;
+  ownerMemberId?:        string;
+  sourceAction?:         MagentaSourceAction;
+  title?:                string;
+  criteriaRevision?:     number;
+  definitionRevision?:   number;
+  expectedTaskRevision?: number;
+  taskId?:               string;
+}
+
+export interface MagentaCriterion {
+  criterionKey: string;
+  description:  string;
+  ordinal:      number;
+  required:     boolean;
+}
+
+export interface MagentaSourceAction {
+  nextActionKey: string;
+  resultId:      string;
+}
+
+export interface MagentaVerificationProfile {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface AmbitiousPolicy {
+  budget:                          Budget7;
+  integration:                     Integration;
+  integrationTargets:              MagentaIntegrationTarget[];
+  maxConcurrency:                  number;
+  requireHumanIntegrationApproval: boolean;
+}
+
+export interface Budget7 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface MagentaIntegrationTarget {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
@@ -2074,11 +2224,11 @@ export interface GovernedExecutionManifest {
 
 export interface GovernedExecutionManifestCapture {
   operationId: string;
-  outputs:     [MagentaOutput, ...MagentaOutput[]];
+  outputs:     [FriskyOutput, ...FriskyOutput[]];
   rootTaskId:  string;
 }
 
-export interface MagentaOutput {
+export interface FriskyOutput {
   path:    null | string;
   slotKey: string;
   summary: string;
@@ -2268,7 +2418,7 @@ export interface GovernedExecutionCapabilityReadyGrant {
   bindingId:          string;
   deviceId:           string;
   grant:              PurpleGrant;
-  integrationTargets: MagentaIntegrationTarget[];
+  integrationTargets: FriskyIntegrationTarget[];
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -2281,7 +2431,7 @@ export interface GovernedExecutionCapabilityReadyGrant {
   revokedAt:            null | string;
   runtimeProfile:       PurpleRuntimeProfile;
   scopePolicy:          PurpleScopePolicy;
-  verificationProfiles: MagentaVerificationProfile[];
+  verificationProfiles: FriskyVerificationProfile[];
 }
 
 export interface PurpleGrant {
@@ -2295,7 +2445,7 @@ export interface PurpleGrant {
   revision:  number;
 }
 
-export interface MagentaIntegrationTarget {
+export interface FriskyIntegrationTarget {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
@@ -2314,7 +2464,7 @@ export interface PurpleScopePolicy {
   requirePreventivePathEnforcement: boolean;
 }
 
-export interface MagentaVerificationProfile {
+export interface FriskyVerificationProfile {
   digest:    string;
   profileId: string;
   revision:  number;
@@ -2389,7 +2539,7 @@ export interface CapabilityReadyGrant {
   bindingId:          string;
   deviceId:           string;
   grant:              FluffyGrant;
-  integrationTargets: FriskyIntegrationTarget[];
+  integrationTargets: MischievousIntegrationTarget[];
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -2402,7 +2552,7 @@ export interface CapabilityReadyGrant {
   revokedAt:            null | string;
   runtimeProfile:       FluffyRuntimeProfile;
   scopePolicy:          FluffyScopePolicy;
-  verificationProfiles: FriskyVerificationProfile[];
+  verificationProfiles: MischievousVerificationProfile[];
 }
 
 export interface FluffyGrant {
@@ -2416,7 +2566,7 @@ export interface FluffyGrant {
   revision:  number;
 }
 
-export interface FriskyIntegrationTarget {
+export interface MischievousIntegrationTarget {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
@@ -2435,7 +2585,7 @@ export interface FluffyScopePolicy {
   requirePreventivePathEnforcement: boolean;
 }
 
-export interface FriskyVerificationProfile {
+export interface MischievousVerificationProfile {
   digest:    string;
   profileId: string;
   revision:  number;
@@ -2592,11 +2742,11 @@ export interface Manifest {
 
 export interface ManifestCapture {
   operationId: string;
-  outputs:     [FriskyOutput, ...FriskyOutput[]];
+  outputs:     [MischievousOutput, ...MischievousOutput[]];
   rootTaskId:  string;
 }
 
-export interface FriskyOutput {
+export interface MischievousOutput {
   path:    null | string;
   slotKey: string;
   summary: string;

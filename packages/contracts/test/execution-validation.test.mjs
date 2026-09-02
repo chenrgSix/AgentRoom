@@ -79,6 +79,45 @@ test("required questions block approval without losing an otherwise valid draft"
   assert.deepEqual(validateExecutionDecision(input.decision), input.decision);
 });
 
+test("Discussion proposal drafts omit server-owned root, source and authority facts", () => {
+  const definition = plan();
+  const draft = {
+    schemaVersion: definition.schemaVersion,
+    title: definition.title,
+    decision: {
+      summary: definition.decision.summary,
+      items: definition.decision.items,
+      unresolvedQuestions: definition.decision.unresolvedQuestions
+    },
+    nodes: definition.nodes,
+    edges: definition.edges,
+    externalInputs: definition.externalInputs,
+    policy: definition.policy
+  };
+  assert.doesNotThrow(() =>
+    assertExecutionCommand("discussionPlanProposalDraft", draft)
+  );
+  for (const [key, value] of [
+    ["rootTaskId", definition.rootTaskId],
+    ["operationId", "op_forged_discussion0001"],
+    ["author", { kind: "member", memberId: "member_00000001" }],
+    ["approved", true]
+  ]) {
+    assert.throws(() => assertExecutionCommand(
+      "discussionPlanProposalDraft",
+      { ...draft, [key]: value }
+    ), /PLAN_SCHEMA_INVALID/u);
+  }
+  assert.throws(() => assertExecutionCommand("discussionPlanProposalDraft", {
+    ...draft,
+    decision: {
+      ...draft.decision,
+      sources: definition.decision.sources,
+      sourceRevisions: definition.decision.sourceRevisions
+    }
+  }), /PLAN_SCHEMA_INVALID/u);
+});
+
 test("source actions bind canonical Result evidence and cannot be compiled twice", () => {
   const input = structuredClone(suite.cases.find((entry) => entry.name === "execution: valid source-action plan").instance);
   const original = validateExecutionPlanDefinition(input);
