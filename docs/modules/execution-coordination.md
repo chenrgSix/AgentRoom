@@ -97,10 +97,19 @@ One immutable source may be adopted by several exact plan revisions. Each
 adoption is unique by plan/revision/node/gate, has exact replay identity and
 rechecks current authorization. Initial supersession carry-forward requires
 byte-identical node-contract and resolved-input-set digests; matching a node key,
-Result or commit alone is insufficient. Current local tables and APIs retain
-their delivered Result-bearing shape until `REPO-003` implements the additive
-backfill, dual-write/shadow-read equality, reader cutover and versioned
-non-Result projection. Design acceptance creates no runtime capability.
+Result or commit alone is insufficient. EXEC-009 has completed the additive
+backfill, dual-write, shadow-equality and adoption-authoritative local reader
+cutover; legacy local rows are compatibility projections rather than alternate
+authority.
+
+REPO-003 adds the first remote-only producer under the frozen
+[remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
+Its provider observation and sealed commit/patch bytes create source evidence;
+configured CI receipts create verification proof; only a separate explicit
+revision-local adoption creates graph authority. Generalized dependency and
+input selections name adoption/source identity and carry a Result companion
+only when the source really is a Task Result. Neither provider success nor an
+EvidenceReuseContract can auto-adopt or carry authority to another revision.
 
 ## Plan Validation and Compilation
 

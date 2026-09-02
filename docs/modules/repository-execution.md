@@ -508,6 +508,8 @@ outside this slice.
 
 Remote source identity and proof adoption follow
 [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md).
+The bounded implementation target is frozen in the
+[REPO-003 remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
 Remote operations are opt-in owner-local bindings. The first adapter has a
 closed supported provider interface and fixed HTTPS origin/repository identity;
 no arbitrary URL supplied by Agent output is fetched. Credentials remain local.
@@ -522,6 +524,15 @@ Callbacks/polls must authenticate the configured source; stale runs, unrelated
 checks and different candidate commits cannot satisfy required verification.
 Provider adapters have real local HTTP acceptance with response-loss injection;
 live external execution is reported separately and is never implied by mocks.
+
+The first REPO-003 slice is observation-only. It retains an immutable
+metadata-only provider binding while resolving credentials at request time,
+uses authenticated operation lookup before any create retry, imports one
+bounded complete Git bundle, validates its exact base/candidate/tree and seals
+both bundle and canonical patch Artifacts. Configured passed CI observations
+are separate proof records. An explicit current-authority adoption—not the
+observation—releases `verified_output`. Optional PR identity is provenance only;
+remote push, PR creation/merge and callbacks remain closed.
 
 ## Security and Failure Matrix
 
