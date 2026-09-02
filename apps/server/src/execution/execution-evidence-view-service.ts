@@ -116,6 +116,16 @@ export class ExecutionEvidenceViewService {
     };
     const task = plan.compiledTasks.find((entry) => entry.nodeKey === node.nodeKey);
     if (!task) throw new Error("Execution evidence Task projection is unavailable");
+    const retainedRuntime = this.nodeStates.get(identity);
+    const runtime = retainedRuntime ? {
+      state: retainedRuntime.state,
+      blockerCode: retainedRuntime.blockerCode,
+      dispatchGeneration: retainedRuntime.dispatchGeneration,
+      runId: retainedRuntime.runId,
+      lastRunState: retainedRuntime.lastRunState,
+      projectionRevision: retainedRuntime.projectionRevision,
+      updatedAt: retainedRuntime.updatedAt
+    } : null;
     const stages = this.stages(identity);
     const localVerifications = this.localVerifications(identity);
     const remote = this.remote(principal, plan, node, now);
@@ -130,7 +140,7 @@ export class ExecutionEvidenceViewService {
     return {
       nodeKey: node.nodeKey,
       taskId: task.taskId,
-      runtime: this.nodeStates.get(identity) ?? null,
+      runtime,
       requiredVerificationProfiles: node.verificationProfiles
         .filter((profile) => profile.required)
         .map((profile) => ({
@@ -143,7 +153,7 @@ export class ExecutionEvidenceViewService {
       remote,
       integration,
       nextAction: this.nextAction(
-        this.nodeStates.get(identity)?.state,
+        runtime?.state,
         stages,
         verifications,
         remote,

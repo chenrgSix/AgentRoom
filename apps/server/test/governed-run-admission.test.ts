@@ -2034,6 +2034,27 @@ test("generation-2 verified output admits one immutable serialized integration",
   assert.equal(changed.statusCode, 409, changed.body);
   assert.match(changed.body, /INTEGRATION_APPROVAL_OPERATION_CONFLICT/u);
   await f.restart(100);
+  await waitFor(() => Boolean(f.database.prepare(`
+    SELECT 1 FROM execution_integrated_node_materializations
+    WHERE plan_id = ? AND node_key = 'Build'
+  `).get(f.plan.planId)));
+  const proofPage = await f.ok(
+    "GET",
+    `/api/tasks/${f.plan.rootTaskId}/execution-evidence`
+  );
+  const buildEvidence = proofPage.plans[0].nodes.find(
+    (node: { nodeKey: string }) => node.nodeKey === "Build"
+  );
+  assert.equal(buildEvidence.integration.state, "succeeded");
+  assert.equal(buildEvidence.integration.approval.approvalDigest,
+    approval.approvalDigest);
+  assert.equal(buildEvidence.integration.receipt.receiptDigest,
+    retained.receiptDigest);
+  assert.deepEqual(buildEvidence.stages.map((stage: { gate: string }) =>
+    stage.gate), ["verified_output", "integrated_commit"]);
+  assert.equal(buildEvidence.verifications[0].kind, "local_verification");
+  assert.equal(buildEvidence.verifications[0].receipt.outcome, "passed");
+  assert.doesNotMatch(JSON.stringify(proofPage), /workspace|localPath|grant_json/u);
   const downstream = await reconnectGovernedAgent(t, f, 3);
   let consumeRequest: BridgeMessage;
   try {
@@ -2319,7 +2340,9 @@ for (const terminal of ["failed", "canceled", "outcome_unknown"] as const) {
       candidateTree: operation.action.integrate!.candidateTree,
       target: operation.action.integrate!.target,
       providerObservationId: null,
-      errorCode: `INTEGRATION_${terminal.toUpperCase()}`,
+      errorCode: terminal === "failed"
+        ? "INTEGRATION_TARGET_MOVED"
+        : `INTEGRATION_${terminal.toUpperCase()}`,
       recordedAt: now
     };
     await f.ok(
@@ -2329,6 +2352,17 @@ for (const terminal of ["failed", "canceled", "outcome_unknown"] as const) {
       `Bearer ${f.credential.secret}`
     );
     await f.restart(0);
+    const proofPage = await f.ok(
+      "GET",
+      `/api/tasks/${f.plan.rootTaskId}/execution-evidence`
+    );
+    const buildEvidence = proofPage.plans[0].nodes.find(
+      (node: { nodeKey: string }) => node.nodeKey === "Build"
+    );
+    assert.equal(buildEvidence.integration.state,
+      terminal === "failed" ? "conflict" : terminal);
+    assert.equal(buildEvidence.integration.blockerCode, receipt.errorCode);
+    assert.equal(buildEvidence.integration.commandTemplate, null);
     assert.equal((f.database.prepare(`
       SELECT count(*) AS n FROM execution_integrated_node_materializations
     `).get() as { n: number }).n, 0);
