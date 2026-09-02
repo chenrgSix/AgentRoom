@@ -149,9 +149,14 @@ func validatePreparedRuns(agents []config.AgentConfig, prepared PreparedRuns, de
 		}
 		seen := map[string]bool{}
 		for _, grant := range grants {
+			runtimeReady := slices.Contains(grant.Operations, execution.Prepare) &&
+				slices.Contains(grant.Operations, execution.Capture) &&
+				len(grant.IntegrationTargets) == 0
+			integrationReady := len(grant.Operations) == 1 &&
+				grant.Operations[0] == execution.Integrate &&
+				len(grant.IntegrationTargets) > 0
 			if grant.AgentID == "" || grant.DeviceID != deviceID || seen[grant.Grant.GrantID] ||
-				grant.RevokedAt != nil || !slices.Contains(grant.Operations, execution.Prepare) ||
-				!slices.Contains(grant.Operations, execution.Capture) {
+				grant.RevokedAt != nil || (!runtimeReady && !integrationReady) {
 				return errors.New("Bridge Run preparation returned an invalid governed grant")
 			}
 			seen[grant.Grant.GrantID] = true

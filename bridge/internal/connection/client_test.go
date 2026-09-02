@@ -329,6 +329,19 @@ func TestValidatePreparedRunsRejectsNonCurrentGovernedGrantSets(t *testing.T) {
 	}, valid.DeviceID); err != nil {
 		t.Fatalf("valid prepared grant was rejected: %v", err)
 	}
+	integration := valid
+	integration.Grant.GrantID = "grant_integration0001"
+	integration.Operations = []execution.KindElement{execution.Integrate}
+	integration.IntegrationTargets = []execution.ExecutionGrantSummaryIntegrationTarget{{
+		RepositoryID:   valid.RepositoryID,
+		TargetRef:      "refs/heads/main",
+		ExpectedCommit: strings.Repeat("c", 40),
+	}}
+	if err := validatePreparedRuns(agents, PreparedRuns{
+		GovernedExecutionGrants: map[string][]execution.ExecutionGrantSummary{"Builder": {valid, integration}},
+	}, valid.DeviceID); err != nil {
+		t.Fatalf("valid Runtime plus integration grant set was rejected: %v", err)
+	}
 	revokedAt := "2026-09-01T10:30:00Z"
 	tests := []struct {
 		name   string
@@ -347,6 +360,18 @@ func TestValidatePreparedRunsRejectsNonCurrentGovernedGrantSets(t *testing.T) {
 			grants: map[string][]execution.ExecutionGrantSummary{"Builder": {func() execution.ExecutionGrantSummary {
 				changed := valid
 				changed.Operations = []execution.KindElement{execution.Prepare}
+				return changed
+			}()}}},
+		{name: "integration without target", device: valid.DeviceID,
+			grants: map[string][]execution.ExecutionGrantSummary{"Builder": {func() execution.ExecutionGrantSummary {
+				changed := integration
+				changed.IntegrationTargets = nil
+				return changed
+			}()}}},
+		{name: "integration mixed with Runtime operations", device: valid.DeviceID,
+			grants: map[string][]execution.ExecutionGrantSummary{"Builder": {func() execution.ExecutionGrantSummary {
+				changed := integration
+				changed.Operations = []execution.KindElement{execution.Prepare, execution.Capture, execution.Integrate}
 				return changed
 			}()}}},
 		{name: "revoked", device: valid.DeviceID,
