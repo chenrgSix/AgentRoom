@@ -131,11 +131,12 @@ flows in regression scope.
 - both worktree paths and the outer run root physically absent after shutdown.
 
 The focused QA-052 test runs three consecutive times under an isolated
-`TMPDIR`. Before and after each run, that isolated parent contains no newly
-retained `agentroom-*`, `agent-room-*`, `convenewire-*` or `convene-wire-*`
-directory. Full Server/Web/contracts/Bridge tests, deterministic E2E, schema
-validation, builds, Go race/vet, documentation lint and `git diff --check`
-remain final gates.
+`CONVENE_WIRE_TEST_RUN_BASE`; each owned run then sets its child `TMPDIR` below
+that exact run root. Before and after each run, the isolated base contains no
+newly retained `agentroom-*`, `agent-room-*`, `convenewire-*` or
+`convene-wire-*` directory. Full Server/Web/contracts/Bridge tests,
+deterministic E2E, schema validation, builds, Go race/vet, documentation lint
+and `git diff --check` remain final gates.
 
 ## Non-goals and Honest Boundary
 
@@ -180,12 +181,15 @@ are already absent. Both source checkouts retain their original commit, clean
 status and original dependency bytes; Bridge B observes the integrated bytes
 only inside its isolated worktree before producing the downstream file.
 
-Three consecutive focused runs used the isolated parent
-`/private/tmp/qa052-three-run.skfATN`. Before and after every run the four-prefix
-directory count was `0`; run durations were 26.8, 27.9 and 28.8 seconds. The
-owned roots `convene-wire-test-run-mDJzKM`, `convene-wire-test-run-qOp6oK` and
-`convene-wire-test-run-SeipB1` were each reported cleaned, and the empty parent
-was removed by its trap.
+The completion audit reran the focused test three consecutive times with
+`CONVENE_WIRE_TEST_RUN_BASE=/private/tmp/qa052-goal-audit.I4Np0T`. The actual
+owned roots were therefore created inside that private base as
+`convene-wire-test-run-LRsqFA`, `convene-wire-test-run-Prr9Vb` and
+`convene-wire-test-run-ykVNgD`; their child temporary/cache paths stayed below
+those roots. Before and after every run the four-prefix count and the total
+remaining-entry count were both `0`; run durations were 39.5, 27.5 and 41.2
+seconds. Every root was reported cleaned, and an independent post-command check
+proved the isolated parent itself absent after its trap.
 
 Final repository gates passed:
 
