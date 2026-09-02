@@ -3,7 +3,8 @@
 - Prefixes: `REPO`, `VER`; local coordination also uses `WSP` and `BRG`
 - Planned implementation: `apps/server/src/repository/`,
   `apps/server/src/verification/`, `bridge/internal/repository/`
-- Governing decision: [ADR-0036](../adr/0036-add-governed-software-team-execution.md)
+- Governing decisions: [ADR-0036](../adr/0036-add-governed-software-team-execution.md)
+  and [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md)
 - State ownership: Central owns operation intents and authenticated receipts;
   Bridge owns local bindings, paths, permissions, Git and command execution
 
@@ -505,6 +506,8 @@ outside this slice.
 
 ## Remote Git, CI and PR
 
+Remote source identity and proof adoption follow
+[ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md).
 Remote operations are opt-in owner-local bindings. The first adapter has a
 closed supported provider interface and fixed HTTPS origin/repository identity;
 no arbitrary URL supplied by Agent output is fetched. Credentials remain local.
@@ -563,8 +566,8 @@ matches its current grant at admission and send, and connects that bounded
 manifest to ordinary frozen Run Delivery. Verifier pins remain exact downstream
 requirements and grant no verifier authority. REPO-002 now supplies the
 separate immutable `integrated_commit` materializer and exact downstream input
-proof. Physical two-Bridge Git handoff remains an open EXEC-003/RUN-018
-acceptance gate.
+proof. The accepted EXEC-003/RUN-018/QA-052 physical two-Bridge handoff proves
+that current local lifecycle; it does not implement remote provider behavior.
 `REPO-001` retains the full owner-local lifecycle acceptance using these actual
 production adapters, and is a prerequisite of QA-052 rather than of its own
 BRG-071 implementation. Local fixtures alone cannot satisfy that closure.
@@ -573,8 +576,8 @@ BRG-071 implementation. Local fixtures alone cannot satisfy that closure.
 later lifecycle acceptance; it runs actual
 bounded commands with pass/fail/timeout and forged-receipt negatives;
 `REPO-002` exercises overlapping branches, conflicts and target CAS;
-`REPO-003` validates authenticated provider IO and ambiguous external effects,
-but may not start until `GOV-026` accepts the source-evidence authority below.
+`REPO-003` must validate the accepted GOV-026 migration plus authenticated
+provider IO and ambiguous external effects before advertising remote behavior.
 `QA-052` through `QA-055` combine these with actual Server and Go Bridge
 processes, browser entry and direction auditing. Delivery state stays in TASKS.
 
@@ -584,19 +587,22 @@ Cross-platform compilation is not native Windows/macOS behavioral acceptance;
 report those gates independently. New APIs and wire data require generated
 TypeScript/Go contract checks and interoperability tests.
 
-### Future Source-Evidence Authority
+### Accepted Source-Evidence Authority
 
-Current local accepted, verified and integrated materializations intentionally
-retain an exact `sourceResultId` and Result version. That remains the delivered
-model for local Agent-produced candidates. Before `REPO-003` adds remote Git,
-PR or CI observations, `GOV-026` must accept an ADR that decides a closed
-source-evidence anchor or source-proof/adoption model, including exact
-provenance, digest/CAS, replay, plan-revision adoption and supersession rules.
+GOV-026 accepts the source/proof/adoption separation in
+[ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md). Current
+local materializations intentionally continue to retain exact Result pins until
+the additive implementation is accepted. The generalized closed sources are a
+Task Result or an exact repository commit with local-checkpoint/authenticated-
+remote origin; CI, verification and integration receipts remain gate proofs,
+not candidate-content owners.
 
-The future decision must not grant an observation authority it did not already
-have, and must not require CI or another non-Agent producer to fabricate an
-Agent Result. No migration, remote-provider adapter or new materialization gate
-is implied by recording this prerequisite.
+`REPO-003` owns the actual contracts, migration/backfill, transactional local
+dual-write, shadow-read equality, reader cutover, versioned non-Result input
+projection and remote adapter. It may not make legacy Result fields nullable,
+invent Results, accept a URL/hash without canonical content, or treat an
+observation as authority for another gate. Design acceptance alone adds no
+provider, migration or materialization capability.
 
 ### Independent Verification Vertical Slice
 

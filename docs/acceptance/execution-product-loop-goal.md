@@ -182,18 +182,18 @@ synthetic Runtime is not live-provider or multiple-machine evidence.
 
 ## Source-Evidence Decision Gate
 
-Current local materializations remain intentionally anchored to an Agent
-Result and its exact version. Before remote PR, Git or CI observations are
-implemented, `GOV-026` must accept an ADR that decides whether a proof source is
-a closed evidence-anchor union, a source proof plus revision-local adoption, or
-another equally explicit authority. The decision must preserve provenance,
-digest/CAS behavior, replay, supersession compatibility and no-authority
-escalation.
+GOV-026 is accepted in
+[ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md). It
+chooses a closed Task-Result/repository-commit source union, gate-specific proof
+references and explicit revision-local adoption with exact contract/input
+compatibility for carry-forward. Current Result-bearing local rows remain the
+delivered model until `REPO-003` implements the additive migration and reader
+cutover.
 
 `REPO-003` may not force CI or another external producer to manufacture a fake
-Agent Result merely to satisfy the current local schema. This program freezes
-the decision requirement only; it performs no source-anchor migration and
-implements no remote provider adapter.
+Agent Result, make legacy fields ambiguously nullable, or advertise a provider
+from design evidence. It remains responsible for contracts, persistence,
+authenticated adapters, canonical content and runtime negative/physical gates.
 
 ## Non-goals
 

@@ -55,6 +55,15 @@ app-server crosses production Bridge/process boundaries but is not live-provider
 or multi-machine evidence. The accepted topology, counts, gates and replay
 matrix live in [`QA-052`](../acceptance/qa-052-controlled-product-loop-goal.md).
 
+GOV-026 accepts only the pre-provider architecture in
+[ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md). Its
+design review audits current materialization SQL/readers against closed source,
+proof and plan-adoption boundaries. `REPO-003` must still provide generated
+contract fixtures, migration/backfill/reopen/rollback and shadow-equality tests,
+proof-substitution/current-authority/concurrent-adoption negatives, real local
+authenticated provider HTTP fault injection and physical canonical-content
+delivery. Documentation acceptance is never provider acceptance.
+
 ## Scope
 
 - Prefixes: `QA` and `OPS`

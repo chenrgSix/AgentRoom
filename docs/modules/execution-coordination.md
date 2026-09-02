@@ -4,7 +4,8 @@
 - Implementation directory: `apps/server/src/execution/`
 - Owns: immutable decisions/plans, approvals, dependency/input bindings,
   dispatch intents and derived graph progress
-- Governing decision: [ADR-0036](../adr/0036-add-governed-software-team-execution.md)
+- Governing decisions: [ADR-0036](../adr/0036-add-governed-software-team-execution.md)
+  and [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md)
 
 ## Purpose and Non-goals
 
@@ -22,12 +23,12 @@ Requirement IDs identify behavior, not delivery status. Only TASKS records state
 | EX-01 | Decisions and proposals are immutable, attributed and non-executing | EXEC-001, DISC-010; exact source and malformed-output tests |
 | EX-02 | Complete versioned DAG validation and atomic child-Task compilation | CON-020, EXEC-001, EXEC-002; cycle/duplicate/rollback/reopen tests |
 | EX-03 | Exact-version human approval fences scope, definitions and authority | EXEC-002; stale/foreign/changed-payload response-loss tests |
-| EX-04 | Dependencies bind exact upstream outputs and authorized cross-Task inputs | EXEC-006 foundation plus EXEC-003, RUN-018, VER-001 and REPO-002; two-Task/two-Bridge transfer and foreign-scope negatives |
+| EX-04 | Dependencies bind exact upstream outputs and authorized cross-Task inputs | EXEC-006 foundation plus EXEC-003, RUN-018, VER-001, REPO-002 and GOV-026; two-Task/two-Bridge transfer, closed evidence adoption and foreign-scope negatives |
 | EX-05 | One dispatch intent creates one ordinary Run under all admission gates | EXEC-004, RUN-018; concurrent schedulers, offline/reconnect and crash cuts |
 | EX-06 | Coding uses explicit local grants and isolated workspaces before startup | WSP-003, BRG-071, REPO-001; actual Git and denied-runtime execution tests |
 | EX-07 | Verifier receipts are independent from Agent claims and pin exact code | VER-001; actual command plus forgery/profile/tree mismatch tests |
 | EX-08 | Integration checks the candidate and compare-and-sets the target | REPO-002; parallel patches, conflict, moved-base and response-loss tests |
-| EX-09 | Scoped CI/PR operations reconcile external effects without blind retry | REPO-003; real HTTP adapter with lost responses and target identity checks |
+| EX-09 | Scoped CI/PR operations reconcile external effects without blind retry | GOV-026 design plus REPO-003 implementation; migration, authenticated real HTTP adapter, lost responses and target identity checks |
 | EX-10 | Web completes proposal, approval, diagnosis, review and recovery flows | WEB-063, WEB-064; real Server browser acceptance at desktop/mobile widths |
 | EX-11 | Tech Lead proposals and bounded revisions do not inherit human authority | MCP-007, EXEC-005; assigned/unassigned and privilege/budget drift negatives |
 | EX-12 | Focused/quorum discussions preserve frozen evidence and actual Run outcomes | DISC-011, DISC-012; permutation/restart/late-result/role tests |
@@ -67,8 +68,11 @@ the actual RUN-018/EXEC-003 delivery and materialization gates.
 | PlanApproval | operationId, exact revision/digest, actor, root Task revision, decision, timestamp |
 | PlanNode | stable nodeKey, taskId, definition/criteria pins, Agent, repository and verifier requirements |
 | PlanEdge | edgeKey, source/target node keys, gate, selected output/input slots |
-| NodeMaterialization | plan revision/node/gate, exact source Run/Result, gate-specific proof authority and canonical checkpoint Artifact pins |
-| TaskInputBinding | bindingId, plan revision/edge, source receipt, destination Task/Run, immutable content pins |
+| SourceEvidence | plan-independent closed task-Result or repository-commit subject, producer provenance, canonical content pins and digest |
+| GateProofRef | gate-specific immutable ResultReview, Verification/CI or Integration receipt identity and digest |
+| EvidenceAdoption | operation, exact plan revision/node/gate, source/proof digests, node-contract/input-set digests and current authority pins |
+| NodeMaterialization | deterministic gate-ready projection of one adoption, its source evidence and complete proof set |
+| TaskInputBinding | bindingId, plan revision/edge, source adoption, destination Task/Run and immutable content pins |
 | DispatchIntent | plan revision/node/generation, unique Run ID, exact inputs, operation digest |
 | PlanControlEvent | operationId, expected execution revision, actor, pause/resume/cancel reason |
 
@@ -78,6 +82,25 @@ edges and set-like fields are normalized deterministically before hashing.
 Duplicates are rejected, not silently discarded. JSON is finite, bounded and
 schema-validated before hashing. Reusing an operation ID with another actor,
 target or normalized payload fails instead of returning an unrelated receipt.
+
+### Generalized source evidence and adoption
+
+[ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md)
+separates exact content provenance from gate proof and plan-revision use. The
+first closed source union is `task_result` and `repository_commit`; repository
+commit origin is separately closed to local checkpoint or authenticated remote
+observation. ResultReview, VerificationReceipt/future configured CI observation
+and IntegrationReceipt remain proofs owned by their existing gates and cannot
+substitute for one another.
+
+One immutable source may be adopted by several exact plan revisions. Each
+adoption is unique by plan/revision/node/gate, has exact replay identity and
+rechecks current authorization. Initial supersession carry-forward requires
+byte-identical node-contract and resolved-input-set digests; matching a node key,
+Result or commit alone is insufficient. Current local tables and APIs retain
+their delivered Result-bearing shape until `REPO-003` implements the additive
+backfill, dual-write/shadow-read equality, reader cutover and versioned
+non-Result projection. Design acceptance creates no runtime capability.
 
 ## Plan Validation and Compilation
 

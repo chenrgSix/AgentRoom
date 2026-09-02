@@ -2,8 +2,8 @@
 
 Date: 2026-09-02
 
-Status: frozen design goal. This record starts `GOV-026`; only an accepted ADR,
-explicit design review and consistent owning-module updates may make it `DONE`.
+Status: accepted on 2026-09-02. `GOV-026` is complete as an architecture
+decision; it grants no remote-provider or migration capability.
 
 ## Goal
 
@@ -109,3 +109,20 @@ authority. It must not prematurely claim those schemas or migrations exist.
   IntegrationReceipt records; and
 - no claim that design acceptance is runtime, E2E, provider or production
   acceptance.
+
+## Accepted Outcome
+
+[ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md)
+selects the closed `task_result`/`repository_commit` source union, closed
+gate-proof matrix and revision-local `EvidenceAdoption`. The initial
+carry-forward rule is exact node-contract and resolved-input-set digest equality,
+not semantic guessing. Source identity has no global adoption uniqueness;
+target plan/revision/node/gate and operation identities remain unique.
+
+The [explicit design review](../reviews/0038-source-evidence-authority-review.md)
+resolved ten authority, provenance, replay, concurrency, migration and provider
+findings against current materialization persistence and readers. Execution,
+Repository and Testing modules now assign the additive contract/migration,
+shadow-equality, versioned projection, provider HTTP and physical input evidence
+to `REPO-003`. Documentation lint and whitespace checks pass. No runtime code,
+database, wire contract, provider or repository state changed.
