@@ -17,6 +17,17 @@ The browser client is the primary Team conversation surface. It renders
 authoritative server state and sends user intents; it does not contain routing,
 authorization, or Run state-machine logic.
 
+`WEB-063` adds a Plan tab to the canonical Task detail. The Server owns the
+Task-scoped plan list, revision history, exact digest and immutable review
+history. The browser may render a structural diff and edit one complete draft
+definition, but every revision and approval remains a closed Server command.
+Approval is an explicit human action bound to the selected revision, digest and
+current root Task revision; a browser role label or cached projection is never
+authority. Exact response-loss recovery retains command pins only and never
+stores credentials, definitions, source evidence or repository bytes. The
+frozen boundary and acceptance matrix live in
+[`WEB-063`](../acceptance/web-063-plan-control-surface.md).
+
 Presentation is split under `apps/web/src/features/` by product responsibility:
 Auth owns the access gate, Team owns member and lifecycle surfaces, Room owns
 the timeline and Room settings, Agent owns roster and configuration, Device owns
