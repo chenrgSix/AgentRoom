@@ -25,9 +25,11 @@ topological ordinal, node key (binary)
 ```
 
 Each bounded round selects at most one candidate per plan before returning to
-that plan, so a large graph cannot starve another approved plan. Within a plan,
-the approved topological order wins; node labels, insertion order, SQL row order
-and process timing are not authority.
+that plan. This prevents one plan from monopolizing a single frozen sweep. It
+does not guarantee fairness across separate sweeps: approval-time ordering may
+reselect an older plan whenever shared Agent capacity becomes free. Within a
+plan, the approved topological order wins; node labels, insertion order, SQL row
+order and process timing are not authority.
 
 The sweep freezes its candidate order, but every admission transaction rechecks
 live plan, dependency, Task, Agent, grant/profile and capacity facts. A stale
@@ -49,7 +51,10 @@ candidate becomes a projected blocker and does not consume a slot.
 ## Non-Goals
 
 This slice adds no manual/supervised/automatic mode. The existing scheduled
-behavior remains the only mode. `EXEC-010` owns future persisted mode authority.
+behavior remains the only mode. `EXEC-010` owns future persisted mode authority
+and a durable cross-sweep shared-Agent fairness cursor/history fact with CAS,
+restart and concurrent-Server safety. Random or process-local rotation is not
+authority.
 It also adds no automatic retry, plan supersession, new node kind, relaxed Agent
 capacity, evidence adoption, verifier/integration authority or remote provider.
 
@@ -138,5 +143,7 @@ failure, spawn failure, timeout, cancellation, process trees and parallel
 owners. The physical snapshots were `before=0`, `after-1=0`, `after-2=0` and
 `after-3=0`; each per-run root and finally the isolated base itself were absent.
 
-This accepts `EXEC-008`. It does not add scheduler modes, automatic retry, plan
-supersession, remote provider authority or multi-computer physical acceptance.
+This accepts `EXEC-008` for deterministic bounded per-sweep capacity. It does
+not claim cross-sweep shared-Agent fairness, scheduler modes, automatic retry,
+plan supersession, remote provider authority or multi-computer physical
+acceptance.

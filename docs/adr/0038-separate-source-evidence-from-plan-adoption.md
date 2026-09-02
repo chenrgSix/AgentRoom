@@ -132,12 +132,20 @@ An adoption freezes at least:
 - actor/service authority and the current authorization revisions it rejoined;
 - `adoptionDigest` and `createdAt`.
 
-`nodeContractDigest` covers the complete approved node contract relevant to
-reuse: Task identity/definition/criteria, kind, Agent assignment, repository and
-base, output slots, scope, required verification/integration policy, local
-grant/profile pins and exact upstream input adoptions. The first implementation
-permits carry-forward only when this digest is byte-identical. Broader semantic
-compatibility requires a later explicit decision.
+The version-1 `nodeContractDigest` and `resolvedInputSetDigest` are exact
+execution identities. They include plan/approval identity and complete
+destination-attempt bindings respectively, so they are correct for replay and
+audit but cannot define cross-revision reuse equality. Their meaning and every
+retained value remain unchanged.
+
+CON-024 adds an immutable companion `EvidenceReuseContract` with
+`nodeExecutionDigest`/`runtimeInputBindingDigest` aliases of those exact facts
+and separately defined `nodeReuseContractDigest`/`reuseInputEvidenceDigest`
+facts. The companion excludes plan revision, approval and destination-attempt
+identity only from reuse equality while retaining Task criteria, Agent/profile/
+grant, repository/base, scope, output, verification/integration and logical
+input evidence. Its frozen formula is
+[`evidence-reuse-digest-separation-goal.md`](../acceptance/evidence-reuse-digest-separation-goal.md).
 
 Adoption is one transaction. Before insertion the owning materialization service
 rechecks the approved plan revision, node contract, current Team/Room/Task and
@@ -169,7 +177,8 @@ Plan supersession never copies a materialization row implicitly. A later plan
 revision submits a new adoption operation referencing the old immutable source
 and proof records. Initial carry-forward requires all of:
 
-1. exact `nodeContractDigest` and resolved-input-set digest equality;
+1. exact `nodeReuseContractDigest` and `reuseInputEvidenceDigest` equality from
+   retained companion facts;
 2. the same logical repository/content subject and complete gate proof under the
    new revision's policy;
 3. current authorization and non-revoked provider/local authority;
@@ -177,7 +186,9 @@ and proof records. Initial carry-forward requires all of:
 5. proof-specific freshness rules, when the approved profile explicitly has
    them.
 
-Matching node keys, Task labels, Result IDs or commit IDs alone is insufficient.
+The version-1 `nodeContractDigest` and `resolvedInputSetDigest` are deliberately
+not reuse comparisons. Matching node keys, Task labels, Result IDs or commit IDs
+alone is insufficient.
 A changed base, input, scope, output contract, required check, integration
 target, Agent/grant/profile pin or Task criterion blocks carry-forward. The old
 adoption and source stay immutable; a human may revise the plan or produce new

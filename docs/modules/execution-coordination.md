@@ -322,12 +322,14 @@ restoring all immutable/exact-scope triggers plus the dependency view. The
 resolver and input freezer consume the selected immutable proof without
 guessing a generation.
 
-Automatic retry remains fail-closed. `EXEC-008` now owns only deterministic
-broader multi-node capacity, fairness and systematic graph fault injection.
-`EXEC-010` separately owns any explicit manual/supervised/automatic scheduler
-mode so capacity cannot silently widen execution authority. `WEB-063` waits on
-the bounded `EXEC-004` control slice; parallel `QA-053` additionally waits on
-`EXEC-008`.
+Automatic retry remains fail-closed. `EXEC-008` owns deterministic broader
+multi-node capacity, per-sweep plan rotation and systematic graph fault
+injection. It does not prove fairness across separate sweeps competing for one
+Agent. `EXEC-010` separately owns explicit manual/supervised/automatic mode and
+a durable shared-Agent fairness cursor/history fact updated by CAS, so restart
+or concurrent Servers cannot reset or duplicate the rotation. `WEB-063` waits
+on the bounded `EXEC-004` control slice; parallel `QA-053` additionally waits
+on `EXEC-008`.
 
 CON-023 and EXEC-009 implement the accepted ADR-0038 source/proof/adoption model
 before remote provider work. Their frozen acceptance authority is
@@ -362,7 +364,19 @@ remain the only capacity counters. The implementation checkpoint now has
 physical fan-out, fan-in, same-Agent serialization, two-plan fairness,
 concurrent-Server uniqueness and restart evidence. `EXEC-008` is accepted after
 the full build, deterministic E2E, Bridge and three-run cleanup gates recorded
-in its frozen goal.
+in its frozen goal. Here, two-plan fairness means bounded rotation inside one
+frozen sweep only; `EXEC-010` owns durable cross-sweep fairness.
+
+CON-024 and EXEC-011 separate exact execution identity from future reuse
+equivalence without changing the version-1 `EvidenceAdoption`. The companion
+`EvidenceReuseContract` records the existing `resolvedInputSetDigest` as
+`runtimeInputBindingDigest` and the existing `nodeContractDigest` as
+`nodeExecutionDigest`, then adds normalized logical input evidence and a
+semantic `nodeReuseContractDigest`. The exact formulas, additive migration and
+negative evidence are frozen in
+[`evidence-reuse-digest-separation-goal.md`](../acceptance/evidence-reuse-digest-separation-goal.md).
+`EXEC-005` may later consume only the new reuse digests for explicit
+carry-forward admission; no current scheduler or dependency reader infers reuse.
 
 ### First Accepted-Result Dependency Increment
 
