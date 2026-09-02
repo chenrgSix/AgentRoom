@@ -1032,6 +1032,7 @@ test("scheduler creates one system-traced DispatchIntent and ordinary Run", {
   const requested = await f.scheduledDelivery!;
   assert.equal(requested.type, "run.requested");
   assert.equal(validateBridgeMessage(requested), true);
+  assert.equal(requested.payload.contextManifest?.target.runtimeKind, "codex");
   const schedulerContext = (requested.payload.contextMessages as Array<{
     senderId: string;
   }>).find(({ senderId }) => senderId === "execution_scheduler");

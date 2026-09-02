@@ -58,7 +58,7 @@ export interface RunContextManifest {
   target: {
     agentId: string;
     deviceId: string | null;
-    runtimeKind: "generic" | "manual" | "fake" | "not_recorded";
+    runtimeKind: "codex" | "generic" | "manual" | "fake" | "not_recorded";
     workspaceAlias: string | null;
   };
   included: {
@@ -1662,7 +1662,14 @@ export class RunRepository {
     execution?: GovernedExecutionManifest
   ): void {
     const manifest = this.buildContextManifest(runId);
-    if (execution) manifest.execution = execution;
+    if (execution) {
+      // Governed execution is currently a Codex-only authority path. The
+      // Bridge registration mode remains "managed", so the frozen delivery
+      // must project the Runtime kind from this stronger execution boundary
+      // instead of collapsing it to the legacy generic value.
+      manifest.target.runtimeKind = "codex";
+      manifest.execution = execution;
+    }
     const updated = this.database.prepare(`
       UPDATE runs SET context_manifest_json = ?
       WHERE run_id = ? AND context_manifest_json IS NULL
