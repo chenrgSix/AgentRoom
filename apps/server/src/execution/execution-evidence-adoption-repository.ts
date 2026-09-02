@@ -318,6 +318,7 @@ export class ExecutionEvidenceAdoptionRepository {
       ) {
         throw new Error("EvidenceAdoption conflicts with retained local proof");
       }
+      this.assertLegacyProjection(materialization, existing);
       return existing;
     }
     this.database.prepare(`
@@ -348,7 +349,9 @@ export class ExecutionEvidenceAdoptionRepository {
       materialization.materializationDigest,
       adoption.createdAt
     );
-    return this.get(materialization, materialization.gate)!;
+    const retained = this.get(materialization, materialization.gate)!;
+    this.assertLegacyProjection(materialization, retained);
+    return retained;
   }
 
   public get(
@@ -628,5 +631,88 @@ export class ExecutionEvidenceAdoptionRepository {
       canonicalExecutionJSON(proof),
       createdAt
     );
+  }
+
+  private assertLegacyProjection(
+    materialization: ExecutionNodeMaterialization,
+    bundle: EvidenceAdoptionBundle
+  ): void {
+    const { adoption, source } = bundle;
+    if (
+      bundle.legacyMaterializationDigest !==
+        materialization.materializationDigest ||
+      adoption.planId !== materialization.planId ||
+      adoption.planRevision !== materialization.planRevision ||
+      adoption.nodeKey !== materialization.nodeKey ||
+      adoption.gate !== materialization.gate ||
+      adoption.sourceExecution?.runId !== materialization.sourceRunId ||
+      adoption.sourceExecution.dispatchGeneration !==
+        materialization.dispatchGeneration ||
+      !same(source.artifactPins, materialization.artifactPins)
+    ) {
+      throw new Error("EvidenceAdoption legacy projection is not shadow-equal");
+    }
+    if (materialization.gate === "accepted_result") {
+      const proof = adoption.proofs[0];
+      if (
+        source.kind !== "task_result" ||
+        source.resultId !== materialization.sourceResultId ||
+        source.resultVersion !== materialization.sourceResultVersion ||
+        adoption.proofs.length !== 1 ||
+        proof?.kind !== "result_review" ||
+        proof.operationId !== materialization.gateOperationId ||
+        proof.resultId !== materialization.sourceResultId ||
+        proof.resultVersion !== materialization.sourceResultVersion
+      ) {
+        throw new Error("Accepted EvidenceAdoption is not shadow-equal");
+      }
+      return;
+    }
+    const origin = source.kind === "repository_commit" &&
+      source.origin?.kind === "local_checkpoint" ? source.origin : undefined;
+    if (
+      source.kind !== "repository_commit" ||
+      source.commit !== materialization.candidateCommit ||
+      source.tree !== materialization.candidateTree ||
+      source.inputDigest !== materialization.inputDigest ||
+      !origin ||
+      origin.checkpointId !== materialization.checkpointId ||
+      origin.sourceRunId !== materialization.sourceRunId ||
+      origin.dispatchGeneration !== materialization.dispatchGeneration
+    ) {
+      throw new Error("Repository EvidenceAdoption is not shadow-equal");
+    }
+    if (materialization.gate === "verified_output") {
+      const projected = adoption.proofs.map((proof) => {
+        if (proof.kind !== "verification_receipt") {
+          throw new Error("Verified EvidenceAdoption has a foreign proof kind");
+        }
+        return {
+          operationId: proof.operationId,
+          profileDigest: proof.profileDigest,
+          profileId: proof.profileId,
+          profileRevision: proof.profileRevision,
+          receiptDigest: proof.proofDigest,
+          verificationId: proof.verificationId
+        };
+      });
+      if (!same(projected, materialization.verificationReceipts)) {
+        throw new Error("Verified EvidenceAdoption is not shadow-equal");
+      }
+      return;
+    }
+    const proof = adoption.proofs[0];
+    if (
+      source.repositoryId !== materialization.repositoryId ||
+      origin.bindingId !== materialization.bindingId ||
+      adoption.proofs.length !== 1 ||
+      proof?.kind !== "integration_receipt" ||
+      proof.operationId !== materialization.gateOperationId ||
+      proof.repositoryId !== materialization.repositoryId ||
+      proof.resultingCommit !== materialization.candidateCommit ||
+      proof.proofDigest !== materialization.integrationReceiptDigest
+    ) {
+      throw new Error("Integrated EvidenceAdoption is not shadow-equal");
+    }
   }
 }

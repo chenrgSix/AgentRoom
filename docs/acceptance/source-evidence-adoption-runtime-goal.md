@@ -182,3 +182,21 @@ verified/integrated source identity, exact row counts, foreign-key integrity,
 reopen idempotence and an injected adoption failure that rolls the source,
 proof and adoption writes back together. Legacy readers and writers are still
 unchanged at this checkpoint; Stage B dual-write is the next authority change.
+
+## EXEC-009 Stage-B Checkpoint
+
+The shared `ExecutionNodeMaterializationRepository` now dual-writes every new
+accepted, verified and integrated local gate inside the materializer's existing
+transaction. Replays reconstruct the same generalized facts instead of trusting
+the legacy row alone. Before return, the repository compares the adoption
+target and dispatch lineage, source Artifact pins and Result/checkpoint/commit
+identity, plus the gate-specific review, verification or integration proof
+projection against the retained legacy materialization.
+
+The additive Stage-A backfill uses an explicit legacy-only read path, so later
+reader cutover cannot make migration circular. Focused physical SQLite tests
+prove all three successful materializers retain adoptions, concurrent verified
+reconciliation converges, response-loss/restart replay is idempotent, and an
+injected adoption insert failure rolls back the legacy materialization, source,
+proof and adoption together. Runtime dependency and input readers still use
+legacy projections until Stage C.

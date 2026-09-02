@@ -33,6 +33,8 @@ import { ExecutionNodeMaterializationRepository } from
   "../src/execution/execution-node-materialization-repository.js";
 import { ExecutionPlanRepository } from
   "../src/execution/execution-plan-repository.js";
+import { AcceptedResultMaterializer } from
+  "../src/execution/materialization/accepted-result-materializer.js";
 import { fixture, now } from "./helpers/execution-plan-fixture.js";
 
 type BridgeSocket = Awaited<ReturnType<FastifyInstance["injectWS"]>>;
@@ -1774,6 +1776,10 @@ test("generation-2 verified output admits one immutable serialized integration",
       artifactId: materialization.artifactPins[0]!.artifactId
     }]
   });
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_evidence_adoptions
+  `).get() as { n: number }).n, 2,
+  "verified and integrated materialization transactions dual-write adoption");
   assert.equal(backfillLegacyEvidenceAdoptions(f.database), 2);
   const evidence = new ExecutionEvidenceAdoptionRepository(f.database);
   const verifiedAdoption = evidence.get({
@@ -2376,9 +2382,40 @@ test("generation-2 accepted output materializes once and drives exact downstream
     BEFORE INSERT ON execution_input_bindings
     BEGIN SELECT RAISE(ABORT, 'injected downstream input failure'); END
   `);
+  f.database.exec(`
+    CREATE TRIGGER fail_evidence_adoption_dual_write
+    BEFORE INSERT ON execution_evidence_adoptions
+    BEGIN SELECT RAISE(ABORT, 'injected adoption dual-write failure'); END
+  `);
+  const buildIdentity = {
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build"
+  };
+  assert.throws(() => f.database.transaction(() =>
+    new AcceptedResultMaterializer(
+      f.database,
+      new ExecutionNodeMaterializationRepository(f.database)
+    ).reconcile(buildIdentity)
+  )(), /injected adoption dual-write failure/u);
+  for (const table of [
+    "execution_node_materializations",
+    "execution_source_evidence",
+    "execution_gate_proof_refs",
+    "execution_evidence_adoptions"
+  ]) {
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM ${table}
+    `).get() as { n: number }).n, 0, `${table} escaped failed dual-write`);
+  }
+  f.database.exec("DROP TRIGGER fail_evidence_adoption_dual_write");
   const schedulerDisabledApp = f.app;
   await f.restart(100);
   assert.notEqual(f.app, schedulerDisabledApp);
+  await waitFor(() => Boolean(f.database.prepare(`
+    SELECT 1 FROM execution_node_materializations
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision)));
   const materialization = f.database.prepare(`
     SELECT * FROM execution_node_materializations
     WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
@@ -2395,25 +2432,10 @@ test("generation-2 accepted output materializes once and drives exact downstream
   assert.equal(materialization.source_run_id, buildRunId);
   assert.equal(materialization.source_result_id, good.resultId);
   assert.equal(materialization.gate_operation_id, "op_dependency_accept_canonical0001");
-  f.database.exec(`
-    CREATE TRIGGER fail_evidence_adoption_backfill
-    BEFORE INSERT ON execution_evidence_adoptions
-    BEGIN SELECT RAISE(ABORT, 'injected adoption backfill failure'); END
-  `);
-  assert.throws(
-    () => backfillLegacyEvidenceAdoptions(f.database),
-    /injected adoption backfill failure/u
-  );
-  for (const table of [
-    "execution_source_evidence",
-    "execution_gate_proof_refs",
-    "execution_evidence_adoptions"
-  ]) {
-    assert.equal((f.database.prepare(`
-      SELECT count(*) AS n FROM ${table}
-    `).get() as { n: number }).n, 0, `${table} escaped failed backfill`);
-  }
-  f.database.exec("DROP TRIGGER fail_evidence_adoption_backfill");
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_evidence_adoptions
+  `).get() as { n: number }).n, 1,
+  "accepted materialization transaction dual-writes adoption");
   assert.equal(backfillLegacyEvidenceAdoptions(f.database), 1);
   const acceptedAdoption = new ExecutionEvidenceAdoptionRepository(
     f.database

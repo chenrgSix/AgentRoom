@@ -340,6 +340,10 @@ Migration 0074 and the deterministic Stage-A backfill are now delivered: empty,
 accepted, verified and integrated local facts reconstruct inside one immediate
 transaction, reopen idempotently, and fail without partial generalized rows.
 Legacy readers and materialization writers remain authoritative until Stage B.
+Stage B is now delivered through the shared materialization repository: all
+three local gates dual-write and compare exact source/proof/adoption projections
+inside the legacy transaction, while backfill retains a named legacy-only read
+path. Reader authority remains unchanged until the Stage-C cutover.
 
 The broader scheduler capacity target is frozen independently in
 [`exec-008-multi-node-scheduler-capacity-goal.md`](../acceptance/exec-008-multi-node-scheduler-capacity-goal.md).

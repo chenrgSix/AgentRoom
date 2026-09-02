@@ -13,7 +13,7 @@ export function backfillLegacyEvidenceAdoptions(
   if (!evidence.available()) return 0;
   const materializations = new ExecutionNodeMaterializationRepository(database);
   const backfill = (): number => evidence.reconcileLegacy(
-    (identity, gate) => materializations.get(identity, gate)
+    (identity, gate) => materializations.getLegacy(identity, gate)
   );
   if (database.inTransaction) return backfill();
   return database.transaction(backfill).immediate();

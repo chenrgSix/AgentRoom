@@ -8,6 +8,8 @@ import {
 
 import type { ExecutionNodeIdentity } from
   "./execution-node-state-repository.js";
+import { ExecutionEvidenceAdoptionRepository } from
+  "./execution-evidence-adoption-repository.js";
 import { ExecutionError } from "./execution-error.js";
 
 export interface ExecutionMaterializationArtifactPin {
@@ -282,9 +284,22 @@ function mapIntegrated(
 }
 
 export class ExecutionNodeMaterializationRepository {
-  public constructor(private readonly database: Database.Database) {}
+  private readonly evidence: ExecutionEvidenceAdoptionRepository;
+
+  public constructor(private readonly database: Database.Database) {
+    this.evidence = new ExecutionEvidenceAdoptionRepository(database);
+  }
 
   public get(
+    identity: ExecutionNodeIdentity,
+    gate: "accepted_result" | "verified_output" | "integrated_commit" =
+      "accepted_result"
+  ): ExecutionNodeMaterialization | undefined {
+    return this.getLegacy(identity, gate);
+  }
+
+  /** Stage-A/backfill access; runtime readers switch away from this in Stage C. */
+  public getLegacy(
     identity: ExecutionNodeIdentity,
     gate: "accepted_result" | "verified_output" | "integrated_commit" =
       "accepted_result"
@@ -341,7 +356,7 @@ export class ExecutionNodeMaterializationRepository {
       if (canonicalExecutionJSON(existing) !== canonicalExecutionJSON(record)) {
         throw new Error("Execution node materialization conflicts with retained evidence");
       }
-      return existing as AcceptedExecutionNodeMaterialization;
+      return this.retainEvidence(existing as AcceptedExecutionNodeMaterialization);
     }
     this.database.prepare(`
       INSERT INTO execution_node_materializations (
@@ -364,7 +379,9 @@ export class ExecutionNodeMaterializationRepository {
       record.materializationDigest,
       record.createdAt
     );
-    return this.get(record, record.gate) as AcceptedExecutionNodeMaterialization;
+    return this.retainEvidence(
+      this.getLegacy(record, record.gate) as AcceptedExecutionNodeMaterialization
+    );
   }
 
   public retainVerified(
@@ -383,7 +400,7 @@ export class ExecutionNodeMaterializationRepository {
       if (canonicalExecutionJSON(existing) !== canonicalExecutionJSON(record)) {
         throw new Error("Verified node materialization conflicts with retained evidence");
       }
-      return existing as VerifiedExecutionNodeMaterialization;
+      return this.retainEvidence(existing as VerifiedExecutionNodeMaterialization);
     }
     this.database.prepare(`
       INSERT INTO execution_verified_node_materializations (
@@ -412,7 +429,9 @@ export class ExecutionNodeMaterializationRepository {
       record.materializationDigest,
       record.createdAt
     );
-    return this.get(record, record.gate) as VerifiedExecutionNodeMaterialization;
+    return this.retainEvidence(
+      this.getLegacy(record, record.gate) as VerifiedExecutionNodeMaterialization
+    );
   }
 
   public retainIntegrated(
@@ -431,7 +450,7 @@ export class ExecutionNodeMaterializationRepository {
       if (canonicalExecutionJSON(existing) !== canonicalExecutionJSON(record)) {
         throw new Error("Integrated node materialization conflicts with retained evidence");
       }
-      return existing as IntegratedExecutionNodeMaterialization;
+      return this.retainEvidence(existing as IntegratedExecutionNodeMaterialization);
     }
     this.database.prepare(`
       INSERT INTO execution_integrated_node_materializations (
@@ -468,6 +487,13 @@ export class ExecutionNodeMaterializationRepository {
       record.materializationDigest,
       record.createdAt
     );
-    return this.get(record, record.gate) as IntegratedExecutionNodeMaterialization;
+    return this.retainEvidence(
+      this.getLegacy(record, record.gate) as IntegratedExecutionNodeMaterialization
+    );
+  }
+
+  private retainEvidence<T extends ExecutionNodeMaterialization>(record: T): T {
+    if (this.evidence.available()) this.evidence.retainLegacy(record);
+    return record;
   }
 }
