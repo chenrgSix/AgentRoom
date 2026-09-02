@@ -21,6 +21,10 @@ import { RepositoryCaptureService } from "./repository/repository-capture-servic
 import { RepositoryIntegrationService } from
   "./repository/repository-integration-service.js";
 import { RepositoryVerificationService } from "./verification/repository-verification-service.js";
+import { RemoteProviderBindingRepository } from
+  "./remote/remote-provider-binding-repository.js";
+import { RemoteProviderBindingService } from
+  "./remote/remote-provider-binding-service.js";
 import { IsolatedWorkspaceLeaseService } from "./workspace/isolated-workspace-lease-service.js";
 import { LocalArtifactBlobStore } from
   "./artifact/local-artifact-blob-store.js";
@@ -59,6 +63,7 @@ import { registerResultRoutes } from "./http/result-routes.js";
 import { registerSystemRoutes } from "./http/system-routes.js";
 import { registerTaskRoutes } from "./http/task-routes.js";
 import { registerExecutionPlanRoutes } from "./http/execution-plan-routes.js";
+import { registerRemoteEvidenceRoutes } from "./http/remote-evidence-routes.js";
 import { ExecutionError } from "./execution/execution-error.js";
 import { ExecutionPlanRepository } from "./execution/execution-plan-repository.js";
 import { ExecutionSourceRepository } from "./execution/execution-source-repository.js";
@@ -555,6 +560,10 @@ export async function createServerApp(
     executionMaterializations,
     bridgeConnections
   );
+  const remoteProviderBindings = new RemoteProviderBindingService(
+    new RemoteProviderBindingRepository(database, transactions),
+    auth
+  );
   const operationalMetrics = new OperationalMetrics(
     database, bridgeConnections, clock, options.buildIdentity
   );
@@ -1028,6 +1037,7 @@ export async function createServerApp(
     repositoryCaptures,
     repositoryIntegrations,
     repositoryVerifications,
+    remoteProviderBindings,
     fakeAdapters,
     handoffs,
     hostedAgents,
@@ -1075,6 +1085,7 @@ export async function createServerApp(
   registerTeamRoomRoutes(routeContext);
   registerTaskRoutes(routeContext);
   registerExecutionPlanRoutes(routeContext);
+  registerRemoteEvidenceRoutes(routeContext);
   registerResultRoutes(routeContext);
   registerWorkbenchRoutes(routeContext);
   registerRegistryRoutes(routeContext);

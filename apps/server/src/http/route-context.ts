@@ -7,6 +7,8 @@ import type { RepositoryCaptureService } from "../repository/repository-capture-
 import type { RepositoryIntegrationService } from
   "../repository/repository-integration-service.js";
 import type { RepositoryVerificationService } from "../verification/repository-verification-service.js";
+import type { RemoteProviderBindingService } from
+  "../remote/remote-provider-binding-service.js";
 
 import type { ArtifactPublicationService } from
   "../artifact/artifact-publication-service.js";
@@ -107,6 +109,7 @@ export interface ServerRouteContext {
   repositoryCaptures: RepositoryCaptureService;
   repositoryIntegrations: RepositoryIntegrationService;
   repositoryVerifications: RepositoryVerificationService;
+  remoteProviderBindings: RemoteProviderBindingService;
   fakeAdapters: Map<string, FakeRuntimeAdapter>;
   handoffs: HandoffService;
   hostedAgents: HostedAgentConfigurationService;
