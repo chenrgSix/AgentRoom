@@ -273,8 +273,8 @@ unique plan/revision/node/generation and Run constraints, then reread the winner
 
 ### Generation-2 Retry and Scheduler Task Split
 
-The next `EXEC-004` increment is an explicit retry of an ExecutionNode, not a
-legacy retry of its Run. The frozen target is the
+The completed `EXEC-004` increment retries an ExecutionNode explicitly; it does
+not invoke the legacy retry of its Run. The frozen target is the
 [Execution Product Loop Goal](../acceptance/execution-product-loop-goal.md).
 `ExecutionNodeRetryAuthorization` owns the human-supervised permission and exact
 previous-attempt lineage. A new immutable DispatchIntent owns generation 2, a
@@ -284,15 +284,21 @@ and Workspace owns its new isolated writer generation.
 Failed, canceled and expired current attempts are eligible only through the
 explicit control. `outcome_unknown` additionally requires the existing exact
 ambiguity acknowledgement. A completed attempt or a generation with retained
-gate proof is not eligible. One immediate transaction must retain the retry
+gate proof is not eligible. One immediate transaction retains the retry
 authorization and the new plan-owned admission facts. Stable operation replay,
 restart and concurrent Servers return the one winner rather than accidentally
 creating another generation. Old DispatchIntents, Runs, Results, receipts and
 materializations remain immutable, and late old-generation evidence cannot
 advance the current generation.
 
-Settlement, accepted/verified/integrated materializers, dependency resolution
-and input freezing become exact-generation aware as part of this increment.
+Settlement and the accepted/verified materializers select the latest retained
+DispatchIntent. Integrated proof inherits that exact verified generation and
+rechecks that no later intent exists. Migration 0073 preserves existing proof
+rows while changing the three table constraints to positive generations and
+restoring all immutable/exact-scope triggers plus the dependency view. The
+resolver and input freezer consume the selected immutable proof without
+guessing a generation.
+
 Automatic retry remains fail-closed. `EXEC-008` separately owns explicit
 manual/supervised/automatic scheduler modes, broader multi-node capacity,
 fairness and systematic graph fault injection. `WEB-063` waits on the bounded

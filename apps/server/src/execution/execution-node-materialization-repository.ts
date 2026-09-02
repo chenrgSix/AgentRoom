@@ -22,7 +22,7 @@ export interface ExecutionMaterializationArtifactPin {
 interface BaseExecutionNodeMaterialization extends ExecutionNodeIdentity {
   artifactPins: ExecutionMaterializationArtifactPin[];
   createdAt: string;
-  dispatchGeneration: 1;
+  dispatchGeneration: number;
   gateOperationId: string;
   materializationDigest: string;
   sourceResultId: string;
@@ -82,7 +82,7 @@ export type ExecutionNodeMaterialization =
 interface BaseMaterializationRow {
   artifact_pins_json: string;
   created_at: string;
-  dispatch_generation: 1;
+  dispatch_generation: number;
   gate_operation_id: string;
   materialization_digest: string;
   node_key: string;

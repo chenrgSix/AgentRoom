@@ -87,7 +87,13 @@ export class ExecutionSettlementService {
         ON intent.plan_id = node.plan_id
           AND intent.plan_revision = node.revision
           AND intent.node_key = node.node_key
-          AND intent.dispatch_generation = 1
+          AND NOT EXISTS (
+            SELECT 1 FROM execution_dispatch_intents later
+            WHERE later.plan_id = intent.plan_id
+              AND later.plan_revision = intent.plan_revision
+              AND later.node_key = intent.node_key
+              AND later.dispatch_generation > intent.dispatch_generation
+          )
       LEFT JOIN runs run ON run.run_id = intent.run_id
       WHERE node.plan_id = ? AND node.revision = ? AND node.node_key = ?
     `).get(

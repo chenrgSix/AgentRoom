@@ -26,7 +26,7 @@ interface ArtifactPinRow {
 interface VerifiedResultRow {
   checkpoint_id: string;
   checkpoint_json: string;
-  dispatch_generation: 1;
+  dispatch_generation: number;
   result_id: string;
   result_version: number;
   run_id: string;
@@ -80,7 +80,14 @@ export class VerifiedOutputMaterializer {
       JOIN repository_checkpoints checkpoint
         ON checkpoint.operation_id = capture.operation_id
       WHERE intent.plan_id = ? AND intent.plan_revision = ?
-        AND intent.node_key = ? AND intent.dispatch_generation = 1
+        AND intent.node_key = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM execution_dispatch_intents later
+          WHERE later.plan_id = intent.plan_id
+            AND later.plan_revision = intent.plan_revision
+            AND later.node_key = intent.node_key
+            AND later.dispatch_generation > intent.dispatch_generation
+        )
         AND EXISTS (
           SELECT 1 FROM result_evidence_refs run_evidence
           JOIN run_events event ON event.run_id = run_evidence.run_id

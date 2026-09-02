@@ -10,7 +10,7 @@ import type {
 } from "../execution-node-materialization-repository.js";
 
 interface AcceptedResultRow {
-  dispatch_generation: 1;
+  dispatch_generation: number;
   gate_operation_id: string;
   result_id: string;
   result_version: number;
@@ -56,7 +56,14 @@ export class AcceptedResultMaterializer {
       JOIN result_reviews review ON review.result_id = result.result_id
         AND review.decision = 'accepted' AND review.completed_task = 0
       WHERE intent.plan_id = ? AND intent.plan_revision = ?
-        AND intent.node_key = ? AND intent.dispatch_generation = 1
+        AND intent.node_key = ?
+        AND NOT EXISTS (
+          SELECT 1 FROM execution_dispatch_intents later
+          WHERE later.plan_id = intent.plan_id
+            AND later.plan_revision = intent.plan_revision
+            AND later.node_key = intent.node_key
+            AND later.dispatch_generation > intent.dispatch_generation
+        )
       ORDER BY result.result_version
     `).all(
       identity.planId,

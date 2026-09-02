@@ -85,6 +85,26 @@ inspection prove success, failure, cancellation, timeout/expiry,
 `outcome_unknown`, late old-generation evidence, duplicate/restart and
 concurrent-retry behavior. Passing an endpoint test alone is insufficient.
 
+### EXEC-004 Retained Acceptance
+
+`EXEC-004` is complete. Migration 0073 preserves the three retained proof
+tables while replacing the generation-1-only checks with positive generation
+checks and latest-intent scope triggers. Settlement and accepted/verified
+materializers select only the latest immutable DispatchIntent; integrated proof
+inherits and rechecks that exact verified generation.
+
+The Server regressions physically inspect two Build DispatchIntents, two Runs
+and two isolated workspace leases, retain the failed generation-1 facts, and
+reject a late generation-1 Result acceptance. They then prove generation 2 can
+produce each of `accepted_result`, `verified_output` and `integrated_commit`,
+that the materialization records pin generation 2 and its exact Run, and that a
+downstream Run reads the expected sealed bytes. Separate cases cover failed,
+canceled, expired and acknowledged `outcome_unknown` attempts, completed and
+already-proven rejection, exact replay after restart, changed replay conflict
+and one winner under concurrent retry controls. Foreign-key and immutable-proof
+checks run against the rebuilt physical SQLite schema. Automatic retry is still
+absent by design and is not implied by this completion.
+
 ## Product-Entry Boundaries
 
 `DISC-010` may translate one real finalization into immutable structured domain

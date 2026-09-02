@@ -621,9 +621,73 @@ async function retainIndependentVerification(
   );
 }
 
+async function retryFailedBuild(
+  f: AdmissionFixture,
+  firstRequest: BridgeMessage,
+  operationId: string
+) {
+  const firstManifest = (firstRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  const runs = new RunRepository(f.database);
+  assert.equal(runs.applyEvent(firstManifest.scope.runId, {
+    type: "status",
+    sequence: 1,
+    status: "failed",
+    error: {
+      code: "IMPLEMENTATION_FAILED",
+      message: "The first bounded implementation attempt failed.",
+      retryable: false
+    }
+  }, "2026-08-31T12:00:00.500Z").applied, true);
+  await waitFor(() => (f.database.prepare(`
+    SELECT last_run_state FROM execution_node_states
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    last_run_state: string | null;
+  } | undefined)?.last_run_state === "failed");
+  const state = f.database.prepare(`
+    SELECT projection_revision, dispatch_generation, run_id
+    FROM execution_node_states
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    dispatch_generation: number;
+    projection_revision: number;
+    run_id: string;
+  };
+  const delivery = nextMessage(f.socket);
+  const retried = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/retries`,
+    {
+      operationId,
+      expectedPlanRevision: f.plan.current.revision,
+      expectedPlanDigest: f.plan.current.digest,
+      expectedControlRevision: f.plan.controlRevision,
+      nodeKey: "Build",
+      expectedNodeProjectionRevision: state.projection_revision,
+      expectedPreviousGeneration: state.dispatch_generation,
+      expectedPreviousRunId: state.run_id,
+      ambiguityAcknowledgementOperationId: null,
+      reason: "Retry the failed implementation with a new isolated attempt."
+    }
+  );
+  const secondRequest = await delivery;
+  const secondManifest = (secondRequest.payload.contextManifest as {
+    execution: GovernedExecutionManifest;
+  }).execution;
+  assert.equal(retried.authorization.previousRunId, firstManifest.scope.runId);
+  assert.equal(retried.authorization.previousGeneration, 1);
+  assert.equal(retried.authorization.newRunId, secondManifest.scope.runId);
+  assert.equal(secondManifest.scope.dispatchGeneration, 2);
+  assert.equal(runs.getRun(firstManifest.scope.runId)?.state, "failed");
+  return { firstManifest, secondManifest, secondRequest };
+}
+
 async function prepareVerifiedDependencySource(
   t: TestContext,
-  integrated = false
+  integrated = false,
+  retry = false
 ) {
   const f = await admissionFixture(t, undefined, {
     integratedDependency: integrated,
@@ -635,7 +699,14 @@ async function prepareVerifiedDependencySource(
     SELECT count(*) AS n FROM execution_dispatch_intents
     WHERE plan_id = ? AND node_key = 'Build'
   `).get(f.plan.planId) as { n: number }).n === 1);
-  const buildRequest = await f.scheduledDelivery!;
+  const firstRequest = await f.scheduledDelivery!;
+  const buildRequest = retry
+    ? (await retryFailedBuild(
+      f,
+      firstRequest,
+      "op_generation_two_verified_retry0001"
+    )).secondRequest
+    : firstRequest;
   const manifest = (buildRequest.payload.contextManifest as {
     execution: GovernedExecutionManifest;
   }).execution;
@@ -1487,11 +1558,12 @@ test("a failed independent verification receipt leaves the dependency gate close
   "failed");
 });
 
-test("exact human integration approval admits one immutable serialized operation", {
+test("generation-2 verified output admits one immutable serialized integration", {
   timeout: 30_000
 }, async (t) => {
   const { f, manifest, captured } =
-    await prepareVerifiedDependencySource(t, true);
+    await prepareVerifiedDependencySource(t, true, true);
+  assert.equal(manifest.scope.dispatchGeneration, 2);
   const verification = await retainIndependentVerification(
     f,
     manifest,
@@ -1511,6 +1583,8 @@ test("exact human integration approval admits one immutable serialized operation
     nodeKey: "Build"
   }, "verified_output");
   assert.ok(materialization?.gate === "verified_output");
+  assert.equal(materialization.dispatchGeneration, 2);
+  assert.equal(materialization.sourceRunId, manifest.scope.runId);
   const target = f.plan.current.definition.policy.integrationTargets[0];
   assert.ok(target);
   const command = {
@@ -1669,6 +1743,8 @@ test("exact human integration approval admits one immutable serialized operation
     nodeKey: "Build"
   }, "integrated_commit");
   assert.ok(integrated?.gate === "integrated_commit");
+  assert.equal(integrated.dispatchGeneration, 2);
+  assert.equal(integrated.sourceRunId, manifest.scope.runId);
   assert.equal(integrated.integrationReceiptDigest, retained.receiptDigest);
   assert.equal(integrated.verifiedMaterializationDigest,
     materialization.materializationDigest);
@@ -2042,7 +2118,7 @@ test("independently verified predecessor output materializes and drives exact do
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
-test("accepted predecessor output materializes once and drives exact downstream input", {
+test("generation-2 accepted output materializes once and drives exact downstream input", {
   timeout: 30_000
 }, async (t) => {
   const f = await admissionFixture(t, undefined, {
@@ -2054,13 +2130,71 @@ test("accepted predecessor output materializes once and drives exact downstream 
     SELECT count(*) AS n FROM execution_dispatch_intents
     WHERE plan_id = ? AND node_key = 'Build'
   `).get(f.plan.planId) as { n: number }).n === 1);
-  const buildRequest = await f.scheduledDelivery!;
+  const firstBuildRequest = await f.scheduledDelivery!;
+  const retried = await retryFailedBuild(
+    f,
+    firstBuildRequest,
+    "op_generation_two_accepted_retry0001"
+  );
+  const buildRequest = retried.secondRequest;
   assert.equal(buildRequest.type, "run.requested");
   const buildManifest = (buildRequest.payload.contextManifest as {
     execution: GovernedExecutionManifest;
   }).execution;
   const buildRunId = buildManifest.scope.runId;
+  assert.equal(buildManifest.scope.dispatchGeneration, 2);
+  assert.notEqual(buildRunId, retried.firstManifest.scope.runId);
   assert.equal(buildManifest.inputs.length, 0);
+  let buildTask = await f.ok(
+    "GET",
+    `/api/tasks/${f.task.taskId}`
+  );
+  buildTask = await f.ok("POST", `/api/tasks/${f.task.taskId}/control`, {
+    operationId: "op_dependency_build_active0001",
+    expectedTaskRevision: buildTask.taskRevision,
+    lifecycleState: "active"
+  });
+  const lateOldResult = await f.ok("POST", "/api/bridge/results", {
+    actorKind: "managed_agent",
+    agentId: f.agent.agentId,
+    runId: retried.firstManifest.scope.runId,
+    proposal: {
+      operationId: "op_generation_one_late_result0001",
+      taskId: buildTask.taskId,
+      definitionRevision: buildTask.definitionRevision,
+      criteriaRevision: buildTask.criteriaRevision,
+      proposedAtTaskRevision: buildTask.taskRevision,
+      supersedesResultId: null,
+      outcome: "informational",
+      summary: "Late evidence from the failed first generation.",
+      risks: [],
+      openQuestions: [],
+      nextActions: [],
+      sources: [{
+        evidenceRefId: "evidence_generation_one_failure0001",
+        kind: "run_event",
+        runId: retried.firstManifest.scope.runId,
+        sequence: 1
+      }],
+      criterionClaims: []
+    }
+  }, `Bearer ${f.credential.secret}`);
+  const lateAcceptance = await f.request(
+    "POST",
+    `/api/results/${lateOldResult.resultId}/review-decisions`,
+    {
+      operationId: "op_generation_one_late_accept0001",
+      decision: "accepted",
+      expectedTaskRevision: buildTask.taskRevision,
+      expectedReviewRevision: 0,
+      reason: "A superseded generation must not release the dependency.",
+      completeTask: false
+    }
+  );
+  assert.equal(lateAcceptance.statusCode, 400, lateAcceptance.body);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_node_materializations
+  `).get() as { n: number }).n, 0);
   await sendAndFlush(f.socket, envelope("run.accepted", {
     runId: buildRunId,
     traceId: buildRequest.payload.traceId,
@@ -2075,12 +2209,6 @@ test("accepted predecessor output materializes once and drives exact downstream 
     status: "working"
   }, "2026-08-31T12:00:01.000Z").applied, true);
 
-  let buildTask = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
-  buildTask = await f.ok("POST", `/api/tasks/${f.task.taskId}/control`, {
-    operationId: "op_dependency_build_active0001",
-    expectedTaskRevision: buildTask.taskRevision,
-    lifecycleState: "active"
-  });
   const captured = await publishCanonicalDependency(f, buildManifest);
   assert.equal(runs.applyEvent(buildRunId, {
     type: "status",
@@ -2105,6 +2233,7 @@ test("accepted predecessor output materializes once and drives exact downstream 
   `).get(f.plan.planId) as { blocker_code: string }).blocker_code,
   "EXECUTION_DEPENDENCY_NOT_MATERIALIZED");
 
+  buildTask = await f.ok("GET", `/api/tasks/${f.task.taskId}`);
   const badProposal = {
     operationId: "op_dependency_result_missing_artifact0001",
     taskId: buildTask.taskId,
@@ -2228,10 +2357,21 @@ test("accepted predecessor output materializes once and drives exact downstream 
     source_run_id: string;
   };
   assert.equal(materialization.gate, "accepted_result");
-  assert.equal(materialization.dispatch_generation, 1);
+  assert.equal(materialization.dispatch_generation, 2);
   assert.equal(materialization.source_run_id, buildRunId);
   assert.equal(materialization.source_result_id, good.resultId);
   assert.equal(materialization.gate_operation_id, "op_dependency_accept_canonical0001");
+  assert.deepEqual(f.database.prepare(`
+    SELECT dispatch_generation, run_id FROM execution_dispatch_intents
+    WHERE plan_id = ? AND node_key = 'Build'
+    ORDER BY dispatch_generation
+  `).all(f.plan.planId), [{
+    dispatch_generation: 1,
+    run_id: retried.firstManifest.scope.runId
+  }, {
+    dispatch_generation: 2,
+    run_id: buildRunId
+  }]);
   assert.deepEqual(JSON.parse(materialization.artifact_pins_json), [{
     outputSlot: "output",
     artifactId: captured.artifact.artifactId,
