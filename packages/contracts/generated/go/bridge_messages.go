@@ -99,12 +99,12 @@ type PurpleReadyGrant struct {
 	IntegrationTargets []PurpleIntegrationTarget `json:"integrationTargets"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	IssuedAt             time.Time                   `json:"issuedAt"`
+	IssuedAt             string                      `json:"issuedAt"`
 	NodeKey              string                      `json:"nodeKey"`
 	Operations           []Operation                 `json:"operations"`
 	PlanID               string                      `json:"planId"`
 	RepositoryID         string                      `json:"repositoryId"`
-	RevokedAt            *time.Time                  `json:"revokedAt"`
+	RevokedAt            *string                     `json:"revokedAt"`
 	RuntimeProfile       PurpleRuntimeProfile        `json:"runtimeProfile"`
 	ScopePolicy          PurpleScopePolicy           `json:"scopePolicy"`
 	VerificationProfiles []PurpleVerificationProfile `json:"verificationProfiles"`
@@ -114,9 +114,9 @@ type PurpleGrant struct {
 	Digest string `json:"digest"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt time.Time `json:"expiresAt"`
-	GrantID   string    `json:"grantId"`
-	Revision  int64     `json:"revision"`
+	ExpiresAt string `json:"expiresAt"`
+	GrantID   string `json:"grantId"`
+	Revision  int64  `json:"revision"`
 }
 
 type PurpleIntegrationTarget struct {
@@ -222,12 +222,12 @@ type FluffyReadyGrant struct {
 	IntegrationTargets []FluffyIntegrationTarget `json:"integrationTargets"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	IssuedAt             time.Time                   `json:"issuedAt"`
+	IssuedAt             string                      `json:"issuedAt"`
 	NodeKey              string                      `json:"nodeKey"`
 	Operations           []Operation                 `json:"operations"`
 	PlanID               string                      `json:"planId"`
 	RepositoryID         string                      `json:"repositoryId"`
-	RevokedAt            *time.Time                  `json:"revokedAt"`
+	RevokedAt            *string                     `json:"revokedAt"`
 	RuntimeProfile       FluffyRuntimeProfile        `json:"runtimeProfile"`
 	ScopePolicy          FluffyScopePolicy           `json:"scopePolicy"`
 	VerificationProfiles []FluffyVerificationProfile `json:"verificationProfiles"`
@@ -237,9 +237,9 @@ type FluffyGrant struct {
 	Digest string `json:"digest"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt time.Time `json:"expiresAt"`
-	GrantID   string    `json:"grantId"`
-	Revision  int64     `json:"revision"`
+	ExpiresAt string `json:"expiresAt"`
+	GrantID   string `json:"grantId"`
+	Revision  int64  `json:"revision"`
 }
 
 type FluffyIntegrationTarget struct {

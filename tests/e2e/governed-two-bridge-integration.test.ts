@@ -894,7 +894,11 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
     // Governed admission reserves the production Run's 20-minute deadline.
     // Keep the owner grant wider than that reservation while remaining
     // intentionally short-lived for this disposable acceptance fixture.
-    const expiresAt = new Date(Date.now() + 60 * 60_000).toISOString();
+    // Exercise exact fractional timestamp preservation across generated Go
+    // Bridge capability types; time.Time would rewrite .250Z as .25Z.
+    const expiresAt = new Date(
+      Math.floor((Date.now() + 60 * 60_000) / 1_000) * 1_000 + 250
+    ).toISOString();
     const commonGrant = {
       bindingRevision: 1,
       repositoryId,

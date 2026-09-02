@@ -256,13 +256,16 @@ function preserveTypeScriptWireStrings(value) {
   );
 }
 
-// Execution digests bind the exact UTC string, including fractional precision.
-// Keep the legacy Bridge timestamps unchanged outside the execution subtree.
+// Execution digests and grant identity bind the exact UTC string, including
+// fractional precision. Keep legacy Bridge timestamps unchanged outside the
+// execution manifest and governed execution capability subtrees.
 function preserveGoExecutionWireStrings(value) {
   if (Array.isArray(value)) return value.map(preserveGoExecutionWireStrings);
   if (value === null || typeof value !== "object") return value;
   return Object.fromEntries(Object.entries(value).map(([key, child]) => [key,
-    key === "execution" ? preserveTypeScriptWireStrings(child) : preserveGoExecutionWireStrings(child)
+    key === "execution" || key === "governedExecution"
+      ? preserveTypeScriptWireStrings(child)
+      : preserveGoExecutionWireStrings(child)
   ]));
 }
 

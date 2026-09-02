@@ -223,3 +223,33 @@ func TestExecutionFractionalUTCStringsSurviveTypedWireRoundTrip(t *testing.T) {
 		})
 	}
 }
+
+func TestGovernedCapabilityFractionalUTCStringsSurviveBridgeTypes(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join(packageRoot(t), "fixtures", "execution-runtime-cases.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var suite fixtureSuite
+	if err := json.Unmarshal(raw, &suite); err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range suite.Cases {
+		if entry.Name != "execution runtime: valid capability" {
+			continue
+		}
+		original := strings.ReplaceAll(string(entry.Instance), ":00Z", ":00.250Z")
+		var capability contracts.CapabilitiesGovernedExecution
+		if err := json.Unmarshal([]byte(original), &capability); err != nil {
+			t.Fatal(err)
+		}
+		encoded, err := json.Marshal(capability)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(decodeJSON(t, []byte(original)), decodeJSON(t, encoded)) {
+			t.Fatal("Bridge governed capability changed fractional UTC strings")
+		}
+		return
+	}
+	t.Fatal("valid execution capability fixture was not found")
+}
