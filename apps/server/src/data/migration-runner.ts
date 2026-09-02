@@ -5,6 +5,8 @@ import path from "node:path";
 
 import Database from "better-sqlite3";
 
+import { backfillLegacyEvidenceAdoptions } from
+  "../execution/execution-evidence-backfill.js";
 import { secureDatabaseFiles } from "./database.js";
 
 const migrationFilename = /^(?<version>[0-9]{4})_(?<name>[a-z0-9_]+)\.sql$/;
@@ -219,6 +221,8 @@ export async function migrateDatabase(
       }
       appliedVersions.push(migration.version);
     }
+
+    backfillLegacyEvidenceAdoptions(database);
 
     const currentVersion = migrations.at(-1)?.version ?? 0;
     return {

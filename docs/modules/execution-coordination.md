@@ -336,6 +336,10 @@ The local migration is additive: contracts first, then backfill and
 transactional dual-write under the unchanged legacy reader, then shadow-equal
 adoption-authoritative dependency/input readers. REPO-003 begins only after
 that cutover and may not hide local migration inside provider enablement.
+Migration 0074 and the deterministic Stage-A backfill are now delivered: empty,
+accepted, verified and integrated local facts reconstruct inside one immediate
+transaction, reopen idempotently, and fail without partial generalized rows.
+Legacy readers and materialization writers remain authoritative until Stage B.
 
 The broader scheduler capacity target is frozen independently in
 [`exec-008-multi-node-scheduler-capacity-goal.md`](../acceptance/exec-008-multi-node-scheduler-capacity-goal.md).

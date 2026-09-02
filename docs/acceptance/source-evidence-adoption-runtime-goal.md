@@ -161,3 +161,24 @@ Node checks, strict generated types, generated-tree comparison and Go package
 tests pass. The owned contract-test roots were physically removed. No Server
 table, materializer, reader or remote-provider capability changed in this
 checkpoint.
+
+## EXEC-009 Stage-A Checkpoint
+
+Migration 0074 additively creates immutable local `SourceEvidence`,
+`GateProofRef` and `EvidenceAdoption` storage plus an unchanged-legacy union
+view. A migration-owned, immediate transaction deterministically reconstructs
+every retained accepted, verified and integrated materialization; it rejoins
+the approved node, dispatch/admission, Result, checkpoint and exact proof rows,
+validates generated contracts and canonical digests, and requires the adoption
+count to equal the legacy projection count. Reopen repeats no row and compares
+the byte-canonical retained content.
+
+The local repository-commit source uses the checkpoint's own retained timestamp
+and therefore remains one source when both verified and integrated gates adopt
+it. Current runtime persistence rejects remote origins and CI proof refs even
+though those closed contract variants are reserved for `REPO-003`. Physical
+SQLite coverage proves empty migration, accepted-only reconstruction, shared
+verified/integrated source identity, exact row counts, foreign-key integrity,
+reopen idempotence and an injected adoption failure that rolls the source,
+proof and adoption writes back together. Legacy readers and writers are still
+unchanged at this checkpoint; Stage B dual-write is the next authority change.

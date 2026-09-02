@@ -207,7 +207,7 @@ test("capture lease migration preserves populated legacy publications, blobs and
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
     assert.deepEqual(migrated.appliedVersions,
-      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73]);
+      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -273,7 +273,7 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     database.close();
     const result = await migrateDatabase(f.databasePath);
     assert.deepEqual(result.appliedVersions,
-      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73]);
+      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -338,7 +338,22 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_dispatch_intents_require_retry_authorization_insert",
       "execution_node_retry_authorizations_require_scope_insert",
       "execution_node_retry_authorizations_immutable_update",
-      "execution_node_retry_authorizations_immutable_delete"
+      "execution_node_retry_authorizations_immutable_delete",
+      "execution_source_evidence",
+      "execution_source_evidence_result_idx",
+      "execution_source_evidence_local_commit_idx",
+      "execution_source_evidence_require_scope_insert",
+      "execution_source_evidence_immutable_update",
+      "execution_source_evidence_immutable_delete",
+      "execution_gate_proof_refs",
+      "execution_gate_proof_refs_require_scope_insert",
+      "execution_gate_proof_refs_immutable_update",
+      "execution_gate_proof_refs_immutable_delete",
+      "execution_evidence_adoptions",
+      "execution_evidence_adoptions_require_scope_insert",
+      "execution_evidence_adoptions_immutable_update",
+      "execution_evidence_adoptions_immutable_delete",
+      "execution_legacy_node_materializations"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))

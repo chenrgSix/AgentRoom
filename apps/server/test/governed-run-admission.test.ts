@@ -25,6 +25,10 @@ import { RunRepository } from "../src/run/run-repository.js";
 import { AuthService } from "../src/security/auth-service.js";
 import { ExecutionDependencyResolver } from
   "../src/execution/execution-dependency-resolver.js";
+import { ExecutionEvidenceAdoptionRepository } from
+  "../src/execution/execution-evidence-adoption-repository.js";
+import { backfillLegacyEvidenceAdoptions } from
+  "../src/execution/execution-evidence-backfill.js";
 import { ExecutionNodeMaterializationRepository } from
   "../src/execution/execution-node-materialization-repository.js";
 import { ExecutionPlanRepository } from
@@ -1770,6 +1774,36 @@ test("generation-2 verified output admits one immutable serialized integration",
       artifactId: materialization.artifactPins[0]!.artifactId
     }]
   });
+  assert.equal(backfillLegacyEvidenceAdoptions(f.database), 2);
+  const evidence = new ExecutionEvidenceAdoptionRepository(f.database);
+  const verifiedAdoption = evidence.get({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build"
+  }, "verified_output");
+  const integratedAdoption = evidence.get({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build"
+  }, "integrated_commit");
+  assert.ok(verifiedAdoption?.source.kind === "repository_commit");
+  assert.ok(integratedAdoption?.source.kind === "repository_commit");
+  assert.equal(
+    integratedAdoption.source.sourceEvidenceId,
+    verifiedAdoption.source.sourceEvidenceId,
+    "verified and integrated gates adopt the same immutable checkpoint source"
+  );
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_source_evidence
+  `).get() as { n: number }).n, 2);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_gate_proof_refs
+  `).get() as { n: number }).n, 2);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_evidence_adoptions
+  `).get() as { n: number }).n, 2);
+  assert.equal(backfillLegacyEvidenceAdoptions(f.database), 2,
+    "reopen backfill is byte-identical and idempotent");
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
@@ -2361,6 +2395,44 @@ test("generation-2 accepted output materializes once and drives exact downstream
   assert.equal(materialization.source_run_id, buildRunId);
   assert.equal(materialization.source_result_id, good.resultId);
   assert.equal(materialization.gate_operation_id, "op_dependency_accept_canonical0001");
+  f.database.exec(`
+    CREATE TRIGGER fail_evidence_adoption_backfill
+    BEFORE INSERT ON execution_evidence_adoptions
+    BEGIN SELECT RAISE(ABORT, 'injected adoption backfill failure'); END
+  `);
+  assert.throws(
+    () => backfillLegacyEvidenceAdoptions(f.database),
+    /injected adoption backfill failure/u
+  );
+  for (const table of [
+    "execution_source_evidence",
+    "execution_gate_proof_refs",
+    "execution_evidence_adoptions"
+  ]) {
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM ${table}
+    `).get() as { n: number }).n, 0, `${table} escaped failed backfill`);
+  }
+  f.database.exec("DROP TRIGGER fail_evidence_adoption_backfill");
+  assert.equal(backfillLegacyEvidenceAdoptions(f.database), 1);
+  const acceptedAdoption = new ExecutionEvidenceAdoptionRepository(
+    f.database
+  ).get({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Build"
+  }, "accepted_result");
+  assert.ok(acceptedAdoption?.source.kind === "task_result");
+  assert.equal(acceptedAdoption.source.resultId, good.resultId);
+  assert.equal(
+    acceptedAdoption.legacyMaterializationDigest,
+    (f.database.prepare(`
+      SELECT materialization_digest FROM execution_node_materializations
+      WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+    `).get(f.plan.planId, f.plan.current.revision) as {
+      materialization_digest: string;
+    }).materialization_digest
+  );
   assert.deepEqual(f.database.prepare(`
     SELECT dispatch_generation, run_id FROM execution_dispatch_intents
     WHERE plan_id = ? AND node_key = 'Build'
