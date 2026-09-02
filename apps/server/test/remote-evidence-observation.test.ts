@@ -455,6 +455,11 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   assert.equal(buildEvidenceAfter.remote.adoptionState, "adopted");
   assert.equal(buildEvidenceAfter.remote.commandTemplate, null);
   assert.equal(buildEvidenceAfter.stages[0].gate, "verified_output");
+  assert.deepEqual(buildEvidenceAfter.nextAction, {
+    kind: "none",
+    actorKind: "none",
+    reasonCode: "NO_ACTION"
+  });
   assert.equal(buildEvidenceAfter.stages[0].adoption.adoptionId,
     adopted.adoption.adoptionId);
   const duplicatePass = await f.ok("POST",

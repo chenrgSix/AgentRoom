@@ -403,6 +403,8 @@ export class ExecutionEvidenceViewService {
     remote: EvidenceNode["remote"],
     integration: IntegrationView
   ): EvidenceNode["nextAction"] {
+    const hasVerifiedOutput = stages.some((stage) =>
+      stage.gate === "verified_output" || stage.gate === "integrated_commit");
     if (remote?.adoptionState === "blocked" &&
       remote.blockerCodes.includes("REMOTE_INPUT_ATTESTATION_REQUIRED")) {
       return { kind: "none", actorKind: "none",
@@ -428,10 +430,12 @@ export class ExecutionEvidenceViewService {
       kind: "investigate_outcome_unknown", actorKind: "task_owner",
       reasonCode: "INTEGRATION_OUTCOME_UNKNOWN"
     };
-    if (verifications.some((entry) => entry.kind === "local_verification" &&
-      entry.receipt.outcome !== "passed") ||
+    if (!hasVerifiedOutput && (
+      verifications.some((entry) => entry.kind === "local_verification" &&
+        entry.receipt.outcome !== "passed") ||
       verifications.some((entry) => entry.kind === "remote_ci" &&
-        entry.receipt.outcome !== "passed")) return {
+        entry.receipt.outcome !== "passed")
+    )) return {
       kind: "inspect_verification", actorKind: "task_owner",
       reasonCode: "VERIFICATION_FAILED"
     };
@@ -445,7 +449,7 @@ export class ExecutionEvidenceViewService {
       kind: "produce_candidate", actorKind: "agent",
       reasonCode: "CANDIDATE_MISSING"
     };
-    if (!stages.some((stage) => stage.gate === "verified_output")) return {
+    if (!hasVerifiedOutput) return {
       kind: "wait_for_verification", actorKind: "bridge",
       reasonCode: "VERIFICATION_PENDING"
     };
