@@ -9,6 +9,9 @@ import type { RepositoryIntegrationService } from
 import type { RepositoryVerificationService } from "../verification/repository-verification-service.js";
 import type { RemoteProviderBindingService } from
   "../remote/remote-provider-binding-service.js";
+import type { RemoteEvidenceService } from "../remote/remote-evidence-service.js";
+import type { RemoteEvidenceAdoptionService } from
+  "../remote/remote-evidence-adoption-service.js";
 
 import type { ArtifactPublicationService } from
   "../artifact/artifact-publication-service.js";
@@ -110,6 +113,8 @@ export interface ServerRouteContext {
   repositoryIntegrations: RepositoryIntegrationService;
   repositoryVerifications: RepositoryVerificationService;
   remoteProviderBindings: RemoteProviderBindingService;
+  remoteEvidence: RemoteEvidenceService;
+  remoteEvidenceAdoptions: RemoteEvidenceAdoptionService;
   fakeAdapters: Map<string, FakeRuntimeAdapter>;
   handoffs: HandoffService;
   hostedAgents: HostedAgentConfigurationService;

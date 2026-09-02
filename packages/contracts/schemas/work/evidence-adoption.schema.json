@@ -464,7 +464,7 @@
         }
       }
     },
-    "adoptionAuthority": {
+    "localAdoptionAuthority": {
       "type": "object",
       "additionalProperties": false,
       "required": [
@@ -519,6 +519,64 @@
           "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
         }
       }
+    },
+    "remoteAdoptionAuthority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "service",
+        "approvalOperationId",
+        "planDigest",
+        "roomId",
+        "taskId",
+        "definitionRevision",
+        "criteriaRevision",
+        "actorMemberId",
+        "providerBindingId",
+        "bindingDigest"
+      ],
+      "properties": {
+        "service": {
+          "const": "remote_evidence_adoption"
+        },
+        "approvalOperationId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/operationId"
+        },
+        "planDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        },
+        "roomId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/roomId"
+        },
+        "taskId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/taskId"
+        },
+        "definitionRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "criteriaRevision": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/revision"
+        },
+        "actorMemberId": {
+          "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/memberId"
+        },
+        "providerBindingId": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-runtime.schema.json#/$defs/providerBindingId"
+        },
+        "bindingDigest": {
+          "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+        }
+      }
+    },
+    "adoptionAuthority": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/localAdoptionAuthority"
+        },
+        {
+          "$ref": "#/$defs/remoteAdoptionAuthority"
+        }
+      ]
     },
     "evidenceAdoptionBase": {
       "type": "object",

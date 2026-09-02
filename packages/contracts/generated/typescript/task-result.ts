@@ -258,6 +258,7 @@ export interface Input {
   planId:                   string;
   planRevision:             number;
   repositoryId:             null | string;
+  sourceAuthority?:         SourceAuthority | null;
   sourceCommit:             null | string;
   sourceCriteriaRevision:   number;
   sourceDefinitionRevision: number;
@@ -279,6 +280,13 @@ export interface Artifact {
 export type ArtifactKind = "patch" | "commit" | "document" | "test_result";
 
 export type Gate = "accepted_result" | "verified_output" | "integrated_commit";
+
+export interface SourceAuthority {
+  adoptionDigest:   string;
+  adoptionId:       string;
+  sourceDigest:     string;
+  sourceEvidenceId: string;
+}
 
 export interface ExecutionOutput {
   kind:     ArtifactKind;

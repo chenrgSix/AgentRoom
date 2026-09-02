@@ -455,18 +455,19 @@ type Input struct {
 	InputSlot       string `json:"inputSlot"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	IssuedAt                 string  `json:"issuedAt"`
-	PlanID                   string  `json:"planId"`
-	PlanRevision             int64   `json:"planRevision"`
-	RepositoryID             *string `json:"repositoryId"`
-	SourceCommit             *string `json:"sourceCommit"`
-	SourceCriteriaRevision   int64   `json:"sourceCriteriaRevision"`
-	SourceDefinitionRevision int64   `json:"sourceDefinitionRevision"`
-	SourceOutputSlot         string  `json:"sourceOutputSlot"`
-	SourceResultID           *string `json:"sourceResultId"`
-	SourceResultVersion      *int64  `json:"sourceResultVersion"`
-	SourceTaskID             string  `json:"sourceTaskId"`
-	SourceTree               *string `json:"sourceTree"`
+	IssuedAt                 string           `json:"issuedAt"`
+	PlanID                   string           `json:"planId"`
+	PlanRevision             int64            `json:"planRevision"`
+	RepositoryID             *string          `json:"repositoryId"`
+	SourceAuthority          *SourceAuthority `json:"sourceAuthority"`
+	SourceCommit             *string          `json:"sourceCommit"`
+	SourceCriteriaRevision   int64            `json:"sourceCriteriaRevision"`
+	SourceDefinitionRevision int64            `json:"sourceDefinitionRevision"`
+	SourceOutputSlot         string           `json:"sourceOutputSlot"`
+	SourceResultID           *string          `json:"sourceResultId"`
+	SourceResultVersion      *int64           `json:"sourceResultVersion"`
+	SourceTaskID             string           `json:"sourceTaskId"`
+	SourceTree               *string          `json:"sourceTree"`
 }
 
 type Artifact struct {
@@ -475,6 +476,13 @@ type Artifact struct {
 	ByteLength       int64  `json:"byteLength"`
 	ContentDigest    string `json:"contentDigest"`
 	Kind             Kind   `json:"kind"`
+}
+
+type SourceAuthority struct {
+	AdoptionDigest   string `json:"adoptionDigest"`
+	AdoptionID       string `json:"adoptionId"`
+	SourceDigest     string `json:"sourceDigest"`
+	SourceEvidenceID string `json:"sourceEvidenceId"`
 }
 
 type ExecutionOutput struct {

@@ -371,6 +371,20 @@ export class ArtifactPublicationRepository {
     return row && mapContent(row);
   }
 
+  /** Internal content-addressed import used only after an independent authority validated bytes. */
+  public retainContent(content: ArtifactContentRecord): ArtifactContentRecord {
+    const existing = this.findContent(content.teamId, content.sha256, content.sizeBytes);
+    if (existing) return existing;
+    this.database.prepare(`
+      INSERT INTO artifact_contents (
+        content_id, team_id, sha256, size_bytes, storage_key, sealed_at
+      ) VALUES (
+        @contentId, @teamId, @sha256, @sizeBytes, @storageKey, @sealedAt
+      )
+    `).run(content);
+    return content;
+  }
+
   public reservedBytes(teamId: string): number {
     const row = this.database.prepare(`
       SELECT

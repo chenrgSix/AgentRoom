@@ -222,6 +222,35 @@ export class LocalArtifactBlobStore {
     this.syncDirectory(path.dirname(temporary));
   }
 
+  /** Writes one caller-owned temporary blob and atomically seals exact content-addressed bytes. */
+  public importBytes(
+    temporaryStorageKey: string,
+    sealedStorageKey: string,
+    source: Buffer,
+    expectedSha256: string
+  ): void {
+    if (createHash("sha256").update(source).digest("hex") !== expectedSha256) {
+      throw new Error("Imported Artifact Blob digest does not match its declaration");
+    }
+    if (this.hasMatchingBlob(sealedStorageKey, expectedSha256, source.length)) return;
+    this.ensureUpload(temporaryStorageKey);
+    try {
+      if (this.size(temporaryStorageKey) !== 0) {
+        throw new Error("Imported Artifact temporary Blob is not empty");
+      }
+      if (source.length > 0) this.append(temporaryStorageKey, 0, source);
+      this.seal(
+        temporaryStorageKey,
+        sealedStorageKey,
+        expectedSha256,
+        source.length
+      );
+    } catch (error) {
+      this.discardUpload(temporaryStorageKey);
+      throw error;
+    }
+  }
+
   public discardUpload(storageKey: string): void {
     const target = this.resolve(storageKey);
     if (!existsSync(target)) return;

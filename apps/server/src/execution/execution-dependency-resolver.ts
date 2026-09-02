@@ -58,7 +58,7 @@ export class ExecutionDependencyResolver {
       const source = validated.definition.nodes.find(
         (candidate) => candidate.nodeKey === edge.fromNodeKey
       );
-      const materialization = this.materializations.get({
+      const materialization = this.materializations.getAdopted({
         ...identity,
         nodeKey: edge.fromNodeKey
       }, edge.gate);
@@ -85,6 +85,12 @@ export class ExecutionDependencyResolver {
         selections.push({
           inputSlot: input.slotKey,
           sourceResultId: materialization.sourceResultId,
+          sourceAuthority: {
+            sourceEvidenceId: materialization.sourceEvidenceId,
+            sourceDigest: materialization.sourceDigest,
+            adoptionId: materialization.adoptionId,
+            adoptionDigest: materialization.adoptionDigest
+          },
           artifactId: artifact.artifactId
         });
       }

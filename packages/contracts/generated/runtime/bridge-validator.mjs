@@ -807,6 +807,14 @@ const canonicalPropertyTrees = {
                           "l": "1",
                           "u": "9007199254740991"
                         },
+                        "sourceAuthority": {
+                          "p": {
+                            "sourceEvidenceId": {},
+                            "sourceDigest": {},
+                            "adoptionId": {},
+                            "adoptionDigest": {}
+                          }
+                        },
                         "sourceOutputSlot": {},
                         "artifact": {
                           "p": {

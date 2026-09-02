@@ -2271,6 +2271,7 @@ export interface GovernedExecutionManifestInput {
   planId:                   string;
   planRevision:             number;
   repositoryId:             null | string;
+  sourceAuthority?:         PurpleSourceAuthority | null;
   sourceCommit:             null | string;
   sourceCriteriaRevision:   number;
   sourceDefinitionRevision: number;
@@ -2287,6 +2288,13 @@ export interface PurpleArtifact {
   byteLength:       number;
   contentDigest:    string;
   kind:             ExternalInputKind;
+}
+
+export interface PurpleSourceAuthority {
+  adoptionDigest:   string;
+  adoptionId:       string;
+  sourceDigest:     string;
+  sourceEvidenceId: string;
 }
 
 export interface GovernedExecutionManifestOutput {
@@ -2381,6 +2389,7 @@ export interface ExecutionInputBinding {
   planId:                   string;
   planRevision:             number;
   repositoryId:             null | string;
+  sourceAuthority?:         ExecutionInputBindingSourceAuthority | null;
   sourceCommit:             null | string;
   sourceCriteriaRevision:   number;
   sourceDefinitionRevision: number;
@@ -2397,6 +2406,13 @@ export interface ExecutionInputBindingArtifact {
   byteLength:       number;
   contentDigest:    string;
   kind:             ExternalInputKind;
+}
+
+export interface ExecutionInputBindingSourceAuthority {
+  adoptionDigest:   string;
+  adoptionId:       string;
+  sourceDigest:     string;
+  sourceEvidenceId: string;
 }
 
 export interface GovernedExecutionCapability {
@@ -2789,6 +2805,7 @@ export interface ManifestInput {
   planId:                   string;
   planRevision:             number;
   repositoryId:             null | string;
+  sourceAuthority?:         FluffySourceAuthority | null;
   sourceCommit:             null | string;
   sourceCriteriaRevision:   number;
   sourceDefinitionRevision: number;
@@ -2805,6 +2822,13 @@ export interface FluffyArtifact {
   byteLength:       number;
   contentDigest:    string;
   kind:             ExternalInputKind;
+}
+
+export interface FluffySourceAuthority {
+  adoptionDigest:   string;
+  adoptionId:       string;
+  sourceDigest:     string;
+  sourceEvidenceId: string;
 }
 
 export interface ManifestOutput {
@@ -3217,21 +3241,24 @@ export interface EvidenceAdoption {
 }
 
 export interface EvidenceAdoptionAuthority {
-  agentId:             string;
+  agentId?:            string;
   approvalOperationId: string;
   criteriaRevision:    number;
   definitionRevision:  number;
-  deviceId:            string;
-  grantDigest:         string;
-  grantId:             string;
-  grantRevision:       number;
+  deviceId?:           string;
+  grantDigest?:        string;
+  grantId?:            string;
+  grantRevision?:      number;
   planDigest:          string;
   roomId:              string;
   service:             Service;
   taskId:              string;
+  actorMemberId?:      string;
+  bindingDigest?:      string;
+  providerBindingId?:  string;
 }
 
-export type Service = "execution_materialization";
+export type Service = "execution_materialization" | "remote_evidence_adoption";
 
 export interface Proof {
   kind:               GateProofRefKind;

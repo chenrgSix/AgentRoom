@@ -25,6 +25,17 @@ import { RemoteProviderBindingRepository } from
   "./remote/remote-provider-binding-repository.js";
 import { RemoteProviderBindingService } from
   "./remote/remote-provider-binding-service.js";
+import {
+  RemoteProviderClient,
+  type RemoteProviderCredentialResolver
+} from "./remote/remote-provider-client.js";
+import { RemoteEvidenceRepository } from
+  "./remote/remote-evidence-repository.js";
+import { RemoteEvidenceService } from "./remote/remote-evidence-service.js";
+import { RemoteEvidenceAdoptionRepository } from
+  "./remote/remote-evidence-adoption-repository.js";
+import { RemoteEvidenceAdoptionService } from
+  "./remote/remote-evidence-adoption-service.js";
 import { IsolatedWorkspaceLeaseService } from "./workspace/isolated-workspace-lease-service.js";
 import { LocalArtifactBlobStore } from
   "./artifact/local-artifact-blob-store.js";
@@ -212,6 +223,11 @@ export interface ServerAppOptions {
   logger?: boolean;
   loggerInstance?: FastifyBaseLogger;
   hostedFetch?: typeof fetch;
+  remoteProviderFetch?: typeof fetch;
+  remoteProviderCredentialResolver?: RemoteProviderCredentialResolver;
+  remoteProviderTimeoutMilliseconds?: number;
+  remoteGitExecutable?: string;
+  remoteGitTemporaryBase?: string;
   memoryReducer?: MemoryReducerRunner;
   memoryReducerSweepMilliseconds?: number;
   executionSchedulerSweepMilliseconds?: number;
@@ -560,8 +576,41 @@ export async function createServerApp(
     executionMaterializations,
     bridgeConnections
   );
+  const remoteProviderBindingRepository = new RemoteProviderBindingRepository(
+    database, transactions
+  );
   const remoteProviderBindings = new RemoteProviderBindingService(
-    new RemoteProviderBindingRepository(database, transactions),
+    remoteProviderBindingRepository,
+    auth
+  );
+  const remoteEvidenceRepository = new RemoteEvidenceRepository(
+    database, artifactRepository, artifactPublicationRepository, transactions
+  );
+  const remoteEvidence = new RemoteEvidenceService(
+    database,
+    remoteEvidenceRepository,
+    remoteProviderBindingRepository,
+    executionPlanRepository,
+    auth,
+    new RemoteProviderClient(
+      options.remoteProviderCredentialResolver ?? (() => undefined),
+      options.remoteProviderFetch ?? fetch,
+      options.remoteProviderTimeoutMilliseconds
+    ),
+    artifactBlobs,
+    {
+      ...(options.remoteGitExecutable === undefined
+        ? {} : { gitExecutable: options.remoteGitExecutable }),
+      ...(options.remoteGitTemporaryBase === undefined
+        ? {} : { temporaryBase: options.remoteGitTemporaryBase })
+    }
+  );
+  const remoteEvidenceAdoptions = new RemoteEvidenceAdoptionService(
+    database,
+    new RemoteEvidenceAdoptionRepository(database, transactions),
+    remoteEvidenceRepository,
+    remoteProviderBindingRepository,
+    executionPlanRepository,
     auth
   );
   const operationalMetrics = new OperationalMetrics(
@@ -1038,6 +1087,8 @@ export async function createServerApp(
     repositoryIntegrations,
     repositoryVerifications,
     remoteProviderBindings,
+    remoteEvidence,
+    remoteEvidenceAdoptions,
     fakeAdapters,
     handoffs,
     hostedAgents,

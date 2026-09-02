@@ -456,6 +456,37 @@
             }
           ]
         },
+        "sourceAuthority": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sourceEvidenceId",
+                "sourceDigest",
+                "adoptionId",
+                "adoptionDigest"
+              ],
+              "properties": {
+                "sourceEvidenceId": {
+                  "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/sourceEvidenceId"
+                },
+                "sourceDigest": {
+                  "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+                },
+                "adoptionId": {
+                  "$ref": "https://agentroom.dev/schemas/work/evidence-adoption.schema.json#/$defs/adoptionId"
+                },
+                "adoptionDigest": {
+                  "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/digest"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "sourceOutputSlot": {
           "$ref": "https://agentroom.dev/schemas/work/execution-plan.schema.json#/$defs/stableKey"
         },

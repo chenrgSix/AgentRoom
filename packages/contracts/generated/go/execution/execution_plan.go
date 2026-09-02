@@ -2201,18 +2201,19 @@ type GovernedExecutionManifestInput struct {
 	InputSlot       string `json:"inputSlot"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	IssuedAt                 string  `json:"issuedAt"`
-	PlanID                   string  `json:"planId"`
-	PlanRevision             int64   `json:"planRevision"`
-	RepositoryID             *string `json:"repositoryId"`
-	SourceCommit             *string `json:"sourceCommit"`
-	SourceCriteriaRevision   int64   `json:"sourceCriteriaRevision"`
-	SourceDefinitionRevision int64   `json:"sourceDefinitionRevision"`
-	SourceOutputSlot         string  `json:"sourceOutputSlot"`
-	SourceResultID           *string `json:"sourceResultId"`
-	SourceResultVersion      *int64  `json:"sourceResultVersion"`
-	SourceTaskID             string  `json:"sourceTaskId"`
-	SourceTree               *string `json:"sourceTree"`
+	IssuedAt                 string                 `json:"issuedAt"`
+	PlanID                   string                 `json:"planId"`
+	PlanRevision             int64                  `json:"planRevision"`
+	RepositoryID             *string                `json:"repositoryId"`
+	SourceAuthority          *PurpleSourceAuthority `json:"sourceAuthority"`
+	SourceCommit             *string                `json:"sourceCommit"`
+	SourceCriteriaRevision   int64                  `json:"sourceCriteriaRevision"`
+	SourceDefinitionRevision int64                  `json:"sourceDefinitionRevision"`
+	SourceOutputSlot         string                 `json:"sourceOutputSlot"`
+	SourceResultID           *string                `json:"sourceResultId"`
+	SourceResultVersion      *int64                 `json:"sourceResultVersion"`
+	SourceTaskID             string                 `json:"sourceTaskId"`
+	SourceTree               *string                `json:"sourceTree"`
 }
 
 type PurpleArtifact struct {
@@ -2221,6 +2222,13 @@ type PurpleArtifact struct {
 	ByteLength       int64             `json:"byteLength"`
 	ContentDigest    string            `json:"contentDigest"`
 	Kind             ExternalInputKind `json:"kind"`
+}
+
+type PurpleSourceAuthority struct {
+	AdoptionDigest   string `json:"adoptionDigest"`
+	AdoptionID       string `json:"adoptionId"`
+	SourceDigest     string `json:"sourceDigest"`
+	SourceEvidenceID string `json:"sourceEvidenceId"`
 }
 
 type GovernedExecutionManifestOutput struct {
@@ -2301,18 +2309,19 @@ type ExecutionInputBinding struct {
 	InputSlot       string `json:"inputSlot"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	IssuedAt                 string  `json:"issuedAt"`
-	PlanID                   string  `json:"planId"`
-	PlanRevision             int64   `json:"planRevision"`
-	RepositoryID             *string `json:"repositoryId"`
-	SourceCommit             *string `json:"sourceCommit"`
-	SourceCriteriaRevision   int64   `json:"sourceCriteriaRevision"`
-	SourceDefinitionRevision int64   `json:"sourceDefinitionRevision"`
-	SourceOutputSlot         string  `json:"sourceOutputSlot"`
-	SourceResultID           *string `json:"sourceResultId"`
-	SourceResultVersion      *int64  `json:"sourceResultVersion"`
-	SourceTaskID             string  `json:"sourceTaskId"`
-	SourceTree               *string `json:"sourceTree"`
+	IssuedAt                 string                                `json:"issuedAt"`
+	PlanID                   string                                `json:"planId"`
+	PlanRevision             int64                                 `json:"planRevision"`
+	RepositoryID             *string                               `json:"repositoryId"`
+	SourceAuthority          *ExecutionInputBindingSourceAuthority `json:"sourceAuthority"`
+	SourceCommit             *string                               `json:"sourceCommit"`
+	SourceCriteriaRevision   int64                                 `json:"sourceCriteriaRevision"`
+	SourceDefinitionRevision int64                                 `json:"sourceDefinitionRevision"`
+	SourceOutputSlot         string                                `json:"sourceOutputSlot"`
+	SourceResultID           *string                               `json:"sourceResultId"`
+	SourceResultVersion      *int64                                `json:"sourceResultVersion"`
+	SourceTaskID             string                                `json:"sourceTaskId"`
+	SourceTree               *string                               `json:"sourceTree"`
 }
 
 type ExecutionInputBindingArtifact struct {
@@ -2321,6 +2330,13 @@ type ExecutionInputBindingArtifact struct {
 	ByteLength       int64             `json:"byteLength"`
 	ContentDigest    string            `json:"contentDigest"`
 	Kind             ExternalInputKind `json:"kind"`
+}
+
+type ExecutionInputBindingSourceAuthority struct {
+	AdoptionDigest   string `json:"adoptionDigest"`
+	AdoptionID       string `json:"adoptionId"`
+	SourceDigest     string `json:"sourceDigest"`
+	SourceEvidenceID string `json:"sourceEvidenceId"`
 }
 
 type GovernedExecutionCapability struct {
@@ -2671,18 +2687,19 @@ type ManifestInput struct {
 	InputSlot       string `json:"inputSlot"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	IssuedAt                 string  `json:"issuedAt"`
-	PlanID                   string  `json:"planId"`
-	PlanRevision             int64   `json:"planRevision"`
-	RepositoryID             *string `json:"repositoryId"`
-	SourceCommit             *string `json:"sourceCommit"`
-	SourceCriteriaRevision   int64   `json:"sourceCriteriaRevision"`
-	SourceDefinitionRevision int64   `json:"sourceDefinitionRevision"`
-	SourceOutputSlot         string  `json:"sourceOutputSlot"`
-	SourceResultID           *string `json:"sourceResultId"`
-	SourceResultVersion      *int64  `json:"sourceResultVersion"`
-	SourceTaskID             string  `json:"sourceTaskId"`
-	SourceTree               *string `json:"sourceTree"`
+	IssuedAt                 string                 `json:"issuedAt"`
+	PlanID                   string                 `json:"planId"`
+	PlanRevision             int64                  `json:"planRevision"`
+	RepositoryID             *string                `json:"repositoryId"`
+	SourceAuthority          *FluffySourceAuthority `json:"sourceAuthority"`
+	SourceCommit             *string                `json:"sourceCommit"`
+	SourceCriteriaRevision   int64                  `json:"sourceCriteriaRevision"`
+	SourceDefinitionRevision int64                  `json:"sourceDefinitionRevision"`
+	SourceOutputSlot         string                 `json:"sourceOutputSlot"`
+	SourceResultID           *string                `json:"sourceResultId"`
+	SourceResultVersion      *int64                 `json:"sourceResultVersion"`
+	SourceTaskID             string                 `json:"sourceTaskId"`
+	SourceTree               *string                `json:"sourceTree"`
 }
 
 type FluffyArtifact struct {
@@ -2691,6 +2708,13 @@ type FluffyArtifact struct {
 	ByteLength       int64             `json:"byteLength"`
 	ContentDigest    string            `json:"contentDigest"`
 	Kind             ExternalInputKind `json:"kind"`
+}
+
+type FluffySourceAuthority struct {
+	AdoptionDigest   string `json:"adoptionDigest"`
+	AdoptionID       string `json:"adoptionId"`
+	SourceDigest     string `json:"sourceDigest"`
+	SourceEvidenceID string `json:"sourceEvidenceId"`
 }
 
 type ManifestOutput struct {
@@ -3069,18 +3093,21 @@ type EvidenceAdoption struct {
 }
 
 type EvidenceAdoptionAuthority struct {
-	AgentID             string  `json:"agentId"`
+	AgentID             *string `json:"agentId,omitempty"`
 	ApprovalOperationID string  `json:"approvalOperationId"`
 	CriteriaRevision    int64   `json:"criteriaRevision"`
 	DefinitionRevision  int64   `json:"definitionRevision"`
-	DeviceID            string  `json:"deviceId"`
-	GrantDigest         string  `json:"grantDigest"`
-	GrantID             string  `json:"grantId"`
-	GrantRevision       int64   `json:"grantRevision"`
+	DeviceID            *string `json:"deviceId,omitempty"`
+	GrantDigest         *string `json:"grantDigest,omitempty"`
+	GrantID             *string `json:"grantId,omitempty"`
+	GrantRevision       *int64  `json:"grantRevision,omitempty"`
 	PlanDigest          string  `json:"planDigest"`
 	RoomID              string  `json:"roomId"`
 	Service             Service `json:"service"`
 	TaskID              string  `json:"taskId"`
+	ActorMemberID       *string `json:"actorMemberId,omitempty"`
+	BindingDigest       *string `json:"bindingDigest,omitempty"`
+	ProviderBindingID   *string `json:"providerBindingId,omitempty"`
 }
 
 type Proof struct {
@@ -3615,6 +3642,7 @@ type Service string
 
 const (
 	ExecutionMaterialization Service = "execution_materialization"
+	RemoteEvidenceAdoption   Service = "remote_evidence_adoption"
 )
 
 type ProducerKind string

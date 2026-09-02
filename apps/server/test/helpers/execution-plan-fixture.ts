@@ -10,7 +10,7 @@ import type {
   ExecutionPlanProposalCommand
 } from "@convene-wire/contracts/execution-plan";
 import { executionOperationDigest } from "@convene-wire/contracts/execution-validation";
-import { createServerApp } from "../../src/app.js";
+import { createServerApp, type ServerAppOptions } from "../../src/app.js";
 import { openDatabase } from "../../src/data/database.js";
 
 export const now = "2026-08-31T12:00:00.000Z";
@@ -23,7 +23,10 @@ const template = fixtures.cases.find((entry: { name: string }) =>
 export async function fixture(
   t: TestContext,
   clock: () => string = () => now,
-  options: { executionSchedulerSweepMilliseconds?: number } = {}
+  options: Pick<ServerAppOptions,
+    "executionSchedulerSweepMilliseconds" | "remoteProviderFetch" |
+    "remoteProviderCredentialResolver" | "remoteGitExecutable" |
+    "remoteGitTemporaryBase" | "remoteProviderTimeoutMilliseconds"> = {}
 ) {
   const executionSchedulerSweepMilliseconds =
     options.executionSchedulerSweepMilliseconds ?? 0;
@@ -42,6 +45,7 @@ export async function fixture(
   });
   const databasePath = path.join(directory, "server.sqlite");
   app = await createServerApp({
+    ...options,
     databasePath,
     clock,
     logger: false,
@@ -127,6 +131,7 @@ export async function fixture(
       await app!.close();
       app = undefined;
       app = await createServerApp({
+        ...options,
         databasePath,
         clock,
         logger: false,
@@ -138,6 +143,7 @@ export async function fixture(
       await app!.close();
       app = undefined;
       app = await createServerApp({
+        ...options,
         databasePath,
         clock,
         logger: false,

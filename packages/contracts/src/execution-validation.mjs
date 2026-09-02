@@ -230,6 +230,15 @@ function assertRemoteCommitObservationSemantics(value) {
     "REMOTE_COMMIT_OBSERVATION_DIGEST_MISMATCH");
 }
 
+function assertExecutionInputBindingSemantics(value) {
+  const hasResult = value.sourceResultId !== null;
+  requireCondition(hasResult === (value.sourceResultVersion !== null),
+    "EXECUTION_INPUT_RESULT_IDENTITY_MISMATCH");
+  requireCondition(hasResult || (value.sourceAuthority &&
+    typeof value.sourceAuthority === "object"),
+    "EXECUTION_INPUT_SOURCE_AUTHORITY_REQUIRED");
+}
+
 function assertSourceEvidenceSemantics(value) {
   ordered(value.artifactPins, artifactOrder, "EVIDENCE_ARTIFACT_ORDER");
   unique(value.artifactPins, "outputSlot", "EVIDENCE_DUPLICATE_OUTPUT_SLOT");
@@ -306,6 +315,9 @@ export function assertExecutionCommand(kind, value) {
   requireCondition(typeof validator === "function" && validator(value),
     "PLAN_SCHEMA_INVALID");
   if (kind === "sourceEvidence") assertSourceEvidenceSemantics(value);
+  if (kind === "executionInputBinding") {
+    assertExecutionInputBindingSemantics(value);
+  }
   if (kind === "evidenceAdoption") assertEvidenceAdoptionSemantics(value);
   if (kind === "evidenceReuseContract") {
     assertEvidenceReuseContractSemantics(value);

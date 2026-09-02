@@ -344,6 +344,41 @@
                   }
                 ]
               },
+              "sourceAuthority": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "sourceEvidenceId",
+                      "sourceDigest",
+                      "adoptionId",
+                      "adoptionDigest"
+                    ],
+                    "properties": {
+                      "sourceEvidenceId": {
+                        "type": "string",
+                        "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+                      },
+                      "sourceDigest": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "adoptionId": {
+                        "type": "string",
+                        "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
+                      },
+                      "adoptionDigest": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
               "sourceOutputSlot": {
                 "type": "string",
                 "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
@@ -744,6 +779,41 @@
               "type": "integer",
               "minimum": 1,
               "maximum": 9007199254740991
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceAuthority": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "sourceEvidenceId",
+                "sourceDigest",
+                "adoptionId",
+                "adoptionDigest"
+              ],
+              "properties": {
+                "sourceEvidenceId": {
+                  "type": "string",
+                  "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+                },
+                "sourceDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "adoptionId": {
+                  "type": "string",
+                  "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
+                },
+                "adoptionDigest": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              }
             },
             {
               "type": "null"
@@ -2470,6 +2540,41 @@
                                     "type": "integer",
                                     "minimum": 1,
                                     "maximum": 9007199254740991
+                                  },
+                                  {
+                                    "type": "null"
+                                  }
+                                ]
+                              },
+                              "sourceAuthority": {
+                                "oneOf": [
+                                  {
+                                    "type": "object",
+                                    "additionalProperties": false,
+                                    "required": [
+                                      "sourceEvidenceId",
+                                      "sourceDigest",
+                                      "adoptionId",
+                                      "adoptionDigest"
+                                    ],
+                                    "properties": {
+                                      "sourceEvidenceId": {
+                                        "type": "string",
+                                        "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+                                      },
+                                      "sourceDigest": {
+                                        "type": "string",
+                                        "pattern": "^[a-f0-9]{64}$"
+                                      },
+                                      "adoptionId": {
+                                        "type": "string",
+                                        "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
+                                      },
+                                      "adoptionDigest": {
+                                        "type": "string",
+                                        "pattern": "^[a-f0-9]{64}$"
+                                      }
+                                    }
                                   },
                                   {
                                     "type": "null"
@@ -4659,74 +4764,137 @@
                   "pattern": "^[a-f0-9]{64}$"
                 },
                 "authority": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "service",
-                    "approvalOperationId",
-                    "planDigest",
-                    "roomId",
-                    "taskId",
-                    "definitionRevision",
-                    "criteriaRevision",
-                    "agentId",
-                    "deviceId",
-                    "grantId",
-                    "grantRevision",
-                    "grantDigest"
-                  ],
-                  "properties": {
-                    "service": {
-                      "const": "execution_materialization"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "service",
+                        "approvalOperationId",
+                        "planDigest",
+                        "roomId",
+                        "taskId",
+                        "definitionRevision",
+                        "criteriaRevision",
+                        "agentId",
+                        "deviceId",
+                        "grantId",
+                        "grantRevision",
+                        "grantDigest"
+                      ],
+                      "properties": {
+                        "service": {
+                          "const": "execution_materialization"
+                        },
+                        "approvalOperationId": {
+                          "type": "string",
+                          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "planDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "roomId": {
+                          "type": "string",
+                          "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "taskId": {
+                          "type": "string",
+                          "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "definitionRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "criteriaRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "agentId": {
+                          "type": "string",
+                          "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "deviceId": {
+                          "type": "string",
+                          "pattern": "^device_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "grantId": {
+                          "type": "string",
+                          "pattern": "^grant_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "grantRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "grantDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
                     },
-                    "approvalOperationId": {
-                      "type": "string",
-                      "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "planDigest": {
-                      "type": "string",
-                      "pattern": "^[a-f0-9]{64}$"
-                    },
-                    "roomId": {
-                      "type": "string",
-                      "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "taskId": {
-                      "type": "string",
-                      "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "definitionRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "criteriaRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "agentId": {
-                      "type": "string",
-                      "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "deviceId": {
-                      "type": "string",
-                      "pattern": "^device_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "grantId": {
-                      "type": "string",
-                      "pattern": "^grant_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "grantRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "grantDigest": {
-                      "type": "string",
-                      "pattern": "^[a-f0-9]{64}$"
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "service",
+                        "approvalOperationId",
+                        "planDigest",
+                        "roomId",
+                        "taskId",
+                        "definitionRevision",
+                        "criteriaRevision",
+                        "actorMemberId",
+                        "providerBindingId",
+                        "bindingDigest"
+                      ],
+                      "properties": {
+                        "service": {
+                          "const": "remote_evidence_adoption"
+                        },
+                        "approvalOperationId": {
+                          "type": "string",
+                          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "planDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "roomId": {
+                          "type": "string",
+                          "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "taskId": {
+                          "type": "string",
+                          "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "definitionRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "criteriaRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "actorMemberId": {
+                          "type": "string",
+                          "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "providerBindingId": {
+                          "type": "string",
+                          "pattern": "^provider_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "bindingDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
                     }
-                  }
+                  ]
                 },
                 "adoptionDigest": {
                   "type": "string",
@@ -5061,74 +5229,137 @@
                   "pattern": "^[a-f0-9]{64}$"
                 },
                 "authority": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "service",
-                    "approvalOperationId",
-                    "planDigest",
-                    "roomId",
-                    "taskId",
-                    "definitionRevision",
-                    "criteriaRevision",
-                    "agentId",
-                    "deviceId",
-                    "grantId",
-                    "grantRevision",
-                    "grantDigest"
-                  ],
-                  "properties": {
-                    "service": {
-                      "const": "execution_materialization"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "service",
+                        "approvalOperationId",
+                        "planDigest",
+                        "roomId",
+                        "taskId",
+                        "definitionRevision",
+                        "criteriaRevision",
+                        "agentId",
+                        "deviceId",
+                        "grantId",
+                        "grantRevision",
+                        "grantDigest"
+                      ],
+                      "properties": {
+                        "service": {
+                          "const": "execution_materialization"
+                        },
+                        "approvalOperationId": {
+                          "type": "string",
+                          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "planDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "roomId": {
+                          "type": "string",
+                          "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "taskId": {
+                          "type": "string",
+                          "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "definitionRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "criteriaRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "agentId": {
+                          "type": "string",
+                          "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "deviceId": {
+                          "type": "string",
+                          "pattern": "^device_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "grantId": {
+                          "type": "string",
+                          "pattern": "^grant_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "grantRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "grantDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
                     },
-                    "approvalOperationId": {
-                      "type": "string",
-                      "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "planDigest": {
-                      "type": "string",
-                      "pattern": "^[a-f0-9]{64}$"
-                    },
-                    "roomId": {
-                      "type": "string",
-                      "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "taskId": {
-                      "type": "string",
-                      "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "definitionRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "criteriaRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "agentId": {
-                      "type": "string",
-                      "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "deviceId": {
-                      "type": "string",
-                      "pattern": "^device_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "grantId": {
-                      "type": "string",
-                      "pattern": "^grant_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "grantRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "grantDigest": {
-                      "type": "string",
-                      "pattern": "^[a-f0-9]{64}$"
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "service",
+                        "approvalOperationId",
+                        "planDigest",
+                        "roomId",
+                        "taskId",
+                        "definitionRevision",
+                        "criteriaRevision",
+                        "actorMemberId",
+                        "providerBindingId",
+                        "bindingDigest"
+                      ],
+                      "properties": {
+                        "service": {
+                          "const": "remote_evidence_adoption"
+                        },
+                        "approvalOperationId": {
+                          "type": "string",
+                          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "planDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "roomId": {
+                          "type": "string",
+                          "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "taskId": {
+                          "type": "string",
+                          "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "definitionRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "criteriaRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "actorMemberId": {
+                          "type": "string",
+                          "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "providerBindingId": {
+                          "type": "string",
+                          "pattern": "^provider_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "bindingDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
                     }
-                  }
+                  ]
                 },
                 "adoptionDigest": {
                   "type": "string",
@@ -5520,74 +5751,137 @@
                   "pattern": "^[a-f0-9]{64}$"
                 },
                 "authority": {
-                  "type": "object",
-                  "additionalProperties": false,
-                  "required": [
-                    "service",
-                    "approvalOperationId",
-                    "planDigest",
-                    "roomId",
-                    "taskId",
-                    "definitionRevision",
-                    "criteriaRevision",
-                    "agentId",
-                    "deviceId",
-                    "grantId",
-                    "grantRevision",
-                    "grantDigest"
-                  ],
-                  "properties": {
-                    "service": {
-                      "const": "execution_materialization"
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "service",
+                        "approvalOperationId",
+                        "planDigest",
+                        "roomId",
+                        "taskId",
+                        "definitionRevision",
+                        "criteriaRevision",
+                        "agentId",
+                        "deviceId",
+                        "grantId",
+                        "grantRevision",
+                        "grantDigest"
+                      ],
+                      "properties": {
+                        "service": {
+                          "const": "execution_materialization"
+                        },
+                        "approvalOperationId": {
+                          "type": "string",
+                          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "planDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "roomId": {
+                          "type": "string",
+                          "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "taskId": {
+                          "type": "string",
+                          "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "definitionRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "criteriaRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "agentId": {
+                          "type": "string",
+                          "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "deviceId": {
+                          "type": "string",
+                          "pattern": "^device_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "grantId": {
+                          "type": "string",
+                          "pattern": "^grant_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "grantRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "grantDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
                     },
-                    "approvalOperationId": {
-                      "type": "string",
-                      "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "planDigest": {
-                      "type": "string",
-                      "pattern": "^[a-f0-9]{64}$"
-                    },
-                    "roomId": {
-                      "type": "string",
-                      "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "taskId": {
-                      "type": "string",
-                      "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "definitionRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "criteriaRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "agentId": {
-                      "type": "string",
-                      "pattern": "^agent_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "deviceId": {
-                      "type": "string",
-                      "pattern": "^device_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "grantId": {
-                      "type": "string",
-                      "pattern": "^grant_[A-Za-z0-9_-]{8,128}$"
-                    },
-                    "grantRevision": {
-                      "type": "integer",
-                      "minimum": 1,
-                      "maximum": 9007199254740991
-                    },
-                    "grantDigest": {
-                      "type": "string",
-                      "pattern": "^[a-f0-9]{64}$"
+                    {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "service",
+                        "approvalOperationId",
+                        "planDigest",
+                        "roomId",
+                        "taskId",
+                        "definitionRevision",
+                        "criteriaRevision",
+                        "actorMemberId",
+                        "providerBindingId",
+                        "bindingDigest"
+                      ],
+                      "properties": {
+                        "service": {
+                          "const": "remote_evidence_adoption"
+                        },
+                        "approvalOperationId": {
+                          "type": "string",
+                          "pattern": "^op_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "planDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        },
+                        "roomId": {
+                          "type": "string",
+                          "pattern": "^room_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "taskId": {
+                          "type": "string",
+                          "pattern": "^task_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "definitionRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "criteriaRevision": {
+                          "type": "integer",
+                          "minimum": 1,
+                          "maximum": 9007199254740991
+                        },
+                        "actorMemberId": {
+                          "type": "string",
+                          "pattern": "^member_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "providerBindingId": {
+                          "type": "string",
+                          "pattern": "^provider_[A-Za-z0-9_-]{8,128}$"
+                        },
+                        "bindingDigest": {
+                          "type": "string",
+                          "pattern": "^[a-f0-9]{64}$"
+                        }
+                      }
                     }
-                  }
+                  ]
                 },
                 "adoptionDigest": {
                   "type": "string",
@@ -6770,7 +7064,7 @@
         },
         "patchByteLength": {
           "type": "integer",
-          "minimum": 0,
+          "minimum": 1,
           "maximum": 4194304
         },
         "pullRequest": {

@@ -45,14 +45,19 @@ export class ExecutionInputRepository {
       binding_id, plan_id, revision, node_key, destination_task_id, destination_run_id,
       destination_agent_id, destination_device_id, input_slot, source_task_id, source_result_id,
       source_artifact_id, gate_operation_id, content_id, plan_digest, approval_operation_id,
-      control_revision, request_digest, binding_digest, binding_json, issued_at, expires_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+      control_revision, request_digest, binding_digest, binding_json, issued_at, expires_at,
+      source_evidence_id, source_digest, adoption_id, adoption_digest
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
       .run(binding.bindingId, binding.planId, binding.planRevision, input.nodeKey, binding.destinationTaskId,
         binding.destinationRunId, binding.destinationAgentId, binding.destinationDeviceId, binding.inputSlot,
         binding.sourceTaskId, binding.sourceResultId, binding.artifact.artifactId, binding.gateOperationId,
         input.contentId, input.planDigest, input.approvalOperationId, input.controlRevision,
         input.requestDigest, executionOperationDigest(binding), canonicalExecutionJSON(binding),
-        binding.issuedAt, binding.expiresAt);
+        binding.issuedAt, binding.expiresAt,
+        binding.sourceAuthority?.sourceEvidenceId ?? null,
+        binding.sourceAuthority?.sourceDigest ?? null,
+        binding.sourceAuthority?.adoptionId ?? null,
+        binding.sourceAuthority?.adoptionDigest ?? null);
     return this.get(binding.bindingId)!.binding;
   }
 

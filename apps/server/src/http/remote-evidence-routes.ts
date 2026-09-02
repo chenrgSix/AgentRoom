@@ -3,7 +3,8 @@ import { noStore } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerRemoteEvidenceRoutes({
-  app, clock, principal, remoteProviderBindings
+  app, clock, principal, remoteProviderBindings, remoteEvidence,
+  remoteEvidenceAdoptions
 }: ServerRouteContext): void {
   const options = {
     bodyLimit: 64 * 1024,
@@ -28,6 +29,27 @@ export function registerRemoteEvidenceRoutes({
     options,
     async (request) => remoteProviderBindings.revoke(
       principal(request), request.params.bindingId, request.body, clock()
+    )
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/remote-commit-observations",
+    options,
+    async (request) => remoteEvidence.observeCommit(
+      principal(request), request.params.planId, request.body, clock()
+    )
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/remote-ci-observations",
+    options,
+    async (request) => remoteEvidence.observeCI(
+      principal(request), request.params.planId, request.body, clock()
+    )
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/remote-evidence-adoptions",
+    options,
+    async (request) => remoteEvidenceAdoptions.adoptVerified(
+      principal(request), request.params.planId, request.body, clock()
     )
   );
 }

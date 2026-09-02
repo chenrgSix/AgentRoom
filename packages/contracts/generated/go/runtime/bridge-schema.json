@@ -2937,6 +2937,41 @@
                                     }
                                   ]
                                 },
+                                "sourceAuthority": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "additionalProperties": false,
+                                      "required": [
+                                        "sourceEvidenceId",
+                                        "sourceDigest",
+                                        "adoptionId",
+                                        "adoptionDigest"
+                                      ],
+                                      "properties": {
+                                        "sourceEvidenceId": {
+                                          "type": "string",
+                                          "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+                                        },
+                                        "sourceDigest": {
+                                          "type": "string",
+                                          "pattern": "^[a-f0-9]{64}$"
+                                        },
+                                        "adoptionId": {
+                                          "type": "string",
+                                          "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
+                                        },
+                                        "adoptionDigest": {
+                                          "type": "string",
+                                          "pattern": "^[a-f0-9]{64}$"
+                                        }
+                                      }
+                                    },
+                                    {
+                                      "type": "null"
+                                    }
+                                  ]
+                                },
                                 "sourceOutputSlot": {
                                   "type": "string",
                                   "pattern": "^[A-Za-z][A-Za-z0-9_-]{0,63}$"
@@ -10706,6 +10741,41 @@
                             "type": "integer",
                             "minimum": 1,
                             "maximum": 9007199254740991
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "sourceAuthority": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": false,
+                            "required": [
+                              "sourceEvidenceId",
+                              "sourceDigest",
+                              "adoptionId",
+                              "adoptionDigest"
+                            ],
+                            "properties": {
+                              "sourceEvidenceId": {
+                                "type": "string",
+                                "pattern": "^source_[A-Za-z0-9_-]{8,128}$"
+                              },
+                              "sourceDigest": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              },
+                              "adoptionId": {
+                                "type": "string",
+                                "pattern": "^adoption_[A-Za-z0-9_-]{8,128}$"
+                              },
+                              "adoptionDigest": {
+                                "type": "string",
+                                "pattern": "^[a-f0-9]{64}$"
+                              }
+                            }
                           },
                           {
                             "type": "null"

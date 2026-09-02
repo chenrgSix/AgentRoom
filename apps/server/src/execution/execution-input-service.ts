@@ -15,7 +15,8 @@ import { ExecutionError } from "./execution-error.js";
 export interface ExecutionInputSelection {
   artifactId: string;
   inputSlot: string;
-  sourceResultId: string;
+  sourceResultId: string | null;
+  sourceAuthority?: NonNullable<ExecutionInputBinding["sourceAuthority"]>;
 }
 export interface FreezeExecutionInputs {
   planId: string; revision: number; expectedDigest: string; expectedControlRevision: number;
@@ -34,6 +35,8 @@ interface AcceptedSource {
 interface MaterializedSource {
   adoption_digest: string;
   adoption_id: string;
+  source_digest: string;
+  source_evidence_id: string;
   candidate_commit: string | null;
   candidate_tree: string | null;
   criteria_revision: number;
@@ -42,7 +45,7 @@ interface MaterializedSource {
   gate_operation_id: string;
   materialization_digest: string;
   operation_id: string | null;
-  result_version: number;
+  result_version: number | null;
   reviewed_at: string | null;
   reviewed_by_member_id: string | null;
   task_id: string;
@@ -55,6 +58,7 @@ function acceptedProjection(source: MaterializedSource): AcceptedSource {
   if (
     source.gate !== "accepted_result" ||
     source.operation_id !== source.gate_operation_id ||
+    source.result_version === null ||
     !source.reviewed_by_member_id ||
     !source.reviewed_at
   ) return fail("EXECUTION_INPUT_SOURCE_UNAVAILABLE");
@@ -124,23 +128,28 @@ export class ExecutionInputService {
       const sourceTaskId = sourceTask?.taskId ?? external?.sourceTaskId;
       if (!sourceTaskId || sourceTaskId === destination.task_id) return fail("EXECUTION_INPUT_SOURCE_INVALID");
       const source = edge
-        ? this.materializedSource(
-          edge.gate,
-          plan.planId,
-          input.revision,
-          sourceTaskId,
-          selection.sourceResultId,
-          selection.artifactId,
-          edge!.bindings.find((entry) => entry.inputSlot === selection.inputSlot)!
-            .outputSlot,
-          plan.roomId
-        )
-        : this.acceptedSource(
-          sourceTaskId,
-          selection.sourceResultId,
-          selection.artifactId,
-          plan.roomId
-        );
+        ? (selection.sourceAuthority || selection.sourceResultId)
+          ? this.materializedSource(
+            edge.gate,
+            plan.planId,
+            input.revision,
+            sourceTaskId,
+            selection.sourceResultId,
+            selection.sourceAuthority,
+            selection.artifactId,
+            edge.bindings.find((entry) =>
+              entry.inputSlot === selection.inputSlot)!.outputSlot,
+            plan.roomId
+          )
+          : fail("EXECUTION_INPUT_SOURCE_AUTHORITY_REQUIRED")
+        : selection.sourceResultId && !selection.sourceAuthority
+          ? this.acceptedSource(
+            sourceTaskId,
+            selection.sourceResultId,
+            selection.artifactId,
+            plan.roomId
+          )
+          : fail("EXECUTION_INPUT_SOURCE_INVALID");
       if (sourceTask && (source.definition_revision !== sourceTask.definitionRevision ||
         source.criteria_revision !== sourceTask.criteriaRevision)) return fail("EXECUTION_INPUT_SOURCE_STALE");
       const artifact = this.sealedArtifact(selection.artifactId, sourceTaskId, plan.roomId);
@@ -166,7 +175,14 @@ export class ExecutionInputService {
             : (source as MaterializedSource).materialization_digest
           : executionOperationDigest(source),
         sourceTaskId, sourceDefinitionRevision: source.definition_revision, sourceCriteriaRevision: source.criteria_revision,
-        sourceResultId: selection.sourceResultId, sourceResultVersion: source.result_version, sourceOutputSlot: outputSlot,
+        sourceResultId: selection.sourceResultId, sourceResultVersion: source.result_version,
+        sourceAuthority: edge ? {
+          sourceEvidenceId: (source as MaterializedSource).source_evidence_id,
+          sourceDigest: (source as MaterializedSource).source_digest,
+          adoptionId: (source as MaterializedSource).adoption_id,
+          adoptionDigest: (source as MaterializedSource).adoption_digest
+        } : null,
+        sourceOutputSlot: outputSlot,
         artifact: { artifactId: artifact.artifactId, artifactRevision: artifact.artifactRevision,
           contentDigest: artifact.contentSha256!, byteLength: artifact.contentSizeBytes!, kind: slot.kind },
         repositoryId: sourceNode?.repository?.repositoryId ?? null,
@@ -291,12 +307,14 @@ export class ExecutionInputService {
         manifest.inputs.filter((entry) => entry.bindingId === bindingId).length !== 1 ||
         canonicalExecutionJSON(manifest.inputs.find((entry) => entry.bindingId === bindingId)) !== canonicalExecutionJSON(binding)) return deny();
       if (binding.edgeKey !== null) {
+        if (!binding.sourceAuthority) return deny();
         const source = this.materializedSource(
           binding.gate,
           binding.planId,
           binding.planRevision,
           binding.sourceTaskId,
-          binding.sourceResultId!,
+          binding.sourceResultId,
+          binding.sourceAuthority,
           binding.artifact.artifactId,
           binding.sourceOutputSlot,
           plan.roomId
@@ -311,6 +329,7 @@ export class ExecutionInputService {
           source.candidate_tree !== binding.sourceTree
         ) return deny();
       } else {
+        if (!binding.sourceResultId || binding.sourceAuthority) return deny();
         const source = this.acceptedSource(
           binding.sourceTaskId,
           binding.sourceResultId!,
@@ -389,36 +408,39 @@ export class ExecutionInputService {
     planId: string,
     planRevision: number,
     taskId: string,
-    resultId: string,
+    resultId: string | null,
+    authority: NonNullable<ExecutionInputBinding["sourceAuthority"]> | undefined,
     artifactId: string,
     outputSlot: string,
     roomId: string
   ): MaterializedSource {
     const source = this.database.prepare(`
-      SELECT result.task_id, result.result_version,
-        result.definition_revision, result.criteria_revision,
+      SELECT node.task_id, result.result_version,
+        node.definition_revision, node.criteria_revision,
         materialization.gate, materialization.adoption_id,
         materialization.adoption_digest,
+        materialization.source_evidence_id,
+        materialization.source_digest,
         materialization.gate_operation_id,
         materialization.materialization_digest,
         materialization.candidate_commit, materialization.candidate_tree,
         review.operation_id, review.reviewed_by_member_id, review.reviewed_at
-      FROM execution_adopted_node_materializations materialization
+      FROM execution_all_adopted_node_materializations materialization
       JOIN execution_plan_nodes node ON node.plan_id = materialization.plan_id
         AND node.revision = materialization.plan_revision
         AND node.node_key = materialization.node_key
         AND node.task_id = @taskId
-      JOIN task_results result ON result.result_id = materialization.source_result_id
+      JOIN agent_tasks task ON task.task_id = node.task_id
+        AND task.room_id = @roomId AND task.lifecycle_state <> 'canceled'
+        AND task.definition_revision = node.definition_revision
+        AND task.criteria_revision = node.criteria_revision
+      LEFT JOIN task_results result
+        ON result.result_id = materialization.source_result_id
         AND result.task_id = node.task_id
         AND result.result_version = materialization.source_result_version
         AND result.definition_revision = node.definition_revision
         AND result.criteria_revision = node.criteria_revision
         AND result.room_id = @roomId
-      JOIN agent_tasks task ON task.task_id = result.task_id
-        AND task.room_id = result.room_id
-        AND task.lifecycle_state <> 'canceled'
-        AND task.definition_revision = result.definition_revision
-        AND task.criteria_revision = result.criteria_revision
       LEFT JOIN result_reviews review
         ON materialization.gate = 'accepted_result'
         AND review.result_id = result.result_id
@@ -427,19 +449,38 @@ export class ExecutionInputService {
       JOIN json_each(materialization.artifact_pins_json) pin
         ON json_extract(pin.value, '$.artifactId') = @artifactId
         AND json_extract(pin.value, '$.outputSlot') = @outputSlot
-      JOIN result_evidence_refs evidence ON evidence.result_id = result.result_id
-        AND evidence.evidence_kind = 'artifact'
-        AND evidence.artifact_id = @artifactId
+      JOIN task_artifact_refs artifact ON artifact.artifact_id = @artifactId
+        AND artifact.task_id = node.task_id AND artifact.room_id = @roomId
+        AND artifact.content_mode = 'snapshot_blob'
       WHERE materialization.plan_id = @planId
         AND materialization.plan_revision = @planRevision
         AND materialization.gate = @gate
-        AND result.result_id = @resultId
+        AND materialization.source_result_id IS @resultId
+        AND (@sourceEvidenceId IS NULL OR
+          (materialization.source_evidence_id = @sourceEvidenceId
+            AND materialization.source_digest = @sourceDigest
+            AND materialization.adoption_id = @adoptionId
+            AND materialization.adoption_digest = @adoptionDigest))
+        AND (
+          (materialization.source_result_id IS NULL AND result.result_id IS NULL) OR
+          (materialization.source_result_id IS NOT NULL AND result.result_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM result_evidence_refs evidence
+              WHERE evidence.result_id = result.result_id
+                AND evidence.evidence_kind = 'artifact'
+                AND evidence.artifact_id = artifact.artifact_id
+            ))
+        )
     `).get({
       planId,
       planRevision,
       gate,
       taskId,
       resultId,
+      sourceEvidenceId: authority?.sourceEvidenceId ?? null,
+      sourceDigest: authority?.sourceDigest ?? null,
+      adoptionId: authority?.adoptionId ?? null,
+      adoptionDigest: authority?.adoptionDigest ?? null,
       artifactId,
       outputSlot,
       roomId

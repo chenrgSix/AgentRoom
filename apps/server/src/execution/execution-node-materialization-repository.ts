@@ -86,6 +86,21 @@ export type ExecutionNodeMaterialization =
   | VerifiedExecutionNodeMaterialization
   | IntegratedExecutionNodeMaterialization;
 
+export interface AdoptedExecutionMaterialization extends ExecutionNodeIdentity {
+  adoptionDigest: string;
+  adoptionId: string;
+  artifactPins: ExecutionMaterializationArtifactPin[];
+  candidateCommit: string | null;
+  candidateTree: string | null;
+  gate: "accepted_result" | "verified_output" | "integrated_commit";
+  gateOperationId: string;
+  materializationDigest: string;
+  sourceDigest: string;
+  sourceEvidenceId: string;
+  sourceResultId: string | null;
+  sourceResultVersion: number | null;
+}
+
 interface BaseMaterializationRow {
   artifact_pins_json: string;
   created_at: string;
@@ -306,6 +321,44 @@ export class ExecutionNodeMaterializationRepository {
     if (!adopted) return undefined;
     this.evidence.assertShadowEqual(legacy, adopted);
     return legacy;
+  }
+
+  /** Adoption-first reader; unlike the legacy writer projection, Result identity is optional. */
+  public getAdopted(
+    identity: ExecutionNodeIdentity,
+    gate: "accepted_result" | "verified_output" | "integrated_commit"
+  ): AdoptedExecutionMaterialization | undefined {
+    const row = this.database.prepare(`
+      SELECT * FROM execution_all_adopted_node_materializations
+      WHERE plan_id = ? AND plan_revision = ? AND node_key = ? AND gate = ?
+    `).get(identity.planId, identity.planRevision, identity.nodeKey, gate) as {
+      adoption_digest: string; adoption_id: string; artifact_pins_json: string;
+      candidate_commit: string | null; candidate_tree: string | null;
+      gate: AdoptedExecutionMaterialization["gate"];
+      gate_operation_id: string; materialization_digest: string;
+      node_key: string; plan_id: string; plan_revision: number;
+      source_digest: string; source_evidence_id: string;
+      source_result_id: string | null; source_result_version: number | null;
+    } | undefined;
+    if (!row) return undefined;
+    return {
+      planId: row.plan_id,
+      planRevision: row.plan_revision,
+      nodeKey: row.node_key,
+      gate: row.gate,
+      gateOperationId: row.gate_operation_id,
+      materializationDigest: row.materialization_digest,
+      sourceResultId: row.source_result_id,
+      sourceResultVersion: row.source_result_version,
+      candidateCommit: row.candidate_commit,
+      candidateTree: row.candidate_tree,
+      artifactPins: JSON.parse(row.artifact_pins_json) as
+        ExecutionMaterializationArtifactPin[],
+      adoptionId: row.adoption_id,
+      adoptionDigest: row.adoption_digest,
+      sourceEvidenceId: row.source_evidence_id,
+      sourceDigest: row.source_digest
+    };
   }
 
   public project(

@@ -64,7 +64,6 @@ WHEN NOT EXISTS (
     AND actor.team_id = binding.team_id AND actor.role = 'owner'
     AND plan.state IN ('approved', 'running')
     AND plan.current_revision = NEW.plan_revision
-    AND plan.current_digest = NEW.expected_plan_digest
     AND plan.control_revision = NEW.expected_control_revision
     AND approval.digest = NEW.expected_plan_digest
     AND json_extract(node.node_json, '$.repository.repositoryId') =
