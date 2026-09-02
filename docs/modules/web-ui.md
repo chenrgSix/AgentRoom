@@ -38,6 +38,17 @@ English light-theme view. The complete command, test, physical cleanup and
 screenshot evidence remains in the acceptance record rather than a second
 delivery checklist.
 
+`WEB-064` is the active next product slice. Its frozen
+[proof-control goal](../acceptance/web-064-proof-control-surface-goal.md) adds
+one authorized Evidence tab that presents local and remote SourceEvidence,
+verification/CI proof, explicit adoption, integration approval/receipt and
+closed recovery guidance for every current node. The Server owns the projection
+and next-action code. The browser may submit only an unchanged Server-prepared
+remote-adoption or integration-approval template after explicit confirmation;
+unknown outcomes retain exact command pins and require authoritative lookup
+before retry. It never runs verification or Git and cannot open an incoming
+edge for a remote producer.
+
 Presentation is split under `apps/web/src/features/` by product responsibility:
 Auth owns the access gate, Team owns member and lifecycle surfaces, Room owns
 the timeline and Room settings, Agent owns roster and configuration, Device owns

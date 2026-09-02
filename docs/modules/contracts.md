@@ -66,6 +66,15 @@ shapes, preserving their canonical digest instead of emitting JSON `null`.
 Closed schema shape is not provider authentication, CI truth or plan-adoption
 authority; owning services rejoin every retained identity and current grant.
 
+`REPO-005` will add a closed remote-input attestation without changing the
+meaning of an existing `EvidenceReuseContract`. The attestation carries exact
+source adoption pins for authority and an ordered logical input projection for
+comparison. Only its logical `remoteInputEvidenceDigest` is compared with the
+planned `reuseInputEvidenceDigest`; adoption-specific `contractDigest`,
+`adoptionDigest`, plan identity and execution digests are never reuse
+equivalence. The contract remains planned and grants no incoming-edge authority
+until persistence, provider authentication and fault acceptance are complete.
+
 An optional `governedExecution` declaration in authenticated `bridge.hello` and
 managed Agent capabilities names version 1, enforced workspace isolation,
 preventive path enforcement and exact supported operations. Manual capability

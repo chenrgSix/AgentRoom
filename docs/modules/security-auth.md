@@ -332,6 +332,16 @@ diagnostics, metrics, audits, and backups. It also proves the Hosted identity
 cannot enter Result, Task-completion, ambiguity-acknowledgement, Member, Device,
 or MCP authority paths.
 
+REPO-003's remote evidence credential remains a Server-operator runtime value;
+a Team Owner cannot submit or persist it. That current deployment boundary
+limits, but does not solve, outbound request risk. Before a Web-configured
+credential or live forge adapter is accepted, `SEC-014` must add a shared
+outbound egress policy: resolve and pin the destination per connection, reject
+private, loopback, link-local, metadata, multicast, unspecified and
+IPv4-mapped bypass addresses, preserve hostname TLS/SNI, ignore ambient proxy
+routing and reject redirects or DNS rebinding. Explicit loopback HTTP remains
+available only to isolated tests. An HTTPS URL alone is not SSRF admission.
+
 `CON-012` defines the additive ADR-0021 pairing-session contract. `SEC-008`
 implements its state machine in migration 0041 and the dedicated pairing
 service and HTTP routes. Focused tests prove exact create, claim, decision and

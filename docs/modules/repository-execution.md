@@ -526,7 +526,8 @@ Provider adapters have real local HTTP acceptance with response-loss injection;
 live external execution is reported separately and is never implied by mocks.
 
 REPO-003 is accepted as an observation-and-adoption-only slice. It retains an
-immutable metadata-only provider binding while resolving credentials at request time,
+immutable metadata-only provider binding while resolving credentials at
+request time,
 uses authenticated operation lookup before any create retry, imports one
 bounded complete Git bundle, validates its exact base/candidate/tree and seals
 both bundle and canonical patch Artifacts. Configured passed CI observations
@@ -539,6 +540,17 @@ pull-request creation/update/merge, webhook ingestion and deployment require
 their own provider operation contracts and acceptance. They cannot reuse the
 observation endpoint as an implicit mutation authority, and force push remains
 outside the control plane.
+
+Remote producers remain input-free after REPO-003. A commit descendant of the
+planned base does not prove that the producer consumed every adopted graph
+input, especially when the input is a patch, document, report or test Artifact.
+`REPO-005` therefore owns a separate `RemoteInputAttestation` companion rather
+than overloading the commit observation. It must retain ordered exact
+`adoptionId`/`adoptionDigest` pins as authority and separately derive the same
+logical input projection used by `reuseInputEvidenceDigest`. Admission requires
+`remoteInputEvidenceDigest == planned reuseInputEvidenceDigest` plus an exact
+join back to every current approved incoming edge. Until that implementation is
+accepted, any remote node with declared inputs or incoming edges fails closed.
 
 ## Security and Failure Matrix
 
