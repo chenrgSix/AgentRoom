@@ -17,6 +17,7 @@ import { fileURLToPath } from "node:url";
 
 import Database from "better-sqlite3";
 import type {
+  DiscussionPlanProposalDraft,
   ExecutionPlanDefinition
 } from "@convene-wire/contracts/execution-plan";
 
@@ -100,6 +101,29 @@ interface CleanupPreview {
   path: string;
   branch: string;
   runId: string;
+}
+
+interface DiscussionView {
+  discussion: {
+    discussionId: string;
+    state: string;
+    stateReason: string | null;
+    currentWave: number;
+    currentTurn: number;
+  };
+  turns: Array<{
+    kind: "discussion" | "finalization";
+    outputMessageId: string | null;
+    runId: string;
+    state: string;
+  }>;
+}
+
+interface McpResponse {
+  result: {
+    isError?: boolean;
+    structuredContent?: Record<string, unknown>;
+  };
 }
 
 async function waitFor<T>(
@@ -261,6 +285,34 @@ async function requestJSON<T>(
   return JSON.parse(source) as T;
 }
 
+async function mcpCall(
+  serverUrl: string,
+  token: string,
+  requestId: number,
+  name: string,
+  args: Record<string, unknown>
+): Promise<McpResponse> {
+  const response = await fetch(`${serverUrl}/mcp`, {
+    method: "POST",
+    headers: {
+      accept: "application/json, text/event-stream",
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: requestId,
+      method: "tools/call",
+      params: { name, arguments: args }
+    })
+  });
+  const source = await response.text();
+  if (!response.ok) {
+    throw new Error(`MCP ${name} returned ${response.status}: ${source}`);
+  }
+  return JSON.parse(source) as McpResponse;
+}
+
 function databaseRead<T>(databasePath: string, read: (database: Database.Database) => T): T {
   const database = new Database(databasePath, {
     readonly: true,
@@ -289,7 +341,8 @@ function materialization(
 }
 
 async function createCodexFixture(
-  directory: string
+  directory: string,
+  planDraftPath: string
 ): Promise<{ executable: string; helper: string }> {
   const executable = path.join(directory, "codex");
   const helper = path.join(directory, "codex-fixture.mjs");
@@ -301,6 +354,9 @@ async function createCodexFixture(
     "import readline from 'node:readline';",
     "const roleArgument = process.argv.find((value) => value.startsWith('fixture-role='));",
     "const role = roleArgument?.slice('fixture-role='.length);",
+    "const sourceArgument = process.argv.find((value) => value.startsWith('fixture-source='));",
+    "const sourceRoot = sourceArgument?.slice('fixture-source='.length);",
+    `const planDraftPath = ${JSON.stringify(planDraftPath)};`,
     "const profile = {",
     "  description: null, extends: null, workspace_roots: null,",
     "  filesystem: {",
@@ -337,19 +393,33 @@ async function createCodexFixture(
     "      }",
     "    }",
     "    send({ id: request.id, result: { exitCode, stdout: '', stderr: '' } });",
-    "  } else if (request.method === 'thread/start') {",
-    "    send({ id: request.id, result: { thread: { id: `thread-${role}`, ephemeral: false } } });",
+    "  } else if (request.method === 'thread/start' || request.method === 'thread/resume') {",
+    "    const threadId = request.params?.threadId ?? `thread-${role}`;",
+    "    send({ id: request.id, result: { thread: { id: threadId, ephemeral: false } } });",
     "  } else if (request.method === 'turn/start') {",
     "    const cwd = process.cwd();",
-    "    await mkdir(path.join(cwd, 'src'), { recursive: true });",
-    "    if (role === 'build') {",
+    "    const instruction = (request.params?.input ?? []).map((item) => item?.text ?? '').join('\\n');",
+    "    let reply;",
+    "    if (sourceRoot && path.resolve(cwd) === path.resolve(sourceRoot)) {",
+    "      if (instruction.includes('<convenewire-plan-proposal>')) {",
+    "        const draft = JSON.parse(await readFile(planDraftPath, 'utf8'));",
+    "        reply = `The exact controlled product plan is ready for human review.\\n<convenewire-plan-proposal>${JSON.stringify(draft)}</convenewire-plan-proposal>`;",
+    "      } else {",
+    "        const reviewerApproved = role === 'consume';",
+    "        reply = `Physical ${role} Discussion contribution.\\n<agentroom-assessment>${JSON.stringify({ goalSatisfied: true, confidence: 0.96, newInformationAdded: true, disagreementRemaining: 'none', recommendation: 'finish', reviewerApproved })}</agentroom-assessment>`;",
+    "      }",
+    "    } else if (role === 'build') {",
+    "      await mkdir(path.join(cwd, 'src'), { recursive: true });",
     "      const before = await readFile(path.join(cwd, 'src/dependency.ts'), 'utf8');",
     "      if (before !== \"export const state = 'old';\\n\") process.exit(31);",
     "      await writeFile(path.join(cwd, 'src/dependency.ts'), \"export const state = 'integrated';\\n\");",
+    "      reply = 'physical build completed';",
     "    } else if (role === 'consume') {",
+    "      await mkdir(path.join(cwd, 'src'), { recursive: true });",
     "      const dependency = await readFile(path.join(cwd, 'src/dependency.ts'), 'utf8');",
     "      if (dependency !== \"export const state = 'integrated';\\n\") process.exit(32);",
     "      await writeFile(path.join(cwd, 'src/downstream.ts'), \"export const observed = 'integrated';\\n\");",
+    "      reply = 'physical consume completed';",
     "    } else {",
     "      process.exit(33);",
     "    }",
@@ -357,7 +427,7 @@ async function createCodexFixture(
     "    const threadId = request.params.threadId;",
     "    send({ id: request.id, result: { turn: { id: turnId, status: 'inProgress' } } });",
     "    send({ method: 'item/completed', params: { threadId, turnId, item: {",
-    "      id: `item-${role}`, type: 'agentMessage', text: `physical ${role} completed`",
+    "      id: `item-${role}`, type: 'agentMessage', text: reply",
     "    } } });",
     "    send({ method: 'turn/completed', params: { threadId, turn: {",
     "      id: turnId, status: 'completed', items: []",
@@ -496,11 +566,11 @@ async function proposeResult(
   ]);
 }
 
-test("real Central and two Bridges carry one integrated_commit dependency", {
-  timeout: 240_000,
+test("controlled product loop reaches one physical integrated_commit dependency", {
+  timeout: 300_000,
   skip: process.platform !== "darwin" ? "native governed Codex boundary is macOS-only" : false
 }, async (t) => {
-  const resources = await createTestResources(t, "convene-wire-two-bridge-e2e-");
+  const resources = await createTestResources(t, "convene-wire-qa052-e2e-");
   const directory = resources.directory;
   const serverDatabase = path.join(directory, "central.sqlite");
   const sourceA = path.join(directory, "source-a");
@@ -509,6 +579,7 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
   const dataB = path.join(directory, "bridge-b-data");
   const configA = path.join(directory, "bridge-a.json");
   const configB = path.join(directory, "bridge-b.json");
+  const planDraftPath = path.join(directory, "discussion-plan-draft.json");
   const bridgeBinary = path.join(directory, "convenewire-bridge");
   const bridgeServerToken = `run018-${"central-token-".repeat(3)}0001`;
   const repositoryId = "repo_run018_physical0001";
@@ -545,7 +616,7 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
     await git(sourceB, ["config", "user.name", "ConveneWire E2E"]);
     await git(sourceB, ["config", "user.email", "e2e@convenewire.invalid"]);
 
-    const codex = await createCodexFixture(directory);
+    const codex = await createCodexFixture(directory, planDraftPath);
     const verifier = await createVerifier(directory);
     const goBinary = process.env.CONVENE_WIRE_GO_BIN ?? "go";
     await execFileAsync(goBinary, [
@@ -566,11 +637,11 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
     });
 
     const bootstrap = await requestJSON<any>(serverUrl, "POST", "/api/bootstrap", {
-      displayName: "RUN-018 Owner"
+      displayName: "QA-052 Owner"
     });
     const webToken = bootstrap.session.token as string;
     const team = await requestJSON<any>(serverUrl, "POST", "/api/teams", {
-      name: "RUN-018 Physical Team"
+      name: "QA-052 Controlled Product Team"
     }, webToken);
     const teamId = team.team.teamId as string;
     const ownerMemberId = team.owner.memberId as string;
@@ -582,6 +653,15 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
       webToken
     );
     const roomId = room.roomId as string;
+    const techLead = await requestJSON<any>(
+      serverUrl,
+      "POST",
+      `/api/teams/${teamId}/manual-agents`,
+      { name: "Assigned QA Tech Lead", role: "Tech Lead" },
+      webToken
+    );
+    const techLeadAgentId = techLead.agent.agentId as string;
+    const techLeadToken = techLead.credential.token as string;
 
     const bridgeConfig = (
       dataDir: string,
@@ -597,7 +677,7 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
       dataDir,
       agents: [{
         name: agentName,
-        role: "Governed implementation",
+        role: role === "consume" ? "Decision reviewer" : "Solution author",
         adapter: "codex",
         runtimeKind: "codex",
         presetVersion: 5,
@@ -605,6 +685,7 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
           codex.executable,
           codex.helper,
           `fixture-role=${role}`,
+          `fixture-source=${source}`,
           "app-server",
           "--listen",
           "stdio://"
@@ -718,26 +799,46 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
       ["repository", "verifier", "register", "--file", verifierSpec, "--confirm"]
     )) as VerificationProfileView;
 
-    stage = "freeze and approve the exact integrated dependency plan";
+    stage = "freeze the controlled product entry";
     await requestJSON<any>(serverUrl, "PUT", `/api/rooms/${roomId}/participants`, {
       memberIds: [ownerMemberId],
-      agentIds: [agentA.agentId, agentB.agentId]
+      agentIds: [agentA.agentId, agentB.agentId, techLeadAgentId]
     }, webToken);
     const rootTask = await requestJSON<any>(serverUrl, "POST", `/api/rooms/${roomId}/tasks`, {
-      title: "Physical integrated dependency",
-      goal: "Build on Bridge A and consume only the integrated proof on Bridge B."
+      title: "Controlled physical integrated dependency",
+      goal: "Discuss, revise and approve the exact Bridge A to Bridge B delivery."
     }, webToken);
-    const sourceMessage = await requestJSON<any>(serverUrl, "POST", `/api/rooms/${roomId}/messages`, {
-      taskId: rootTask.taskId,
-      content: "Execute the frozen two-Bridge integrated dependency."
-    }, webToken);
-    const currentRoot = await requestJSON<any>(
+    let currentRoot = await requestJSON<any>(
       serverUrl,
       "GET",
       `/api/tasks/${rootTask.taskId}`,
       undefined,
       webToken
     );
+    currentRoot = await requestJSON<any>(
+      serverUrl,
+      "PUT",
+      `/api/tasks/${rootTask.taskId}/definition`,
+      {
+        operationId: "op_qa052_assign_tech_lead0001",
+        expectedTaskRevision: currentRoot.taskRevision,
+        title: currentRoot.title,
+        goal: currentRoot.goal,
+        ownerMemberId: currentRoot.ownerMemberId,
+        completionPolicy: currentRoot.completionPolicy,
+        priority: currentRoot.priority,
+        dueAt: currentRoot.dueAt,
+        criteria: currentRoot.criteria,
+        assignments: [
+          { agentId: techLeadAgentId, role: "primary" },
+          { agentId: agentA.agentId, role: "contributor" },
+          { agentId: agentB.agentId, role: "reviewer" }
+        ],
+        budgetPolicy: currentRoot.budgetPolicy
+      },
+      webToken
+    );
+    currentRoot = await setTaskActive(serverUrl, webToken, rootTask.taskId, "root");
     const fixtureCases = JSON.parse(await readFile(path.join(
       repositoryRoot,
       "packages/contracts/fixtures/execution-plan-cases.json"
@@ -754,15 +855,8 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
         statement: "Only the exact integrated_commit proof unlocks Bridge B."
       }],
       unresolvedQuestions: [],
-      sources: [{
-        evidenceRefId: "evidence_run018_source0001",
-        kind: "message",
-        messageId: sourceMessage.message.messageId
-      }],
-      sourceRevisions: [{
-        evidenceRefId: "evidence_run018_source0001",
-        revision: sourceMessage.message.sequence
-      }]
+      sources: [],
+      sourceRevisions: []
     };
     const buildNode = definition.nodes[0];
     const consumeNode = definition.nodes[1];
@@ -851,32 +945,338 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
       requireHumanIntegrationApproval: true,
       integrationTargets: [{ repositoryId, targetRef, expectedCommit: baseCommit }]
     };
-    const draft = await requestJSON<any>(
+    const discussionDraft: DiscussionPlanProposalDraft = {
+      schemaVersion: definition.schemaVersion,
+      title: definition.title,
+      decision: {
+        summary: definition.decision.summary,
+        items: definition.decision.items,
+        unresolvedQuestions: definition.decision.unresolvedQuestions
+      },
+      nodes: definition.nodes,
+      edges: definition.edges,
+      externalInputs: definition.externalInputs,
+      policy: definition.policy
+    };
+    await writeJSON(planDraftPath, discussionDraft);
+
+    stage = "run one real Bridge-backed Discussion and finalization";
+    bridgeA = startBridge(resources, bridgeBinary, configA, "build");
+    bridgeB = startBridge(resources, bridgeBinary, configB, "consume");
+    processHistory.push(bridgeA, bridgeB);
+    await Promise.all([
+      waitForAgent(serverUrl, webToken, teamId, agentNameA, true),
+      waitForAgent(serverUrl, webToken, teamId, agentNameB, true)
+    ]);
+    const startedDiscussion = await requestJSON<DiscussionView>(
       serverUrl,
       "POST",
-      `/api/tasks/${rootTask.taskId}/execution-plans`,
+      `/api/rooms/${roomId}/discussions`,
       {
-        operationId: "op_run018_plan_create0001",
-        expectedRootTaskRevision: currentRoot.taskRevision,
-        definition
+        taskId: rootTask.taskId,
+        goal: "Produce the bounded proof-gated two-Bridge implementation plan for human review.",
+        participantAgentIds: [agentA.agentId, agentB.agentId],
+        mode: "review",
+        outputMode: "decision_record",
+        policy: {
+          initialLeaseTurns: 1,
+          automaticMaxTurns: 1,
+          hardMaxTurns: 3,
+          maxDurationSeconds: 180,
+          plateauWindow: 2,
+          minimumCompletionConfidence: 0.8,
+          finalizationReserveTurns: 1,
+          requireReviewer: true,
+          allowAutomaticFinish: false
+        }
       },
       webToken
     );
+    const discussionId = startedDiscussion.discussion.discussionId;
+    try {
+      await waitFor(async () => {
+        const view = await requestJSON<DiscussionView>(
+          serverUrl,
+          "GET",
+          `/api/discussions/${discussionId}`,
+          undefined,
+          webToken
+        );
+        return view.discussion.state === "awaiting_extension" ? view : undefined;
+      }, 30_000);
+    } catch (error) {
+      const view = await requestJSON<DiscussionView>(
+        serverUrl,
+        "GET",
+        `/api/discussions/${discussionId}`,
+        undefined,
+        webToken
+      );
+      const roomRuns = await requestJSON<RunView[]>(
+        serverUrl,
+        "GET",
+        `/api/rooms/${roomId}/runs`,
+        undefined,
+        webToken
+      );
+      const runEvents = await Promise.all(roomRuns.map(async (run) => ({
+        run,
+        events: await requestJSON<any[]>(
+          serverUrl,
+          "GET",
+          `/api/runs/${run.runId}/events?after=0`,
+          undefined,
+          webToken
+        )
+      })));
+      throw new Error(`Discussion did not reach its human boundary: ${JSON.stringify({
+        view,
+        runEvents
+      })}`, { cause: error });
+    }
+    await requestJSON<DiscussionView>(
+      serverUrl,
+      "POST",
+      `/api/discussions/${discussionId}/actions`,
+      { action: "finish" },
+      webToken
+    );
+    let completedDiscussion: DiscussionView;
+    try {
+      completedDiscussion = await waitFor(async () => {
+        const view = await requestJSON<DiscussionView>(
+          serverUrl,
+          "GET",
+          `/api/discussions/${discussionId}`,
+          undefined,
+          webToken
+        );
+        return view.discussion.state === "completed" ? view : undefined;
+      }, 90_000);
+    } catch (error) {
+      const view = await requestJSON<DiscussionView>(
+        serverUrl,
+        "GET",
+        `/api/discussions/${discussionId}`,
+        undefined,
+        webToken
+      );
+      const roomRuns = await requestJSON<RunView[]>(
+        serverUrl,
+        "GET",
+        `/api/rooms/${roomId}/runs`,
+        undefined,
+        webToken
+      );
+      const runEvents = await Promise.all(roomRuns.map(async (run) => ({
+        run,
+        events: await requestJSON<any[]>(
+          serverUrl,
+          "GET",
+          `/api/runs/${run.runId}/events?after=0`,
+          undefined,
+          webToken
+        )
+      })));
+      throw new Error(`Discussion finalization did not complete: ${JSON.stringify({
+        view,
+        runEvents
+      })}`, { cause: error });
+    }
+    assert.equal(completedDiscussion.discussion.stateReason, "user_requested_finish");
+    assert.equal(completedDiscussion.turns.filter(({ kind, state }) =>
+      kind === "discussion" && state === "completed").length, 2);
+    const finalTurn = completedDiscussion.turns.find(({ kind }) =>
+      kind === "finalization");
+    assert.equal(finalTurn?.state, "completed");
+    assert.ok(finalTurn?.outputMessageId);
+
+    const discussionPlans = await requestJSON<any>(
+      serverUrl,
+      "GET",
+      `/api/tasks/${rootTask.taskId}/execution-plans?limit=20`,
+      undefined,
+      webToken
+    );
+    const discussionPlanEvidence = databaseRead(serverDatabase, (database) => ({
+      finalMessage: database.prepare(`
+        SELECT content, sender_type AS senderType, sender_id AS senderId,
+               room_id AS roomId, task_id AS taskId, sequence
+        FROM messages
+        WHERE message_id = ?
+      `).get(finalTurn.outputMessageId),
+      plans: database.prepare(`
+        SELECT plan_id AS planId, root_task_id AS rootTaskId, state
+        FROM execution_plans
+      `).all()
+    }));
+    assert.equal(discussionPlans.plans.length, 1, JSON.stringify({
+      discussionPlans,
+      discussionPlanEvidence
+    }));
+    const discussionPlan = discussionPlans.plans[0];
+    assert.equal(discussionPlan.current.revision, 1);
+    assert.deepEqual(discussionPlan.current.author, {
+      kind: "discussion",
+      discussionId
+    });
+    assert.equal(discussionPlan.compiledTasks.length, 0);
+    assert.equal(
+      discussionPlan.current.definition.decision.sources.some(
+        (source: { kind: string; discussionId?: string }) =>
+          source.kind === "discussion" && source.discussionId === discussionId
+      ),
+      true
+    );
+    assert.equal(
+      discussionPlan.current.definition.decision.sources.some(
+        (source: { kind: string; messageId?: string }) =>
+          source.kind === "message" && source.messageId === finalTurn.outputMessageId
+      ),
+      true
+    );
+
+    stage = "revise the Discussion plan through the exact Tech Lead MCP Run";
+    const techLeadTrigger = await requestJSON<any>(
+      serverUrl,
+      "POST",
+      `/api/rooms/${roomId}/messages`,
+      {
+        taskId: rootTask.taskId,
+        content: "Review the Discussion draft and tighten its exact human-control statement.",
+        mentionAgentId: techLeadAgentId
+      },
+      webToken
+    );
+    const techLeadRun = techLeadTrigger.runs[0] as RunView;
+    assert.ok(techLeadRun?.runId);
+    const claimed = await mcpCall(
+      serverUrl,
+      techLeadToken,
+      5201,
+      "team.claim_run",
+      { runId: techLeadRun.runId }
+    );
+    assert.equal(
+      (claimed.result.structuredContent?.run as { state: string }).state,
+      "working"
+    );
+    const readByTechLead = await mcpCall(
+      serverUrl,
+      techLeadToken,
+      5202,
+      "team.get_plan",
+      { runId: techLeadRun.runId, planId: discussionPlan.planId }
+    );
+    assert.equal(
+      (readByTechLead.result.structuredContent?.plan as any).current.digest,
+      discussionPlan.current.digest
+    );
+    const revisedDefinition = structuredClone(
+      discussionPlan.current.definition
+    ) as ExecutionPlanDefinition;
+    revisedDefinition.title = "Tech Lead revised physical integrated_commit handoff";
+    revisedDefinition.decision.items.push({
+      itemKey: "human_control",
+      statement: "Only the exact retained revision may receive human approval."
+    });
+    revisedDefinition.decision.sources.push({
+      evidenceRefId: "evidence_qa052_tech_lead_trigger",
+      kind: "message",
+      messageId: techLeadTrigger.message.messageId
+    });
+    revisedDefinition.decision.sourceRevisions.push({
+      evidenceRefId: "evidence_qa052_tech_lead_trigger",
+      revision: techLeadTrigger.message.sequence
+    });
+    const revisionCommand = {
+      operationId: "op_qa052_tech_lead_revision0001",
+      expectedRevision: 1,
+      expectedRootTaskRevision: currentRoot.taskRevision,
+      definition: revisedDefinition
+    };
+    await mcpCall(
+      serverUrl,
+      techLeadToken,
+      5203,
+      "team.propose_plan_revision",
+      { runId: techLeadRun.runId, planId: discussionPlan.planId, command: revisionCommand }
+    );
+    const replayedRevision = await mcpCall(
+      serverUrl,
+      techLeadToken,
+      5204,
+      "team.propose_plan_revision",
+      { runId: techLeadRun.runId, planId: discussionPlan.planId, command: revisionCommand }
+    );
+    const revisedPlan = replayedRevision.result.structuredContent?.plan as any;
+    assert.equal(replayedRevision.result.isError, undefined);
+    assert.equal(revisedPlan.current.revision, 2);
+    assert.deepEqual(revisedPlan.current.author, {
+      kind: "agent",
+      agentId: techLeadAgentId,
+      runId: techLeadRun.runId
+    });
+    await mcpCall(serverUrl, techLeadToken, 5205, "team.complete_run", {
+      runId: techLeadRun.runId,
+      content: "Revision 2 is ready for exact human review."
+    });
+
+    stage = "replay the response-lost exact human plan approval";
+    const approvalCommand = {
+      operationId: "op_qa052_plan_approval0001",
+      expectedRevision: revisedPlan.current.revision,
+      expectedDigest: revisedPlan.current.digest,
+      expectedRootTaskRevision: currentRoot.taskRevision,
+      decision: "approved",
+      reason: "Authorize the exact Discussion and Tech Lead revised product plan."
+    };
+    const lostApprovalResponse = await fetch(
+      `${serverUrl}/api/execution-plans/${discussionPlan.planId}/approvals`,
+      {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${webToken}`,
+          "content-type": "application/json"
+        },
+        body: JSON.stringify(approvalCommand)
+      }
+    );
+    assert.equal(lostApprovalResponse.status, 200);
+    await lostApprovalResponse.body?.cancel();
     const approval = await requestJSON<any>(
       serverUrl,
       "POST",
-      `/api/execution-plans/${draft.planId}/approvals`,
-      {
-        operationId: "op_run018_plan_approval0001",
-        expectedRevision: draft.current.revision,
-        expectedDigest: draft.current.digest,
-        expectedRootTaskRevision: currentRoot.taskRevision,
-        decision: "approved",
-        reason: "Authorize this exact physical two-Bridge handoff."
-      },
+      `/api/execution-plans/${discussionPlan.planId}/approvals`,
+      approvalCommand,
       webToken
     );
+    const approvalReplay = await requestJSON<any>(
+      serverUrl,
+      "POST",
+      `/api/execution-plans/${discussionPlan.planId}/approvals`,
+      approvalCommand,
+      webToken
+    );
+    assert.deepEqual(approvalReplay, approval);
     const plan = approval.plan;
+    assert.equal(plan.current.revision, 2);
+    const planHistory = await requestJSON<any>(
+      serverUrl,
+      "GET",
+      `/api/execution-plans/${plan.planId}/revisions?limit=20`,
+      undefined,
+      webToken
+    );
+    assert.equal(planHistory.revisions.length, 2);
+    const approvalHistory = await requestJSON<any>(
+      serverUrl,
+      "GET",
+      `/api/execution-plans/${plan.planId}/approvals?limit=20`,
+      undefined,
+      webToken
+    );
+    assert.equal(approvalHistory.approvals.length, 1);
     const tasksByNode = new Map<string, any>();
     for (const compiled of plan.compiledTasks as Array<{ nodeKey: string; taskId: string }>) {
       tasksByNode.set(compiled.nodeKey, await setTaskActive(
@@ -889,6 +1289,9 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
     const buildTask = tasksByNode.get("Build");
     const consumeTask = tasksByNode.get("Consume");
     assert.ok(buildTask && consumeTask);
+    await Promise.all([bridgeA.stop(), bridgeB.stop()]);
+    bridgeA = undefined;
+    bridgeB = undefined;
 
     stage = "issue exact task and integration grants";
     // Governed admission reserves the production Run's 20-minute deadline.
@@ -1198,6 +1601,17 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
     ]);
     const integrationReceipt = JSON.parse(integrationOutput);
     assert.equal(integrationReceipt.receipt.state, "succeeded");
+    const integrationReplay = JSON.parse(await bridgeCommand(
+      bridgeBinary,
+      configA,
+      "build",
+      [
+        "repository", "integration", "execute",
+        "--operation-id", integrationApproval.integrationOperationId,
+        "--confirm"
+      ]
+    ));
+    assert.deepEqual(integrationReplay, integrationReceipt);
     assert.equal(
       await git(sourceA, ["show-ref", "--verify", "--hash", targetRef]),
       replayedVerified.candidateCommit
@@ -1351,6 +1765,34 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
     );
     assert.equal(await git(sourceB, ["status", "--porcelain=v1", "--untracked-files=all"]), "");
     const evidence = databaseRead(serverDatabase, (database) => ({
+      completedDiscussions: (database.prepare(`
+        SELECT count(*) AS count FROM discussions
+        WHERE discussion_id = ? AND state = 'completed'
+      `).get(discussionId) as { count: number }).count,
+      completedDiscussionTurns: (database.prepare(`
+        SELECT count(*) AS count FROM discussion_turns
+        WHERE discussion_id = ? AND state = 'completed'
+      `).get(discussionId) as { count: number }).count,
+      planRevisions: (database.prepare(`
+        SELECT count(*) AS count FROM execution_plan_revisions WHERE plan_id = ?
+      `).get(plan.planId) as { count: number }).count,
+      planApprovals: (database.prepare(`
+        SELECT count(*) AS count FROM execution_plan_approvals WHERE plan_id = ?
+      `).get(plan.planId) as { count: number }).count,
+      compiledNodes: (database.prepare(`
+        SELECT count(*) AS count FROM execution_plan_nodes WHERE plan_id = ?
+      `).get(plan.planId) as { count: number }).count,
+      compiledEdges: (database.prepare(`
+        SELECT count(*) AS count FROM execution_plan_edges WHERE plan_id = ?
+      `).get(plan.planId) as { count: number }).count,
+      completedTechLeadRuns: (database.prepare(`
+        SELECT count(*) AS count FROM runs
+        WHERE run_id = ? AND task_id = ? AND target_agent_id = ? AND state = 'completed'
+      `).get(
+        techLeadRun.runId,
+        rootTask.taskId,
+        techLeadAgentId
+      ) as { count: number }).count,
       dispatches: (database.prepare(`
         SELECT count(*) AS count FROM execution_dispatch_intents WHERE plan_id = ?
       `).get(plan.planId) as { count: number }).count,
@@ -1378,6 +1820,13 @@ test("real Central and two Bridges carry one integrated_commit dependency", {
       foreignKeys: database.pragma("foreign_key_check") as unknown[]
     }));
     assert.deepEqual(evidence, {
+      completedDiscussions: 1,
+      completedDiscussionTurns: 3,
+      planRevisions: 2,
+      planApprovals: 1,
+      compiledNodes: 2,
+      compiledEdges: 1,
+      completedTechLeadRuns: 1,
       dispatches: 2,
       completedRuns: 2,
       results: 2,
