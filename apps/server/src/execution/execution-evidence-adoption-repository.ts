@@ -1,6 +1,8 @@
 import type Database from "better-sqlite3";
 import type {
   EvidenceAdoption,
+  EvidenceReuseContract,
+  ExecutionInputBinding,
   GateProofRef,
   SourceEvidence
 } from "@convene-wire/contracts/execution-plan";
@@ -11,7 +13,8 @@ import {
   evidenceAdoptionOperationDigest,
   evidenceProofSetDigest,
   executionOperationDigest,
-  sourceEvidenceDigest
+  sourceEvidenceDigest,
+  validateExecutionPlanDefinition
 } from "@convene-wire/contracts/execution-validation";
 
 import type {
@@ -23,6 +26,7 @@ import type {
 import type { ExecutionNodeIdentity } from
   "./execution-node-state-repository.js";
 import { ExecutionError } from "./execution-error.js";
+import { createEvidenceReuseContract } from "./execution-evidence-reuse.js";
 
 type Gate = ExecutionNodeMaterialization["gate"];
 
@@ -39,6 +43,7 @@ interface ContextRow {
   criteria_revision: number;
   definition_revision: number;
   device_id: string;
+  definition_json: string;
   grant_json: string;
   node_json: string;
   plan_digest: string;
@@ -95,6 +100,10 @@ interface SourceRow {
 interface AdoptionRow {
   adoption_json: string;
   legacy_materialization_digest: string;
+}
+
+interface ReuseRow {
+  contract_json: string;
 }
 
 export interface EvidenceAdoptionBundle {
@@ -180,6 +189,13 @@ export class ExecutionEvidenceAdoptionRepository {
     `).get());
   }
 
+  public reuseAvailable(): boolean {
+    return Boolean(this.database.prepare(`
+      SELECT 1 FROM sqlite_master
+      WHERE type = 'table' AND name = 'execution_evidence_reuse_contracts'
+    `).get());
+  }
+
   public reconcileLegacy(
     loadMaterialization: (
       identity: ExecutionNodeIdentity,
@@ -209,6 +225,12 @@ export class ExecutionEvidenceAdoptionRepository {
       const existing = this.get(identity, row.gate);
       if (existing) {
         this.assertShadowEqual(materialization, existing);
+        if (this.reuseAvailable()) {
+          this.retainReuseContract(
+            this.reuseContract(materialization, existing.adoption),
+            true
+          );
+        }
       } else {
         this.retainLegacy(materialization);
       }
@@ -225,6 +247,32 @@ export class ExecutionEvidenceAdoptionRepository {
     `).get() as { count: number }).count;
     if (localCount !== rows.length) {
       throw new Error("EvidenceAdoption backfill count mismatch");
+    }
+    if (this.reuseAvailable()) {
+      const reuseCount = (this.database.prepare(`
+        SELECT count(*) AS count
+        FROM execution_evidence_reuse_contracts reuse
+        JOIN execution_evidence_adoptions adoption
+          ON adoption.adoption_id = reuse.adoption_id
+          AND adoption.adoption_digest = reuse.adoption_digest
+          AND adoption.plan_id = reuse.plan_id
+          AND adoption.plan_revision = reuse.plan_revision
+          AND adoption.node_key = reuse.node_key
+          AND adoption.gate = reuse.gate
+          AND adoption.resolved_input_set_digest =
+            reuse.runtime_input_binding_digest
+          AND adoption.node_contract_digest = reuse.node_execution_digest
+        JOIN execution_legacy_node_materializations legacy
+          ON legacy.plan_id = adoption.plan_id
+          AND legacy.plan_revision = adoption.plan_revision
+          AND legacy.node_key = adoption.node_key
+          AND legacy.gate = adoption.gate
+          AND legacy.materialization_digest =
+            adoption.legacy_materialization_digest
+      `).get() as { count: number }).count;
+      if (reuseCount !== rows.length) {
+        throw new Error("EvidenceReuseContract backfill count mismatch");
+      }
     }
     return rows.length;
   }
@@ -251,7 +299,11 @@ export class ExecutionEvidenceAdoptionRepository {
       ORDER BY input_slot COLLATE BINARY, binding_id COLLATE BINARY
     `).all(materialization.sourceRunId) as Array<{
       binding_json: string;
-    }>).map((row) => JSON.parse(row.binding_json) as unknown);
+    }>).map((row) => {
+      const binding = JSON.parse(row.binding_json) as ExecutionInputBinding;
+      assertExecutionCommand("executionInputBinding", binding);
+      return binding;
+    });
     const resolvedInputSetDigest = executionOperationDigest(inputs);
     const nodeContractDigest = executionOperationDigest({
       planId: materialization.planId,
@@ -313,6 +365,9 @@ export class ExecutionEvidenceAdoptionRepository {
       },
       createdAt: materialization.createdAt
     });
+    const reuseContract = this.reuseAvailable()
+      ? this.reuseContract(materialization, adoption, context, inputs)
+      : undefined;
     const existing = this.get(materialization, materialization.gate);
     if (existing) {
       if (
@@ -324,6 +379,9 @@ export class ExecutionEvidenceAdoptionRepository {
         throw new Error("EvidenceAdoption conflicts with retained local proof");
       }
       this.assertShadowEqual(materialization, existing);
+      if (this.reuseAvailable()) {
+        this.retainReuseContract(reuseContract!, false);
+      }
       return existing;
     }
     this.database.prepare(`
@@ -356,6 +414,9 @@ export class ExecutionEvidenceAdoptionRepository {
     );
     const retained = this.get(materialization, materialization.gate)!;
     this.assertShadowEqual(materialization, retained);
+    if (this.reuseAvailable()) {
+      this.retainReuseContract(reuseContract!, true);
+    }
     return retained;
   }
 
@@ -406,10 +467,23 @@ export class ExecutionEvidenceAdoptionRepository {
     return source;
   }
 
+  public getReuse(adoptionId: string): EvidenceReuseContract | undefined {
+    if (!this.reuseAvailable()) return undefined;
+    const row = this.database.prepare(`
+      SELECT contract_json FROM execution_evidence_reuse_contracts
+      WHERE adoption_id = ?
+    `).get(adoptionId) as ReuseRow | undefined;
+    if (!row) return undefined;
+    const contract = JSON.parse(row.contract_json) as EvidenceReuseContract;
+    assertExecutionCommand("evidenceReuseContract", contract);
+    return contract;
+  }
+
   private context(materialization: ExecutionNodeMaterialization): ContextRow {
     const row = this.database.prepare(`
       SELECT node.task_id, node.definition_revision, node.criteria_revision,
         node.agent_id, node.node_json, node.task_snapshot_json,
+        proposal.definition_json,
         intent.room_id, intent.device_id, intent.plan_digest,
         intent.approval_operation_id, admission.grant_json,
         result.result_version, result.proposed_at
@@ -421,6 +495,9 @@ export class ExecutionEvidenceAdoptionRepository {
         AND intent.dispatch_generation = ?
         AND intent.run_id = ?
       JOIN execution_run_admissions admission ON admission.run_id = intent.run_id
+      JOIN execution_plan_proposals proposal
+        ON proposal.plan_id = node.plan_id
+        AND proposal.revision = node.revision
       JOIN task_results result
         ON result.result_id = ?
         AND result.result_version = ?
@@ -438,6 +515,171 @@ export class ExecutionEvidenceAdoptionRepository {
     ) as ContextRow | undefined;
     if (!row) throw new Error("Legacy materialization context is incomplete");
     return row;
+  }
+
+  private reuseContract(
+    materialization: ExecutionNodeMaterialization,
+    adoption: EvidenceAdoption,
+    knownContext?: ContextRow,
+    knownInputs?: ExecutionInputBinding[]
+  ): EvidenceReuseContract {
+    const context = knownContext ?? this.context(materialization);
+    const definition = validateExecutionPlanDefinition(
+      JSON.parse(context.definition_json)
+    ).definition;
+    const node = definition.nodes.find((entry) =>
+      entry.nodeKey === materialization.nodeKey);
+    if (!node) throw new Error("Evidence reuse node is unavailable");
+    const bindings = knownInputs ?? (this.database.prepare(`
+      SELECT binding_json FROM execution_input_bindings
+      WHERE destination_run_id = ?
+      ORDER BY input_slot COLLATE BINARY, binding_id COLLATE BINARY
+    `).all(materialization.sourceRunId) as Array<{
+      binding_json: string;
+    }>).map((row) => {
+      const binding = JSON.parse(row.binding_json) as ExecutionInputBinding;
+      assertExecutionCommand("executionInputBinding", binding);
+      return binding;
+    });
+    const reuseInputs = bindings.map((binding) => {
+      const edge = definition.edges.find((entry) =>
+        entry.edgeKey === binding.edgeKey &&
+        entry.toNodeKey === materialization.nodeKey &&
+        entry.bindings.some((candidate) =>
+          candidate.inputSlot === binding.inputSlot)
+      );
+      const external = definition.externalInputs.find((entry) =>
+        entry.nodeKey === materialization.nodeKey &&
+        entry.inputSlot === binding.inputSlot
+      );
+      if ((edge && external) || (!edge && !external)) {
+        throw new Error("Evidence reuse input producer is ambiguous");
+      }
+      if (edge) {
+        const source = this.get({
+          planId: materialization.planId,
+          planRevision: materialization.planRevision,
+          nodeKey: edge.fromNodeKey
+        }, edge.gate);
+        const edgeBinding = edge.bindings.find((candidate) =>
+          candidate.inputSlot === binding.inputSlot);
+        const pin = edgeBinding && source?.source.artifactPins.find((candidate) =>
+          candidate.outputSlot === edgeBinding.outputSlot);
+        if (
+          !source || !edgeBinding || !pin ||
+          binding.planId !== materialization.planId ||
+          binding.planRevision !== materialization.planRevision ||
+          binding.gate !== edge.gate ||
+          binding.sourceTaskId !== source.adoption.authority.taskId ||
+          binding.sourceOutputSlot !== edgeBinding.outputSlot ||
+          binding.artifact.artifactId !== pin.artifactId ||
+          binding.artifact.artifactRevision !== pin.artifactRevision ||
+          binding.artifact.contentDigest !== pin.contentDigest ||
+          binding.artifact.kind !== pin.kind
+        ) {
+          throw new Error("Evidence reuse graph input is not shadow-equal");
+        }
+        return {
+          inputSlot: binding.inputSlot,
+          producer: {
+            kind: "adopted_evidence" as const,
+            edge,
+            sourceEvidenceId: source.adoption.sourceEvidenceId,
+            sourceDigest: source.adoption.sourceDigest,
+            proofSetDigest: source.adoption.proofSetDigest
+          },
+          artifact: {
+            contentDigest: binding.artifact.contentDigest,
+            kind: binding.artifact.kind
+          }
+        };
+      }
+      if (
+        !external || binding.edgeKey !== null ||
+        binding.gate !== "accepted_result" ||
+        binding.sourceTaskId !== external.sourceTaskId ||
+        binding.sourceResultId !== external.sourceResultId ||
+        binding.artifact.artifactId !== external.artifactId ||
+        binding.artifact.artifactRevision !== external.artifactRevision ||
+        binding.artifact.contentDigest !== external.contentDigest ||
+        binding.artifact.kind !== external.kind
+      ) {
+        throw new Error("Evidence reuse external input is not shadow-equal");
+      }
+      return {
+        inputSlot: binding.inputSlot,
+        producer: {
+          kind: "external_result" as const,
+          externalInput: external,
+          reviewOperationId: binding.gateOperationId,
+          reviewDigest: binding.gateDigest
+        },
+        artifact: {
+          contentDigest: binding.artifact.contentDigest,
+          kind: binding.artifact.kind
+        }
+      };
+    });
+    return createEvidenceReuseContract({
+      adoption,
+      bindings,
+      integrationPolicy: definition.policy,
+      node,
+      reuseInputs,
+      task: JSON.parse(context.task_snapshot_json) as
+        EvidenceReuseContract["task"] & { taskRevision: number }
+    });
+  }
+
+  private retainReuseContract(
+    contract: EvidenceReuseContract,
+    allowInsert: boolean
+  ): void {
+    const row = this.database.prepare(`
+      SELECT contract_json FROM execution_evidence_reuse_contracts
+      WHERE adoption_id = ? OR reuse_contract_id = ? OR contract_digest = ?
+    `).get(
+      contract.adoptionId,
+      contract.reuseContractId,
+      contract.contractDigest
+    ) as ReuseRow | undefined;
+    if (row) {
+      if (!same(JSON.parse(row.contract_json), contract)) {
+        throw new Error("EvidenceReuseContract conflicts with retained content");
+      }
+      return;
+    }
+    if (!allowInsert) {
+      throw new Error("EvidenceReuseContract is unavailable");
+    }
+    this.database.prepare(`
+      INSERT INTO execution_evidence_reuse_contracts (
+        reuse_contract_id, schema_version, adoption_id, adoption_digest,
+        plan_id, plan_revision, node_key, gate,
+        runtime_input_binding_digest, reuse_input_evidence_digest,
+        node_execution_digest, node_reuse_contract_digest, contract_digest,
+        contract_json, created_at
+      ) VALUES (?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      contract.reuseContractId,
+      contract.adoptionId,
+      contract.adoptionDigest,
+      contract.planId,
+      contract.planRevision,
+      contract.nodeKey,
+      contract.gate,
+      contract.runtimeInputBindingDigest,
+      contract.reuseInputEvidenceDigest,
+      contract.nodeExecutionDigest,
+      contract.nodeReuseContractDigest,
+      contract.contractDigest,
+      canonicalExecutionJSON(contract),
+      contract.createdAt
+    );
+    const retained = this.getReuse(contract.adoptionId);
+    if (!retained || !same(retained, contract)) {
+      throw new Error("EvidenceReuseContract insert is not replayable");
+    }
   }
 
   private taskResultSource(

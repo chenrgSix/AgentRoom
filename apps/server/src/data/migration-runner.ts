@@ -220,11 +220,17 @@ export async function migrateDatabase(
         }
       }
       appliedVersions.push(migration.version);
+      // Migration 74's deterministic data phase must finish before later
+      // companion migrations inspect the complete adoption set. This is not a
+      // runtime repair loop.
+      if (migration.version === 74) {
+        backfillLegacyEvidenceAdoptions(database);
+      }
     }
 
-    // This is a data migration, not a runtime repair loop. Once migration 74
-    // has committed, a missing adoption must remain observable and fail closed.
-    if (appliedVersions.includes(74)) {
+    // Migration 76 adds one companion per existing adoption. Re-running an
+    // ordinary startup does not call this path once the migration is recorded.
+    if (appliedVersions.includes(76)) {
       backfillLegacyEvidenceAdoptions(database);
     }
 

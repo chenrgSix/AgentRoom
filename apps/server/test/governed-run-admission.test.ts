@@ -53,6 +53,8 @@ const capability = {
 
 interface RemovedAdoption {
   deleteTriggerSql: string;
+  reuseDeleteTriggerSql: string;
+  reuseRow: Record<string, string | number | null>;
   row: Record<string, string | number | null>;
 }
 
@@ -63,6 +65,21 @@ function removeAdoption(
   nodeKey: string,
   gate: "accepted_result" | "verified_output" | "integrated_commit"
 ): RemovedAdoption {
+  const reuseTrigger = database.prepare(`
+    SELECT sql FROM sqlite_master
+    WHERE type = 'trigger'
+      AND name = 'execution_evidence_reuse_contracts_immutable_delete'
+  `).get() as { sql: string };
+  assert.ok(reuseTrigger?.sql);
+  const reuseRow = database.prepare(`
+    SELECT reuse.* FROM execution_evidence_reuse_contracts reuse
+    JOIN execution_evidence_adoptions adoption
+      ON adoption.adoption_id = reuse.adoption_id
+    WHERE adoption.plan_id = ? AND adoption.plan_revision = ?
+      AND adoption.node_key = ? AND adoption.gate = ?
+  `).get(planId, planRevision, nodeKey, gate) as
+    Record<string, string | number | null>;
+  assert.ok(reuseRow);
   const trigger = database.prepare(`
     SELECT sql FROM sqlite_master
     WHERE type = 'trigger'
@@ -75,12 +92,23 @@ function removeAdoption(
   `).get(planId, planRevision, nodeKey, gate) as
     Record<string, string | number | null>;
   assert.ok(row);
+  database.exec(
+    "DROP TRIGGER execution_evidence_reuse_contracts_immutable_delete"
+  );
+  assert.equal(database.prepare(`
+    DELETE FROM execution_evidence_reuse_contracts WHERE adoption_id = ?
+  `).run(row.adoption_id).changes, 1);
   database.exec("DROP TRIGGER execution_evidence_adoptions_immutable_delete");
   assert.equal(database.prepare(`
     DELETE FROM execution_evidence_adoptions
     WHERE plan_id = ? AND plan_revision = ? AND node_key = ? AND gate = ?
   `).run(planId, planRevision, nodeKey, gate).changes, 1);
-  return { deleteTriggerSql: trigger.sql, row };
+  return {
+    deleteTriggerSql: trigger.sql,
+    reuseDeleteTriggerSql: reuseTrigger.sql,
+    reuseRow,
+    row
+  };
 }
 
 function restoreAdoption(
@@ -102,7 +130,23 @@ function restoreAdoption(
       @adoption_json, @legacy_materialization_digest, @created_at
     )
   `).run(removed.row);
+  database.prepare(`
+    INSERT INTO execution_evidence_reuse_contracts (
+      reuse_contract_id, schema_version, adoption_id, adoption_digest,
+      plan_id, plan_revision, node_key, gate,
+      runtime_input_binding_digest, reuse_input_evidence_digest,
+      node_execution_digest, node_reuse_contract_digest, contract_digest,
+      contract_json, created_at
+    ) VALUES (
+      @reuse_contract_id, @schema_version, @adoption_id, @adoption_digest,
+      @plan_id, @plan_revision, @node_key, @gate,
+      @runtime_input_binding_digest, @reuse_input_evidence_digest,
+      @node_execution_digest, @node_reuse_contract_digest, @contract_digest,
+      @contract_json, @created_at
+    )
+  `).run(removed.reuseRow);
   database.exec(removed.deleteTriggerSql);
+  database.exec(removed.reuseDeleteTriggerSql);
 }
 
 function envelope(
@@ -2070,6 +2114,10 @@ test("generation-2 verified output admits one immutable serialized integration",
     SELECT count(*) AS n FROM execution_evidence_adoptions
   `).get() as { n: number }).n, 2,
   "verified and integrated materialization transactions dual-write adoption");
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_evidence_reuse_contracts
+  `).get() as { n: number }).n, 2,
+  "verified and integrated adoptions each retain one reuse companion");
   assert.equal(backfillLegacyEvidenceAdoptions(f.database), 2);
   const evidence = new ExecutionEvidenceAdoptionRepository(f.database);
   const verifiedAdoption = evidence.get({
@@ -2084,6 +2132,21 @@ test("generation-2 verified output admits one immutable serialized integration",
   }, "integrated_commit");
   assert.ok(verifiedAdoption?.source.kind === "repository_commit");
   assert.ok(integratedAdoption?.source.kind === "repository_commit");
+  const verifiedReuse = evidence.getReuse(verifiedAdoption.adoption.adoptionId);
+  const integratedReuse = evidence.getReuse(integratedAdoption.adoption.adoptionId);
+  assert.ok(verifiedReuse);
+  assert.ok(integratedReuse);
+  assert.equal(verifiedReuse.runtimeInputBindingDigest,
+    verifiedAdoption.adoption.resolvedInputSetDigest);
+  assert.equal(verifiedReuse.nodeExecutionDigest,
+    verifiedAdoption.adoption.nodeContractDigest);
+  assert.equal(integratedReuse.runtimeInputBindingDigest,
+    integratedAdoption.adoption.resolvedInputSetDigest);
+  assert.equal(integratedReuse.nodeExecutionDigest,
+    integratedAdoption.adoption.nodeContractDigest);
+  assert.equal(verifiedReuse.nodeReuseContractDigest,
+    integratedReuse.nodeReuseContractDigest,
+    "gate-specific proof identity does not change the node reuse contract");
   assert.equal(
     integratedAdoption.source.sourceEvidenceId,
     verifiedAdoption.source.sourceEvidenceId,
@@ -2098,6 +2161,79 @@ test("generation-2 verified output admits one immutable serialized integration",
   assert.equal((f.database.prepare(`
     SELECT count(*) AS n FROM execution_evidence_adoptions
   `).get() as { n: number }).n, 2);
+  assert.throws(() => f.database.prepare(`
+    UPDATE execution_evidence_reuse_contracts
+    SET contract_digest = contract_digest
+  `).run(), /immutable/u);
+  assert.throws(() => f.database.prepare(`
+    DELETE FROM execution_evidence_reuse_contracts
+  `).run(), /retained evidence/u);
+
+  const deleteTrigger = f.database.prepare(`
+    SELECT sql FROM sqlite_master
+    WHERE type = 'trigger'
+      AND name = 'execution_evidence_reuse_contracts_immutable_delete'
+  `).get() as { sql: string };
+  const removedVerifiedReuse = f.database.prepare(`
+    SELECT * FROM execution_evidence_reuse_contracts WHERE adoption_id = ?
+  `).get(verifiedAdoption.adoption.adoptionId) as {
+    contract_json: string;
+  };
+  const removedIntegratedReuse = f.database.prepare(`
+    SELECT * FROM execution_evidence_reuse_contracts WHERE adoption_id = ?
+  `).get(integratedAdoption.adoption.adoptionId) as {
+    contract_json: string;
+  };
+  assert.ok(deleteTrigger.sql);
+  assert.ok(removedVerifiedReuse.contract_json);
+  assert.ok(removedIntegratedReuse.contract_json);
+  f.database.exec(
+    "DROP TRIGGER execution_evidence_reuse_contracts_immutable_delete"
+  );
+  assert.equal(f.database.prepare(`
+    DELETE FROM execution_evidence_reuse_contracts WHERE adoption_id = ?
+  `).run(verifiedAdoption.adoption.adoptionId).changes, 1);
+  f.database.exec(deleteTrigger.sql);
+  const { materializationDigest: _materializationDigest, ...verifiedUnsigned } =
+    materialization;
+  assert.throws(() => f.database.transaction(() =>
+    new ExecutionNodeMaterializationRepository(f.database)
+      .retainVerified(verifiedUnsigned)
+  )(), /EvidenceReuseContract is unavailable/u,
+  "ordinary replay cannot heal a missing reuse companion");
+  f.database.exec(
+    "DROP TRIGGER execution_evidence_reuse_contracts_immutable_delete"
+  );
+  assert.equal(f.database.prepare(`
+    DELETE FROM execution_evidence_reuse_contracts WHERE adoption_id = ?
+  `).run(integratedAdoption.adoption.adoptionId).changes, 1);
+  f.database.exec(deleteTrigger.sql);
+  f.database.exec(`
+    CREATE TRIGGER fail_reuse_backfill
+    BEFORE INSERT ON execution_evidence_reuse_contracts
+    WHEN NEW.gate = 'integrated_commit'
+    BEGIN SELECT RAISE(ABORT, 'injected reuse backfill failure'); END
+  `);
+  assert.throws(() => backfillLegacyEvidenceAdoptions(f.database),
+    /injected reuse backfill failure/u);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_evidence_reuse_contracts
+  `).get() as { n: number }).n, 0,
+  "failed multi-row companion backfill rolls back its earlier insert");
+  f.database.exec("DROP TRIGGER fail_reuse_backfill");
+  assert.equal(backfillLegacyEvidenceAdoptions(f.database), 2,
+    "the explicit migration backfill restores both exact companions");
+  assert.deepEqual(f.database.prepare(`
+    SELECT adoption_id, contract_json
+    FROM execution_evidence_reuse_contracts
+    ORDER BY adoption_id COLLATE BINARY
+  `).all(), [{
+    adoption_id: integratedAdoption.adoption.adoptionId,
+    contract_json: removedIntegratedReuse.contract_json
+  }, {
+    adoption_id: verifiedAdoption.adoption.adoptionId,
+    contract_json: removedVerifiedReuse.contract_json
+  }].sort((left, right) => left.adoption_id < right.adoption_id ? -1 : 1));
   assert.equal(backfillLegacyEvidenceAdoptions(f.database), 2,
     "reopen backfill is byte-identical and idempotent");
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
@@ -2692,13 +2828,38 @@ test("generation-2 accepted output materializes once and drives exact downstream
     "execution_node_materializations",
     "execution_source_evidence",
     "execution_gate_proof_refs",
-    "execution_evidence_adoptions"
+    "execution_evidence_adoptions",
+    "execution_evidence_reuse_contracts"
   ]) {
     assert.equal((f.database.prepare(`
       SELECT count(*) AS n FROM ${table}
     `).get() as { n: number }).n, 0, `${table} escaped failed dual-write`);
   }
   f.database.exec("DROP TRIGGER fail_evidence_adoption_dual_write");
+  f.database.exec(`
+    CREATE TRIGGER fail_evidence_reuse_dual_write
+    BEFORE INSERT ON execution_evidence_reuse_contracts
+    BEGIN SELECT RAISE(ABORT, 'injected reuse dual-write failure'); END
+  `);
+  assert.throws(() => f.database.transaction(() =>
+    new AcceptedResultMaterializer(
+      f.database,
+      new ExecutionNodeMaterializationRepository(f.database)
+    ).reconcile(buildIdentity)
+  )(), /injected reuse dual-write failure/u);
+  for (const table of [
+    "execution_node_materializations",
+    "execution_source_evidence",
+    "execution_gate_proof_refs",
+    "execution_evidence_adoptions",
+    "execution_evidence_reuse_contracts"
+  ]) {
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM ${table}
+    `).get() as { n: number }).n, 0,
+    `${table} escaped failed reuse companion dual-write`);
+  }
+  f.database.exec("DROP TRIGGER fail_evidence_reuse_dual_write");
   const schedulerDisabledApp = f.app;
   await f.restart(100);
   assert.notEqual(f.app, schedulerDisabledApp);
@@ -2727,15 +2888,21 @@ test("generation-2 accepted output materializes once and drives exact downstream
   `).get() as { n: number }).n, 1,
   "accepted materialization transaction dual-writes adoption");
   assert.equal(backfillLegacyEvidenceAdoptions(f.database), 1);
-  const acceptedAdoption = new ExecutionEvidenceAdoptionRepository(
-    f.database
-  ).get({
+  const evidence = new ExecutionEvidenceAdoptionRepository(f.database);
+  const acceptedAdoption = evidence.get({
     planId: f.plan.planId,
     planRevision: f.plan.current.revision,
     nodeKey: "Build"
   }, "accepted_result");
   assert.ok(acceptedAdoption?.source.kind === "task_result");
   assert.equal(acceptedAdoption.source.resultId, good.resultId);
+  const acceptedReuse = evidence.getReuse(acceptedAdoption.adoption.adoptionId);
+  assert.ok(acceptedReuse);
+  assert.equal(acceptedReuse.runtimeInputBindingDigest,
+    acceptedAdoption.adoption.resolvedInputSetDigest);
+  assert.equal(acceptedReuse.nodeExecutionDigest,
+    acceptedAdoption.adoption.nodeContractDigest);
+  assert.deepEqual(acceptedReuse.reuseInputs, []);
   const projectionRepository = new ExecutionNodeMaterializationRepository(
     f.database
   );
