@@ -38,8 +38,9 @@ One owned run root contains:
 - one actual Central process and SQLite database;
 - two actual authenticated Go Bridge processes with distinct Devices, data
   roots, stable Agents, local repository bindings and Runtime/verifier grants;
-- two owner-selected source checkouts of one logical repository plus three
-  Bridge-owned isolated attempt worktrees;
+- one owner-selected source checkout addressed by two distinct Bridge-local
+  bindings, one untouched observer clone, and three Bridge-owned isolated
+  attempt worktrees;
 - one approved three-node plan with `maxConcurrency = 2`;
 - `BuildA -> Join` gated by `integrated_commit` and
   `BuildB -> Join` gated by `verified_output`; and
@@ -74,8 +75,9 @@ The acceptance must prove all of these physical facts:
    adoption and B from the verified adoption.
 6. The Join worktree contains both exact disjoint changes before its Runtime
    writes the combined output, and its independent verifier passes.
-7. Source checkout `HEAD`, worktree bytes and clean status remain unchanged;
-   only the approved target ref changes.
+7. The shared source checkout's `HEAD`, worktree bytes and clean status remain
+   unchanged; only the approved target ref changes. The observer clone remains
+   byte- and ref-stable, proving that local CAS does not imply a push.
 8. Owner-confirmed cleanup removes all three exact stopped attempt worktrees,
    and exact cleanup replay returns retained receipts without scanning any
    prefix.
