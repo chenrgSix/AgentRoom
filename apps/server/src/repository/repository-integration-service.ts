@@ -2,6 +2,7 @@ import type Database from "better-sqlite3";
 import type {
   ExecutionGrantSummary,
   GovernedExecutionManifest,
+  IntegrationApprovalCommandTemplate,
   RepositoryCheckpoint,
   RepositoryOperationReceipt,
   RepositoryOperationRequest
@@ -181,6 +182,93 @@ export class RepositoryIntegrationService {
     private readonly connections: BridgeConnectionRegistry
   ) {}
 
+  /** Read-only exact command preparation. Authority is still rejoined by approve(). */
+  public approvalTemplate(
+    principal: WebPrincipal,
+    planId: string,
+    nodeKey: string,
+    now: string
+  ): IntegrationApprovalCommandTemplate | undefined {
+    const plan = this.database.prepare(`
+      SELECT current_revision FROM execution_plans WHERE plan_id = ?
+    `).get(planId) as { current_revision: number } | undefined;
+    if (!plan) return undefined;
+    const identity = { planId, planRevision: plan.current_revision, nodeKey };
+    const materialization = this.materializations.get(
+      identity,
+      "verified_output"
+    ) as VerifiedExecutionNodeMaterialization | undefined;
+    if (!materialization) return undefined;
+    const context = this.candidateContext(identity);
+    const member = this.auth.requireRoomMember(principal, context.plan_room_id);
+    if (member.memberId !== context.owner_member_id && member.role !== "owner") {
+      return undefined;
+    }
+    const manifest = JSON.parse(context.manifest_json) as GovernedExecutionManifest;
+    assertExecutionCommand("executionManifest", manifest);
+    const runtimeGrant = JSON.parse(context.grant_json) as ExecutionGrantSummary;
+    assertExecutionCommand("executionGrant", runtimeGrant);
+    const definition = JSON.parse(context.definition_json) as {
+      policy: {
+        integration: string;
+        integrationTargets: IntegrationTarget[];
+        requireHumanIntegrationApproval: boolean;
+      };
+    };
+    const targets = definition.policy.integrationTargets.filter((target) =>
+      target.repositoryId === manifest.repository.repositoryId);
+    const hasIntegratedEdge = this.database.prepare(`
+      SELECT 1 FROM execution_plan_edges
+      WHERE plan_id = ? AND revision = ? AND from_node_key = ?
+        AND gate = 'integrated_commit'
+    `).get(planId, plan.current_revision, nodeKey);
+    if (
+      targets.length !== 1 || !hasIntegratedEdge ||
+      definition.policy.integration !== "local_integration" ||
+      !definition.policy.requireHumanIntegrationApproval ||
+      (context.plan_state !== "approved" && context.plan_state !== "running") ||
+      context.plan_digest !== manifest.scope.planDigest ||
+      context.approval_operation_id !== manifest.scope.approvalOperationId ||
+      context.plan_control_revision !== manifest.scope.planControlRevision ||
+      manifest.scope.planId !== planId ||
+      manifest.scope.planRevision !== plan.current_revision ||
+      manifest.scope.nodeKey !== nodeKey ||
+      manifest.scope.runId !== materialization.sourceRunId ||
+      runtimeGrant.grant.digest !== manifest.grant.digest ||
+      runtimeGrant.grant.grantId !== manifest.grant.grantId ||
+      runtimeGrant.grant.revision !== manifest.grant.revision ||
+      runtimeGrant.deviceId !== manifest.scope.deviceId
+    ) return undefined;
+    const target = targets[0]!;
+    const grants = this.integrationGrants(manifest, target, now);
+    if (grants.length !== 1) return undefined;
+    const nowMs = Date.parse(now);
+    const expiresAt = Date.parse(grants[0]!.grant.expiresAt);
+    if (!Number.isFinite(nowMs) || !Number.isFinite(expiresAt) || expiresAt <= nowMs) {
+      return undefined;
+    }
+    const deadlineMs = Math.min(nowMs + 5 * 60_000, expiresAt - 1);
+    if (deadlineMs <= nowMs) return undefined;
+    const template: IntegrationApprovalCommandTemplate = {
+      candidateCommit: materialization.candidateCommit,
+      candidateTree: materialization.candidateTree,
+      deadline: new Date(deadlineMs).toISOString(),
+      inputDigest: materialization.inputDigest,
+      materializationDigest: materialization.materializationDigest,
+      nodeKey,
+      planId,
+      planRevision: plan.current_revision,
+      target: { ...target },
+      verificationReceipts: materialization.verificationReceipts.map((pin) => ({
+        verificationId: pin.verificationId,
+        receiptDigest: pin.receiptDigest
+      })).sort((left, right) =>
+        left.verificationId.localeCompare(right.verificationId)) as
+          IntegrationApprovalCommandTemplate["verificationReceipts"]
+    };
+    return template;
+  }
+
   public approve(
     principal: WebPrincipal,
     planId: string,
@@ -226,23 +314,10 @@ export class RepositoryIntegrationService {
         WHERE plan_id = ? AND revision = ? AND from_node_key = ?
           AND gate = 'integrated_commit'
       `).get(command.planId, command.planRevision, command.nodeKey);
-      const integrationGrants = this.connections.governedAgentReadyGrants(
-        manifest.scope.deviceId,
-        manifest.scope.agentId
-      ).filter((grant) =>
-        grant.planId === command.planId &&
-        grant.nodeKey === command.nodeKey &&
-        grant.repositoryId === command.target.repositoryId &&
-        grant.bindingId === manifest.repository.bindingId &&
-        grant.deviceId === manifest.scope.deviceId &&
-        grant.agentId === manifest.scope.agentId &&
-        grant.revokedAt === null &&
-        grant.operations.length === 1 && grant.operations[0] === "integrate" &&
-        grant.integrationTargets.length === 1 &&
-        equal(grant.integrationTargets[0], command.target) &&
-        Number.isFinite(Date.parse(grant.issuedAt)) &&
-        Date.parse(grant.issuedAt) <= Date.parse(now) &&
-        Date.parse(now) < Date.parse(grant.grant.expiresAt)
+      const integrationGrants = this.integrationGrants(
+        manifest,
+        command.target,
+        now
       );
       if (
         context.plan_state !== "approved" && context.plan_state !== "running" ||
@@ -471,7 +546,33 @@ export class RepositoryIntegrationService {
     return materialization;
   }
 
-  private candidateContext(command: IntegrationApprovalCommand): CandidateContextRow {
+  private integrationGrants(
+    manifest: GovernedExecutionManifest,
+    target: IntegrationTarget,
+    now: string
+  ) {
+    return this.connections.governedAgentReadyGrants(
+      manifest.scope.deviceId,
+      manifest.scope.agentId
+    ).filter((grant) =>
+      grant.planId === manifest.scope.planId &&
+      grant.nodeKey === manifest.scope.nodeKey &&
+      grant.repositoryId === target.repositoryId &&
+      grant.bindingId === manifest.repository.bindingId &&
+      grant.deviceId === manifest.scope.deviceId &&
+      grant.agentId === manifest.scope.agentId &&
+      grant.revokedAt === null &&
+      grant.operations.length === 1 && grant.operations[0] === "integrate" &&
+      grant.integrationTargets.length === 1 &&
+      equal(grant.integrationTargets[0], target) &&
+      Number.isFinite(Date.parse(grant.issuedAt)) &&
+      Date.parse(grant.issuedAt) <= Date.parse(now) &&
+      Date.parse(now) < Date.parse(grant.grant.expiresAt)
+    );
+  }
+
+  private candidateContext(command: Pick<IntegrationApprovalCommand,
+    "planId" | "planRevision" | "nodeKey">): CandidateContextRow {
     const row = this.database.prepare(`
       SELECT plan.state AS plan_state, plan.control_revision AS plan_control_revision,
         plan.room_id AS plan_room_id, plan.root_task_id AS plan_root_task_id,

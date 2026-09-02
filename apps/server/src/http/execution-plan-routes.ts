@@ -6,7 +6,7 @@ import { bearerToken, noStore } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
-  app, auth, clock, executionPlans, executionInputs, isolatedWorkspaces,
+  app, auth, clock, executionPlans, executionEvidence, executionInputs, isolatedWorkspaces,
   executionNodeControls, repositoryCaptures, repositoryIntegrations,
   repositoryVerifications, dispatchRun, principal
 }: ServerRouteContext): void {
@@ -140,6 +140,17 @@ export function registerExecutionPlanRoutes({
     async (request) => execute(() => executionPlans.listForTask(
       principal(request), request.params.taskId, request.query.afterPlanId,
       integer(request.query.limit, 20)
+    ))
+  );
+  app.get<{
+    Params: { taskId: string }; Querystring: { limit?: string }
+  }>(
+    "/api/tasks/:taskId/execution-evidence", options,
+    async (request) => execute(() => executionEvidence.get(
+      principal(request),
+      request.params.taskId,
+      integer(request.query.limit, 20),
+      clock()
     ))
   );
   app.get<{ Params: { roomId: string }; Querystring: { afterPlanId?: string; limit?: string } }>(

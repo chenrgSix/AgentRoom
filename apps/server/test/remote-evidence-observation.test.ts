@@ -407,6 +407,24 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   assert.equal((f.database.prepare(`
     SELECT count(*) AS n FROM execution_remote_gate_proof_refs
   `).get() as { n: number }).n, 1);
+  const evidenceBeforeAdoption = await f.ok("GET",
+    `/api/tasks/${f.root.taskId}/execution-evidence`);
+  const buildEvidenceBefore = evidenceBeforeAdoption.plans[0].nodes.find(
+    (node: { nodeKey: string }) => node.nodeKey === "Build"
+  );
+  assert.equal(buildEvidenceBefore.remote.adoptionState, "ready");
+  assert.deepEqual(buildEvidenceBefore.remote.blockerCodes, []);
+  assert.deepEqual(buildEvidenceBefore.remote.commandTemplate, {
+    providerBindingId: binding.providerBindingId,
+    planRevision: plan.current.revision,
+    nodeKey: "Build",
+    expectedPlanDigest: plan.current.digest,
+    expectedControlRevision: plan.controlRevision,
+    sourceEvidenceId: observed.source.sourceEvidenceId
+  });
+  assert.equal(buildEvidenceBefore.verifications.length, 2);
+  assert.doesNotMatch(JSON.stringify(evidenceBeforeAdoption),
+    /provider-test-token|providerOrigin|candidate\.bundle/u);
   const resolver = () => new ExecutionDependencyResolver(
     new ExecutionPlanRepository(f.database),
     new ExecutionNodeMaterializationRepository(f.database)
@@ -429,6 +447,16 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   assert.equal(adopted.adoption.gate, "verified_output");
   assert.equal(adopted.adoption.sourceExecution, null);
   assert.equal(adopted.adoption.authority.service, "remote_evidence_adoption");
+  const evidenceAfterAdoption = await f.ok("GET",
+    `/api/tasks/${f.root.taskId}/execution-evidence`);
+  const buildEvidenceAfter = evidenceAfterAdoption.plans[0].nodes.find(
+    (node: { nodeKey: string }) => node.nodeKey === "Build"
+  );
+  assert.equal(buildEvidenceAfter.remote.adoptionState, "adopted");
+  assert.equal(buildEvidenceAfter.remote.commandTemplate, null);
+  assert.equal(buildEvidenceAfter.stages[0].gate, "verified_output");
+  assert.equal(buildEvidenceAfter.stages[0].adoption.adoptionId,
+    adopted.adoption.adoptionId);
   const duplicatePass = await f.ok("POST",
     `/api/execution-plans/${plan.planId}/remote-ci-observations`, {
       operationId: "op_remote_ci_duplicate0001",

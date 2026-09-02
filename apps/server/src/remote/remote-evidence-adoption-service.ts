@@ -1,5 +1,9 @@
 import type Database from "better-sqlite3";
-import type { EvidenceAdoption, GateProofRef } from
+import type {
+  EvidenceAdoption,
+  GateProofRef,
+  RemoteEvidenceAdoptionCommandTemplate
+} from
   "@convene-wire/contracts/execution-plan";
 import {
   assertExecutionCommand,
@@ -42,6 +46,14 @@ interface ProofRow {
   profile_digest: string;
   profile_id: string;
   profile_revision: number;
+}
+
+export function remoteEvidenceNeedsInputAttestation(
+  definition: { nodes: Array<{ nodeKey: string; inputs: unknown[] }> },
+  nodeKey: string
+): boolean {
+  const node = definition.nodes.find((entry) => entry.nodeKey === nodeKey);
+  return !node || node.inputs.length > 0;
 }
 
 const fail = (code: string, statusCode: 400 | 404 | 409 = 409): never => {
@@ -88,6 +100,54 @@ export class RemoteEvidenceAdoptionService {
     private readonly auth: AuthService
   ) {}
 
+  /** Read-only exact command preparation; adoptVerified remains the authority. */
+  public commandTemplate(
+    principal: WebPrincipal,
+    planId: string,
+    nodeKey: string,
+    providerBindingId: string,
+    sourceEvidenceId: string
+  ): RemoteEvidenceAdoptionCommandTemplate | undefined {
+    const plan = this.plans.get(planId);
+    if (!plan) return undefined;
+    this.auth.requireFullWebSession(principal);
+    const actor = this.auth.requireRoomMember(principal, plan.roomId);
+    if (actor.role !== "owner" ||
+      (plan.state !== "approved" && plan.state !== "running")) return undefined;
+    const node = plan.current.definition.nodes.find((entry) =>
+      entry.nodeKey === nodeKey);
+    const binding = this.bindings.get(providerBindingId);
+    const source = this.evidence.getSource(sourceEvidenceId);
+    if (!node || !binding || binding.revocation || !source ||
+      binding.binding.teamId !== actor.teamId ||
+      source.repositoryId !== node.repository.repositoryId ||
+      binding.binding.repositoryId !== source.repositoryId ||
+      source.inputDigest !== executionOperationDigest([]) ||
+      source.origin?.kind !== "remote_observation" ||
+      source.origin.providerBindingId !== providerBindingId ||
+      remoteEvidenceNeedsInputAttestation(plan.current.definition, nodeKey) ||
+      this.database.prepare(`
+        SELECT 1 FROM execution_dispatch_intents
+        WHERE plan_id = ? AND plan_revision = ? AND node_key = ? LIMIT 1
+      `).get(planId, plan.current.revision, nodeKey)) return undefined;
+    const required = node.verificationProfiles.filter((profile) =>
+      profile.required);
+    const rows = this.proofRows(sourceEvidenceId, providerBindingId);
+    if (required.length === 0 || rows.length !== required.length ||
+      required.some((profile) => rows.filter((row) =>
+        row.profile_id === profile.profileId &&
+        row.profile_revision === profile.revision &&
+        row.profile_digest === profile.digest).length !== 1)) return undefined;
+    return {
+      providerBindingId,
+      planRevision: plan.current.revision,
+      nodeKey,
+      expectedPlanDigest: plan.current.digest,
+      expectedControlRevision: plan.controlRevision,
+      sourceEvidenceId
+    };
+  }
+
   public adoptVerified(
     principal: WebPrincipal,
     planId: string,
@@ -99,6 +159,7 @@ export class RemoteEvidenceAdoptionService {
       "expectedPlanDigest", "expectedControlRevision", "sourceEvidenceId"
     ]);
     canonicalExecutionJSON(input);
+    assertExecutionCommand("remoteEvidenceAdoptionCommand", input);
     const command = input as unknown as AdoptCommand;
     const plan = this.plans.get(planId);
     if (!plan) return fail("EXECUTION_PLAN_NOT_FOUND", 404);
@@ -124,6 +185,10 @@ export class RemoteEvidenceAdoptionService {
       source.inputDigest !== executionOperationDigest([]) ||
       source.origin?.kind !== "remote_observation" ||
       source.origin.providerBindingId !== command.providerBindingId ||
+      remoteEvidenceNeedsInputAttestation(
+        plan.current.definition,
+        command.nodeKey
+      ) ||
       this.database.prepare(`
         SELECT 1 FROM execution_dispatch_intents
         WHERE plan_id = ? AND plan_revision = ? AND node_key = ? LIMIT 1
@@ -132,17 +197,10 @@ export class RemoteEvidenceAdoptionService {
     }
     const required = node.verificationProfiles.filter((profile) =>
       profile.required);
-    const rows = this.database.prepare(`
-      SELECT proof.proof_json, receipt.profile_id, receipt.profile_revision,
-        receipt.profile_digest
-      FROM execution_remote_gate_proof_refs proof
-      JOIN remote_ci_observation_receipts receipt
-        ON receipt.operation_id = proof.operation_id
-      WHERE receipt.source_evidence_id = ?
-        AND receipt.provider_binding_id = ? AND receipt.outcome = 'passed'
-      ORDER BY receipt.profile_id COLLATE BINARY, receipt.attempt,
-        receipt.operation_id COLLATE BINARY
-    `).all(command.sourceEvidenceId, command.providerBindingId) as ProofRow[];
+    const rows = this.proofRows(
+      command.sourceEvidenceId,
+      command.providerBindingId
+    );
     const selected: GateProofRef[] = [];
     for (const profile of required) {
       const matches = rows.filter((row) => row.profile_id === profile.profileId &&
@@ -213,5 +271,22 @@ export class RemoteEvidenceAdoptionService {
       return replay;
     }
     return this.repository.retain(command.providerBindingId, adoption);
+  }
+
+  private proofRows(
+    sourceEvidenceId: string,
+    providerBindingId: string
+  ): ProofRow[] {
+    return this.database.prepare(`
+      SELECT proof.proof_json, receipt.profile_id, receipt.profile_revision,
+        receipt.profile_digest
+      FROM execution_remote_gate_proof_refs proof
+      JOIN remote_ci_observation_receipts receipt
+        ON receipt.operation_id = proof.operation_id
+      WHERE receipt.source_evidence_id = ?
+        AND receipt.provider_binding_id = ? AND receipt.outcome = 'passed'
+      ORDER BY receipt.profile_id COLLATE BINARY, receipt.attempt,
+        receipt.operation_id COLLATE BINARY
+    `).all(sourceEvidenceId, providerBindingId) as ProofRow[];
   }
 }

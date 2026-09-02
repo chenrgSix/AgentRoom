@@ -87,6 +87,8 @@ import { ExecutionNodeRetryRepository } from
   "./execution/execution-node-retry-repository.js";
 import { ExecutionInputRepository } from "./execution/execution-input-repository.js";
 import { ExecutionInputService } from "./execution/execution-input-service.js";
+import { ExecutionEvidenceViewService } from
+  "./execution/execution-evidence-view-service.js";
 import { ExecutionDependencyResolver } from
   "./execution/execution-dependency-resolver.js";
 import { ExecutionNodeMaterializationRepository } from
@@ -722,6 +724,16 @@ export async function createServerApp(
     return runRepository.getRun(run.runId) ?? run;
   };
   const executionNodeStates = new ExecutionNodeStateRepository(database);
+  const executionEvidence = new ExecutionEvidenceViewService(
+    database,
+    executionPlans,
+    executionNodeStates,
+    executionMaterializations,
+    new RemoteEvidenceAdoptionRepository(database, transactions),
+    remoteEvidenceAdoptions,
+    remoteProviderBindingRepository,
+    repositoryIntegrations
+  );
   const executionNodeProjector = new ExecutionNodeProjector(
     executionNodeStates
   );
@@ -1080,6 +1092,7 @@ export async function createServerApp(
     dispatchDiscussionRuns,
     executor,
     executionPlans,
+    executionEvidence,
     executionInputs,
     executionNodeControls,
     isolatedWorkspaces,

@@ -1,6 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { ExecutionPlanService } from "../execution/execution-plan-service.js";
 import type { ExecutionInputService } from "../execution/execution-input-service.js";
+import type { ExecutionEvidenceViewService } from
+  "../execution/execution-evidence-view-service.js";
 import type { ExecutionNodeControlService } from
   "../execution/execution-node-control-service.js";
 import type { RepositoryCaptureService } from "../repository/repository-capture-service.js";
@@ -106,6 +108,7 @@ export interface ServerRouteContext {
   dispatchDiscussionRuns: (runs: PersistedRun[]) => Promise<void>;
   executor: InProcessRunExecutor;
   executionPlans: ExecutionPlanService;
+  executionEvidence: ExecutionEvidenceViewService;
   executionInputs: ExecutionInputService;
   executionNodeControls: ExecutionNodeControlService;
   isolatedWorkspaces: IsolatedWorkspaceLeaseService;
