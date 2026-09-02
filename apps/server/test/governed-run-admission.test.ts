@@ -15,6 +15,7 @@ import {
   assertExecutionCommand,
   executionOperationDigest
 } from "@convene-wire/contracts/execution-validation";
+import { validateBridgeMessage } from "@convene-wire/contracts/bridge-validator";
 
 import { createServerApp } from "../src/app.js";
 import { CoreRepository } from "../src/data/core-repository.js";
@@ -1030,6 +1031,11 @@ test("scheduler creates one system-traced DispatchIntent and ordinary Run", {
   `).get() as { n: number }).n === 1);
   const requested = await f.scheduledDelivery!;
   assert.equal(requested.type, "run.requested");
+  assert.equal(validateBridgeMessage(requested), true);
+  const schedulerContext = (requested.payload.contextMessages as Array<{
+    senderId: string;
+  }>).find(({ senderId }) => senderId === "execution_scheduler");
+  assert.ok(schedulerContext);
   const manifest = (requested.payload.contextManifest as {
     execution: GovernedExecutionManifest;
   }).execution;

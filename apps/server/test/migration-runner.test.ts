@@ -31,16 +31,16 @@ test("an empty database migrates from zero and reruns idempotently", async (t) =
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 70);
+  assert.equal(first.currentVersion, 71);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -161,7 +161,7 @@ test("an empty database migrates from zero and reruns idempotently", async (t) =
       .prepare("PRAGMA table_info(agents)")
       .all() as Array<{ name: string }>;
 
-    assert.equal(migrationCount.count, 70);
+    assert.equal(migrationCount.count, 71);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
     assert.equal(memberRecoveryTable.count, 1);
@@ -195,6 +195,53 @@ test("an empty database migrates from zero and reruns idempotently", async (t) =
     assert.equal(agentColumns.some((column) =>
       column.name === "workspace_alias"
     ), true);
+  } finally {
+    database.close();
+  }
+});
+
+test("scheduler wire migration drops only pending legacy projections", async () => {
+  const database = new Database(":memory:");
+  try {
+    database.exec(`
+      CREATE TABLE run_deliveries (
+        delivery_attempt_id TEXT PRIMARY KEY,
+        payload_json TEXT NOT NULL CHECK (json_valid(payload_json)),
+        state TEXT NOT NULL CHECK (state IN ('pending', 'accepted'))
+      ) STRICT;
+    `);
+    const insert = database.prepare(`
+      INSERT INTO run_deliveries (
+        delivery_attempt_id, payload_json, state
+      ) VALUES (?, ?, ?)
+    `);
+    insert.run("delivery_pending_context", JSON.stringify({
+      contextMessages: [{ senderId: "execution-scheduler" }]
+    }), "pending");
+    insert.run("delivery_pending_bundle", JSON.stringify({
+      roomContextBundle: {
+        rawTail: { messages: [{ senderId: "execution-scheduler" }] }
+      }
+    }), "pending");
+    insert.run("delivery_accepted_legacy", JSON.stringify({
+      contextMessages: [{ senderId: "execution-scheduler" }]
+    }), "accepted");
+    insert.run("delivery_pending_current", JSON.stringify({
+      contextMessages: [{ senderId: "execution_scheduler" }]
+    }), "pending");
+
+    database.exec(await readFile(path.join(
+      defaultMigrationsDirectory,
+      "0071_scheduler_wire_sender_identity.sql"
+    ), "utf8"));
+
+    assert.deepEqual(database.prepare(`
+      SELECT delivery_attempt_id FROM run_deliveries
+      ORDER BY delivery_attempt_id
+    `).all(), [
+      { delivery_attempt_id: "delivery_accepted_legacy" },
+      { delivery_attempt_id: "delivery_pending_current" }
+    ]);
   } finally {
     database.close();
   }
@@ -274,7 +321,7 @@ test("Discussion Wave migration preserves legacy singleton Turns", async (t) => 
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
@@ -432,7 +479,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70]
+    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
   );
   const database = openDatabase(databasePath);
   try {
@@ -547,7 +594,7 @@ test("Task work migration maps legacy state and replaces a terminal default", as
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70]
+    [43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71]
   );
   const database = openDatabase(databasePath);
   try {

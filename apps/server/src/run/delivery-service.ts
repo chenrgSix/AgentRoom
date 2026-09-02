@@ -536,7 +536,13 @@ export class DeliveryService {
     return {
       messageId: message.messageId,
       sequence: message.sequence,
-      senderId: message.senderId,
+      // The scheduler's internal SQL identity predates the cross-process ID
+      // grammar. Keep that authority key stable in retained rows, but never
+      // put its hyphenated spelling onto the Bridge wire.
+      senderId: message.senderType === "system" &&
+          message.senderId === "execution-scheduler"
+        ? "execution_scheduler"
+        : message.senderId,
       senderName: message.senderType === "member"
         ? this.core.getMember(message.senderId)?.displayName ?? "Member"
         : message.senderType === "agent"
