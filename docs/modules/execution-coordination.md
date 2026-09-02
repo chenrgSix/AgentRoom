@@ -343,7 +343,14 @@ Legacy readers and materialization writers remain authoritative until Stage B.
 Stage B is now delivered through the shared materialization repository: all
 three local gates dual-write and compare exact source/proof/adoption projections
 inside the legacy transaction, while backfill retains a named legacy-only read
-path. Reader authority remains unchanged until the Stage-C cutover.
+path. Stage C is implemented by migration 0075 and the adoption-authoritative
+materialization repository: dependency, retry, integration and graph-input
+readers require a shadow-equal adoption, while the legacy tables remain
+compatibility projections only. Backfill executes only when migration 0074 is
+first applied, so runtime startup cannot heal a missing authority fact. The
+version-2 projection omits absent Result identity instead of emitting a null or
+invented Result; `EXEC-009` remains ACTIVE until its full regression and
+physical cleanup evidence is recorded.
 
 The broader scheduler capacity target is frozen independently in
 [`exec-008-multi-node-scheduler-capacity-goal.md`](../acceptance/exec-008-multi-node-scheduler-capacity-goal.md).

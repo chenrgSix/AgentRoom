@@ -207,7 +207,7 @@ test("capture lease migration preserves populated legacy publications, blobs and
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
     assert.deepEqual(migrated.appliedVersions,
-      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]);
+      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -273,7 +273,7 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     database.close();
     const result = await migrateDatabase(f.databasePath);
     assert.deepEqual(result.appliedVersions,
-      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74]);
+      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -353,7 +353,8 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_evidence_adoptions_require_scope_insert",
       "execution_evidence_adoptions_immutable_update",
       "execution_evidence_adoptions_immutable_delete",
-      "execution_legacy_node_materializations"
+      "execution_legacy_node_materializations",
+      "execution_adopted_node_materializations"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))

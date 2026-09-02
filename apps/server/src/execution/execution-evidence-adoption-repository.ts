@@ -206,7 +206,12 @@ export class ExecutionEvidenceAdoptionRepository {
       if (!materialization) {
         throw new Error("Legacy NodeMaterialization cannot be reconstructed");
       }
-      this.retainLegacy(materialization);
+      const existing = this.get(identity, row.gate);
+      if (existing) {
+        this.assertShadowEqual(materialization, existing);
+      } else {
+        this.retainLegacy(materialization);
+      }
     }
     const localCount = (this.database.prepare(`
       SELECT count(*) AS count
@@ -318,7 +323,7 @@ export class ExecutionEvidenceAdoptionRepository {
       ) {
         throw new Error("EvidenceAdoption conflicts with retained local proof");
       }
-      this.assertLegacyProjection(materialization, existing);
+      this.assertShadowEqual(materialization, existing);
       return existing;
     }
     this.database.prepare(`
@@ -350,7 +355,7 @@ export class ExecutionEvidenceAdoptionRepository {
       adoption.createdAt
     );
     const retained = this.get(materialization, materialization.gate)!;
-    this.assertLegacyProjection(materialization, retained);
+    this.assertShadowEqual(materialization, retained);
     return retained;
   }
 
@@ -372,21 +377,33 @@ export class ExecutionEvidenceAdoptionRepository {
     if (!row) return undefined;
     const adoption = JSON.parse(row.adoption_json) as EvidenceAdoption;
     assertExecutionCommand("evidenceAdoption", adoption);
-    const sourceRow = this.database.prepare(`
-      SELECT source_json FROM execution_source_evidence
-      WHERE source_evidence_id = ? AND source_digest = ?
-    `).get(
+    const source = this.getSource(
       adoption.sourceEvidenceId,
       adoption.sourceDigest
-    ) as SourceRow | undefined;
-    if (!sourceRow) throw new Error("EvidenceAdoption source is unavailable");
-    const source = JSON.parse(sourceRow.source_json) as SourceEvidence;
-    assertExecutionCommand("sourceEvidence", source);
+    );
+    if (!source) throw new Error("EvidenceAdoption source is unavailable");
     return {
       adoption,
       legacyMaterializationDigest: row.legacy_materialization_digest,
       source
     };
+  }
+
+  public getSource(
+    sourceEvidenceId: string,
+    sourceDigest?: string
+  ): SourceEvidence | undefined {
+    if (!this.available()) return undefined;
+    const row = this.database.prepare(`
+      SELECT source_json FROM execution_source_evidence
+      WHERE source_evidence_id = ?
+        AND (? IS NULL OR source_digest = ?)
+    `).get(sourceEvidenceId, sourceDigest ?? null, sourceDigest ?? null) as
+      SourceRow | undefined;
+    if (!row) return undefined;
+    const source = JSON.parse(row.source_json) as SourceEvidence;
+    assertExecutionCommand("sourceEvidence", source);
+    return source;
   }
 
   private context(materialization: ExecutionNodeMaterialization): ContextRow {
@@ -633,7 +650,7 @@ export class ExecutionEvidenceAdoptionRepository {
     );
   }
 
-  private assertLegacyProjection(
+  public assertShadowEqual(
     materialization: ExecutionNodeMaterialization,
     bundle: EvidenceAdoptionBundle
   ): void {

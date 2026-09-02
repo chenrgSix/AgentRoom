@@ -380,6 +380,9 @@ export class RepositoryIntegrationService {
     this.requireOwner(principal, operation);
     const approval = this.approval(operation.approval_operation_id);
     if (!approval) return fail("INTEGRATION_APPROVAL_NOT_FOUND", 404);
+    this.requireMaterialization(
+      JSON.parse(approval.approval_json) as IntegrationApprovalCommand
+    );
     return {
       operation: this.decodeOperation(operation),
       approvalDigest: approval.approval_digest,
@@ -402,6 +405,11 @@ export class RepositoryIntegrationService {
       const operation = this.operation(receipt.operationId);
       if (!operation) return fail("INTEGRATION_OPERATION_NOT_FOUND", 404);
       this.requireOwner(principal, operation);
+      const approval = this.approval(operation.approval_operation_id);
+      if (!approval) return fail("INTEGRATION_APPROVAL_NOT_FOUND", 404);
+      this.requireMaterialization(
+        JSON.parse(approval.approval_json) as IntegrationApprovalCommand
+      );
       const existing = this.receipt(receipt.operationId);
       const receiptDigest = executionOperationDigest(receipt);
       if (existing) {

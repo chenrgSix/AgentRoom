@@ -31,19 +31,43 @@ interface AcceptedSource {
   task_id: string; result_version: number; definition_revision: number; criteria_revision: number;
   operation_id: string; reviewed_by_member_id: string; reviewed_at: string;
 }
-interface VerifiedSource {
-  candidate_commit: string;
-  candidate_tree: string;
+interface MaterializedSource {
+  adoption_digest: string;
+  adoption_id: string;
+  candidate_commit: string | null;
+  candidate_tree: string | null;
   criteria_revision: number;
   definition_revision: number;
+  gate: "accepted_result" | "verified_output" | "integrated_commit";
   gate_operation_id: string;
   materialization_digest: string;
+  operation_id: string | null;
   result_version: number;
+  reviewed_at: string | null;
+  reviewed_by_member_id: string | null;
   task_id: string;
 }
 const binary = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
 const fail = (code: string): never => { throw new ExecutionError(code, 409); };
 const deny = (): never => { throw new AuthorizationError("FORBIDDEN", "Execution input is not authorized for this Run"); };
+
+function acceptedProjection(source: MaterializedSource): AcceptedSource {
+  if (
+    source.gate !== "accepted_result" ||
+    source.operation_id !== source.gate_operation_id ||
+    !source.reviewed_by_member_id ||
+    !source.reviewed_at
+  ) return fail("EXECUTION_INPUT_SOURCE_UNAVAILABLE");
+  return {
+    task_id: source.task_id,
+    result_version: source.result_version,
+    definition_revision: source.definition_revision,
+    criteria_revision: source.criteria_revision,
+    operation_id: source.operation_id,
+    reviewed_by_member_id: source.reviewed_by_member_id,
+    reviewed_at: source.reviewed_at
+  };
+}
 
 /** Owns explicit input grants, never Result acceptance or repository execution. */
 export class ExecutionInputService {
@@ -99,13 +123,9 @@ export class ExecutionInputService {
       const sourceTask = sourceNode && plan.compiledTasks.find((entry) => entry.nodeKey === sourceNode.nodeKey);
       const sourceTaskId = sourceTask?.taskId ?? external?.sourceTaskId;
       if (!sourceTaskId || sourceTaskId === destination.task_id) return fail("EXECUTION_INPUT_SOURCE_INVALID");
-      let materializedGate: "verified_output" | "integrated_commit" | undefined;
-      if (edge?.gate === "verified_output" || edge?.gate === "integrated_commit") {
-        materializedGate = edge.gate;
-      }
-      const source = materializedGate
+      const source = edge
         ? this.materializedSource(
-          materializedGate,
+          edge.gate,
           plan.planId,
           input.revision,
           sourceTaskId,
@@ -135,22 +155,26 @@ export class ExecutionInputService {
         bindingId: `input_${executionOperationDigest({ runId: input.runId, inputSlot: selection.inputSlot })}`,
         planId: plan.planId, planRevision: input.revision, edgeKey: edge?.edgeKey ?? null,
         gate: edge?.gate ?? "accepted_result",
-        gateOperationId: materializedGate
-          ? (source as VerifiedSource).gate_operation_id
+        gateOperationId: edge
+          ? (source as MaterializedSource).gate_operation_id
           : (source as AcceptedSource).operation_id,
-        gateDigest: materializedGate
-          ? (source as VerifiedSource).materialization_digest
+        gateDigest: edge
+          ? edge.gate === "accepted_result"
+            ? executionOperationDigest(acceptedProjection(
+              source as MaterializedSource
+            ))
+            : (source as MaterializedSource).materialization_digest
           : executionOperationDigest(source),
         sourceTaskId, sourceDefinitionRevision: source.definition_revision, sourceCriteriaRevision: source.criteria_revision,
         sourceResultId: selection.sourceResultId, sourceResultVersion: source.result_version, sourceOutputSlot: outputSlot,
         artifact: { artifactId: artifact.artifactId, artifactRevision: artifact.artifactRevision,
           contentDigest: artifact.contentSha256!, byteLength: artifact.contentSizeBytes!, kind: slot.kind },
         repositoryId: sourceNode?.repository?.repositoryId ?? null,
-        sourceCommit: materializedGate
-          ? (source as VerifiedSource).candidate_commit
+        sourceCommit: edge
+          ? (source as MaterializedSource).candidate_commit
           : null,
-        sourceTree: materializedGate
-          ? (source as VerifiedSource).candidate_tree
+        sourceTree: edge
+          ? (source as MaterializedSource).candidate_tree
           : null,
         destinationTaskId: destination.task_id, destinationRunId: input.runId,
         destinationAgentId: destination.target_agent_id, destinationDeviceId: input.deviceId,
@@ -266,8 +290,7 @@ export class ExecutionInputService {
         scope.definitionRevision !== destination.definition_revision || scope.criteriaRevision !== destination.criteria_revision ||
         manifest.inputs.filter((entry) => entry.bindingId === bindingId).length !== 1 ||
         canonicalExecutionJSON(manifest.inputs.find((entry) => entry.bindingId === bindingId)) !== canonicalExecutionJSON(binding)) return deny();
-      if (binding.gate === "verified_output" ||
-        binding.gate === "integrated_commit") {
+      if (binding.edgeKey !== null) {
         const source = this.materializedSource(
           binding.gate,
           binding.planId,
@@ -278,8 +301,11 @@ export class ExecutionInputService {
           binding.sourceOutputSlot,
           plan.roomId
         );
+        const gateDigest = binding.gate === "accepted_result"
+          ? executionOperationDigest(acceptedProjection(source))
+          : source.materialization_digest;
         if (
-          source.materialization_digest !== binding.gateDigest ||
+          gateDigest !== binding.gateDigest ||
           source.gate_operation_id !== binding.gateOperationId ||
           source.candidate_commit !== binding.sourceCommit ||
           source.candidate_tree !== binding.sourceTree
@@ -359,7 +385,7 @@ export class ExecutionInputService {
   }
 
   private materializedSource(
-    gate: "verified_output" | "integrated_commit",
+    gate: "accepted_result" | "verified_output" | "integrated_commit",
     planId: string,
     planRevision: number,
     taskId: string,
@@ -367,14 +393,17 @@ export class ExecutionInputService {
     artifactId: string,
     outputSlot: string,
     roomId: string
-  ): VerifiedSource {
+  ): MaterializedSource {
     const source = this.database.prepare(`
       SELECT result.task_id, result.result_version,
         result.definition_revision, result.criteria_revision,
+        materialization.gate, materialization.adoption_id,
+        materialization.adoption_digest,
         materialization.gate_operation_id,
         materialization.materialization_digest,
-        materialization.candidate_commit, materialization.candidate_tree
-      FROM execution_dependency_materializations materialization
+        materialization.candidate_commit, materialization.candidate_tree,
+        review.operation_id, review.reviewed_by_member_id, review.reviewed_at
+      FROM execution_adopted_node_materializations materialization
       JOIN execution_plan_nodes node ON node.plan_id = materialization.plan_id
         AND node.revision = materialization.plan_revision
         AND node.node_key = materialization.node_key
@@ -390,16 +419,17 @@ export class ExecutionInputService {
         AND task.lifecycle_state <> 'canceled'
         AND task.definition_revision = result.definition_revision
         AND task.criteria_revision = result.criteria_revision
+      LEFT JOIN result_reviews review
+        ON materialization.gate = 'accepted_result'
+        AND review.result_id = result.result_id
+        AND review.operation_id = materialization.gate_operation_id
+        AND review.decision = 'accepted'
       JOIN json_each(materialization.artifact_pins_json) pin
         ON json_extract(pin.value, '$.artifactId') = @artifactId
         AND json_extract(pin.value, '$.outputSlot') = @outputSlot
-      JOIN repository_checkpoint_outputs output
-        ON output.checkpoint_id = materialization.checkpoint_id
-        AND output.artifact_id = @artifactId
-        AND output.slot_key = @outputSlot
       JOIN result_evidence_refs evidence ON evidence.result_id = result.result_id
         AND evidence.evidence_kind = 'artifact'
-        AND evidence.artifact_id = output.artifact_id
+        AND evidence.artifact_id = @artifactId
       WHERE materialization.plan_id = @planId
         AND materialization.plan_revision = @planRevision
         AND materialization.gate = @gate
@@ -413,7 +443,7 @@ export class ExecutionInputService {
       artifactId,
       outputSlot,
       roomId
-    }) as VerifiedSource | undefined;
+    }) as MaterializedSource | undefined;
     return source ?? fail("EXECUTION_INPUT_SOURCE_UNAVAILABLE");
   }
 

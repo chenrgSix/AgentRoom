@@ -11,6 +11,11 @@ import type { ExecutionNodeIdentity } from
 import { ExecutionEvidenceAdoptionRepository } from
   "./execution-evidence-adoption-repository.js";
 import { ExecutionError } from "./execution-error.js";
+import {
+  projectGeneralizedExecutionMaterialization,
+  projectLocalExecutionMaterialization,
+  type ExecutionMaterializationProjection
+} from "./execution-materialization-projection.js";
 
 export interface ExecutionMaterializationArtifactPin {
   artifactId: string;
@@ -295,7 +300,36 @@ export class ExecutionNodeMaterializationRepository {
     gate: "accepted_result" | "verified_output" | "integrated_commit" =
       "accepted_result"
   ): ExecutionNodeMaterialization | undefined {
-    return this.getLegacy(identity, gate);
+    const legacy = this.getLegacy(identity, gate);
+    if (!legacy) return undefined;
+    const adopted = this.evidence.get(identity, gate);
+    if (!adopted) return undefined;
+    this.evidence.assertShadowEqual(legacy, adopted);
+    return legacy;
+  }
+
+  public project(
+    identity: ExecutionNodeIdentity,
+    gate: "accepted_result" | "verified_output" | "integrated_commit",
+    projectionVersion: 1 | 2
+  ): ExecutionMaterializationProjection | undefined {
+    const legacy = this.get(identity, gate);
+    if (!legacy) return undefined;
+    if (projectionVersion === 1) {
+      return projectLocalExecutionMaterialization(legacy);
+    }
+    const bundle = this.evidence.get(identity, gate)!;
+    const origin = bundle.source.kind === "repository_commit" &&
+      bundle.source.origin?.kind === "local_checkpoint"
+      ? bundle.source.origin
+      : undefined;
+    const companion = origin?.companionSourceEvidenceId
+      ? this.evidence.getSource(
+        origin.companionSourceEvidenceId,
+        origin.companionSourceDigest
+      )
+      : undefined;
+    return projectGeneralizedExecutionMaterialization(bundle, companion);
   }
 
   /** Stage-A/backfill access; runtime readers switch away from this in Stage C. */
@@ -351,7 +385,7 @@ export class ExecutionNodeMaterializationRepository {
       ...normalized,
       materializationDigest: executionOperationDigest(normalized)
     };
-    const existing = this.get(record, record.gate);
+    const existing = this.getLegacy(record, record.gate);
     if (existing) {
       if (canonicalExecutionJSON(existing) !== canonicalExecutionJSON(record)) {
         throw new Error("Execution node materialization conflicts with retained evidence");
@@ -395,7 +429,7 @@ export class ExecutionNodeMaterializationRepository {
       ...normalized,
       materializationDigest: executionOperationDigest(normalized)
     };
-    const existing = this.get(record, record.gate);
+    const existing = this.getLegacy(record, record.gate);
     if (existing) {
       if (canonicalExecutionJSON(existing) !== canonicalExecutionJSON(record)) {
         throw new Error("Verified node materialization conflicts with retained evidence");
@@ -445,7 +479,7 @@ export class ExecutionNodeMaterializationRepository {
       ...normalized,
       materializationDigest: executionOperationDigest(normalized)
     };
-    const existing = this.get(record, record.gate);
+    const existing = this.getLegacy(record, record.gate);
     if (existing) {
       if (canonicalExecutionJSON(existing) !== canonicalExecutionJSON(record)) {
         throw new Error("Integrated node materialization conflicts with retained evidence");

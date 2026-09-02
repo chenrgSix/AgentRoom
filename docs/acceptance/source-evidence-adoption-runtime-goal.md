@@ -200,3 +200,30 @@ reconciliation converges, response-loss/restart replay is idempotent, and an
 injected adoption insert failure rolls back the legacy materialization, source,
 proof and adoption together. Runtime dependency and input readers still use
 legacy projections until Stage C.
+
+## EXEC-009 Stage-C Implementation Checkpoint
+
+Migration 0075 exposes only legacy rows that have an exact joined adoption and
+source-evidence record, and replaces the frozen-input scope trigger so every
+graph edge uses that adopted view. `ExecutionNodeMaterializationRepository`
+now treats a shadow-equal adoption as mandatory; dependency resolution,
+accepted/verified/integrated input freezing and reads, retry fencing, and both
+integration approval and Bridge admission therefore fail closed when only the
+legacy row remains. External approved Result inputs keep their separate direct
+Result authority and cannot masquerade as graph edges.
+
+Backfill now runs as migration-74 data work, not as a startup repair loop. An
+already migrated runtime cannot recreate a deliberately missing adoption from
+the compatibility row. Physical SQLite fault fixtures retain the legacy row
+while removing only the owned adoption and prove that integration admission,
+dependency readiness and already-frozen byte delivery are denied. The normal
+accepted path still delivers byte-identical sealed content.
+
+The materialization reader also provides two explicit projections. Version 1
+retains the local Result-bearing compatibility shape. Version 2 carries source
+evidence, proof and adoption identities and includes a `companionResult` only
+when an actual Task Result source exists; a contract-valid remote repository
+source produces no nullable or fabricated Result field. Focused migration,
+projection, input-binding and accepted/integrated generation-2 tests pass under
+owned temporary roots. `EXEC-009` remains ACTIVE until the full regression and
+three-run physical cleanup gates above are recorded.

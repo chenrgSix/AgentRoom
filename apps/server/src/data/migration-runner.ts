@@ -222,7 +222,11 @@ export async function migrateDatabase(
       appliedVersions.push(migration.version);
     }
 
-    backfillLegacyEvidenceAdoptions(database);
+    // This is a data migration, not a runtime repair loop. Once migration 74
+    // has committed, a missing adoption must remain observable and fail closed.
+    if (appliedVersions.includes(74)) {
+      backfillLegacyEvidenceAdoptions(database);
+    }
 
     const currentVersion = migrations.at(-1)?.version ?? 0;
     return {

@@ -4,7 +4,14 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test, { type TestContext } from "node:test";
 import type { ExecutionInputBinding, ExecutionPlanProjection, GovernedExecutionManifest, RepositoryOperationRequest } from "@convene-wire/contracts/execution-plan";
-import { executionOperationDigest } from "@convene-wire/contracts/execution-validation";
+import {
+  canonicalExecutionJSON,
+  evidenceAdoptionDigest,
+  evidenceAdoptionOperationDigest,
+  evidenceProofSetDigest,
+  executionOperationDigest,
+  sourceEvidenceDigest
+} from "@convene-wire/contracts/execution-validation";
 import { ArtifactPublicationRepository } from "../src/artifact/artifact-publication-repository.js";
 import { LocalArtifactBlobStore } from "../src/artifact/local-artifact-blob-store.js";
 import { CoreRepository } from "../src/data/core-repository.js";
@@ -31,6 +38,229 @@ const sha256 = createHash("sha256").update(bytes).digest("hex");
 const wire = JSON.parse(await readFile(new URL(
   "../../../packages/contracts/fixtures/execution-runtime-cases.json", import.meta.url
 ), "utf8")).cases.find((entry: { name: string }) => entry.name === "execution runtime: valid governed wire delivery").instance.payload;
+
+function seedAcceptedAdoptionFixture(
+  database: Awaited<ReturnType<typeof fixture>>["database"],
+  input: {
+    artifact: { artifactId: string; artifactRevision: number };
+    plan: ExecutionPlanProjection;
+    result: { resultId: string; resultVersion: number };
+    sourceAgentId: string;
+    sourceDeviceId: string;
+    sourceRunId: string;
+    sourceTask: {
+      criteriaRevision: number;
+      definitionRevision: number;
+      taskId: string;
+    };
+  }
+): void {
+  const pins = [{
+    artifactId: input.artifact.artifactId,
+    artifactRevision: input.artifact.artifactRevision,
+    byteLength: bytes.length,
+    contentDigest: sha256,
+    kind: "patch" as const,
+    outputSlot: "output"
+  }];
+  const sourcePending = {
+    version: 1,
+    kind: "task_result" as const,
+    sourceEvidenceId: "source_pending0001",
+    sourceDigest: "0".repeat(64),
+    roomId: input.plan.roomId,
+    taskId: input.sourceTask.taskId,
+    definitionRevision: input.sourceTask.definitionRevision,
+    criteriaRevision: input.sourceTask.criteriaRevision,
+    sourceRunId: input.sourceRunId,
+    dispatchGeneration: 1,
+    agentId: input.sourceAgentId,
+    deviceId: input.sourceDeviceId,
+    resultId: input.result.resultId,
+    resultVersion: input.result.resultVersion,
+    artifactPins: pins,
+    createdAt: now
+  };
+  const sourceDigest = sourceEvidenceDigest(sourcePending);
+  const source = {
+    ...sourcePending,
+    sourceEvidenceId: `source_${sourceDigest}`,
+    sourceDigest
+  };
+  const review = database.prepare(`
+    SELECT operation_id, decision, review_revision, reviewed_by_member_id,
+      reason, task_revision_before, task_revision_after, completed_task,
+      reviewed_at
+    FROM result_reviews WHERE result_id = ?
+  `).get(input.result.resultId) as {
+    completed_task: number;
+    decision: string;
+    operation_id: string;
+    reason: string;
+    review_revision: number;
+    reviewed_at: string;
+    reviewed_by_member_id: string;
+    task_revision_after: number;
+    task_revision_before: number;
+  };
+  const proof = {
+    kind: "result_review" as const,
+    operationId: review.operation_id,
+    resultId: input.result.resultId,
+    resultVersion: input.result.resultVersion,
+    proofDigest: executionOperationDigest({
+      resultId: input.result.resultId,
+      resultVersion: input.result.resultVersion,
+      operationId: review.operation_id,
+      decision: review.decision,
+      reviewRevision: review.review_revision,
+      reviewedByMemberId: review.reviewed_by_member_id,
+      reason: review.reason,
+      taskRevisionBefore: review.task_revision_before,
+      taskRevisionAfter: review.task_revision_after,
+      completedTask: Boolean(review.completed_task),
+      reviewedAt: review.reviewed_at
+    })
+  };
+  const legacyUnsigned = {
+    planId: input.plan.planId,
+    planRevision: input.plan.current.revision,
+    nodeKey: "Build",
+    gate: "accepted_result" as const,
+    dispatchGeneration: 1,
+    sourceRunId: input.sourceRunId,
+    sourceResultId: input.result.resultId,
+    sourceResultVersion: input.result.resultVersion,
+    gateOperationId: review.operation_id,
+    artifactPins: pins,
+    createdAt: now
+  };
+  const legacyDigest = executionOperationDigest(legacyUnsigned);
+  const keyDigest = executionOperationDigest({
+    planId: input.plan.planId,
+    planRevision: input.plan.current.revision,
+    nodeKey: "Build",
+    gate: "accepted_result",
+    sourceEvidenceId: source.sourceEvidenceId,
+    legacyMaterializationDigest: legacyDigest
+  });
+  const adoption = {
+    version: 1,
+    adoptionId: `adoption_${keyDigest}`,
+    operationId: `op_adoption_${keyDigest}`,
+    planId: input.plan.planId,
+    planRevision: input.plan.current.revision,
+    nodeKey: "Build",
+    gate: "accepted_result" as const,
+    sourceEvidenceId: source.sourceEvidenceId,
+    sourceDigest: source.sourceDigest,
+    sourceExecution: { runId: input.sourceRunId, dispatchGeneration: 1 },
+    proofs: [proof] as [typeof proof],
+    proofSetDigest: evidenceProofSetDigest([proof]),
+    nodeContractDigest: executionOperationDigest({ fixture: "input-binding" }),
+    resolvedInputSetDigest: executionOperationDigest([]),
+    authority: {
+      service: "execution_materialization" as const,
+      approvalOperationId: "op_input_approval0001",
+      planDigest: input.plan.current.digest,
+      roomId: input.plan.roomId,
+      taskId: input.sourceTask.taskId,
+      definitionRevision: input.sourceTask.definitionRevision,
+      criteriaRevision: input.sourceTask.criteriaRevision,
+      agentId: input.sourceAgentId,
+      deviceId: input.sourceDeviceId,
+      grantId: "grant_input_fixture0001",
+      grantRevision: 1,
+      grantDigest: "a".repeat(64)
+    },
+    operationDigest: "0".repeat(64),
+    adoptionDigest: "0".repeat(64),
+    createdAt: now
+  };
+  adoption.operationDigest = evidenceAdoptionOperationDigest(adoption);
+  adoption.adoptionDigest = evidenceAdoptionDigest(adoption);
+
+  database.transaction(() => {
+    const triggerNames = [
+      "execution_node_materializations_require_exact_scope_insert",
+      "execution_source_evidence_require_scope_insert",
+      "execution_gate_proof_refs_require_scope_insert",
+      "execution_evidence_adoptions_require_scope_insert"
+    ];
+    const triggers = triggerNames.map((name) => database.prepare(`
+      SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?
+    `).get(name) as { sql: string });
+    for (const name of triggerNames) database.exec(`DROP TRIGGER ${name}`);
+    database.prepare(`
+      INSERT INTO execution_node_materializations (
+        plan_id, plan_revision, node_key, gate, dispatch_generation,
+        source_run_id, source_result_id, source_result_version,
+        gate_operation_id, artifact_pins_json, materialization_digest, created_at
+      ) VALUES (?, ?, 'Build', 'accepted_result', 1, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      input.plan.planId,
+      input.plan.current.revision,
+      input.sourceRunId,
+      input.result.resultId,
+      input.result.resultVersion,
+      review.operation_id,
+      canonicalExecutionJSON(pins),
+      legacyDigest,
+      now
+    );
+    database.prepare(`
+      INSERT INTO execution_source_evidence (
+        source_evidence_id, schema_version, kind, source_digest, source_json,
+        source_run_id, source_result_id, created_at
+      ) VALUES (?, 1, 'task_result', ?, ?, ?, ?, ?)
+    `).run(
+      source.sourceEvidenceId,
+      source.sourceDigest,
+      canonicalExecutionJSON(source),
+      input.sourceRunId,
+      input.result.resultId,
+      now
+    );
+    database.prepare(`
+      INSERT INTO execution_gate_proof_refs (
+        proof_ref_id, kind, operation_id, proof_digest, proof_json, created_at
+      ) VALUES (?, 'result_review', ?, ?, ?, ?)
+    `).run(
+      `proof_${executionOperationDigest(proof)}`,
+      proof.operationId,
+      proof.proofDigest,
+      canonicalExecutionJSON(proof),
+      now
+    );
+    database.prepare(`
+      INSERT INTO execution_evidence_adoptions (
+        adoption_id, schema_version, operation_id, operation_digest,
+        plan_id, plan_revision, node_key, gate, source_evidence_id,
+        source_digest, source_run_id, dispatch_generation, proof_set_digest,
+        node_contract_digest, resolved_input_set_digest, adoption_digest,
+        adoption_json, legacy_materialization_digest, created_at
+      ) VALUES (?, 1, ?, ?, ?, ?, 'Build', 'accepted_result', ?, ?, ?, 1,
+        ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      adoption.adoptionId,
+      adoption.operationId,
+      adoption.operationDigest,
+      adoption.planId,
+      adoption.planRevision,
+      adoption.sourceEvidenceId,
+      adoption.sourceDigest,
+      input.sourceRunId,
+      adoption.proofSetDigest,
+      adoption.nodeContractDigest,
+      adoption.resolvedInputSetDigest,
+      adoption.adoptionDigest,
+      canonicalExecutionJSON(adoption),
+      legacyDigest,
+      now
+    );
+    for (const trigger of triggers) database.exec(trigger.sql);
+  })();
+}
 
 async function inputFixture(t: TestContext, options: { gate?: "verified_output" | "integrated_commit"; twoInputs?: boolean; external?: boolean; captureOutput?: boolean } = {}) {
   const f = await fixture(t);
@@ -141,6 +371,17 @@ async function inputFixture(t: TestContext, options: { gate?: "verified_output" 
     operationId: "op_input_approval0001", expectedRevision: draft.current.revision, expectedDigest: draft.current.digest,
     expectedRootTaskRevision: command.expectedRootTaskRevision, decision: "approved", reason: "Approve exact input slots"
   })).plan as ExecutionPlanProjection;
+  if (!options.external && !options.gate) {
+    seedAcceptedAdoptionFixture(database, {
+      artifact,
+      plan,
+      result,
+      sourceAgentId: source.agent.agentId,
+      sourceDeviceId: source.device.deviceId,
+      sourceRunId: sourceRun.runId,
+      sourceTask: tasks[0]
+    });
+  }
   const trigger = (await f.ok("POST", `/api/rooms/${f.roomId}/messages`, {
     taskId: tasks[1].taskId, content: "Frozen input authorization fixture"
   })).message;

@@ -101,16 +101,7 @@ export class ExecutionNodeRetryRepository {
     nodeKey: string
   ): boolean {
     return Boolean(this.database.prepare(`
-      SELECT 1 FROM (
-        SELECT plan_id, plan_revision, node_key
-        FROM execution_node_materializations
-        UNION ALL
-        SELECT plan_id, plan_revision, node_key
-        FROM execution_verified_node_materializations
-        UNION ALL
-        SELECT plan_id, plan_revision, node_key
-        FROM execution_integrated_node_materializations
-      ) materialization
+      SELECT 1 FROM execution_evidence_adoptions materialization
       WHERE plan_id = ? AND plan_revision = ? AND node_key = ?
       LIMIT 1
     `).get(planId, planRevision, nodeKey));

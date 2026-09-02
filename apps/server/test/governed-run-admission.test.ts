@@ -51,6 +51,60 @@ const capability = {
   operations: ["prepare", "capture", "verify", "integrate"] as const
 };
 
+interface RemovedAdoption {
+  deleteTriggerSql: string;
+  row: Record<string, string | number | null>;
+}
+
+function removeAdoption(
+  database: Awaited<ReturnType<typeof fixture>>["database"],
+  planId: string,
+  planRevision: number,
+  nodeKey: string,
+  gate: "accepted_result" | "verified_output" | "integrated_commit"
+): RemovedAdoption {
+  const trigger = database.prepare(`
+    SELECT sql FROM sqlite_master
+    WHERE type = 'trigger'
+      AND name = 'execution_evidence_adoptions_immutable_delete'
+  `).get() as { sql: string };
+  assert.ok(trigger?.sql);
+  const row = database.prepare(`
+    SELECT * FROM execution_evidence_adoptions
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = ? AND gate = ?
+  `).get(planId, planRevision, nodeKey, gate) as
+    Record<string, string | number | null>;
+  assert.ok(row);
+  database.exec("DROP TRIGGER execution_evidence_adoptions_immutable_delete");
+  assert.equal(database.prepare(`
+    DELETE FROM execution_evidence_adoptions
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = ? AND gate = ?
+  `).run(planId, planRevision, nodeKey, gate).changes, 1);
+  return { deleteTriggerSql: trigger.sql, row };
+}
+
+function restoreAdoption(
+  database: Awaited<ReturnType<typeof fixture>>["database"],
+  removed: RemovedAdoption
+): void {
+  database.prepare(`
+    INSERT INTO execution_evidence_adoptions (
+      adoption_id, schema_version, operation_id, operation_digest,
+      plan_id, plan_revision, node_key, gate, source_evidence_id,
+      source_digest, source_run_id, dispatch_generation, proof_set_digest,
+      node_contract_digest, resolved_input_set_digest, adoption_digest,
+      adoption_json, legacy_materialization_digest, created_at
+    ) VALUES (
+      @adoption_id, @schema_version, @operation_id, @operation_digest,
+      @plan_id, @plan_revision, @node_key, @gate, @source_evidence_id,
+      @source_digest, @source_run_id, @dispatch_generation, @proof_set_digest,
+      @node_contract_digest, @resolved_input_set_digest, @adoption_digest,
+      @adoption_json, @legacy_materialization_digest, @created_at
+    )
+  `).run(removed.row);
+  database.exec(removed.deleteTriggerSql);
+}
+
 function envelope(
   type: string,
   payload: Record<string, unknown>,
@@ -1609,6 +1663,30 @@ test("generation-2 verified output admits one immutable serialized integration",
     })),
     deadline: "2026-08-31T12:30:00.000Z"
   };
+  const missingVerifiedAdoption = removeAdoption(
+    f.database,
+    f.plan.planId,
+    f.plan.current.revision,
+    "Build",
+    "verified_output"
+  );
+  try {
+    assert.equal(new ExecutionNodeMaterializationRepository(f.database).get({
+      planId: f.plan.planId,
+      planRevision: f.plan.current.revision,
+      nodeKey: "Build"
+    }, "verified_output"), undefined,
+    "a legacy-only verified row is not integration authority");
+    const denied = await f.request(
+      "POST",
+      `/api/execution-plans/${f.plan.planId}/integration-approvals`,
+      command
+    );
+    assert.equal(denied.statusCode, 409, denied.body);
+    assert.match(denied.body, /INTEGRATION_VERIFIED_MATERIALIZATION_REQUIRED/u);
+  } finally {
+    restoreAdoption(f.database, missingVerifiedAdoption);
+  }
   const approval = await f.ok(
     "POST",
     `/api/execution-plans/${f.plan.planId}/integration-approvals`,
@@ -1621,6 +1699,26 @@ test("generation-2 verified output admits one immutable serialized integration",
     SELECT count(*) AS n FROM repository_integration_locks
     WHERE repository_id = ? AND target_ref = ?
   `).get(target.repositoryId, target.targetRef) as { n: number }).n, 1);
+
+  const missingAdmissionAdoption = removeAdoption(
+    f.database,
+    f.plan.planId,
+    f.plan.current.revision,
+    "Build",
+    "verified_output"
+  );
+  try {
+    const denied = await f.request(
+      "GET",
+      `/api/bridge/repository-integrations/${approval.integrationOperationId}`,
+      undefined,
+      `Bearer ${f.credential.secret}`
+    );
+    assert.equal(denied.statusCode, 409, denied.body);
+    assert.match(denied.body, /INTEGRATION_VERIFIED_MATERIALIZATION_REQUIRED/u);
+  } finally {
+    restoreAdoption(f.database, missingAdmissionAdoption);
+  }
 
   const admission = await f.ok(
     "GET",
@@ -2446,6 +2544,25 @@ test("generation-2 accepted output materializes once and drives exact downstream
   }, "accepted_result");
   assert.ok(acceptedAdoption?.source.kind === "task_result");
   assert.equal(acceptedAdoption.source.resultId, good.resultId);
+  const projectionRepository = new ExecutionNodeMaterializationRepository(
+    f.database
+  );
+  const localProjection = projectionRepository.project(
+    buildIdentity,
+    "accepted_result",
+    1
+  );
+  assert.ok(localProjection?.projectionVersion === 1);
+  assert.equal(localProjection.sourceResultId, good.resultId);
+  const generalizedProjection = projectionRepository.project(
+    buildIdentity,
+    "accepted_result",
+    2
+  );
+  assert.ok(generalizedProjection?.projectionVersion === 2);
+  assert.equal(generalizedProjection.sourceEvidence.kind, "task_result");
+  assert.equal(generalizedProjection.companionResult?.resultId, good.resultId);
+  assert.equal("sourceResultId" in generalizedProjection, false);
   assert.equal(
     acceptedAdoption.legacyMaterializationDigest,
     (f.database.prepare(`
@@ -2593,6 +2710,35 @@ test("generation-2 accepted output materializes once and drives exact downstream
     DELETE FROM execution_node_materializations
   `).run(), /retained evidence/u);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+  removeAdoption(
+    f.database,
+    f.plan.planId,
+    f.plan.current.revision,
+    "Build",
+    "accepted_result"
+  );
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_node_materializations
+  `).get() as { n: number }).n, 1, "legacy proof remains in the fault fixture");
+  assert.deepEqual(new ExecutionDependencyResolver(
+    new ExecutionPlanRepository(f.database),
+    new ExecutionNodeMaterializationRepository(f.database)
+  ).resolve({
+    planId: f.plan.planId,
+    planRevision: f.plan.current.revision,
+    nodeKey: "Consume"
+  }), {
+    ready: false,
+    blocker: "EXECUTION_DEPENDENCY_NOT_MATERIALIZED"
+  });
+  const deniedAfterAdoptionLoss = await f.request(
+    "GET",
+    `/api/bridge/runs/${consumeManifest.scope.runId}/execution-inputs/${input.bindingId}/content`,
+    undefined,
+    `Bearer ${f.credential.secret}`
+  );
+  assert.equal(deniedAfterAdoptionLoss.statusCode, 403,
+    "frozen physical bytes are withheld when adoption authority disappears");
 });
 
 test("restart and duplicate scheduler wakeups retain one generation and Run", {
