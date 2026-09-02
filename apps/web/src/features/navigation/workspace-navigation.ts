@@ -26,7 +26,7 @@ export function isManagementView(view: WorkspaceView): boolean {
   return view !== "work" && view !== "room";
 }
 const tabs: Record<TaskWorkDetailTab, true> = {
-  overview: true, plan: true, runs: true, results: true, artifacts: true,
+  overview: true, plan: true, evidence: true, runs: true, results: true, artifacts: true,
   discussion: true, audit: true
 };
 const states: Record<LifecycleState, true> = {

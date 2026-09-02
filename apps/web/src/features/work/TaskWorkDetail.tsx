@@ -23,10 +23,11 @@ import type {
   TaskArtifactPage
 } from "../../models.js";
 import { ArtifactPreviewPanel, canPreviewArtifact } from "../task/ArtifactPreviewPanel.js";
+import { ExecutionEvidencePanel } from "./ExecutionEvidencePanel.js";
 import { ExecutionPlanPanel } from "./ExecutionPlanPanel.js";
 import { RunRecoveryControls } from "./RunRecoveryControls.js";
 
-export const taskWorkDetailTabs = ["overview", "plan", "runs", "results", "artifacts", "discussion", "audit"] as const;
+export const taskWorkDetailTabs = ["overview", "plan", "evidence", "runs", "results", "artifacts", "discussion", "audit"] as const;
 export type TaskWorkDetailTab = typeof taskWorkDetailTabs[number];
 
 interface DetailedRun {
@@ -347,6 +348,7 @@ export function TaskWorkDetail({
   const tabs = useMemo<Array<{ key: TaskWorkDetailTab; label: string }>>(() => [
     { key: "overview", label: text("概览", "Overview", locale) },
     { key: "plan", label: text("计划", "Plan", locale) },
+    { key: "evidence", label: text("证据", "Evidence", locale) },
     { key: "runs", label: "Runs" },
     { key: "results", label: "Results" },
     { key: "artifacts", label: "Artifacts" },
@@ -642,6 +644,14 @@ export function TaskWorkDetail({
 
         {tab === "plan" && <ExecutionPlanPanel
           agentNames={agentNames}
+          currentMember={currentMember}
+          locale={locale}
+          onChanged={onChanged}
+          task={task}
+          token={token}
+        />}
+
+        {tab === "evidence" && <ExecutionEvidencePanel
           currentMember={currentMember}
           locale={locale}
           onChanged={onChanged}
