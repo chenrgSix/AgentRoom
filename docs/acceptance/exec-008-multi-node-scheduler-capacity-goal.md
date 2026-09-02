@@ -1,8 +1,8 @@
 # EXEC-008 Multi-Node Scheduler Capacity Goal
 
-Status: frozen and active on 2026-09-02. This document is the acceptance
-authority for `EXEC-008`; `docs/TASKS.md` remains the sole delivery-state
-register.
+Status: frozen and accepted on 2026-09-02. This document is the acceptance
+authority for completed `EXEC-008`; `docs/TASKS.md` remains the sole
+delivery-state register.
 
 ## Goal
 
@@ -109,6 +109,34 @@ physical SQLite tests additionally prove:
   admission blockers without partial side effects or automatic retry.
 
 The complete governed-admission file and full Server workspace regression pass
-under owned temporary roots. `EXEC-008` remains ACTIVE until the repository
-build, deterministic E2E and required three-run physical zero-residue evidence
-are recorded in this document and `docs/TASKS.md`.
+under owned temporary roots.
+
+## Final Acceptance
+
+The final 2026-09-02 acceptance ran from the committed implementation and
+recorded these independent gates:
+
+- `npm run validate` validated 12 schemas and 257 fixtures;
+- `npm run build` compiled strict Server TypeScript, built the Web production
+  bundle and confirmed generated TypeScript/Go contracts were current;
+- `npm test` completed every registered workspace, Bridge UI, QA evidence,
+  product-experience, site and temporary-lifecycle test and then physically
+  removed its owned run root;
+- `npm run test:e2e` passed all eight deterministic scenarios, including the
+  controlled physical `integrated_commit` product loop and two-Bridge recovery
+  cuts; only the explicitly live-provider scenario remained skipped, and the
+  E2E run root was removed;
+- `npm run test:bridge` passed every Go package, including the 334-second real
+  repository package, and removed its Go/npm cache-bearing run root;
+- `npm run lint:docs` checked 338 maintained Markdown files with zero issues.
+
+The required standalone cleanup acceptance used one newly owned isolated base,
+counted only `agentroom-*`, `agent-room-*`, `convenewire-*` and
+`convene-wire-*` directories beneath it, and ran `npm run test:temp-lifecycle`
+three consecutive times. Each round passed 24 tests covering success, assertion
+failure, spawn failure, timeout, cancellation, process trees and parallel
+owners. The physical snapshots were `before=0`, `after-1=0`, `after-2=0` and
+`after-3=0`; each per-run root and finally the isolated base itself were absent.
+
+This accepts `EXEC-008`. It does not add scheduler modes, automatic retry, plan
+supersession, remote provider authority or multi-computer physical acceptance.

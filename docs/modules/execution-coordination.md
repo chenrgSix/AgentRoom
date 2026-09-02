@@ -349,8 +349,8 @@ readers require a shadow-equal adoption, while the legacy tables remain
 compatibility projections only. Backfill executes only when migration 0074 is
 first applied, so runtime startup cannot heal a missing authority fact. The
 version-2 projection omits absent Result identity instead of emitting a null or
-invented Result; `EXEC-009` remains ACTIVE until its full regression and
-physical cleanup evidence is recorded.
+invented Result. `EXEC-009` is accepted after the full regression, deterministic
+E2E, Bridge and three-run physical cleanup evidence recorded in its frozen goal.
 
 The broader scheduler capacity target is frozen independently in
 [`exec-008-multi-node-scheduler-capacity-goal.md`](../acceptance/exec-008-multi-node-scheduler-capacity-goal.md).
@@ -360,8 +360,9 @@ round. Blocked candidates may be revisited only in a later bounded round, and a
 complete no-progress round ends the sweep. Durable DispatchIntent/Run facts
 remain the only capacity counters. The implementation checkpoint now has
 physical fan-out, fan-in, same-Agent serialization, two-plan fairness,
-concurrent-Server uniqueness and restart evidence; `EXEC-008` remains ACTIVE
-until the full build, E2E and three-run cleanup gates are recorded.
+concurrent-Server uniqueness and restart evidence. `EXEC-008` is accepted after
+the full build, deterministic E2E, Bridge and three-run cleanup gates recorded
+in its frozen goal.
 
 ### First Accepted-Result Dependency Increment
 

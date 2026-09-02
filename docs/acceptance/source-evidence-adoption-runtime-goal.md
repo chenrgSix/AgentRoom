@@ -1,8 +1,9 @@
 # Source-Evidence Adoption Runtime Goal
 
-Status: frozen on 2026-09-02. `CON-023` is accepted and `EXEC-009` is active.
-This document is their acceptance authority. ADR-0038 remains the architecture
-decision; `docs/TASKS.md` remains the sole delivery-state register.
+Status: frozen and accepted on 2026-09-02. `CON-023` and `EXEC-009` are
+complete. This document is their acceptance authority. ADR-0038 remains the
+architecture decision; `docs/TASKS.md` remains the sole delivery-state
+register.
 
 ## Goal
 
@@ -225,5 +226,30 @@ evidence, proof and adoption identities and includes a `companionResult` only
 when an actual Task Result source exists; a contract-valid remote repository
 source produces no nullable or fabricated Result field. Focused migration,
 projection, input-binding and accepted/integrated generation-2 tests pass under
-owned temporary roots. `EXEC-009` remains ACTIVE until the full regression and
-three-run physical cleanup gates above are recorded.
+owned temporary roots.
+
+## EXEC-009 Final Acceptance
+
+The final 2026-09-02 run proves all three migration stages together. Physical
+SQLite migration tests cover empty, accepted, verified and integrated backfill,
+byte-stable reopen, broken-join rollback and exact counts. Materializer tests
+cover the three gate dual-writes, concurrent/replayed writers and injected
+mid-transaction failure. Adoption-authoritative dependency, integration, retry
+and input tests remove only the owned adoption in a fault fixture and prove the
+legacy compatibility row cannot release graph authority or physical bytes.
+Projection tests retain the Result-bearing version 1 shape and prove version 2
+does not fabricate or emit a nullable Result for repository evidence.
+
+`npm run validate`, `npm run build`, `npm test`, `npm run test:e2e`,
+`npm run test:bridge` and `npm run lint:docs` all exited successfully. The
+contract catalog remained 12 schemas and 257 fixtures and generated TypeScript
+and Go trees were current. Full workspace, E2E and Bridge roots each reported
+their exact owned cleanup. A separate isolated-base acceptance then ran the
+temporary lifecycle suite three times; all three 24-test rounds passed and the
+four-prefix directory snapshots were `0` before and `0` after every round. The
+isolated base was also physically removed.
+
+This accepts `EXEC-009`. Legacy tables remain immutable compatibility
+projections for this release. No remote Git/PR/CI producer, live provider,
+semantic carry-forward, plan supersession, scheduler mode, legacy-table removal
+or multi-computer physical acceptance is claimed.
