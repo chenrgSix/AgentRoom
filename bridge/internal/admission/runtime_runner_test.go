@@ -55,14 +55,13 @@ func TestGovernedRuntimeRunnerUsesExactWorkspaceAndClosesOutcome(t *testing.T) {
 			}}
 			adapter := &governedFakeAdapter{events: test.events}
 			runner, err := newGovernedRuntimeRunner(coordinator,
-				map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: configured}, nil, processes, capture,
-				func(agent config.AgentConfig, _ bridgeruntime.RuntimeSessionStore,
-					tracker bridgeruntime.GovernedProcessTracker,
+				map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: configured}, processes, capture,
+				func(agent config.AgentConfig, tracker bridgeruntime.GovernedProcessTracker,
 					identity bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
 					used = agent
 					usedIdentity = identity
 					if tracker != processes {
-						t.Fatal("runner changed process tracker")
+						t.Fatal("runner widened the governed process or session boundary")
 					}
 					return adapter
 				})
@@ -86,7 +85,8 @@ func TestGovernedRuntimeRunnerUsesExactWorkspaceAndClosesOutcome(t *testing.T) {
 			if test.emitErr != nil {
 				wantErr = test.emitErr
 			}
-			if !errors.Is(runErr, wantErr) || used.Workspace != rig.prepared.Path ||
+			if ticket.request.Session == nil || adapter.request.Run.Session != nil ||
+				!errors.Is(runErr, wantErr) || used.Workspace != rig.prepared.Path ||
 				configured.Workspace != "/ordinary" || !reflect.DeepEqual(emitted, test.events) || rig.stopCalls != 1 ||
 				view.State != RuntimeAdmissionStopped || view.Outcome == nil || *view.Outcome != test.want ||
 				usedIdentity.RunID != ticket.manifest.Scope.RunID ||
@@ -111,7 +111,7 @@ func TestGovernedRuntimeRunnerClosesUnknownAfterInvokeSetupFailure(t *testing.T)
 	}
 	runner, err := newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
 		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
-	}}, nil, &runnerProcessTrackerStub{}, nil, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+	}}, &runnerProcessTrackerStub{}, nil, func(config.AgentConfig,
 		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
 		return nil
 	})
@@ -120,7 +120,7 @@ func TestGovernedRuntimeRunnerClosesUnknownAfterInvokeSetupFailure(t *testing.T)
 	}
 	runner, err = newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
 		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
-	}}, nil, &runnerProcessTrackerStub{}, &runnerCaptureStub{}, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+	}}, &runnerProcessTrackerStub{}, &runnerCaptureStub{}, func(config.AgentConfig,
 		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
 		return nil
 	})
@@ -148,7 +148,7 @@ func TestGovernedRuntimeRunnerRejectsReplayAndPostTerminalEvents(t *testing.T) {
 	adapter := &governedFakeAdapter{events: []bridgeruntime.Event{{Status: &completed}, {Status: &working}}}
 	runner, err := newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
 		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
-	}}, nil, &runnerProcessTrackerStub{}, nil, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+	}}, &runnerProcessTrackerStub{}, nil, func(config.AgentConfig,
 		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
 		return adapter
 	})
@@ -158,7 +158,7 @@ func TestGovernedRuntimeRunnerRejectsReplayAndPostTerminalEvents(t *testing.T) {
 	capture := &runnerCaptureStub{}
 	runner, err = newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
 		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
-	}}, nil, &runnerProcessTrackerStub{}, capture, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+	}}, &runnerProcessTrackerStub{}, capture, func(config.AgentConfig,
 		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
 		return adapter
 	})
@@ -198,7 +198,7 @@ func TestGovernedRuntimeRunnerDowngradesCaptureFailureBeforeTerminalDelivery(t *
 	completed := contracts.Completed
 	runner, err := newGovernedRuntimeRunner(coordinator, map[string]config.AgentConfig{ticket.manifest.Scope.AgentID: {
 		Name: "Builder", Adapter: "codex", RuntimeKind: "codex", Command: []string{"codex", "app-server"},
-	}}, nil, &runnerProcessTrackerStub{}, capture, func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
+	}}, &runnerProcessTrackerStub{}, capture, func(config.AgentConfig,
 		bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
 		return &governedFakeAdapter{events: []bridgeruntime.Event{{Status: &completed}}}
 	})
@@ -222,8 +222,9 @@ func TestGovernedRuntimeRunnerDowngradesCaptureFailureBeforeTerminalDelivery(t *
 }
 
 type governedFakeAdapter struct {
-	events []bridgeruntime.Event
-	calls  int
+	events  []bridgeruntime.Event
+	calls   int
+	request bridgeruntime.Request
 }
 
 type runnerProcessTrackerStub struct{}
@@ -253,8 +254,9 @@ func (*governedFakeAdapter) Name() string { return "codex" }
 func (*governedFakeAdapter) Capabilities() bridgeruntime.Capabilities {
 	return bridgeruntime.Capabilities{}
 }
-func (a *governedFakeAdapter) Execute(ctx context.Context, _ bridgeruntime.Request, emit bridgeruntime.EmitFunc) error {
+func (a *governedFakeAdapter) Execute(ctx context.Context, request bridgeruntime.Request, emit bridgeruntime.EmitFunc) error {
 	a.calls++
+	a.request = request
 	for _, event := range a.events {
 		if err := emit(ctx, event); err != nil {
 			return err

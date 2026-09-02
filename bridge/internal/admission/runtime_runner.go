@@ -13,8 +13,8 @@ import (
 	execution "convenewire.dev/contracts/generated/go/execution"
 )
 
-type governedAdapterFactory func(config.AgentConfig, bridgeruntime.RuntimeSessionStore,
-	bridgeruntime.GovernedProcessTracker, bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter
+type governedAdapterFactory func(config.AgentConfig, bridgeruntime.GovernedProcessTracker,
+	bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter
 
 type governedCapture interface {
 	CaptureCompleted(context.Context, GovernedAdmissionTicket, GovernedStartDecision) (execution.RepositoryCheckpoint, error)
@@ -33,7 +33,6 @@ var ErrRuntimeOutcomeMissing = errors.New("governed Runtime returned without a t
 type GovernedRuntimeRunner struct {
 	coordinator  *GovernedAdmissionCoordinator
 	agents       map[string]config.AgentConfig
-	sessions     bridgeruntime.RuntimeSessionStore
 	processes    bridgeruntime.GovernedProcessTracker
 	capture      governedCapture
 	verification governedVerification
@@ -50,19 +49,17 @@ func (r *GovernedRuntimeRunner) UseVerification(value *GovernedVerificationCoord
 }
 
 func NewGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents map[string]config.AgentConfig,
-	sessions bridgeruntime.RuntimeSessionStore,
 	processes bridgeruntime.GovernedProcessTracker, capture *GovernedCaptureCoordinator) (*GovernedRuntimeRunner, error) {
-	return newGovernedRuntimeRunner(coordinator, agents, sessions, processes, capture,
-		func(agent config.AgentConfig, store bridgeruntime.RuntimeSessionStore,
-			tracker bridgeruntime.GovernedProcessTracker,
+	return newGovernedRuntimeRunner(coordinator, agents, processes, capture,
+		func(agent config.AgentConfig, tracker bridgeruntime.GovernedProcessTracker,
 			identity bridgeruntime.GovernedProcessIdentity) bridgeruntime.Adapter {
-			return bridgeruntime.CodexAdapter{Config: agent, Sessions: store,
+			return bridgeruntime.CodexAdapter{Config: agent,
 				ProcessTracker: tracker, ProcessIdentity: identity}
 		})
 }
 
 func newGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents map[string]config.AgentConfig,
-	sessions bridgeruntime.RuntimeSessionStore, processes bridgeruntime.GovernedProcessTracker,
+	processes bridgeruntime.GovernedProcessTracker,
 	capture governedCapture, factory governedAdapterFactory) (*GovernedRuntimeRunner, error) {
 	if coordinator == nil || len(agents) == 0 || processes == nil || capture == nil || factory == nil {
 		return nil, ErrAdmissionInvalid
@@ -76,7 +73,7 @@ func newGovernedRuntimeRunner(coordinator *GovernedAdmissionCoordinator, agents 
 		agent.EnvAllowlist = append([]string{}, agent.EnvAllowlist...)
 		cloned[id] = agent
 	}
-	return &GovernedRuntimeRunner{coordinator: coordinator, agents: cloned, sessions: sessions, processes: processes,
+	return &GovernedRuntimeRunner{coordinator: coordinator, agents: cloned, processes: processes,
 		capture: capture, newAdapter: factory, now: time.Now}, nil
 }
 
@@ -102,7 +99,12 @@ func (r *GovernedRuntimeRunner) Run(ctx context.Context, ticket GovernedAdmissio
 	if bridgeruntime.ValidateGovernedProcessIdentity(processIdentity) != nil {
 		return r.stopUnknown(ticket, decision, ErrAdmissionChanged)
 	}
-	adapter := r.newAdapter(agent, r.sessions, r.processes, processIdentity)
+	// A governed attempt runs in a fresh, Run-owned worktree. It must not resume
+	// the ordinary Task session that was published for the Agent's source
+	// checkout, because that session scope names a different workspace and may
+	// still have a live writer. The execution manifest and sealed dependency
+	// inputs provide the continuation authority for this isolated attempt.
+	adapter := r.newAdapter(agent, r.processes, processIdentity)
 	if adapter == nil || adapter.Name() != CodexRuntimeKind {
 		return r.stopUnknown(ticket, decision, ErrProfileDenied)
 	}
@@ -110,7 +112,9 @@ func (r *GovernedRuntimeRunner) Run(ctx context.Context, ticket GovernedAdmissio
 	terminal := false
 	var terminalEvent bridgeruntime.Event
 	var emittedErr error
-	executeErr := adapter.Execute(ctx, bridgeruntime.Request{Run: ticket.request},
+	runtimeRequest := ticket.request
+	runtimeRequest.Session = nil
+	executeErr := adapter.Execute(ctx, bridgeruntime.Request{Run: runtimeRequest},
 		func(eventContext context.Context, event bridgeruntime.Event) error {
 			if terminal {
 				emittedErr = ErrAdmissionChanged

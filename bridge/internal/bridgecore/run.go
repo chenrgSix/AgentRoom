@@ -175,7 +175,7 @@ func RunObservedWithProvisioning(
 			return admission.ErrAdmissionInvalid
 		}
 		runner, runnerErr := admission.NewGovernedRuntimeRunner(coordinator,
-			configuredAgentsByID(loaded.Agents, identities), sessions, governedResources.ProcessTracker(), capture)
+			configuredAgentsByID(loaded.Agents, identities), governedResources.ProcessTracker(), capture)
 		if runnerErr != nil {
 			return runnerErr
 		}

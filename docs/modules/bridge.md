@@ -272,6 +272,15 @@ callback. Therefore the persisted `starting` state means the Runtime may have
 started, including a crash after the append but before the caller invokes it;
 recovery never guesses that it is safe to invoke again.
 
+The sole governed runner replaces the configured source checkout with the
+exact prepared worktree only after that fence. It also starts a fresh native
+Codex thread without the ordinary Task-session binding: a source-checkout
+Runtime scope cannot be resumed inside a different Run-owned worktree, and a
+prior writer must never be inherited by an isolated attempt. Continuation comes
+from the frozen execution manifest and sealed dependency inputs. The bounded
+attempt therefore emits no logical Task-session cursor and retains no reusable
+provider-session binding; capture and Result evidence remain the durable handoff.
+
 The internal `GovernedRuntimeRunner` is now the sole consumer designed for that
 `invoke=true` decision. It revalidates the frozen ticket/decision, selects only
 the exact Codex Agent, clones its local configuration and replaces the ordinary
