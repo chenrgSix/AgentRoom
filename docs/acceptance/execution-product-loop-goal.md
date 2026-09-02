@@ -172,12 +172,13 @@ and the preview plus all observed test roots were physically absent after
 shutdown. No plan review, Run, verification or repository mutation occurred
 during browser inspection.
 
-`QA-052` must traverse the real product entry and the existing governed local
-execution path with actual Server, Go Bridge, Git, verification, Result and
-integration facts. It must include interruption and response-loss cuts,
-physical artifact/repository/worktree inspection, legacy-flow regressions and
-explicit live-provider limits. Existing component acceptances are prerequisites,
-not substitutes for this end-to-end evidence.
+`QA-052` is accepted. One real Central and two real Go Bridges traverse the
+product entry and governed local execution path with actual Git, verification,
+Result, integration and cleanup facts. Response-loss/restart cuts, physical
+artifact/repository/worktree inspection, full legacy regressions and three
+zero-residue isolated runs are retained in the
+[QA-052 acceptance](qa-052-controlled-product-loop-goal.md). Its deterministic
+synthetic Runtime is not live-provider or multiple-machine evidence.
 
 ## Source-Evidence Decision Gate
 

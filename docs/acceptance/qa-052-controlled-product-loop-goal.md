@@ -2,9 +2,8 @@
 
 Date: 2026-09-02
 
-Status: frozen implementation goal. This record does not make `QA-052` done;
-retained completion evidence is appended only after the same real topology
-passes and its physical state is inspected.
+Status: accepted on 2026-09-02. `QA-052` is complete at the bounded topology
+and non-goals recorded below.
 
 ## Goal
 
@@ -154,3 +153,52 @@ The accurate claim on completion is a full controlled product loop using one
 native macOS host, one real Central, two real Bridge processes, distinct local
 owners/worktrees, real Git/SQLite/process effects and a deterministic synthetic
 Runtime provider.
+
+## Retained Acceptance Evidence
+
+The retained cross-process test is
+`tests/e2e/governed-two-bridge-integration.test.ts`. It starts one actual
+Central and two actual Go Bridges, runs one ordinary two-Agent Discussion Wave
+plus finalization, resumes the selected Agent's retained Codex logical thread,
+and accepts only a compact single-line plan envelope. It then executes the
+assigned manual Tech Lead MCP Run, exact human approval, both governed
+implementation Runs, independent verification, exact-target CAS integration,
+sealed downstream input and owner-confirmed cleanup.
+
+The final SQLite inspection retained exactly:
+
+- one completed Discussion and three completed Discussion/finalization Turns;
+- two plan revisions, one approval, two compiled nodes and one compiled edge;
+- one completed Tech Lead Run, two DispatchIntents, two completed governed
+  implementation Runs and two proposed Results;
+- two passed VerificationReceipts, one successful IntegrationReceipt, one
+  integrated materialization and one destination input binding; and
+- an empty `PRAGMA foreign_key_check` result.
+
+The same test verifies both cleanup execute replays after the two worktree paths
+are already absent. Both source checkouts retain their original commit, clean
+status and original dependency bytes; Bridge B observes the integrated bytes
+only inside its isolated worktree before producing the downstream file.
+
+Three consecutive focused runs used the isolated parent
+`/private/tmp/qa052-three-run.skfATN`. Before and after every run the four-prefix
+directory count was `0`; run durations were 26.8, 27.9 and 28.8 seconds. The
+owned roots `convene-wire-test-run-mDJzKM`, `convene-wire-test-run-qOp6oK` and
+`convene-wire-test-run-SeipB1` were each reported cleaned, and the empty parent
+was removed by its trap.
+
+Final repository gates passed:
+
+- deterministic E2E: eight passed and the explicit live-provider case skipped;
+- `npm test`: 525 Server, 264 Web, 81 contract, 58 Bridge UI, 45 QA evidence,
+  two product-experience, 15 site and 24 temporary-lifecycle tests passed;
+- all Bridge packages passed; the focused admission/repository/integration/
+  console/delivery race run passed; `go vet ./...` passed;
+- schema validation covered 11 schemas and 245 fixtures; workspace builds,
+  generated-contract checks and documentation lint passed; and
+- every observed full-suite, E2E, Bridge, race and vet run root was physically
+  removed. The production Web build retains its pre-existing large-chunk
+  advisory only.
+
+No live provider, second physical machine, remote Git/CI, scheduler-mode,
+parallel-coding, Release or deployment claim follows from this acceptance.
