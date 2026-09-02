@@ -100,6 +100,8 @@ import { registerTeamRoomRoutes } from "./http/team-room-routes.js";
 import { registerWorkbenchRoutes } from "./http/workbench-routes.js";
 import { DiscussionOrchestrator } from "./discussion/discussion-orchestrator.js";
 import { DiscussionRepository } from "./discussion/discussion-repository.js";
+import { DiscussionPlanProposalService } from
+  "./discussion/discussion-plan-proposal-service.js";
 import { TeamWaitService } from "./mcp/team-wait-service.js";
 import { ManualTaskWorkService } from
   "./mcp/manual-task-work-service.js";
@@ -574,6 +576,13 @@ export async function createServerApp(
   );
   deviceRevocation.recover();
   const discussionRepository = new DiscussionRepository(database);
+  const discussionPlanProposals = new DiscussionPlanProposalService(
+    transactions,
+    core,
+    discussionRepository,
+    executionDraftWriter,
+    taskRepository
+  );
   const discussions = new DiscussionOrchestrator(
     core,
     messages,
@@ -581,7 +590,8 @@ export async function createServerApp(
     runRepository,
     auth,
     taskRepository,
-    clock
+    clock,
+    discussionPlanProposals
   );
   let discussionSweepTimer: ReturnType<typeof setInterval> | undefined;
   let discussionSweepInFlight = false;

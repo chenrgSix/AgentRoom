@@ -312,6 +312,17 @@ creating another. The resulting plan remains `draft`: finalization cannot
 approve it, compile child Tasks, dispatch Runs, review Results, verify code,
 integrate repositories, enlarge budgets or grant local Runtime authority.
 
+`DISC-010` is implemented as this exact adapter. The finalizer instruction
+names the closed envelope without granting source or operation fields. Central
+parses only the singular bounded final line, closes the finalization Wave and
+Discussion in the same immediate transaction used to retain a valid draft, and
+reconciles the stable Turn-derived operation after restart. Focused physical
+SQLite tests prove the final Message bytes remain unchanged, only the terminal
+Discussion and final Message are frozen, approval/compiled-node counts stay at
+zero, an injected Decision insert failure rolls closure back, and recovery
+retains exactly one draft. Missing and domain-invalid envelopes still complete
+the Discussion with no plan.
+
 ## User Experience
 
 The Room uses one composer. Two to five distinct structured Agent Mentions
@@ -366,7 +377,8 @@ and Reviewer finalization through the Go Bridge.
 Sequential orchestration is tracked by `DISC-001` through `DISC-006`; parallel
 Wave delivery, presentation, and acceptance are completed by `DISC-007`,
 `WEB-020`, and `QA-010`. Lifecycle service extraction is tracked by `DISC-008`
-and `DISC-009` in `docs/TASKS.md`.
+and `DISC-009`; structured finalization-to-plan delivery is completed by
+`DISC-010` in `docs/TASKS.md`.
 
 ## Dependencies
 

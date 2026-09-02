@@ -92,9 +92,24 @@ export class DiscussionEvidenceService {
     const transcriptText = transcript.map((message) =>
       `[${this.senderName(message)}] ${redactSensitiveText(message.content)}`
     ).join("\n");
+    const planProposalInstruction = turn.kind === "finalization" &&
+      discussion.outputMode === "decision_record"
+      ? [
+          "For a structured execution-plan draft, append exactly one final line:",
+          "<convenewire-plan-proposal>{\"schemaVersion\":\"1.0\",...}</convenewire-plan-proposal>",
+          "The JSON must contain only title, decision summary/items/unresolvedQuestions, " +
+            "nodes, edges, externalInputs and policy. Do not set the root Task, sources, " +
+            "revisions, author, operation, approval or execution state.",
+          `The Server-owned root Task is ${discussion.taskId}; available Agent IDs: ` +
+            this.repository.listParticipants(discussion.discussionId)
+              .map(({ agentId }) => agentId).join(", ") + ".",
+          "If you cannot produce a complete closed-schema draft, omit the envelope; prose is preserved."
+        ].join("\n")
+      : "";
     const task = turn.kind === "finalization"
       ? `Produce the final ${discussion.outputMode.replaceAll("_", " ")} now. ` +
-        "Synthesize the best supported conclusion, important unresolved issues, and next actions."
+        "Synthesize the best supported conclusion, important unresolved issues, and next actions." +
+        (planProposalInstruction ? `\n${planProposalInstruction}` : "")
       : "Make an independent, useful contribution for this Wave. Resolve a question, add evidence, " +
         "or challenge the current conclusion; do not merely repeat agreement.";
     return [

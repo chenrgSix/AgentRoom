@@ -107,7 +107,7 @@ absent by design and is not implied by this completion.
 
 ## Product-Entry Boundaries
 
-`DISC-010` may translate one real finalization into immutable structured domain
+`DISC-010` translates one real finalization into immutable structured domain
 content through a stable operation identity. Missing or malformed structure
 keeps the existing final Message and creates no proposal. It grants no plan
 approval, Task completion, repository or local Runtime authority.
@@ -119,6 +119,19 @@ author and operation ID; the Server pins the terminal Discussion and immutable
 final Message and derives stable attribution. Finalization closure and valid
 draft persistence are atomic. Invalid topology or references are treated as an
 invalid draft rather than as authority to block the already-visible conclusion.
+
+Completion evidence is the generated TypeScript/Go contract, strict final-line
+parser, Discussion proposal adapter and real SQLite orchestration regression.
+The positive case freezes exactly the terminal Discussion version and immutable
+final Message sequence, retains one `draft` authored by the Discussion, leaves
+approval and compiled-node tables empty, and adds no work Run. Missing,
+duplicate, trailing, oversized, malformed, authority-shaped and domain-invalid
+payloads create no proposal. An injected proposal insert failure leaves the
+Discussion `finalizing` and Wave open; recovery after removing the fault closes
+both and retains one draft. A separate database connection replays the same
+Turn-derived operation without duplication. The full Server suite passes 517
+tests, the shared contract suite passes 81 tests, both builds pass, and the
+isolated test runner reports physical removal of its owned temporary roots.
 
 `MCP-007` may let an Agent propose, read and revise only plans within its exact
 assigned Tech Lead Run/context. A role label is not authority. The MCP surface

@@ -48,6 +48,8 @@ import {
 } from "./progress-evaluator.js";
 import { DiscussionRecoveryService } from "./discussion-recovery-service.js";
 import { DiscussionEvidenceService } from "./discussion-evidence-service.js";
+import type { DiscussionPlanProposalService } from
+  "./discussion-plan-proposal-service.js";
 import { WaveSettlementService } from "./wave-settlement-service.js";
 
 const maximumParticipants = 5;
@@ -121,7 +123,8 @@ export class DiscussionOrchestrator {
     private readonly runs: RunRepository,
     private readonly auth: AuthService,
     private readonly tasks: AgentTaskRepository,
-    private readonly clock: () => string
+    private readonly clock: () => string,
+    private readonly planProposals?: DiscussionPlanProposalService
   ) {
     this.recovery = new DiscussionRecoveryService(repository, runs, clock);
     this.evidence = new DiscussionEvidenceService(core, repository, runs, clock);
@@ -492,15 +495,26 @@ export class DiscussionOrchestrator {
       if (!finalizationSucceeded) {
         this.evidence.appendFallbackConclusion(discussion, wave.inputMessageId);
       }
-      this.repository.closeFinalizationAndFinish({
-        discussionId: discussion.discussionId,
-        expectedDiscussionVersion: discussion.version,
-        state: terminalState,
-        waveId: wave.waveId,
-        expectedWaveVersion: wave.version,
-        waveState: closeState,
-        now: this.clock()
-      });
+      const now = this.clock();
+      if (finalizationSucceeded && this.planProposals) {
+        this.planProposals.closeAndPropose({
+          discussion,
+          wave,
+          state: terminalState,
+          waveState: closeState,
+          now
+        });
+      } else {
+        this.repository.closeFinalizationAndFinish({
+          discussionId: discussion.discussionId,
+          expectedDiscussionVersion: discussion.version,
+          state: terminalState,
+          waveId: wave.waveId,
+          expectedWaveVersion: wave.version,
+          waveState: closeState,
+          now
+        });
+      }
       return this.mutationResult(discussion.discussionId);
     }
     return this.advanceSettledWave(discussion, wave, turns);
@@ -525,6 +539,7 @@ export class DiscussionOrchestrator {
   }
 
   public recover(): RunRecord[] {
+    this.planProposals?.reconcileAllTerminal();
     const scheduled = new Map<string, RunRecord>();
     this.recovery.closeCanceledWaves((runId) => this.onRunTerminal(runId));
     for (const run of this.expireDueWaves()) {

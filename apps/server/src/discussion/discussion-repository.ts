@@ -276,6 +276,15 @@ export class DiscussionRepository {
     `).all() as DiscussionRow[]).map(mapDiscussion);
   }
 
+  public listTerminalDecisionRecords(): DiscussionRecord[] {
+    return (this.database.prepare(`
+      SELECT * FROM discussions
+      WHERE output_mode = 'decision_record'
+        AND state IN ('completed', 'terminated')
+      ORDER BY terminal_at, discussion_id
+    `).all() as DiscussionRow[]).map(mapDiscussion);
+  }
+
   public listParticipants(discussionId: string): DiscussionParticipant[] {
     return (this.database.prepare(`
       SELECT * FROM discussion_participants

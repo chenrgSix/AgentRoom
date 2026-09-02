@@ -72,9 +72,10 @@ mandatory; this review is not their acceptance.
   trigger or synthetic copying of accepted claims.
 - `WorkspaceLeaseService` implements only `read_source`; worktree/write modes
   are not implemented merely because their names exist in documentation.
-- `ResultService.proposeOrchestrator` exists, but current Discussion construction
-  has no ResultService dependency and no production call to that method. The
-  structured finalization-to-plan adapter remains actual implementation work.
+- `ResultService.proposeOrchestrator` exists, but Discussion does not use Result
+  acceptance as plan authority. The later `DISC-010` implementation instead
+  retains one non-executing Discussion-authored plan draft from an exact closed
+  finalization envelope; human approval remains separate.
 - Existing Room checkpoints summarize context; they are not repository or
   process recovery snapshots.
 
