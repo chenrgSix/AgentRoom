@@ -28,6 +28,16 @@ stores credentials, definitions, source evidence or repository bytes. The
 frozen boundary and acceptance matrix live in
 [`WEB-063`](../acceptance/web-063-plan-control-surface.md).
 
+`WEB-063` is accepted. The retained product fixture and production browser
+prove exact revision-2 identity, graph/policy inspection, adjacent diff,
+owner-only revision/review controls, response-loss recovery and immutable
+receipt presentation without submitting a review. At 1280, 720 and 390 pixels
+the document and Plan surface remain horizontally bounded; the Task tab strip
+retains a 38-pixel visible row under the scrolling detail grid, including the
+English light-theme view. The complete command, test, physical cleanup and
+screenshot evidence remains in the acceptance record rather than a second
+delivery checklist.
+
 Presentation is split under `apps/web/src/features/` by product responsibility:
 Auth owns the access gate, Team owns member and lifecycle surfaces, Room owns
 the timeline and Room settings, Agent owns roster and configuration, Device owns

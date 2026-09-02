@@ -152,6 +152,26 @@ must bind the exact proposal/revision/digest and expose an immutable receipt;
 stale or changed bytes fail closed. Keyboard, localization and real browser
 evidence are required at 1280, 720 and 390 pixel widths.
 
+### WEB-063 Retained Acceptance
+
+`WEB-063` is complete. A Task-scoped, Room-authorized Server read model feeds
+the canonical Plan tab; the browser renders exact identity, topology, sources,
+policy, blockers, adjacent diff and immutable review history, and submits only
+closed owner-authorized revision or digest/revision/root-pinned review
+commands. Unknown responses retain one minimal identity-bound retry receipt;
+stale selections and sessions cannot consume it.
+
+The Server and Web full suites pass 525 and 264 tests respectively, both builds
+pass, and the local/trusted product fixtures pass against real disposable
+Servers. Production-browser inspection proves keyboard traversal, Chinese dark
+and English light presentation and no document or Plan-surface horizontal
+overflow at 1280, 720 and 390 pixels. A 390-pixel tab-strip collapse found by
+that inspection was fixed and regression-tested before acceptance. Browser
+logs were empty, screenshots are retained in the WEB-063 acceptance record,
+and the preview plus all observed test roots were physically absent after
+shutdown. No plan review, Run, verification or repository mutation occurred
+during browser inspection.
+
 `QA-052` must traverse the real product entry and the existing governed local
 execution path with actual Server, Go Bridge, Git, verification, Result and
 integration facts. It must include interruption and response-loss cuts,

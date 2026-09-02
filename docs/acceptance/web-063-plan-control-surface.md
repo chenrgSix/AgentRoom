@@ -1,7 +1,8 @@
 # WEB-063 Plan Control Surface
 
-Status: frozen implementation goal; completion evidence is appended only after
-the Server, Web and production-browser acceptance passes.
+Status: accepted on 2026-09-02. The retained implementation and physical
+acceptance evidence below complete `WEB-063` without claiming the governed
+Bridge execution chain owned by `QA-052`.
 
 ## Goal
 
@@ -108,3 +109,72 @@ Completion requires:
 Component tests or screenshots alone do not complete `WEB-063`. No live model,
 Bridge Runtime, verification command or repository integration is claimed by
 this Web milestone; that product chain belongs to `QA-052`.
+
+## Retained Implementation
+
+- `GET /api/tasks/:taskId/execution-plans` performs a bounded, root-Task exact
+  plan lookup after current Room authorization. The repository and service do
+  not enumerate a Room or mutate plan state.
+- The canonical Task detail exposes a **Plan** tab backed by current plan,
+  revision and approval APIs. It renders complete graph, source, policy,
+  blocker, diff and immutable receipt facts, and gives only a current Task or
+  Team Owner the closed revise/review controls.
+- Revision editing starts from the exact retained definition. Human approval
+  binds plan ID, revision, full digest, root Task revision, decision, reason
+  and a stable operation ID. Unknown response outcomes retain only those
+  identity pins in session storage and require an explicit exact retry.
+- Structural diffing is deterministic and bounded to 500 entries. Selection,
+  stale-response and session-generation fences prevent an older projection or
+  response from replacing the current plan.
+- The disposable product fixture retains one two-node `verified_output` plan
+  with two revisions and zero approvals so browser inspection cannot consume
+  or fabricate the human decision under test.
+
+## Retained Acceptance Evidence
+
+The affected full suites and builds passed from a clean task-scoped temporary
+root:
+
+- `npm test --workspace @convene-wire/server`: 525 tests passed; owned root
+  `/private/tmp/convene-wire-test-run-WtmXyu` was reported cleaned and was
+  physically absent afterward.
+- `npm test --workspace @convene-wire/web`: 264 tests passed, including exact
+  plan inspection/revision/review, response-loss, authorization, selection,
+  navigation, responsive tab-height and light-theme contrast regressions;
+  owned root `/private/tmp/convene-wire-test-run-dzEWSf` was cleaned and absent.
+- `npm run build --workspace @convene-wire/server` and
+  `npm run build --workspace @convene-wire/web` passed. Vite reported only its
+  existing advisory chunk-size warning.
+- `npm run test:product-experience`: the local and trusted-team real Server
+  fixtures both passed; `/private/tmp/convene-wire-test-run-2k9MD1` was cleaned.
+
+The production Web build was then served against the disposable trusted-team
+Server and inspected through the real browser. The exact plan was revision 2
+with digest
+`434ea3581569b4f0b5a9298c026b212fe7ef79796ba1671e4030e09949f5035d`;
+the screen showed both nodes, the `verified_output` edge, current policy,
+adjacent structural diff, full-definition edit control and exact review pins.
+Arrow Right moved Plan to Runs and Arrow Left restored Plan with
+`aria-selected=true`. Browser warning/error logs were empty.
+
+| View | Locale/theme | Document width | Plan width/scroll width | Tab height |
+| --- | --- | ---: | ---: | ---: |
+| 1280 x 800 | Simplified Chinese / dark | 1280 / 1280 | 964 / 964 | 38 |
+| 720 x 900 | Simplified Chinese / dark | 720 / 720 | 692 / 692 | 38 |
+| 390 x 844 | English / light | 390 / 390 | 362 / 362 | 38 |
+
+The first 390-pixel inspection exposed a collapsed, dark Task tab strip in the
+light theme. The acceptance did not waive it: the retained fix gives the
+scrolling tab list and buttons intrinsic minimum heights and explicit light
+contrast, adds focused regressions, and the same physical browser then produced
+the accepted measurements and screenshots:
+
+- [1280 px Chinese dark](assets/web-063/plan-review-zh-dark-1280.png)
+- [720 px Chinese dark](assets/web-063/plan-review-zh-dark-720.png)
+- [390 px English light](assets/web-063/plan-review-en-light-390.png)
+
+Stopping the preview through `SIGINT` reported
+`cleaned=/private/tmp/convene-wire-test-run-aKGBQK`; direct filesystem checks
+confirmed the preview, Web-test and Server-test roots were absent. The browser
+never submitted approval, revision, dispatch, verification or repository
+mutation during this inspection.
