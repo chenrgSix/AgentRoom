@@ -68,6 +68,17 @@ also requires effect/row/object inspection and three isolated zero-residue
 rounds; documentation or contract acceptance alone is never provider
 acceptance.
 
+`WEB-064` joins those retained local and remote proof facts into one
+Task-authorized production-browser control surface without changing their
+authority. Its
+[acceptance record](../acceptance/web-064-proof-control-surface-goal.md) covers
+real local integration, remote adoption and `outcome_unknown` databases,
+1280/720/390 responsive inspection, exact command recovery, closed downstream
+blocking, full contract/Server/Web/Bridge/build/E2E gates and three private
+24-test lifecycle rounds with four-prefix and total-entry counts at zero.
+Browser membership is added only inside each disposable test Team; proof and
+repository state still come from the production authority paths.
+
 ## Scope
 
 - Prefixes: `QA` and `OPS`

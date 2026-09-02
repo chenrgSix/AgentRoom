@@ -1,9 +1,10 @@
 # WEB-064 Proof Control Surface Goal
 
-Status: frozen on 2026-09-03 before implementation. `docs/TASKS.md` remains
-the sole delivery-state register. This goal presents and controls already
-delivered verification, adoption and integration authority; it may not invent
-proof, infer success or mutate a repository in the browser.
+Status: accepted on 2026-09-03 against the goal frozen before implementation.
+`docs/TASKS.md` remains the sole delivery-state register. This goal presents
+and controls already delivered verification, adoption and integration
+authority; it may not invent proof, infer success or mutate a repository in
+the browser.
 
 ## Goal
 
@@ -156,3 +157,120 @@ evidence, run Git, retry a Bridge operation, resolve a target conflict, accept
 remote-node inputs, configure provider credentials, add live GitHub/GitLab,
 allow remote push/PR merge/webhooks, implement scheduler modes or fairness,
 supersede a plan, carry evidence to another revision, or complete QA-053.
+
+## Accepted Delivery
+
+The delivered `ExecutionEvidencePage` contract is one closed, bounded read
+model shared by generated TypeScript, Go and runtime validators. The Task-
+authorized Server projection joins the current plan revision to local or
+remote source evidence, ordered proof pins, explicit adoptions,
+materializations, exact-target integration approval/operation/receipt facts
+and a Server-owned next action. Draft plans truthfully return no compiled
+nodes. Corrupt or mismatched internal joins fail the affected read closed.
+
+The canonical Task detail now has one bilingual **Evidence** tab. It renders
+candidate provenance, sealed Artifact pins, local verification or remote CI,
+adoption authority and repository integration as separate facts. Owner-only
+remote adoption and integration approval use the unchanged Server-prepared
+command template, explicit confirmation and identity-scoped `sessionStorage`
+receipt. A transport-unknown submission requires an authoritative lookup
+before an exact retry. Task, plan, node, member, session or selection changes
+fence stale state. The browser never executes verification or Git.
+
+The implementation retained the remote-producer boundary: a remote node with
+declared inputs or incoming edges reports
+`REMOTE_INPUT_ATTESTATION_REQUIRED`. `REPO-005` owns the future attestation
+contract. Provider credentials remain outside this surface, and `SEC-014`
+remains the required egress-policy follow-up before owner-configured
+credentials or live adapters.
+
+Four issues found while exercising real retained states were fixed rather than
+documented away:
+
+- internal plan identity fields no longer leak into a receipt-shaped public
+  projection;
+- an uncompiled draft no longer violates the evidence-page node contract;
+- a retained adopted remote proof outranks a stale failed CI attempt when
+  computing the current action; and
+- a downstream runtime already blocked by the graph now returns
+  `none / none / NODE_BLOCKED` instead of suggesting candidate production.
+
+The changes are split into the independently reviewable commits `99843e6`,
+`11dae30`, `3afc861`, `0143b58`, `2a5b325`, `7476e24`, `6d4231d`, `a61c5b3`
+and `a6d9ea4`.
+
+## Production Browser Evidence
+
+The browser acceptance used the production Web build against the same
+temporary SQLite databases produced by the real authority tests. The only
+browser-specific mutation was adding the temporary local browser identity to
+the already isolated test Team so it could read the Task. No proof, adoption,
+integration approval, receipt or materialization was synthesized for a
+screenshot.
+
+The local integrated chain came from the real two-Bridge test and displayed
+the repository source, local verification, `verified_output`, exact expected,
+candidate and resulting commits, human approval, integration receipt and
+`integrated_commit`. The document and Evidence panel measured `1280/1280` and
+`964/964` pixels at width 1280, `720/720` and `692/692` at width 720, and
+`390/390` and `362/362` at width 390. The narrow English/light-theme node cards
+measured `360/360`; only the tab strip used bounded local scrolling.
+
+![Local integrated evidence at 1280 pixels](assets/web-064/local-integrated-zh-dark-1280.jpg)
+
+![Local integrated evidence at 720 pixels](assets/web-064/local-integrated-zh-dark-720.jpg)
+
+![Local integrated evidence at 390 pixels](assets/web-064/local-integrated-en-light-390.jpg)
+
+The remote case came from the authenticated-provider observation test after
+real canonical import, CI receipts and explicit Result-free adoption. It
+displayed `adopted`, `none / none` and `NO_ACTION`; the 1280-pixel document and
+panel measured `1280/1280` and `964/964`.
+
+![Remote adopted evidence](assets/web-064/remote-adopted-zh-dark-1280.jpg)
+
+The recovery case came from a retained `outcome_unknown` integration receipt.
+Build displayed `investigate outcome unknown / task owner` with
+`INTEGRATION_OUTCOME_UNKNOWN`, while its dependent Consume node remained
+`blocked` with `none / none / NODE_BLOCKED`. The 1280-pixel document and panel
+again measured `1280/1280` and `964/964`. All three browser cases rejected
+visible local paths, grant identifiers and credential tokens.
+
+![Unknown integration outcome and blocked dependent](assets/web-064/outcome-unknown-zh-dark-1280.jpg)
+
+## Verification Record
+
+The final no-pause and full-suite gates passed on 2026-09-03:
+
+- contracts: 94/94 checks, generated sources current, strict TypeScript and Go
+  round trips;
+- Server: 545/545 tests;
+- Web: 268/268 tests and the production build;
+- Bridge: every Go package under `go test ./...`;
+- workspace: schema validation for 14 schemas and 258 fixtures plus the full
+  workspace build;
+- product experience: 2/2 local and trusted-team cases;
+- deterministic E2E: 8 passed and the explicitly live-provider-only case was
+  skipped; and
+- the unpaused focused physical two-Bridge integrated-dependency scenario
+  passed in 28.3 seconds.
+
+Every printed suite root was physically absent after completion, including
+the final focused two-Bridge root
+`/private/tmp/convene-wire-test-run-bxszUv`, full Server root
+`/private/tmp/convene-wire-test-run-a9ugyy`, Bridge root
+`/private/tmp/convene-wire-test-run-4RABmf` and E2E root
+`/private/tmp/convene-wire-test-run-PwU4hz`.
+
+The lifecycle gate then ran `npm run test:temp-lifecycle` three consecutive
+times under one private `CONVENE_WIRE_TEST_RUN_BASE`. Each round passed 24/24
+success, assertion-failure, spawn-failure, timeout, signal, orphan-process and
+parallel-owner cases. For all four names `agentroom-*`, `agent-room-*`,
+`convenewire-*` and `convene-wire-*`, every round recorded `before=0` and
+`after=0`; the base also recorded `total=0` after each round and was removed at
+the end. No real user temporary directory was scanned or cleared.
+
+This acceptance does not claim a live GitHub/GitLab provider, remote incoming-
+edge attestation, owner-configured provider credentials, multi-physical-machine
+execution, scheduler modes, QA-053 parallel integration or plan
+supersession/carry-forward.
