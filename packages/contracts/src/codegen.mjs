@@ -245,6 +245,19 @@ function preserveGoOpenErrorDetails(source) {
   );
 }
 
+function preserveGoSourceAuthorityOptionality(source, expectedFields) {
+  const fields = source.match(
+    /SourceAuthority\s+\*\w+\s+`json:"sourceAuthority"`/gu
+  ) ?? [];
+  if (fields.length !== expectedFields) {
+    throw new Error("Generated Go source authority fields are incomplete");
+  }
+  return source.replace(
+    /`json:"sourceAuthority"`/gu,
+    '`json:"sourceAuthority,omitempty"`'
+  );
+}
+
 function preserveExecutionAuthorityCompatibility(source, language) {
   if (language === "typescript") {
     if (/^export interface Authority \{/mu.test(source)) return source;
@@ -1623,7 +1636,9 @@ export async function generateContractTypes(packageRoot) {
     `\n\nexport type BridgeMessage =\n${union};\n`;
   const go = formatGo(
     "// Code generated from JSON Schema; DO NOT EDIT.\n\n" +
-      preserveGoOpenErrorDetails(renderedGo)
+      preserveGoSourceAuthorityOptionality(
+        preserveGoOpenErrorDetails(renderedGo), 1
+      )
   );
   const pairingTypescript =
     "// Code generated from JSON Schema; DO NOT EDIT.\n\n" +
@@ -1647,7 +1662,9 @@ export async function generateContractTypes(packageRoot) {
     )).trimEnd() + "\n";
   const executionGo = formatGo(
     "// Code generated from JSON Schema; DO NOT EDIT.\n\n" +
-      preserveExecutionAuthorityCompatibility(renderedExecutionGo, "go")
+      preserveGoSourceAuthorityOptionality(
+        preserveExecutionAuthorityCompatibility(renderedExecutionGo, "go"), 3
+      )
   );
 
   return {

@@ -2205,7 +2205,7 @@ type GovernedExecutionManifestInput struct {
 	PlanID                   string                 `json:"planId"`
 	PlanRevision             int64                  `json:"planRevision"`
 	RepositoryID             *string                `json:"repositoryId"`
-	SourceAuthority          *PurpleSourceAuthority `json:"sourceAuthority"`
+	SourceAuthority          *PurpleSourceAuthority `json:"sourceAuthority,omitempty"`
 	SourceCommit             *string                `json:"sourceCommit"`
 	SourceCriteriaRevision   int64                  `json:"sourceCriteriaRevision"`
 	SourceDefinitionRevision int64                  `json:"sourceDefinitionRevision"`
@@ -2313,7 +2313,7 @@ type ExecutionInputBinding struct {
 	PlanID                   string                                `json:"planId"`
 	PlanRevision             int64                                 `json:"planRevision"`
 	RepositoryID             *string                               `json:"repositoryId"`
-	SourceAuthority          *ExecutionInputBindingSourceAuthority `json:"sourceAuthority"`
+	SourceAuthority          *ExecutionInputBindingSourceAuthority `json:"sourceAuthority,omitempty"`
 	SourceCommit             *string                               `json:"sourceCommit"`
 	SourceCriteriaRevision   int64                                 `json:"sourceCriteriaRevision"`
 	SourceDefinitionRevision int64                                 `json:"sourceDefinitionRevision"`
@@ -2691,7 +2691,7 @@ type ManifestInput struct {
 	PlanID                   string                 `json:"planId"`
 	PlanRevision             int64                  `json:"planRevision"`
 	RepositoryID             *string                `json:"repositoryId"`
-	SourceAuthority          *FluffySourceAuthority `json:"sourceAuthority"`
+	SourceAuthority          *FluffySourceAuthority `json:"sourceAuthority,omitempty"`
 	SourceCommit             *string                `json:"sourceCommit"`
 	SourceCriteriaRevision   int64                  `json:"sourceCriteriaRevision"`
 	SourceDefinitionRevision int64                  `json:"sourceDefinitionRevision"`

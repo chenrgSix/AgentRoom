@@ -459,7 +459,7 @@ type Input struct {
 	PlanID                   string           `json:"planId"`
 	PlanRevision             int64            `json:"planRevision"`
 	RepositoryID             *string          `json:"repositoryId"`
-	SourceAuthority          *SourceAuthority `json:"sourceAuthority"`
+	SourceAuthority          *SourceAuthority `json:"sourceAuthority,omitempty"`
 	SourceCommit             *string          `json:"sourceCommit"`
 	SourceCriteriaRevision   int64            `json:"sourceCriteriaRevision"`
 	SourceDefinitionRevision int64            `json:"sourceDefinitionRevision"`
