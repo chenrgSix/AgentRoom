@@ -58,6 +58,54 @@ export function createEvidenceReuseContract(input: {
   ) {
     throw new Error("Evidence reuse context conflicts with adoption");
   }
+  return sealEvidenceReuseContract({
+    adoption: input.adoption,
+    integrationPolicy: input.integrationPolicy,
+    node: input.node,
+    reuseInputs: input.reuseInputs,
+    runtimeDigest,
+    task: input.task
+  });
+}
+
+/** Remote adoption has no Runtime destination bindings; its logical inputs are
+ * sealed by RemoteInputAttestation and retained separately from dispatch state. */
+export function createRemoteEvidenceReuseContract(input: {
+  adoption: EvidenceAdoption;
+  integrationPolicy: PlanPolicy;
+  node: PlanNode;
+  reuseInputs: ReuseInput[];
+  task: ReuseTask;
+}): EvidenceReuseContract {
+  const runtimeDigest = runtimeInputBindingDigest([]);
+  if (input.adoption.authority.service !== "remote_evidence_adoption" ||
+    input.adoption.resolvedInputSetDigest !== runtimeDigest ||
+    input.node.nodeKey !== input.adoption.nodeKey ||
+    input.task.taskId !== input.adoption.authority.taskId ||
+    input.task.roomId !== input.adoption.authority.roomId ||
+    input.task.definitionRevision !==
+      input.adoption.authority.definitionRevision ||
+    input.task.criteriaRevision !== input.adoption.authority.criteriaRevision) {
+    throw new Error("Remote evidence reuse context conflicts with adoption");
+  }
+  return sealEvidenceReuseContract({
+    adoption: input.adoption,
+    integrationPolicy: input.integrationPolicy,
+    node: input.node,
+    reuseInputs: input.reuseInputs,
+    runtimeDigest,
+    task: input.task
+  });
+}
+
+function sealEvidenceReuseContract(input: {
+  adoption: EvidenceAdoption;
+  integrationPolicy: PlanPolicy;
+  node: PlanNode;
+  reuseInputs: ReuseInput[];
+  runtimeDigest: string;
+  task: ReuseTask;
+}): EvidenceReuseContract {
   const { task: _planTask, ...node } = structuredClone(input.node);
   const { taskRevision: _taskRevision, ...task } = structuredClone(input.task);
   const repositoryId = node.repository.repositoryId;
@@ -82,7 +130,7 @@ export function createEvidenceReuseContract(input: {
     planRevision: input.adoption.planRevision,
     nodeKey: input.adoption.nodeKey,
     gate: input.adoption.gate,
-    runtimeInputBindingDigest: runtimeDigest,
+    runtimeInputBindingDigest: input.runtimeDigest,
     reuseInputs,
     reuseInputEvidenceDigest: evidenceReuseInputDigest(reuseInputs),
     nodeExecutionDigest: input.adoption.nodeContractDigest,

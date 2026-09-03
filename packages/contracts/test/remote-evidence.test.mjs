@@ -263,6 +263,24 @@ test("remote input attestations separate adoption authority from logical equalit
   assert.notEqual(secondAuthority.providerAttestationDigest,
     external.providerAttestationDigest);
 
+  const reordered = structuredClone(external);
+  const earlier = structuredClone(reordered.inputs[0]);
+  earlier.adoptionId = "adoption_inputsource0003";
+  earlier.adoptionDigest = digest("8");
+  earlier.reuseInput.inputSlot = "artifact";
+  earlier.reuseInput.producer.edge.edgeKey = "ArtifactBuild";
+  earlier.reuseInput.producer.edge.bindings = [{
+    outputSlot: "patch",
+    inputSlot: "artifact"
+  }];
+  reordered.inputs = [reordered.inputs[0], earlier];
+  reordered.remoteInputEvidenceDigest = remoteInputEvidenceDigest(reordered.inputs);
+  reordered.providerAttestationDigest = providerInputAttestationDigest(reordered);
+  assert.throws(() => assertExecutionCommand(
+    "providerInputAttestation",
+    reordered
+  ), /REMOTE_INPUT_ATTESTATION_INPUT_ORDER/u);
+
   for (const mutate of [
     (value) => { value.inputs[0].reuseInput.producer.sourceDigest = digest("1"); },
     (value) => { value.inputs[0].reuseInput.producer.proofSetDigest = digest("2"); },

@@ -36,6 +36,12 @@ import { RemoteEvidenceAdoptionRepository } from
   "./remote/remote-evidence-adoption-repository.js";
 import { RemoteEvidenceAdoptionService } from
   "./remote/remote-evidence-adoption-service.js";
+import { RemoteInputAttestationPlanner } from
+  "./remote/remote-input-attestation-planner.js";
+import { RemoteInputAttestationRepository } from
+  "./remote/remote-input-attestation-repository.js";
+import { RemoteInputAttestationService } from
+  "./remote/remote-input-attestation-service.js";
 import { IsolatedWorkspaceLeaseService } from "./workspace/isolated-workspace-lease-service.js";
 import { LocalArtifactBlobStore } from
   "./artifact/local-artifact-blob-store.js";
@@ -600,17 +606,24 @@ export async function createServerApp(
   const remoteEvidenceRepository = new RemoteEvidenceRepository(
     database, artifactRepository, artifactPublicationRepository, transactions
   );
+  const remoteProviderClient = new RemoteProviderClient(
+    options.remoteProviderCredentialResolver ?? (() => undefined),
+    options.remoteProviderFetch ?? fetch,
+    options.remoteProviderTimeoutMilliseconds
+  );
+  const remoteInputAttestationRepository =
+    new RemoteInputAttestationRepository(database, transactions);
+  const remoteInputAttestationPlanner = new RemoteInputAttestationPlanner(
+    database,
+    artifactBlobs
+  );
   const remoteEvidence = new RemoteEvidenceService(
     database,
     remoteEvidenceRepository,
     remoteProviderBindingRepository,
     executionPlanRepository,
     auth,
-    new RemoteProviderClient(
-      options.remoteProviderCredentialResolver ?? (() => undefined),
-      options.remoteProviderFetch ?? fetch,
-      options.remoteProviderTimeoutMilliseconds
-    ),
+    remoteProviderClient,
     artifactBlobs,
     {
       ...(options.remoteGitExecutable === undefined
@@ -619,13 +632,25 @@ export async function createServerApp(
         ? {} : { temporaryBase: options.remoteGitTemporaryBase })
     }
   );
+  const remoteInputAttestations = new RemoteInputAttestationService(
+    database,
+    remoteInputAttestationRepository,
+    remoteEvidenceRepository,
+    remoteProviderBindingRepository,
+    executionPlanRepository,
+    auth,
+    remoteProviderClient,
+    remoteInputAttestationPlanner
+  );
   const remoteEvidenceAdoptions = new RemoteEvidenceAdoptionService(
     database,
     new RemoteEvidenceAdoptionRepository(database, transactions),
     remoteEvidenceRepository,
     remoteProviderBindingRepository,
     executionPlanRepository,
-    auth
+    auth,
+    remoteInputAttestationRepository,
+    remoteInputAttestationPlanner
   );
   const operationalMetrics = new OperationalMetrics(
     database, bridgeConnections, clock, options.buildIdentity
@@ -743,6 +768,7 @@ export async function createServerApp(
     executionMaterializations,
     new RemoteEvidenceAdoptionRepository(database, transactions),
     remoteEvidenceAdoptions,
+    remoteInputAttestationRepository,
     remoteProviderBindingRepository,
     repositoryIntegrations
   );
@@ -1126,6 +1152,7 @@ export async function createServerApp(
     repositoryVerifications,
     remoteProviderBindings,
     remoteEvidence,
+    remoteInputAttestations,
     remoteEvidenceAdoptions,
     fakeAdapters,
     handoffs,

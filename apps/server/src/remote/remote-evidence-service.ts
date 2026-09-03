@@ -36,6 +36,8 @@ import {
   RemoteEvidenceRepository,
   type RemoteEvidenceOperation
 } from "./remote-evidence-repository.js";
+import { remoteInputTopologySupported } from
+  "./remote-input-attestation-planner.js";
 
 interface ObserveCommitCommand {
   operationId: string;
@@ -153,11 +155,10 @@ export class RemoteEvidenceService {
     const context = this.requireContext(principal, planId, command);
     if (context.node.kind !== "implementation" ||
       context.node.repository.baseCommit !== command.expectedBaseCommit ||
-      context.node.inputs.length !== 0 ||
-      context.plan.current.definition.externalInputs.some((entry) =>
-        entry.nodeKey === command.nodeKey) ||
-      context.plan.current.definition.edges.some((edge) =>
-        edge.toNodeKey === command.nodeKey) ||
+      !remoteInputTopologySupported(
+        context.plan.current.definition,
+        command.nodeKey
+      ) ||
       !context.node.outputs.some((output) => output.required &&
         output.kind === "patch" && output.slotKey === command.patchOutputSlot) ||
       this.database.prepare(`
