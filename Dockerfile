@@ -44,6 +44,7 @@ COPY --from=build --chown=node:node /app/apps/web/package.json ./apps/web/packag
 COPY --from=build --chown=node:node /app/apps/web/dist ./apps/web/dist
 COPY --from=build --chown=node:node /app/packages/contracts/package.json ./packages/contracts/package.json
 COPY --from=build --chown=node:node /app/packages/contracts/generated ./packages/contracts/generated
+COPY --from=build --chown=node:node /app/packages/contracts/src ./packages/contracts/src
 COPY --chown=node:node LICENSE NOTICE COMMERCIAL-LICENSE.md TRADEMARKS.md ./
 
 RUN mkdir -p /data /backups && chown node:node /data /backups
