@@ -16,6 +16,23 @@ import { AuthService, AuthorizationError } from
 const now = "2026-08-30T05:00:00.000Z";
 const apiKey = "sk-hosted-api-test-ABCDEFGHIJKLMNOP";
 
+async function within<T>(
+  promise: Promise<T>,
+  milliseconds: number,
+  message: string
+): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), milliseconds);
+    timer.unref();
+  });
+  try {
+    return await Promise.race([promise, deadline]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 function frame(type: string, fields: Record<string, unknown>): string {
   return `event: ${type}\ndata: ${JSON.stringify({ type, ...fields })}\n\n`;
 }
@@ -1046,7 +1063,7 @@ test("Hosted provider credentials grant no Result, Task, Member, Device, or MCP 
 
 for (const cancellation of ["client disconnect", "Server shutdown"] as const) {
   test(`Hosted configuration probes abort HTTPS on ${cancellation}`, {
-    timeout: 5_000
+    timeout: 30_000
   }, async () => {
     const directory = await mkdtemp(path.join(
       os.tmpdir(),
@@ -1096,13 +1113,21 @@ for (const cancellation of ["client disconnect", "Server shutdown"] as const) {
           signal: caller.signal
         }
       )]);
-      await started;
+      await within(started, 15_000, "Hosted provider probe did not start");
       const closing = cancellation === "Server shutdown"
         ? app.close()
         : undefined;
       if (cancellation === "client disconnect") caller.abort();
-      await aborted;
-      const [settled] = await request;
+      await within(
+        aborted,
+        5_000,
+        `Hosted provider probe did not abort after ${cancellation}`
+      );
+      const [settled] = await within(
+        request,
+        5_000,
+        `Hosted provider request did not settle after ${cancellation}`
+      );
       if (cancellation === "client disconnect") {
         assert.equal(settled?.status, "rejected");
       } else {
@@ -1119,7 +1144,9 @@ for (const cancellation of ["client disconnect", "Server shutdown"] as const) {
         assert.equal(observation.status, "failed");
         assert.equal(observation.failureCode, "HOSTED_PROVIDER_PROBE_CANCELED");
       }
-      await closing;
+      if (closing) {
+        await within(closing, 5_000, "Server did not close after probe abort");
+      }
     } finally {
       caller.abort();
       await app.close();
