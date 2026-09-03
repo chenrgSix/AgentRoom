@@ -3,6 +3,7 @@
 Thumbs.db
 .idea/
 .vscode/
+.codegraph/
 *.swp
 
 # Local configuration and credentials
