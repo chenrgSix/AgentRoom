@@ -543,11 +543,10 @@ evidence and full requirements, but wait on those concrete implementations
 instead of being prerequisites of their own downstream adapters. No task becomes
 DONE merely because this dependency split is recorded.
 
-The remaining Core route is strictly `DISC-012` -> `QA-054` -> `QA-055`.
-`EXEC-005` and `DISC-011` are completed prerequisites. REPO-003, REPO-005 and
-SEC-014 are retained completed Optional Remote Evidence Extensions. They remain
-tested and supported but are not Core completion gates or a source of new
-Remote Forge roadmap work.
+The Governed Execution Core route `EXEC-005` -> `DISC-011` -> `DISC-012` ->
+`QA-054` -> `QA-055` is complete. REPO-003, REPO-005 and SEC-014 are retained
+completed Optional Remote Evidence Extensions. They remain tested and supported
+but are not Core completion gates or a source of new Remote Forge roadmap work.
 
 ### Governed Execution Core
 
