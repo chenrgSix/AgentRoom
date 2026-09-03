@@ -6,6 +6,10 @@ credential and authenticated lookup-before-create protocol remain
 authoritative; SEC-010's fixed-origin, credential-redaction and
 no-provider-proxy boundaries remain unchanged.
 
+Classification: retained Optional Remote Evidence Extension security boundary
+under ADR-0039. Its implementation, tests and `DONE` state remain valid whenever
+the extension is enabled; it is not a Core completion gate.
+
 ## Goal
 
 Put every production remote-provider connection behind one Server-owned

@@ -5,6 +5,10 @@ Status: frozen on 2026-09-03. Delivery state exists only in
 EXEC-009 remain authoritative; this goal closes remote-producer input
 provenance without reinterpreting their retained facts.
 
+Classification: retained Optional Remote Evidence Extension under ADR-0039.
+Its implementation, tests, migration, evidence and `DONE` state remain valid;
+it is not a Core completion gate or an active Remote Forge roadmap item.
+
 ## Goal
 
 Admit a remote-produced repository commit with declared graph inputs only when

@@ -7,6 +7,11 @@ canonical views. Plan approval, local authority, Result acceptance and merge
 approval are separate actions with exact version/candidate receipts. New flows
 require real Server-backed and responsive browser acceptance before completion.
 
+[ADR-0039](../adr/0039-keep-repositories-client-owned.md) keeps repository and
+Git authority on Client/Bridge. Remote Evidence presentation is a retained
+Optional Extension, not a Core completion gate; the browser never receives Git
+credentials or repository execution authority.
+
 ## Scope
 
 - Prefix: `WEB`
@@ -51,6 +56,12 @@ and require authoritative lookup before retry. Production-browser evidence at
 outcome recovery without exposing credentials, local paths or grants. The
 surface never runs verification or Git and cannot open an incoming edge for a
 remote producer.
+
+The remote source, CI proof and remote-adoption states above remain available
+only when the Optional Remote Evidence Extension is configured. Default
+installation exposes no provider credential and initiates no provider access.
+New provider adapters, PR/webhook lifecycle, push, remote merge and provider
+credential controls are paused unless separately re-approved.
 
 Presentation is split under `apps/web/src/features/` by product responsibility:
 Auth owns the access gate, Team owns member and lifecycle surfaces, Room owns

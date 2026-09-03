@@ -96,11 +96,14 @@ recovery ownership.
 
 ## Standard Module Document
 
-ADR-0036 adds governed software-team execution incrementally. Execution calls
-existing Task/Run/Result ports; it does not own mirrored terminal state.
-Repository and Verification are explicit local/provider adapters in the current
-process topology, not a new central shell. Dependencies describe contracts;
-composition-root callbacks connect scheduling without circular process ownership.
+ADR-0036 adds governed software-team execution incrementally, and ADR-0039
+fixes its Client-owned Repository boundary. Execution calls existing
+Task/Run/Result ports; it does not own mirrored terminal state. Repository and
+Git execution stay on the Client/Bridge; Central keeps only governed requests,
+evidence and receipts. The retained Remote Evidence provider adapter is an
+optional extension, not a new central shell or a Core dependency. Dependencies
+describe contracts; composition-root callbacks connect scheduling without
+circular process ownership.
 
 Every module document contains:
 

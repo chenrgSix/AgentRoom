@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-09-02
-- Supersedes: none; refines ADR-0036 source materialization
+- Supersedes: none; refines ADR-0036 source materialization and is itself
+  refined by ADR-0039's optional Remote Evidence classification
 
 ## Context
 
@@ -227,13 +228,13 @@ unchanged legacy authority. After cutover, rollback means restoring the verified
 pre-cutover database/application pair; an older binary must not partially read
 new remote-only adoptions.
 
-### REPO-003 implementation boundary
+### Optional REPO-003 implementation boundary
 
-This ADR does not enable remote behavior. `REPO-003` must implement the shared
-contracts, migrations and generalized materialization/input readers before its
-first remote-only evidence path. It must then add owner-configured provider
-bindings, authenticated observations, canonical commit import, exact remote
-identity lookup before retry and bounded receipt persistence.
+This ADR did not itself enable remote behavior. `REPO-003` subsequently
+implemented the shared contracts, migrations, generalized readers,
+authenticated observations, canonical commit import, exact lookup-before-retry
+and bounded receipts. ADR-0039 now classifies that delivered path as an Optional
+Remote Evidence Extension rather than a Core completion gate.
 
 Provider PR state is provenance or review evidence only. Provider CI can become
 a verification proof only through the configured closed check policy. Remote
@@ -271,10 +272,10 @@ escalation difficult to reject at schema, SQL and service boundaries.
 
 ## Consequences
 
-The model gains two persisted concepts and a compatibility projection. Remote
-integration cannot be a small nullable-field patch, and plan carry-forward
-requires an explicit service operation. In exchange, content provenance, trust
-proof and plan authorization remain auditable and independently replaceable.
+The model gains two persisted concepts and a compatibility projection. Plan
+carry-forward requires an explicit service operation. Optional remote evidence
+cannot be a small nullable-field patch; when enabled, it uses the same explicit
+provenance, proof and adoption separation without becoming Core authority.
 
 Current local flows do not change until the additive implementation is accepted.
 Existing Result identities remain first-class provenance, while exact evidence
@@ -304,8 +305,7 @@ replay. Owning requirements are recorded in
 [Testing and Observability](../modules/testing-observability.md).
 
 Design acceptance requires documentation lint, whitespace checks and a
-consistent task dependency review. Runtime completion remains `REPO-003` work
-and must add closed-schema/digest fixtures, migration/backfill/reopen/rollback,
-current local shadow equality, foreign/stale/substituted proof negatives,
-concurrent adoption, response-loss, authenticated provider HTTP and physical
-canonical-content/input tests. Live-provider evidence remains separate.
+consistent task dependency review. The optional runtime acceptance was
+completed by `REPO-003`, `REPO-005` and `SEC-014`; their retained tests remain
+extension regressions. Live-provider evidence remains separate, and none of
+these tasks is required for Core completion under ADR-0039.

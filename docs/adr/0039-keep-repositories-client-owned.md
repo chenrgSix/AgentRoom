@@ -84,6 +84,12 @@ Default installation has no Remote Provider credential and performs no active
 external provider access. Absence, disablement or non-use of the extension must
 not reduce Core readiness, Core completion or the validity of local evidence.
 
+The retained implementation uses fixed Git commands only to inspect an
+extension-owned disposable bare object store for a bounded received bundle. It
+does not address or mutate an Owner repository, read repository configuration,
+or receive a Git/SSH credential. This compatibility validator is outside Core
+repository execution and is not precedent for expanding Central Git authority.
+
 No new GitHub/GitLab adapter, PR lifecycle, webhook, push, remote merge or
 provider-credential Web UI work is on the active roadmap. Such work requires a
 new stable task and an explicit accepted product decision covering ownership,

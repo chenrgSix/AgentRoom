@@ -6,6 +6,8 @@ repository/verifier envelopes. JSON Schema remains the wire authority with
 generated TypeScript and Go. Structural validity does not prove graph topology,
 referential integrity, authorization, local capability or evidence truth.
 Old Bridge compatibility never allows silent downgrade of governed coding.
+[ADR-0039](../adr/0039-keep-repositories-client-owned.md) classifies retained
+Remote Provider contracts as Optional Extension wire, not Core conformance.
 
 `CON-021` adds version-1 `work/execution-runtime.schema.json`: the governed Run
 manifest, exact input binding, capability, repository binding, local grant
@@ -54,7 +56,7 @@ must still validate all fingerprints, expiry, source/destination authorization,
 grant enforcement, operation ownership and actual observations. Valid JSON does
 not establish any of those facts or enable execution.
 
-`CON-023` and the additive REPO-003 contract increment define the closed
+`CON-023` and the additive optional REPO-003 contract increment define the closed
 `SourceEvidence`, `GateProofRef`, `EvidenceAdoption`, remote provider binding,
 commit observation and CI receipt shapes. A remote `repository_commit` source
 pins exact repository/object-format/base/candidate/tree identity and sealed
@@ -66,7 +68,7 @@ shapes, preserving their canonical digest instead of emitting JSON `null`.
 Closed schema shape is not provider authentication, CI truth or plan-adoption
 authority; owning services rejoin every retained identity and current grant.
 
-The frozen `REPO-005` contract adds closed provider and retained remote-input
+The retained optional `REPO-005` contract adds closed provider and remote-input
 attestations without changing the meaning of an existing
 `EvidenceReuseContract`. Each ordered entry carries exact adoption pins for
 authority and one unchanged graph `ReuseInput` projection. The latter already

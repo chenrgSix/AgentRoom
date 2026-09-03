@@ -2,7 +2,8 @@
 
 - Status: Accepted
 - Date: 2026-08-31
-- Supersedes: none
+- Supersedes: none; ADR-0039 supersedes this ADR's Remote Forge and Core
+  completion assumptions while preserving the delivered local design
 
 ## Context
 
@@ -60,12 +61,14 @@ are not required to implement this design. Existing workflows remain usable.
 | Run | one execution attempt, frozen Delivery, events and outcome | Task acceptance or merge authority |
 | Result/Artifact | immutable claims, review and canonical content/provenance | trusted test execution merely from Agent prose |
 | Workspace/Bridge | opaque leases and owner-local workspace operations respectively | Central-generated operating-system permissions |
-| Repository | pinned operation intents and receipts; Bridge-local Git adapter | arbitrary commands or deployment |
+| Repository/Bridge | owner-local paths, remotes, credentials, Git commands, worktrees and ref mutation | Central possession of repository or machine authority |
 | Verification | authenticated observation against an exact input and profile | accepting Results or declaring arbitrary claims true |
 
-Execution and Repository live in the existing Server and Bridge, not new
-services. Existing repositories share the composition-root transaction
-boundary. No duplicate Issue, TaskAttempt or TaskEvidence authority is created.
+Execution coordination lives in the existing Server; Repository execution
+lives on the Client/Bridge. The Server retains opaque requests and receipts but
+does not become a repository adapter or shell. The retained Remote Evidence
+adapter is an optional extension under ADR-0039, not Core Repository authority.
+No duplicate Issue, TaskAttempt or TaskEvidence authority is created.
 A top-level non-default Task is the development objective; an external Issue is
 an optional attributed reference, not another completion state machine.
 
@@ -237,22 +240,26 @@ Required verification policy is checked independently of ordinary Result
 evidence references. Current human Result acceptance and Task completion stay
 with Task/Team Owners; Reviewer Agents contribute claims, not human decisions.
 
-### Integration and external repository operations
+### Integration and repository operations
 
 Integration is a separate explicit authority. A queue serializes by repository
 ID and target ref across all enrolled bindings, pins its expected target commit and all reviewed inputs,
-constructs a candidate, checks scope and required verification/CI against that
+constructs a candidate, checks scope and required verification against that
 candidate, and updates the target only under an exact-base compare-and-set.
 Target movement invalidates the candidate checks; it never invokes an implicit
 force update, automatic conflict resolution or a blanket push.
 
-Local integration, remote push, PR creation, merge and deployment are distinct.
-The supported repository adapter implements local integration and scoped
-push/PR/CI observation with owner-configured credentials. Production deployment
-is excluded. External operations first persist immutable intent and stable
-operation identity, then execute, then persist a receipt. Response loss is
-reconciled by querying exact remote ref/PR identity before any retry. An
-unprovable effect becomes `outcome_unknown` and requires human action.
+The Core repository adapter implements local integration on the Client/Bridge.
+Repository paths, remotes, Git/SSH credentials, fetch/pull/push, worktrees and
+Git commands stay under Owner-local authority. Central can approve an opaque
+operation and retain its receipt; it cannot execute or credential the Git side
+effect.
+
+The delivered remote commit/CI/input observation adapter is retained as an
+Optional Remote Evidence Extension under ADR-0039. Remote push, PR creation,
+webhooks, remote merge and deployment are paused and excluded from the current
+roadmap. They require a new accepted product decision rather than inheriting
+authority from this ADR.
 
 Plan completion requires every required node's current accepted Task Result,
 its required verification, satisfied edge/input bindings, resolved integration
@@ -329,6 +336,10 @@ Git, verification and recovery work. Initial defaults remain human-approved and
 conservative. Explicit unsupported states are preferable to hidden downgrades.
 The plan/receipt layer adds storage and review complexity while preserving
 observable, versioned authority across crashes and concurrent operators.
+
+ADR-0039 narrows Core completion to the Client/Bridge-owned local path. Optional
+Remote Evidence regressions remain required when that retained extension is
+changed, but provider availability is not a Core completion condition.
 
 ## Compatibility and Security
 

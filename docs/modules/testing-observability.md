@@ -7,6 +7,13 @@ parallel execution, response-loss/restart cuts, real Server-backed browser flows
 and final direction review. Contract/source-only tests cannot stand in for those
 gates; physical-platform, live-provider and deployment evidence stays explicit.
 
+[ADR-0039](../adr/0039-keep-repositories-client-owned.md) separates Core
+acceptance from retained Optional Remote Evidence coverage. Remote-provider,
+remote-commit, CI-observation, input-attestation and egress tests continue to
+protect delivered code. Provider unavailability, an absent credential or the
+extension's disabled-by-default state does not block Governed Software-Team
+Execution Core completion.
+
 ## Product Experience Acceptance
 
 ADR-0028 additionally requires authorized Work search, direct Work actions,
@@ -60,7 +67,8 @@ GOV-026 accepts the pre-provider architecture in
 `CON-023` supplies generated contract fixtures and `EXEC-009` supplies
 migration/backfill/reopen/rollback, shadow-equality, proof-substitution,
 current-authority, concurrent-adoption and physical local-content tests.
-REPO-003 is accepted only after adding real loopback authenticated-provider
+Optional Extension task REPO-003 is accepted after adding real loopback
+authenticated-provider
 HTTP fault injection, real Git bundle import, canonical sealed-content delivery,
 exact CI proof, explicit Result-free adoption and a downstream Bridge byte read.
 Its [acceptance record](../acceptance/repo-003-remote-evidence-adoption-goal.md)
@@ -68,7 +76,7 @@ also requires effect/row/object inspection and three isolated zero-residue
 rounds; documentation or contract acceptance alone is never provider
 acceptance.
 
-`WEB-064` joins those retained local and remote proof facts into one
+`WEB-064` joins retained Core proof facts and Optional Remote Evidence facts into one
 Task-authorized production-browser control surface without changing their
 authority. Its
 [acceptance record](../acceptance/web-064-proof-control-surface-goal.md) covers
@@ -86,9 +94,12 @@ independently verify both, retain one successful exact-target integration and
 one moved-target conflict, then admit a mixed integrated/verified fan-in only
 with exact adopted bytes. The Join independently verifies the combined result,
 while the missing integrated proof leaves its explicit conflict consumer
-blocked with no Run. The same gate reruns real-loopback remote-provider faults,
-full regressions and three private zero-residue physical rounds. It adds no
-scheduler mode, automatic conflict resolution or remote input attestation.
+blocked with no Run. The same historical acceptance reruns Optional Extension
+real-loopback remote-provider faults, full regressions and three private
+zero-residue physical rounds. Its Core claim is the local multi-Bridge execution
+and integration path; the provider checks are retained regressions, not Core
+prerequisites. It adds no scheduler mode, automatic conflict resolution or
+remote input attestation.
 
 ## Scope
 

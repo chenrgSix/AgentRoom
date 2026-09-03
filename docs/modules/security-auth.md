@@ -7,6 +7,12 @@ scope-bounded. Cross-Task input authority never grants Room membership. Agent
 result/prose/upload channels cannot mint verified execution receipts. Every
 legacy admission path must enforce active plan gates before scheduling is enabled.
 
+[ADR-0039](../adr/0039-keep-repositories-client-owned.md) additionally fixes
+repository paths and remotes, Git/SSH credentials, worktrees, refs and every
+Git command under Client/Bridge authority. Central's Plan, scheduling,
+authorization, Evidence/Proof/Adoption and receipt authority does not include
+repository access or credential authority.
+
 ## Scope
 
 - Prefix: `SEC`
@@ -332,9 +338,12 @@ diagnostics, metrics, audits, and backups. It also proves the Hosted identity
 cannot enter Result, Task-completion, ambiguity-acknowledgement, Member, Device,
 or MCP authority paths.
 
-REPO-003's remote evidence credential remains a Server-operator runtime value;
-a Team Owner cannot submit or persist it. That deployment boundary limits, but
-does not solve, outbound request risk. `SEC-014` implements the remaining policy in
+REPO-003's Optional Remote Evidence credential remains a Server-operator runtime
+value; a Team Owner cannot submit or persist it. It is a provider API credential,
+not a Git credential or SSH key, and cannot authorize repository commands or
+mutation. The default installation resolves no such credential and initiates no
+provider request. That deployment boundary limits, but does not solve, outbound
+request risk when the extension is enabled. `SEC-014` implements the remaining policy in
 the [remote-provider egress goal](../acceptance/sec-014-remote-provider-egress-goal.md):
 resolve once and pin the destination for every direct connection, reject the
 whole answer set when any private, loopback, link-local, metadata, multicast,
@@ -354,6 +363,11 @@ an in-memory marker on the injected deterministic test transport; default or
 unmarked startup, Team commands and persisted bindings cannot recreate it.
 The accepted evidence and explicit live-network/platform limits are recorded in
 the [SEC-014 acceptance](../acceptance/sec-014-remote-provider-egress-goal.md).
+
+ADR-0039 retains this accepted security boundary and its regressions as an
+Optional Extension. New GitHub/GitLab adapters, PR lifecycle, webhook, push,
+remote merge and provider-credential Web UI work are paused unless a future
+explicit product task reopens their scope and authority.
 
 `CON-012` defines the additive ADR-0021 pairing-session contract. `SEC-008`
 implements its state machine in migration 0041 and the dedicated pairing

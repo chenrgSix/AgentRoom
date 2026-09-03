@@ -6,6 +6,10 @@ CON-023/EXEC-009 contracts remain the evidence authority; this delivery extends
 their remote producers without reinterpreting local evidence or reuse
 semantics.
 
+Classification: retained Optional Remote Evidence Extension under ADR-0039.
+Its implementation, tests, migrations, evidence and `DONE` state remain valid;
+it is not a Governed Software-Team Execution Core completion gate.
+
 ## Goal
 
 Admit one exact remote repository commit and its configured CI observations as

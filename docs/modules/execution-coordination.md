@@ -4,15 +4,18 @@
 - Implementation directory: `apps/server/src/execution/`
 - Owns: immutable decisions/plans, approvals, dependency/input bindings,
   dispatch intents and derived graph progress
-- Governing decisions: [ADR-0036](../adr/0036-add-governed-software-team-execution.md)
-  and [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md)
+- Governing decisions: [ADR-0036](../adr/0036-add-governed-software-team-execution.md),
+  [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md) and
+  [ADR-0039](../adr/0039-keep-repositories-client-owned.md)
 
 ## Purpose and Non-goals
 
 Turn an approved software-development plan into existing bounded Task Runs and
 verified deliveries. This module does not duplicate Task lifecycle, Run outcome,
 Result review, Artifact content, Discussion state or provider sessions. It does
-not expose a shell. A top-level Product Task represents the objective.
+not expose a shell or own Repository/Git credentials and commands. A top-level
+Product Task represents the objective. Remote provider facts are retained
+optional-extension inputs, not Core scheduler prerequisites.
 
 ## Requirement and Acceptance Map
 
@@ -28,12 +31,12 @@ Requirement IDs identify behavior, not delivery status. Only TASKS records state
 | EX-06 | Coding uses explicit local grants and isolated workspaces before startup | WSP-003, BRG-071, REPO-001; actual Git and denied-runtime execution tests |
 | EX-07 | Verifier receipts are independent from Agent claims and pin exact code | VER-001; actual command plus forgery/profile/tree mismatch tests |
 | EX-08 | Integration checks the candidate and compare-and-sets the target | REPO-002; parallel patches, conflict, moved-base and response-loss tests |
-| EX-09 | Scoped CI/PR operations reconcile external effects without blind retry | GOV-026 design plus REPO-003 implementation; migration, authenticated real HTTP adapter, lost responses and target identity checks |
+| EX-09 | Optional extension: scoped remote CI/commit observations reconcile external effects without blind retry | GOV-026 design plus retained REPO-003/REPO-005/SEC-014 implementation; not a Core exit gate under ADR-0039 |
 | EX-10 | Web completes proposal, approval, diagnosis, review and recovery flows | WEB-063, WEB-064; real Server browser acceptance at desktop/mobile widths |
 | EX-11 | Tech Lead proposals and bounded revisions do not inherit human authority | MCP-007, EXEC-005; assigned/unassigned and privilege/budget drift negatives |
 | EX-12 | Focused/quorum discussions preserve frozen evidence and actual Run outcomes | DISC-011, DISC-012; permutation/restart/late-result/role tests |
 | EX-13 | Existing Rooms, default Tasks, ordinary Runs and human Result review remain intact | QA-052, QA-053, QA-054; full regression plus legacy-route bypass negatives |
-| EX-14 | Final scope and completion evidence match the accepted design | QA-055; requirement-by-requirement direction audit |
+| EX-14 | Final Core scope and completion evidence match the accepted design | QA-055; requirement-by-requirement Core audit with Optional Extensions reported separately |
 
 ### Foundation and Closure Ordering
 
@@ -102,7 +105,7 @@ backfill, dual-write, shadow-equality and adoption-authoritative local reader
 cutover; legacy local rows are compatibility projections rather than alternate
 authority.
 
-REPO-003 adds the first accepted remote-only producer under the
+The optional REPO-003 extension adds the first accepted remote-only producer under the
 [remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
 Its provider observation and sealed commit/patch bytes create source evidence;
 configured CI receipts create verification proof; only a separate explicit
@@ -414,6 +417,10 @@ separate consumer blocked with no dispatch. The
 binds those database facts to actual Git refs/bytes, provider faults, exact
 worktree cleanup, full gates and three private zero-residue rounds.
 
+The local parallel Bridge/Git/proof chain is Core evidence. QA-053's retained
+provider-fault coverage is an Optional Remote Evidence regression and does not
+make REPO-003 or provider availability a future Core dependency.
+
 CON-024 and EXEC-011 separate exact execution identity from future reuse
 equivalence without changing the version-1 `EvidenceAdoption`. The companion
 `EvidenceReuseContract` records the existing `resolvedInputSetDigest` as
@@ -432,6 +439,10 @@ without runtime healing, and dependency/input readers remain
 adoption-authoritative. `CON-024` and `EXEC-011` are accepted by the full
 contract, migration, regression, E2E, Bridge and physical cleanup evidence in
 their frozen goal.
+
+ADR-0039 fixes the remaining Core order as `EXEC-005`, `DISC-011`, `DISC-012`,
+`QA-054` and `QA-055`. No new Remote Forge work enters that chain without a new
+accepted product decision.
 
 ### First Accepted-Result Dependency Increment
 

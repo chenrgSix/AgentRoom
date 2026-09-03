@@ -3,10 +3,37 @@
 - Prefixes: `REPO`, `VER`; local coordination also uses `WSP` and `BRG`
 - Planned implementation: `apps/server/src/repository/`,
   `apps/server/src/verification/`, `bridge/internal/repository/`
-- Governing decisions: [ADR-0036](../adr/0036-add-governed-software-team-execution.md)
-  and [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md)
-- State ownership: Central owns operation intents and authenticated receipts;
-  Bridge owns local bindings, paths, permissions, Git and command execution
+- Governing decisions: [ADR-0036](../adr/0036-add-governed-software-team-execution.md),
+  [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md) and
+  [ADR-0039](../adr/0039-keep-repositories-client-owned.md)
+- State ownership: Central owns Plan, scheduling, authorization,
+  Evidence/Proof/Adoption and operation receipts; Client/Bridge owns repository
+  bindings, paths, remotes, credentials, permissions, worktrees, refs and every
+  Git command
+
+## Core Ownership Boundary
+
+The Governed Software-Team Execution Core never acquires repository authority.
+Repository paths and configuration, Git remotes, Git and SSH credentials,
+fetch/pull/push, worktrees, branches, indexes, refs and every Git command remain
+under Client/Bridge authority on the owner's machine. Central may retain an
+approved Plan, schedule a bounded node/generation, issue exact authorization,
+evaluate Evidence/Proof/Adoption and retain an opaque operation receipt. The
+effective operation is always the intersection of that Central authority and
+current owner-local consent.
+
+The retained Remote Evidence implementation is an Optional Extension. Its
+provider origin and repository identifier are evidence metadata, not a Git
+remote, and its transient provider API credential is neither a Git credential
+nor an SSH key. The default installation resolves no provider credential and
+makes no active provider request. Installing or enabling the extension does not
+authorize Central to execute Git or mutate a repository.
+
+For compatibility, the retained extension invokes fixed Git inspection commands
+only against its own disposable bare object store when validating a bounded
+received bundle. It never addresses an Owner repository or receives repository
+configuration, Git credentials or SSH keys. This is not Core repository
+execution and cannot be widened into Central repository authority.
 
 ## Local Repository Binding
 
@@ -489,10 +516,11 @@ Conflict creates actionable attention and retains inputs; no force resolution.
 
 If the target moves, a new candidate and verification are required. Git update
 uses expected old object ID; an old green receipt cannot authorize a new tree.
-A successful local target update is recorded separately from remote publish or
-PR state. Task acceptance is not itself merge approval. A plan's chosen
-integration policy is explicit: reviewed local candidate, local integration or
-configured remote PR/merge observation, with distinct completion evidence.
+A successful local target update is recorded separately from any external
+publication state. Task acceptance is not itself integration approval. The
+Core integration policy covers a reviewed local candidate and owner-local
+exact-target integration; optional external observations may supplement that
+evidence but cannot replace Client/Bridge repository authority.
 
 The bounded REPO-002 implementation is frozen by the
 [exact-target integration goal](../acceptance/repo-002-exact-target-integration-goal.md).
@@ -504,16 +532,22 @@ Targets checked out in any worktree fail closed rather than leaving owner files
 or an index inconsistent. Remote transport and physical two-Bridge handoff stay
 outside this slice.
 
-## Remote Git, CI and PR
+## Optional Remote Evidence Extension
 
 Remote source identity and proof adoption follow
 [ADR-0038](../adr/0038-separate-source-evidence-from-plan-adoption.md).
 The bounded implementation target is frozen in the
 [REPO-003 remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
-Remote operations are opt-in owner-local bindings. The first adapter has a
-closed supported provider interface and fixed HTTPS origin/repository identity;
-no arbitrary URL supplied by Agent output is fetched. Credentials remain
-runtime-only and are resolved by binding ID. Every observation uses its stable
+ADR-0039 classifies the accepted REPO-003, REPO-005 and SEC-014 capability as
+an Optional Remote Evidence Extension. It remains supported and tested, but is
+not a Core completion gate or a dependency of the Core roadmap.
+
+Remote observations require an explicitly configured metadata binding and an
+installed extension. The first adapter has a closed supported provider
+interface and fixed HTTPS origin/repository identity; no arbitrary URL supplied
+by Agent output is fetched. Provider API credentials remain runtime-only and
+are resolved by binding ID; they are not Git/SSH credentials and grant no
+repository mutation. Every observation uses its stable
 operation identity for authenticated lookup before a missing effect may be
 created. Ambiguous outcomes remain `outcome_unknown`; an explicit retry starts
 with lookup and never blindly repeats the external effect.
@@ -535,15 +569,15 @@ are separate proof records. An explicit current-authority adoption—not the
 observation—releases `verified_output`. Optional PR identity is provenance only;
 remote push, PR creation/merge and callbacks remain closed.
 
-The imported commit is evidence, not a shared-ref mutation. Future remote push,
-pull-request creation/update/merge, webhook ingestion and deployment require
-their own provider operation contracts and acceptance. They cannot reuse the
-observation endpoint as an implicit mutation authority, and force push remains
-outside the control plane.
+The imported commit is evidence, not a shared-ref mutation. New GitHub/GitLab
+adapters, fetch/pull/push, pull-request creation/update/merge, webhook
+ingestion, provider-credential Web UI and remote merge work are paused. Any
+future addition requires a new explicit product task and authority decision;
+it cannot reuse the observation endpoint as implicit mutation authority.
 
-Remote producers remain input-free after REPO-003. A commit descendant of the
-planned base does not prove that the producer consumed every adopted graph
-input, especially when the input is a patch, document, report or test Artifact.
+REPO-005 records why a commit descendant of the planned base does not prove
+that a remote producer consumed every adopted graph input, especially when the
+input is a patch, document, report or test Artifact.
 The frozen [REPO-005 goal](../acceptance/repo-005-remote-input-attestation-goal.md)
 therefore adds a separate provider-authenticated `RemoteInputAttestation`
 companion rather than overloading the commit observation. It retains ordered
@@ -551,10 +585,9 @@ exact `adoptionId`/`adoptionDigest` pins as authority and an unchanged graph
 `ReuseInput` projection for logical comparison. Admission requires
 `remoteInputEvidenceDigest == planned reuseInputEvidenceDigest`, exact
 commit/tree identity and a current join back to every approved incoming edge,
-source, proof set and sealed Artifact. The first version accepts only one
-adopted graph producer for every declared required slot; external, optional,
-unbound or ambiguous inputs remain closed. Until implementation acceptance, any
-remote node with declared inputs or incoming edges still fails closed.
+source, proof set and sealed Artifact. The accepted first version allows only
+one adopted graph producer for every declared required slot; external,
+optional, unbound or ambiguous inputs remain closed.
 
 ## Security and Failure Matrix
 
@@ -568,7 +601,7 @@ remote node with declared inputs or incoming edges still fails closed.
 | untracked/out-of-scope/symlink output | reject publication/integration; retain diagnostic workspace |
 | verify succeeded but receipt was lost | replay stored receipt for exact operation |
 | target update may have committed | inspect exact target; confirm or keep unknown |
-| remote push/PR response was lost | authenticated exact-identity lookup, no blind duplicate |
+| optional remote observation response was lost | authenticated exact-identity lookup, no blind duplicate |
 | cancellation raced with success | first trustworthy durable outcome wins; retain diagnostics |
 | task/plan was superseded | preserve historical receipts; block incompatible new use |
 
@@ -610,11 +643,13 @@ later lifecycle acceptance; it runs actual
 bounded commands with pass/fail/timeout and forged-receipt negatives;
 `REPO-002` exercises overlapping branches, conflicts and target CAS;
 `REPO-003` validates the accepted GOV-026 migration plus authenticated provider
-I/O and ambiguous external effects before advertising its bounded remote
-observation behavior. Its accepted evidence is recorded in the
+I/O and ambiguous external effects before advertising its bounded optional
+remote-observation behavior. Its accepted evidence is recorded in the
 [remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
-`QA-052` through `QA-055` combine these with actual Server and Go Bridge
-processes, browser entry and direction auditing. Delivery state stays in TASKS.
+`QA-052`, the local portion of `QA-053`, and the future `QA-054`/`QA-055`
+combine the Core with actual Server and Go Bridge processes, browser entry and
+direction auditing. Remote-provider checks remain Optional Extension
+regressions. Delivery state stays in TASKS.
 
 Build/test Server through its existing npm workspace commands. Bridge code uses
 `gofmt`, `go test ./...`, `go test -race` for affected packages and `go vet ./...`.
@@ -636,12 +671,13 @@ not candidate-content owners.
 migration/backfill, transactional local dual-write, shadow-read equality,
 reader cutover and the versioned non-Result input projection under the frozen
 [runtime goal](../acceptance/source-evidence-adoption-runtime-goal.md).
-`REPO-003` started only after that local authority was accepted and now owns the
-remote adapter/provider observations plus explicit remote adoption. It does not
+`REPO-003` started only after that local authority was accepted and retains the
+optional remote adapter/provider observations plus explicit remote adoption. It does not
 make legacy Result fields nullable, invent Results, accept a URL/hash without
 canonical content, or treat an observation as authority for another gate. Its
 runtime acceptance, rather than the earlier design acceptance, is what adds
-this bounded provider capability.
+this bounded provider capability when the extension is enabled; it adds no Core
+completion requirement.
 
 ### Independent Verification Vertical Slice
 
