@@ -48,7 +48,7 @@ Use an updated Central, Web and Bridge together; v0.4.2 packages do not include
 this flow.
 
 The unreleased governed software-team execution route has completed its
-bounded-autonomy product acceptance; the current source is undergoing the
+bounded-autonomy product acceptance and
 [final Core audit](docs/acceptance/qa-055-final-core-audit-goal.md). This source
 status is not a packaged Release claim.
 

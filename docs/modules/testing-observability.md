@@ -101,6 +101,15 @@ and integration path; the provider checks are retained regressions, not Core
 prerequisites. It adds no scheduler mode, automatic conflict resolution or
 remote input attestation.
 
+`QA-054` joins the read-only focused quorum, Discussion-authored draft,
+assigned Tech Lead MCP authority, exact human approval and bounded delegated
+carry-forward with the existing physical product loop. `QA-055` then audits
+the current implementation against EX-01 through EX-14 and every recorded
+design resolution, repairs the carried accepted-input and acceptance-harness
+findings, and repeats the full workspace, Bridge, race, vet, E2E and physical
+temporary-directory gates. Their accepted records are the final bounded Core
+evidence; Optional Remote Provider availability is not part of that claim.
+
 ## Scope
 
 - Prefixes: `QA` and `OPS`

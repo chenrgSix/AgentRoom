@@ -648,7 +648,7 @@ remote-observation behavior. Its accepted evidence is recorded in the
 [remote-evidence goal](../acceptance/repo-003-remote-evidence-adoption-goal.md).
 `QA-052`, the local portion of `QA-053`, and accepted `QA-054` combine the Core
 with actual Server and Go Bridge processes, browser entry and direction
-auditing. `QA-055` is the active final design-to-implementation audit.
+auditing. `QA-055` closes the final design-to-implementation audit.
 Remote-provider checks remain Optional Extension regressions. Delivery state
 stays in TASKS.
 

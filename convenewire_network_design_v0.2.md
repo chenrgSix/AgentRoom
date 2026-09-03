@@ -509,9 +509,10 @@ fetch/pull/push、worktree 和全部 Git command execution。Central approval
 不能替代 Owner 对机器和 Repository 的最终控制。
 
 `EXEC-005` Plan supersession/evidence carry-forward/bounded replanning、
-`DISC-011` focused participant selection、`DISC-012` read-only quorum 和
-`QA-054` bounded-autonomy 产品验收均已完成。`QA-055` 是当前唯一的 Core
-主线，用当前实现和物理证据完成 EX-01 至 EX-14 最终审计。
+`DISC-011` focused participant selection、`DISC-012` read-only quorum、
+`QA-054` bounded-autonomy 产品验收和 `QA-055` EX-01 至 EX-14 最终审计均已
+完成。当前 bounded Governed Software-Team Execution Core 主线已闭环；新增
+产品范围必须重新立项，不能从 Optional Remote Evidence 隐式扩权。
 
 ### 13.2 Optional Remote Evidence Extensions
 
