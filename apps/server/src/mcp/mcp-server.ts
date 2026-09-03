@@ -96,6 +96,27 @@ const executionRevisionCommand = z.object({
   expectedRootTaskRevision: z.number().int().positive(),
   definition: z.unknown()
 }).strict();
+const executionSupersessionCandidateCommand = z.object({
+  operationId: opaqueId("op"),
+  expectedCurrentRevision: z.number().int().positive(),
+  expectedCurrentDigest: z.string().regex(/^[a-f0-9]{64}$/u),
+  expectedControlRevision: z.number().int().positive(),
+  expectedRootTaskRevision: z.number().int().positive(),
+  definition: z.unknown(),
+  reason: z.string().min(1).max(2_000)
+}).strict();
+const executionSupersessionActivationCommand = z.object({
+  operationId: opaqueId("op"),
+  candidateId: opaqueId("supersession"),
+  expectedCandidateRevision: z.number().int().positive(),
+  expectedCandidateDigest: z.string().regex(/^[a-f0-9]{64}$/u),
+  expectedCurrentRevision: z.number().int().positive(),
+  expectedCurrentDigest: z.string().regex(/^[a-f0-9]{64}$/u),
+  expectedControlRevision: z.number().int().positive(),
+  expectedRootTaskRevision: z.number().int().positive(),
+  carryForward: z.array(z.unknown()).max(192),
+  reason: z.string().min(1).max(2_000)
+}).strict();
 
 function toolResult(value: Record<string, unknown>) {
   return {
@@ -275,6 +296,37 @@ export function createTeamMcpServer(
       runId,
       planId,
       command,
+      dependencies.clock()
+    )
+  }));
+  server.registerTool("team.propose_plan_supersession", {
+    description: "Propose one immutable active-plan supersession candidate from this exact Tech Lead Run.",
+    inputSchema: {
+      runId: opaqueId("run"),
+      planId: opaqueId("plan"),
+      command: executionSupersessionCandidateCommand
+    }
+  }, async ({ runId, planId, command }) => toolResult({
+    candidate: dependencies.manualExecutionPlans.proposeSupersession(
+      principal,
+      planId,
+      { runId, command },
+      dependencies.clock()
+    )
+  }));
+  server.registerTool("team.activate_plan_supersession", {
+    description: "Use one exact Owner-issued delegation to activate this Tech Lead Run's low-risk supersession candidate.",
+    inputSchema: {
+      runId: opaqueId("run"),
+      planId: opaqueId("plan"),
+      delegationId: opaqueId("replan"),
+      command: executionSupersessionActivationCommand
+    }
+  }, async ({ runId, planId, delegationId, command }) => toolResult({
+    receipt: dependencies.manualExecutionPlans.activateSupersession(
+      principal,
+      planId,
+      { runId, delegationId, command },
       dependencies.clock()
     )
   }));

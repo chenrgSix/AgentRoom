@@ -2639,10 +2639,11 @@ export interface MischievousIntegrationTarget {
 }
 
 export interface ExecutionReplanDelegationIssueCommand {
-  agentId:                 string;
-  expectedControlRevision: number;
-  expectedPlanDigest:      string;
-  expectedPlanRevision:    number;
+  agentId:                  string;
+  expectedControlRevision:  number;
+  expectedPlanDigest:       string;
+  expectedPlanRevision:     number;
+  expectedRootTaskRevision: number;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -2674,6 +2675,7 @@ export interface ExecutionReplanDelegation {
   planRevision:        number;
   reason:              string;
   revision:            number;
+  rootTaskRevision:    number;
   taskIds:             [string, ...string[]];
 }
 

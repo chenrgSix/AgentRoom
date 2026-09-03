@@ -196,6 +196,14 @@ export class ExecutionEvidenceAdoptionRepository {
     `).get());
   }
 
+  private carriedAvailable(): boolean {
+    return Boolean(this.database.prepare(`
+      SELECT 1 FROM sqlite_master
+      WHERE type = 'table'
+        AND name = 'execution_carried_evidence_adoptions'
+    `).get());
+  }
+
   public reconcileLegacy(
     loadMaterialization: (
       identity: ExecutionNodeIdentity,
@@ -425,16 +433,28 @@ export class ExecutionEvidenceAdoptionRepository {
     gate: Gate
   ): EvidenceAdoptionBundle | undefined {
     if (!this.available()) return undefined;
-    const row = this.database.prepare(`
+    const sql = this.carriedAvailable() ? `
       SELECT adoption_json, legacy_materialization_digest
       FROM execution_evidence_adoptions
       WHERE plan_id = ? AND plan_revision = ? AND node_key = ? AND gate = ?
-    `).get(
+      UNION ALL
+      SELECT adoption_json, adoption_digest AS legacy_materialization_digest
+      FROM execution_carried_evidence_adoptions
+      WHERE plan_id = ? AND plan_revision = ? AND node_key = ? AND gate = ?
+    ` : `
+      SELECT adoption_json, legacy_materialization_digest
+      FROM execution_evidence_adoptions
+      WHERE plan_id = ? AND plan_revision = ? AND node_key = ? AND gate = ?
+    `;
+    const parameters = [
       identity.planId,
       identity.planRevision,
       identity.nodeKey,
       gate
-    ) as AdoptionRow | undefined;
+    ];
+    if (this.carriedAvailable()) parameters.push(...parameters);
+    const row = this.database.prepare(sql).get(...parameters) as
+      AdoptionRow | undefined;
     if (!row) return undefined;
     const adoption = JSON.parse(row.adoption_json) as EvidenceAdoption;
     assertExecutionCommand("evidenceAdoption", adoption);
@@ -469,10 +489,18 @@ export class ExecutionEvidenceAdoptionRepository {
 
   public getReuse(adoptionId: string): EvidenceReuseContract | undefined {
     if (!this.reuseAvailable()) return undefined;
-    const row = this.database.prepare(`
+    const carried = this.carriedAvailable();
+    const row = this.database.prepare(carried ? `
       SELECT contract_json FROM execution_evidence_reuse_contracts
       WHERE adoption_id = ?
-    `).get(adoptionId) as ReuseRow | undefined;
+      UNION ALL
+      SELECT contract_json FROM execution_carried_evidence_reuse_contracts
+      WHERE adoption_id = ?
+    ` : `
+      SELECT contract_json FROM execution_evidence_reuse_contracts
+      WHERE adoption_id = ?
+    `).get(...(carried ? [adoptionId, adoptionId] : [adoptionId])) as
+      ReuseRow | undefined;
     if (!row) return undefined;
     const contract = JSON.parse(row.contract_json) as EvidenceReuseContract;
     assertExecutionCommand("evidenceReuseContract", contract);

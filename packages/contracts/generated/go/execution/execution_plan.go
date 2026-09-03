@@ -2575,10 +2575,11 @@ type MischievousIntegrationTarget struct {
 }
 
 type ExecutionReplanDelegationIssueCommand struct {
-	AgentID                 string `json:"agentId"`
-	ExpectedControlRevision int64  `json:"expectedControlRevision"`
-	ExpectedPlanDigest      string `json:"expectedPlanDigest"`
-	ExpectedPlanRevision    int64  `json:"expectedPlanRevision"`
+	AgentID                  string `json:"agentId"`
+	ExpectedControlRevision  int64  `json:"expectedControlRevision"`
+	ExpectedPlanDigest       string `json:"expectedPlanDigest"`
+	ExpectedPlanRevision     int64  `json:"expectedPlanRevision"`
+	ExpectedRootTaskRevision int64  `json:"expectedRootTaskRevision"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
 	ExpiresAt   string `json:"expiresAt"`
@@ -2604,6 +2605,7 @@ type ExecutionReplanDelegation struct {
 	PlanRevision        int64    `json:"planRevision"`
 	Reason              string   `json:"reason"`
 	Revision            int64    `json:"revision"`
+	RootTaskRevision    int64    `json:"rootTaskRevision"`
 	TaskIDS             []string `json:"taskIds"`
 }
 

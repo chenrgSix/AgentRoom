@@ -866,6 +866,95 @@ async function completeAndAcceptScheduledNode(
   return { accepted, captured, manifest, result };
 }
 
+async function carryLocalGate(
+  f: AdmissionFixture,
+  selectedGates: ("accepted_result" | "verified_output" |
+    "integrated_commit")[],
+  suffix: string
+) {
+  const sources = selectedGates.map((gate) => {
+    const source = f.database.prepare(`
+      SELECT adoption_id, adoption_digest FROM execution_evidence_adoptions
+      WHERE plan_id = ? AND plan_revision = 1 AND node_key = 'Build'
+        AND gate = ?
+    `).get(f.plan.planId, gate) as {
+      adoption_digest: string;
+      adoption_id: string;
+    };
+    assert.ok(source);
+    const reuse = f.database.prepare(`
+      SELECT reuse_contract_id, reuse_input_evidence_digest,
+        node_reuse_contract_digest
+      FROM execution_evidence_reuse_contracts WHERE adoption_id = ?
+    `).get(source.adoption_id) as {
+      node_reuse_contract_digest: string;
+      reuse_contract_id: string;
+      reuse_input_evidence_digest: string;
+    };
+    assert.ok(reuse);
+    return { gate, reuse, source };
+  });
+  const label = selectedGates.join(" and ");
+  const current = await f.ok(
+    "GET", `/api/execution-plans/${f.plan.planId}`
+  );
+  const definition = structuredClone(current.current.definition);
+  for (const node of definition.nodes) {
+    const compiled = current.compiledTasks.find((entry: {
+      nodeKey: string;
+    }) => entry.nodeKey === node.nodeKey);
+    assert.ok(compiled);
+    const task = await f.ok("GET", `/api/tasks/${compiled.taskId}`);
+    node.task = {
+      mode: "existing",
+      taskId: task.taskId,
+      expectedTaskRevision: task.taskRevision,
+      definitionRevision: task.definitionRevision,
+      criteriaRevision: task.criteriaRevision
+    };
+  }
+  definition.decision.summary = `Carry the exact ${label} proof.`;
+  const root = await f.ok("GET", `/api/tasks/${current.rootTaskId}`);
+  const candidate = await f.ok(
+    "POST",
+    `/api/execution-plans/${current.planId}/supersession-candidates`,
+    {
+      operationId: `op_${suffix}_candidate0001`,
+      expectedCurrentRevision: current.current.revision,
+      expectedCurrentDigest: current.current.digest,
+      expectedControlRevision: current.controlRevision,
+      expectedRootTaskRevision: root.taskRevision,
+      definition,
+      reason: `Prepare an exact ${label} carry candidate.`
+    }
+  );
+  const receipt = await f.ok(
+    "POST",
+    `/api/execution-plans/${current.planId}/supersession-activations`,
+    {
+      operationId: `op_${suffix}_activation0001`,
+      candidateId: candidate.candidateId,
+      expectedCandidateRevision: candidate.candidateRevision,
+      expectedCandidateDigest: candidate.candidateDigest,
+      expectedCurrentRevision: current.current.revision,
+      expectedCurrentDigest: current.current.digest,
+      expectedControlRevision: current.controlRevision,
+      expectedRootTaskRevision: root.taskRevision,
+      carryForward: sources.map(({ gate, reuse, source }) => ({
+        targetNodeKey: "Build",
+        gate,
+        sourceAdoptionId: source.adoption_id,
+        sourceAdoptionDigest: source.adoption_digest,
+        sourceReuseContractId: reuse.reuse_contract_id,
+        sourceNodeReuseContractDigest: reuse.node_reuse_contract_digest,
+        sourceReuseInputEvidenceDigest: reuse.reuse_input_evidence_digest
+      })),
+      reason: `Adopt the exact ${label} proof into revision two.`
+    }
+  );
+  return { current, receipt, sources };
+}
+
 async function retainIndependentVerification(
   f: AdmissionFixture,
   manifest: GovernedExecutionManifest,
@@ -2765,6 +2854,31 @@ test("generation-2 verified output admits one immutable serialized integration",
   }].sort((left, right) => left.adoption_id < right.adoption_id ? -1 : 1));
   assert.equal(backfillLegacyEvidenceAdoptions(f.database), 2,
     "reopen backfill is byte-identical and idempotent");
+  const carried = await carryLocalGate(
+    f,
+    ["verified_output", "integrated_commit"],
+    "integrated_carry"
+  );
+  assert.deepEqual(
+    carried.receipt.carryForward.map((entry: { gate: string }) => entry.gate),
+    ["integrated_commit", "verified_output"]
+  );
+  const carriedResolution = new ExecutionDependencyResolver(
+    new ExecutionPlanRepository(f.database),
+    new ExecutionNodeMaterializationRepository(f.database)
+  ).resolve({
+    planId: f.plan.planId,
+    planRevision: 2,
+    nodeKey: "Consume"
+  });
+  assert.equal(carriedResolution.ready, true);
+  if (!carriedResolution.ready) throw new Error(carriedResolution.blocker);
+  assert.equal(
+    carriedResolution.selections[0]!.sourceAuthority.adoptionId,
+    carried.receipt.carryForward.find(
+      (entry: { gate: string }) => entry.gate === "integrated_commit"
+    )!.adoptionId
+  );
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
@@ -3651,6 +3765,259 @@ test("generation-2 accepted output materializes once and drives exact downstream
     "frozen physical bytes are withheld when adoption authority disappears");
 });
 
+test("plan supersession carries exact local evidence by semantic reuse digests", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    acceptedDependency: true,
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => Boolean(f.database.prepare(`
+    SELECT 1 FROM execution_dispatch_intents
+    WHERE plan_id = ? AND plan_revision = 1 AND node_key = 'Build'
+  `).get(f.plan.planId)));
+  await completeAndAcceptScheduledNode(f, "Build");
+  await waitFor(() => Boolean(f.database.prepare(`
+    SELECT 1 FROM execution_dispatch_intents
+    WHERE plan_id = ? AND plan_revision = 1 AND node_key = 'Consume'
+  `).get(f.plan.planId)));
+
+  const source = f.database.prepare(`
+    SELECT adoption_id, adoption_digest FROM execution_evidence_adoptions
+    WHERE plan_id = ? AND plan_revision = 1 AND node_key = 'Build'
+      AND gate = 'accepted_result'
+  `).get(f.plan.planId) as {
+    adoption_digest: string;
+    adoption_id: string;
+  };
+  const sourceReuse = f.database.prepare(`
+    SELECT reuse_contract_id, reuse_input_evidence_digest,
+      node_reuse_contract_digest, contract_digest
+    FROM execution_evidence_reuse_contracts WHERE adoption_id = ?
+  `).get(source.adoption_id) as {
+    contract_digest: string;
+    node_reuse_contract_digest: string;
+    reuse_contract_id: string;
+    reuse_input_evidence_digest: string;
+  };
+  assert.ok(source && sourceReuse);
+
+  const current = await f.ok(
+    "GET", `/api/execution-plans/${f.plan.planId}`
+  );
+  const definition = structuredClone(current.current.definition);
+  for (const node of definition.nodes) {
+    const compiled = current.compiledTasks.find((entry: {
+      nodeKey: string;
+    }) => entry.nodeKey === node.nodeKey);
+    assert.ok(compiled);
+    const task = await f.ok("GET", `/api/tasks/${compiled.taskId}`);
+    node.task = {
+      mode: "existing",
+      taskId: task.taskId,
+      expectedTaskRevision: task.taskRevision,
+      definitionRevision: task.definitionRevision,
+      criteriaRevision: task.criteriaRevision
+    };
+  }
+  definition.decision.summary =
+    "Carry only evidence whose execution semantics and logical inputs match.";
+  const root = await f.ok("GET", `/api/tasks/${current.rootTaskId}`);
+  const candidate = await f.ok(
+    "POST",
+    `/api/execution-plans/${current.planId}/supersession-candidates`,
+    {
+      operationId: "op_carry_candidate0001",
+      expectedCurrentRevision: current.current.revision,
+      expectedCurrentDigest: current.current.digest,
+      expectedControlRevision: current.controlRevision,
+      expectedRootTaskRevision: root.taskRevision,
+      definition,
+      reason: "Retain the exact semantic contract in revision two."
+    }
+  );
+  const command = {
+    operationId: "op_carry_activation0001",
+    candidateId: candidate.candidateId,
+    expectedCandidateRevision: candidate.candidateRevision,
+    expectedCandidateDigest: candidate.candidateDigest,
+    expectedCurrentRevision: current.current.revision,
+    expectedCurrentDigest: current.current.digest,
+    expectedControlRevision: current.controlRevision,
+    expectedRootTaskRevision: root.taskRevision,
+    carryForward: [{
+      targetNodeKey: "Build",
+      gate: "accepted_result",
+      sourceAdoptionId: source.adoption_id,
+      sourceAdoptionDigest: source.adoption_digest,
+      sourceReuseContractId: sourceReuse.reuse_contract_id,
+      sourceNodeReuseContractDigest: sourceReuse.node_reuse_contract_digest,
+      sourceReuseInputEvidenceDigest:
+        sourceReuse.reuse_input_evidence_digest
+    }],
+    reason: "Adopt the exact retained Build proof into revision two."
+  };
+  const omitted = await f.request(
+    "POST",
+    `/api/execution-plans/${current.planId}/supersession-activations`,
+    {
+      ...command,
+      operationId: "op_carry_omitted0001",
+      carryForward: []
+    }
+  );
+  assert.equal(omitted.statusCode, 409, omitted.body);
+  assert.match(omitted.body, /EXECUTION_CARRY_COVERAGE_REQUIRED/u);
+  const mismatched = await f.request(
+    "POST",
+    `/api/execution-plans/${current.planId}/supersession-activations`,
+    {
+      ...command,
+      operationId: "op_carry_mismatch0001",
+      carryForward: [{
+        ...command.carryForward[0],
+        sourceNodeReuseContractDigest: "f".repeat(64)
+      }]
+    }
+  );
+  assert.equal(mismatched.statusCode, 409, mismatched.body);
+  assert.match(mismatched.body, /EXECUTION_CARRY_SOURCE_CONFLICT/u);
+  assert.equal(
+    (await f.ok("GET", `/api/execution-plans/${current.planId}`))
+      .current.revision,
+    1,
+    "failed carry attempts must leave the active revision unchanged"
+  );
+  const receipt = await f.ok(
+    "POST",
+    `/api/execution-plans/${current.planId}/supersession-activations`,
+    command
+  );
+  assert.equal(receipt.plan.current.revision, 2);
+  assert.equal(receipt.carryForward.length, 1);
+  assert.equal(receipt.carryForward[0].sourceAdoptionId, source.adoption_id);
+
+  const carried = f.database.prepare(`
+    SELECT adoption_id, source_adoption_id, adoption_json
+    FROM execution_carried_evidence_adoptions
+    WHERE plan_id = ? AND plan_revision = 2 AND node_key = 'Build'
+  `).get(current.planId) as {
+    adoption_id: string;
+    adoption_json: string;
+    source_adoption_id: string;
+  };
+  const targetReuse = f.database.prepare(`
+    SELECT contract_digest, node_reuse_contract_digest,
+      reuse_input_evidence_digest, source_reuse_contract_id
+    FROM execution_carried_evidence_reuse_contracts WHERE adoption_id = ?
+  `).get(carried.adoption_id) as {
+    contract_digest: string;
+    node_reuse_contract_digest: string;
+    reuse_input_evidence_digest: string;
+    source_reuse_contract_id: string;
+  };
+  assert.equal(carried.source_adoption_id, source.adoption_id);
+  assert.equal(targetReuse.source_reuse_contract_id,
+    sourceReuse.reuse_contract_id);
+  assert.equal(targetReuse.node_reuse_contract_digest,
+    sourceReuse.node_reuse_contract_digest);
+  assert.equal(targetReuse.reuse_input_evidence_digest,
+    sourceReuse.reuse_input_evidence_digest);
+  assert.notEqual(targetReuse.contract_digest, sourceReuse.contract_digest,
+    "adoption-specific contract digests must not decide reuse");
+  assert.equal(
+    JSON.parse(carried.adoption_json).authority.service,
+    "execution_supersession"
+  );
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND plan_revision = 2 AND node_key = 'Build'
+  `).get(current.planId) as { n: number }).n, 0,
+  "a carried node must not dispatch again");
+  const resolution = new ExecutionDependencyResolver(
+    new ExecutionPlanRepository(f.database),
+    new ExecutionNodeMaterializationRepository(f.database)
+  ).resolve({
+    planId: current.planId,
+    planRevision: 2,
+    nodeKey: "Consume"
+  });
+  assert.equal(resolution.ready, true);
+  if (!resolution.ready) throw new Error(resolution.blocker);
+  assert.equal(resolution.selections.length, 1);
+  assert.equal(resolution.selections[0]!.inputSlot, "patch");
+  assert.equal(resolution.selections[0]!.sourceAuthority.adoptionId,
+    receipt.carryForward[0].adoptionId);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND plan_revision = 2 AND node_key = 'Consume'
+  `).get(current.planId) as { n: number }).n, 0,
+  "the active prior-revision Run for the same Task must block new admission");
+  const priorConsume = f.database.prepare(`
+    SELECT run_id FROM execution_dispatch_intents
+    WHERE plan_id = ? AND plan_revision = 1 AND node_key = 'Consume'
+  `).get(current.planId) as { run_id: string };
+  assert.ok(priorConsume);
+  assert.equal(new RunRepository(f.database).applyEvent(priorConsume.run_id, {
+    type: "status",
+    sequence: 1,
+    status: "outcome_unknown",
+    error: {
+      code: "TEST_AMBIGUOUS_PRIOR_REVISION",
+      message: "The prior revision outcome is deliberately ambiguous.",
+      retryable: false
+    }
+  }, "2026-08-31T12:00:04.000Z").applied, true);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM run_ambiguity_acknowledgements
+    WHERE run_id = ?
+  `).get(priorConsume.run_id) as { n: number }).n, 0);
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id = ? AND plan_revision = 2 AND node_key = 'Consume'
+  `).get(current.planId) as { n: number }).n, 0,
+  "an unacknowledged ambiguous prior-revision Run must remain a blocker");
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("plan supersession carries verified output into the dependency reader", {
+  timeout: 30_000
+}, async (t) => {
+  const { f, manifest, captured } = await prepareVerifiedDependencySource(t);
+  const verification = await retainIndependentVerification(
+    f,
+    manifest,
+    captured
+  );
+  assert.equal(verification.receipt.outcome, "passed");
+  await waitFor(() => Boolean(f.database.prepare(`
+    SELECT 1 FROM execution_evidence_adoptions
+    WHERE plan_id = ? AND plan_revision = 1 AND node_key = 'Build'
+      AND gate = 'verified_output'
+  `).get(f.plan.planId)));
+  const { receipt } = await carryLocalGate(
+    f,
+    ["verified_output"],
+    "verified_carry"
+  );
+  assert.equal(receipt.carryForward[0].gate, "verified_output");
+  const resolution = new ExecutionDependencyResolver(
+    new ExecutionPlanRepository(f.database),
+    new ExecutionNodeMaterializationRepository(f.database)
+  ).resolve({
+    planId: f.plan.planId,
+    planRevision: 2,
+    nodeKey: "Consume"
+  });
+  assert.equal(resolution.ready, true);
+  if (!resolution.ready) throw new Error(resolution.blocker);
+  assert.equal(resolution.selections[0]!.sourceAuthority.adoptionId,
+    receipt.carryForward[0].adoptionId);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
 test("restart and duplicate scheduler wakeups retain one generation and Run", {
   timeout: 30_000
 }, async (t) => {
@@ -3709,6 +4076,50 @@ test("scheduler migration backfills automatic controls and retained admission hi
   f.socket.terminate();
   await f.app.close();
   f.database.exec(`
+    DROP VIEW execution_all_adopted_node_materializations;
+    CREATE VIEW execution_all_adopted_node_materializations AS
+    SELECT materialization.plan_id, materialization.plan_revision,
+      materialization.node_key, materialization.gate,
+      materialization.dispatch_generation, materialization.source_run_id,
+      materialization.source_result_id, materialization.source_result_version,
+      materialization.gate_operation_id, materialization.materialization_digest,
+      materialization.candidate_commit, materialization.candidate_tree,
+      materialization.checkpoint_id, materialization.artifact_pins_json,
+      materialization.adoption_id, materialization.adoption_digest,
+      materialization.source_evidence_id, materialization.source_digest,
+      node.task_id AS source_task_id, node.definition_revision,
+      node.criteria_revision
+    FROM execution_adopted_node_materializations materialization
+    JOIN execution_plan_nodes node ON node.plan_id = materialization.plan_id
+      AND node.revision = materialization.plan_revision
+      AND node.node_key = materialization.node_key
+    UNION ALL
+    SELECT adoption.plan_id, adoption.plan_revision, adoption.node_key,
+      adoption.gate, NULL, NULL, NULL, NULL,
+      adoption.operation_id, adoption.adoption_digest,
+      source.candidate_commit, source.candidate_tree, NULL,
+      source.artifact_pins_json, adoption.adoption_id,
+      adoption.adoption_digest, adoption.source_evidence_id,
+      adoption.source_digest, node.task_id, node.definition_revision,
+      node.criteria_revision
+    FROM execution_remote_evidence_adoptions adoption
+    JOIN execution_remote_source_evidence source
+      ON source.source_evidence_id = adoption.source_evidence_id
+      AND source.source_digest = adoption.source_digest
+    JOIN execution_plan_nodes node ON node.plan_id = adoption.plan_id
+      AND node.revision = adoption.plan_revision
+      AND node.node_key = adoption.node_key;
+    DROP TRIGGER execution_approval_require_exact_compilation_insert;
+    DROP TRIGGER execution_claim_supersession_update;
+    DROP TRIGGER execution_plan_supersession_current_update;
+    DROP TABLE execution_carried_evidence_reuse_contracts;
+    DROP TABLE execution_carried_evidence_adoptions;
+    DROP TABLE execution_plan_supersession_receipts;
+    DROP TABLE execution_replan_delegation_consumptions;
+    DROP TABLE execution_plan_supersession_activations;
+    DROP TABLE execution_replan_delegation_revocations;
+    DROP TABLE execution_replan_delegations;
+    DROP TABLE execution_plan_supersession_candidates;
     DROP TRIGGER execution_plan_create_scheduler_control;
     DROP TRIGGER execution_scheduler_operations_require_scope_insert;
     DROP TRIGGER execution_scheduler_operations_immutable_update;
@@ -3731,7 +4142,7 @@ test("scheduler migration backfills automatic controls and retained admission hi
     DROP TABLE execution_scheduler_receipts;
     DROP TABLE execution_scheduler_operations;
     DROP TABLE execution_scheduler_controls;
-    DELETE FROM schema_migrations WHERE version IN (81, 82);
+    DELETE FROM schema_migrations WHERE version IN (81, 82, 83);
   `);
   f.database.close();
 

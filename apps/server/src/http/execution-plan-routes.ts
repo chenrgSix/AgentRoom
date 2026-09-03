@@ -6,7 +6,8 @@ import { bearerToken, noStore } from "./http-helpers.js";
 import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
-  app, auth, clock, executionPlans, executionEvidence, executionInputs, isolatedWorkspaces,
+  app, auth, clock, executionPlans, executionPlanSupersessions,
+  executionEvidence, executionInputs, isolatedWorkspaces,
   executionNodeControls, executionSchedulerControls, repositoryCaptures, repositoryIntegrations,
   repositoryVerifications, dispatchRun, principal
 }: ServerRouteContext): void {
@@ -200,6 +201,49 @@ export function registerExecutionPlanRoutes({
   app.get<{ Params: { planId: string } }>(
     "/api/execution-plans/:planId", options,
     async (request) => execute(() => executionPlans.get(principal(request), request.params.planId))
+  );
+  app.get<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/supersession-candidate",
+    options,
+    async (request) => execute(() => executionPlanSupersessions.getCandidate(
+      principal(request), request.params.planId
+    ))
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/supersession-candidates",
+    options,
+    async (request) => execute(() => executionPlanSupersessions.propose(
+      principal(request), request.params.planId, request.body, clock()
+    ))
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/supersession-activations",
+    options,
+    async (request) => execute(() => executionPlanSupersessions.activate(
+      principal(request), request.params.planId, request.body, clock()
+    ))
+  );
+  app.get<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/replan-delegations",
+    options,
+    async (request) => execute(() => executionPlanSupersessions.listDelegations(
+      principal(request), request.params.planId
+    ))
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/replan-delegations",
+    options,
+    async (request) => execute(() => executionPlanSupersessions.issueDelegation(
+      principal(request), request.params.planId, request.body, clock()
+    ))
+  );
+  app.post<{ Params: { planId: string; delegationId: string } }>(
+    "/api/execution-plans/:planId/replan-delegations/:delegationId/revocations",
+    options,
+    async (request) => execute(() => executionPlanSupersessions.revokeDelegation(
+      principal(request), request.params.planId, request.params.delegationId,
+      request.body, clock()
+    ))
   );
   app.post<{ Params: { planId: string } }>(
     "/api/execution-plans/:planId/revisions", options,

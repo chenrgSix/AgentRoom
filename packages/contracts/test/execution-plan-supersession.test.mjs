@@ -96,6 +96,7 @@ test("replan delegation is exact, expiring and independently revocable", () => {
     expectedPlanRevision: 1,
     expectedPlanDigest: digest,
     expectedControlRevision: 1,
+    expectedRootTaskRevision: 1,
     agentId: "agent_supersession0001",
     expiresAt: "2026-09-03T09:00:00.000Z",
     reason: "Delegate one bounded topology correction."
@@ -108,6 +109,7 @@ test("replan delegation is exact, expiring and independently revocable", () => {
     planRevision: 1,
     planDigest: digest,
     planControlRevision: 1,
+    rootTaskRevision: 1,
     agentId: issue.agentId,
     issuedByMemberId: "member_supersession0001",
     taskIds: ["task_supersession0001"],

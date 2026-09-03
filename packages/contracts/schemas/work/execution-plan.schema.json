@@ -1136,6 +1136,7 @@
         "expectedPlanRevision",
         "expectedPlanDigest",
         "expectedControlRevision",
+        "expectedRootTaskRevision",
         "agentId",
         "expiresAt",
         "reason"
@@ -1147,6 +1148,7 @@
         "expectedPlanRevision": { "$ref": "#/$defs/revision" },
         "expectedPlanDigest": { "$ref": "#/$defs/digest" },
         "expectedControlRevision": { "$ref": "#/$defs/revision" },
+        "expectedRootTaskRevision": { "$ref": "#/$defs/revision" },
         "agentId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
         },
@@ -1167,6 +1169,7 @@
         "planRevision",
         "planDigest",
         "planControlRevision",
+        "rootTaskRevision",
         "agentId",
         "issuedByMemberId",
         "taskIds",
@@ -1185,6 +1188,7 @@
         "planRevision": { "$ref": "#/$defs/revision" },
         "planDigest": { "$ref": "#/$defs/digest" },
         "planControlRevision": { "$ref": "#/$defs/revision" },
+        "rootTaskRevision": { "$ref": "#/$defs/revision" },
         "agentId": {
           "$ref": "https://agentroom.dev/schemas/common/identifiers.schema.json#/$defs/agentId"
         },

@@ -394,7 +394,9 @@ test("execution approved claims cannot be reused under another root or rewritten
     assert.throws(() => f.database.exec(`DELETE FROM ${table}`), /immutable/u);
   }
   assert.throws(() => f.database.exec("DELETE FROM execution_plan_task_claims"), /terminal plan release/u);
-  assert.throws(() => f.database.exec("UPDATE execution_plan_task_claims SET revision = revision"), /retargeted/u);
+  assert.throws(() => f.database.exec(
+    "UPDATE execution_plan_task_claims SET revision = revision"
+  ), /retargeted|exact supersession/u);
   assert.throws(() => f.database.prepare("UPDATE execution_plans SET state = 'approved' WHERE plan_id = ?").run(second.planId), /exact approval/u);
   assert.throws(() => f.database.exec("INSERT INTO execution_plan_nodes SELECT * FROM execution_plan_nodes"), /sealed/u);
   assert.throws(() => f.database.exec("INSERT INTO execution_plan_edges SELECT * FROM execution_plan_edges"), /sealed/u);

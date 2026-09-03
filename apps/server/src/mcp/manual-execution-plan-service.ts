@@ -1,8 +1,12 @@
 import type {
+  ExecutionAgentSupersessionActivationCommand,
+  ExecutionAgentSupersessionCandidateCommand,
   ExecutionPlanDefinition,
   ExecutionPlanProjection,
   ExecutionPlanProposalCommand,
-  ExecutionPlanRevisionCommand
+  ExecutionPlanRevisionCommand,
+  ExecutionPlanSupersessionActivationReceipt,
+  ExecutionPlanSupersessionCandidate
 } from "@convene-wire/contracts/execution-plan";
 import { assertExecutionCommand } from
   "@convene-wire/contracts/execution-validation";
@@ -13,6 +17,8 @@ import type { ExecutionPlanDraftWriter } from
   "../execution/execution-plan-draft-writer.js";
 import type { ExecutionPlanRepository } from
   "../execution/execution-plan-repository.js";
+import type { ExecutionPlanSupersessionService } from
+  "../execution/execution-plan-supersession-service.js";
 import type { RunContextManifest, RunRecord, RunRepository } from
   "../run/run-repository.js";
 import type { McpPrincipal } from "../security/auth-service.js";
@@ -39,7 +45,8 @@ export class ManualExecutionPlanService {
     private readonly tasks: AgentTaskRepository,
     private readonly runs: RunRepository,
     private readonly plans: ExecutionPlanRepository,
-    private readonly drafts: ExecutionPlanDraftWriter
+    private readonly drafts: ExecutionPlanDraftWriter,
+    private readonly supersessions: ExecutionPlanSupersessionService
   ) {}
 
   public propose(
@@ -104,6 +111,70 @@ export class ManualExecutionPlanService {
     });
   }
 
+  public proposeSupersession(
+    principal: McpPrincipal,
+    planId: string,
+    value: unknown,
+    now: string
+  ): ExecutionPlanSupersessionCandidate {
+    assertExecutionCommand("agentSupersessionCandidateCommand", value);
+    const input = value as ExecutionAgentSupersessionCandidateCommand;
+    const delegation = this.requireDelegation(
+      principal,
+      input.runId,
+      "mutate"
+    );
+    const plan = this.get(principal, input.runId, planId);
+    if (plan.rootTaskId !== delegation.root.taskId) {
+      throw new ExecutionError("EXECUTION_AGENT_PLAN_SCOPE_MISMATCH");
+    }
+    this.requireCommandContext(input.command, delegation);
+    return this.supersessions.proposeForAgent(
+      planId,
+      input.command,
+      { kind: "agent", agentId: principal.agentId, runId: input.runId },
+      now
+    );
+  }
+
+  public activateSupersession(
+    principal: McpPrincipal,
+    planId: string,
+    value: unknown,
+    now: string
+  ): ExecutionPlanSupersessionActivationReceipt {
+    assertExecutionCommand("agentSupersessionActivationCommand", value);
+    const input = value as ExecutionAgentSupersessionActivationCommand;
+    const author = {
+      kind: "agent" as const,
+      agentId: principal.agentId,
+      runId: input.runId
+    };
+    const replay = this.supersessions.replayForAgent(
+      planId,
+      input.command,
+      author,
+      input.delegationId
+    );
+    if (replay) return replay;
+    const delegation = this.requireDelegation(
+      principal,
+      input.runId,
+      "mutate"
+    );
+    const plan = this.get(principal, input.runId, planId);
+    if (plan.rootTaskId !== delegation.root.taskId) {
+      throw new ExecutionError("EXECUTION_AGENT_PLAN_SCOPE_MISMATCH");
+    }
+    return this.supersessions.activateForAgent(
+      planId,
+      input.command,
+      author,
+      input.delegationId,
+      now
+    );
+  }
+
   private requireDelegation(
     principal: McpPrincipal,
     runId: string,
@@ -145,7 +216,8 @@ export class ManualExecutionPlanService {
   }
 
   private requireCommandContext(
-    command: ExecutionPlanProposalCommand | ExecutionPlanRevisionCommand,
+    command: ExecutionPlanProposalCommand | ExecutionPlanRevisionCommand |
+      ExecutionAgentSupersessionCandidateCommand["command"],
     delegation: TechLeadDelegation
   ): void {
     if (command.definition.rootTaskId !== delegation.root.taskId ||
@@ -175,4 +247,3 @@ export class ManualExecutionPlanService {
     });
   }
 }
-

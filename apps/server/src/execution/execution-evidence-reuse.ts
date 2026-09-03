@@ -98,6 +98,37 @@ export function createRemoteEvidenceReuseContract(input: {
   });
 }
 
+/** Carry-forward has no destination attempt. Its runtime binding digest is the
+ * canonical empty set while logical inputs and the target semantic contract
+ * remain exact. The caller must separately prove source/target equality. */
+export function createCarriedEvidenceReuseContract(input: {
+  adoption: EvidenceAdoption;
+  integrationPolicy: PlanPolicy;
+  node: PlanNode;
+  reuseInputs: ReuseInput[];
+  task: ReuseTask;
+}): EvidenceReuseContract {
+  const runtimeDigest = runtimeInputBindingDigest([]);
+  if (input.adoption.authority.service !== "execution_supersession" ||
+    input.adoption.resolvedInputSetDigest !== runtimeDigest ||
+    input.node.nodeKey !== input.adoption.nodeKey ||
+    input.task.taskId !== input.adoption.authority.taskId ||
+    input.task.roomId !== input.adoption.authority.roomId ||
+    input.task.definitionRevision !==
+      input.adoption.authority.definitionRevision ||
+    input.task.criteriaRevision !== input.adoption.authority.criteriaRevision) {
+    throw new Error("Carried evidence reuse context conflicts with adoption");
+  }
+  return sealEvidenceReuseContract({
+    adoption: input.adoption,
+    integrationPolicy: input.integrationPolicy,
+    node: input.node,
+    reuseInputs: input.reuseInputs,
+    runtimeDigest,
+    task: input.task
+  });
+}
+
 function sealEvidenceReuseContract(input: {
   adoption: EvidenceAdoption;
   integrationPolicy: PlanPolicy;

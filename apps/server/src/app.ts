@@ -87,6 +87,14 @@ import { registerExecutionPlanRoutes } from "./http/execution-plan-routes.js";
 import { registerRemoteEvidenceRoutes } from "./http/remote-evidence-routes.js";
 import { ExecutionError } from "./execution/execution-error.js";
 import { ExecutionPlanRepository } from "./execution/execution-plan-repository.js";
+import { ExecutionEvidenceAdoptionRepository } from
+  "./execution/execution-evidence-adoption-repository.js";
+import { ExecutionEvidenceCarryForwardRepository } from
+  "./execution/execution-evidence-carry-forward-repository.js";
+import { ExecutionPlanSupersessionRepository } from
+  "./execution/execution-plan-supersession-repository.js";
+import { ExecutionPlanSupersessionService } from
+  "./execution/execution-plan-supersession-service.js";
 import { ExecutionSourceRepository } from "./execution/execution-source-repository.js";
 import { ExecutionPlanService } from "./execution/execution-plan-service.js";
 import { ExecutionPlanDraftWriter } from
@@ -529,12 +537,34 @@ export async function createServerApp(
     resultRepository,
     results
   );
+  const bridgeConnections = new BridgeConnectionRegistry(
+    () => new Date(clock())
+  );
+  const executionEvidenceAdoptions =
+    new ExecutionEvidenceAdoptionRepository(database);
+  const executionPlanSupersessions = new ExecutionPlanSupersessionService(
+    database,
+    transactions,
+    executionPlanRepository,
+    new ExecutionPlanSupersessionRepository(database),
+    new ExecutionEvidenceCarryForwardRepository(
+      database,
+      executionEvidenceAdoptions
+    ),
+    executionSources,
+    taskRepository,
+    core,
+    auth,
+    bridgeConnections,
+    notifyExecutionChanged
+  );
   const manualExecutionPlans = new ManualExecutionPlanService(
     core,
     taskRepository,
     runRepository,
     executionPlanRepository,
-    executionDraftWriter
+    executionDraftWriter,
+    executionPlanSupersessions
   );
   const workbench = new WorkbenchService(
     core,
@@ -561,9 +591,6 @@ export async function createServerApp(
     clock
   );
   const fakeAdapters = new Map<string, FakeRuntimeAdapter>();
-  const bridgeConnections = new BridgeConnectionRegistry(
-    () => new Date(clock())
-  );
   const isolatedWorkspaces = new IsolatedWorkspaceLeaseService(
     database, new ExecutionPlanRepository(database), bridgeConnections
   );
@@ -1149,6 +1176,7 @@ export async function createServerApp(
     dispatchDiscussionRuns,
     executor,
     executionPlans,
+    executionPlanSupersessions,
     executionEvidence,
     executionInputs,
     executionNodeControls,

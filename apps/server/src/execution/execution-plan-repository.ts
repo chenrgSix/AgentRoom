@@ -6,9 +6,13 @@ import type {
   ExecutionPlanPage,
   ExecutionPlanProjection,
   ExecutionPlanRevision,
-  ExecutionPlanRevisionPage
+  ExecutionPlanRevisionPage,
+  ExecutionPlanSupersessionCandidate
 } from "@convene-wire/contracts/execution-plan";
-import { canonicalExecutionJSON } from "@convene-wire/contracts/execution-validation";
+import {
+  assertExecutionCommand,
+  canonicalExecutionJSON
+} from "@convene-wire/contracts/execution-validation";
 import { createOpaqueId } from "../domain/identifiers.js";
 import { ExecutionError } from "./execution-error.js";
 
@@ -167,7 +171,14 @@ export class ExecutionPlanRepository {
   }
 
   public replay(operationId: string, digest: string): ExecutionPlanProjection | undefined {
-    if (this.database.prepare("SELECT 1 FROM execution_plan_approvals WHERE operation_id = ?").get(operationId)) {
+    if (this.database.prepare(`
+      SELECT 1 FROM execution_plan_approvals WHERE operation_id = ?
+      UNION ALL SELECT 1 FROM execution_plan_supersession_candidates
+        WHERE operation_id = ?
+      UNION ALL SELECT 1 FROM execution_plan_supersession_activations
+        WHERE operation_id = ?
+      LIMIT 1
+    `).get(operationId, operationId, operationId)) {
       throw new ExecutionError("EXECUTION_OPERATION_CONFLICT", 409);
     }
     const row = this.database.prepare(`
@@ -251,5 +262,183 @@ export class ExecutionPlanRepository {
     `).run(input.operationId, input.plan ? "revise" : "create", authorJson,
       input.rootTaskId, planId, input.operationDigest, canonicalExecutionJSON(result), input.now);
     return result;
+  }
+
+  public supersessionCandidate(
+    planId: string
+  ): ExecutionPlanSupersessionCandidate | undefined {
+    const row = this.database.prepare(`
+      SELECT response_json FROM execution_plan_supersession_candidates
+      WHERE plan_id = ? AND candidate_revision = (
+        SELECT current_revision + 1 FROM execution_plans WHERE plan_id = ?
+      )
+    `).get(planId, planId) as { response_json: string } | undefined;
+    if (!row) return undefined;
+    const candidate = JSON.parse(row.response_json) as
+      ExecutionPlanSupersessionCandidate;
+    assertExecutionCommand("supersessionCandidateRecord", candidate);
+    return candidate;
+  }
+
+  public supersessionCandidateById(
+    candidateId: string
+  ): ExecutionPlanSupersessionCandidate | undefined {
+    const row = this.database.prepare(`
+      SELECT response_json FROM execution_plan_supersession_candidates
+      WHERE candidate_id = ?
+    `).get(candidateId) as { response_json: string } | undefined;
+    if (!row) return undefined;
+    const candidate = JSON.parse(row.response_json) as
+      ExecutionPlanSupersessionCandidate;
+    assertExecutionCommand("supersessionCandidateRecord", candidate);
+    return candidate;
+  }
+
+  public replaySupersessionCandidate(
+    operationId: string,
+    requestDigest: string
+  ): ExecutionPlanSupersessionCandidate | undefined {
+    if (this.database.prepare(`
+      SELECT 1 FROM execution_plan_operations WHERE operation_id = ?
+      UNION ALL SELECT 1 FROM execution_plan_approvals WHERE operation_id = ?
+      UNION ALL SELECT 1 FROM execution_plan_supersession_activations
+        WHERE operation_id = ?
+      UNION ALL SELECT 1 FROM execution_replan_delegations WHERE operation_id = ?
+      UNION ALL SELECT 1 FROM execution_replan_delegation_revocations
+        WHERE operation_id = ? LIMIT 1
+    `).get(operationId, operationId, operationId, operationId, operationId)) {
+      throw new ExecutionError("EXECUTION_OPERATION_CONFLICT", 409);
+    }
+    const row = this.database.prepare(`
+      SELECT request_digest, response_json
+      FROM execution_plan_supersession_candidates WHERE operation_id = ?
+    `).get(operationId) as {
+      request_digest: string;
+      response_json: string;
+    } | undefined;
+    if (!row) return undefined;
+    if (row.request_digest !== requestDigest) {
+      throw new ExecutionError("EXECUTION_OPERATION_CONFLICT", 409);
+    }
+    const candidate = JSON.parse(row.response_json) as
+      ExecutionPlanSupersessionCandidate;
+    assertExecutionCommand("supersessionCandidateRecord", candidate);
+    return candidate;
+  }
+
+  public appendSupersessionCandidate(input: {
+    plan: ExecutionPlanProjection;
+    rootTaskRevision: number;
+    definition: ExecutionPlanDefinition;
+    definitionDigest: string;
+    author: ExecutionPlanRevision["author"];
+    snapshots: ExecutionSourceSnapshot[];
+    operationId: string;
+    requestDigest: string;
+    reason: string;
+    now: string;
+  }): ExecutionPlanSupersessionCandidate {
+    if (!this.database.inTransaction) {
+      throw new ExecutionError("EXECUTION_TRANSACTION_REQUIRED");
+    }
+    const candidateRevision = input.plan.current.revision + 1;
+    const decisionId = createOpaqueId("decision");
+    const proposalId = createOpaqueId("proposal");
+    const candidateId = createOpaqueId("supersession");
+    const authorJson = canonicalExecutionJSON(input.author);
+    this.database.prepare(`
+      INSERT INTO execution_decisions (
+        decision_id, root_task_id, room_id, content_json, author_json,
+        supersedes_decision_id, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      decisionId,
+      input.plan.rootTaskId,
+      input.plan.roomId,
+      canonicalExecutionJSON(input.definition.decision),
+      authorJson,
+      input.plan.current.decisionId,
+      input.now
+    );
+    for (const source of input.snapshots) {
+      this.database.prepare(`
+        INSERT INTO execution_decision_sources (
+          decision_id, evidence_ref_id, source_json, source_revision,
+          snapshot_json, snapshot_digest
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        decisionId,
+        source.source.evidenceRefId,
+        canonicalExecutionJSON(source.source),
+        source.revision,
+        source.snapshotJson,
+        source.digest
+      );
+    }
+    this.database.prepare(`
+      INSERT INTO execution_plan_proposals (
+        proposal_id, plan_id, revision, root_task_id, room_id,
+        root_task_revision, decision_id, definition_json, digest,
+        author_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      proposalId,
+      input.plan.planId,
+      candidateRevision,
+      input.plan.rootTaskId,
+      input.plan.roomId,
+      input.rootTaskRevision,
+      decisionId,
+      canonicalExecutionJSON(input.definition),
+      input.definitionDigest,
+      authorJson,
+      input.now
+    );
+    this.database.prepare(`
+      INSERT INTO execution_plan_revisions (plan_id, revision, proposal_id)
+      VALUES (?, ?, ?)
+    `).run(input.plan.planId, candidateRevision, proposalId);
+    const candidate: ExecutionPlanSupersessionCandidate = {
+      candidateId,
+      operationId: input.operationId,
+      planId: input.plan.planId,
+      baseRevision: input.plan.current.revision,
+      baseDigest: input.plan.current.digest,
+      baseControlRevision: input.plan.controlRevision,
+      rootTaskRevision: input.rootTaskRevision,
+      candidateRevision,
+      candidateDigest: input.definitionDigest,
+      definition: structuredClone(input.definition),
+      author: structuredClone(input.author),
+      reason: input.reason,
+      requestDigest: input.requestDigest,
+      createdAt: input.now
+    } as ExecutionPlanSupersessionCandidate;
+    assertExecutionCommand("supersessionCandidateRecord", candidate);
+    this.database.prepare(`
+      INSERT INTO execution_plan_supersession_candidates (
+        candidate_id, operation_id, plan_id, base_revision, base_digest,
+        base_control_revision, root_task_revision, candidate_revision,
+        candidate_digest, proposal_id, author_json, reason, request_digest,
+        response_json, created_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      candidate.candidateId,
+      candidate.operationId,
+      candidate.planId,
+      candidate.baseRevision,
+      candidate.baseDigest,
+      candidate.baseControlRevision,
+      candidate.rootTaskRevision,
+      candidate.candidateRevision,
+      candidate.candidateDigest,
+      proposalId,
+      authorJson,
+      candidate.reason,
+      candidate.requestDigest,
+      canonicalExecutionJSON(candidate),
+      candidate.createdAt
+    );
+    return candidate;
   }
 }

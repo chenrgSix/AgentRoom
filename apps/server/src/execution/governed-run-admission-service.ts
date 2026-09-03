@@ -226,10 +226,52 @@ implements GovernedMessageAdmissionPort {
         'queued', 'delivered', 'working', 'input_required'
       )
     `).get(node.agentId) as { count: number }).count : 0;
-    const existingAttempt = Boolean(this.database.prepare(`
-      SELECT 1 FROM execution_dispatch_intents
-      WHERE plan_id = ? AND plan_revision = ? AND node_key = ?
-    `).get(identity.planId, identity.planRevision, identity.nodeKey));
+    const existingAttempt = Boolean(node && this.database.prepare(`
+      SELECT 1
+      WHERE (
+        ? = 0 AND (
+          EXISTS (
+            SELECT 1 FROM execution_dispatch_intents intent
+            WHERE intent.plan_id = ? AND intent.plan_revision = ?
+              AND intent.node_key = ?
+          ) OR EXISTS (
+            SELECT 1 FROM execution_all_adopted_node_materializations adopted
+            WHERE adopted.plan_id = ? AND adopted.plan_revision = ?
+              AND adopted.node_key = ?
+          )
+        )
+      ) OR EXISTS (
+        SELECT 1
+        FROM execution_plan_nodes prior_node
+        JOIN execution_dispatch_intents prior_intent
+          ON prior_intent.plan_id = prior_node.plan_id
+          AND prior_intent.plan_revision = prior_node.revision
+          AND prior_intent.node_key = prior_node.node_key
+        JOIN runs prior_run ON prior_run.run_id = prior_intent.run_id
+        LEFT JOIN run_ambiguity_acknowledgements acknowledgement
+          ON acknowledgement.run_id = prior_run.run_id
+        WHERE prior_node.plan_id = ? AND prior_node.revision < ?
+          AND prior_node.task_id = ?
+          AND (
+            prior_run.state IN ('queued', 'delivered', 'working', 'input_required')
+            OR (
+              prior_run.state = 'outcome_unknown'
+              AND acknowledgement.run_id IS NULL
+            )
+          )
+      )
+    `).get(
+      ignoreExistingAttempt ? 1 : 0,
+      identity.planId,
+      identity.planRevision,
+      identity.nodeKey,
+      identity.planId,
+      identity.planRevision,
+      identity.nodeKey,
+      identity.planId,
+      identity.planRevision,
+      node.task.taskId
+    ));
     const reviewer = approval
       ? this.core.getMember(approval.reviewedByMemberId)
       : undefined;
@@ -270,7 +312,7 @@ implements GovernedMessageAdmissionPort {
       agentAvailable,
       capabilityAvailable,
       dependencyBlocker: dependency.ready ? null : dependency.blocker,
-      existingAttempt: ignoreExistingAttempt ? false : existingAttempt,
+      existingAttempt,
       grantMatches: grants.length,
       nodeKind: node?.kind ?? "verification",
       nextRunReservationSeconds,

@@ -1,5 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { ExecutionPlanService } from "../execution/execution-plan-service.js";
+import type { ExecutionPlanSupersessionService } from
+  "../execution/execution-plan-supersession-service.js";
 import type { ExecutionInputService } from "../execution/execution-input-service.js";
 import type { ExecutionEvidenceViewService } from
   "../execution/execution-evidence-view-service.js";
@@ -112,6 +114,7 @@ export interface ServerRouteContext {
   dispatchDiscussionRuns: (runs: PersistedRun[]) => Promise<void>;
   executor: InProcessRunExecutor;
   executionPlans: ExecutionPlanService;
+  executionPlanSupersessions: ExecutionPlanSupersessionService;
   executionEvidence: ExecutionEvidenceViewService;
   executionInputs: ExecutionInputService;
   executionNodeControls: ExecutionNodeControlService;

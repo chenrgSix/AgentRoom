@@ -126,6 +126,12 @@ export class ExecutionNodeStateRepository {
         ON control.plan_id = state.plan_id
       WHERE plan.state IN ('approved', 'running')
         AND state.run_id IS NULL
+        AND NOT EXISTS (
+          SELECT 1 FROM execution_all_adopted_node_materializations adopted
+          WHERE adopted.plan_id = state.plan_id
+            AND adopted.plan_revision = state.plan_revision
+            AND adopted.node_key = state.node_key
+        )
         AND (@mode IS NULL OR control.mode = @mode)
         AND (@planId IS NULL OR state.plan_id = @planId)
     `).all({

@@ -22,9 +22,10 @@ interface McpResponse {
 
 async function setupTechLead(
   t: TestContext,
-  assignmentRole: "primary" | "contributor" = "primary"
+  assignmentRole: "primary" | "contributor" = "primary",
+  clock: () => string = () => now
 ) {
-  const environment = await executionFixture(t);
+  const environment = await executionFixture(t, clock);
   const manual = await environment.ok(
     "POST",
     `/api/teams/${environment.teamId}/manual-agents`,
@@ -181,6 +182,7 @@ test("assigned Tech Lead creates reads and revises only unapproved drafts", asyn
     planId: first.planId,
     command: revision
   });
+  assert.equal(revised.result.isError, undefined, JSON.stringify(revised));
   const second = revised.result.structuredContent?.plan as typeof first;
   assert.equal(second.current.revision, 2);
   assert.deepEqual(second.current.author, first.current.author);
@@ -225,6 +227,11 @@ test("assigned Tech Lead creates reads and revises only unapproved drafts", asyn
       .map((name) => names.includes(name)),
     [true, true, true]
   );
+  assert.deepEqual(
+    ["team.propose_plan_supersession", "team.activate_plan_supersession"]
+      .map((name) => names.includes(name)),
+    [true, true]
+  );
   assert.equal(names.some((name) => [
     "team.approve_plan",
     "team.review_result",
@@ -244,6 +251,356 @@ test("assigned Tech Lead creates reads and revises only unapproved drafts", asyn
     planId: first.planId
   });
   assert.equal(afterTerminal.result.isError, true);
+});
+
+test("assigned Tech Lead consumes one bounded replan delegation", async (t) => {
+  let testNow = now;
+  const value = await setupTechLead(t, "primary", () => testNow);
+  const proposed = await value.call("team.propose_plan", {
+    runId: value.runId,
+    command: value.proposal
+  });
+  const draft = proposed.result.structuredContent?.plan as any;
+  const approved = (await value.ok(
+    "POST",
+    `/api/execution-plans/${draft.planId}/approvals`,
+    {
+      operationId: "op_mcp_supersession_approval0001",
+      expectedRevision: draft.current.revision,
+      expectedDigest: draft.current.digest,
+      expectedRootTaskRevision: value.manifest.taskRevision,
+      decision: "approved",
+      reason: "Authorize the initial bounded graph."
+    }
+  )).plan;
+  const delegated = await value.ok(
+    "POST",
+    `/api/execution-plans/${approved.planId}/replan-delegations`,
+    {
+      operationId: "op_mcp_replan_delegation0001",
+      expectedPlanRevision: approved.current.revision,
+      expectedPlanDigest: approved.current.digest,
+      expectedControlRevision: approved.controlRevision,
+      expectedRootTaskRevision: value.manifest.taskRevision + 1,
+      agentId: value.agentId,
+      expiresAt: "2026-08-31T12:30:00.000Z",
+      reason: "Permit one low-risk Tech Lead replan."
+    }
+  );
+  const newerDelegation = await value.ok(
+    "POST",
+    `/api/execution-plans/${approved.planId}/replan-delegations`,
+    {
+      operationId: "op_mcp_replan_delegation0002",
+      expectedPlanRevision: approved.current.revision,
+      expectedPlanDigest: approved.current.digest,
+      expectedControlRevision: approved.controlRevision,
+      expectedRootTaskRevision: value.manifest.taskRevision + 1,
+      agentId: value.agentId,
+      expiresAt: "2026-08-31T12:40:00.000Z",
+      reason: "Replace the older unconsumed delegation."
+    }
+  );
+  assert.equal(delegated.revision, 1);
+  assert.equal(newerDelegation.revision, 2);
+
+  const trigger = await value.ok(
+    "POST",
+    `/api/rooms/${value.roomId}/messages`,
+    {
+      taskId: value.currentRoot.taskId,
+      content: "Replan the active graph inside the existing authority boundary.",
+      mentionAgentId: value.agentId
+    }
+  );
+  const runId = trigger.runs[0].runId as string;
+  const claimed = await value.call("team.claim_run", { runId });
+  assert.equal(
+    (claimed.result.structuredContent?.run as { state: string }).state,
+    "working"
+  );
+  const manifest = new RunRepository(value.database).getContextManifest(runId)!;
+  const definition = structuredClone(approved.current.definition);
+  for (const node of definition.nodes) {
+    const compiled = approved.compiledTasks.find((entry: {
+      nodeKey: string;
+    }) => entry.nodeKey === node.nodeKey);
+    assert.ok(compiled);
+    const task = await value.ok("GET", `/api/tasks/${compiled.taskId}`);
+    node.task = {
+      mode: "existing",
+      taskId: task.taskId,
+      expectedTaskRevision: task.taskRevision,
+      definitionRevision: task.definitionRevision,
+      criteriaRevision: task.criteriaRevision
+    };
+  }
+  definition.decision.sources = [{
+    evidenceRefId: "evidence_mcp_replan_trigger0001",
+    kind: "message",
+    messageId: trigger.message.messageId
+  }];
+  definition.decision.sourceRevisions = [{
+    evidenceRefId: "evidence_mcp_replan_trigger0001",
+    revision: trigger.message.sequence
+  }];
+  definition.decision.summary = "Use the delegated low-risk revision path.";
+  const candidateCommand = {
+    operationId: "op_mcp_supersession_candidate0001",
+    expectedCurrentRevision: approved.current.revision,
+    expectedCurrentDigest: approved.current.digest,
+    expectedControlRevision: approved.controlRevision,
+    expectedRootTaskRevision: manifest.taskRevision,
+    definition,
+    reason: "Propose the exact delegated active-plan revision."
+  };
+  const candidateResult = await value.call(
+    "team.propose_plan_supersession",
+    { runId, planId: approved.planId, command: candidateCommand }
+  );
+  assert.equal(candidateResult.result.isError, undefined);
+  const candidate = candidateResult.result.structuredContent?.candidate as any;
+  assert.deepEqual(candidate.author, {
+    kind: "agent", agentId: value.agentId, runId
+  });
+  const activationCommand = {
+    operationId: "op_mcp_supersession_activation0001",
+    candidateId: candidate.candidateId,
+    expectedCandidateRevision: candidate.candidateRevision,
+    expectedCandidateDigest: candidate.candidateDigest,
+    expectedCurrentRevision: approved.current.revision,
+    expectedCurrentDigest: approved.current.digest,
+    expectedControlRevision: approved.controlRevision,
+    expectedRootTaskRevision: manifest.taskRevision,
+    carryForward: [],
+    reason: "Consume the exact one-shot delegation."
+  };
+  const stale = await value.call("team.activate_plan_supersession", {
+    runId,
+    planId: approved.planId,
+    delegationId: delegated.delegationId,
+    command: {
+      ...activationCommand,
+      operationId: "op_mcp_stale_delegation_activation0001"
+    }
+  });
+  assert.equal(stale.result.isError, true);
+  const revoked = await value.ok(
+    "POST",
+    `/api/execution-plans/${approved.planId}/replan-delegations/${newerDelegation.delegationId}/revocations`,
+    {
+      operationId: "op_mcp_replan_revocation0001",
+      expectedRevision: newerDelegation.revision,
+      expectedDigest: newerDelegation.delegationDigest,
+      reason: "Revoke before the Agent may consume it."
+    }
+  );
+  assert.equal(revoked.delegationId, newerDelegation.delegationId);
+  const revokedAttempt = await value.call("team.activate_plan_supersession", {
+    runId,
+    planId: approved.planId,
+    delegationId: newerDelegation.delegationId,
+    command: {
+      ...activationCommand,
+      operationId: "op_mcp_revoked_delegation_activation0001"
+    }
+  });
+  assert.equal(revokedAttempt.result.isError, true);
+  const expiredDelegation = await value.ok(
+    "POST",
+    `/api/execution-plans/${approved.planId}/replan-delegations`,
+    {
+      operationId: "op_mcp_replan_delegation0003",
+      expectedPlanRevision: approved.current.revision,
+      expectedPlanDigest: approved.current.digest,
+      expectedControlRevision: approved.controlRevision,
+      expectedRootTaskRevision: value.manifest.taskRevision + 1,
+      agentId: value.agentId,
+      expiresAt: "2026-08-31T12:05:00.000Z",
+      reason: "Retain a delegation that will expire before use."
+    }
+  );
+  assert.equal(expiredDelegation.revision, 3);
+  testNow = "2026-08-31T12:06:00.000Z";
+  const expiredAttempt = await value.call("team.activate_plan_supersession", {
+    runId,
+    planId: approved.planId,
+    delegationId: expiredDelegation.delegationId,
+    command: {
+      ...activationCommand,
+      operationId: "op_mcp_expired_delegation_activation0001"
+    }
+  });
+  assert.equal(expiredAttempt.result.isError, true);
+  const currentDelegation = await value.ok(
+    "POST",
+    `/api/execution-plans/${approved.planId}/replan-delegations`,
+    {
+      operationId: "op_mcp_replan_delegation0004",
+      expectedPlanRevision: approved.current.revision,
+      expectedPlanDigest: approved.current.digest,
+      expectedControlRevision: approved.controlRevision,
+      expectedRootTaskRevision: value.manifest.taskRevision + 1,
+      agentId: value.agentId,
+      expiresAt: "2026-08-31T12:50:00.000Z",
+      reason: "Issue the exact current one-shot delegation."
+    }
+  );
+  assert.equal(currentDelegation.revision, 4);
+  const activation = await value.call("team.activate_plan_supersession", {
+    runId,
+    planId: approved.planId,
+    delegationId: currentDelegation.delegationId,
+    command: activationCommand
+  });
+  assert.equal(activation.result.isError, undefined);
+  const receipt = activation.result.structuredContent?.receipt as any;
+  assert.equal(receipt.plan.current.revision, 2);
+  assert.deepEqual(receipt.activatedBy, {
+    kind: "agent", agentId: value.agentId, runId
+  });
+  assert.equal(receipt.delegationId, currentDelegation.delegationId);
+  const listed = await value.ok(
+    "GET", `/api/execution-plans/${approved.planId}/replan-delegations`
+  );
+  const current = listed.find(({ delegation }: any) =>
+    delegation.delegationId === currentDelegation.delegationId);
+  const withdrawn = listed.find(({ delegation }: any) =>
+    delegation.delegationId === newerDelegation.delegationId);
+  assert.equal(current.consumed, true);
+  assert.equal(current.revoked, false);
+  assert.equal(withdrawn.consumed, false);
+  assert.equal(withdrawn.revoked, true);
+  const replay = await value.call("team.activate_plan_supersession", {
+    runId,
+    planId: approved.planId,
+    delegationId: currentDelegation.delegationId,
+    command: activationCommand
+  });
+  assert.equal(replay.result.isError, undefined, JSON.stringify(replay));
+  assert.deepEqual(replay.result.structuredContent?.receipt, receipt);
+});
+
+test("delegated replan rejects budget expansion without consuming authority", async (t) => {
+  const value = await setupTechLead(t);
+  const proposed = await value.call("team.propose_plan", {
+    runId: value.runId,
+    command: value.proposal
+  });
+  const draft = proposed.result.structuredContent?.plan as any;
+  const approved = (await value.ok(
+    "POST",
+    `/api/execution-plans/${draft.planId}/approvals`,
+    {
+      operationId: "op_mcp_expansion_approval0001",
+      expectedRevision: draft.current.revision,
+      expectedDigest: draft.current.digest,
+      expectedRootTaskRevision: value.manifest.taskRevision,
+      decision: "approved",
+      reason: "Authorize the original bounded graph only."
+    }
+  )).plan;
+  const delegation = await value.ok(
+    "POST",
+    `/api/execution-plans/${approved.planId}/replan-delegations`,
+    {
+      operationId: "op_mcp_expansion_delegation0001",
+      expectedPlanRevision: approved.current.revision,
+      expectedPlanDigest: approved.current.digest,
+      expectedControlRevision: approved.controlRevision,
+      expectedRootTaskRevision: value.manifest.taskRevision + 1,
+      agentId: value.agentId,
+      expiresAt: "2026-08-31T12:30:00.000Z",
+      reason: "Allow one bounded replan, but no budget expansion."
+    }
+  );
+  const trigger = await value.ok(
+    "POST",
+    `/api/rooms/${value.roomId}/messages`,
+    {
+      taskId: value.currentRoot.taskId,
+      content: "Propose a broader budget for explicit human review.",
+      mentionAgentId: value.agentId
+    }
+  );
+  const runId = trigger.runs[0].runId as string;
+  await value.call("team.claim_run", { runId });
+  const manifest = new RunRepository(value.database).getContextManifest(runId)!;
+  const definition = structuredClone(approved.current.definition);
+  for (const node of definition.nodes) {
+    const compiled = approved.compiledTasks.find((entry: {
+      nodeKey: string;
+    }) => entry.nodeKey === node.nodeKey);
+    assert.ok(compiled);
+    const task = await value.ok("GET", `/api/tasks/${compiled.taskId}`);
+    node.task = {
+      mode: "existing",
+      taskId: task.taskId,
+      expectedTaskRevision: task.taskRevision,
+      definitionRevision: task.definitionRevision,
+      criteriaRevision: task.criteriaRevision
+    };
+  }
+  definition.policy.budget.maxRunAttempts += 1;
+  definition.decision.sources = [{
+    evidenceRefId: "evidence_mcp_expansion_trigger0001",
+    kind: "message",
+    messageId: trigger.message.messageId
+  }];
+  definition.decision.sourceRevisions = [{
+    evidenceRefId: "evidence_mcp_expansion_trigger0001",
+    revision: trigger.message.sequence
+  }];
+  definition.decision.summary = "Request broader authority for human review.";
+  const candidateResult = await value.call(
+    "team.propose_plan_supersession",
+    {
+      runId,
+      planId: approved.planId,
+      command: {
+        operationId: "op_mcp_expansion_candidate0001",
+        expectedCurrentRevision: approved.current.revision,
+        expectedCurrentDigest: approved.current.digest,
+        expectedControlRevision: approved.controlRevision,
+        expectedRootTaskRevision: manifest.taskRevision,
+        definition,
+        reason: "Retain the candidate for explicit human review."
+      }
+    }
+  );
+  assert.equal(candidateResult.result.isError, undefined);
+  const candidate = candidateResult.result.structuredContent?.candidate as any;
+  const denied = await value.call("team.activate_plan_supersession", {
+    runId,
+    planId: approved.planId,
+    delegationId: delegation.delegationId,
+    command: {
+      operationId: "op_mcp_expansion_activation0001",
+      candidateId: candidate.candidateId,
+      expectedCandidateRevision: candidate.candidateRevision,
+      expectedCandidateDigest: candidate.candidateDigest,
+      expectedCurrentRevision: approved.current.revision,
+      expectedCurrentDigest: approved.current.digest,
+      expectedControlRevision: approved.controlRevision,
+      expectedRootTaskRevision: manifest.taskRevision,
+      carryForward: [],
+      reason: "The delegation must refuse this broader budget."
+    }
+  });
+  assert.equal(denied.result.isError, true);
+  assert.equal(
+    (await value.ok("GET", `/api/execution-plans/${approved.planId}`))
+      .current.revision,
+    1
+  );
+  const listed = await value.ok(
+    "GET", `/api/execution-plans/${approved.planId}/replan-delegations`
+  );
+  const retained = listed.find(({ delegation: row }: any) =>
+    row.delegationId === delegation.delegationId);
+  assert.equal(retained.consumed, false);
+  assert.equal(count(value.database,
+    "execution_plan_supersession_activations"), 0);
 });
 
 test("role labels schemas assignments Run substitution and stale context fail closed", async (t) => {

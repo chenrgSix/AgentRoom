@@ -8518,6 +8518,7 @@
         "expectedPlanRevision",
         "expectedPlanDigest",
         "expectedControlRevision",
+        "expectedRootTaskRevision",
         "agentId",
         "expiresAt",
         "reason"
@@ -8537,6 +8538,11 @@
           "pattern": "^[a-f0-9]{64}$"
         },
         "expectedControlRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "expectedRootTaskRevision": {
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
@@ -8570,6 +8576,7 @@
         "planRevision",
         "planDigest",
         "planControlRevision",
+        "rootTaskRevision",
         "agentId",
         "issuedByMemberId",
         "taskIds",
@@ -8606,6 +8613,11 @@
           "pattern": "^[a-f0-9]{64}$"
         },
         "planControlRevision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "rootTaskRevision": {
           "type": "integer",
           "minimum": 1,
           "maximum": 9007199254740991
