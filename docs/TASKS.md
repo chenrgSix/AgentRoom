@@ -543,10 +543,11 @@ evidence and full requirements, but wait on those concrete implementations
 instead of being prerequisites of their own downstream adapters. No task becomes
 DONE merely because this dependency split is recorded.
 
-The remaining Core route is strictly `EXEC-005` -> `DISC-011` -> `DISC-012` ->
-`QA-054` -> `QA-055`. REPO-003, REPO-005 and SEC-014 are retained completed
-Optional Remote Evidence Extensions. They remain tested and supported but are
-not Core completion gates or a source of new Remote Forge roadmap work.
+The remaining Core route is strictly `DISC-012` -> `QA-054` -> `QA-055`.
+`EXEC-005` and `DISC-011` are completed prerequisites. REPO-003, REPO-005 and
+SEC-014 are retained completed Optional Remote Evidence Extensions. They remain
+tested and supported but are not Core completion gates or a source of new
+Remote Forge roadmap work.
 
 ### Governed Execution Core
 
@@ -585,7 +586,7 @@ not Core completion gates or a source of new Remote Forge roadmap work.
 | WEB-064 | DONE | Expose verification, integration and recovery decisions | VER-001, REPO-002, REPO-003, WEB-063 | The [accepted proof-control surface](acceptance/web-064-proof-control-surface-goal.md), closed generated contract, Task-authorized Server projection and exact owner-confirmed commands expose local/remote source, proof, adoption, integration and recovery facts without running verification/Git or opening remote-node inputs; 94 contract, 545 Server, 268 Web, all Bridge/build/schema/product/E2E gates, real 1280/720/390 production-browser states and three private 24-test four-prefix/total-zero lifecycle rounds pass |
 | QA-053 | DONE | Verify parallel coding and repository integration | QA-052, WEB-064, EXEC-003, EXEC-008, EXEC-009, REPO-003 | The [accepted parallel integration record](acceptance/qa-053-parallel-coding-integration-goal.md) proves two physically overlapping Bridge Runs in distinct worktrees, three independent passed verifier receipts, one exact-target integration, one retained moved-target conflict with an explicitly blocked zero-Run integrated consumer, exact mixed `integrated_commit`/`verified_output` adopted bytes in Join, three-worktree cleanup, seven real-loopback provider fault checks, 94 contract/545 Server/268 Web tests, all Bridge/build/product/E2E/docs gates and three private four-prefix/total-zero rounds without adding scheduler modes, automatic conflict resolution or remote input authority |
 | EXEC-005 | DONE | Govern versioned replanning with bounded delegation | QA-053, MCP-007, EXEC-011 | The [accepted supersession record](acceptance/exec-005-plan-supersession-goal.md), migration 0083 and closed HTTP/MCP contracts prove inert immutable next-revision candidates, atomic fixed-Task-set activation, accepted/verified/integrated local evidence carry using only retained semantic reuse digests, prior-Run ambiguity fences and one-shot current Owner delegation with stale/revoked/expired/expansion escalation; 99 Contract, 569 Server and 268 Web tests, all builds/Bridge packages, 9 deterministic E2Es with one explicit live skip, docs and three private 24-test four-prefix/total-zero lifecycle rounds pass without Remote Evidence carry or repository authority |
-| DISC-011 | ACTIVE | Select focused participants under frozen Discussion policy | EXEC-005, DISC-010 | The [frozen focused-selection goal](acceptance/disc-011-focused-participant-selection-goal.md) requires question-focused deterministic selection, current Room/Task/role checks, frozen per-Wave member limits, immutable selection snapshots and exact restart recovery before this task may become DONE |
+| DISC-011 | DONE | Select focused participants under frozen Discussion policy | EXEC-005, DISC-010 | The [accepted focused-selection record](acceptance/disc-011-focused-participant-selection-goal.md), migration 0084 and pure selector retain highest-priority reporter/role matches plus required Reviewer behind current Room/Task/Team/assignment checks, immutable per-Wave snapshot/digest and exact restart recovery; 49 focused and 583 full Server tests, all workspace/build/Bridge/E2E/schema/docs gates and three private 24-test four-prefix zero-residue rounds pass |
 | DISC-012 | PLANNED | Add opt-in read-only quorum sealing and late evidence | DISC-011 | Enforced read-only capability, required-role quorum, sealed snapshot, live-Run fences, append-only late evidence and crash/permutation tests |
 | QA-054 | PLANNED | Verify bounded autonomy without weakening human authority | EXEC-005, DISC-012 | Real proposal/revision/dispatch flows, low-risk adoption and escalation, quorum recovery and no code-pipeline/Discussion authority regression |
 | QA-055 | PLANNED | Audit final implementation against the complete accepted design | QA-052, QA-053, QA-054 | Requirement-by-requirement current evidence, repaired findings, all relevant regression/build/contract/browser gates and final completion inventory |

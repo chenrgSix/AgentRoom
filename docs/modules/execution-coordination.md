@@ -441,9 +441,9 @@ adoption-authoritative. `CON-024` and `EXEC-011` are accepted by the full
 contract, migration, regression, E2E, Bridge and physical cleanup evidence in
 their frozen goal.
 
-ADR-0039 fixes the remaining Core order as `EXEC-005`, `DISC-011`, `DISC-012`,
-`QA-054` and `QA-055`. No new Remote Forge work enters that chain without a new
-accepted product decision.
+ADR-0039 fixes the Core order. `EXEC-005` and `DISC-011` are accepted; the
+remaining sequence is `DISC-012`, `QA-054` and `QA-055`. No new Remote Forge
+work enters that chain without a new accepted product decision.
 
 ### First Accepted-Result Dependency Increment
 

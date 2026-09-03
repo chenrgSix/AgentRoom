@@ -307,6 +307,13 @@ two Fake Agents start in one Wave and display independent outcomes. `QA-010`
 also verifies deterministic-anchor retry, participant-ordered bounded context,
 and reopened-SQLite recovery at all three durable cut points.
 
+`DISC-011` adds deterministic focus, reporter/role scoring, no-match and
+compatibility cases; a complete Room/Team/Task/assignment/Agent/Reviewer
+authority-loss matrix; exact selected-slot budget events; atomic snapshot/Turn
+rollback; immutable digest and member-substitution rejection; and reopened-
+SQLite duplicate recovery that keeps committed members after later role drift.
+The acceptance record pins one fixed selected-ID pair and SHA-256 digest.
+
 `QA-007` runs only when explicitly requested with `npm run test:e2e:live`.
 The verified 2026-08-23 run used Codex CLI `0.149.0-alpha.4.1` as a read-only
 Solver and Pi `0.84.2` as a no-tools Generic CLI Reviewer. A temporary server,

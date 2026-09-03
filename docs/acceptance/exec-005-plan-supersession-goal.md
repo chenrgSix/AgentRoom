@@ -274,5 +274,5 @@ grant/profile and Artifact digest and show that the reusable node digest changes
 `EXEC-005` does not create or remove Tasks, automatically retry or replan,
 carry Optional Remote Evidence, edit the graph in Web, execute Git, or grant
 repository authority to Central. Repository and Git remain client-owned as
-stated in ADR-0039. The next Core tasks are `DISC-011`, `DISC-012`, `QA-054`
-and `QA-055`.
+stated in ADR-0039. `DISC-011` is now accepted; the remaining Core tasks are
+`DISC-012`, `QA-054` and `QA-055`.

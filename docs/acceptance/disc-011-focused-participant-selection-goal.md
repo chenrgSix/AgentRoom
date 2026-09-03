@@ -1,8 +1,8 @@
 # DISC-011 Focused Discussion Participant Selection Goal
 
-Status: frozen on 2026-09-03 before implementation. This document is the
-implementation and acceptance authority for `DISC-011`; `docs/TASKS.md`
-remains the sole delivery-state register.
+Status: accepted on 2026-09-03 against the goal frozen before implementation.
+This document remains the implementation and acceptance authority for
+`DISC-011`; `docs/TASKS.md` remains the sole delivery-state register.
 
 ## Goal
 
@@ -153,3 +153,69 @@ A green planner unit test alone is not acceptance. Final evidence must include
 selected member IDs and selection digest from reopened SQLite, exact budget
 slot counts, negative authority cases, duplicate recovery and physical
 temporary-directory snapshots.
+
+## Accepted Implementation
+
+Migration 0084 preserves every pre-existing Discussion as `all_eligible` with
+the compatibility limit of five, adds a nullable historic/new-required Wave
+selection column and prevents later selection mutation. Every newly planned
+Wave must carry a valid snapshot; historic Waves remain readable with `null`
+selection rather than receiving invented evidence.
+
+`discussion-participant-selector.ts` is the pure Central selector. It sorts by
+frozen participant ordinal, considers only the highest-priority retained open
+questions, gives retained reporters priority over exact normalized role-term
+matches, retains the required Reviewer and falls back to all eligible members
+when it has no deterministic match. The SHA-256 selection digest covers the
+version, strategy, focused questions, eligible and selected IDs, required
+roles and focused limit.
+
+The Orchestrator rechecks current Room policy/roster, Team, Task lifecycle and
+assignment, Agent enablement and Reviewer availability before each new Wave.
+The repository validates and commits the Wave, snapshot and ordered member
+Turns in one immediate transaction. Recovery validates the persisted digest
+and exact Turn order before binding a Run and never reselects a committed Wave;
+current authority can still stop a frozen member without replacing it.
+
+## Acceptance Evidence
+
+The accepted implementation is commits `8ba0d8f`, `dbad2ff` and `95aa51d` on
+`main`. Verification on 2026-09-03 produced these results:
+
+- 49 focused selector, Orchestrator, repository, migration and HTTP tests
+  passed. The authority matrix covers foreign Team, Room removal, disabled
+  Agent, closed Task, removed Task assignment, disabled Room Discussions and
+  lost required Reviewer.
+- The full Server suite passed 583 tests. `npm test` then passed every Server,
+  Web, Contract, Bridge UI, QA evidence, product-experience, site and temporary-
+  lifecycle workspace suite under one owned run root, which was removed.
+- The reopened SQLite assertion retained selected IDs
+  `agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W6` and
+  `agent_01K4Z6J7Y8N9P0Q1R2S3T4V5W7` with exact digest
+  `65e01c51f0c1f5d1dde8112a0fff886cead0beb39c15eb45f8e967337b70301c`.
+  Separate restart tests retain the focused Backend/Reviewer subset after
+  another Agent becomes a better role match, detect snapshot/Turn substitution
+  and make duplicate recovery idempotent.
+- A four-member first Wave charged four slots and its focused successor charged
+  two; the retained budget metadata is exactly `[4, 2]` and total
+  `agentRunsUsed` is six. Existing lease, duration, hard-limit and finalization-
+  reserve regressions passed unchanged.
+- `npm run test:e2e` passed nine deterministic scenarios and skipped only the
+  explicit opt-in live-Runtime case. `npm run test:bridge` passed every Go
+  Bridge package; it and E2E ran concurrently under different owned run IDs and
+  each removed only its own root.
+- `npm run validate` validated 14 schemas and 258 fixtures. `npm run build`
+  built Server, Web and current generated contracts; Markdown lint checked 348
+  files with zero issues.
+- Three additional isolated `npm run test:temp-lifecycle` rounds each passed 24
+  success, assertion/spawn failure, timeout, signal, nested and parallel
+  cleanup checks. Before and after every round, physical counts for
+  `agentroom-*`, `agent-room-*`, `convenewire-*` and `convene-wire-*` were all
+  zero inside the private acceptance base, and the base itself was removed.
+
+## Retained Boundaries
+
+Focused selection is not model authority, a capability token, a lease or a
+quorum. It creates no Task assignment, retry, repository/Git operation or
+Remote Provider access. `DISC-012` remains the next Core task and separately
+owns opt-in read-only quorum sealing and append-only late evidence.

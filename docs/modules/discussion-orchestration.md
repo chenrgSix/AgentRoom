@@ -2,10 +2,10 @@
 
 [ADR-0036](../adr/0036-add-governed-software-team-execution.md) adds structured
 decision/plan proposals without execution or Result acceptance authority.
-Code review/test pipelines belong to Execution, not Wave semantics. Later
-focused/read-only quorum modes require frozen participant selection, required
-roles and separate append-only supplemental evidence; existing terminal Run
-events remain immutable. All-settled remains the default.
+Code review/test pipelines belong to Execution, not Wave semantics. Focused
+selection now uses frozen policy and immutable per-Wave snapshots; later read-
+only quorum modes still require separate append-only supplemental evidence.
+Existing terminal Run events remain immutable. All-settled remains the default.
 
 ## Scope
 
@@ -18,10 +18,12 @@ events remain immutable. All-settled remains the default.
 
 Discussion Orchestration makes Agent-to-Agent conversation visible in a Room
 without allowing Agents or Bridges to route directly to one another. An
-ordinary logical round is a durable bulk-synchronous **Wave**: every eligible
-participant gets one member Turn and one normal managed or manual Run from the
-same frozen input anchor. Replies remain normal Agent-authored Room Messages.
-The central server is the only authority for opening and closing Waves.
+ordinary logical round is a durable bulk-synchronous **Wave**: the first Wave,
+compatibility mode and unmatched focus use all eligible participants; a later
+focused Wave gives each deterministically selected eligible participant one
+member Turn and one normal managed or manual Run from the same frozen input
+anchor. Replies remain normal Agent-authored Room Messages. The central server
+is the only authority for selecting participants and opening or closing Waves.
 
 A Discussion is not a Handoff. Handoff is a bounded delegation lineage that
 rejects revisiting an Agent. Discussion may use the same participants again in
@@ -69,12 +71,13 @@ The implementation keeps command coordination and aggregate transitions in
 `wave-settlement-service.ts`; canceled/restarted and deadline recovery is owned
 by `discussion-recovery-service.ts`; bounded instructions, deterministic result
 anchors, and fallback output are owned by `discussion-evidence-service.ts`.
-Pure terminal/barrier transitions live in `discussion-state.ts`, while pure
-Wave/finalizer planning lives in `discussion-wave-planner.ts`. Progress
-evaluation, policy, semantic evidence, and budget arithmetic retain their
-standalone units. The pure planners receive frozen aggregate inputs and return
-values only; they do not read SQLite, create Runs, append Messages, or dispatch
-Bridge deliveries.
+Pure terminal/barrier transitions live in `discussion-state.ts`, pure focused
+participant selection and its digest live in
+`discussion-participant-selector.ts`, and Wave/finalizer planning lives in
+`discussion-wave-planner.ts`. Progress evaluation, policy, semantic evidence,
+and budget arithmetic retain their standalone units. The pure planners receive
+frozen aggregate inputs and return values only; they do not read SQLite, create
+Runs, append Messages, or dispatch Bridge deliveries.
 
 The deterministic evaluator sorts successful reports by frozen participant
 ordinal, normalizes and hashes visible replies, combines valid structured
@@ -104,7 +107,7 @@ Discussions migrate to `all_eligible` compatibility behavior.
 | Entity | Required State |
 | --- | --- |
 | Discussion | ID, Room, Task, root Message, goal, participants, policy, execution model, current Wave, state, reason, version |
-| DiscussionWave | ID, Discussion, ordinal, phase, frozen input Message, expected members, deadline, state, version |
+| DiscussionWave | ID, Discussion, ordinal, phase, frozen input Message, expected members, immutable selection snapshot/digest, deadline, state, version |
 | DiscussionTurn | ID, Wave, member ordinal, speaker, input Message, Run, output Message, terminal reason, assessment |
 | ProgressSnapshot | version, goal coverage, open questions, decisions, evidence, disagreement, plateau count |
 | BudgetLedger | limits, lease, logical Wave usage, committed member-slot usage, extensions, finalization reserve |
@@ -151,13 +154,16 @@ interpreted as completion.
 
 ## Wave Execution and Progress Evaluation
 
-Opening an ordinary Wave atomically persists the Wave and one planned member
-Turn per eligible participant. MVP eligibility means the Agent exists, is
-enabled, and belongs to the same Team as the Room. It does not require a ready
-presence, a particular Owner, or remote-wake capability. All members share one
-input Message and deadline, and their Runs may start concurrently. Replies
-appear as they arrive, but no ProgressSnapshot or next action is committed until
-every member is terminal or the deadline resolves missing members.
+Opening an ordinary Wave atomically persists the Wave, immutable selection and
+one planned member Turn per selected participant. Eligibility requires the
+current Room policy and roster, same Team, non-terminal same-Room Task, current
+non-default Task assignment and enabled Agent. It does not require a ready
+presence, a particular Owner, or remote-wake capability. Selection starts broad
+and narrows a later Wave only from retained highest-priority question evidence;
+no match stays broad. All selected members share one input Message and deadline,
+and their Runs may start concurrently. Replies appear as they arrive, but no
+ProgressSnapshot or next action is committed until every member is terminal or
+the deadline resolves missing members.
 
 The ordinary Wave deadline is the earlier of the Discussion deadline and
 `waveTimeoutSeconds`. A queued member becomes `expired` when it passes; an
@@ -364,6 +370,9 @@ goal**, without asking users to allocate internal rounds.
 
 - Persist a decision, Wave, and all member Turn intents atomically before Run
   creation or delivery.
+- Persist and digest the selected/eligible member IDs, focused questions,
+  required roles and focused limit with that Wave; recovery validates exact
+  member order and never reselects a committed Wave.
 - A Room has at most one non-terminal Discussion. Competing creation requests
   receive a conflict.
 - Each member Run uses its member `turnId` as a unique `orchestrationKey`.
@@ -384,19 +393,22 @@ goal**, without asking users to allocate internal rounds.
 
 ## Verification and Tasks
 
-Deterministic tests cover callback permutations, duplicate terminals,
-all-success, partial-success, all-failed, deadline, `input_required`, cancel-all,
-early completion, lease renewal, boundary-aligned user controls, stale
-decisions, plateau policies, Runtime capability downgrade, deterministic
-anchors, participant-ordered bounded context, and three reopened-SQLite
-recovery cut points. A live Codex-Pi run proves one parallel contribution Wave
-and Reviewer finalization through the Go Bridge.
+Deterministic tests cover focused question/reporting/role selection, no-match
+and migration compatibility, exact digest/order, current authority loss,
+snapshot substitution and duplicate reopened recovery; callback permutations,
+duplicate terminals, all-success, partial-success, all-failed, deadline,
+`input_required`, cancel-all, early completion, lease renewal, boundary-aligned
+user controls, stale decisions, plateau policies, Runtime capability downgrade,
+deterministic anchors, participant-ordered bounded context, and three reopened-
+SQLite recovery cut points. A live Codex-Pi run proves one parallel contribution
+Wave and Reviewer finalization through the Go Bridge.
 
 Sequential orchestration is tracked by `DISC-001` through `DISC-006`; parallel
 Wave delivery, presentation, and acceptance are completed by `DISC-007`,
 `WEB-020`, and `QA-010`. Lifecycle service extraction is tracked by `DISC-008`
 and `DISC-009`; structured finalization-to-plan delivery is completed by
-`DISC-010` in `docs/TASKS.md`.
+`DISC-010`, and focused participant selection by `DISC-011`, in
+`docs/TASKS.md`.
 
 ## Dependencies
 

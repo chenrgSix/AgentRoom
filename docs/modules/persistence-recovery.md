@@ -105,6 +105,14 @@ unique nullable recovery key; Discussion member Runs use their `turnId`.
 Existing sequential Turns migrate to singleton Waves before new parallel Waves
 are scheduled.
 
+Migration 0084 adds each new Wave's immutable focused-selection snapshot. It
+backfills only Discussion policy to `all_eligible` compatibility and leaves
+historic Wave selection `null`, so no evidence is fabricated. A new Wave and
+its ordered member Turns commit with the snapshot in one transaction; an
+insert trigger requires the snapshot, an update trigger makes it immutable,
+and recovery validates the digest and exact selected-member order before Run
+binding.
+
 Migration 0024 creates one default Agent Task per existing Room and adds Task
 identity to existing Messages, Runs, and Discussions. Triggers reject
 cross-Room references, and a partial unique index enforces one active
@@ -335,6 +343,11 @@ Discussion reconciliation covers three explicit cut points:
 3. a closed barrier whose next Wave is already committed: dispatch only its
    missing member Runs and do not repeat projection, budget, or policy writes.
 
+At every cut point, a committed migration-0084 selection is reused rather than
+recomputed. Current Room, Task, Team, assignment and Agent authority remains a
+separate Run-admission fence; losing authority may stop a frozen member but
+cannot replace it with a newly scored Agent.
+
 Duplicate terminal callbacks may update no state after the first successful
 barrier close. Partial success remains recoverable because every member outcome
 and terminal reason is durable; all-member failure converges to
@@ -432,7 +445,8 @@ but never rewrite this build observation.
 ## Verification and Tasks
 
 Tests cover constraints, migration rollback behavior, Wave backfill,
-atomic planning and closure, callback duplication, ordinary reconciliation,
+atomic planning and closure, focused selection snapshot/digest persistence,
+member substitution rejection, callback duplication, ordinary reconciliation,
 delivery recovery, backup, restore, and corrupted input rejection. `QA-010`
 reopens SQLite at planned-member, partially settled barrier, and
 committed-next-Wave cut points, and verifies deterministic-anchor retry.
@@ -440,7 +454,8 @@ Persistence work is tracked by `DATA-001` through `DATA-006`, `TASK-007`
 through `TASK-009`, target Task/Result persistence by `TASK-012`/`TASK-013`, and
 Artifact storage by `ART-001`; local Bridge state ownership/durability by
 `BRG-052`; ADR-0026 Hosted storage and recovery by `DATA-007`; parallel recovery
-is completed by `DISC-007` and `QA-010` in `docs/TASKS.md`.
+is completed by `DISC-007` and `QA-010`; focused selection recovery is
+completed by `DISC-011` in `docs/TASKS.md`.
 
 ## Dependencies
 

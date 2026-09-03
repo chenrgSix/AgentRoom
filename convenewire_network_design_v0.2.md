@@ -21,7 +21,7 @@
 该 ADR 对本文早期“不接管 Git 生命周期”的非目标作明确扩展，但不授予中央服务
 远程 Shell、成员文件系统或本地权限；交付状态仍只记录在 `docs/TASKS.md`。
 
-ConveneWire 是现有 AI 客户端之上的轻量 Team Layer。用户在中央 Web 项目的 Room 中组织 Member 和 Agent，通过结构化 `@mention` 发起协作；中央服务保存消息、路由 Mention，并将任务推送到目标机器上的 ConveneWire Bridge。Bridge 使用目标 Runtime 已有的机器接口启动或恢复一次 Team Session，再把状态和回复送回 Room。多 Agent Discussion 在 Room 中表现为 Agent 直接对话；同一逻辑轮次使用 durable parallel Wave 并发唤醒参与者，中央 Orchestrator 在 all-settled barrier 后依据进展、预算和策略决定下一步，不建立 Bridge 间直连。
+ConveneWire 是现有 AI 客户端之上的轻量 Team Layer。用户在中央 Web 项目的 Room 中组织 Member 和 Agent，通过结构化 `@mention` 发起协作；中央服务保存消息、路由 Mention，并将任务推送到目标机器上的 ConveneWire Bridge。Bridge 使用目标 Runtime 已有的机器接口启动或恢复一次 Team Session，再把状态和回复送回 Room。多 Agent Discussion 在 Room 中表现为 Agent 直接对话；同一逻辑轮次使用 durable parallel Wave 并发唤醒经当前 Room/Task 权限校验的参与者，后续 Wave 可依据冻结策略和最高优先级未决问题确定性聚焦。中央 Orchestrator 在 all-settled barrier 后依据进展、预算和策略决定下一步，不建立 Bridge 间直连，也不调用模型选择参与者。
 
 MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Room、发送消息和 handoff。MCP Server 不能可靠地凭空启动 Codex Turn，因此主动唤醒由中央服务与 Bridge 之间的 WebSocket 通道承担。
 
@@ -44,7 +44,7 @@ MCP 仅负责“运行中的 Agent 主动使用 Team 能力”，例如读取 Ro
 4. 让运行中的 Agent 通过 MCP读取 Room 上下文、回复和 handoff。
 5. 保持 Agent 的认证、工作目录、工具和审批留在原 Runtime。
 6. 安装成本控制为一个 Bridge 二进制和一份可选 MCP/Skill 配置。
-7. 支持并行 Wave、all-settled barrier、自适应结束、停滞检测和人工控制的 Agent-to-Agent Discussion。
+7. 支持并行 Wave、all-settled barrier、确定性问题聚焦、自适应结束、停滞检测和人工控制的 Agent-to-Agent Discussion。
 
 ### 2.2 非目标
 
@@ -465,7 +465,7 @@ discussion.state_changed
 | P6 | Recovery | Bridge 重连、重复投递和中央服务重启可恢复 |
 | P7 | Multi-Agent Handoff | 三个 Agent 在深度限制内完成接力 |
 | P8 | Additional Runtime | 接入一个 MCP-native 或 Generic CLI Runtime |
-| P9 | Adaptive Agent Discussion | Codex 与 Pi 在 durable parallel Waves 中并发贡献，经 barrier、中央策略和 finalization 收敛 |
+| P9 | Adaptive Agent Discussion | Codex 与 Pi 在 durable parallel Waves 中并发贡献，后续 Wave 可在权限和预算内确定性聚焦，经 barrier、中央策略和 finalization 收敛 |
 
 ## 12. 测试与验收
 
@@ -478,7 +478,7 @@ discussion.state_changed
 - Runtime：启动失败、进程退出、超时、无法 resume、输出过大。
 - MCP：未授权访问、错误 Room、缺失能力、manual participant。
 - Handoff：未知目标、循环、深度超限、unique agents 超限。
-- Discussion：parallel Wave fan-out、callback 排列、all-settled、partial/all-failed、提前完成、有效续租、低收益 plateau、高优先级未决问题、软预算扩展、硬预算与 finalization reserve。
+- Discussion：parallel Wave fan-out、callback 排列、all-settled、确定性 participant selection、权限撤销、selection digest/recovery、partial/all-failed、提前完成、有效续租、低收益 plateau、高优先级未决问题、软预算扩展、硬预算与 finalization reserve。
 - Discussion Control：Agent 伪造完成、standalone semantic contract 拒绝 state/action、过期决策、重复 terminal callback、logical Wave 与 committed member slot 计量、用户控制的 Wave 边界、cancel-all、Reviewer approval 可选策略。
 - Discussion Recovery：`QA-010` 必须验证 Run 创建前、partial barrier、barrier 已关闭且 next Wave 已提交三个真实 restart cut point，以及 `wave_result` 重试均不重复执行或推进；通过前不宣称 recovery gate 完成。
 - Security：伪造 Bridge、重放消息、越权 Room、敏感信息过滤。
@@ -495,7 +495,7 @@ discussion.state_changed
 8. Bob Agent 可 handoff 给 Carol Agent，且中央服务执行深度与循环限制。
 9. Device revoke 后不能接收新 Run。
 10. 中央服务重启后 Room、Message、Run 和 pending delivery 可恢复。
-11. 用户可发起 Codex 与 Pi Discussion；两者在同一普通 Wave 并发贡献，Room 实时展示各自回复和 barrier 状态；简单目标提前结束，复杂目标在有进展时续租，partial/all-failed、plateau 和用户控制均确定收敛，且 callback 或重启不会重复创建下一 Wave。
+11. 用户可发起 Codex 与 Pi Discussion；初始普通 Wave 并发贡献，后续 Wave 可从最高优先级未决问题、报告者和角色确定性选择当前有权参与的子集；Room 实时展示各自回复和 barrier 状态；简单目标提前结束，复杂目标在有进展时续租，partial/all-failed、plateau 和用户控制均确定收敛，且 callback 或重启不会重选已提交成员或重复创建下一 Wave。
 
 ## 13. 后续演进
 
@@ -508,9 +508,9 @@ Owner 本地授权下负责 Repository path、Git remote、Git/SSH credential、
 fetch/pull/push、worktree 和全部 Git command execution。Central approval
 不能替代 Owner 对机器和 Repository 的最终控制。
 
-当前 Core 主线固定为 `EXEC-005` Plan supersession/evidence carry-forward/
-bounded replanning，随后依次为 `DISC-011`、`DISC-012`、`QA-054` 和
-`QA-055`。
+`EXEC-005` Plan supersession/evidence carry-forward/bounded replanning 和
+`DISC-011` focused participant selection 已完成。当前 Core 主线依次为
+`DISC-012`、`QA-054` 和 `QA-055`。
 
 ### 13.2 Optional Remote Evidence Extensions
 
