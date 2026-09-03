@@ -338,9 +338,9 @@ multi-node capacity, per-sweep plan rotation and systematic graph fault
 injection. It does not prove fairness across separate sweeps competing for one
 Agent. `EXEC-010` separately owns explicit manual/supervised/automatic mode and
 a durable shared-Agent fairness cursor/history fact updated by CAS, so restart
-or concurrent Servers cannot reset or duplicate the rotation. `WEB-063` waits
-on the bounded `EXEC-004` control slice; parallel `QA-053` additionally waits
-on `EXEC-008`.
+or concurrent Servers cannot reset or duplicate the rotation. `WEB-063` uses
+the bounded `EXEC-004` control slice; accepted `QA-053` composes that control
+with `EXEC-008` capacity rather than adding another scheduler.
 
 CON-023 and EXEC-009 implement the accepted ADR-0038 source/proof/adoption model
 before remote provider work. Their frozen acceptance authority is
@@ -379,6 +379,16 @@ concurrent-Server uniqueness and restart evidence. `EXEC-008` is accepted after
 the full build, deterministic E2E, Bridge and three-run cleanup gates recorded
 in its frozen goal. Here, two-plan fairness means bounded rotation inside one
 frozen sweep only; `EXEC-010` owns durable cross-sweep fairness.
+
+QA-053 composes this scheduler with existing proof and repository authorities
+under physical parallel coding. Two Bridge-owned root Runs overlap from one
+base, both retain independent verified evidence, one exact-target CAS wins and
+the other retains `INTEGRATION_TARGET_MOVED`. A later Join consumes the exact
+integrated-A and verified-B adoptions; the missing integrated-B proof keeps a
+separate consumer blocked with no dispatch. The
+[accepted record](../acceptance/qa-053-parallel-coding-integration-goal.md)
+binds those database facts to actual Git refs/bytes, provider faults, exact
+worktree cleanup, full gates and three private zero-residue rounds.
 
 CON-024 and EXEC-011 separate exact execution identity from future reuse
 equivalence without changing the version-1 `EvidenceAdoption`. The companion

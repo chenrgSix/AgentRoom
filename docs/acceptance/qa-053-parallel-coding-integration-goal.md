@@ -2,8 +2,8 @@
 
 Date: 2026-09-03
 
-Status: frozen before implementation. `docs/TASKS.md` is the sole delivery-
-state register.
+Status: accepted on 2026-09-03. `docs/TASKS.md` is the sole delivery-state
+register.
 
 ## Goal
 
@@ -119,6 +119,63 @@ Completion requires:
 The four watched prefixes are `agentroom-*`, `agent-room-*`, `convenewire-*`
 and `convene-wire-*`. The acceptance may inspect and delete only the exact
 owned run roots created beneath its private base.
+
+## Accepted Evidence
+
+Commit `6d36514` retains the deterministic cross-process QA-053 regression in
+`tests/e2e/governed-two-bridge-integration.test.ts`. Its four-node plan creates
+three actual governed Runs. The two root Runtime processes rendezvous through
+independent process markers before either returns, and all three attempt
+worktrees are later removed through exact owner cleanup grants and replayed
+receipts.
+
+The retained SQLite and physical Git assertions prove:
+
+- three DispatchIntents, leases, managed Results and passed independent
+  verification receipts;
+- two useful `verified_output` materializations, one successful
+  `integrated_commit` materialization, and two distinct adopted input IDs;
+- one successful integration receipt followed by one retained
+  `INTEGRATION_TARGET_MOVED` receipt against the same approved base;
+- zero `ConflictSink` DispatchIntents and its retained
+  `blocked / EXECUTION_DEPENDENCY_NOT_MATERIALIZED` projection;
+- exact A-integrated and B-verified adopted bytes in the Join worktree before
+  its output, plus a passed Join verification receipt; and
+- unchanged source `HEAD`/tree/worktree bytes, an unchanged observer clone,
+  one exact target-ref movement, three removed worktrees and no foreign-key
+  violations.
+
+The terminal Join receipt deliberately has no unused `verified_output`
+materialization: the accepted materializer creates gate authority only for a
+node with a declared outgoing verified/integrated edge. This does not weaken
+the independently retained receipt or the exact Join Result/checkpoint facts.
+
+The REPO-003 composition gate passed seven focused tests: authenticated remote
+commit/CI observations, missing credentials and revocation, lookup-after-
+response-loss without a second POST, redirect/size rejection, bounded timeout,
+real loopback response loss, and exact cleanup after Git spawn/malformed-bundle
+failure. Its owned root was removed.
+
+Final commands and results were:
+
+- `npm run validate`: 14 schemas and 258 fixtures;
+- `npm run build`: Server, Web and generated contracts current;
+- workspace tests: 94 contracts, 545 Server and 268 Web tests passed;
+- `npm run test:bridge`: every Go Bridge package passed and its owned root was
+  removed;
+- `npm run test:product-experience`: 2 tests passed;
+- `npm run test:e2e`: 9 passed and the explicit live Codex/Pi test remained the
+  sole skip;
+- `npm run test:temp-lifecycle`: 24 success/failure/spawn/timeout/signal/
+  nested/parallel/shell lifecycle tests passed; and
+- `npm run lint:docs` plus `git diff --check`: passed.
+
+The focused QA-053 test then passed three consecutive times beneath the single
+private base `/private/tmp/qa053-audit.sZ1h8a`. Each round recorded
+`before_prefix=0`, `before_total=0`, `after_prefix=0` and `after_total=0` after
+the exact child root was removed. The parent base was empty and was itself
+removed with `rmdir`; no user temporary directory or global prefix was scanned
+or deleted.
 
 ## Explicit Non-goals
 

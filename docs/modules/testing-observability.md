@@ -79,14 +79,16 @@ blocking, full contract/Server/Web/Bridge/build/E2E gates and three private
 Browser membership is added only inside each disposable test Team; proof and
 repository state still come from the production authority paths.
 
-`QA-053` is the active parallel-composition gate. Its
-[frozen goal](../acceptance/qa-053-parallel-coding-integration-goal.md) requires
-two actual Bridges to overlap on disjoint isolated candidates, independently
-verify both, retain one successful exact-target integration and one moved-
-target conflict, then admit a mixed integrated/verified fan-in only with exact
-adopted bytes. It also reruns the real-loopback remote-provider fault boundary,
-full regressions and three private zero-residue physical runs. It does not own
-scheduler modes, automatic conflict resolution or remote input attestation.
+`QA-053` accepts the parallel-composition gate. Its
+[acceptance record](../acceptance/qa-053-parallel-coding-integration-goal.md)
+proves two actual Bridges physically overlap on disjoint isolated candidates,
+independently verify both, retain one successful exact-target integration and
+one moved-target conflict, then admit a mixed integrated/verified fan-in only
+with exact adopted bytes. The Join independently verifies the combined result,
+while the missing integrated proof leaves its explicit conflict consumer
+blocked with no Run. The same gate reruns real-loopback remote-provider faults,
+full regressions and three private zero-residue physical rounds. It adds no
+scheduler mode, automatic conflict resolution or remote input attestation.
 
 ## Scope
 
