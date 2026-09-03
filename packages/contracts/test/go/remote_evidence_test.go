@@ -1,9 +1,12 @@
 package contracts_test
 
 import (
+	"encoding/json"
+	"reflect"
 	"strings"
 	"testing"
 
+	execution "convenewire.dev/contracts/generated/go/execution"
 	runtimecontracts "convenewire.dev/contracts/generated/go/runtime"
 )
 
@@ -84,6 +87,84 @@ func TestRemoteEvidenceGoValidation(t *testing.T) {
 	}
 }
 
+func TestRemoteInputAttestationGoValidation(t *testing.T) {
+	at := "2026-09-03T01:00:00.000Z"
+	input := map[string]any{
+		"adoptionId": "adoption_inputsource0001", "adoptionDigest": strings.Repeat("a", 64),
+		"reuseInput": map[string]any{
+			"inputSlot": "source",
+			"producer": map[string]any{
+				"kind": "adopted_evidence",
+				"edge": map[string]any{
+					"edgeKey": "PrepareBuild", "fromNodeKey": "Prepare", "toNodeKey": "Build",
+					"gate": "verified_output", "bindings": []any{map[string]any{
+						"outputSlot": "patch", "inputSlot": "source",
+					}},
+				},
+				"sourceEvidenceId": "source_inputsource0001",
+				"sourceDigest":     strings.Repeat("b", 64),
+				"proofSetDigest":   strings.Repeat("c", 64),
+			},
+			"artifact": map[string]any{
+				"contentDigest": strings.Repeat("d", 64), "kind": "patch",
+			},
+		},
+	}
+	provider := map[string]any{
+		"version": 1, "operationId": "op_remote_inputs00001",
+		"attestationId":        "attestation_remoteinputs0001",
+		"providerRepositoryId": "owner/repository", "nodeKey": "Build",
+		"commit": strings.Repeat("2", 40), "tree": strings.Repeat("3", 40),
+		"inputs": []any{input}, "remoteInputEvidenceDigest": strings.Repeat("0", 64),
+		"providerAttestationDigest": strings.Repeat("0", 64), "attestedAt": at,
+	}
+	provider["remoteInputEvidenceDigest"] = executionDigest(t, []any{input["reuseInput"]})
+	sealRemote(t, provider, "providerAttestationDigest", "providerAttestationDigest")
+	if err := runtimecontracts.ValidateExecutionCommand("providerInputAttestation", encodeJSON(t, provider)); err != nil {
+		t.Fatalf("valid provider input attestation rejected: %v", err)
+	}
+	providerJSON := encodeJSON(t, provider)
+	var typedProvider execution.ProviderInputAttestation
+	if err := json.Unmarshal(providerJSON, &typedProvider); err != nil {
+		t.Fatalf("generated provider type rejected valid JSON: %v", err)
+	}
+	typedProviderJSON, err := json.Marshal(typedProvider)
+	if err != nil || !reflect.DeepEqual(decodeJSON(t, providerJSON), decodeJSON(t, typedProviderJSON)) {
+		t.Fatal("generated provider type changed attestation JSON")
+	}
+	retained := decodeMap(t, encodeJSON(t, provider))
+	retained["providerBindingId"] = "provider_example001"
+	retained["repositoryId"] = "repo_example001"
+	retained["planId"] = "plan_example001"
+	retained["planRevision"] = 1
+	retained["sourceEvidenceId"] = "source_remoteoutput0001"
+	retained["sourceDigest"] = strings.Repeat("e", 64)
+	retained["sourceObservationId"] = "observation_commit0001"
+	retained["sourceObservationDigest"] = strings.Repeat("f", 64)
+	retained["attestationDigest"] = strings.Repeat("0", 64)
+	sealRemote(t, retained, "attestationDigest", "attestationDigest")
+	if err := runtimecontracts.ValidateExecutionCommand("remoteInputAttestation", encodeJSON(t, retained)); err != nil {
+		t.Fatalf("valid retained input attestation rejected: %v", err)
+	}
+	retainedJSON := encodeJSON(t, retained)
+	var typedRetained execution.RemoteInputAttestation
+	if err := json.Unmarshal(retainedJSON, &typedRetained); err != nil {
+		t.Fatalf("generated retained type rejected valid JSON: %v", err)
+	}
+	typedRetainedJSON, err := json.Marshal(typedRetained)
+	if err != nil || !reflect.DeepEqual(decodeJSON(t, retainedJSON), decodeJSON(t, typedRetainedJSON)) {
+		t.Fatal("generated retained type changed attestation JSON")
+	}
+	tampered := decodeMap(t, encodeJSON(t, retained))
+	tamperedInputs := tampered["inputs"].([]any)
+	tamperedReuse := tamperedInputs[0].(map[string]any)["reuseInput"].(map[string]any)
+	tamperedReuse["artifact"].(map[string]any)["contentDigest"] = strings.Repeat("9", 64)
+	sealRemote(t, tampered, "attestationDigest", "attestationDigest")
+	if runtimecontracts.ValidateExecutionCommand("remoteInputAttestation", encodeJSON(t, tampered)) == nil {
+		t.Fatal("tampered logical input accepted")
+	}
+}
+
 func TestProofControlCommandsHaveClosedGoValidation(t *testing.T) {
 	digest := strings.Repeat("a", 64)
 	remote := map[string]any{
@@ -109,7 +190,7 @@ func TestProofControlCommandsHaveClosedGoValidation(t *testing.T) {
 			"expectedCommit": strings.Repeat("1", 40),
 		},
 		"verificationReceipts": []any{map[string]any{
-			"receiptDigest": strings.Repeat("c", 64),
+			"receiptDigest":  strings.Repeat("c", 64),
 			"verificationId": "verification_web00001",
 		}},
 	}

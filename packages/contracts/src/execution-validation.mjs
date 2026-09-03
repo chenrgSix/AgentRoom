@@ -190,6 +190,20 @@ export function remoteCIObservationReceiptDigest(value) {
   return executionOperationDigest(record);
 }
 
+export function remoteInputEvidenceDigest(inputs) {
+  return evidenceReuseInputDigest(inputs.map((entry) => entry.reuseInput));
+}
+
+export function providerInputAttestationDigest(value) {
+  const { providerAttestationDigest: _digest, ...record } = value;
+  return executionOperationDigest(record);
+}
+
+export function remoteInputAttestationDigest(value) {
+  const { attestationDigest: _digest, ...record } = value;
+  return executionOperationDigest(record);
+}
+
 function assertObjectFormat(objectFormat, ...objects) {
   const length = objectFormat === "sha1" ? 40 : 64;
   requireCondition(objects.every((object) => object.length === length),
@@ -228,6 +242,54 @@ function assertRemoteCommitObservationSemantics(value) {
   assertObjectFormat(value.objectFormat, value.baseCommit, value.commit, value.tree);
   requireCondition(value.observationDigest === remoteCommitObservationDigest(value),
     "REMOTE_COMMIT_OBSERVATION_DIGEST_MISMATCH");
+}
+
+function providerInputAttestationProjection(value) {
+  return {
+    version: value.version,
+    operationId: value.operationId,
+    attestationId: value.attestationId,
+    providerRepositoryId: value.providerRepositoryId,
+    nodeKey: value.nodeKey,
+    commit: value.commit,
+    tree: value.tree,
+    inputs: value.inputs,
+    remoteInputEvidenceDigest: value.remoteInputEvidenceDigest,
+    providerAttestationDigest: value.providerAttestationDigest,
+    attestedAt: value.attestedAt
+  };
+}
+
+function assertRemoteInputAttestationSemantics(value, retained) {
+  requireCondition(value.commit.length === value.tree.length &&
+    (value.commit.length === 40 || value.commit.length === 64),
+  "REMOTE_INPUT_ATTESTATION_OBJECT_FORMAT_MISMATCH");
+  ordered(value.inputs, (left, right) =>
+    binaryCompare(left.reuseInput.inputSlot, right.reuseInput.inputSlot),
+  "REMOTE_INPUT_ATTESTATION_INPUT_ORDER");
+  unique(value.inputs, "adoptionId", "REMOTE_INPUT_ATTESTATION_DUPLICATE_ADOPTION");
+  for (const entry of value.inputs) {
+    const input = entry.reuseInput;
+    requireCondition(input.producer.kind === "adopted_evidence",
+      "REMOTE_INPUT_ATTESTATION_PRODUCER_INVALID");
+    const matches = input.producer.edge.bindings.filter((binding) =>
+      binding.inputSlot === input.inputSlot);
+    requireCondition(input.producer.edge.toNodeKey === value.nodeKey &&
+      matches.length === 1,
+    "REMOTE_INPUT_ATTESTATION_EDGE_MISMATCH");
+  }
+  requireCondition(value.remoteInputEvidenceDigest ===
+    remoteInputEvidenceDigest(value.inputs),
+  "REMOTE_INPUT_ATTESTATION_INPUT_DIGEST_MISMATCH");
+  const provider = retained ? providerInputAttestationProjection(value) : value;
+  requireCondition(value.providerAttestationDigest ===
+    providerInputAttestationDigest(provider),
+  "REMOTE_INPUT_ATTESTATION_PROVIDER_DIGEST_MISMATCH");
+  if (retained) {
+    requireCondition(value.attestationDigest ===
+      remoteInputAttestationDigest(value),
+    "REMOTE_INPUT_ATTESTATION_DIGEST_MISMATCH");
+  }
 }
 
 function assertExecutionInputBindingSemantics(value) {
@@ -439,6 +501,12 @@ export function assertExecutionCommand(kind, value) {
     requireCondition(value.receiptDigest ===
       remoteCIObservationReceiptDigest(value),
     "REMOTE_CI_RECEIPT_DIGEST_MISMATCH");
+  }
+  if (kind === "providerInputAttestation") {
+    assertRemoteInputAttestationSemantics(value, false);
+  }
+  if (kind === "remoteInputAttestation") {
+    assertRemoteInputAttestationSemantics(value, true);
   }
   if (kind === "executionEvidencePage") {
     assertExecutionEvidencePageSemantics(value);

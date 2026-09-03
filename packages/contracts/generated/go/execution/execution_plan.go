@@ -3236,7 +3236,7 @@ type EvidenceReuseContract struct {
 	PlanRevision              int64                     `json:"planRevision"`
 	ReuseContractID           string                    `json:"reuseContractId"`
 	ReuseInputEvidenceDigest  string                    `json:"reuseInputEvidenceDigest"`
-	ReuseInputs               []ReuseInput              `json:"reuseInputs"`
+	ReuseInputs               []ReuseInputElement       `json:"reuseInputs"`
 	RuntimeInputBindingDigest string                    `json:"runtimeInputBindingDigest"`
 	Task                      EvidenceReuseContractTask `json:"task"`
 	Version                   int64                     `json:"version"`
@@ -3308,29 +3308,29 @@ type BraggadociousVerificationProfile struct {
 	Revision  int64  `json:"revision"`
 }
 
-type ReuseInput struct {
-	Artifact  ReuseInputArtifact `json:"artifact"`
-	InputSlot string             `json:"inputSlot"`
-	Producer  Producer           `json:"producer"`
+type ReuseInputElement struct {
+	Artifact  TentacledArtifact `json:"artifact"`
+	InputSlot string            `json:"inputSlot"`
+	Producer  PurpleProducer    `json:"producer"`
 }
 
-type ReuseInputArtifact struct {
+type TentacledArtifact struct {
 	ContentDigest string            `json:"contentDigest"`
 	Kind          ExternalInputKind `json:"kind"`
 }
 
-type Producer struct {
-	Edge              *ProducerEdge          `json:"edge,omitempty"`
-	Kind              ProducerKind           `json:"kind"`
-	ProofSetDigest    *string                `json:"proofSetDigest,omitempty"`
-	SourceDigest      *string                `json:"sourceDigest,omitempty"`
-	SourceEvidenceID  *string                `json:"sourceEvidenceId,omitempty"`
-	ExternalInput     *ProducerExternalInput `json:"externalInput,omitempty"`
-	ReviewDigest      *string                `json:"reviewDigest,omitempty"`
-	ReviewOperationID *string                `json:"reviewOperationId,omitempty"`
+type PurpleProducer struct {
+	Edge              *CunningEdge          `json:"edge,omitempty"`
+	Kind              ProducerKind          `json:"kind"`
+	ProofSetDigest    *string               `json:"proofSetDigest,omitempty"`
+	SourceDigest      *string               `json:"sourceDigest,omitempty"`
+	SourceEvidenceID  *string               `json:"sourceEvidenceId,omitempty"`
+	ExternalInput     *CunningExternalInput `json:"externalInput,omitempty"`
+	ReviewDigest      *string               `json:"reviewDigest,omitempty"`
+	ReviewOperationID *string               `json:"reviewOperationId,omitempty"`
 }
 
-type ProducerEdge struct {
+type CunningEdge struct {
 	Bindings    []FriskyBinding `json:"bindings"`
 	EdgeKey     string          `json:"edgeKey"`
 	FromNodeKey string          `json:"fromNodeKey"`
@@ -3343,7 +3343,7 @@ type FriskyBinding struct {
 	OutputSlot string `json:"outputSlot"`
 }
 
-type ProducerExternalInput struct {
+type CunningExternalInput struct {
 	ArtifactID       string            `json:"artifactId"`
 	ArtifactRevision int64             `json:"artifactRevision"`
 	ContentDigest    string            `json:"contentDigest"`
@@ -3521,6 +3521,151 @@ type RemoteCIObservationReceipt struct {
 	SourceEvidenceID          string                       `json:"sourceEvidenceId"`
 	Tree                      string                       `json:"tree"`
 	Version                   int64                        `json:"version"`
+}
+
+type ProviderInputAttestation struct {
+	AttestationID string `json:"attestationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	AttestedAt                string                          `json:"attestedAt"`
+	Commit                    string                          `json:"commit"`
+	Inputs                    []ProviderInputAttestationInput `json:"inputs"`
+	NodeKey                   string                          `json:"nodeKey"`
+	OperationID               string                          `json:"operationId"`
+	ProviderAttestationDigest string                          `json:"providerAttestationDigest"`
+	ProviderRepositoryID      string                          `json:"providerRepositoryId"`
+	RemoteInputEvidenceDigest string                          `json:"remoteInputEvidenceDigest"`
+	Tree                      string                          `json:"tree"`
+	Version                   int64                           `json:"version"`
+}
+
+type ProviderInputAttestationInput struct {
+	AdoptionDigest string           `json:"adoptionDigest"`
+	AdoptionID     string           `json:"adoptionId"`
+	ReuseInput     PurpleReuseInput `json:"reuseInput"`
+}
+
+type PurpleReuseInput struct {
+	Artifact  StickyArtifact `json:"artifact"`
+	InputSlot string         `json:"inputSlot"`
+	Producer  FluffyProducer `json:"producer"`
+}
+
+type StickyArtifact struct {
+	ContentDigest string            `json:"contentDigest"`
+	Kind          ExternalInputKind `json:"kind"`
+}
+
+type FluffyProducer struct {
+	Edge              *MagentaEdge          `json:"edge,omitempty"`
+	Kind              ProducerKind          `json:"kind"`
+	ProofSetDigest    *string               `json:"proofSetDigest,omitempty"`
+	SourceDigest      *string               `json:"sourceDigest,omitempty"`
+	SourceEvidenceID  *string               `json:"sourceEvidenceId,omitempty"`
+	ExternalInput     *MagentaExternalInput `json:"externalInput,omitempty"`
+	ReviewDigest      *string               `json:"reviewDigest,omitempty"`
+	ReviewOperationID *string               `json:"reviewOperationId,omitempty"`
+}
+
+type MagentaEdge struct {
+	Bindings    []MischievousBinding `json:"bindings"`
+	EdgeKey     string               `json:"edgeKey"`
+	FromNodeKey string               `json:"fromNodeKey"`
+	Gate        Gate                 `json:"gate"`
+	ToNodeKey   string               `json:"toNodeKey"`
+}
+
+type MischievousBinding struct {
+	InputSlot  string `json:"inputSlot"`
+	OutputSlot string `json:"outputSlot"`
+}
+
+type MagentaExternalInput struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ContentDigest    string            `json:"contentDigest"`
+	InputSlot        string            `json:"inputSlot"`
+	Kind             ExternalInputKind `json:"kind"`
+	NodeKey          string            `json:"nodeKey"`
+	SourceResultID   string            `json:"sourceResultId"`
+	SourceTaskID     string            `json:"sourceTaskId"`
+}
+
+type RemoteInputAttestation struct {
+	AttestationDigest string `json:"attestationDigest"`
+	AttestationID     string `json:"attestationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	AttestedAt                string                        `json:"attestedAt"`
+	Commit                    string                        `json:"commit"`
+	Inputs                    []RemoteInputAttestationInput `json:"inputs"`
+	NodeKey                   string                        `json:"nodeKey"`
+	OperationID               string                        `json:"operationId"`
+	PlanID                    string                        `json:"planId"`
+	PlanRevision              int64                         `json:"planRevision"`
+	ProviderAttestationDigest string                        `json:"providerAttestationDigest"`
+	ProviderBindingID         string                        `json:"providerBindingId"`
+	ProviderRepositoryID      string                        `json:"providerRepositoryId"`
+	RemoteInputEvidenceDigest string                        `json:"remoteInputEvidenceDigest"`
+	RepositoryID              string                        `json:"repositoryId"`
+	SourceDigest              string                        `json:"sourceDigest"`
+	SourceEvidenceID          string                        `json:"sourceEvidenceId"`
+	SourceObservationDigest   string                        `json:"sourceObservationDigest"`
+	SourceObservationID       string                        `json:"sourceObservationId"`
+	Tree                      string                        `json:"tree"`
+	Version                   int64                         `json:"version"`
+}
+
+type RemoteInputAttestationInput struct {
+	AdoptionDigest string           `json:"adoptionDigest"`
+	AdoptionID     string           `json:"adoptionId"`
+	ReuseInput     FluffyReuseInput `json:"reuseInput"`
+}
+
+type FluffyReuseInput struct {
+	Artifact  IndigoArtifact    `json:"artifact"`
+	InputSlot string            `json:"inputSlot"`
+	Producer  TentacledProducer `json:"producer"`
+}
+
+type IndigoArtifact struct {
+	ContentDigest string            `json:"contentDigest"`
+	Kind          ExternalInputKind `json:"kind"`
+}
+
+type TentacledProducer struct {
+	Edge              *FriskyEdge          `json:"edge,omitempty"`
+	Kind              ProducerKind         `json:"kind"`
+	ProofSetDigest    *string              `json:"proofSetDigest,omitempty"`
+	SourceDigest      *string              `json:"sourceDigest,omitempty"`
+	SourceEvidenceID  *string              `json:"sourceEvidenceId,omitempty"`
+	ExternalInput     *FriskyExternalInput `json:"externalInput,omitempty"`
+	ReviewDigest      *string              `json:"reviewDigest,omitempty"`
+	ReviewOperationID *string              `json:"reviewOperationId,omitempty"`
+}
+
+type FriskyEdge struct {
+	Bindings    []BraggadociousBinding `json:"bindings"`
+	EdgeKey     string                 `json:"edgeKey"`
+	FromNodeKey string                 `json:"fromNodeKey"`
+	Gate        Gate                   `json:"gate"`
+	ToNodeKey   string                 `json:"toNodeKey"`
+}
+
+type BraggadociousBinding struct {
+	InputSlot  string `json:"inputSlot"`
+	OutputSlot string `json:"outputSlot"`
+}
+
+type FriskyExternalInput struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ContentDigest    string            `json:"contentDigest"`
+	InputSlot        string            `json:"inputSlot"`
+	Kind             ExternalInputKind `json:"kind"`
+	NodeKey          string            `json:"nodeKey"`
+	SourceResultID   string            `json:"sourceResultId"`
+	SourceTaskID     string            `json:"sourceTaskId"`
 }
 
 type ExecutionEvidencePage struct {

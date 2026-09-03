@@ -509,6 +509,8 @@ function renderExecutionValidators(schemas) {
     remoteCommitObservation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteCommitObservation`,
     providerCIObservation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/providerCIObservation`,
     remoteCIObservationReceipt: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteCIObservationReceipt`,
+    providerInputAttestation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/providerInputAttestation`,
+    remoteInputAttestation: `${REMOTE_EVIDENCE_SCHEMA_ID}#/$defs/remoteInputAttestation`,
     executionEvidencePage: `${EXECUTION_EVIDENCE_VIEW_SCHEMA_ID}#/$defs/executionEvidencePage`,
     remoteEvidenceAdoptionCommand: `${EXECUTION_EVIDENCE_VIEW_SCHEMA_ID}#/$defs/remoteEvidenceAdoptionCommand`,
     integrationApprovalCommand: `${EXECUTION_EVIDENCE_VIEW_SCHEMA_ID}#/$defs/integrationApprovalCommand`
@@ -1547,7 +1549,9 @@ export async function generateContractTypes(packageRoot) {
     ["ProviderCommitObservation", "providerCommitObservation"],
     ["RemoteCommitObservation", "remoteCommitObservation"],
     ["ProviderCIObservation", "providerCIObservation"],
-    ["RemoteCIObservationReceipt", "remoteCIObservationReceipt"]
+    ["RemoteCIObservationReceipt", "remoteCIObservationReceipt"],
+    ["ProviderInputAttestation", "providerInputAttestation"],
+    ["RemoteInputAttestation", "remoteInputAttestation"]
   ]));
   executionCodegen.push(...createDefinitionCodegenSchemas(
     executionEvidenceViewSchema,
@@ -1743,7 +1747,9 @@ export async function generateContractTypes(packageRoot) {
           providerCommitObservation: "providerCommitObservation",
           remoteCommitObservation: "remoteCommitObservation",
           providerCIObservation: "providerCIObservation",
-          remoteCIObservationReceipt: "remoteCIObservationReceipt"
+          remoteCIObservationReceipt: "remoteCIObservationReceipt",
+          providerInputAttestation: "providerInputAttestation",
+          remoteInputAttestation: "remoteInputAttestation"
         }).map(([kind, definition]) => [kind, removeNestedSchemaIdentities(
           dereference(remoteEvidenceSchema.$defs[definition], remoteEvidenceSchema, schemas), false)]))
         , ...Object.fromEntries(Object.entries({
