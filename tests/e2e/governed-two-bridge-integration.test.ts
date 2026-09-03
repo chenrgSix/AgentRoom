@@ -126,6 +126,8 @@ interface McpResponse {
   };
 }
 
+type BridgeRole = "build" | "consume" | "parallel-a" | "parallel-b";
+
 async function waitFor<T>(
   read: () => Promise<T | undefined>,
   timeoutMs = 45_000
@@ -223,7 +225,7 @@ function startBridge(
   resources: TestResources,
   bridgeBinary: string,
   configPath: string,
-  role: "build" | "consume"
+  role: BridgeRole
 ): ProcessHandle {
   return startProcess(resources, bridgeBinary, ["run", "--config", configPath], {
     env: { ...process.env, CONVENE_WIRE_E2E_ROLE: role },
@@ -234,7 +236,7 @@ function startBridge(
 async function bridgeCommand(
   bridgeBinary: string,
   configPath: string,
-  role: "build" | "consume",
+  role: BridgeRole,
   args: string[]
 ): Promise<string> {
   const result = await execFileAsync(bridgeBinary, [
@@ -246,6 +248,31 @@ async function bridgeCommand(
     maxBuffer: 4 << 20
   });
   return result.stdout;
+}
+
+async function bridgeTerminalCommand(
+  bridgeBinary: string,
+  configPath: string,
+  role: BridgeRole,
+  args: string[]
+): Promise<{ stdout: string; stderr: string; failed: boolean }> {
+  try {
+    return {
+      stdout: await bridgeCommand(bridgeBinary, configPath, role, args),
+      stderr: "",
+      failed: false
+    };
+  } catch (error) {
+    const failure = error as Error & {
+      stdout?: string | Buffer;
+      stderr?: string | Buffer;
+    };
+    return {
+      stdout: failure.stdout?.toString() ?? "",
+      stderr: failure.stderr?.toString() ?? failure.message,
+      failed: true
+    };
+  }
 }
 
 async function git(repository: string, args: string[]): Promise<string> {
@@ -452,6 +479,139 @@ async function createVerifier(directory: string): Promise<string> {
   return verifier;
 }
 
+async function createParallelCodexFixture(
+  directory: string,
+  rendezvousDirectory: string
+): Promise<{ executable: string; helper: string }> {
+  const executable = path.join(directory, "codex");
+  const helper = path.join(directory, "codex-parallel-fixture.mjs");
+  await copyFile(process.execPath, executable);
+  await chmod(executable, 0o700);
+  await writeFile(helper, [
+    "import { access, mkdir, readFile, writeFile } from 'node:fs/promises';",
+    "import path from 'node:path';",
+    "import readline from 'node:readline';",
+    "const roleArgument = process.argv.find((value) => value.startsWith('fixture-role='));",
+    "const role = roleArgument?.slice('fixture-role='.length);",
+    `const rendezvous = ${JSON.stringify(rendezvousDirectory)};`,
+    "const profile = {",
+    "  description: null, extends: null, workspace_roots: null,",
+    "  filesystem: {",
+    "    glob_scan_max_depth: null, ':root': 'deny', ':minimal': 'read',",
+    "    ':tmpdir': 'deny', ':slash_tmp': 'deny', ':workspace_roots': { '.': 'write' }",
+    "  },",
+    "  network: { enabled: false, domains: null }",
+    "};",
+    "const send = (value) => process.stdout.write(`${JSON.stringify(value)}\\n`);",
+    "const exists = async (filename) => { try { await access(filename); return true; } catch { return false; } };",
+    "const inside = (cwd, target) => {",
+    "  const relative = path.relative(cwd, target);",
+    "  return relative !== '' && !relative.startsWith(`..${path.sep}`) && relative !== '..' && !path.isAbsolute(relative);",
+    "};",
+    "const waitForPeer = async (own, peer) => {",
+    "  await mkdir(rendezvous, { recursive: true });",
+    "  await writeFile(path.join(rendezvous, `started-${own}`), `${process.pid}\\n`, { mode: 0o600 });",
+    "  for (let attempt = 0; attempt < 200; attempt += 1) {",
+    "    if (await exists(path.join(rendezvous, `started-${peer}`))) {",
+    "      await writeFile(path.join(rendezvous, `saw-${own}`), `${peer}\\n`, { mode: 0o600 });",
+    "      return;",
+    "    }",
+    "    await new Promise((resolve) => setTimeout(resolve, 25));",
+    "  }",
+    "  process.exit(41);",
+    "};",
+    "for await (const line of readline.createInterface({ input: process.stdin })) {",
+    "  const request = JSON.parse(line);",
+    "  if (!request.id) continue;",
+    "  if (request.method === 'initialize') {",
+    "    send({ id: request.id, result: { userAgent: 'convenewire-parallel-fixture' } });",
+    "  } else if (request.method === 'permissionProfile/list') {",
+    "    send({ id: request.id, result: { data: [{ id: 'convenewire_governed', allowed: true }], nextCursor: null } });",
+    "  } else if (request.method === 'config/read') {",
+    "    send({ id: request.id, result: { config: { permissions: { convenewire_governed: profile } } } });",
+    "  } else if (request.method === 'command/exec') {",
+    "    const command = request.params?.command ?? [];",
+    "    const cwd = request.params?.cwd ?? '';",
+    "    let exitCode = 1;",
+    "    if (command[0] === '/usr/bin/nc' && command.length === 2 && command[1] === '-h') {",
+    "      exitCode = 0;",
+    "    } else if (command[0] === '/bin/sh') {",
+    "      const target = command.at(-1);",
+    "      if (typeof target === 'string' && inside(cwd, target)) {",
+    "        await writeFile(target, 'permitted', { mode: 0o600 });",
+    "        exitCode = 0;",
+    "      }",
+    "    }",
+    "    send({ id: request.id, result: { exitCode, stdout: '', stderr: '' } });",
+    "  } else if (request.method === 'thread/start' || request.method === 'thread/resume') {",
+    "    const threadId = request.params?.threadId ?? `thread-${role}`;",
+    "    send({ id: request.id, result: { thread: { id: threadId, ephemeral: false } } });",
+    "  } else if (request.method === 'turn/start') {",
+    "    const cwd = process.cwd();",
+    "    const featureA = path.join(cwd, 'src/feature-a.ts');",
+    "    const featureB = path.join(cwd, 'src/feature-b.ts');",
+    "    const hasA = await exists(featureA);",
+    "    const hasB = await exists(featureB);",
+    "    await mkdir(path.join(cwd, 'src'), { recursive: true });",
+    "    let reply;",
+    "    if (role === 'parallel-a' && hasA && hasB) {",
+    "      if (await readFile(featureA, 'utf8') !== \"export const featureA = 'verified-a';\\n\") process.exit(42);",
+    "      if (await readFile(featureB, 'utf8') !== \"export const featureB = 'verified-b';\\n\") process.exit(43);",
+    "      await writeFile(path.join(cwd, 'src/join.ts'), \"export const joined = 'a+b';\\n\");",
+    "      reply = 'parallel join completed from exact inputs';",
+    "    } else if (role === 'parallel-a' && !hasA && !hasB) {",
+    "      await writeFile(featureA, \"export const featureA = 'verified-a';\\n\");",
+    "      await waitForPeer('a', 'b');",
+    "      reply = 'parallel candidate A completed';",
+    "    } else if (role === 'parallel-b' && !hasA && !hasB) {",
+    "      await writeFile(featureB, \"export const featureB = 'verified-b';\\n\");",
+    "      await waitForPeer('b', 'a');",
+    "      reply = 'parallel candidate B completed';",
+    "    } else {",
+    "      process.exit(44);",
+    "    }",
+    "    const turnId = `turn-${role}-${Date.now()}`;",
+    "    const threadId = request.params.threadId;",
+    "    send({ id: request.id, result: { turn: { id: turnId, status: 'inProgress' } } });",
+    "    send({ method: 'item/completed', params: { threadId, turnId, item: {",
+    "      id: `item-${role}`, type: 'agentMessage', text: reply",
+    "    } } });",
+    "    send({ method: 'turn/completed', params: { threadId, turn: {",
+    "      id: turnId, status: 'completed', items: []",
+    "    } } });",
+    "  }",
+    "}"
+  ].join("\n"), { encoding: "utf8", mode: 0o600 });
+  return { executable, helper };
+}
+
+async function createParallelVerifier(directory: string): Promise<string> {
+  const verifier = path.join(directory, "verify-parallel.mjs");
+  await writeFile(verifier, [
+    "import { access, readFile } from 'node:fs/promises';",
+    "const exists = async (filename) => { try { await access(filename); return true; } catch { return false; } };",
+    "const exact = async (filename, expected) => {",
+    "  if (await readFile(filename, 'utf8') !== expected) process.exit(51);",
+    "};",
+    "const hasA = await exists('src/feature-a.ts');",
+    "const hasB = await exists('src/feature-b.ts');",
+    "const hasJoin = await exists('src/join.ts');",
+    "if (hasJoin) {",
+    "  await exact('src/feature-a.ts', \"export const featureA = 'verified-a';\\n\");",
+    "  await exact('src/feature-b.ts', \"export const featureB = 'verified-b';\\n\");",
+    "  await exact('src/join.ts', \"export const joined = 'a+b';\\n\");",
+    "} else if (hasA && !hasB) {",
+    "  await exact('src/feature-a.ts', \"export const featureA = 'verified-a';\\n\");",
+    "} else if (hasB && !hasA) {",
+    "  await exact('src/feature-b.ts', \"export const featureB = 'verified-b';\\n\");",
+    "} else {",
+    "  process.exit(52);",
+    "}",
+    "process.stdout.write('independent parallel candidate verification passed');"
+  ].join("\n"), { encoding: "utf8", mode: 0o600 });
+  return verifier;
+}
+
 async function waitForAgent(
   serverUrl: string,
   token: string,
@@ -516,7 +676,7 @@ async function setTaskActive(
 async function proposeResult(
   bridgeBinary: string,
   configPath: string,
-  role: "build" | "consume",
+  role: BridgeRole,
   agentName: string,
   run: RunView,
   task: any,
@@ -1840,6 +2000,958 @@ test("controlled product loop reaches one physical integrated_commit dependency"
       createHash("sha256").update(await readFile(path.join(sourceA, "src/dependency.ts"))).digest("hex"),
       createHash("sha256").update("export const state = 'old';\n").digest("hex")
     );
+  } catch (error) {
+    const logs = processHistory.map((handle, index) => [
+      `Process ${index + 1}: pid=${String(handle.process.pid)} ` +
+        `code=${String(handle.process.exitCode)} signal=${String(handle.process.signalCode)}`,
+      `stdout:\n${handle.stdout}`,
+      `stderr:\n${handle.stderr}`
+    ].join("\n")).join("\n\n");
+    throw new Error(`${String(error)}\nStage: ${stage}\n${logs}`, { cause: error });
+  } finally {
+    await Promise.allSettled([
+      bridgeA?.stop(),
+      bridgeB?.stop(),
+      central?.stop()
+    ]);
+  }
+});
+
+test("parallel Bridges retain one CAS winner, one conflict, and exact fan-in", {
+  timeout: 300_000,
+  skip: process.platform !== "darwin" ?
+    "native governed Codex boundary is macOS-only" : false
+}, async (t) => {
+  const resources = await createTestResources(t, "convene-wire-qa053-e2e-");
+  const directory = resources.directory;
+  const serverDatabase = path.join(directory, "central.sqlite");
+  const source = path.join(directory, "shared-source");
+  const observer = path.join(directory, "observer-clone");
+  const rendezvous = path.join(directory, "parallel-rendezvous");
+  const dataA = path.join(directory, "bridge-a-data");
+  const dataB = path.join(directory, "bridge-b-data");
+  const configA = path.join(directory, "bridge-a.json");
+  const configB = path.join(directory, "bridge-b.json");
+  const bridgeBinary = path.join(directory, "convenewire-bridge");
+  const bridgeServerToken = `qa053-${"central-token-".repeat(3)}0001`;
+  const repositoryId = "repo_qa053_parallel0001";
+  const bindingIdA = "repobind_qa053_bridge_a0001";
+  const bindingIdB = "repobind_qa053_bridge_b0001";
+  const runtimeProfileIdA = "profile_qa053_runtime_a0001";
+  const runtimeProfileIdB = "profile_qa053_runtime_b0001";
+  const verifierProfileIdA = "profile_qa053_verifier_a0001";
+  const verifierProfileIdB = "profile_qa053_verifier_b0001";
+  const agentNameA = "Parallel Builder A";
+  const agentNameB = "Parallel Builder B";
+  const targetRef = "refs/heads/qa053-integrated";
+  let central: ProcessHandle | undefined;
+  let bridgeA: ProcessHandle | undefined;
+  let bridgeB: ProcessHandle | undefined;
+  const processHistory: ProcessHandle[] = [];
+  let stage = "initialize parallel fixture";
+
+  try {
+    await mkdir(path.join(source, "src"), { recursive: true });
+    await writeFile(path.join(source, "src/base.ts"),
+      "export const base = 'unchanged';\n");
+    await execFileAsync("git", ["init", "--initial-branch=main", source]);
+    await git(source, ["config", "user.name", "ConveneWire QA-053"]);
+    await git(source, ["config", "user.email", "qa053@convenewire.invalid"]);
+    await git(source, ["add", "--all"]);
+    await git(source, ["commit", "-m", "parallel base"]);
+    const baseCommit = await git(source, ["rev-parse", "HEAD"]);
+    const baseTree = await git(source, ["rev-parse", "HEAD^{tree}"]);
+    await git(source, ["update-ref", targetRef, baseCommit]);
+    await execFileAsync("git", ["clone", "--no-local", source, observer]);
+    const observerRefs = await git(observer, ["show-ref"]);
+    const observerHead = await git(observer, ["rev-parse", "HEAD"]);
+
+    await mkdir(rendezvous, { recursive: true });
+    const codex = await createParallelCodexFixture(directory, rendezvous);
+    const verifier = await createParallelVerifier(directory);
+    const goBinary = process.env.CONVENE_WIRE_GO_BIN ?? "go";
+    await execFileAsync(goBinary, [
+      "build", "-o", bridgeBinary, "./cmd/convenewire-bridge"
+    ], { cwd: bridgeRoot, maxBuffer: 8 << 20 });
+
+    const port = await reservePort();
+    const serverUrl = `http://127.0.0.1:${port}`;
+    central = startCentral(resources, port, serverDatabase, bridgeServerToken);
+    processHistory.push(central);
+    stage = "wait for actual Central";
+    await waitFor(async () => {
+      const response = await fetch(`${serverUrl}/api/health/ready`);
+      return response.ok ? true : undefined;
+    });
+
+    const bootstrap = await requestJSON<any>(serverUrl, "POST", "/api/bootstrap", {
+      displayName: "QA-053 Owner"
+    });
+    const webToken = bootstrap.session.token as string;
+    const team = await requestJSON<any>(serverUrl, "POST", "/api/teams", {
+      name: "QA-053 Parallel Coding Team"
+    }, webToken);
+    const teamId = team.team.teamId as string;
+    const ownerMemberId = team.owner.memberId as string;
+    const room = await requestJSON<any>(serverUrl, "POST",
+      `/api/teams/${teamId}/rooms`, { name: "parallel-integration" }, webToken);
+    const roomId = room.roomId as string;
+
+    const bridgeConfig = (
+      dataDir: string,
+      deviceName: string,
+      agentName: string,
+      role: "parallel-a" | "parallel-b"
+    ) => ({
+      schemaVersion: 5,
+      serverUrl,
+      serverToken: bridgeServerToken,
+      deviceName,
+      dataDir,
+      agents: [{
+        name: agentName,
+        role: "Solution author",
+        adapter: "codex",
+        runtimeKind: "codex",
+        presetVersion: 5,
+        command: [
+          codex.executable,
+          codex.helper,
+          `fixture-role=${role}`,
+          "app-server",
+          "--listen",
+          "stdio://"
+        ],
+        workspace: source,
+        workspaceAlias: "shared-source",
+        sandbox: "workspace-write",
+        codexSessionConflictPolicy: "preserve_and_retry",
+        envAllowlist: []
+      }]
+    });
+    await writeJSON(configA, bridgeConfig(
+      dataA, "Parallel Bridge A", agentNameA, "parallel-a"
+    ));
+    await writeJSON(configB, bridgeConfig(
+      dataB, "Parallel Bridge B", agentNameB, "parallel-b"
+    ));
+
+    for (const [deviceName, configPath, role] of [
+      ["Parallel Bridge A", configA, "parallel-a"],
+      ["Parallel Bridge B", configB, "parallel-b"]
+    ] as const) {
+      const invite = await requestJSON<any>(serverUrl, "POST",
+        `/api/teams/${teamId}/bridge-invites`, { deviceName }, webToken);
+      await bridgeCommand(bridgeBinary, configPath, role,
+        ["pair", "--code", invite.code]);
+    }
+
+    stage = "provision two actual Bridge Agents";
+    bridgeA = startBridge(resources, bridgeBinary, configA, "parallel-a");
+    bridgeB = startBridge(resources, bridgeBinary, configB, "parallel-b");
+    processHistory.push(bridgeA, bridgeB);
+    const agentA = await waitForAgent(serverUrl, webToken, teamId, agentNameA);
+    const agentB = await waitForAgent(serverUrl, webToken, teamId, agentNameB);
+    await Promise.all([bridgeA.stop(), bridgeB.stop()]);
+    bridgeA = undefined;
+    bridgeB = undefined;
+
+    stage = "register distinct bindings and execution profiles";
+    const bindingA = JSON.parse(await bridgeCommand(
+      bridgeBinary, configA, "parallel-a", [
+        "repository", "bind",
+        "--binding-id", bindingIdA,
+        "--repository-id", repositoryId,
+        "--alias", "QA-053 shared source A",
+        "--workspace", source,
+        "--allowed-root", source,
+        "--confirm"
+      ]
+    )) as BindingView;
+    const bindingB = JSON.parse(await bridgeCommand(
+      bridgeBinary, configB, "parallel-b", [
+        "repository", "bind",
+        "--binding-id", bindingIdB,
+        "--repository-id", repositoryId,
+        "--alias", "QA-053 shared source B",
+        "--workspace", source,
+        "--allowed-root", source,
+        "--confirm"
+      ]
+    )) as BindingView;
+    assert.equal(bindingA.sourceFingerprint, bindingB.sourceFingerprint);
+    const runtimeA = JSON.parse(await bridgeCommand(
+      bridgeBinary, configA, "parallel-a", [
+        "repository", "profile", "register",
+        "--profile-id", runtimeProfileIdA,
+        "--agent-id", agentA.agentId,
+        "--permission-profile", permissionProfile,
+        "--confirm"
+      ]
+    )) as RuntimeProfileView;
+    const runtimeB = JSON.parse(await bridgeCommand(
+      bridgeBinary, configB, "parallel-b", [
+        "repository", "profile", "register",
+        "--profile-id", runtimeProfileIdB,
+        "--agent-id", agentB.agentId,
+        "--permission-profile", permissionProfile,
+        "--confirm"
+      ]
+    )) as RuntimeProfileView;
+    const verifierSpec = path.join(directory, "parallel-verifier-profile.json");
+    await writeJSON(verifierSpec, {
+      profileId: verifierProfileIdA,
+      revision: 1,
+      command: [process.execPath, verifier],
+      environmentNames: [],
+      timeoutMilliseconds: 10_000,
+      outputLimitBytes: 16_384
+    });
+    const verifierA = JSON.parse(await bridgeCommand(
+      bridgeBinary, configA, "parallel-a", [
+        "repository", "verifier", "register",
+        "--file", verifierSpec,
+        "--confirm"
+      ]
+    )) as VerificationProfileView;
+    await writeJSON(verifierSpec, {
+      profileId: verifierProfileIdB,
+      revision: 1,
+      command: [process.execPath, verifier],
+      environmentNames: [],
+      timeoutMilliseconds: 10_000,
+      outputLimitBytes: 16_384
+    });
+    const verifierB = JSON.parse(await bridgeCommand(
+      bridgeBinary, configB, "parallel-b", [
+        "repository", "verifier", "register",
+        "--file", verifierSpec,
+        "--confirm"
+      ]
+    )) as VerificationProfileView;
+
+    stage = "approve the exact three-node parallel graph";
+    await requestJSON<any>(serverUrl, "PUT", `/api/rooms/${roomId}/participants`, {
+      memberIds: [ownerMemberId],
+      agentIds: [agentA.agentId, agentB.agentId]
+    }, webToken);
+    const rootTask = await requestJSON<any>(serverUrl, "POST",
+      `/api/rooms/${roomId}/tasks`, {
+        title: "Parallel proof-carrying integration",
+        goal: "Integrate one parallel candidate and retain the competing conflict."
+      }, webToken);
+    const sourceMessage = (await requestJSON<any>(serverUrl, "POST",
+      `/api/rooms/${roomId}/messages`, {
+        taskId: rootTask.taskId,
+        content: "Approve two parallel candidates and one exact evidence fan-in."
+      }, webToken)).message;
+    const activeRoot = await setTaskActive(
+      serverUrl, webToken, rootTask.taskId, "qa053_root"
+    );
+    const fixtureCases = JSON.parse(await readFile(path.join(
+      repositoryRoot,
+      "packages/contracts/fixtures/execution-plan-cases.json"
+    ), "utf8"));
+    const template = fixtureCases.cases.find((entry: { name: string }) =>
+      entry.name === "execution: valid full plan").instance as ExecutionPlanDefinition;
+    const nodeTemplate = template.nodes[0]!;
+    const scope = {
+      access: "isolated_write" as const,
+      allowedPaths: ["src"],
+      forbiddenPaths: ["secrets"],
+      requirePreventivePathEnforcement: false
+    };
+    const makeNode = (
+      nodeKey: "BuildA" | "BuildB" | "Join" | "ConflictSink",
+      agentId: string,
+      bindingId: string,
+      grantId: string,
+      runtime: RuntimeProfileView,
+      verification: VerificationProfileView,
+      inputs: Array<{ slotKey: string; kind: "patch"; required: true }>
+    ) => {
+      const node = structuredClone(nodeTemplate) as any;
+      node.nodeKey = nodeKey;
+      node.kind = "implementation";
+      node.task = {
+        mode: "new",
+        title: `QA-053 ${nodeKey}`,
+        goal: nodeKey === "Join"
+          ? "Consume both exact adopted candidates and retain a combined output."
+          : nodeKey === "ConflictSink"
+            ? "Remain blocked unless BuildB receives exact integrated proof."
+          : `Produce disjoint parallel candidate ${nodeKey}.`,
+        ownerMemberId,
+        criteria: [{
+          criterionKey: `criterion_qa053_${nodeKey.toLowerCase()}0001`,
+          description: `The ${nodeKey} canonical candidate is independently verified.`,
+          required: true,
+          ordinal: 1
+        }]
+      };
+      node.agentId = agentId;
+      node.repository = {
+        repositoryId,
+        bindingId,
+        baseCommit,
+        grantId,
+        grantRevision: 1,
+        runtimeProfileId: runtime.spec.profileId,
+        runtimeProfileDigest: runtime.digest
+      };
+      node.scope = structuredClone(scope);
+      node.verificationProfiles = [{
+        profileId: verification.profileId,
+        revision: verification.revision,
+        digest: verification.digest,
+        required: true
+      }];
+      node.inputs = inputs;
+      node.outputs = [{ slotKey: "output", kind: "patch", required: true }];
+      return node;
+    };
+    const buildANode = makeNode(
+      "BuildA", agentA.agentId, bindingIdA, "grant_qa053_build_a0001",
+      runtimeA, verifierA, []
+    );
+    const buildBNode = makeNode(
+      "BuildB", agentB.agentId, bindingIdB, "grant_qa053_build_b0001",
+      runtimeB, verifierB, []
+    );
+    const joinNode = makeNode(
+      "Join", agentA.agentId, bindingIdA, "grant_qa053_join0000001",
+      runtimeA, verifierA, [
+        { slotKey: "a_patch", kind: "patch", required: true },
+        { slotKey: "b_patch", kind: "patch", required: true }
+      ]
+    );
+    const conflictSinkNode = makeNode(
+      "ConflictSink", agentB.agentId, bindingIdB,
+      "grant_qa053_conflict_sink0001", runtimeB, verifierB,
+      [{ slotKey: "conflicted_patch", kind: "patch", required: true }]
+    );
+    const definition = structuredClone(template) as any;
+    definition.rootTaskId = rootTask.taskId;
+    definition.title = "QA-053 parallel integration and exact fan-in";
+    definition.decision = {
+      summary: "Parallel candidates advance only through retained proof authority.",
+      items: [{
+        itemKey: "parallel_authority",
+        statement: "One target CAS winner never converts the competing candidate into success."
+      }],
+      unresolvedQuestions: [],
+      sources: [{
+        evidenceRefId: "evidence_qa053_source0001",
+        kind: "message",
+        messageId: sourceMessage.messageId
+      }],
+      sourceRevisions: [{
+        evidenceRefId: "evidence_qa053_source0001",
+        revision: sourceMessage.sequence
+      }]
+    };
+    definition.nodes = [buildANode, buildBNode, joinNode, conflictSinkNode];
+    definition.edges = [{
+      edgeKey: "build_a_join",
+      fromNodeKey: "BuildA",
+      toNodeKey: "Join",
+      gate: "integrated_commit",
+      bindings: [{ outputSlot: "output", inputSlot: "a_patch" }]
+    }, {
+      edgeKey: "build_b_join",
+      fromNodeKey: "BuildB",
+      toNodeKey: "Join",
+      gate: "verified_output",
+      bindings: [{ outputSlot: "output", inputSlot: "b_patch" }]
+    }, {
+      edgeKey: "build_b_conflict_sink",
+      fromNodeKey: "BuildB",
+      toNodeKey: "ConflictSink",
+      gate: "integrated_commit",
+      bindings: [{ outputSlot: "output", inputSlot: "conflicted_patch" }]
+    }];
+    definition.externalInputs = [];
+    definition.policy = {
+      maxConcurrency: 2,
+      budget: { maxRunAttempts: 4, maxExecutionDurationSeconds: 3_600 },
+      integration: "local_integration",
+      requireHumanIntegrationApproval: true,
+      integrationTargets: [{ repositoryId, targetRef, expectedCommit: baseCommit }]
+    };
+    const draft = await requestJSON<any>(serverUrl, "POST",
+      `/api/tasks/${rootTask.taskId}/execution-plans`, {
+        operationId: "op_qa053_plan_create0001",
+        expectedRootTaskRevision: activeRoot.taskRevision,
+        definition
+      }, webToken);
+    const approved = await requestJSON<any>(serverUrl, "POST",
+      `/api/execution-plans/${draft.planId}/approvals`, {
+        operationId: "op_qa053_plan_approval0001",
+        expectedRevision: draft.current.revision,
+        expectedDigest: draft.current.digest,
+        expectedRootTaskRevision: activeRoot.taskRevision,
+        decision: "approved",
+        reason: "Authorize the exact parallel conflict and fan-in acceptance."
+      }, webToken);
+    const plan = approved.plan;
+    const tasks = new Map<string, any>();
+    for (const compiled of plan.compiledTasks as Array<{
+      nodeKey: string;
+      taskId: string;
+    }>) {
+      tasks.set(compiled.nodeKey, await setTaskActive(
+        serverUrl, webToken, compiled.taskId, `qa053_${compiled.nodeKey.toLowerCase()}`
+      ));
+    }
+    const taskA = tasks.get("BuildA");
+    const taskB = tasks.get("BuildB");
+    const taskJoin = tasks.get("Join");
+    const taskConflictSink = tasks.get("ConflictSink");
+    assert.ok(taskA && taskB && taskJoin && taskConflictSink);
+
+    stage = "issue exact node grants";
+    const expiresAt = new Date(
+      Math.floor((Date.now() + 60 * 60_000) / 1_000) * 1_000 + 250
+    ).toISOString();
+    const commonGrant = {
+      bindingRevision: 1,
+      repositoryId,
+      baseCommit,
+      planId: plan.planId,
+      planRevision: plan.current.revision,
+      planDigest: plan.current.digest,
+      roomId,
+      expiresAt
+    };
+    const issueNodeGrant = async (
+      configPath: string,
+      role: BridgeRole,
+      node: any,
+      task: any,
+      binding: BindingView,
+      runtime: RuntimeProfileView,
+      verification: VerificationProfileView
+    ) => {
+      const filename = path.join(directory, `${node.nodeKey}-grant.json`);
+      await writeJSON(filename, {
+        ...commonGrant,
+        grantId: node.repository.grantId,
+        bindingId: node.repository.bindingId,
+        sourceFingerprint: binding.sourceFingerprint,
+        nodeKey: node.nodeKey,
+        taskId: task.taskId,
+        definitionRevision: task.definitionRevision,
+        criteriaRevision: task.criteriaRevision,
+        agentId: node.agentId,
+        operations: ["prepare", "capture", "verify"],
+        runtimeProfile: {
+          profileId: runtime.spec.profileId,
+          revision: runtime.spec.revision,
+          digest: runtime.digest
+        },
+        verificationProfiles: [{
+          profileId: verification.profileId,
+          revision: verification.revision,
+          digest: verification.digest
+        }],
+        scopePolicy: structuredClone(node.scope),
+        integrationTargets: []
+      });
+      await bridgeCommand(bridgeBinary, configPath, role, [
+        "repository", "grant", "issue", "--file", filename, "--confirm"
+      ]);
+    };
+    await issueNodeGrant(
+      configA, "parallel-a", buildANode, taskA, bindingA, runtimeA, verifierA
+    );
+    await issueNodeGrant(
+      configB, "parallel-b", buildBNode, taskB, bindingB, runtimeB, verifierB
+    );
+    await issueNodeGrant(
+      configA, "parallel-a", joinNode, taskJoin, bindingA, runtimeA, verifierA
+    );
+
+    stage = "run BuildA and BuildB through a physical rendezvous";
+    bridgeA = startBridge(resources, bridgeBinary, configA, "parallel-a");
+    bridgeB = startBridge(resources, bridgeBinary, configB, "parallel-b");
+    processHistory.push(bridgeA, bridgeB);
+    await Promise.all([
+      waitForAgentGrant(
+        serverUrl, webToken, teamId, agentNameA, buildANode.repository.grantId
+      ),
+      waitForAgentGrant(
+        serverUrl, webToken, teamId, agentNameB, buildBNode.repository.grantId
+      )
+    ]);
+    const terminalRuns = await waitFor(async () => {
+      const runs = await requestJSON<RunView[]>(serverUrl, "GET",
+        `/api/rooms/${roomId}/runs`, undefined, webToken);
+      const first = runs.find((run) => run.taskId === taskA.taskId);
+      const second = runs.find((run) => run.taskId === taskB.taskId);
+      if (first?.state === "completed" && second?.state === "completed") {
+        return { first, second };
+      }
+      if (first && first.state !== "queued" && first.state !== "working" &&
+          first.state !== "completed") {
+        throw new Error(`BuildA terminated as ${first.state}`);
+      }
+      if (second && second.state !== "queued" && second.state !== "working" &&
+          second.state !== "completed") {
+        throw new Error(`BuildB terminated as ${second.state}`);
+      }
+      return undefined;
+    }, 90_000);
+    const buildARun = terminalRuns.first;
+    const buildBRun = terminalRuns.second;
+    assert.notEqual(buildARun.runId, buildBRun.runId);
+    assert.equal((await readFile(path.join(rendezvous, "saw-a"), "utf8")).trim(), "b");
+    assert.equal((await readFile(path.join(rendezvous, "saw-b"), "utf8")).trim(), "a");
+
+    const retainVerified = async (
+      run: RunView,
+      task: any,
+      nodeKey: string,
+      configPath: string,
+      role: BridgeRole,
+      agentName: string
+    ) => {
+      const artifacts = await requestJSON<{ artifacts: ArtifactView[] }>(
+        serverUrl, "GET", `/api/tasks/${task.taskId}/artifacts`, undefined, webToken
+      );
+      const artifact = artifacts.artifacts.find((candidate) =>
+        candidate.sourceRunId === run.runId && candidate.type === "patch" &&
+        candidate.contentSha256);
+      assert.ok(artifact);
+      const events = await requestJSON<Array<{
+        sequence: number;
+        event: { type: string; status?: string };
+      }>>(serverUrl, "GET", `/api/runs/${run.runId}/events?after=0`, undefined, webToken);
+      const completed = events.find(({ event }) =>
+        event.type === "status" && event.status === "completed");
+      assert.ok(completed);
+      const output = await proposeResult(
+        bridgeBinary, configPath, role, agentName, run, task, artifact,
+        completed.sequence, `qa053_${nodeKey.toLowerCase()}0001`
+      );
+      assert.match(output, /proposed Result result_/u);
+      const retained = await waitFor(async () => materialization(
+        serverDatabase, plan.planId, plan.current.revision, nodeKey,
+        "verified_output"
+      ));
+      assert.equal(retained.artifactPins[0]?.contentDigest, artifact.contentSha256);
+      return { artifact, retained };
+    };
+    const [verifiedA, verifiedB] = await Promise.all([
+      retainVerified(
+        buildARun, taskA, "BuildA", configA, "parallel-a", agentNameA
+      ),
+      retainVerified(
+        buildBRun, taskB, "BuildB", configB, "parallel-b", agentNameB
+      )
+    ]);
+    assert.notEqual(
+      verifiedA.retained.candidateCommit,
+      verifiedB.retained.candidateCommit
+    );
+    assert.equal(databaseRead(serverDatabase, (database) =>
+      (database.prepare(`
+        SELECT count(*) AS n FROM execution_dispatch_intents
+        WHERE plan_id = ? AND node_key = 'Join'
+      `).get(plan.planId) as { n: number }).n), 0);
+
+    stage = "issue and publish distinct integration grants";
+    await Promise.all([bridgeA.stop(), bridgeB.stop()]);
+    bridgeA = undefined;
+    bridgeB = undefined;
+    const issueIntegrationGrant = async (
+      configPath: string,
+      role: BridgeRole,
+      node: any,
+      task: any,
+      binding: BindingView,
+      runtime: RuntimeProfileView,
+      verification: VerificationProfileView,
+      grantId: string
+    ) => {
+      const filename = path.join(directory, `${node.nodeKey}-integration-grant.json`);
+      await writeJSON(filename, {
+        ...commonGrant,
+        grantId,
+        bindingId: node.repository.bindingId,
+        sourceFingerprint: binding.sourceFingerprint,
+        nodeKey: node.nodeKey,
+        taskId: task.taskId,
+        definitionRevision: task.definitionRevision,
+        criteriaRevision: task.criteriaRevision,
+        agentId: node.agentId,
+        operations: ["integrate"],
+        runtimeProfile: {
+          profileId: runtime.spec.profileId,
+          revision: runtime.spec.revision,
+          digest: runtime.digest
+        },
+        verificationProfiles: [{
+          profileId: verification.profileId,
+          revision: verification.revision,
+          digest: verification.digest
+        }],
+        scopePolicy: structuredClone(node.scope),
+        integrationTargets: [{ repositoryId, targetRef, expectedCommit: baseCommit }]
+      });
+      await bridgeCommand(bridgeBinary, configPath, role, [
+        "repository", "grant", "issue", "--file", filename, "--confirm"
+      ]);
+    };
+    const integrationGrantA = "grant_qa053_integrate_a0001";
+    const integrationGrantB = "grant_qa053_integrate_b0001";
+    await issueIntegrationGrant(
+      configA, "parallel-a", buildANode, taskA, bindingA, runtimeA, verifierA,
+      integrationGrantA
+    );
+    await issueIntegrationGrant(
+      configB, "parallel-b", buildBNode, taskB, bindingB, runtimeB, verifierB,
+      integrationGrantB
+    );
+    bridgeA = startBridge(resources, bridgeBinary, configA, "parallel-a");
+    bridgeB = startBridge(resources, bridgeBinary, configB, "parallel-b");
+    processHistory.push(bridgeA, bridgeB);
+    await Promise.all([
+      waitForAgentGrant(serverUrl, webToken, teamId, agentNameA, integrationGrantA),
+      waitForAgentGrant(serverUrl, webToken, teamId, agentNameB, integrationGrantB)
+    ]);
+    const target = plan.current.definition.policy.integrationTargets[0];
+    assert.ok(target);
+    const approveIntegration = async (
+      nodeKey: string,
+      verified: ExecutionNodeMaterialization,
+      operationId: string
+    ) => requestJSON<any>(serverUrl, "POST",
+      `/api/execution-plans/${plan.planId}/integration-approvals`, {
+        operationId,
+        planId: plan.planId,
+        planRevision: plan.current.revision,
+        nodeKey,
+        materializationDigest: verified.materializationDigest,
+        candidateCommit: verified.candidateCommit,
+        candidateTree: verified.candidateTree,
+        inputDigest: verified.inputDigest,
+        target,
+        verificationReceipts: verified.verificationReceipts.map((receipt) => ({
+          verificationId: receipt.verificationId,
+          receiptDigest: receipt.receiptDigest
+        })),
+        deadline: new Date(Date.now() + 5 * 60_000).toISOString()
+      }, webToken);
+
+    stage = "integrate BuildA by exact target CAS";
+    const approvalA = await approveIntegration(
+      "BuildA", verifiedA.retained, "op_qa053_integration_approval_a0001"
+    );
+    await bridgeA.stop();
+    bridgeA = undefined;
+    const integrationA = JSON.parse(await bridgeCommand(
+      bridgeBinary, configA, "parallel-a", [
+        "repository", "integration", "execute",
+        "--operation-id", approvalA.integrationOperationId,
+        "--confirm"
+      ]
+    ));
+    assert.equal(integrationA.receipt.state, "succeeded");
+    const integratedA = await waitFor(async () => materialization(
+      serverDatabase, plan.planId, plan.current.revision, "BuildA",
+      "integrated_commit"
+    ));
+    assert.equal(integratedA.gate, "integrated_commit");
+    assert.equal(await git(source, ["show-ref", "--verify", "--hash", targetRef]),
+      verifiedA.retained.candidateCommit);
+
+    stage = "retain BuildB moved-target conflict";
+    const approvalB = await approveIntegration(
+      "BuildB", verifiedB.retained, "op_qa053_integration_approval_b0001"
+    );
+    await bridgeB.stop();
+    bridgeB = undefined;
+    const integrationB = await bridgeTerminalCommand(
+      bridgeBinary, configB, "parallel-b", [
+        "repository", "integration", "execute",
+        "--operation-id", approvalB.integrationOperationId,
+        "--confirm"
+      ]
+    );
+    assert.equal(integrationB.failed, true);
+    const conflict = JSON.parse(integrationB.stdout);
+    assert.equal(conflict.receipt.state, "failed");
+    assert.equal(conflict.receipt.errorCode, "INTEGRATION_TARGET_MOVED");
+    assert.match(integrationB.stderr, /terminal state failed/u);
+    assert.equal(materialization(
+      serverDatabase, plan.planId, plan.current.revision, "BuildB",
+      "integrated_commit"
+    ), undefined);
+    assert.equal(await git(source, ["show-ref", "--verify", "--hash", targetRef]),
+      verifiedA.retained.candidateCommit);
+
+    stage = "run Join from exact integrated and verified inputs";
+    bridgeA = startBridge(resources, bridgeBinary, configA, "parallel-a");
+    bridgeB = startBridge(resources, bridgeBinary, configB, "parallel-b");
+    processHistory.push(bridgeA, bridgeB);
+    await Promise.all([
+      waitForAgent(serverUrl, webToken, teamId, agentNameA, true),
+      waitForAgent(serverUrl, webToken, teamId, agentNameB, true)
+    ]);
+    const joinRun = await waitFor(async () => {
+      const runs = await requestJSON<RunView[]>(serverUrl, "GET",
+        `/api/rooms/${roomId}/runs`, undefined, webToken);
+      const run = runs.find((candidate) => candidate.taskId === taskJoin.taskId);
+      if (run?.state === "completed") return run;
+      if (run && run.state !== "queued" && run.state !== "working") {
+        throw new Error(`Join terminated as ${run.state}`);
+      }
+      return undefined;
+    }, 90_000);
+    const joinArtifacts = await requestJSON<{ artifacts: ArtifactView[] }>(
+      serverUrl, "GET", `/api/tasks/${taskJoin.taskId}/artifacts`, undefined, webToken
+    );
+    const joinArtifact = joinArtifacts.artifacts.find((candidate) =>
+      candidate.sourceRunId === joinRun.runId && candidate.type === "patch" &&
+      candidate.contentSha256);
+    assert.ok(joinArtifact);
+    const joinEvents = await requestJSON<Array<{
+      sequence: number;
+      event: { type: string; status?: string };
+    }>>(serverUrl, "GET", `/api/runs/${joinRun.runId}/events?after=0`, undefined, webToken);
+    const joinCompleted = joinEvents.find(({ event }) =>
+      event.type === "status" && event.status === "completed");
+    assert.ok(joinCompleted);
+    assert.match(await proposeResult(
+      bridgeBinary, configA, "parallel-a", agentNameA, joinRun, taskJoin,
+      joinArtifact, joinCompleted.sequence, "qa053_join0001"
+    ), /proposed Result result_/u);
+    const joinVerification = await waitFor(async () => databaseRead(
+      serverDatabase, (database) => database.prepare(`
+        SELECT receipt.outcome, receipt.receipt_digest,
+          verification.checkpoint_id,
+          (SELECT count(*) FROM repository_checkpoint_outputs output
+            WHERE output.checkpoint_id = verification.checkpoint_id
+              AND output.artifact_id = ?) AS output_matches
+        FROM repository_verification_operations verification
+        JOIN verification_receipts receipt
+          ON receipt.operation_id = verification.operation_id
+        WHERE json_extract(verification.request_json, '$.execution.runId') = ?
+      `).get(joinArtifact.artifactId, joinRun.runId) as {
+        checkpoint_id: string;
+        outcome: string;
+        output_matches: number;
+        receipt_digest: string;
+      } | undefined
+    ));
+    assert.equal(joinVerification.outcome, "passed");
+    assert.equal(joinVerification.output_matches, 1);
+    assert.match(joinVerification.receipt_digest, /^[0-9a-f]{64}$/u);
+    assert.equal(materialization(
+      serverDatabase, plan.planId, plan.current.revision, "Join", "verified_output"
+    ), undefined);
+
+    stage = "retire all exact stopped worktrees";
+    await Promise.all([bridgeA.stop(), bridgeB.stop()]);
+    bridgeA = undefined;
+    bridgeB = undefined;
+    const checkpoints = databaseRead(serverDatabase, (database) => {
+      const rows = database.prepare(`
+        SELECT checkpoint_json FROM repository_checkpoints
+        WHERE json_extract(checkpoint_json, '$.scope.runId') IN (?, ?, ?)
+      `).all(buildARun.runId, buildBRun.runId, joinRun.runId) as Array<{
+        checkpoint_json: string;
+      }>;
+      return new Map(rows.map((row) => {
+        const checkpoint = JSON.parse(row.checkpoint_json);
+        return [checkpoint.scope.runId as string, checkpoint];
+      }));
+    });
+    assert.equal(checkpoints.size, 3);
+    const cleanup = async (
+      configPath: string,
+      role: BridgeRole,
+      run: RunView,
+      suffix: string,
+      expected: "a" | "b" | "join"
+    ) => {
+      const checkpoint = checkpoints.get(run.runId);
+      assert.ok(checkpoint);
+      const checkpointFile = path.join(directory, `checkpoint-${suffix}.json`);
+      await writeJSON(checkpointFile, checkpoint);
+      const grantId = `cleanupgrant_qa053_${suffix}`;
+      const operationId = `op_cleanup_qa053_${suffix}`;
+      await bridgeCommand(bridgeBinary, configPath, role, [
+        "repository", "cleanup", "grant", "issue",
+        "--grant-id", grantId,
+        "--operation-id", operationId,
+        "--checkpoint-file", checkpointFile,
+        "--expires-at", expiresAt,
+        "--confirm"
+      ]);
+      const preview = JSON.parse(await bridgeCommand(
+        bridgeBinary, configPath, role, [
+          "repository", "cleanup", "preview",
+          "--grant-id", grantId,
+          "--operation-id", operationId,
+          "--checkpoint-file", checkpointFile
+        ]
+      )) as CleanupPreview;
+      await access(preview.path);
+      const hasA = expected === "a" || expected === "join";
+      const hasB = expected === "b" || expected === "join";
+      if (hasA) {
+        assert.equal(await readFile(path.join(preview.path, "src/feature-a.ts"), "utf8"),
+          "export const featureA = 'verified-a';\n");
+      } else {
+        await assert.rejects(access(path.join(preview.path, "src/feature-a.ts")), {
+          code: "ENOENT"
+        });
+      }
+      if (hasB) {
+        assert.equal(await readFile(path.join(preview.path, "src/feature-b.ts"), "utf8"),
+          "export const featureB = 'verified-b';\n");
+      } else {
+        await assert.rejects(access(path.join(preview.path, "src/feature-b.ts")), {
+          code: "ENOENT"
+        });
+      }
+      if (expected === "join") {
+        assert.equal(await readFile(path.join(preview.path, "src/join.ts"), "utf8"),
+          "export const joined = 'a+b';\n");
+      }
+      const executeArgs = [
+        "repository", "cleanup", "execute",
+        "--grant-id", grantId,
+        "--operation-id", operationId,
+        "--checkpoint-file", checkpointFile,
+        "--expected-preview-digest", preview.digest,
+        "--confirm"
+      ];
+      const receipt = JSON.parse(await bridgeCommand(
+        bridgeBinary, configPath, role, executeArgs
+      ));
+      await assert.rejects(access(preview.path), { code: "ENOENT" });
+      assert.deepEqual(JSON.parse(await bridgeCommand(
+        bridgeBinary, configPath, role, executeArgs
+      )), receipt);
+      return preview.path;
+    };
+    const [removedBuildA, removedBuildB] = await Promise.all([
+      cleanup(configA, "parallel-a", buildARun, "build_a0001", "a"),
+      cleanup(configB, "parallel-b", buildBRun, "build_b0001", "b")
+    ]);
+    const removedJoin = await cleanup(
+      configA, "parallel-a", joinRun, "join0000001", "join"
+    );
+    const removedPaths = [removedBuildA, removedBuildB, removedJoin];
+    assert.equal(new Set(removedPaths).size, 3);
+
+    stage = "inspect retained proof, Git and SQLite facts";
+    assert.equal(await git(source, ["rev-parse", "HEAD"]), baseCommit);
+    assert.equal(await git(source, ["rev-parse", "HEAD^{tree}"]), baseTree);
+    assert.equal(await readFile(path.join(source, "src/base.ts"), "utf8"),
+      "export const base = 'unchanged';\n");
+    await assert.rejects(access(path.join(source, "src/feature-a.ts")), {
+      code: "ENOENT"
+    });
+    await assert.rejects(access(path.join(source, "src/feature-b.ts")), {
+      code: "ENOENT"
+    });
+    assert.equal(await git(source, ["status", "--porcelain=v1", "--untracked-files=all"]),
+      "");
+    assert.equal(await git(observer, ["rev-parse", "HEAD"]), observerHead);
+    assert.equal(await git(observer, ["show-ref"]), observerRefs);
+    assert.equal(await git(observer, ["status", "--porcelain=v1", "--untracked-files=all"]),
+      "");
+
+    const inputAdoptionIds = databaseRead(serverDatabase, (database) =>
+      (database.prepare(`
+        SELECT json_extract(binding_json, '$.sourceAuthority.adoptionId') AS adoption_id
+        FROM execution_input_bindings WHERE destination_run_id = ?
+        ORDER BY input_slot COLLATE BINARY
+      `).all(joinRun.runId) as Array<{ adoption_id: string }>).map(
+        (row) => row.adoption_id
+      )
+    );
+    assert.equal(inputAdoptionIds.length, 2);
+    assert.match(inputAdoptionIds[0]!, /^adoption_[0-9a-f]{64}$/u);
+    assert.match(inputAdoptionIds[1]!, /^adoption_[0-9a-f]{64}$/u);
+    assert.notEqual(inputAdoptionIds[0], inputAdoptionIds[1]);
+    const evidence = databaseRead(serverDatabase, (database) => ({
+      dispatches: (database.prepare(`
+        SELECT count(*) AS n FROM execution_dispatch_intents WHERE plan_id = ?
+      `).get(plan.planId) as { n: number }).n,
+      leases: (database.prepare(`
+        SELECT count(*) AS n FROM isolated_workspace_leases WHERE plan_id = ?
+      `).get(plan.planId) as { n: number }).n,
+      results: (database.prepare(`
+        SELECT count(*) AS n FROM task_results
+        WHERE task_id IN (?, ?, ?)
+      `).get(taskA.taskId, taskB.taskId, taskJoin.taskId) as { n: number }).n,
+      verifications: (database.prepare(`
+        SELECT count(*) AS n FROM verification_receipts WHERE outcome = 'passed'
+      `).get() as { n: number }).n,
+      verified: (database.prepare(`
+        SELECT count(*) AS n FROM execution_verified_node_materializations
+        WHERE plan_id = ?
+      `).get(plan.planId) as { n: number }).n,
+      integrated: (database.prepare(`
+        SELECT count(*) AS n FROM execution_integrated_node_materializations
+        WHERE plan_id = ?
+      `).get(plan.planId) as { n: number }).n,
+      integrations: database.prepare(`
+        SELECT state, error_code FROM integration_receipts ORDER BY recorded_at, operation_id
+      `).all(),
+      inputs: database.prepare(`
+        SELECT input_slot, json_extract(binding_json, '$.gate') AS gate,
+          EXISTS (
+            SELECT 1 FROM execution_evidence_adoptions adoption
+            WHERE adoption.adoption_id =
+                json_extract(binding_json, '$.sourceAuthority.adoptionId')
+              AND adoption.gate = json_extract(binding_json, '$.gate')
+              AND adoption.node_key = CASE input_slot
+                WHEN 'a_patch' THEN 'BuildA' ELSE 'BuildB' END
+          ) AS adoption_matches
+        FROM execution_input_bindings WHERE destination_run_id = ?
+        ORDER BY input_slot COLLATE BINARY
+      `).all(joinRun.runId),
+      conflictSink: database.prepare(`
+        SELECT state, blocker_code FROM execution_node_states
+        WHERE plan_id = ? AND plan_revision = ? AND node_key = 'ConflictSink'
+      `).get(plan.planId, plan.current.revision),
+      conflictSinkDispatches: (database.prepare(`
+        SELECT count(*) AS n FROM execution_dispatch_intents
+        WHERE plan_id = ? AND plan_revision = ? AND node_key = 'ConflictSink'
+      `).get(plan.planId, plan.current.revision) as { n: number }).n,
+      foreignKeys: database.pragma("foreign_key_check") as unknown[]
+    }));
+    assert.deepEqual(evidence, {
+      dispatches: 3,
+      leases: 3,
+      results: 3,
+      verifications: 3,
+      verified: 2,
+      integrated: 1,
+      integrations: [{ state: "succeeded", error_code: null }, {
+        state: "failed", error_code: "INTEGRATION_TARGET_MOVED"
+      }],
+      inputs: [{
+        input_slot: "a_patch",
+        gate: "integrated_commit",
+        adoption_matches: 1
+      }, {
+        input_slot: "b_patch",
+        gate: "verified_output",
+        adoption_matches: 1
+      }],
+      conflictSink: {
+        state: "blocked",
+        blocker_code: "EXECUTION_DEPENDENCY_NOT_MATERIALIZED"
+      },
+      conflictSinkDispatches: 0,
+      foreignKeys: []
+    });
   } catch (error) {
     const logs = processHistory.map((handle, index) => [
       `Process ${index + 1}: pid=${String(handle.process.pid)} ` +
