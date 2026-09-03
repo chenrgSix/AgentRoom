@@ -6,6 +6,9 @@ Code review/test pipelines belong to Execution, not Wave semantics. Focused
 selection now uses frozen policy and immutable per-Wave snapshots; later read-
 only quorum modes still require separate append-only supplemental evidence.
 Existing terminal Run events remain immutable. All-settled remains the default.
+The exact opt-in quorum and supplemental-evidence target is frozen in
+[`DISC-012`](../acceptance/disc-012-read-only-quorum-goal.md); the task remains
+ACTIVE until its implementation and physical acceptance evidence exist.
 
 ## Scope
 
@@ -102,6 +105,21 @@ Agent enablement are rechecked before a member Run starts, so the snapshot is
 an audit and recovery fact, not continuing execution authority. Existing
 Discussions migrate to `all_eligible` compatibility behavior.
 
+`DISC-012` adds no generic soft barrier. Its accepted target is a separate
+`read_only_quorum` completion mode available only when every participant is a
+current managed, supplemental-capable, enforceably read-only Agent. The soft
+deadline, minimum completed count and required roles are frozen in policy. A
+seal pins exact completed Turn/Run/reply/Message sequences and closes the Wave,
+progress projection and optional successor atomically; omitted Runs keep their
+real lifecycle and their Agents cannot be selected again while live.
+
+Late output remains an ordinary canonical Run fact, but a capable Bridge may
+reference it only through a separate operation offered in the frozen Delivery.
+The append-only supplemental record is audit evidence, not an amendment: later
+prompts and progress read only the seal's accepted Turn set. All-settled Waves,
+finalization Waves, coding execution and every Task/Result/proof authority stay
+outside this quorum mode.
+
 ## Domain Model
 
 | Entity | Required State |
@@ -109,6 +127,8 @@ Discussions migrate to `all_eligible` compatibility behavior.
 | Discussion | ID, Room, Task, root Message, goal, participants, policy, execution model, current Wave, state, reason, version |
 | DiscussionWave | ID, Discussion, ordinal, phase, frozen input Message, expected members, immutable selection snapshot/digest, deadline, state, version |
 | DiscussionTurn | ID, Wave, member ordinal, speaker, input Message, Run, output Message, terminal reason, assessment |
+| DiscussionWaveSeal | ID, Wave, policy threshold/deadline, required roles, ordered accepted Turn/Run/reply/Message sequence pins, digest |
+| DiscussionSupplementalEvidence | ID, offered operation, seal, original Device/Agent/Run/Turn, canonical late reply/Message sequence pins, digest |
 | ProgressSnapshot | version, goal coverage, open questions, decisions, evidence, disagreement, plateau count |
 | BudgetLedger | limits, lease, logical Wave usage, committed member-slot usage, extensions, finalization reserve |
 | OrchestrationDecision | action, reason, next Wave or finalizer, output mode, input projection version |
