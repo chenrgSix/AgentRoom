@@ -604,6 +604,37 @@ not weaken criteria or required verification, and does not broaden integration
 authority. Otherwise it waits for a human. Policy expiry/revocation stops new
 admission. No automatic revision changes existing accepted history.
 
+`EXEC-005` is frozen by the
+[Plan supersession goal](../acceptance/exec-005-plan-supersession-goal.md).
+An active Plan keeps its current approved revision while at most one immutable
+`current + 1` candidate waits for adoption. Initial supersession keeps the
+compiled Task set fixed: every claimed Task appears exactly once in the
+candidate as an existing Task. Activation atomically compiles that candidate,
+transfers current claims, retains the exact activation and selected carry facts,
+and advances Plan revision/control once without rewriting prior Runs or proof.
+
+Evidence carry-forward is always a new revision-local `EvidenceAdoption`, never
+a copied materialization or an inference from an `EvidenceReuseContract`.
+Admission rechecks the retained source/proof/adoption, current local authority
+and target policy, and compares only `nodeReuseContractDigest` plus
+`reuseInputEvidenceDigest`. Adoption-, execution- and operation-specific
+digests remain audit identities, not reuse equivalence. The first Core slice
+does not carry Optional Remote Evidence.
+
+One-shot Agent adoption requires a current exact Task Owner/Team Owner
+delegation and a deterministic no-broadening comparison. The Task set, node
+permissions, Agent/repository/grant/profile identity, slots, required checks and
+integration targets remain fixed; Plan/node budgets and concurrency may only
+narrow. Wider candidates wait for exact human adoption. Expiry, revocation,
+stale pins or a wrong Agent create no partial revision, claim, Run, adoption or
+delegation-consumption facts.
+
+Old-revision DispatchIntents, Runs, manifests, inputs and workspace leases stay
+immutable. They may finish as historical attempts, but cannot settle the new
+revision; a same-Task active or unacknowledged ambiguous attempt blocks new
+admission. A Task with retained adopted gates must carry every one explicitly
+or activation fails, so supersession cannot strand an already-accepted Task.
+
 ## User Experience
 
 The Plan surface shows the objective, proposal source, dependency graph,

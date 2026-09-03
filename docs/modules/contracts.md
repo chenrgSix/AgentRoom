@@ -119,6 +119,16 @@ string and SHA-256, not an executable command or copied Result acceptance.
 Its source identity/revision and closed envelope are cross-language contracts;
 the Server freezes and verifies the source under current Room authorization.
 
+`EXEC-005` adds closed supersession candidate, activation, carry selection and
+one-shot replan-delegation commands/receipts. Candidate proposal and activation
+are distinct wire facts: a structurally valid candidate grants no current Plan,
+Task claim, Run or evidence authority. Carry selections pin the exact source
+adoption and its two reusable semantic digests. Generated types do not permit a
+caller to substitute adoption-, execution- or operation-specific digests for
+`nodeReuseContractDigest` and `reuseInputEvidenceDigest`; the Server still
+recomputes both and rechecks current authority before retaining a new target
+adoption.
+
 Plan sets are sorted before digesting; arrays with order semantics remain
 ordered. `.` means the whole repository in an explicit output scope; other
 prefixes are normalized relative components without traversal, Git metadata or
