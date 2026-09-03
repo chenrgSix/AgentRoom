@@ -20,6 +20,7 @@ import { RunRepository, type RunRecord } from "../src/run/run-repository.js";
 import { AuthService, type WebPrincipal } from "../src/security/auth-service.js";
 import { MessageService } from "../src/team-room/message-service.js";
 import { TeamRoomService } from "../src/team-room/team-room-service.js";
+import { AgentTaskService } from "../src/task/agent-task-service.js";
 import { AgentTaskRepository } from "../src/task/task-repository.js";
 
 const now = "2026-08-23T10:00:00.000Z";
@@ -40,7 +41,8 @@ interface OrchestratorFixture {
 
 async function fixture(
   t: TestContext,
-  clock: { value: string } = { value: now }
+  clock: { value: string } = { value: now },
+  agentNames: string[] = ["Coder", "Reviewer"]
 ): Promise<OrchestratorFixture> {
   const resources = await createTestResources(t, "convene-wire-orchestrator-");
   const directory = resources.directory;
@@ -75,7 +77,7 @@ async function fixture(
     "Test Bridge",
     now
   );
-  const agentIds = ["Coder", "Reviewer"].map((name) => agents.publishAgent(principal, {
+  const agentIds = agentNames.map((name) => agents.publishAgent(principal, {
     teamId: created.team.teamId,
     deviceId: device.deviceId,
     name,
@@ -240,6 +242,282 @@ test("Room policy can disable new Agent Discussions", async (t) => {
   }
 });
 
+test("invalid focused and Reviewer policies roll back before Discussion creation", async (t) => {
+  const value = await fixture(t);
+  try {
+    assert.throws(() => value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Reject an invalid focused limit.",
+      participantAgentIds: value.agentIds,
+      policy: { focusedParticipantLimit: 1 }
+    }), /focusedParticipantLimit must be between 2 and 5/u);
+    assert.throws(() => value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Reject a missing Reviewer role.",
+      participantAgentIds: value.agentIds,
+      mode: "round_robin",
+      policy: { requireReviewer: true }
+    }), /requires review mode/u);
+    assert.throws(() => value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Reject an unknown selection mode.",
+      participantAgentIds: value.agentIds,
+      policy: { participantSelectionMode: "model_selected" as never }
+    }), /policy fields are invalid/u);
+    assert.equal(value.discussions.listForRoom(value.roomId).length, 0);
+    assert.equal(value.core.listMessagesAfter(value.roomId, 0, 100).length, 0);
+  } finally {
+    value.close();
+  }
+});
+
+test("a foreign-Team Agent cannot enter a Discussion selection", async (t) => {
+  const value = await fixture(t);
+  try {
+    const auth = new AuthService(value.database);
+    const teams = new TeamRoomService(value.core, auth);
+    const registry = new MemberDeviceService(value.core, auth);
+    const agents = new AgentService(value.core, auth);
+    const foreign = teams.createTeamForUser({
+      userId: value.principal.userId,
+      userDisplayName: "Alice",
+      teamName: "Foreign Team",
+      now
+    });
+    const device = registry.registerOwnDevice(
+      value.principal,
+      foreign.team.teamId,
+      "Foreign Bridge",
+      now
+    );
+    const foreignAgent = agents.publishAgent(value.principal, {
+      teamId: foreign.team.teamId,
+      deviceId: device.deviceId,
+      name: "Foreign Reviewer",
+      role: "Reviewer",
+      integrationMode: "fake",
+      capabilities: {
+        supportsHandoff: true,
+        supportsInterrupt: true,
+        supportsResume: false,
+        supportsStart: true,
+        supportsStreaming: true
+      },
+      now
+    });
+
+    assert.throws(() => value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Reject cross-Team participant authority.",
+      participantAgentIds: [value.agentIds[0]!, foreignAgent.agentId]
+    }), /Discussion participant is unavailable/u);
+    assert.equal(value.discussions.listForRoom(value.roomId).length, 0);
+  } finally {
+    value.close();
+  }
+});
+
+test("Room policy revocation prevents a new Wave without replacing frozen members", async (t) => {
+  const value = await fixture(t);
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Do not continue after Room authority is revoked.",
+      participantAgentIds: value.agentIds
+    });
+    value.core.replaceRoomSettings(
+      value.roomId,
+      value.core.getRoomParticipants(value.roomId),
+      {
+        allowDiscussion: false,
+        allowAll: true,
+        allowAgentMentions: true,
+        maxAgentMentionDepth: 4
+      },
+      value.core.getRoom(value.roomId)?.settingsRevision ?? 0,
+      now
+    );
+    for (const run of result.scheduledRuns) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: "This already-authorized member finished.",
+        assessment: { newInformationAdded: true, recommendation: "continue" }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+    assert.equal(result.discussion.state, "waiting_human");
+    assert.equal(result.discussion.stateReason, "runtime_failure");
+    assert.equal(result.waves.length, 1);
+    assert.deepEqual(result.scheduledRuns, []);
+  } finally {
+    value.close();
+  }
+});
+
+test("removed non-default Task assignments cannot enter the next Wave", async (t) => {
+  const value = await fixture(t);
+  try {
+    const taskService = new AgentTaskService(
+      new AgentTaskRepository(value.database),
+      value.core,
+      new AuthService(value.database)
+    );
+    const task = taskService.create(value.principal, {
+      roomId: value.roomId,
+      title: "Focused Task",
+      goal: "Keep current Task assignment authority.",
+      assignments: [
+        { agentId: value.agentIds[0]!, role: "primary" },
+        { agentId: value.agentIds[1]!, role: "reviewer" }
+      ]
+    }, now);
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      taskId: task.taskId,
+      goal: "Only current Task assignees may continue.",
+      participantAgentIds: value.agentIds,
+      mode: "review",
+      policy: { allowAutomaticFinish: false }
+    });
+    taskService.updateDefinition(value.principal, task.taskId, {
+      operationId: "op_remove_focus_assignment",
+      expectedTaskRevision: task.taskRevision,
+      title: task.title,
+      goal: task.goal,
+      ownerMemberId: task.ownerMemberId,
+      completionPolicy: task.completionPolicy,
+      priority: task.priority,
+      dueAt: task.dueAt,
+      criteria: task.criteria,
+      assignments: [{ agentId: value.agentIds[1]!, role: "reviewer" }],
+      budgetPolicy: task.budgetPolicy
+    }, now);
+    for (const [index, run] of result.scheduledRuns.entries()) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: `Committed member ${index} completed.`,
+        assessment: {
+          newInformationAdded: true,
+          recommendation: "continue",
+          ...(index === 0 ? {
+            openQuestions: [{
+              id: "question:coder",
+              question: "Should the Coder continue?",
+              importance: "high"
+            }]
+          } : {})
+        }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+    assert.equal(result.waves[1]?.expectedMembers, 1);
+    assert.deepEqual(
+      result.waves[1]?.selection?.selectedAgentIds,
+      [value.agentIds[1]]
+    );
+    assert.deepEqual(
+      result.scheduledRuns.map(({ targetAgentId }) => targetAgentId),
+      [value.agentIds[1]]
+    );
+  } finally {
+    value.close();
+  }
+});
+
+test("a closed Task prevents every new participant selection", async (t) => {
+  const value = await fixture(t);
+  try {
+    const taskService = new AgentTaskService(
+      new AgentTaskRepository(value.database),
+      value.core,
+      new AuthService(value.database)
+    );
+    const task = taskService.create(value.principal, {
+      roomId: value.roomId,
+      title: "Closing Task",
+      goal: "Stop discussion selection when the owning Task closes.",
+      assignments: value.agentIds.map((agentId, index) => ({
+        agentId,
+        role: index === 0 ? "primary" : "reviewer"
+      }))
+    }, now);
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      taskId: task.taskId,
+      goal: "Do not schedule beyond the Task authority lifetime.",
+      participantAgentIds: value.agentIds,
+      policy: { allowAutomaticFinish: false }
+    });
+    value.database.prepare(`
+      UPDATE agent_tasks
+      SET state = 'canceled', lifecycle_state = 'canceled', updated_at = ?
+      WHERE task_id = ?
+    `).run(now, task.taskId);
+
+    for (const run of result.scheduledRuns) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: "The already-committed Wave member completed.",
+        assessment: { newInformationAdded: true, recommendation: "continue" }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+
+    assert.equal(result.discussion.state, "waiting_human");
+    assert.equal(result.discussion.stateReason, "runtime_failure");
+    assert.equal(result.waves.length, 1);
+    assert.deepEqual(result.scheduledRuns, []);
+  } finally {
+    value.close();
+  }
+});
+
+test("required Reviewer loss fails closed at the next Wave boundary", async (t) => {
+  const value = await fixture(t, { value: now }, ["Coder", "Security", "Reviewer"]);
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Require an eligible Reviewer for every review Wave.",
+      participantAgentIds: value.agentIds,
+      mode: "review",
+      policy: { allowAutomaticFinish: false, focusedParticipantLimit: 2 }
+    });
+    const reviewerId = value.agentIds[2];
+    assert.ok(reviewerId);
+    const reviewer = value.core.getAgent(reviewerId);
+    assert.ok(reviewer);
+    value.core.updateAgentPublication({
+      ...reviewer,
+      enabled: false,
+      updatedAt: now
+    });
+
+    for (const run of result.scheduledRuns) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: "The frozen participant contributes before reselection.",
+        assessment: { newInformationAdded: true, recommendation: "continue" }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+
+    assert.equal(result.discussion.state, "waiting_human");
+    assert.equal(result.discussion.stateReason, "policy_violation");
+    assert.equal(result.waves.length, 1);
+    assert.deepEqual(result.scheduledRuns, []);
+  } finally {
+    value.close();
+  }
+});
+
 test("create fans one Wave out to every participant and advances only after its barrier", async (t) => {
   const value = await fixture(t);
   try {
@@ -345,7 +623,8 @@ test("Wave aggregation is invariant to participant callback order", async (t) =>
       let result = value.orchestrator.create(value.principal, {
         roomId: value.roomId,
         goal: "Collect stable recovery evidence.",
-        participantAgentIds: value.agentIds
+        participantAgentIds: value.agentIds,
+        policy: { participantSelectionMode: "all_eligible" }
       });
       const runs = result.scheduledRuns;
       assert.equal(runs.length, 2);
@@ -403,6 +682,165 @@ test("Wave aggregation is invariant to participant callback order", async (t) =>
   assert.equal(reverse.firstWave?.state, "completed");
   assert.deepEqual(forward.scheduledOrdinals, [0, 1]);
   assert.deepEqual(reverse.scheduledOrdinals, [0, 1]);
+});
+
+test("focused Waves persist question, role, Reviewer, and exact budget-slot selection", async (t) => {
+  const value = await fixture(
+    t,
+    { value: now },
+    ["Backend", "Security", "Documentation", "Reviewer"]
+  );
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Resolve the highest-risk security question.",
+      participantAgentIds: value.agentIds,
+      mode: "review",
+      policy: {
+        focusedParticipantLimit: 2,
+        allowAutomaticFinish: false
+      }
+    });
+    assert.equal(result.scheduledRuns.length, 4);
+    assert.equal(result.waves[0]?.selection?.strategy, "all_eligible");
+    const highQuestion = {
+      id: "question:security",
+      question: "Which security boundary protects the token exchange?",
+      importance: "high"
+    } as const;
+    for (const [index, run] of result.scheduledRuns.entries()) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: `Participant ${index} contributes.`,
+        assessment: {
+          newInformationAdded: true,
+          recommendation: "continue",
+          ...(index === 0 ? { openQuestions: [highQuestion] } : {})
+        }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+
+    const nextWave = result.waves[1];
+    assert.ok(nextWave?.selection);
+    assert.equal(nextWave.selection.strategy, "question_focused");
+    assert.deepEqual(nextWave.selection.focusQuestionIds, [highQuestion.id]);
+    assert.deepEqual(nextWave.selection.selectedAgentIds, [
+      value.agentIds[0],
+      value.agentIds[3]
+    ]);
+    assert.deepEqual(
+      result.scheduledRuns.map(({ targetAgentId }) => targetAgentId),
+      nextWave.selection.selectedAgentIds
+    );
+    assert.equal(nextWave.expectedMembers, 2);
+    assert.equal(result.discussion.budget.agentRunsUsed, 4);
+    assert.match(nextWave.selection.selectionDigest, /^[a-f0-9]{64}$/u);
+    for (const [index, run] of result.scheduledRuns.entries()) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: `Focused participant ${index} completes.`,
+        assessment: { newInformationAdded: true, recommendation: "continue" }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+    assert.equal(result.discussion.budget.agentRunsUsed, 6);
+    assert.deepEqual(
+      value.discussions.listBudgetEvents(result.discussion.discussionId)
+        .filter(({ eventType }) => eventType === "turn_recorded")
+        .map(({ metadata }) => metadata.agentRuns),
+      [4, 2]
+    );
+  } finally {
+    value.close();
+  }
+});
+
+test("reopened recovery binds only frozen focused members after roles change", async (t) => {
+  const value = await fixture(
+    t,
+    { value: now },
+    ["Backend", "Security", "Documentation", "Reviewer"]
+  );
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Freeze the selected members before restart.",
+      participantAgentIds: value.agentIds,
+      mode: "review",
+      policy: { focusedParticipantLimit: 2, allowAutomaticFinish: false }
+    });
+    for (const [index, run] of result.scheduledRuns.entries()) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: `Initial evidence ${index}.`,
+        assessment: {
+          newInformationAdded: true,
+          recommendation: "continue",
+          ...(index === 1 ? {
+            openQuestions: [{
+              id: "question:security",
+              question: "Which security control is required?",
+              importance: "high"
+            }]
+          } : {})
+        }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+    const wave = result.waves[1];
+    assert.ok(wave?.selection);
+    const selected = [...wave.selection.selectedAgentIds];
+    assert.deepEqual(selected, [value.agentIds[1], value.agentIds[3]]);
+    for (const turn of result.turns.filter(({ waveId }) => waveId === wave.waveId)) {
+      assert.ok(turn.runId);
+      value.database.prepare(`
+        UPDATE discussion_turns SET run_id = NULL, state = 'planned'
+        WHERE turn_id = ?
+      `).run(turn.turnId);
+      value.database.prepare("DELETE FROM runs WHERE run_id = ?").run(turn.runId);
+    }
+    value.database.prepare(`
+      UPDATE agents SET role = 'Security Specialist', updated_at = ?
+      WHERE agent_id = ?
+    `).run(now, value.agentIds[2]);
+
+    const restarted = value.restart();
+    const recovered = restarted.recover();
+    const reopened = restarted.get(value.principal, result.discussion.discussionId);
+    assert.deepEqual(recovered.map(({ targetAgentId }) => targetAgentId), selected);
+    assert.deepEqual(reopened.waves[1]?.selection, wave.selection);
+    assert.deepEqual(
+      reopened.turns.filter(({ waveId }) => waveId === wave.waveId)
+        .map(({ speakerAgentId }) => speakerAgentId),
+      selected
+    );
+    assert.deepEqual(
+      sortedRunIds(restarted.recover()),
+      sortedRunIds(recovered)
+    );
+    assert.throws(() => value.database.prepare(`
+      UPDATE discussion_waves
+      SET selection_json = json_set(selection_json, '$.strategy', 'all_eligible')
+      WHERE wave_id = ?
+    `).run(wave.waveId), /selection is immutable/u);
+    value.database.prepare(`
+      UPDATE discussion_turns SET speaker_agent_id = ?
+      WHERE wave_id = ? AND wave_member_ordinal = 0
+    `).run(value.agentIds[2], wave.waveId);
+    assert.throws(
+      () => restarted.recover(),
+      /selection snapshot is invalid/u
+    );
+  } finally {
+    value.close();
+  }
 });
 
 test("a partial Wave continues while an all-failed Wave waits for a human", async (t) => {
@@ -862,6 +1300,43 @@ test("a disabled participant is omitted from the next Wave", async (t) => {
     assert.equal(result.waves[1]?.expectedMembers, 1);
     assert.equal(result.scheduledRuns.length, 1);
     assert.equal(result.scheduledRuns[0]?.targetAgentId, value.agentIds[0]);
+  } finally {
+    value.close();
+  }
+});
+
+test("a participant removed from the Room is omitted from the next Wave", async (t) => {
+  const value = await fixture(t);
+  try {
+    let result = value.orchestrator.create(value.principal, {
+      roomId: value.roomId,
+      goal: "Do not dispatch future work outside the current Room roster.",
+      participantAgentIds: value.agentIds,
+      policy: { allowAutomaticFinish: false }
+    });
+    const participants = value.core.getRoomParticipants(value.roomId);
+    value.core.replaceRoomParticipants(value.roomId, {
+      memberIds: participants.memberIds,
+      agentIds: [value.agentIds[0]!]
+    }, now);
+
+    for (const run of result.scheduledRuns) {
+      completeRun({
+        core: value.core,
+        runs: value.runs,
+        run,
+        content: "The current Wave remains frozen after Room removal.",
+        assessment: { newInformationAdded: true, recommendation: "continue" }
+      });
+      result = requireTerminalResult(value.orchestrator.onRunTerminal(run.runId));
+    }
+
+    assert.equal(result.discussion.state, "active");
+    assert.deepEqual(result.waves[1]?.selection?.selectedAgentIds, [value.agentIds[0]]);
+    assert.deepEqual(
+      result.scheduledRuns.map(({ targetAgentId }) => targetAgentId),
+      [value.agentIds[0]]
+    );
   } finally {
     value.close();
   }

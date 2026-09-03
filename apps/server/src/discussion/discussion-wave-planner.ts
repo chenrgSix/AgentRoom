@@ -3,8 +3,11 @@ import type {
   DiscussionParticipant,
   DiscussionRecord,
   DiscussionTurn,
-  DiscussionWave
+  DiscussionWave,
+  DiscussionWaveSelection
 } from "./discussion-types.js";
+import { assertDiscussionWaveSelection } from
+  "./discussion-participant-selector.js";
 
 const finalizationDurationMilliseconds = 5 * 60 * 1000;
 
@@ -18,11 +21,16 @@ export function buildWavePlan(input: {
   participants: DiscussionParticipant[];
   inputMessageId: string;
   kind: DiscussionTurn["kind"];
+  selection: DiscussionWaveSelection;
   now: string;
 }): WavePlan {
   if (input.participants.length === 0) {
     throw new Error("Discussion Wave has no eligible participant");
   }
+  assertDiscussionWaveSelection(
+    input.selection,
+    input.participants.map(({ agentId }) => agentId)
+  );
   const waveId = createOpaqueId("wave");
   const waveOrdinal = (input.discussion.currentWave ?? 0) + 1;
   const deadlineAt = input.kind === "finalization"
@@ -43,7 +51,8 @@ export function buildWavePlan(input: {
     version: 1,
     createdAt: input.now,
     updatedAt: input.now,
-    closedAt: null
+    closedAt: null,
+    selection: input.selection
   };
   const turns: DiscussionTurn[] = input.participants.map(
     (participant, waveMemberOrdinal) => ({

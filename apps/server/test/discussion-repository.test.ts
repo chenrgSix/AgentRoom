@@ -8,6 +8,8 @@ import { CoreRepository } from "../src/data/core-repository.js";
 import { openDatabase } from "../src/data/database.js";
 import { migrateDatabase } from "../src/data/migration-runner.js";
 import { DiscussionRepository } from "../src/discussion/discussion-repository.js";
+import { createDiscussionWaveSelection } from
+  "../src/discussion/discussion-participant-selector.js";
 import {
   defaultDiscussionPolicy,
   emptyBudgetSnapshot,
@@ -32,6 +34,18 @@ const ids = {
   discussion: "discussion_01K4Z6J7Y8N9P0Q1R2S3T4V5W6"
 };
 const taskId = `task_default_${ids.room.slice(5)}`;
+
+function waveSelection(agentIds: string[]) {
+  return createDiscussionWaveSelection({
+    version: 1,
+    strategy: "all_eligible",
+    focusQuestionIds: [],
+    eligibleAgentIds: agentIds,
+    selectedAgentIds: agentIds,
+    requiredRoles: [],
+    focusedParticipantLimit: 3
+  });
+}
 
 function seed(core: CoreRepository): void {
   core.createUser({ userId: ids.user, displayName: "Alice", createdAt: now });
@@ -336,7 +350,8 @@ test("parallel Wave planning, settlement, and Barrier advancement are atomic", a
       version: 1,
       createdAt: now,
       updatedAt: now,
-      closedAt: null
+      closedAt: null,
+      selection: waveSelection([ids.agent1, ids.agent2])
     };
     const turns: DiscussionTurn[] = [ids.agent1, ids.agent2].map(
       (speakerAgentId, index) => ({

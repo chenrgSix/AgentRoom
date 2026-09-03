@@ -31,16 +31,16 @@ test("an empty database migrates from zero and reruns idempotently", async (t) =
   const first = await migrateDatabase(databasePath);
   assert.deepEqual(
     first.appliedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84]
   );
   assert.deepEqual(first.skippedVersions, []);
-  assert.equal(first.currentVersion, 83);
+  assert.equal(first.currentVersion, 84);
 
   const second = await migrateDatabase(databasePath);
   assert.deepEqual(second.appliedVersions, []);
   assert.deepEqual(
     second.skippedVersions,
-    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83]
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84]
   );
 
   const database = new Database(databasePath, { readonly: true });
@@ -161,7 +161,7 @@ test("an empty database migrates from zero and reruns idempotently", async (t) =
       .prepare("PRAGMA table_info(agents)")
       .all() as Array<{ name: string }>;
 
-    assert.equal(migrationCount.count, 83);
+    assert.equal(migrationCount.count, 84);
     assert.equal(metadataTable.count, 1);
     assert.equal(trustedInvitationTable.count, 1);
     assert.equal(memberRecoveryTable.count, 1);
@@ -321,25 +321,31 @@ test("Discussion Wave migration preserves legacy singleton Turns", async (t) => 
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83]
+    [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84]
   );
   const database = new Database(databasePath, { readonly: true });
   try {
     const discussion = database.prepare(`
-      SELECT execution_model, current_wave FROM discussions
+      SELECT execution_model, current_wave, policy_json FROM discussions
       WHERE discussion_id = 'discussion_legacy'
-    `).get() as { execution_model: string; current_wave: number };
+    `).get() as {
+      execution_model: string;
+      current_wave: number;
+      policy_json: string;
+    };
     const turn = database.prepare(`
       SELECT wave_id, wave_member_ordinal, state FROM discussion_turns
       WHERE turn_id = 'turn_legacy'
     `).get() as { wave_id: string; wave_member_ordinal: number; state: string };
     const wave = database.prepare(`
-      SELECT state, expected_members, input_message_id FROM discussion_waves
+      SELECT state, expected_members, input_message_id, selection_json
+      FROM discussion_waves
       WHERE wave_id = ?
     `).get(turn.wave_id) as {
       state: string;
       expected_members: number;
       input_message_id: string;
+      selection_json: string | null;
     };
     const roomParticipants = database.prepare(`
       SELECT
@@ -351,9 +357,25 @@ test("Discussion Wave migration preserves legacy singleton Turns", async (t) => 
     const roomPolicy = database.prepare(`
       SELECT collaboration_policy_json FROM rooms WHERE room_id = 'room_legacy'
     `).get() as { collaboration_policy_json: string };
-    assert.deepEqual(discussion, {
+    assert.deepEqual({
+      execution_model: discussion.execution_model,
+      current_wave: discussion.current_wave
+    }, {
       execution_model: "parallel_wave",
       current_wave: 1
+    });
+    assert.deepEqual(JSON.parse(discussion.policy_json), {
+      initialLeaseTurns: 4,
+      automaticMaxTurns: 12,
+      hardMaxTurns: 50,
+      maxDurationSeconds: 1200,
+      plateauWindow: 2,
+      minimumCompletionConfidence: 0.8,
+      finalizationReserveTurns: 1,
+      requireReviewer: false,
+      allowAutomaticFinish: true,
+      participantSelectionMode: "all_eligible",
+      focusedParticipantLimit: 5
     });
     assert.deepEqual(roomParticipants, { human_count: 1, agent_count: 1 });
     assert.deepEqual(JSON.parse(roomPolicy.collaboration_policy_json), {
@@ -367,10 +389,13 @@ test("Discussion Wave migration preserves legacy singleton Turns", async (t) => 
     assert.deepEqual(wave, {
       state: "open",
       expected_members: 1,
-      input_message_id: "msg_legacy"
+      input_message_id: "msg_legacy",
+      selection_json: null
     });
     const mapped = new DiscussionRepository(database).get("discussion_legacy");
     assert.equal(mapped?.policy.waveTimeoutSeconds, 300);
+    assert.equal(mapped?.policy.participantSelectionMode, "all_eligible");
+    assert.equal(mapped?.policy.focusedParticipantLimit, 5);
     assert.equal(mapped?.budget.agentRunsUsed, 1);
   } finally {
     database.close();
@@ -479,7 +504,7 @@ test("Runtime activity migration preserves pending reply routing intents", async
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83]
+    [23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84]
   );
   const database = openDatabase(databasePath);
   try {
@@ -594,7 +619,7 @@ test("Task work migration maps legacy state and replaces a terminal default", as
   const migrated = await migrateDatabase(databasePath);
   assert.deepEqual(
     migrated.appliedVersions,
-    [43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83]
+    [43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84]
   );
   const database = openDatabase(databasePath);
   try {

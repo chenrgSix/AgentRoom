@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { waveCloseState } from "../src/discussion/discussion-state.js";
+import { createDiscussionWaveSelection } from
+  "../src/discussion/discussion-participant-selector.js";
 import {
   buildWavePlan,
   selectFinalizer
@@ -35,12 +37,25 @@ const discussion = {
   policy: { ...defaultDiscussionPolicy, waveTimeoutSeconds: 600 }
 } as DiscussionRecord;
 
+function selection(agentIds: string[], strategy: "all_eligible" | "finalizer") {
+  return createDiscussionWaveSelection({
+    version: 1,
+    strategy,
+    focusQuestionIds: [],
+    eligibleAgentIds: participants.map(({ agentId }) => agentId),
+    selectedAgentIds: agentIds,
+    requiredRoles: strategy === "finalizer" ? ["reviewer"] : [],
+    focusedParticipantLimit: 3
+  });
+}
+
 test("Wave planner freezes participant order and bounded deadlines", () => {
   const plan = buildWavePlan({
     discussion,
     participants,
     inputMessageId: "msg_anchor1234",
     kind: "discussion",
+    selection: selection(participants.map(({ agentId }) => agentId), "all_eligible"),
     now
   });
 
@@ -76,6 +91,7 @@ test("finalization planning prefers a reviewer and owns a five-minute boundary",
     participants: [selectFinalizer(participants)],
     inputMessageId: "msg_anchor1234",
     kind: "finalization",
+    selection: selection([selectFinalizer(participants).agentId], "finalizer"),
     now
   });
 

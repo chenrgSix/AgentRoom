@@ -13,6 +13,12 @@ import {
 } from "./budget-ledger.js";
 import { DiscussionRepository } from "./discussion-repository.js";
 import {
+  assertDiscussionWaveSelection,
+  selectDiscussionParticipants,
+  type DiscussionParticipantCandidate,
+  type DiscussionParticipantSelection
+} from "./discussion-participant-selector.js";
+import {
   decideDiscussion,
   type DiscussionUserIntent,
   type PolicyDecision
@@ -40,7 +46,6 @@ import {
 } from "./discussion-state.js";
 import {
   buildWavePlan,
-  selectFinalizer,
   type WavePlan
 } from "./discussion-wave-planner.js";
 import {
@@ -83,9 +88,11 @@ function resolvePolicy(overrides?: Partial<DiscussionPolicy>): DiscussionPolicy 
   const policy = { ...defaultDiscussionPolicy, ...overrides };
   if (
     typeof policy.requireReviewer !== "boolean" ||
-    typeof policy.allowAutomaticFinish !== "boolean"
+    typeof policy.allowAutomaticFinish !== "boolean" ||
+    !new Set(["all_eligible", "question_focused"])
+      .has(policy.participantSelectionMode)
   ) {
-    throw new Error("Discussion boolean policy fields must be booleans");
+    throw new Error("Discussion policy fields are invalid");
   }
   requiredInteger(policy.initialLeaseTurns, "initialLeaseTurns", 1, 12);
   requiredInteger(policy.automaticMaxTurns, "automaticMaxTurns", 1, 30);
@@ -94,6 +101,12 @@ function resolvePolicy(overrides?: Partial<DiscussionPolicy>): DiscussionPolicy 
   requiredInteger(policy.waveTimeoutSeconds, "waveTimeoutSeconds", 30, 7_200);
   requiredInteger(policy.plateauWindow, "plateauWindow", 1, 6);
   requiredInteger(policy.finalizationReserveTurns, "finalizationReserveTurns", 1, 3);
+  requiredInteger(
+    policy.focusedParticipantLimit,
+    "focusedParticipantLimit",
+    2,
+    maximumParticipants
+  );
   if (
     policy.initialLeaseTurns > policy.automaticMaxTurns ||
     policy.automaticMaxTurns >= policy.hardMaxTurns ||
@@ -179,7 +192,8 @@ export class DiscussionOrchestrator {
       : this.tasks.getDefaultForRoom(input.roomId);
     if (
       !task || task.roomId !== input.roomId ||
-      task.state === "completed" || task.state === "canceled"
+      task.state === "completed" || task.state === "canceled" ||
+      task.lifecycleState === "completed" || task.lifecycleState === "canceled"
     ) {
       throw new Error("Discussion Task must be runnable in the target Room");
     }
@@ -214,6 +228,9 @@ export class DiscussionOrchestrator {
     const outputMode = input.outputMode ?? "final_answer";
     if (mode !== "round_robin" && mode !== "review") {
       throw new Error("Discussion mode must be round_robin or review");
+    }
+    if (policy.requireReviewer && mode !== "review") {
+      throw new Error("Reviewer-required Discussion policy requires review mode");
     }
     if (!new Set([
       "none", "summary", "final_answer", "artifact", "decision_record",
@@ -658,6 +675,14 @@ export class DiscussionOrchestrator {
         this.repository.listParticipants(discussionId)
       ).map(({ agentId }) => agentId)
     );
+    for (const wave of this.repository.listWaves(discussionId)) {
+      if (wave.state !== "open" || wave.selection === null) continue;
+      assertDiscussionWaveSelection(
+        wave.selection,
+        this.repository.listTurnsForWave(wave.waveId)
+          .map(({ speakerAgentId }) => speakerAgentId)
+      );
+    }
     const affectedWaves = new Set<string>();
     for (const turn of this.repository.listTurns(discussionId)) {
       if (turn.state !== "planned" || eligibleAgentIds.has(turn.speakerAgentId)) {
@@ -781,6 +806,17 @@ export class DiscussionOrchestrator {
         grantAutomaticLease: false
       };
     } else if (
+      decision.action === "continue" &&
+      !this.requiredParticipantRolesAvailable(discussion, eligibleParticipants)
+    ) {
+      decision = {
+        action: "wait_human",
+        state: "waiting_human",
+        reason: "policy_violation",
+        outputMode: "none",
+        grantAutomaticLease: false
+      };
+    } else if (
       eligibleParticipants.length === 0 && decision.action === "finalize"
     ) {
       this.evidence.appendFallbackConclusion(discussion, nextInputMessageId);
@@ -812,22 +848,32 @@ export class DiscussionOrchestrator {
     const now = this.clock();
     let nextWave: WavePlan | undefined;
     if (decision.action === "continue") {
+      const selection = this.selectParticipants(
+        { ...discussion, progress: evaluation.snapshot, budget },
+        eligibleParticipants
+      );
       nextWave = buildWavePlan({
         discussion,
-        participants: eligibleParticipants,
+        participants: selection.participants,
         inputMessageId: nextInputMessageId,
         kind: "discussion",
+        selection: selection.snapshot,
         now
       });
     } else if (
       decision.action === "finalize" && eligibleParticipants.length > 0
     ) {
-      const finalizer = selectFinalizer(eligibleParticipants);
+      const selection = this.selectParticipants(
+        { ...discussion, progress: evaluation.snapshot, budget },
+        eligibleParticipants,
+        true
+      );
       nextWave = buildWavePlan({
         discussion,
-        participants: [finalizer],
+        participants: selection.participants,
         inputMessageId: nextInputMessageId,
         kind: "finalization",
+        selection: selection.snapshot,
         now
       });
       budget = { ...budget, agentRunsUsed: budget.agentRunsUsed + 1 };
@@ -900,6 +946,22 @@ export class DiscussionOrchestrator {
       );
       return [];
     }
+    if (!this.requiredParticipantRolesAvailable(discussion, participants)) {
+      const decision: PolicyDecision = {
+        action: "wait_human",
+        state: "waiting_human",
+        reason: "policy_violation",
+        outputMode: "none",
+        grantAutomaticLease: false
+      };
+      this.persistDecision(
+        discussion,
+        decision,
+        budgetEvent ? [budgetEvent] : [],
+        null
+      );
+      return [];
+    }
     this.persistWavePlan({
       discussion,
       participants,
@@ -948,7 +1010,6 @@ export class DiscussionOrchestrator {
       );
       return [];
     }
-    const finalizer = selectFinalizer(participants);
     const budget = {
       ...discussion.budget,
       agentRunsUsed: discussion.budget.agentRunsUsed + 1
@@ -960,7 +1021,7 @@ export class DiscussionOrchestrator {
     }, usageEvents.length);
     this.persistWavePlan({
       discussion,
-      participants: [finalizer],
+      participants,
       inputMessageId: this.evidence.latestOutputMessageId(discussion),
       kind: "finalization",
       decision,
@@ -982,17 +1043,23 @@ export class DiscussionOrchestrator {
     budgetEvents: DiscussionBudgetEvent[];
   }): WavePlan {
     const now = this.clock();
-    const inputMessageId = this.evidence.uniqueWaveAnchor(
+    const selection = this.selectParticipants(
       input.discussion,
       input.participants,
+      input.kind === "finalization"
+    );
+    const inputMessageId = this.evidence.uniqueWaveAnchor(
+      input.discussion,
+      selection.participants,
       input.inputMessageId,
       now
     );
     const plan = buildWavePlan({
       discussion: input.discussion,
-      participants: input.participants,
+      participants: selection.participants,
       inputMessageId,
       kind: input.kind,
+      selection: selection.snapshot,
       now
     });
     this.repository.recordDecisionAndPlanWave({
@@ -1000,7 +1067,9 @@ export class DiscussionOrchestrator {
         input.discussion,
         input.decision,
         input.progress,
-        input.kind === "finalization" ? input.participants[0]?.agentId ?? null : null,
+        input.kind === "finalization"
+          ? plan.turns[0]?.speakerAgentId ?? null
+          : null,
         now
       ),
       wave: plan.wave,
@@ -1161,15 +1230,70 @@ export class DiscussionOrchestrator {
     participants: DiscussionParticipant[]
   ): DiscussionParticipant[] {
     const room = this.core.getRoom(discussion.roomId);
-    if (!room) return [];
+    const task = this.tasks.get(discussion.taskId);
+    if (
+      !room || !room.collaborationPolicy.allowDiscussion ||
+      !task || task.roomId !== discussion.roomId ||
+      task.state === "completed" || task.state === "canceled" ||
+      task.lifecycleState === "completed" || task.lifecycleState === "canceled"
+    ) return [];
     return participants.filter(({ agentId }) => {
       const agent = this.core.getAgent(agentId);
       return Boolean(
         agent?.enabled &&
         agent.teamId === room.teamId &&
-        this.core.isRoomAgent(room.roomId, agentId)
+        this.core.isRoomAgent(room.roomId, agentId) &&
+        (task.isDefault || task.assignments.some((assignment) =>
+          assignment.agentId === agentId
+        ))
       );
     });
+  }
+
+  private selectParticipants(
+    discussion: DiscussionRecord,
+    participants: DiscussionParticipant[],
+    finalization = false
+  ): DiscussionParticipantSelection {
+    const eligible = this.eligibleParticipants(discussion, participants);
+    const task = this.tasks.get(discussion.taskId);
+    const reports = new Map<string, Set<string>>();
+    for (const turn of this.repository.listTurns(discussion.discussionId)) {
+      if (turn.state !== "completed") continue;
+      for (const question of turn.assessment?.openQuestions ?? []) {
+        const reporters = reports.get(turn.speakerAgentId) ?? new Set<string>();
+        reporters.add(question.id);
+        reports.set(turn.speakerAgentId, reporters);
+      }
+    }
+    const candidates = eligible.flatMap((participant) => {
+      const agent = this.core.getAgent(participant.agentId);
+      if (!agent) return [];
+      const candidate: DiscussionParticipantCandidate = {
+        participant,
+        agentRole: agent.role,
+        taskRole: task?.assignments.find(({ agentId }) =>
+          agentId === participant.agentId
+        )?.role ?? null,
+        reportedQuestionIds: [...(reports.get(participant.agentId) ?? [])]
+          .sort((left, right) => left.localeCompare(right, "en-US"))
+      };
+      return [candidate];
+    });
+    return selectDiscussionParticipants({
+      discussion,
+      candidates,
+      ...(finalization ? { finalization: true } : {})
+    });
+  }
+
+  private requiredParticipantRolesAvailable(
+    discussion: DiscussionRecord,
+    participants: DiscussionParticipant[]
+  ): boolean {
+    return (
+      discussion.mode !== "review" && !discussion.policy.requireReviewer
+    ) || participants.some(({ role }) => role === "reviewer");
   }
 
   private refreshElapsedBudget(

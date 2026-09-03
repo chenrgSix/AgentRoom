@@ -334,11 +334,33 @@ test("local Web API bootstraps a user and manages authorized Teams and Rooms", a
     });
     assert.equal(startDiscussion.statusCode, 200);
     const discussion = startDiscussion.json() as {
-      discussion: { discussionId: string; state: string; stateReason: string };
+      discussion: {
+        discussionId: string;
+        state: string;
+        stateReason: string;
+        policy: {
+          participantSelectionMode: string;
+          focusedParticipantLimit: number;
+        };
+      };
       turns: Array<{ kind: string; state: string }>;
+      waves: Array<{
+        selection: {
+          selectedAgentIds: string[];
+          selectionDigest: string;
+        } | null;
+      }>;
     };
     assert.equal(discussion.discussion.state, "completed");
     assert.equal(discussion.discussion.stateReason, "discussion_plateau");
+    assert.equal(
+      discussion.discussion.policy.participantSelectionMode,
+      "question_focused"
+    );
+    assert.equal(discussion.discussion.policy.focusedParticipantLimit, 3);
+    assert.ok(discussion.waves.every(({ selection }) =>
+      selection !== null && /^[a-f0-9]{64}$/u.test(selection.selectionDigest)
+    ));
     assert.equal(discussion.turns.at(-1)?.kind, "finalization");
     assert.ok(discussion.turns.every(({ state }) => state === "completed"));
     const listDiscussions = await app.inject({

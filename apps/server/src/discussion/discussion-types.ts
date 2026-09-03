@@ -52,7 +52,13 @@ export interface DiscussionPolicy {
   finalizationReserveTurns: number;
   requireReviewer: boolean;
   allowAutomaticFinish: boolean;
+  participantSelectionMode: DiscussionParticipantSelectionMode;
+  focusedParticipantLimit: number;
 }
+
+export type DiscussionParticipantSelectionMode =
+  | "all_eligible"
+  | "question_focused";
 
 export interface OpenQuestion {
   id: string;
@@ -172,6 +178,18 @@ export interface DiscussionWave {
   createdAt: string;
   updatedAt: string;
   closedAt: string | null;
+  selection: DiscussionWaveSelection | null;
+}
+
+export interface DiscussionWaveSelection {
+  version: 1;
+  strategy: "all_eligible" | "question_focused" | "finalizer";
+  focusQuestionIds: string[];
+  eligibleAgentIds: string[];
+  selectedAgentIds: string[];
+  requiredRoles: Array<"reviewer">;
+  focusedParticipantLimit: number;
+  selectionDigest: string;
 }
 
 export interface DiscussionDecision {
@@ -213,7 +231,9 @@ export const defaultDiscussionPolicy: DiscussionPolicy = {
   minimumCompletionConfidence: 0.8,
   finalizationReserveTurns: 1,
   requireReviewer: false,
-  allowAutomaticFinish: true
+  allowAutomaticFinish: true,
+  participantSelectionMode: "question_focused",
+  focusedParticipantLimit: 3
 };
 
 export const emptyProgressSnapshot = (): ProgressSnapshot => ({

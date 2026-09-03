@@ -1,5 +1,7 @@
 import type Database from "better-sqlite3";
 import { SqliteTransactionBoundary } from "../data/sqlite-transaction-boundary.js";
+import { assertDiscussionWaveSelection } from
+  "./discussion-participant-selector.js";
 
 import {
   defaultDiscussionPolicy,
@@ -15,6 +17,7 @@ import {
   type DiscussionStateReason,
   type DiscussionTurn,
   type DiscussionWave,
+  type DiscussionWaveSelection,
   type DiscussionWaveState,
   type ProgressSnapshot
 } from "./discussion-types.js";
@@ -85,6 +88,7 @@ interface WaveRow {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  selection_json: string | null;
 }
 
 interface DecisionRow {
@@ -184,7 +188,10 @@ function mapWave(row: WaveRow): DiscussionWave {
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
-    closedAt: row.closed_at
+    closedAt: row.closed_at,
+    selection: row.selection_json
+      ? JSON.parse(row.selection_json) as DiscussionWaveSelection
+      : null
   };
 }
 
@@ -1031,13 +1038,16 @@ export class DiscussionRepository {
       INSERT INTO discussion_waves (
         wave_id, discussion_id, ordinal, phase, input_message_id, state,
         deadline_at, expected_members, version, created_at, updated_at,
-        closed_at
+        closed_at, selection_json
       ) VALUES (
         @waveId, @discussionId, @ordinal, @phase, @inputMessageId, @state,
         @deadlineAt, @expectedMembers, @version, @createdAt, @updatedAt,
-        @closedAt
+        @closedAt, @selectionJson
       )
-    `).run(wave);
+    `).run({
+      ...wave,
+      selectionJson: wave.selection ? JSON.stringify(wave.selection) : null
+    });
   }
 
   private insertTurn(turn: DiscussionTurn): void {
@@ -1065,10 +1075,44 @@ export class DiscussionRepository {
   private validateWavePlan(wave: DiscussionWave, turns: DiscussionTurn[]): void {
     if (
       wave.state !== "open" || wave.closedAt !== null ||
+      wave.selection === null ||
       !Number.isSafeInteger(wave.expectedMembers) ||
       wave.expectedMembers !== turns.length || turns.length === 0
     ) {
       throw new Error("Discussion Wave member count is inconsistent");
+    }
+    const selectedAgentIds = [...turns]
+      .sort((left, right) =>
+        (left.waveMemberOrdinal ?? -1) - (right.waveMemberOrdinal ?? -1)
+      )
+      .map(({ speakerAgentId }) => speakerAgentId);
+    assertDiscussionWaveSelection(wave.selection, selectedAgentIds);
+    if (
+      (wave.phase === "finalization") !==
+        (wave.selection.strategy === "finalizer")
+    ) {
+      throw new Error("Discussion Wave selection strategy does not match its phase");
+    }
+    const participantAgentIds = new Set(
+      this.listParticipants(wave.discussionId).map(({ agentId }) => agentId)
+    );
+    if (wave.selection.eligibleAgentIds.some((agentId) =>
+      !participantAgentIds.has(agentId)
+    )) {
+      throw new Error("Discussion Wave selection contains a foreign participant");
+    }
+    if (wave.selection.requiredRoles.includes("reviewer")) {
+      const reviewer = this.listParticipants(wave.discussionId)
+        .find(({ role }) => role === "reviewer");
+      if (!reviewer || !selectedAgentIds.includes(reviewer.agentId)) {
+        throw new Error("Discussion Wave selection omits its required reviewer");
+      }
+    }
+    if (
+      JSON.stringify(wave.selection.selectedAgentIds) !==
+        JSON.stringify(selectedAgentIds)
+    ) {
+      throw new Error("Discussion Wave selection does not match member Turns");
     }
     const memberOrdinals = new Set<number>();
     const agents = new Set<string>();
