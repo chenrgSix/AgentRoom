@@ -30,7 +30,8 @@ export function assertExecutionCommand(
     "revisionCommand" |
     "approvalCommand" | "supersessionCandidateCommand" |
     "supersessionCandidateRecord" | "supersessionActivationCommand" |
-    "supersessionActivationReceipt" | "replanDelegationIssueCommand" |
+    "supersessionActivationReceipt" | "supersessionControlView" |
+    "replanDelegationIssueCommand" |
     "replanDelegationRecord" | "replanDelegationRevokeCommand" |
     "replanDelegationRevocationRecord" |
     "agentSupersessionCandidateCommand" |

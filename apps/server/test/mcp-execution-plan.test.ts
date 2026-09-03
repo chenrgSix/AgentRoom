@@ -447,6 +447,27 @@ test("assigned Tech Lead consumes one bounded replan delegation", async (t) => {
     }
   );
   assert.equal(currentDelegation.revision, 4);
+  const controlBefore = await value.ok(
+    "GET", `/api/execution-plans/${approved.planId}/supersession-control`
+  );
+  assert.equal(controlBefore.candidate.candidateId, candidate.candidateId);
+  assert.deepEqual(controlBefore.activationTemplate, {
+    expectedCurrentRevision: activationCommand.expectedCurrentRevision,
+    expectedCurrentDigest: activationCommand.expectedCurrentDigest,
+    expectedControlRevision: activationCommand.expectedControlRevision,
+    expectedRootTaskRevision: activationCommand.expectedRootTaskRevision,
+    candidateId: activationCommand.candidateId,
+    expectedCandidateRevision: activationCommand.expectedCandidateRevision,
+    expectedCandidateDigest: activationCommand.expectedCandidateDigest,
+    carryForward: []
+  });
+  assert.equal(controlBefore.activationBlockerCode, null);
+  assert.deepEqual(
+    controlBefore.delegations.map(({ delegation, state }: any) => [
+      delegation.revision, state
+    ]),
+    [[1, "superseded"], [2, "revoked"], [3, "expired"], [4, "active"]]
+  );
   const activation = await value.call("team.activate_plan_supersession", {
     runId,
     planId: approved.planId,
@@ -471,6 +492,17 @@ test("assigned Tech Lead consumes one bounded replan delegation", async (t) => {
   assert.equal(current.revoked, false);
   assert.equal(withdrawn.consumed, false);
   assert.equal(withdrawn.revoked, true);
+  const controlAfter = await value.ok(
+    "GET", `/api/execution-plans/${approved.planId}/supersession-control`
+  );
+  assert.equal(controlAfter.currentRevision, 2);
+  assert.equal(controlAfter.candidate, null);
+  assert.equal(controlAfter.activationTemplate, null);
+  assert.equal(
+    controlAfter.delegations.find(({ delegation }: any) =>
+      delegation.delegationId === currentDelegation.delegationId).state,
+    "consumed"
+  );
   const replay = await value.call("team.activate_plan_supersession", {
     runId,
     planId: approved.planId,

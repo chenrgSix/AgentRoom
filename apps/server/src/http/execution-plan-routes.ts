@@ -209,6 +209,13 @@ export function registerExecutionPlanRoutes({
       principal(request), request.params.planId
     ))
   );
+  app.get<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/supersession-control",
+    options,
+    async (request) => execute(() => executionPlanSupersessions.control(
+      principal(request), request.params.planId, clock()
+    ))
+  );
   app.post<{ Params: { planId: string } }>(
     "/api/execution-plans/:planId/supersession-candidates",
     options,

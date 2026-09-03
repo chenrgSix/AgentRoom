@@ -8,6 +8,7 @@ import type {
   ExecutionPlanSupersessionActivationReceipt,
   ExecutionPlanSupersessionCandidate,
   ExecutionPlanSupersessionCandidateCommand,
+  ExecutionPlanSupersessionControlView,
   ExecutionReplanDelegation,
   ExecutionReplanDelegationIssueCommand,
   ExecutionReplanDelegationRevokeCommand,
@@ -87,6 +88,56 @@ export class ExecutionPlanSupersessionService {
   ): ExecutionPlanSupersessionCandidate | null {
     const plan = this.requirePlan(principal, planId);
     return this.plans.supersessionCandidate(plan.planId) ?? null;
+  }
+
+  public control(
+    principal: WebPrincipal,
+    planId: string,
+    now: string
+  ): ExecutionPlanSupersessionControlView {
+    const plan = this.requirePlan(principal, planId);
+    this.requireOwner(principal, plan);
+    const root = this.requireRoot(plan);
+    const candidate = this.plans.supersessionCandidate(plan.planId) ?? null;
+    let activationTemplate: ExecutionPlanSupersessionControlView["activationTemplate"] =
+      null;
+    let activationBlockerCode: string | null = null;
+    if (candidate) {
+      try {
+        activationTemplate = this.activationTemplate(
+          plan,
+          root,
+          candidate,
+          now
+        );
+      } catch (error) {
+        if (!(error instanceof ExecutionError)) throw error;
+        activationBlockerCode = error.code;
+      }
+    }
+    const delegations = this.supersessions.listDelegations(plan.planId)
+      .sort((left, right) =>
+        binary(left.agentId, right.agentId) ||
+        left.revision - right.revision ||
+        binary(left.delegationId, right.delegationId)
+      )
+      .map((delegation) => ({
+        delegation,
+        state: this.delegationState(delegation, plan, root, now)
+      }));
+    const view = {
+      planId: plan.planId,
+      currentRevision: plan.current.revision,
+      currentDigest: plan.current.digest,
+      controlRevision: plan.controlRevision,
+      rootTaskRevision: root.taskRevision,
+      candidate,
+      activationTemplate,
+      activationBlockerCode,
+      delegations
+    } as ExecutionPlanSupersessionControlView;
+    assertExecutionCommand("supersessionControlView", view);
+    return view;
   }
 
   public propose(
@@ -609,6 +660,91 @@ export class ExecutionPlanSupersessionService {
       topology.indexOf(left.node.nodeKey) - topology.indexOf(right.node.nodeKey) ||
       binary(left.selection.gate, right.selection.gate)
     );
+  }
+
+  private activationTemplate(
+    plan: ExecutionPlanProjection,
+    root: AgentTaskRecord,
+    candidate: ExecutionPlanSupersessionCandidate,
+    now: string
+  ): NonNullable<ExecutionPlanSupersessionControlView["activationTemplate"]> {
+    if (candidate.baseRevision !== plan.current.revision ||
+      candidate.baseDigest !== plan.current.digest ||
+      candidate.baseControlRevision !== plan.controlRevision ||
+      candidate.rootTaskRevision !== root.taskRevision ||
+      candidate.candidateRevision !== plan.current.revision + 1) {
+      throw new ExecutionError("EXECUTION_SUPERSESSION_CANDIDATE_CONFLICT", 409);
+    }
+    const definition = validateExecutionPlanDefinition(
+      candidate.definition as ExecutionPlanDefinition
+    ).definition;
+    const compiled = this.compileFixedTaskSet(plan, definition);
+    const adopted = this.database.prepare(`
+      SELECT adoption_id, adoption_digest, gate, node_key, source_task_id
+      FROM execution_all_adopted_node_materializations
+      WHERE plan_id = ? AND plan_revision = ?
+      ORDER BY node_key COLLATE BINARY, gate COLLATE BINARY
+    `).all(plan.planId, plan.current.revision) as AdoptedRow[];
+    const topology = validateExecutionPlanDefinition(definition).topologicalOrder;
+    const carryForward = adopted.map((row) => {
+      const source = this.carry.source(row.adoption_id);
+      const target = compiled.find(({ task }) =>
+        task.taskId === row.source_task_id
+      );
+      if (!source || !target ||
+        source.adoption.planId !== plan.planId ||
+        source.adoption.planRevision !== plan.current.revision ||
+        source.adoption.adoptionDigest !== row.adoption_digest ||
+        source.adoption.gate !== row.gate ||
+        source.adoption.authority.service === "remote_evidence_adoption") {
+        throw new ExecutionError("EXECUTION_CARRY_LOCAL_AUTHORITY_REQUIRED", 409);
+      }
+      this.requireCurrentLocalAuthority(
+        plan,
+        target.node,
+        source.adoption.adoptionId,
+        now
+      );
+      return {
+        targetNodeKey: target.node.nodeKey,
+        gate: row.gate,
+        sourceAdoptionId: source.adoption.adoptionId,
+        sourceAdoptionDigest: source.adoption.adoptionDigest,
+        sourceReuseContractId: source.reuse.reuseContractId,
+        sourceNodeReuseContractDigest: source.reuse.nodeReuseContractDigest,
+        sourceReuseInputEvidenceDigest: source.reuse.reuseInputEvidenceDigest
+      };
+    }).sort((left, right) =>
+      topology.indexOf(left.targetNodeKey) - topology.indexOf(right.targetNodeKey) ||
+      binary(left.gate, right.gate)
+    );
+    return {
+      expectedCurrentRevision: plan.current.revision,
+      expectedCurrentDigest: plan.current.digest,
+      expectedControlRevision: plan.controlRevision,
+      expectedRootTaskRevision: root.taskRevision,
+      candidateId: candidate.candidateId,
+      expectedCandidateRevision: candidate.candidateRevision,
+      expectedCandidateDigest: candidate.candidateDigest,
+      carryForward
+    };
+  }
+
+  private delegationState(
+    delegation: ExecutionReplanDelegation,
+    plan: ExecutionPlanProjection,
+    root: AgentTaskRecord,
+    now: string
+  ): ExecutionPlanSupersessionControlView["delegations"][number]["state"] {
+    if (this.supersessions.isRevoked(delegation.delegationId)) return "revoked";
+    if (this.supersessions.isConsumed(delegation.delegationId)) return "consumed";
+    if (Date.parse(delegation.expiresAt) <= Date.parse(now)) return "expired";
+    if (!this.supersessions.isCurrentDelegation(delegation)) return "superseded";
+    if (delegation.planRevision !== plan.current.revision ||
+      delegation.planDigest !== plan.current.digest ||
+      delegation.planControlRevision !== plan.controlRevision ||
+      delegation.rootTaskRevision !== root.taskRevision) return "stale";
+    return "active";
   }
 
   private compileFixedTaskSet(

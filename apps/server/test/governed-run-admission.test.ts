@@ -3977,6 +3977,16 @@ test("plan supersession carries exact local evidence by semantic reuse digests",
     }],
     reason: "Adopt the exact retained Build proof into revision two."
   };
+  const control = await f.ok(
+    "GET", `/api/execution-plans/${current.planId}/supersession-control`
+  );
+  const { operationId: _operationId, reason: _reason, ...expectedTemplate } =
+    command;
+  assert.deepEqual(control.activationTemplate, expectedTemplate,
+    "the browser receives the complete Server-owned carry selection");
+  assert.equal(control.activationBlockerCode, null);
+  assert.equal(control.delegations.find(({ delegation: row }: any) =>
+    row.delegationId === delegation.delegationId).state, "active");
   const omitted = await callMcp(
     f.app,
     f.techLead.credential.token,

@@ -94,6 +94,18 @@ function activation(
 test("supersession candidate is inert until one atomic human activation", async (t) => {
   const f = await fixture(t);
   const plan = await approve(f);
+  const emptyControl = await f.ok(
+    "GET",
+    `/api/execution-plans/${plan.planId}/supersession-control`
+  );
+  assert.equal(emptyControl.planId, plan.planId);
+  assert.equal(emptyControl.currentRevision, plan.current.revision);
+  assert.equal(emptyControl.currentDigest, plan.current.digest);
+  assert.equal(emptyControl.controlRevision, plan.controlRevision);
+  assert.equal(emptyControl.candidate, null);
+  assert.equal(emptyControl.activationTemplate, null);
+  assert.equal(emptyControl.activationBlockerCode, null);
+  assert.deepEqual(emptyControl.delegations, []);
   const definition = await existingTaskDefinition(f, plan);
   const candidate = await propose(f, plan, definition);
 
@@ -104,6 +116,27 @@ test("supersession candidate is inert until one atomic human activation", async 
     await f.ok("GET", `/api/execution-plans/${plan.planId}/supersession-candidate`),
     candidate
   );
+  const control = await f.ok(
+    "GET",
+    `/api/execution-plans/${plan.planId}/supersession-control`
+  );
+  const rootBeforeActivation = await f.ok(
+    "GET",
+    `/api/tasks/${plan.rootTaskId}`
+  );
+  const { operationId: _operationId, reason: _reason, ...expectedTemplate } =
+    activation(plan, candidate, rootBeforeActivation.taskRevision);
+  assert.deepEqual(control.candidate, candidate);
+  assert.deepEqual(control.activationTemplate, expectedTemplate);
+  assert.equal(control.activationBlockerCode, null);
+  const participant = await f.participant();
+  const denied = await f.request(
+    "GET",
+    `/api/execution-plans/${plan.planId}/supersession-control`,
+    undefined,
+    participant.authorization
+  );
+  assert.equal(denied.statusCode, 403);
   assert.deepEqual(
     f.database.prepare(`
       SELECT DISTINCT revision FROM execution_plan_task_claims
