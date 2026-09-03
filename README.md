@@ -25,6 +25,8 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
   [convenewire_network_design_v0.2.md](convenewire_network_design_v0.2.md)
 - Stable release:
   [ConveneWire v0.4.2](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2)
+- Current prerelease:
+  [ConveneWire v0.5.0-rc.3](https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.3)
 - Historical baseline:
   [agent_room_network_design_v0.1.md](agent_room_network_design_v0.1.md)
 - Contributor rules: [CONTRIBUTING.md](CONTRIBUTING.md)
@@ -36,26 +38,22 @@ while the headless Go Bridge can wake configured Codex or Generic CLI runtimes.
 - Security and clean-room audit:
   [docs/acceptance/qa-005-security-clean-room-audit.md](docs/acceptance/qa-005-security-clean-room-audit.md)
 
-Current source includes Central HTTP Agents and the
+Stable v0.4.2 includes Central HTTP Agents and the
 [product experience iteration](docs/acceptance/qa-040-product-experience.md).
-These capabilities are included in the v0.4.2 stable packages. Read the
-[upgrade and verification notes](docs/releases/v0.4.2.md) and back up Central
-before upgrading. Website publication is not an application Release.
-
-Current unreleased source also includes
-[client owner collaboration entry](docs/adr/0035-connect-client-owners-to-team-collaboration.md).
-Use an updated Central, Web and Bridge together; v0.4.2 packages do not include
-this flow.
-
-The unreleased governed software-team execution route has completed its
-bounded-autonomy product acceptance and
-[final Core audit](docs/acceptance/qa-055-final-core-audit-goal.md). This source
-status is not a packaged Release claim.
+The v0.5.0-rc.3 prerelease additionally packages
+[client owner collaboration entry](docs/adr/0035-connect-client-owners-to-team-collaboration.md)
+and the completed governed software-team execution route through its
+[final Core audit](docs/acceptance/qa-055-final-core-audit-goal.md). Install
+Central, Web and Bridge from the same release. Before evaluating the RC, read
+its [upgrade and verification notes](docs/releases/v0.5.0-rc.3.md), take a
+verified Central backup and retain the v0.4.2 packages and secrets. Website
+publication is not an application Release.
 
 ## Repository Ownership
 
-Your repository stays on the client machine and remains under its owner's
-control. The local Bridge, not Central, owns repository paths, Git remotes,
+ConveneWire does not take over your Git repository or Git credentials. Your
+repository stays on the client machine and remains under its owner's control.
+The local Bridge, not Central, owns repository paths, Git remotes,
 Git/SSH credentials, fetch/pull/push, worktrees and every Git command. Central
 governs Plans, scheduling, bounded authorization, evidence adoption and
 operation receipts; it cannot browse a checkout, obtain Git credentials or run

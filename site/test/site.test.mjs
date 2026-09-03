@@ -151,13 +151,18 @@ test("home and guide have distinct truthful share metadata without an invented f
 test("product copy preserves release, authority, provider and license boundaries", () => {
   const home = textOnly(html["index.html"]);
   const guide = textOnly(html["guide/index.html"]);
-  assert.match(home, /已包含在 v0\.4\.2 稳定包/u);
-  assert.match(guide, /v0\.4\.2 已正式发布/u);
-  assert.match(guide, /升级前请备份中央数据库/u);
+  assert.match(home, /v0\.5\.0-rc\.3 预发布版/u);
+  assert.match(home, /稳定 Latest 仍为 v0\.4\.2/u);
+  assert.match(guide, /v0\.5\.0-rc\.3 是预发布版/u);
+  assert.match(guide, /稳定 Latest v0\.4\.2/u);
+  assert.match(guide, /评估 RC 前请备份中央数据库/u);
   for (const page of [html["index.html"], html["guide/index.html"]]) {
+    assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.5.0-rc.3"));
     assert.ok(page.includes("https://github.com/chenrgSix/ConveneWire/releases/tag/v0.4.2"));
     assert.doesNotMatch(page, /releases\/tag\/v0\.4\.1/u);
   }
+  assert.match(home, /不接管你的 Git 仓库或 Git 凭据/u);
+  assert.match(guide, /不接管你的 Git 仓库或 Git 凭据/u);
   assert.match(guide, /仅支持固定的 OpenAI Responses API/u);
   assert.match(guide, /不能操作电脑、访问文件、执行命令或工具/u);
   assert.match(guide, /不能提交正式 Result、审核结果或自行完成任务/u);
