@@ -81,6 +81,24 @@ ordinal, normalizes and hashes visible replies, combines valid structured
 question and evidence deltas, and treats missing or malformed assessment fields
 as reply-only evidence. Callback arrival order cannot change the projection.
 
+`DISC-011` is governed by the
+[frozen focused-selection goal](../acceptance/disc-011-focused-participant-selection-goal.md).
+New Discussions freeze an `all_eligible` or `question_focused` selection mode
+and a two-to-five member focused limit. The focused mode keeps the first Wave
+broad, then may narrow later Waves only from highest-priority retained open
+questions, their retained reporters and exact normalized Agent/Task role terms.
+It falls back to all eligible participants when there is no deterministic
+match. Review mode and reviewer-required policy keep the frozen Reviewer in
+every contribution Wave. Selection remains a pure Central projection and does
+not call a model or consume Agent recommendations as authority.
+
+Every new Wave carries an immutable selection snapshot in the same transaction
+as its member Turns. Recovery verifies and reuses that snapshot rather than
+selecting again. Current Room policy, Room roster, Task state/assignment and
+Agent enablement are rechecked before a member Run starts, so the snapshot is
+an audit and recovery fact, not continuing execution authority. Existing
+Discussions migrate to `all_eligible` compatibility behavior.
+
 ## Domain Model
 
 | Entity | Required State |
