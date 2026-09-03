@@ -527,10 +527,12 @@ Release is included.
 
 ## Governed Software-Team Execution
 
-ADR-0036 defines the complete incremental design on the existing Task/Run/Result
-model. The three increments are cumulative; completing the first does not close
-the overall workstream. Requirements and acceptance scopes are in the owning
-Execution and Repository modules. No deployment or Release publication is implied.
+ADR-0036 defines governed execution on the existing Task/Run/Result model;
+[ADR-0039](adr/0039-keep-repositories-client-owned.md) fixes its current product
+boundary. Central governs Plan, scheduling, authorization and evidence facts.
+Client/Bridge owns repository paths, remotes, credentials, Git commands and
+worktrees under explicit Owner-local grants. No deployment or Release
+publication is implied.
 
 Foundation prerequisites and end-to-end acceptance are separate tasks. EXEC-006
 supplies the accepted-result admission port; EXEC-003 still requires all gate
@@ -540,6 +542,11 @@ lifecycle through BRG-071/RUN-018. The original closure tasks retain their IDs,
 evidence and full requirements, but wait on those concrete implementations
 instead of being prerequisites of their own downstream adapters. No task becomes
 DONE merely because this dependency split is recorded.
+
+The remaining Core route is strictly `EXEC-005` -> `DISC-011` -> `DISC-012` ->
+`QA-054` -> `QA-055`. REPO-003, REPO-005 and SEC-014 are retained completed
+Optional Remote Evidence Extensions. They remain tested and supported but are
+not Core completion gates or a source of new Remote Forge roadmap work.
 
 | ID | State | Task | Depends On | Completion Evidence |
 | --- | --- | --- | --- | --- |
@@ -572,6 +579,7 @@ DONE merely because this dependency split is recorded.
 | QA-052 | DONE | Verify controlled single-repository delivery end to end | REPO-001, VER-001, WEB-063 | The [accepted controlled product loop](acceptance/qa-052-controlled-product-loop-goal.md) runs a real Bridge-backed decision Discussion, immutable draft, assigned-Tech-Lead MCP revision and response-lost exact human approval through one actual Central, two actual Go Bridges, isolated Git worktrees, verification, CAS integration, sealed downstream bytes and exact cleanup; physical SQLite/Git/path inspection, replay/restart cuts, three consecutive private `CONVENE_WIRE_TEST_RUN_BASE` runs with four-prefix and total entries `before=0`/`after=0`, eight deterministic E2Es, 525 Server/264 Web tests, all Bridge/race/vet/build/schema/docs gates pass, with synthetic-provider/single-host limits explicit |
 | REPO-002 | DONE | Serialize verified integration candidates behind exact-target CAS | VER-001, EXEC-004 | [Exact-target acceptance](acceptance/repo-002-exact-target-integration-goal.md): gate-materializer extraction, exact verified candidate plus independent human approval, distinct owner-local integration grant, serialized atomic old-object CAS, immutable receipt and `integrated_commit` materialization, moved-target/cancel/response-loss/concurrency recovery, exact downstream bytes and physical Git/SQLite/temp-root evidence; 503 Server tests, all Bridge packages, focused race/vet, schema/build, seven deterministic E2Es with one explicit live skip and three lifecycle runs pass |
 | GOV-026 | DONE | Decide source-evidence authority before remote observations | REPO-002, QA-052 | The [accepted source-evidence goal](acceptance/gov-026-source-evidence-authority-goal.md), [ADR-0038](adr/0038-separate-source-evidence-from-plan-adoption.md) and [ten-finding review](reviews/0038-source-evidence-authority-review.md) define a closed Task-Result/repository-commit source union, separate gate proofs, revision-local exact-contract adoption, digest/CAS/replay/carry-forward and additive migration rules; owning modules and REPO-003 negatives are aligned, docs gates pass, and no remote capability is inferred |
+| GOV-027 | ACTIVE | Keep repositories Client-owned and classify Remote Evidence as optional | GOV-024 | [ADR-0039](adr/0039-keep-repositories-client-owned.md) fixes Central/Client/Owner authority, retains REPO-003/REPO-005/SEC-014 history and makes EXEC-005 through QA-055 the Core continuation; owning-module alignment, task partition and documentation verification remain open |
 | REPO-003 | DONE | Integrate scoped remote Git, PR and CI observations | REPO-002, GOV-026, EXEC-009 | The [accepted remote-evidence goal](acceptance/repo-003-remote-evidence-adoption-goal.md) records metadata-only provider bindings, runtime-only credentials, authenticated lookup-before-retry, bounded canonical commit-bundle and patch Artifact import, exact CI receipts, explicit Result-free revision-local adoption and adoption-first downstream bytes; real loopback HTTP/Git/SQLite fault and concurrency evidence, full contract/Server/Bridge/build/E2E gates and three 24-test zero-residue rounds pass without authorizing remote mutation, webhooks, scheduler modes or evidence carry-forward |
 | REPO-005 | DONE | Attest remote producer input evidence | REPO-003, CON-024, EXEC-009 | The [accepted remote-input goal](acceptance/repo-005-remote-input-attestation-goal.md) is implemented by the closed TypeScript/Go contracts, additive migration 0082, provider lookup-before-create observation, immutable attestation journal and adoption-first remote reuse companion; physical SQLite/Artifact/provider/restart/concurrency/tamper tests and the merged 563-test Server/full workspace/E2E/Bridge/docs/three-round lifecycle gates pass, while unattested, unbound, optional, external, ambiguous, gate-only or substituted inputs remain fail-closed and Git ancestry alone never satisfies provenance |
 | SEC-014 | DONE | Enforce remote provider outbound egress policy | REPO-003, SEC-010 | The [accepted egress goal](acceptance/sec-014-remote-provider-egress-goal.md) and 7 focused/563 merged Server tests prove one Server-owned direct transport rejects non-public/mixed/rebinding/proxy/redirect targets, pins and rechecks every unpooled connection before HTTP, preserves exact Host/TLS SNI/certificate validation, and keeps loopback behind a non-persistent marked test seam; 14-schema/258-fixture validation, all builds, 9 deterministic E2Es, 345 docs and isolated-root cleanup pass without a live provider or deployment claim |

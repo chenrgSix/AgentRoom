@@ -499,7 +499,31 @@ discussion.state_changed
 
 ## 13. 后续演进
 
-只有在 MVP 证明 Team 协作有效后才考虑：
+### 13.1 Governed Software-Team Execution Core
+
+MVP 之后的受控软件团队执行遵循
+[ADR-0039](docs/adr/0039-keep-repositories-client-owned.md)：Central 负责 Plan、
+调度、授权、Evidence/Proof/Adoption 与 operation receipt；Client/Bridge 在
+Owner 本地授权下负责 Repository path、Git remote、Git/SSH credential、
+fetch/pull/push、worktree 和全部 Git command execution。Central approval
+不能替代 Owner 对机器和 Repository 的最终控制。
+
+当前 Core 主线固定为 `EXEC-005` Plan supersession/evidence carry-forward/
+bounded replanning，随后依次为 `DISC-011`、`DISC-012`、`QA-054` 和
+`QA-055`。
+
+### 13.2 Optional Remote Evidence Extensions
+
+已完成的 `REPO-003`、`REPO-005` 和 `SEC-014` 作为可选扩展保留实现、
+测试、迁移与验收历史。默认安装不配置 Remote Provider credential，也不
+主动访问外部 Provider；扩展未启用不影响 Core readiness 或完成度。
+
+GitHub/GitLab adapter、PR lifecycle、webhook、push、remote merge 和
+provider credential Web UI 暂停，除非以后基于明确产品需求重新立项。
+
+### 13.3 Other Future Evolution
+
+只有在 Core Team 协作有效后才考虑：
 
 - 独立 Team Coordinator 集群与 PostgreSQL；
 - Slack、飞书、Discord 等额外人类消息入口；
