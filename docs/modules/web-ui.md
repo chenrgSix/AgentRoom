@@ -63,6 +63,16 @@ installation exposes no provider credential and initiates no provider access.
 New provider adapters, PR/webhook lifecycle, push, remote merge and provider
 credential controls are paused unless separately re-approved.
 
+`WEB-065` is the bounded-autonomy productization tail. It extends the existing
+Plan tab with current-versus-candidate supersession diff, a Server-prepared
+mandatory carry set, exact human activation and one-shot Tech Lead delegation
+issue/status/revoke controls. It also extends the Room composer with explicit
+focused-participation/read-only-quorum settings and the expanded Discussion
+view with immutable selection, seal and supplemental-evidence audit facts. The
+[frozen goal](../acceptance/web-065-bounded-autonomy-surface.md) keeps every
+digest, eligibility decision and mutation on the existing Server authority;
+the browser neither computes evidence reuse nor acts as an Agent.
+
 Presentation is split under `apps/web/src/features/` by product responsibility:
 Auth owns the access gate, Team owns member and lifecycle surfaces, Room owns
 the timeline and Room settings, Agent owns roster and configuration, Device owns
