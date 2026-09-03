@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -51,7 +52,7 @@ func TestDockerVerifierSelectsOnlyCompleteRuntimeReferenceGeneration(t *testing.
 			wantGeneration: "classic-config-digest",
 		},
 		{
-			name:          "cleanup failure does not overwrite a successful runtime gate",
+			name:          "cleanup failure fails closed without erasing the successful runtime result",
 			classicServer: true, classicCaddy: true,
 			cleanupFails:   true,
 			wantGeneration: "classic-config-digest",
@@ -294,7 +295,15 @@ fi
 		}
 		return
 	}
-	if commandErr != nil {
+	if scenario.cleanupFails {
+		if commandErr == nil {
+			t.Fatalf("Docker verifier accepted an unproven cleanup:\n%s", output)
+		}
+		var exitError *exec.ExitError
+		if !errors.As(commandErr, &exitError) || exitError.ExitCode() != 1 {
+			t.Fatalf("Docker verifier cleanup exit = %v, want exit 1:\n%s", commandErr, output)
+		}
+	} else if commandErr != nil {
 		t.Fatalf("Docker verifier failed: %v\n%s", commandErr, output)
 	}
 	if !strings.Contains(string(output), scenario.wantGeneration+" execution") {
