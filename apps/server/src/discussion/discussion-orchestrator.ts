@@ -620,25 +620,8 @@ export class DiscussionOrchestrator {
     const scheduled = new Map<string, RunRecord>();
     this.recovery.closeCanceledWaves((runId) => this.onRunTerminal(runId));
     const now = Date.parse(this.clock());
-    for (const wave of this.repository.listOpenWaves()) {
-      const discussion = this.repository.get(wave.discussionId);
-      if (
-        discussion?.policy.waveCompletionMode !== "read_only_quorum" ||
-        Date.parse(quorumSoftDeadline(
-          wave.createdAt,
-          discussion.policy.quorumSoftDeadlineSeconds
-        )) > now
-      ) continue;
-      for (const turn of this.repository.listTurnsForWave(wave.waveId)) {
-        if (!turn.runId) continue;
-        const run = this.runs.getRun(turn.runId);
-        if (!run || !terminalRunStates.has(run.state)) continue;
-        const result = this.onRunTerminal(run.runId);
-        for (const next of result?.scheduledRuns ?? []) {
-          scheduled.set(next.runId, next);
-        }
-        if (this.repository.getWave(wave.waveId)?.state !== "open") break;
-      }
+    for (const run of this.reconcileDueQuorums(now)) {
+      scheduled.set(run.runId, run);
     }
     for (const run of this.expireDueWaves()) {
       scheduled.set(run.runId, run);
@@ -745,6 +728,17 @@ export class DiscussionOrchestrator {
       (turn) => this.ensureRun(turn),
       (runId) => this.onRunTerminal(runId)
     );
+  }
+
+  public sweepDueWaves(): RunRecord[] {
+    const scheduled = new Map<string, RunRecord>();
+    for (const run of this.reconcileDueQuorums(Date.parse(this.clock()))) {
+      scheduled.set(run.runId, run);
+    }
+    for (const run of this.expireDueWaves()) {
+      scheduled.set(run.runId, run);
+    }
+    return [...scheduled.values()];
   }
 
   public reconcileDiscussion(discussionId: string): RunRecord[] {
@@ -1452,6 +1446,31 @@ export class DiscussionOrchestrator {
       this.settlement.settle(run.runId, this.clock());
     }
     return this.repository.listTurnsForWave(wave.waveId);
+  }
+
+  private reconcileDueQuorums(now: number): RunRecord[] {
+    const scheduled = new Map<string, RunRecord>();
+    for (const wave of this.repository.listOpenWaves()) {
+      const discussion = this.repository.get(wave.discussionId);
+      if (
+        discussion?.policy.waveCompletionMode !== "read_only_quorum" ||
+        Date.parse(quorumSoftDeadline(
+          wave.createdAt,
+          discussion.policy.quorumSoftDeadlineSeconds
+        )) > now
+      ) continue;
+      for (const turn of this.repository.listTurnsForWave(wave.waveId)) {
+        if (!turn.runId) continue;
+        const run = this.runs.getRun(turn.runId);
+        if (!run || !terminalRunStates.has(run.state)) continue;
+        const result = this.onRunTerminal(run.runId);
+        for (const next of result?.scheduledRuns ?? []) {
+          scheduled.set(next.runId, next);
+        }
+        if (this.repository.getWave(wave.waveId)?.state !== "open") break;
+      }
+    }
+    return [...scheduled.values()];
   }
 
   private selectParticipants(

@@ -793,12 +793,13 @@ test("read-only quorum seals exact replies and retains excluded late evidence", 
       BEFORE INSERT ON discussion_decisions
       BEGIN SELECT RAISE(ABORT, 'injected quorum decision failure'); END;
     `);
-    assert.throws(() => restarted.recover(), /injected quorum decision failure/u);
+    assert.throws(() => restarted.sweepDueWaves(),
+      /injected quorum decision failure/u);
     assert.equal(value.discussions.listWaveSeals(result.discussion.discussionId).length, 0);
     assert.equal(value.discussions.getWave(result.waves[0]!.waveId)?.state, "open");
     assert.equal(value.discussions.get(result.discussion.discussionId)?.progress.version, 0);
     value.database.exec("DROP TRIGGER test_quorum_decision_failure");
-    const recovered = restarted.recover();
+    const recovered = restarted.sweepDueWaves();
     const recoveredView = restarted.get(
       value.principal,
       result.discussion.discussionId
@@ -820,10 +821,7 @@ test("read-only quorum seals exact replies and retains excluded late evidence", 
     assert.ok(recovered.every(({ targetAgentId }) =>
       targetAgentId !== lateSecurity.targetAgentId
     ));
-    assert.deepEqual(
-      sortedRunIds(restarted.recover()),
-      sortedRunIds(recovered)
-    );
+    assert.deepEqual(restarted.sweepDueWaves(), []);
     const duplicate = value.orchestrator.onRunTerminal(coder.runId);
     assert.equal(duplicate?.seals.length, 1);
     assert.deepEqual(

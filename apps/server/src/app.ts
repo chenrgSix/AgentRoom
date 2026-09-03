@@ -952,7 +952,7 @@ export async function createServerApp(
     if (discussionSweepInFlight) return;
     discussionSweepInFlight = true;
     try {
-      await dispatchDiscussionRuns(discussions.expireDueWaves());
+      await dispatchDiscussionRuns(discussions.sweepDueWaves());
     } finally {
       discussionSweepInFlight = false;
     }
