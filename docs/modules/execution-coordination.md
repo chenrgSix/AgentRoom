@@ -380,6 +380,19 @@ the full build, deterministic E2E, Bridge and three-run cleanup gates recorded
 in its frozen goal. Here, two-plan fairness means bounded rotation inside one
 frozen sweep only; `EXEC-010` owns durable cross-sweep fairness.
 
+The frozen `EXEC-010` target is
+[`exec-010-governed-scheduler-modes-goal.md`](../acceptance/exec-010-governed-scheduler-modes-goal.md).
+Scheduler autonomy is a separate Plan-local CAS: `manual` admits only an exact
+owner-pinned node, `supervised` admits at most one deterministic candidate per
+owner command, and `automatic` alone enables startup/timer sweeps. Its revision
+must never reuse Plan control revision because changing future scheduling policy
+cannot invalidate already frozen verification or integration authority. Every
+new governed admission advances one Agent-local fairness cursor and immutable
+history row in the same transaction as its Run/DispatchIntent; only shared-Agent
+Plan order rotates, while independent Agents retain the EXEC-008 base tuple.
+Restart, competing Servers, failed readiness and duplicate replay cannot invent
+or reset a cursor.
+
 QA-053 composes this scheduler with existing proof and repository authorities
 under physical parallel coding. Two Bridge-owned root Runs overlap from one
 base, both retain independent verified evidence, one exact-target CAS wins and
