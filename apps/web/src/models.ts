@@ -47,6 +47,9 @@ export interface Agent {
   role: string;
   integrationMode: "managed" | "manual" | "fake" | "hosted";
   presence: string;
+  capabilities?: {
+    supportsDiscussionSupplementalEvidence?: boolean;
+  };
   runtimePolicy?: {
     filesystemAccess: "read-only" | "workspace-write" | "local-policy";
   } | null;
@@ -203,6 +206,13 @@ export interface DiscussionView {
       turnsUsed: number;
       durationSeconds: number;
     };
+    policy?: {
+      participantSelectionMode: "all_eligible" | "question_focused";
+      focusedParticipantLimit: number;
+      waveCompletionMode: "all_settled" | "read_only_quorum";
+      quorumMinimumCompleted: number;
+      quorumSoftDeadlineSeconds: number;
+    };
   };
   participants: Array<{
     agentId: string;
@@ -214,6 +224,16 @@ export interface DiscussionView {
     phase: "contribution" | "review" | "finalization";
     state: "open" | "completed" | "partial" | "failed" | "canceled";
     expectedMembers: number;
+    selection?: {
+      version: 1;
+      strategy: "all_eligible" | "question_focused" | "finalizer";
+      focusQuestionIds: string[];
+      eligibleAgentIds: string[];
+      selectedAgentIds: string[];
+      requiredRoles: Array<"reviewer">;
+      focusedParticipantLimit: number;
+      selectionDigest: string;
+    } | null;
   }>;
   turns: Array<{
     turnId: string;
@@ -224,6 +244,44 @@ export interface DiscussionView {
     waveId: string | null;
     waveMemberOrdinal: number | null;
     terminalReason: string | null;
+  }>;
+  seals?: Array<{
+    sealId: string;
+    discussionId: string;
+    waveId: string;
+    softDeadlineAt: string;
+    minimumCompleted: number;
+    requiredRoles: Array<"reviewer">;
+    acceptedMembers: Array<{
+      turnId: string;
+      waveMemberOrdinal: number;
+      agentId: string;
+      role: "participant" | "reviewer";
+      runId: string;
+      sourceReplySequence: number;
+      outputMessageId: string;
+      sourceMessageSequence: number;
+      replyHash: string;
+    }>;
+    sealDigest: string;
+    sealedAt: string;
+  }>;
+  supplementalEvidence?: Array<{
+    evidenceId: string;
+    operationId: string;
+    sealId: string;
+    discussionId: string;
+    waveId: string;
+    turnId: string;
+    runId: string;
+    agentId: string;
+    deviceId: string;
+    sourceReplySequence: number;
+    sourceMessageId: string;
+    sourceMessageSequence: number;
+    replyHash: string;
+    evidenceDigest: string;
+    submittedAt: string;
   }>;
 }
 

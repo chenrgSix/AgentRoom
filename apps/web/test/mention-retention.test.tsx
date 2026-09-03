@@ -10,11 +10,15 @@ import {
   writeKeepMentionsPreference
 } from "../src/features/room/mention-retention.js";
 import { useRoomComposer } from "../src/features/room/useRoomComposer.js";
+import { emptyComposerState } from "../src/features/room/composer-storage.js";
 import type { Agent, DiscussionView } from "../src/models.js";
 
 const builder: Agent = {
   agentId: "agent_builder", name: "Local Codex", role: "Builder",
-  integrationMode: "managed", presence: "ready", enabled: true
+  integrationMode: "managed", presence: "ready", enabled: true,
+  deviceId: "device_builder",
+  runtimePolicy: { filesystemAccess: "read-only" },
+  capabilities: { supportsDiscussionSupplementalEvidence: true }
 };
 const reviewer: Agent = {
   ...builder, agentId: "agent_reviewer", name: "Reviewer", role: "Reviewer"
@@ -284,6 +288,58 @@ test("composer retains explicit recipients only with local opt-in", async (t) =>
       await h.submit();
       assert.equal(requests.length, 2);
       assert.match(errors.at(-1) ?? "", /已有协作讨论/u);
+    });
+
+    await t.test("read-only quorum sends explicit policy and resets it only after success", async () => {
+      const h = mount();
+      h.rerender({ ...h.input, roomPolicy: { ...h.input.roomPolicy, allowDiscussion: true } });
+      h.enable();
+      h.type("@all 讨论带封存的方案");
+      act(() => h.result.current.setDiscussionOptions({
+        participantSelectionMode: "all_eligible",
+        focusedParticipantLimit: 4,
+        waveCompletionMode: "read_only_quorum",
+        quorumMinimumCompleted: 2,
+        quorumSoftDeadlineSeconds: 45
+      }));
+      respond = () => new Response("unavailable", { status: 503 });
+      await h.submit();
+      assert.equal(h.result.current.discussionOptions.waveCompletionMode, "read_only_quorum");
+      respond = response;
+      await h.submit();
+      assert.deepEqual(requests[1]?.body.policy, {
+        participantSelectionMode: "all_eligible",
+        focusedParticipantLimit: 4,
+        waveCompletionMode: "read_only_quorum",
+        quorumMinimumCompleted: 2,
+        quorumSoftDeadlineSeconds: 45
+      });
+      assert.deepEqual(h.result.current.discussionOptions,
+        emptyComposerState().discussionOptions);
+    });
+
+    await t.test("read-only quorum fails closed for an ineligible participant", async () => {
+      const h = mount();
+      const ineligible = {
+        ...reviewer,
+        runtimePolicy: { filesystemAccess: "workspace-write" as const }
+      };
+      const input = {
+        ...h.input,
+        agents: [builder, ineligible],
+        roomAgents: [builder, ineligible],
+        roomPolicy: { ...h.input.roomPolicy, allowDiscussion: true }
+      };
+      h.rerender(input);
+      h.type("@all 不应启动");
+      act(() => h.result.current.setDiscussionOptions({
+        ...h.result.current.discussionOptions,
+        waveCompletionMode: "read_only_quorum"
+      }));
+      await h.submit();
+      assert.equal(requests.length, 0);
+      assert.match(errors.at(-1) ?? "", /Reviewer/u);
+      assert.equal(h.result.current.messageContent, "@all 不应启动");
     });
 
     await t.test("late Discussion responses cannot restore a cleared scope or overwrite edits", async () => {

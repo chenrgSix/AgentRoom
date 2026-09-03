@@ -87,6 +87,9 @@ function installFixture(input: {
   runs: unknown[];
   turns: unknown[];
   waves: unknown[];
+  policy?: Record<string, unknown>;
+  seals?: unknown[];
+  supplementalEvidence?: unknown[];
 }): void {
   const discussion = {
     budget: { durationSeconds: 12, turnsUsed: input.currentWave },
@@ -97,7 +100,8 @@ function installFixture(input: {
     goal: "确定可靠的交付方案",
     progress: { confidence: 0.7, openQuestions: [], plateauCount: 0 },
     state: input.discussionState,
-    stateReason: input.discussionState === "completed" ? "finalized" : "all_runs_failed"
+    stateReason: input.discussionState === "completed" ? "finalized" : "all_runs_failed",
+    ...(input.policy ? { policy: input.policy } : {})
   };
   globalThis.fetch = async (request, init = {}) => {
     const path = typeof request === "string" ? request : request.url;
@@ -180,7 +184,9 @@ function installFixture(input: {
         discussion,
         participants: agents.map(({ agentId }) => ({ agentId, role: "participant" })),
         turns: input.turns,
-        waves: input.waves
+        waves: input.waves,
+        seals: input.seals ?? [],
+        supplementalEvidence: input.supplementalEvidence ?? []
       }]);
     }
     if (path.startsWith(`/api/teams/${team.teamId}/changes?after=`)) {
@@ -265,6 +271,107 @@ test("waiting Discussion keeps the just-closed partial Wave visible", async () =
     assert.ok(failedMember);
     within(failedMember).getByText("失败");
     within(failedMember).getByText("原因：执行失败");
+  } finally {
+    cleanup();
+    dom.window.close();
+  }
+});
+
+test("quorum policy, selection, seal and content-free late evidence remain auditable", async () => {
+  const dom = installDom();
+  installFixture({
+    currentWave: 1,
+    discussionState: "completed",
+    policy: {
+      participantSelectionMode: "question_focused",
+      focusedParticipantLimit: 2,
+      waveCompletionMode: "read_only_quorum",
+      quorumMinimumCompleted: 2,
+      quorumSoftDeadlineSeconds: 45
+    },
+    runs: [],
+    turns: [],
+    waves: [{
+      expectedMembers: 2,
+      ordinal: 1,
+      phase: "review",
+      state: "completed",
+      waveId: "wave_quorum",
+      selection: {
+        version: 1,
+        strategy: "question_focused",
+        focusQuestionIds: ["question_security"],
+        eligibleAgentIds: agents.map(({ agentId }) => agentId),
+        selectedAgentIds: agents.map(({ agentId }) => agentId),
+        requiredRoles: ["reviewer"],
+        focusedParticipantLimit: 2,
+        selectionDigest: "a".repeat(64)
+      }
+    }],
+    seals: [{
+      sealId: "seal_quorum",
+      discussionId: "discussion_test",
+      waveId: "wave_quorum",
+      softDeadlineAt: "2026-08-24T00:00:45.000Z",
+      minimumCompleted: 2,
+      requiredRoles: ["reviewer"],
+      acceptedMembers: [{
+        turnId: "turn_solver",
+        waveMemberOrdinal: 0,
+        agentId: agents[0]!.agentId,
+        role: "participant",
+        runId: "run_solver",
+        sourceReplySequence: 3,
+        outputMessageId: "message_solver",
+        sourceMessageSequence: 8,
+        replyHash: "b".repeat(64)
+      }, {
+        turnId: "turn_reviewer",
+        waveMemberOrdinal: 1,
+        agentId: agents[1]!.agentId,
+        role: "reviewer",
+        runId: "run_reviewer",
+        sourceReplySequence: 4,
+        outputMessageId: "message_reviewer",
+        sourceMessageSequence: 9,
+        replyHash: "c".repeat(64)
+      }],
+      sealDigest: "d".repeat(64),
+      sealedAt: "2026-08-24T00:00:45.000Z"
+    }],
+    supplementalEvidence: [{
+      evidenceId: "evidence_late",
+      operationId: "op_late",
+      sealId: "seal_quorum",
+      discussionId: "discussion_test",
+      waveId: "wave_quorum",
+      turnId: "turn_late",
+      runId: "run_late",
+      agentId: agents[1]!.agentId,
+      deviceId: "device_reviewer",
+      sourceReplySequence: 5,
+      sourceMessageId: "message_late",
+      sourceMessageSequence: 10,
+      replyHash: "e".repeat(64),
+      evidenceDigest: "f".repeat(64),
+      submittedAt: "2026-08-24T00:00:50.000Z",
+      content: "THIS LATE CONTENT MUST NEVER RENDER"
+    }]
+  });
+  const { cleanup, fireEvent, render, within } = await import("@testing-library/react");
+  try {
+    const view = render(<App />);
+    fireEvent.click((await view.findAllByRole("button", { name: "对话" }))[0]!);
+    const panel = await view.findByRole("region", { name: "当前智能体讨论" });
+    fireEvent.click(within(panel).getByRole("button", { name: /展开讨论详情/u }));
+    within(panel).getByLabelText("讨论策略");
+    within(panel).getByText(/read only quorum · 2 @ 45s/u);
+    within(panel).getByText("本轮选择证据");
+    within(panel).getByText(/question_security/u);
+    const audit = within(panel).getByLabelText("Quorum 封存与迟到证据");
+    within(audit).getByText(/seal_quorum/u);
+    within(audit).getByText(/迟到证据 · evidence_late/u);
+    assert.equal(within(panel).queryByText("THIS LATE CONTENT MUST NEVER RENDER"), null);
   } finally {
     cleanup();
     dom.window.close();

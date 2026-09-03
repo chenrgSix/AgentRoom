@@ -129,6 +129,10 @@ function terminalReasonLabel(reason: string, locale: Locale): string {
   return labels[reason] ?? reason;
 }
 
+function display(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
 interface DiscussionStatusProps {
   activeDiscussion: DiscussionView | null;
   agentsById: Map<string, Agent>;
@@ -249,6 +253,16 @@ export function DiscussionStatus({
                   ? (locale === "zh-CN" ? "本次讨论已经结束" : "This Discussion has ended")
                   : (locale === "zh-CN" ? "正在根据进展和边际收益决定下一步" : "The Orchestrator is evaluating progress and marginal gain")}
             </small>
+            {visibleDiscussion.discussion.policy && <dl className="discussion-policy-audit" aria-label={locale === "zh-CN" ? "讨论策略" : "Discussion policy"}>
+              <div><dt>{locale === "zh-CN" ? "参与选择" : "Participant selection"}</dt><dd>{display(visibleDiscussion.discussion.policy.participantSelectionMode)} · {visibleDiscussion.discussion.policy.focusedParticipantLimit}</dd></div>
+              <div><dt>{locale === "zh-CN" ? "本轮完成" : "Wave completion"}</dt><dd>{display(visibleDiscussion.discussion.policy.waveCompletionMode)}{visibleDiscussion.discussion.policy.waveCompletionMode === "read_only_quorum" ? ` · ${visibleDiscussion.discussion.policy.quorumMinimumCompleted} @ ${visibleDiscussion.discussion.policy.quorumSoftDeadlineSeconds}s` : ""}</dd></div>
+            </dl>}
+            {activeWave?.selection && <div className="discussion-selection-audit" aria-label={locale === "zh-CN" ? "本轮参与选择证据" : "Wave participant selection evidence"}>
+              <strong>{locale === "zh-CN" ? "本轮选择证据" : "Wave selection evidence"}</strong>
+              <span>{display(activeWave.selection.strategy)} · {activeWave.selection.selectedAgentIds.map((agentId) => agentsById.get(agentId)?.name ?? agentId).join(", ")}</span>
+              {activeWave.selection.focusQuestionIds.length > 0 && <span>{locale === "zh-CN" ? "聚焦问题" : "Focus questions"}: {activeWave.selection.focusQuestionIds.join(", ")}</span>}
+              <code>{activeWave.selection.selectionDigest}</code>
+            </div>}
             {activeWave && (
               <div className={`discussion-wave ${activeWave.phase} ${activeWave.state}`}>
                 <div className="discussion-wave-summary">
@@ -291,6 +305,22 @@ export function DiscussionStatus({
                 </ul>
               </div>
             )}
+            {((visibleDiscussion.seals?.length ?? 0) > 0 ||
+              (visibleDiscussion.supplementalEvidence?.length ?? 0) > 0) && <div className="discussion-quorum-audit" aria-label={locale === "zh-CN" ? "Quorum 封存与迟到证据" : "Quorum seals and late evidence"}>
+              <strong>{locale === "zh-CN" ? "Quorum 封存与迟到证据" : "Quorum seals and late evidence"}</strong>
+              {(visibleDiscussion.seals ?? []).map((seal) => <article key={seal.sealId}>
+                <header><span>{seal.sealId}</span><span>{seal.sealedAt}</span></header>
+                <p>{locale === "zh-CN" ? "最低完成" : "Minimum completed"}: {seal.minimumCompleted} · {seal.acceptedMembers.length} {locale === "zh-CN" ? "条回复已封存" : "replies sealed"}</p>
+                <ul>{seal.acceptedMembers.map((member) => <li key={member.turnId}><strong>{agentsById.get(member.agentId)?.name ?? member.agentId}</strong><span>{member.role} · reply #{member.sourceReplySequence} · message #{member.sourceMessageSequence}</span><code>{member.replyHash}</code></li>)}</ul>
+                <code>{locale === "zh-CN" ? "Seal 摘要" : "Seal digest"}: {seal.sealDigest}</code>
+              </article>)}
+              {(visibleDiscussion.supplementalEvidence ?? []).map((evidence) => <article className="supplemental" key={evidence.evidenceId}>
+                <header><span>{locale === "zh-CN" ? "迟到证据" : "Late evidence"} · {evidence.evidenceId}</span><span>{evidence.submittedAt}</span></header>
+                <p>{agentsById.get(evidence.agentId)?.name ?? evidence.agentId} · reply #{evidence.sourceReplySequence} · message #{evidence.sourceMessageSequence}</p>
+                <code>{evidence.evidenceDigest}</code>
+              </article>)}
+              <small>{locale === "zh-CN" ? "只显示不可变身份与摘要；迟到回复内容不会进入已封存决策。" : "Only immutable identities and digests are shown; late reply content never enters the sealed decision."}</small>
+            </div>}
           </div>
           <div className="discussion-controls">
             {activeDiscussion && (goalEditId === activeDiscussion.discussion.discussionId ? (

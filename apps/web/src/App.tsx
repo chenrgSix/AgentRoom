@@ -38,6 +38,7 @@ import {
   roleLabel
 } from "./features/agent/AgentWorkspace.js";
 import { DiscussionStatus } from "./features/discussion/DiscussionStatus.js";
+import { DiscussionComposerPolicy } from "./features/room/DiscussionComposerPolicy.js";
 import { useDiscussionController } from "./features/discussion/useDiscussionController.js";
 import { RoomTimeline } from "./features/room/RoomTimeline.js";
 import { RoomSettingsDialog } from "./features/room/RoomSettingsDialog.js";
@@ -470,6 +471,7 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
     changeKeepMentions,
     deliver: deliverPendingMessage,
     directlyParsedAgents,
+    discussionOptions,
     exactMentionCommands,
     handleChange: handleMessageChange,
     handleKeyDown: handleMessageKeyDown,
@@ -486,6 +488,7 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
     retainMentionAgentIds,
     selectMention,
     selectedMentionAgents,
+    setDiscussionOptions,
     submit: submitComposer,
     unresolvedExactAmbiguousNames
   } = useRoomComposer({
@@ -2097,6 +2100,13 @@ function WorkspaceApp({ clientEntrySession }: { clientEntrySession: ClientEntryS
                     </span>
                   </div>
                 )}
+                {selectedRoomPolicy.allowDiscussion && selectedMentionAgents.length >= 2 && <DiscussionComposerPolicy
+                  agents={selectedMentionAgents}
+                  disabled={composerBusy}
+                  locale={locale}
+                  onChange={setDiscussionOptions}
+                  value={discussionOptions}
+                />}
                 {(exactMentionCommands.usesAll || directlyParsedAgents.length > 0 || unresolvedExactAmbiguousNames.length > 0) && (
                   <div className={`exact-mention-preview ${unresolvedExactAmbiguousNames.length > 0 ? "ambiguous" : ""} ${exactMentionCommands.usesAll && !selectedRoomPolicy.allowAll ? "policy-disabled" : ""}`} role="status">
                     {exactMentionCommands.usesAll

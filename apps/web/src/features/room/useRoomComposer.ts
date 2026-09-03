@@ -39,6 +39,7 @@ import {
 } from "./mention-retention.js";
 import {
   composerClearedEvent,
+  defaultDiscussionComposerOptions,
   composerStorageLimits,
   composerUserGeneration,
   emptyComposerState,
@@ -110,7 +111,7 @@ export function useRoomComposer(input: RoomComposerInput) {
   const [composer, setComposer] = useState({ key: scopeKey, value: emptyComposerState() });
   const composerRef = useRef(composer);
   const value = composer.key === scopeKey ? composer.value : emptyComposerState();
-  const { content: messageContent, pendingMessages, mentionAgentIds } = value;
+  const { content: messageContent, discussionOptions, pendingMessages, mentionAgentIds } = value;
   const [persistence, setPersistence] = useState<{
     state: ComposerPersistenceStatus["state"]; warning: ComposerStorageWarning | null;
   }>({ state: "empty", warning: null });
@@ -158,6 +159,14 @@ export function useRoomComposer(input: RoomComposerInput) {
   const setMentionAgentIds = (update: StateUpdate<string[]>) => updateComposer((current) => {
     const mentionAgentIds = updatedValue(current.mentionAgentIds, update);
     return mentionAgentIds === current.mentionAgentIds ? current : { ...current, mentionAgentIds };
+  });
+  const setDiscussionOptions = (
+    update: StateUpdate<ComposerStoredState["discussionOptions"]>
+  ) => updateComposer((current) => {
+    const discussionOptions = updatedValue(current.discussionOptions, update);
+    return discussionOptions === current.discussionOptions
+      ? current
+      : { ...current, discussionOptions };
   });
   const setPendingMessages = (update: StateUpdate<PendingRoomMessage[]>) => updateComposer((current) => ({
     ...current, pendingMessages: updatedValue(current.pendingMessages, update)
@@ -311,6 +320,35 @@ export function useRoomComposer(input: RoomComposerInput) {
     }
     onError(null);
     if (roomPolicy.allowDiscussion && resolvedMentionAgentIds.length >= 2) {
+      const participantAgents = resolvedMentionAgentIds.flatMap((agentId) => {
+        const agent = agentsById.get(agentId);
+        return agent ? [agent] : [];
+      });
+      if (participantAgents.length !== resolvedMentionAgentIds.length) {
+        onError(locale === "zh-CN"
+          ? "讨论参与者身份不完整，请重新选择 Agent。"
+          : "Discussion participant identities are incomplete. Select the Agents again.");
+        return;
+      }
+      if (discussionOptions.waveCompletionMode === "read_only_quorum") {
+        if (discussionOptions.quorumMinimumCompleted > participantAgents.length) {
+          onError(locale === "zh-CN"
+            ? "Quorum 最少完成数不能大于参与 Agent 数。"
+            : "Quorum minimum completion cannot exceed the participant count.");
+          return;
+        }
+        const ineligible = participantAgents.filter((agent) =>
+          agent.integrationMode !== "managed" || !agent.deviceId ||
+          agent.runtimePolicy?.filesystemAccess !== "read-only" ||
+          agent.capabilities?.supportsDiscussionSupplementalEvidence !== true
+        );
+        if (ineligible.length > 0) {
+          onError(locale === "zh-CN"
+            ? `Read-only quorum 只允许具备迟到证据能力的 managed 只读 Agent：${ineligible.map(({ name }) => name).join("、")}`
+            : `Read-only quorum requires managed read-only Agents with late-evidence support: ${ineligible.map(({ name }) => name).join(", ")}`);
+          return;
+        }
+      }
       const generation = composerUserGeneration(session.userId);
       const currentAction = () => mountedRef.current && isCurrentSession() && scopeRef.current.revision === submittedScopeRevision &&
         composerUserGeneration(session.userId) === generation;
@@ -326,7 +364,11 @@ export function useRoomComposer(input: RoomComposerInput) {
               goal: messageContent,
               participantAgentIds: resolvedMentionAgentIds,
               mode: "round_robin",
-              outputMode: "final_answer"
+              outputMode: "final_answer",
+              ...(JSON.stringify(discussionOptions) ===
+                JSON.stringify(defaultDiscussionComposerOptions)
+                ? {}
+                : { policy: discussionOptions })
             })
           },
           session.token
@@ -589,6 +631,7 @@ export function useRoomComposer(input: RoomComposerInput) {
     retainedAgentsRef.current = retained;
     setMessageContent(retained.map(({ name }) => `@${name} `).join(""));
     setMentionAgentIds(retained.map(({ agentId }) => agentId));
+    setDiscussionOptions({ ...defaultDiscussionComposerOptions });
     setMentionSearch(null);
     setMentionOptionIndex(0);
   }
@@ -599,6 +642,7 @@ export function useRoomComposer(input: RoomComposerInput) {
     changeKeepMentions,
     deliver,
     directlyParsedAgents,
+    discussionOptions,
     exactMentionCommands,
     handleChange,
     handleKeyDown,
@@ -614,6 +658,7 @@ export function useRoomComposer(input: RoomComposerInput) {
     retainMentionAgentIds,
     selectMention,
     selectedMentionAgents,
+    setDiscussionOptions,
     submit,
     unresolvedExactAmbiguousNames
   };

@@ -16,10 +16,27 @@ export interface ComposerScope {
 
 export interface ComposerStoredState {
   content: string;
+  discussionOptions: DiscussionComposerOptions;
   mentionAgentIds: string[];
   retainedMentions: Array<{ agentId: string; name: string }>;
   pendingMessages: PendingRoomMessage[];
 }
+
+export interface DiscussionComposerOptions {
+  participantSelectionMode: "all_eligible" | "question_focused";
+  focusedParticipantLimit: number;
+  waveCompletionMode: "all_settled" | "read_only_quorum";
+  quorumMinimumCompleted: number;
+  quorumSoftDeadlineSeconds: number;
+}
+
+export const defaultDiscussionComposerOptions: DiscussionComposerOptions = {
+  participantSelectionMode: "question_focused",
+  focusedParticipantLimit: 3,
+  waveCompletionMode: "all_settled",
+  quorumMinimumCompleted: 2,
+  quorumSoftDeadlineSeconds: 60
+};
 
 export type ComposerStorageWarning = "unavailable" | "invalid" | "limit" | "expired";
 interface StorageAccess {
@@ -30,7 +47,9 @@ interface StorageAccess {
 interface StorageOptions { storage?: StorageAccess; now?: number }
 interface StoredEntry extends Omit<ComposerScope, "userId"> {
   updatedAt: number;
-  draft: Omit<ComposerStoredState, "pendingMessages">;
+  draft: Omit<ComposerStoredState, "pendingMessages" | "discussionOptions"> & {
+    discussionOptions?: DiscussionComposerOptions;
+  };
   pendingMessages: PendingRoomMessage[];
 }
 
@@ -46,7 +65,13 @@ const agentIds = (value: unknown): value is string[] => Array.isArray(value) && 
   value.every((id) => identity(id, "agent")) && new Set(value).size === value.length;
 
 export function emptyComposerState(): ComposerStoredState {
-  return { content: "", mentionAgentIds: [], retainedMentions: [], pendingMessages: [] };
+  return {
+    content: "",
+    discussionOptions: { ...defaultDiscussionComposerOptions },
+    mentionAgentIds: [],
+    retainedMentions: [],
+    pendingMessages: []
+  };
 }
 
 export function validComposerScope(scope: ComposerScope): boolean {
@@ -63,9 +88,29 @@ export function validPendingMessage(value: unknown, scope: Pick<ComposerScope, "
     (value.status === "pending" || value.status === "failed");
 }
 
+function validDiscussionOptions(value: unknown): value is DiscussionComposerOptions {
+  return record(value) && onlyKeys(value, [
+    "participantSelectionMode", "focusedParticipantLimit", "waveCompletionMode",
+    "quorumMinimumCompleted", "quorumSoftDeadlineSeconds"
+  ]) && (value.participantSelectionMode === "all_eligible" ||
+    value.participantSelectionMode === "question_focused") &&
+    Number.isSafeInteger(value.focusedParticipantLimit) &&
+    (value.focusedParticipantLimit as number) >= 2 &&
+    (value.focusedParticipantLimit as number) <= 5 &&
+    (value.waveCompletionMode === "all_settled" ||
+      value.waveCompletionMode === "read_only_quorum") &&
+    Number.isSafeInteger(value.quorumMinimumCompleted) &&
+    (value.quorumMinimumCompleted as number) >= 2 &&
+    (value.quorumMinimumCompleted as number) <= 5 &&
+    Number.isSafeInteger(value.quorumSoftDeadlineSeconds) &&
+    (value.quorumSoftDeadlineSeconds as number) >= 1 &&
+    (value.quorumSoftDeadlineSeconds as number) < 300;
+}
+
 function validDraft(value: unknown): value is StoredEntry["draft"] {
-  return record(value) && onlyKeys(value, ["content", "mentionAgentIds", "retainedMentions"]) &&
+  return record(value) && onlyKeys(value, ["content", "discussionOptions", "mentionAgentIds", "retainedMentions"]) &&
     typeof value.content === "string" && value.content.length <= composerStorageLimits.text &&
+    (value.discussionOptions === undefined || validDiscussionOptions(value.discussionOptions)) &&
     agentIds(value.mentionAgentIds) && Array.isArray(value.retainedMentions) && value.retainedMentions.length <= 5 &&
     value.retainedMentions.every((item) => record(item) && onlyKeys(item, ["agentId", "name"]) &&
       identity(item.agentId, "agent") && (value.mentionAgentIds as string[]).includes(item.agentId) &&
@@ -128,6 +173,9 @@ export function loadComposerState(scope: ComposerScope, options: StorageOptions 
     return {
       state: entry ? {
         ...entry.draft,
+        discussionOptions: entry.draft.discussionOptions ?? {
+          ...defaultDiscussionComposerOptions
+        },
         // A saved in-flight submission has an uncertain outcome after recovery.
         pendingMessages: entry.pendingMessages.map((item) => ({ ...item, status: "failed" }))
       } : emptyComposerState(),
@@ -149,7 +197,9 @@ export function saveComposerState(scope: ComposerScope, state: ComposerStoredSta
     const storage = storageFor(options);
     const { entries } = readEntries(scope.userId, storage, now);
     const next = entries.filter((item) => !sameScope(item, scope));
-    if (draft.content || pendingMessages.length) next.push(entry);
+    const nonDefaultDiscussionOptions = JSON.stringify(draft.discussionOptions) !==
+      JSON.stringify(defaultDiscussionComposerOptions);
+    if (draft.content || pendingMessages.length || nonDefaultDiscussionOptions) next.push(entry);
     if (next.length > composerStorageLimits.scopes) return { saved: false, warning: "limit" };
     const raw = JSON.stringify({ version: 1, userId: scope.userId, entries: next });
     if (raw.length > composerStorageLimits.serialized) return { saved: false, warning: "limit" };

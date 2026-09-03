@@ -41,8 +41,39 @@ test("composer storage isolates User, Team, Room and Task and contains no sessio
   const value = JSON.parse(data.get(`${composerStoragePrefix}${scope.userId}`)!);
   assert.deepEqual(Object.keys(value).sort(), ["entries", "userId", "version"]);
   assert.deepEqual(Object.keys(value.entries[0]).sort(), ["draft", "pendingMessages", "roomId", "taskId", "teamId", "updatedAt"]);
+  assert.deepEqual(Object.keys(value.entries[0].draft).sort(), [
+    "content", "discussionOptions", "mentionAgentIds", "retainedMentions"
+  ]);
   assert.equal(saveComposerState(scope, { ...draft(), token: "must-not-save" } as ComposerStoredState, { storage, now }).saved, false);
   assert.equal([...data.values()].some((raw) => raw.includes("must-not-save")), false);
+});
+
+test("discussion policy persists per scope and legacy drafts receive safe defaults", () => {
+  const { storage, data } = storageFixture();
+  const configured: ComposerStoredState = {
+    ...emptyComposerState(),
+    discussionOptions: {
+      participantSelectionMode: "all_eligible",
+      focusedParticipantLimit: 4,
+      waveCompletionMode: "read_only_quorum",
+      quorumMinimumCompleted: 3,
+      quorumSoftDeadlineSeconds: 45
+    }
+  };
+  assert.equal(saveComposerState(scope, configured, { storage, now }).saved, true);
+  assert.deepEqual(loadComposerState(scope, { storage, now }).state.discussionOptions,
+    configured.discussionOptions);
+
+  const key = `${composerStoragePrefix}${scope.userId}`;
+  const legacy = JSON.parse(data.get(key)!);
+  delete legacy.entries[0].draft.discussionOptions;
+  legacy.entries[0].draft.content = "legacy draft";
+  data.set(key, JSON.stringify(legacy));
+  const restored = loadComposerState(scope, { storage, now });
+  assert.equal(restored.warning, undefined);
+  assert.equal(restored.state.content, "legacy draft");
+  assert.deepEqual(restored.state.discussionOptions,
+    emptyComposerState().discussionOptions);
 });
 
 test("hydration makes an uncertain pending delivery failed while preserving every payload field", () => {
