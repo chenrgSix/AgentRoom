@@ -1,9 +1,9 @@
 # WEB-065 Bounded-Autonomy Product Surface
 
-Status: goal frozen before implementation on 2026-09-03. `docs/TASKS.md`
-remains the sole delivery-state register. This task productizes already accepted
-`EXEC-005`, `DISC-011` and `DISC-012` authority; it adds no execution, evidence,
-repository or Discussion semantics.
+Status: accepted on 2026-09-03. The goal was frozen before implementation on
+the same date, and `docs/TASKS.md` remains the sole delivery-state register.
+This task productizes already accepted `EXEC-005`, `DISC-011` and `DISC-012`
+authority; it adds no execution, evidence, repository or Discussion semantics.
 
 ## Goal
 
@@ -145,3 +145,109 @@ quality claims, repository/Git authority, Remote Provider configuration,
 GitHub/GitLab adapters, PR/webhook/push/merge flows, deployment or Release
 acceptance. Optional Remote Evidence remains default-off and outside this
 productization exit gate.
+
+## Accepted Delivery
+
+The canonical Task **Plan** tab now reads one closed Server projection for the
+current Plan, its immutable next-revision candidate, the complete mandatory
+local carry set and every retained delegation state. An authorized human can
+prepare and inspect a structural revision diff, explicitly activate the exact
+candidate, or issue and revoke one bounded Tech Lead delegation. The browser
+does not calculate carry eligibility or reuse digests, cannot activate as an
+Agent and never obtains repository authority.
+
+The Plan surface binds every command to the current Plan revision/digest,
+control revision and root Task revision. Candidate activation uses the
+unchanged Server-prepared carry selections. Delegation issue binds the selected
+primary Agent, expiry and reason; revocation binds the exact retained revision
+and digest. A transport-unknown mutation locks every new command and editable
+field until an authoritative reload succeeds. Successful activation reloads
+the parent Plan before exposing another action, and local datetime input is
+converted to an actual future instant instead of being shifted by the browser
+timezone.
+
+The Room composer keeps ordinary multi-Agent Discussion defaults unchanged and
+adds one explicit advanced policy surface. A participant may select all
+eligible or question-focused selection and may opt into read-only quorum with
+minimum completion and soft-deadline values. Saved draft state is scoped to the
+same Room and Task, and sending or clearing resets the advanced fields. The UI
+warns from its current projection when a selected Agent does not appear to have
+the required managed, Device-backed, read-only and supplemental-evidence
+capabilities; Central remains the sole admission authority.
+
+Expanded Discussion details render the retained policy, immutable per-Wave
+selection snapshot, exact quorum seal and content-free supplemental evidence.
+Accepted member/source-sequence/reply-hash facts remain visibly separate from
+late evidence Agent/Device/Run/Turn/message/digest facts. The audit card neither
+copies late Message content nor treats it as accepted quorum content, Plan
+approval or scheduler authority.
+
+The implementation was retained in the independently reviewable commits
+`2f03d96`, `3c30cdf`, `c70e594`, `a606e5e`, `576a42a`, `4774803` and
+`a5f8fc7`. The last commit removes a generated-enum-name dependency from one Go
+authority fixture; it does not change production behavior.
+
+## Production Browser Evidence
+
+The production Web build was exercised in the in-app browser against a real,
+disposable trusted-Team Server and its SQLite-backed product fixture. Recovery
+used the fixture's temporary Owner authority. No browser state was substituted
+for a Server fact.
+
+On the Plan tab, the browser read current revision 2, issued a one-hour
+delegation to an actual primary Agent, observed it as active, revoked the exact
+retained record and observed the revoked state. It then prepared revision 3
+from the complete current definition, displayed the title and new-to-existing
+Task-pin structural diff, showed that this fixture required no prior evidence
+carry, activated the exact candidate and reloaded authoritative revision 3.
+The revoked delegation remained revoked.
+
+On the Discussion surface, the browser selected the real three-Agent fixture
+and displayed question-focused selection, read-only quorum 2 at the 30-second
+soft deadline, the frozen selection digest, a seal with two accepted reply
+hashes/source sequences and one separately retained late supplemental-evidence
+record without Message content. The composer selected two eligible managed
+Agents and exposed the exact focused/quorum inputs and capability summaries.
+
+At 1280, 720 and 390 pixel widths, both the Plan and Discussion pages reported
+document scroll width equal to viewport width, with no horizontal overflow.
+Browser warning/error logs were empty. Shutdown printed and physical inspection
+confirmed removal of `/private/tmp/convene-wire-test-run-MLpXmJ`.
+
+## Verification Record
+
+The final full gates passed on 2026-09-03:
+
+- contracts: 101/101 checks, 14 schemas and 258 fixtures, generated sources
+  current, strict TypeScript and Go round trips;
+- Server: 594/594 tests;
+- Web: 277/277 tests and the production build;
+- product experience: 2/2 local and trusted-team Server-backed fixtures;
+- Bridge: every Go package under `go test ./...`;
+- deterministic E2E: 9 passed and the explicitly live-provider-only case was
+  skipped;
+- Bridge UI, sanitized QA evidence and product-site acceptance all passed; and
+- workspace schema validation and the complete workspace build passed.
+
+Every suite-created run root reported cleanup and was physically absent after
+completion, including the Server root
+`/private/tmp/convene-wire-test-run-WXEbQ9`, Web root
+`/private/tmp/convene-wire-test-run-BggQLn`, Contracts root
+`/private/tmp/convene-wire-test-run-GDh7rG`, Bridge root
+`/private/tmp/convene-wire-test-run-O2dy6M`, product root
+`/private/tmp/convene-wire-test-run-CAD8b0` and E2E root
+`/private/tmp/convene-wire-test-run-XrW8jr`.
+
+The lifecycle gate then ran `npm run test:temp-lifecycle` three consecutive
+times under one owned, isolated directory. Each round passed 25/25 success,
+assertion-failure, spawn-failure, timeout, cancellation/signal, orphan-process,
+nested-run and parallel-owner cases. Before and after all three rounds, the
+isolated parent contained zero `agentroom-*`, `agent-room-*`, `convenewire-*`
+or `convene-wire-*` entries. Each nested run root and the outer root
+`/private/tmp/convene-wire-test-run-96gQWT` were physically removed. No global
+temporary-directory glob was scanned or deleted.
+
+This acceptance does not claim live-model quality, multiple physical machines,
+a packaged Release, automatic replanning, repository/Git authority or a new
+Remote Provider capability. It completes only the human-facing product closure
+for already accepted bounded-autonomy Core authority.
