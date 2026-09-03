@@ -207,7 +207,7 @@ test("capture lease migration preserves populated legacy publications, blobs and
     database.close();
     const migrated = await migrateDatabase(f.databasePath);
     assert.deepEqual(migrated.appliedVersions,
-      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]);
+      [62, 63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -273,7 +273,7 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
     database.close();
     const result = await migrateDatabase(f.databasePath);
     assert.deepEqual(result.appliedVersions,
-      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80]);
+      [63, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81]);
     database = openDatabase(f.databasePath);
     const expected = structuredClone(before);
     expected[0] = expected[0]!.map((row) => ({
@@ -398,7 +398,28 @@ test("commit migration preserves populated canonical lineage and rolls back a fa
       "execution_remote_adoptions_immutable_update",
       "execution_remote_adoptions_immutable_delete",
       "execution_all_adopted_node_materializations",
-      "execution_input_source_authority_insert"
+      "execution_input_source_authority_insert",
+      "execution_scheduler_controls",
+      "execution_plan_create_scheduler_control",
+      "execution_scheduler_operations",
+      "execution_scheduler_receipts",
+      "execution_scheduler_operations_require_scope_insert",
+      "execution_scheduler_operations_immutable_update",
+      "execution_scheduler_operations_immutable_delete",
+      "execution_scheduler_receipts_require_operation_insert",
+      "execution_scheduler_receipts_immutable_update",
+      "execution_scheduler_receipts_immutable_delete",
+      "execution_scheduler_controls_transition_guard",
+      "execution_scheduler_controls_immutable_delete",
+      "execution_dispatch_intents_require_scheduler_mode_insert",
+      "execution_scheduler_fairness_history",
+      "execution_scheduler_fairness_cursors",
+      "execution_scheduler_fairness_history_require_admission_insert",
+      "execution_scheduler_fairness_history_immutable_update",
+      "execution_scheduler_fairness_history_immutable_delete",
+      "execution_scheduler_fairness_cursor_insert_guard",
+      "execution_scheduler_fairness_cursor_update_guard",
+      "execution_scheduler_fairness_cursor_immutable_delete"
     ]);
     assert.deepEqual(objects()
       .filter(({ name }) => !admissionObjects.has(name))

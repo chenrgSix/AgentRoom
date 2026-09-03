@@ -106,6 +106,12 @@ import { ExecutionSettlementService } from
 import { ExecutionRecoveryService } from
   "./execution/execution-recovery-service.js";
 import { ExecutionScheduler } from "./execution/execution-scheduler.js";
+import { ExecutionSchedulerControlRepository } from
+  "./execution/execution-scheduler-control-repository.js";
+import { ExecutionSchedulerControlService } from
+  "./execution/execution-scheduler-control-service.js";
+import { ExecutionSchedulerFairnessRepository } from
+  "./execution/execution-scheduler-fairness-repository.js";
 import { AcceptedResultMaterializer } from
   "./execution/materialization/accepted-result-materializer.js";
 import { ExecutionMaterializationService } from
@@ -551,6 +557,10 @@ export async function createServerApp(
   const isolatedWorkspaces = new IsolatedWorkspaceLeaseService(
     database, new ExecutionPlanRepository(database), bridgeConnections
   );
+  const executionSchedulerControlRepository =
+    new ExecutionSchedulerControlRepository(database);
+  const executionSchedulerFairness =
+    new ExecutionSchedulerFairnessRepository(database);
   const governedAdmission = new GovernedRunAdmissionService(
     database,
     transactions,
@@ -562,7 +572,9 @@ export async function createServerApp(
     executionDependencies,
     isolatedWorkspaces,
     bridgeConnections,
-    runRepository
+    runRepository,
+    executionSchedulerControlRepository,
+    executionSchedulerFairness
   );
   runs.configureGovernedAdmission(governedAdmission);
   const repositoryCaptures = new RepositoryCaptureService(database,
@@ -758,6 +770,7 @@ export async function createServerApp(
     executionNodeProjector,
     executionSettlement,
     governedAdmission,
+    executionSchedulerFairness,
     clock
   );
   const executionNodeControls = new ExecutionNodeControlService(
@@ -771,6 +784,17 @@ export async function createServerApp(
     executionSettlement,
     governedAdmission,
     runRepository
+  );
+  const executionSchedulerControls = new ExecutionSchedulerControlService(
+    transactions,
+    executionPlanRepository,
+    taskRepository,
+    auth,
+    executionSchedulerControlRepository,
+    executionSchedulerFairness,
+    executionNodeStates,
+    executionScheduler,
+    governedAdmission
   );
   let executionSweepInFlight = false;
   const sweepExecution = async (): Promise<void> => {
@@ -1095,6 +1119,7 @@ export async function createServerApp(
     executionEvidence,
     executionInputs,
     executionNodeControls,
+    executionSchedulerControls,
     isolatedWorkspaces,
     repositoryCaptures,
     repositoryIntegrations,

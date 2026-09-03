@@ -4,6 +4,8 @@ import { validateExecutionPlanDefinition } from
 import type { RunState } from "../run/run-repository.js";
 import type { ExecutionReadinessBlocker } from
   "./execution-readiness-evaluator.js";
+import type { ExecutionSchedulerMode } from
+  "./execution-scheduler-control-repository.js";
 
 export type ExecutionNodeStateValue =
   | "blocked"
@@ -22,7 +24,10 @@ export interface ExecutionNodeIdentity {
 }
 
 export interface ExecutionSchedulerCandidate extends ExecutionNodeIdentity {
+  agentId: string;
   planApprovedAt: string;
+  schedulerMode: ExecutionSchedulerMode;
+  schedulerModeRevision: number;
   topologicalOrdinal: number;
 }
 
@@ -95,13 +100,21 @@ export class ExecutionNodeStateRepository {
     return row && map(row);
   }
 
-  public listCandidates(): ExecutionSchedulerCandidate[] {
+  public listCandidates(options: {
+    mode?: ExecutionSchedulerMode;
+    planId?: string;
+  } = {}): ExecutionSchedulerCandidate[] {
     const rows = this.database.prepare(`
       SELECT state.plan_id, state.plan_revision, state.node_key,
-        approval.reviewed_at, proposal.definition_json
+        approval.reviewed_at, proposal.definition_json, node.agent_id,
+        control.mode AS scheduler_mode,
+        control.mode_revision AS scheduler_mode_revision
       FROM execution_node_states state
       JOIN execution_plans plan ON plan.plan_id = state.plan_id
         AND plan.current_revision = state.plan_revision
+      JOIN execution_plan_nodes node ON node.plan_id = state.plan_id
+        AND node.revision = state.plan_revision
+        AND node.node_key = state.node_key
       JOIN execution_plan_approvals approval
         ON approval.plan_id = state.plan_id
         AND approval.revision = state.plan_revision
@@ -109,14 +122,24 @@ export class ExecutionNodeStateRepository {
       JOIN execution_plan_proposals proposal
         ON proposal.plan_id = state.plan_id
         AND proposal.revision = state.plan_revision
+      JOIN execution_scheduler_controls control
+        ON control.plan_id = state.plan_id
       WHERE plan.state IN ('approved', 'running')
         AND state.run_id IS NULL
-    `).all() as Array<{
+        AND (@mode IS NULL OR control.mode = @mode)
+        AND (@planId IS NULL OR state.plan_id = @planId)
+    `).all({
+      mode: options.mode ?? null,
+      planId: options.planId ?? null
+    }) as Array<{
+      agent_id: string;
       definition_json: string;
       node_key: string;
       plan_id: string;
       plan_revision: number;
       reviewed_at: string;
+      scheduler_mode: ExecutionSchedulerMode;
+      scheduler_mode_revision: number;
     }>;
     const topologies = new Map<string, string[]>();
     return rows.map((row) => {
@@ -136,7 +159,10 @@ export class ExecutionNodeStateRepository {
         planId: row.plan_id,
         planRevision: row.plan_revision,
         nodeKey: row.node_key,
+        agentId: row.agent_id,
         planApprovedAt: row.reviewed_at,
+        schedulerMode: row.scheduler_mode,
+        schedulerModeRevision: row.scheduler_mode_revision,
         topologicalOrdinal: ordinal
       };
     }).sort(compareExecutionSchedulerCandidates);

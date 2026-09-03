@@ -19,6 +19,8 @@ import { validateBridgeMessage } from "@convene-wire/contracts/bridge-validator"
 
 import { createServerApp } from "../src/app.js";
 import { CoreRepository } from "../src/data/core-repository.js";
+import { openDatabase } from "../src/data/database.js";
+import { migrateDatabase } from "../src/data/migration-runner.js";
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { RunRepository } from "../src/run/run-repository.js";
@@ -557,6 +559,86 @@ async function admissionFixture(
 }
 
 type AdmissionFixture = Awaited<ReturnType<typeof admissionFixture>>;
+
+async function createSharedAgentSiblingPlan(
+  f: AdmissionFixture,
+  suffix: string
+) {
+  const root = await f.ok("POST", `/api/rooms/${f.roomId}/tasks`, {
+    title: `Shared Agent sibling ${suffix}`,
+    goal: "Prove durable shared-Agent Plan rotation"
+  });
+  const source = (await f.ok("POST", `/api/rooms/${f.roomId}/messages`, {
+    taskId: root.taskId,
+    content: "Authorize the sibling scheduler Plan."
+  })).message;
+  const currentRoot = await f.ok("GET", `/api/tasks/${root.taskId}`);
+  const definition = structuredClone(f.plan.current.definition);
+  definition.rootTaskId = root.taskId;
+  definition.title = `Shared Agent sibling Plan ${suffix}`;
+  definition.policy.maxConcurrency = 1;
+  definition.decision.sources = [{
+    evidenceRefId: `evidence_shared_${suffix}_source0001`,
+    kind: "message",
+    messageId: source.messageId
+  }];
+  definition.decision.sourceRevisions = [{
+    evidenceRefId: `evidence_shared_${suffix}_source0001`,
+    revision: source.sequence
+  }];
+  for (const [index, node] of definition.nodes.entries()) {
+    node.agentId = f.managedAgents[0]!.agent.agentId;
+    node.repository.grantId = `grant_shared_${suffix}_node${index + 1}0001`;
+    node.task.title = `Shared ${suffix} node ${index + 1}`;
+  }
+  const draft = await f.ok(
+    "POST",
+    `/api/tasks/${root.taskId}/execution-plans`,
+    {
+      operationId: `op_shared_${suffix}_create0001`,
+      expectedRootTaskRevision: currentRoot.taskRevision,
+      definition
+    }
+  );
+  const plan = (await f.ok(
+    "POST",
+    `/api/execution-plans/${draft.planId}/approvals`,
+    {
+      operationId: `op_shared_${suffix}_approval0001`,
+      expectedRevision: draft.current.revision,
+      expectedDigest: draft.current.digest,
+      expectedRootTaskRevision: currentRoot.taskRevision,
+      decision: "approved",
+      reason: "Authorize the exact shared-Agent sibling Plan."
+    }
+  )).plan;
+  for (const compiled of plan.compiledTasks as Array<{
+    nodeKey: string;
+    taskId: string;
+  }>) {
+    const task = await f.ok("GET", `/api/tasks/${compiled.taskId}`);
+    await f.ok("POST", `/api/tasks/${compiled.taskId}/control`, {
+      operationId: `op_shared_${suffix}_${compiled.nodeKey.toLowerCase()}_ready0001`,
+      expectedTaskRevision: task.taskRevision,
+      lifecycleState: "ready"
+    });
+  }
+  const grants = plan.current.definition.nodes.map(
+    (node: typeof f.node, index: number): GovernedExecutionCapabilityReadyGrant => ({
+      ...structuredClone(f.grants[index]!),
+      grant: {
+        ...structuredClone(f.grants[index]!.grant),
+        grantId: node.repository.grantId,
+        digest: "76543210"[index]!.repeat(64)
+      },
+      agentId: node.agentId,
+      planId: plan.planId,
+      nodeKey: node.nodeKey
+    })
+  );
+  return { plan, grants };
+}
+
 const dependencyBytes = Buffer.from(
   "diff --git a/src/dependency.ts b/src/dependency.ts\n" +
   "--- a/src/dependency.ts\n+++ b/src/dependency.ts\n@@ -1 +1 @@\n" +
@@ -1326,6 +1408,13 @@ test("approved governed Build dispatch seals and delivers one exact capture mani
   };
   assert.equal(admission.manifest_digest, manifest.manifestDigest);
   assert.deepEqual(JSON.parse(admission.grant_json), f.grant);
+  assert.deepEqual(f.database.prepare(`
+    SELECT source, scheduler_operation_id
+    FROM execution_scheduler_fairness_history WHERE run_id = ?
+  `).get(routed.runs[0].runId), {
+    source: "member_message",
+    scheduler_operation_id: null
+  });
   assert.throws(() => f.database.prepare(`
     UPDATE execution_run_admissions SET manifest_digest = ? WHERE run_id = ?
   `).run(manifest.manifestDigest, routed.runs[0].runId), /seal one manifest only/u);
@@ -1356,6 +1445,387 @@ test("approved governed Build dispatch seals and delivers one exact capture mani
   assert.equal((f.database.prepare(`
     SELECT count(*) AS n FROM execution_run_admissions
   `).get() as { n: number }).n, 1);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_scheduler_fairness_history
+  `).get() as { n: number }).n, 1,
+  "duplicate Message replay must not advance fairness");
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("manual scheduler mode admits only the exact owner-pinned node", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t);
+  const control = await f.ok(
+    "GET",
+    `/api/execution-plans/${f.plan.planId}/scheduler`
+  );
+  const mode = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/mode-transitions`,
+    {
+      operationId: "op_scheduler_manual_mode0001",
+      expectedPlanRevision: f.plan.current.revision,
+      expectedPlanDigest: f.plan.current.digest,
+      expectedPlanControlRevision: f.plan.controlRevision,
+      expectedModeRevision: control.modeRevision,
+      mode: "manual",
+      reason: "Require one exact human-selected node."
+    }
+  );
+  const state = f.database.prepare(`
+    SELECT projection_revision FROM execution_node_states
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    projection_revision: number;
+  };
+  const background = await createServerApp({
+    databasePath: f.databasePath,
+    logger: false,
+    clock: () => now,
+    executionSchedulerSweepMilliseconds: 100
+  });
+  await background.ready();
+  const backgroundSocket = await background.injectWS("/ws/bridge", {
+    headers: {
+      authorization: `Bearer ${f.credential.secret}`,
+      host: "127.0.0.1"
+    }
+  });
+  t.after(async () => {
+    backgroundSocket.terminate();
+    await background.close();
+  });
+  await sendAndFlush(backgroundSocket, envelope("bridge.hello", {
+    bridgeVersion: "v0.4.0-test.1",
+    connectionEpoch: 2,
+    deviceId: f.device.deviceId,
+    supportedProtocolVersions: ["1.0"],
+    governedExecution: capability
+  }, "manual_background_hello0001"));
+  await sendAndFlush(backgroundSocket, envelope("agent.publish", {
+    teamId: f.teamId,
+    agentId: f.agent.agentId,
+    ownerMemberId: f.ownerMemberId,
+    deviceId: f.device.deviceId,
+    name: f.agent.name,
+    role: f.agent.role,
+    capabilities: {
+      invocationMode: "managed",
+      supportsStart: true,
+      supportsResume: false,
+      supportsStreaming: true,
+      supportsInterrupt: true,
+      supportsHandoff: false,
+      supportsWorkspaceLeases: true,
+      governedExecution: f.agentCapability
+    },
+    workspaceRef: f.workspaceRef,
+    workspaceGeneration: f.workspaceGeneration,
+    workspaceAlias: "Manual-mode background exclusion"
+  }, "manual_background_publish0001"));
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n, 0,
+  "automatic timer must not select a manual Plan");
+  const wrongMode = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/advances`,
+    {
+      operationId: "op_scheduler_manual_advance0001",
+      expectedPlanRevision: f.plan.current.revision,
+      expectedPlanDigest: f.plan.current.digest,
+      expectedPlanControlRevision: f.plan.controlRevision,
+      expectedModeRevision: mode.modeRevision,
+      reason: "A manual Plan cannot invoke supervised selection."
+    }
+  );
+  assert.equal(wrongMode.statusCode, 409, wrongMode.body);
+  assert.match(wrongMode.body, /EXECUTION_SCHEDULER_MODE_CONFLICT/u);
+  const staleNode = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/dispatches`,
+    {
+      operationId: "op_scheduler_manual_stale0001",
+      expectedPlanRevision: f.plan.current.revision,
+      expectedPlanDigest: f.plan.current.digest,
+      expectedPlanControlRevision: f.plan.controlRevision,
+      expectedModeRevision: mode.modeRevision,
+      nodeKey: "Build",
+      expectedNodeProjectionRevision: state.projection_revision + 1,
+      reason: "Reject a stale node projection pin."
+    }
+  );
+  assert.equal(staleNode.statusCode, 409, staleNode.body);
+  assert.match(staleNode.body, /EXECUTION_SCHEDULER_NODE_CONFLICT/u);
+  const command = {
+    operationId: "op_scheduler_manual_dispatch0001",
+    expectedPlanRevision: f.plan.current.revision,
+    expectedPlanDigest: f.plan.current.digest,
+    expectedPlanControlRevision: f.plan.controlRevision,
+    expectedModeRevision: mode.modeRevision,
+    nodeKey: "Build",
+    expectedNodeProjectionRevision: state.projection_revision,
+    reason: "Dispatch only the reviewed Build node."
+  };
+  const receipt = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/dispatches`,
+    command
+  );
+  assert.equal(receipt.action, "manual_dispatch");
+  assert.equal(receipt.mode, "manual");
+  assert.equal(receipt.selection.nodeKey, "Build");
+  assert.deepEqual(await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/dispatches`,
+    command
+  ), receipt);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_scheduler_fairness_history
+    WHERE run_id = ?
+  `).get(receipt.selection.runId) as { n: number }).n, 1,
+  "manual command replay must not advance fairness");
+  assert.deepEqual(f.database.prepare(`
+    SELECT history.source, history.scheduler_operation_id,
+      history.cursor_revision, history.plan_id, history.node_key,
+      history.dispatch_intent_id, history.run_id
+    FROM execution_scheduler_fairness_history history
+    WHERE history.run_id = ?
+  `).get(receipt.selection.runId), {
+    source: "manual",
+    scheduler_operation_id: command.operationId,
+    cursor_revision: 1,
+    plan_id: f.plan.planId,
+    node_key: "Build",
+    dispatch_intent_id: receipt.selection.dispatchIntentId,
+    run_id: receipt.selection.runId
+  });
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_scheduler_operations
+    WHERE operation_id = ?
+  `).get(command.operationId) as { n: number }).n, 1);
+  assert.throws(() => f.database.prepare(`
+    UPDATE execution_scheduler_fairness_history SET source = 'automatic'
+    WHERE run_id = ?
+  `).run(receipt.selection.runId), /history is immutable/u);
+  assert.throws(() => f.database.prepare(`
+    DELETE FROM execution_scheduler_fairness_cursors WHERE agent_id = ?
+  `).run(f.agent.agentId), /cursor cannot be deleted/u);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("supervised scheduler mode advances one candidate and seals no-progress replay", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    independentAgentIndexes: [0, 1],
+    maxConcurrency: 1
+  });
+  const control = await f.ok(
+    "GET",
+    `/api/execution-plans/${f.plan.planId}/scheduler`
+  );
+  const mode = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/mode-transitions`,
+    {
+      operationId: "op_scheduler_supervised_mode0001",
+      expectedPlanRevision: f.plan.current.revision,
+      expectedPlanDigest: f.plan.current.digest,
+      expectedPlanControlRevision: f.plan.controlRevision,
+      expectedModeRevision: control.modeRevision,
+      mode: "supervised",
+      reason: "Require one human-supervised scheduler step."
+    }
+  );
+  const background = await createServerApp({
+    databasePath: f.databasePath,
+    logger: false,
+    clock: () => now,
+    executionSchedulerSweepMilliseconds: 100
+  });
+  await background.ready();
+  const backgroundSocket = await background.injectWS("/ws/bridge", {
+    headers: {
+      authorization: `Bearer ${f.credential.secret}`,
+      host: "127.0.0.1"
+    }
+  });
+  t.after(async () => {
+    backgroundSocket.terminate();
+    await background.close();
+  });
+  await sendAndFlush(backgroundSocket, envelope("bridge.hello", {
+    bridgeVersion: "v0.4.0-test.1",
+    connectionEpoch: 2,
+    deviceId: f.device.deviceId,
+    supportedProtocolVersions: ["1.0"],
+    governedExecution: capability
+  }, "supervised_background_hello0001"));
+  await sendAndFlush(backgroundSocket, envelope("agent.publish", {
+    teamId: f.teamId,
+    agentId: f.agent.agentId,
+    ownerMemberId: f.ownerMemberId,
+    deviceId: f.device.deviceId,
+    name: f.agent.name,
+    role: f.agent.role,
+    capabilities: {
+      invocationMode: "managed",
+      supportsStart: true,
+      supportsResume: false,
+      supportsStreaming: true,
+      supportsInterrupt: true,
+      supportsHandoff: false,
+      supportsWorkspaceLeases: true,
+      governedExecution: f.agentCapability
+    },
+    workspaceRef: f.workspaceRef,
+    workspaceGeneration: f.workspaceGeneration,
+    workspaceAlias: "Supervised-mode background exclusion"
+  }, "supervised_background_publish0001"));
+  await new Promise((resolve) => setTimeout(resolve, 250));
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n, 0,
+  "automatic timer must not select a supervised Plan");
+  const advance = (operationId: string) => ({
+    operationId,
+    expectedPlanRevision: f.plan.current.revision,
+    expectedPlanDigest: f.plan.current.digest,
+    expectedPlanControlRevision: f.plan.controlRevision,
+    expectedModeRevision: mode.modeRevision,
+    reason: "Advance at most one deterministic ready node."
+  });
+  const first = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/advances`,
+    advance("op_scheduler_supervised_advance0001")
+  );
+  assert.equal(first.action, "supervised_advance");
+  assert.equal(first.selection.nodeKey, "Node1");
+  assert.deepEqual(f.database.prepare(`
+    SELECT source, scheduler_operation_id FROM execution_scheduler_fairness_history
+    WHERE run_id = ?
+  `).get(first.selection.runId), {
+    source: "supervised",
+    scheduler_operation_id: first.operationId
+  });
+
+  const noProgressCommand = advance("op_scheduler_supervised_empty0001");
+  const noProgress = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/advances`,
+    noProgressCommand
+  );
+  assert.equal(noProgress.selection, null);
+  assert.equal(new RunRepository(f.database).applyEvent(
+    first.selection.runId,
+    {
+      type: "status",
+      sequence: 1,
+      status: "failed",
+      error: {
+        code: "EXPECTED_SUPERVISED_FAULT",
+        message: "Release plan capacity for the next exact command.",
+        retryable: false
+      }
+    },
+    "2026-08-31T12:00:01.000Z"
+  ).applied, true);
+  assert.deepEqual(await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/advances`,
+    noProgressCommand
+  ), noProgress, "a no-progress replay cannot acquire later authority");
+  const later = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/advances`,
+    advance("op_scheduler_supervised_advance0002")
+  );
+  assert.equal(later.selection.nodeKey, "Node2");
+  await f.restart();
+  assert.deepEqual(await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/advances`,
+    noProgressCommand
+  ), noProgress);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n, 2);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("manual scheduler admission failure rolls back its entire authority chain", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, (grant) => {
+    grant.planId = "plan_foreign0001";
+  });
+  const initial = await f.ok(
+    "GET",
+    `/api/execution-plans/${f.plan.planId}/scheduler`
+  );
+  const mode = await f.ok(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/scheduler/mode-transitions`,
+    {
+      operationId: "op_scheduler_failed_mode0001",
+      expectedPlanRevision: f.plan.current.revision,
+      expectedPlanDigest: f.plan.current.digest,
+      expectedPlanControlRevision: f.plan.controlRevision,
+      expectedModeRevision: initial.modeRevision,
+      mode: "manual",
+      reason: "Require exact manual failure evidence."
+    }
+  );
+  const state = f.database.prepare(`
+    SELECT projection_revision FROM execution_node_states
+    WHERE plan_id = ? AND plan_revision = ? AND node_key = 'Build'
+  `).get(f.plan.planId, f.plan.current.revision) as {
+    projection_revision: number;
+  };
+  const beforeMessages = (f.database.prepare(`
+    SELECT count(*) AS n FROM messages
+  `).get() as { n: number }).n;
+  const operationId = "op_scheduler_failed_dispatch0001";
+  const response = await f.request(
+    "POST",
+    `/api/execution-plans/${f.plan.planId}/nodes/Build/dispatches`,
+    {
+      operationId,
+      expectedPlanRevision: f.plan.current.revision,
+      expectedPlanDigest: f.plan.current.digest,
+      expectedPlanControlRevision: f.plan.controlRevision,
+      expectedModeRevision: mode.modeRevision,
+      nodeKey: "Build",
+      expectedNodeProjectionRevision: state.projection_revision,
+      reason: "This exact blocked node must not leave partial facts."
+    }
+  );
+  assert.equal(response.statusCode, 409, response.body);
+  assert.match(response.body, /EXECUTION_GRANT_UNAVAILABLE/u);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM messages
+  `).get() as { n: number }).n, beforeMessages);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_scheduler_operations
+    WHERE operation_id = ?
+  `).get(operationId) as { n: number }).n, 0);
+  for (const table of [
+    "execution_dispatch_intents",
+    "execution_run_admissions",
+    "runs",
+    "execution_scheduler_fairness_cursors",
+    "execution_scheduler_fairness_history",
+    "isolated_workspace_leases",
+    "run_deliveries"
+  ]) {
+    assert.equal((f.database.prepare(`
+      SELECT count(*) AS n FROM ${table}
+    `).get() as { n: number }).n, 0, `${table} retained partial state`);
+  }
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
@@ -1461,6 +1931,14 @@ test("explicit node retry retains one immutable generation-2 admission and repla
     run_id: retained.authorization.newRunId,
     retry_operation_id: command.operationId
   }]);
+  assert.deepEqual(f.database.prepare(`
+    SELECT source, scheduler_operation_id, cursor_revision
+    FROM execution_scheduler_fairness_history WHERE run_id = ?
+  `).get(retained.authorization.newRunId), {
+    source: "node_retry",
+    scheduler_operation_id: null,
+    cursor_revision: 2
+  });
   assert.equal((f.database.prepare(`
     SELECT count(*) AS n FROM execution_node_retry_authorizations
   `).get() as { n: number }).n, 1);
@@ -1664,6 +2142,8 @@ test("missing exact current grant rolls back governed Message and Run state", {
     "execution_dispatch_intents",
     "execution_run_admissions",
     "runs",
+    "execution_scheduler_fairness_cursors",
+    "execution_scheduler_fairness_history",
     "isolated_workspace_leases",
     "run_deliveries"
   ]) {
@@ -1778,6 +2258,14 @@ test("scheduler creates one system-traced DispatchIntent and ordinary Run", {
   assert.equal(row.manifest_digest, manifest.manifestDigest);
   assert.equal(row.run_id, manifest.scope.runId);
   assert.match(row.operation_digest, /^[a-f0-9]{64}$/u);
+  assert.deepEqual(f.database.prepare(`
+    SELECT source, scheduler_operation_id, cursor_revision
+    FROM execution_scheduler_fairness_history WHERE run_id = ?
+  `).get(row.run_id), {
+    source: "automatic",
+    scheduler_operation_id: null,
+    cursor_revision: 1
+  });
   assert.equal((f.database.prepare(`
     SELECT count(*) AS n FROM execution_dispatch_intents
   `).get() as { n: number }).n, 1);
@@ -3189,6 +3677,109 @@ test("restart and duplicate scheduler wakeups retain one generation and Run", {
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
+test("scheduler migration backfills automatic controls and retained admission history", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    schedulerMilliseconds: 100
+  });
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents WHERE plan_id = ?
+  `).get(f.plan.planId) as { n: number }).n === 1);
+  const retained = f.database.prepare(`
+    SELECT intent_id, run_id, agent_id, plan_id, plan_revision, node_key
+    FROM execution_dispatch_intents WHERE plan_id = ?
+  `).get(f.plan.planId) as {
+    agent_id: string;
+    intent_id: string;
+    node_key: string;
+    plan_id: string;
+    plan_revision: number;
+    run_id: string;
+  };
+  const planControlRevision = (f.database.prepare(`
+    SELECT control_revision FROM execution_plans WHERE plan_id = ?
+  `).get(f.plan.planId) as { control_revision: number }).control_revision;
+  f.socket.terminate();
+  await f.app.close();
+  f.database.exec(`
+    DROP TRIGGER execution_plan_create_scheduler_control;
+    DROP TRIGGER execution_scheduler_operations_require_scope_insert;
+    DROP TRIGGER execution_scheduler_operations_immutable_update;
+    DROP TRIGGER execution_scheduler_operations_immutable_delete;
+    DROP TRIGGER execution_scheduler_receipts_require_operation_insert;
+    DROP TRIGGER execution_scheduler_receipts_immutable_update;
+    DROP TRIGGER execution_scheduler_receipts_immutable_delete;
+    DROP TRIGGER execution_scheduler_controls_transition_guard;
+    DROP TRIGGER execution_scheduler_controls_immutable_delete;
+    DROP TRIGGER execution_dispatch_intents_require_scheduler_mode_insert;
+    DROP TRIGGER execution_scheduler_fairness_history_require_admission_insert;
+    DROP TRIGGER execution_scheduler_fairness_history_immutable_update;
+    DROP TRIGGER execution_scheduler_fairness_history_immutable_delete;
+    DROP TRIGGER execution_scheduler_fairness_cursor_insert_guard;
+    DROP TRIGGER execution_scheduler_fairness_cursor_update_guard;
+    DROP TRIGGER execution_scheduler_fairness_cursor_immutable_delete;
+    ALTER TABLE execution_dispatch_intents DROP COLUMN scheduler_operation_id;
+    DROP TABLE execution_scheduler_fairness_cursors;
+    DROP TABLE execution_scheduler_fairness_history;
+    DROP TABLE execution_scheduler_receipts;
+    DROP TABLE execution_scheduler_operations;
+    DROP TABLE execution_scheduler_controls;
+    DELETE FROM schema_migrations WHERE version = 81;
+  `);
+  f.database.close();
+
+  const migration = await migrateDatabase(f.databasePath);
+  assert.deepEqual(migration.appliedVersions, [81]);
+  const migrated = openDatabase(f.databasePath);
+  t.after(() => {
+    if (migrated.open) migrated.close();
+  });
+  assert.deepEqual(migrated.prepare(`
+    SELECT mode, mode_revision, last_operation_id,
+      updated_by_member_id, reason
+    FROM execution_scheduler_controls WHERE plan_id = ?
+  `).get(f.plan.planId), {
+    mode: "automatic",
+    mode_revision: 1,
+    last_operation_id: null,
+    updated_by_member_id: null,
+    reason: "Initial automatic scheduler mode."
+  });
+  assert.equal((migrated.prepare(`
+    SELECT control_revision FROM execution_plans WHERE plan_id = ?
+  `).get(f.plan.planId) as { control_revision: number }).control_revision,
+  planControlRevision);
+  assert.deepEqual(migrated.prepare(`
+    SELECT agent_id, cursor_revision, plan_id, plan_revision, node_key,
+      source, scheduler_operation_id, dispatch_intent_id, run_id
+    FROM execution_scheduler_fairness_history WHERE agent_id = ?
+  `).get(retained.agent_id), {
+    agent_id: retained.agent_id,
+    cursor_revision: 1,
+    plan_id: retained.plan_id,
+    plan_revision: retained.plan_revision,
+    node_key: retained.node_key,
+    source: "automatic",
+    scheduler_operation_id: null,
+    dispatch_intent_id: retained.intent_id,
+    run_id: retained.run_id
+  });
+  assert.deepEqual(migrated.prepare(`
+    SELECT cursor_revision, last_plan_id, last_plan_revision, last_node_key,
+      last_dispatch_intent_id, last_run_id
+    FROM execution_scheduler_fairness_cursors WHERE agent_id = ?
+  `).get(retained.agent_id), {
+    cursor_revision: 1,
+    last_plan_id: retained.plan_id,
+    last_plan_revision: retained.plan_revision,
+    last_node_key: retained.node_key,
+    last_dispatch_intent_id: retained.intent_id,
+    last_run_id: retained.run_id
+  });
+  assert.deepEqual(migrated.pragma("foreign_key_check"), []);
+});
+
 test("scheduler fills plan capacity with independent Agents in topology order", {
   timeout: 30_000
 }, async (t) => {
@@ -3400,6 +3991,128 @@ test("one shared sweep gives two approved plans fair physical progress", {
     plan_id: planOrder[1],
     node_key: "Node2"
   }]);
+  assert.deepEqual(f.database.pragma("foreign_key_check"), []);
+});
+
+test("shared-Agent Plan rotation survives a later sweep and Server restart", {
+  timeout: 30_000
+}, async (t) => {
+  const f = await admissionFixture(t, undefined, {
+    independentAgentIndexes: [0, 0],
+    maxConcurrency: 1,
+    schedulerMilliseconds: 0
+  });
+  const sibling = await createSharedAgentSiblingPlan(f, "rotation");
+  let schedulerApp: Awaited<ReturnType<typeof createServerApp>> | undefined;
+  let schedulerSocket: BridgeSocket | undefined;
+  t.after(async () => {
+    schedulerSocket?.terminate();
+    await schedulerApp?.close();
+  });
+  const start = async (epoch: number) => {
+    schedulerApp = await createServerApp({
+      databasePath: f.databasePath,
+      logger: false,
+      clock: () => now,
+      executionSchedulerSweepMilliseconds: 100
+    });
+    await schedulerApp.ready();
+    schedulerSocket = await schedulerApp.injectWS("/ws/bridge", {
+      headers: {
+        authorization: `Bearer ${f.credential.secret}`,
+        host: "127.0.0.1"
+      }
+    });
+    await sendAndFlush(schedulerSocket, envelope("bridge.hello", {
+      bridgeVersion: "v0.4.0-test.1",
+      connectionEpoch: epoch,
+      deviceId: f.device.deviceId,
+      supportedProtocolVersions: ["1.0"],
+      governedExecution: capability
+    }, `rotation_hello000${epoch}`));
+    const managed = f.managedAgents[0]!;
+    await sendAndFlush(schedulerSocket, envelope("agent.publish", {
+      teamId: f.teamId,
+      agentId: managed.agent.agentId,
+      ownerMemberId: f.ownerMemberId,
+      deviceId: f.device.deviceId,
+      name: managed.agent.name,
+      role: managed.agent.role,
+      capabilities: {
+        invocationMode: "managed",
+        supportsStart: true,
+        supportsResume: false,
+        supportsStreaming: true,
+        supportsInterrupt: true,
+        supportsHandoff: false,
+        supportsWorkspaceLeases: true,
+        governedExecution: {
+          ...capability,
+          readyGrants: [...f.grants, ...sibling.grants]
+        }
+      },
+      workspaceRef: managed.workspaceRef,
+      workspaceGeneration: managed.workspaceGeneration,
+      workspaceAlias: "Durable rotation workspace"
+    }, `rotation_publish000${epoch}`));
+  };
+
+  await start(2);
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id IN (?, ?)
+  `).get(f.plan.planId, sibling.plan.planId) as { n: number }).n === 1);
+  const first = f.database.prepare(`
+    SELECT plan_id, node_key, run_id FROM execution_dispatch_intents
+    WHERE plan_id IN (?, ?)
+  `).get(f.plan.planId, sibling.plan.planId) as {
+    node_key: string;
+    plan_id: string;
+    run_id: string;
+  };
+  schedulerSocket!.terminate();
+  await schedulerApp!.close();
+  schedulerSocket = undefined;
+  schedulerApp = undefined;
+  assert.equal(new RunRepository(f.database).applyEvent(first.run_id, {
+    type: "status",
+    sequence: 1,
+    status: "failed",
+    error: {
+      code: "EXPECTED_FAULT",
+      message: "Release shared Agent capacity for the next Plan.",
+      retryable: false
+    }
+  }, "2026-08-31T12:00:01.000Z").applied, true);
+
+  await start(3);
+  await waitFor(() => (f.database.prepare(`
+    SELECT count(*) AS n FROM execution_dispatch_intents
+    WHERE plan_id IN (?, ?)
+  `).get(f.plan.planId, sibling.plan.planId) as { n: number }).n === 2);
+  const selections = f.database.prepare(`
+    SELECT plan_id, node_key FROM execution_scheduler_fairness_history
+    WHERE agent_id = ? ORDER BY cursor_revision
+  `).all(f.managedAgents[0]!.agent.agentId) as Array<{
+    node_key: string;
+    plan_id: string;
+  }>;
+  assert.equal(selections.length, 2);
+  assert.equal(selections[0]!.plan_id, first.plan_id);
+  assert.notEqual(selections[1]!.plan_id, first.plan_id,
+    "the prior Plan must not reacquire the shared Agent before its peer");
+  assert.deepEqual(f.database.prepare(`
+    SELECT cursor_revision, last_plan_id, last_node_key
+    FROM execution_scheduler_fairness_cursors WHERE agent_id = ?
+  `).get(f.managedAgents[0]!.agent.agentId), {
+    cursor_revision: 2,
+    last_plan_id: selections[1]!.plan_id,
+    last_node_key: selections[1]!.node_key
+  });
+  assert.equal((f.database.prepare(`
+    SELECT count(DISTINCT run_id) AS n FROM execution_dispatch_intents
+    WHERE plan_id IN (?, ?)
+  `).get(f.plan.planId, sibling.plan.planId) as { n: number }).n, 2);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });
 
@@ -3736,5 +4449,17 @@ test("two Server schedulers retain exact multi-node generation-1 winners", {
     SELECT count(*) AS n FROM execution_input_bindings
     WHERE plan_id = ?
   `).get(f.plan.planId) as { n: number }).n, 0);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_scheduler_fairness_history
+    WHERE run_id IN (
+      SELECT run_id FROM execution_dispatch_intents WHERE plan_id = ?
+    )
+  `).get(f.plan.planId) as { n: number }).n, 3);
+  assert.equal((f.database.prepare(`
+    SELECT count(*) AS n FROM execution_scheduler_fairness_cursors
+    WHERE agent_id IN (
+      SELECT agent_id FROM execution_dispatch_intents WHERE plan_id = ?
+    ) AND cursor_revision = 1
+  `).get(f.plan.planId) as { n: number }).n, 3);
   assert.deepEqual(f.database.pragma("foreign_key_check"), []);
 });

@@ -7,7 +7,7 @@ import type { ServerRouteContext } from "./route-context.js";
 
 export function registerExecutionPlanRoutes({
   app, auth, clock, executionPlans, executionEvidence, executionInputs, isolatedWorkspaces,
-  executionNodeControls, repositoryCaptures, repositoryIntegrations,
+  executionNodeControls, executionSchedulerControls, repositoryCaptures, repositoryIntegrations,
   repositoryVerifications, dispatchRun, principal
 }: ServerRouteContext): void {
   const options = {
@@ -75,6 +75,43 @@ export function registerExecutionPlanRoutes({
       );
       const run = await dispatchRun(result.run);
       return { ...result, run };
+    })
+  );
+  app.get<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/scheduler",
+    options,
+    async (request) => execute(() => executionSchedulerControls.get(
+      principal(request), request.params.planId
+    ))
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/scheduler/mode-transitions",
+    options,
+    async (request) => execute(() => executionSchedulerControls.setMode(
+      principal(request), request.params.planId, request.body, clock()
+    ))
+  );
+  app.post<{ Params: { planId: string } }>(
+    "/api/execution-plans/:planId/scheduler/advances",
+    options,
+    async (request) => execute(async () => {
+      const result = executionSchedulerControls.advance(
+        principal(request), request.params.planId, request.body, clock()
+      );
+      for (const run of result.runs) await dispatchRun(run);
+      return result.receipt;
+    })
+  );
+  app.post<{ Params: { planId: string; nodeKey: string } }>(
+    "/api/execution-plans/:planId/nodes/:nodeKey/dispatches",
+    options,
+    async (request) => execute(async () => {
+      const result = executionSchedulerControls.manualDispatch(
+        principal(request), request.params.planId, request.params.nodeKey,
+        request.body, clock()
+      );
+      for (const run of result.runs) await dispatchRun(run);
+      return result.receipt;
     })
   );
   app.get<{ Params: { operationId: string } }>(

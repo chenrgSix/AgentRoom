@@ -15,6 +15,8 @@ import { ExecutionScheduler } from
   "../src/execution/execution-scheduler.js";
 import type { ExecutionSettlementService } from
   "../src/execution/execution-settlement-service.js";
+import type { ExecutionSchedulerFairnessRepository } from
+  "../src/execution/execution-scheduler-fairness-repository.js";
 import type { GovernedRunAdmissionService } from
   "../src/execution/governed-run-admission-service.js";
 import type { RunRecord } from "../src/run/run-repository.js";
@@ -25,13 +27,17 @@ function candidate(
   planId: string,
   nodeKey: string,
   topologicalOrdinal: number,
-  planApprovedAt = now
+  planApprovedAt = now,
+  agentId = `agent_${planId}_${nodeKey}`
 ): ExecutionSchedulerCandidate {
   return {
     planId,
     planRevision: 1,
     nodeKey,
+    agentId,
     planApprovedAt,
+    schedulerMode: "automatic",
+    schedulerModeRevision: 1,
     topologicalOrdinal
   };
 }
@@ -64,10 +70,17 @@ function schedulerFixture(input: {
     evaluation: number
   ) => { ready: true; blocker: null } | { ready: false; blocker: string };
   admit?: (candidate: ExecutionSchedulerCandidate) => RunRecord;
+  fairness?: Record<string, {
+    cursorRevision: number;
+    lastPlanId: string;
+    lastPlanRevision: number;
+  }>;
 }) {
   const admissions: string[] = [];
   const projections: Array<{ blocker: string | null; key: string }> = [];
   const evaluations = new Map<string, number>();
+  const fairness = new Map(Object.entries(input.fairness ?? {}));
+  const candidateQueries: unknown[] = [];
   let settlementRounds = 0;
   const key = (value: ExecutionSchedulerCandidate): string =>
     `${value.planId}/${value.nodeKey}`;
@@ -77,7 +90,14 @@ function schedulerFixture(input: {
     }
   } as SqliteTransactionBoundary;
   const nodes = {
-    listCandidates: () => structuredClone(input.candidates)
+    ensureCurrent: () => undefined,
+    listCandidates: (options: { mode?: string; planId?: string } = {}) => {
+      candidateQueries.push(structuredClone(options));
+      return structuredClone(input.candidates).filter((entry) =>
+        (!options.mode || entry.schedulerMode === options.mode) &&
+        (!options.planId || entry.planId === options.planId)
+      );
+    }
   } as unknown as ExecutionNodeStateRepository;
   const projector = {
     projectReadiness: (
@@ -108,20 +128,33 @@ function schedulerFixture(input: {
     admitScheduled: (identity: ExecutionSchedulerCandidate) => {
       const admitted = input.admit?.(identity) ?? run(identity);
       admissions.push(key(identity));
+      const previous = fairness.get(identity.agentId);
+      fairness.set(identity.agentId, {
+        cursorRevision: (previous?.cursorRevision ?? 0) + 1,
+        lastPlanId: identity.planId,
+        lastPlanRevision: identity.planRevision
+      });
       return { created: true, runs: [admitted] };
     }
   } as unknown as GovernedRunAdmissionService;
+  const fairnessRepository = {
+    get: (agentId: string) => fairness.get(agentId),
+    revision: (agentId: string) =>
+      fairness.get(agentId)?.cursorRevision ?? 0
+  } as unknown as ExecutionSchedulerFairnessRepository;
   const scheduler = new ExecutionScheduler(
     transactions,
     nodes,
     projector,
     settlement,
     admission,
+    fairnessRepository,
     () => now,
     input.maxCandidateEvaluations
   );
   return {
     admissions,
+    candidateQueries,
     evaluations,
     projections,
     scheduler,
@@ -218,4 +251,57 @@ test("candidate ordering is stable across insertion permutations", () => {
       expected
     );
   }
+});
+
+test("scheduler starts after the durable shared-Agent Plan cursor", () => {
+  const sharedAgent = "agent_scheduler_shared0001";
+  const f = schedulerFixture({
+    candidates: [
+      candidate("plan_a", "A1", 0, now, sharedAgent),
+      candidate("plan_b", "B1", 0, now, sharedAgent)
+    ],
+    fairness: {
+      [sharedAgent]: {
+        cursorRevision: 4,
+        lastPlanId: "plan_a",
+        lastPlanRevision: 1
+      }
+    },
+    maxCandidateEvaluations: 1
+  });
+  f.scheduler.sweep();
+  assert.deepEqual(f.admissions, ["plan_b/B1"]);
+});
+
+test("supervised sweep is one exact Plan operation and admits at most one node", () => {
+  const f = schedulerFixture({
+    candidates: [
+      { ...candidate("plan_a", "A1", 0), schedulerMode: "supervised" },
+      { ...candidate("plan_a", "A2", 1), schedulerMode: "supervised" }
+    ]
+  });
+  f.scheduler.sweep({
+    maxAdmissions: 1,
+    mode: "supervised",
+    operationId: "op_scheduler_advance0001",
+    planId: "plan_a"
+  });
+  assert.deepEqual(f.admissions, ["plan_a/A1"]);
+  assert.deepEqual(f.candidateQueries, [{
+    mode: "supervised",
+    planId: "plan_a"
+  }]);
+});
+
+test("automatic sweep excludes manual and supervised Plans", () => {
+  const f = schedulerFixture({
+    candidates: [
+      { ...candidate("plan_a", "Manual", 0), schedulerMode: "manual" },
+      { ...candidate("plan_b", "Supervised", 0), schedulerMode: "supervised" },
+      candidate("plan_c", "Automatic", 0)
+    ]
+  });
+  f.scheduler.sweep();
+  assert.deepEqual(f.admissions, ["plan_c/Automatic"]);
+  assert.deepEqual(f.candidateQueries, [{ mode: "automatic" }]);
 });

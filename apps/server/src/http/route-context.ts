@@ -5,6 +5,8 @@ import type { ExecutionEvidenceViewService } from
   "../execution/execution-evidence-view-service.js";
 import type { ExecutionNodeControlService } from
   "../execution/execution-node-control-service.js";
+import type { ExecutionSchedulerControlService } from
+  "../execution/execution-scheduler-control-service.js";
 import type { RepositoryCaptureService } from "../repository/repository-capture-service.js";
 import type { RepositoryIntegrationService } from
   "../repository/repository-integration-service.js";
@@ -111,6 +113,7 @@ export interface ServerRouteContext {
   executionEvidence: ExecutionEvidenceViewService;
   executionInputs: ExecutionInputService;
   executionNodeControls: ExecutionNodeControlService;
+  executionSchedulerControls: ExecutionSchedulerControlService;
   isolatedWorkspaces: IsolatedWorkspaceLeaseService;
   repositoryCaptures: RepositoryCaptureService;
   repositoryIntegrations: RepositoryIntegrationService;

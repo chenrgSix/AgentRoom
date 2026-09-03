@@ -41,6 +41,12 @@ import type { ExecutionNodeIdentity } from
 import type { ExecutionInputService } from "./execution-input-service.js";
 import type { ExecutionPlanRepository } from
   "./execution-plan-repository.js";
+import type {
+  ExecutionSchedulerControlRepository,
+  ExecutionSchedulerMode
+} from "./execution-scheduler-control-repository.js";
+import type { ExecutionSchedulerFairnessRepository } from
+  "./execution-scheduler-fairness-repository.js";
 
 export interface GovernedMessageAdmissionInput {
   member: { memberId: string; role: "owner" | "member" };
@@ -67,6 +73,13 @@ interface GovernanceRow {
 }
 
 type AdmissionSource = "member_message" | "scheduler";
+
+export interface ScheduledAdmissionAuthority {
+  expectedFairnessCursorRevision: number;
+  mode: ExecutionSchedulerMode;
+  modeRevision: number;
+  operationId: string | null;
+}
 
 interface GovernedNodeRetryAdmissionInput extends GovernedMessageAdmissionInput {
   authorization: ExecutionNodeRetryAuthorization;
@@ -102,7 +115,9 @@ implements GovernedMessageAdmissionPort {
     private readonly dependencies: ExecutionDependencyResolver,
     private readonly workspaces: IsolatedWorkspaceLeaseService,
     private readonly connections: BridgeConnectionRegistry,
-    private readonly runs: RunRepository
+    private readonly runs: RunRepository,
+    private readonly schedulerControls: ExecutionSchedulerControlRepository,
+    private readonly schedulerFairness: ExecutionSchedulerFairnessRepository
   ) {}
 
   public createRunsForMessage(
@@ -304,11 +319,21 @@ implements GovernedMessageAdmissionPort {
 
   public admitScheduled(
     identity: ExecutionNodeIdentity,
-    now: string
+    now: string,
+    authority: ScheduledAdmissionAuthority
   ): GovernedMessageAdmissionResult {
     return this.transactions.immediate(() => {
       const existing = this.findIntentRun(identity);
       if (existing) return { created: false, runs: [existing] };
+      this.schedulerControls.require(
+        identity.planId,
+        authority.mode,
+        authority.modeRevision
+      );
+      if ((authority.mode === "automatic") !==
+        (authority.operationId === null)) {
+        return fail("EXECUTION_SCHEDULER_AUTHORITY_INVALID");
+      }
       const readiness = this.readiness(identity, now);
       if (!readiness.ready) fail(readiness.blocker);
       const plan = this.plans.get(identity.planId)!;
@@ -342,7 +367,7 @@ implements GovernedMessageAdmissionPort {
         plan_id: identity.planId,
         revision: identity.planRevision,
         node_key: identity.nodeKey
-      }, "scheduler");
+      }, "scheduler", undefined, authority);
     });
   }
 
@@ -350,7 +375,8 @@ implements GovernedMessageAdmissionPort {
     input: GovernedMessageAdmissionInput,
     governance: GovernanceRow,
     source: AdmissionSource,
-    retry?: GovernedNodeRetryAdmissionInput
+    retry?: GovernedNodeRetryAdmissionInput,
+    schedulerAuthority?: ScheduledAdmissionAuthority
   ): GovernedMessageAdmissionResult {
     const { member, message, now, task } = input;
     const existing = this.runs.findByTrigger(message.messageId);
@@ -544,18 +570,23 @@ implements GovernedMessageAdmissionPort {
       dispatchGeneration,
       inputSelections: dependency.selections,
       grant,
-      retryOperationId: retry?.authorization.operationId ?? null
+      retryOperationId: retry?.authorization.operationId ?? null,
+      schedulerOperationId: schedulerAuthority?.operationId ?? null,
+      schedulerMode: schedulerAuthority?.mode ?? null,
+      schedulerModeRevision: schedulerAuthority?.modeRevision ?? null
     });
+    const dispatchIntentId = retry?.authorization.newDispatchIntentId ??
+      createOpaqueId("dispatch");
     this.database.prepare(`
       INSERT INTO execution_dispatch_intents (
         intent_id, source, plan_id, plan_revision, plan_digest,
         plan_control_revision, approval_operation_id, node_key,
         dispatch_generation, task_id, room_id, agent_id, device_id, run_id,
         trace_message_id, requester_member_id, operation_digest, created_at,
-        retry_operation_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        retry_operation_id, scheduler_operation_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      retry?.authorization.newDispatchIntentId ?? createOpaqueId("dispatch"),
+      dispatchIntentId,
       source,
       plan.planId,
       plan.current.revision,
@@ -573,7 +604,8 @@ implements GovernedMessageAdmissionPort {
       member.memberId,
       requestDigest,
       now,
-      retry?.authorization.operationId ?? null
+      retry?.authorization.operationId ?? null,
+      schedulerAuthority?.operationId ?? null
     );
     this.database.prepare(`
       INSERT INTO execution_run_admissions (
@@ -681,6 +713,27 @@ implements GovernedMessageAdmissionPort {
     });
     if (!manifest) return fail("EXECUTION_DISPATCH_MANIFEST_CONFLICT");
     this.workspaces.reserveForRun(manifest, now);
+    this.schedulerFairness.advance({
+      admittedAt: now,
+      agentId: node.agentId,
+      dispatchIntentId,
+      ...(schedulerAuthority
+        ? {
+            expectedCursorRevision:
+              schedulerAuthority.expectedFairnessCursorRevision
+          }
+        : {}),
+      nodeKey: node.nodeKey,
+      planId: plan.planId,
+      planRevision: plan.current.revision,
+      runId,
+      schedulerOperationId: schedulerAuthority?.operationId ?? null,
+      source: retry
+        ? "node_retry"
+        : source === "member_message"
+          ? "member_message"
+          : schedulerAuthority!.mode
+    });
     return { created: true, runs: [created] };
   }
 
