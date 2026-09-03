@@ -16,6 +16,8 @@ import {
   RemoteProviderClient,
   RemoteProviderClientError
 } from "../src/remote/remote-provider-client.js";
+import { createRemoteProviderEgressFetch } from
+  "../src/remote/remote-provider-egress-policy.js";
 
 const now = "2026-09-03T00:00:00.000Z";
 
@@ -215,7 +217,9 @@ test("real loopback response loss reconciles by lookup and loopback timeout abor
   const localBinding = binding();
   localBinding.providerOrigin = `http://127.0.0.1:${address.port}`;
   const client = new RemoteProviderClient(
-    () => "runtime-only-token", fetch, 100
+    () => "runtime-only-token",
+    createRemoteProviderEgressFetch({ testOnlyAllowLoopback: true }),
+    100
   );
   const request = {
     operationId: retained.operationId,

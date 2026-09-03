@@ -26,6 +26,8 @@ import { ExecutionPlanRepository } from
 import { AgentService } from "../src/registry/agent-service.js";
 import { MemberDeviceService } from "../src/registry/member-device-service.js";
 import { AuthService } from "../src/security/auth-service.js";
+import { createRemoteProviderEgressFetch } from
+  "../src/remote/remote-provider-egress-policy.js";
 
 const run = promisify(execFile);
 const digest = (source: Buffer) => createHash("sha256").update(source).digest("hex");
@@ -208,6 +210,9 @@ test("authenticated remote commit and CI observations retain result-free evidenc
   assert.ok(address && typeof address !== "string");
   const f = await fixture(t, () => now, {
     remoteProviderCredentialResolver: () => "provider-test-token",
+    remoteProviderFetch: createRemoteProviderEgressFetch({
+      testOnlyAllowLoopback: true
+    }),
     remoteGitTemporaryBase: candidate.root
   });
   const core = new CoreRepository(f.database);

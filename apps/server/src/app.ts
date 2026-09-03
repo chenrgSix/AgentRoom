@@ -29,6 +29,10 @@ import {
   RemoteProviderClient,
   type RemoteProviderCredentialResolver
 } from "./remote/remote-provider-client.js";
+import {
+  createRemoteProviderEgressFetch,
+  remoteProviderFetchAllowsTestLoopback
+} from "./remote/remote-provider-egress-policy.js";
 import { RemoteEvidenceRepository } from
   "./remote/remote-evidence-repository.js";
 import { RemoteEvidenceService } from "./remote/remote-evidence-service.js";
@@ -593,9 +597,12 @@ export async function createServerApp(
   const remoteProviderBindingRepository = new RemoteProviderBindingRepository(
     database, transactions
   );
+  const remoteProviderFetch = options.remoteProviderFetch ??
+    createRemoteProviderEgressFetch();
   const remoteProviderBindings = new RemoteProviderBindingService(
     remoteProviderBindingRepository,
-    auth
+    auth,
+    remoteProviderFetchAllowsTestLoopback(remoteProviderFetch)
   );
   const remoteEvidenceRepository = new RemoteEvidenceRepository(
     database, artifactRepository, artifactPublicationRepository, transactions
@@ -608,7 +615,7 @@ export async function createServerApp(
     auth,
     new RemoteProviderClient(
       options.remoteProviderCredentialResolver ?? (() => undefined),
-      options.remoteProviderFetch ?? fetch,
+      remoteProviderFetch,
       options.remoteProviderTimeoutMilliseconds
     ),
     artifactBlobs,
