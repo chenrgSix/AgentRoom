@@ -2133,7 +2133,7 @@ type ExecutionPlanSupersessionActivationReceipt struct {
 	// most nanosecond precision.
 	ActivatedAt     string                                                   `json:"activatedAt"`
 	ActivatedBy     ExecutionPlanSupersessionActivationReceiptActivatedBy    `json:"activatedBy"`
-	Candidate       Candidate                                                `json:"candidate"`
+	Candidate       ExecutionPlanSupersessionActivationReceiptCandidate      `json:"candidate"`
 	CarryForward    []ExecutionPlanSupersessionActivationReceiptCarryForward `json:"carryForward"`
 	DelegationID    *string                                                  `json:"delegationId"`
 	OperationDigest string                                                   `json:"operationDigest"`
@@ -2149,26 +2149,26 @@ type ExecutionPlanSupersessionActivationReceiptActivatedBy struct {
 	RunID    *string         `json:"runId,omitempty"`
 }
 
-type Candidate struct {
-	Author              CandidateAuthor `json:"author"`
-	BaseControlRevision int64           `json:"baseControlRevision"`
-	BaseDigest          string          `json:"baseDigest"`
-	BaseRevision        int64           `json:"baseRevision"`
-	CandidateDigest     string          `json:"candidateDigest"`
-	CandidateID         string          `json:"candidateId"`
-	CandidateRevision   int64           `json:"candidateRevision"`
+type ExecutionPlanSupersessionActivationReceiptCandidate struct {
+	Author              StickyAuthor `json:"author"`
+	BaseControlRevision int64        `json:"baseControlRevision"`
+	BaseDigest          string       `json:"baseDigest"`
+	BaseRevision        int64        `json:"baseRevision"`
+	CandidateDigest     string       `json:"candidateDigest"`
+	CandidateID         string       `json:"candidateId"`
+	CandidateRevision   int64        `json:"candidateRevision"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	CreatedAt        string              `json:"createdAt"`
-	Definition       CandidateDefinition `json:"definition"`
-	OperationID      string              `json:"operationId"`
-	PlanID           string              `json:"planId"`
-	Reason           string              `json:"reason"`
-	RequestDigest    string              `json:"requestDigest"`
-	RootTaskRevision int64               `json:"rootTaskRevision"`
+	CreatedAt        string           `json:"createdAt"`
+	Definition       StickyDefinition `json:"definition"`
+	OperationID      string           `json:"operationId"`
+	PlanID           string           `json:"planId"`
+	Reason           string           `json:"reason"`
+	RequestDigest    string           `json:"requestDigest"`
+	RootTaskRevision int64            `json:"rootTaskRevision"`
 }
 
-type CandidateAuthor struct {
+type StickyAuthor struct {
 	Kind         AuthorKind `json:"kind"`
 	MemberID     *string    `json:"memberId,omitempty"`
 	AgentID      *string    `json:"agentId,omitempty"`
@@ -2176,7 +2176,7 @@ type CandidateAuthor struct {
 	DiscussionID *string    `json:"discussionId,omitempty"`
 }
 
-type CandidateDefinition struct {
+type StickyDefinition struct {
 	Decision       CunningDecision        `json:"decision"`
 	Edges          []CunningEdge          `json:"edges"`
 	ExternalInputs []CunningExternalInput `json:"externalInputs"`
@@ -2384,19 +2384,19 @@ type IndigoCompiledTask struct {
 }
 
 type TentacledCurrent struct {
-	Author StickyAuthor `json:"author"`
+	Author IndigoAuthor `json:"author"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
 	CreatedAt  string           `json:"createdAt"`
 	DecisionID string           `json:"decisionId"`
-	Definition StickyDefinition `json:"definition"`
+	Definition IndigoDefinition `json:"definition"`
 	Digest     string           `json:"digest"`
 	PlanID     string           `json:"planId"`
 	ProposalID string           `json:"proposalId"`
 	Revision   int64            `json:"revision"`
 }
 
-type StickyAuthor struct {
+type IndigoAuthor struct {
 	Kind         AuthorKind `json:"kind"`
 	MemberID     *string    `json:"memberId,omitempty"`
 	AgentID      *string    `json:"agentId,omitempty"`
@@ -2404,7 +2404,7 @@ type StickyAuthor struct {
 	DiscussionID *string    `json:"discussionId,omitempty"`
 }
 
-type StickyDefinition struct {
+type IndigoDefinition struct {
 	Decision       MagentaDecision        `json:"decision"`
 	Edges          []MagentaEdge          `json:"edges"`
 	ExternalInputs []MagentaExternalInput `json:"externalInputs"`
@@ -2574,77 +2574,67 @@ type MischievousIntegrationTarget struct {
 	TargetRef      string `json:"targetRef"`
 }
 
-type ExecutionReplanDelegationIssueCommand struct {
-	AgentID                  string `json:"agentId"`
-	ExpectedControlRevision  int64  `json:"expectedControlRevision"`
-	ExpectedPlanDigest       string `json:"expectedPlanDigest"`
-	ExpectedPlanRevision     int64  `json:"expectedPlanRevision"`
-	ExpectedRootTaskRevision int64  `json:"expectedRootTaskRevision"`
+type ExecutionPlanSupersessionControlView struct {
+	ActivationBlockerCode *string                                        `json:"activationBlockerCode"`
+	ActivationTemplate    *ActivationTemplate                            `json:"activationTemplate"`
+	Candidate             *ExecutionPlanSupersessionControlViewCandidate `json:"candidate"`
+	ControlRevision       int64                                          `json:"controlRevision"`
+	CurrentDigest         string                                         `json:"currentDigest"`
+	CurrentRevision       int64                                          `json:"currentRevision"`
+	Delegations           []DelegationElement                            `json:"delegations"`
+	PlanID                string                                         `json:"planId"`
+	RootTaskRevision      int64                                          `json:"rootTaskRevision"`
+}
+
+type ActivationTemplate struct {
+	CandidateID               string                           `json:"candidateId"`
+	CarryForward              []ActivationTemplateCarryForward `json:"carryForward"`
+	ExpectedCandidateDigest   string                           `json:"expectedCandidateDigest"`
+	ExpectedCandidateRevision int64                            `json:"expectedCandidateRevision"`
+	ExpectedControlRevision   int64                            `json:"expectedControlRevision"`
+	ExpectedCurrentDigest     string                           `json:"expectedCurrentDigest"`
+	ExpectedCurrentRevision   int64                            `json:"expectedCurrentRevision"`
+	ExpectedRootTaskRevision  int64                            `json:"expectedRootTaskRevision"`
+}
+
+type ActivationTemplateCarryForward struct {
+	Gate                           Gate   `json:"gate"`
+	SourceAdoptionDigest           string `json:"sourceAdoptionDigest"`
+	SourceAdoptionID               string `json:"sourceAdoptionId"`
+	SourceNodeReuseContractDigest  string `json:"sourceNodeReuseContractDigest"`
+	SourceReuseContractID          string `json:"sourceReuseContractId"`
+	SourceReuseInputEvidenceDigest string `json:"sourceReuseInputEvidenceDigest"`
+	TargetNodeKey                  string `json:"targetNodeKey"`
+}
+
+type ExecutionPlanSupersessionControlViewCandidate struct {
+	Author              IndecentAuthor `json:"author"`
+	BaseControlRevision int64          `json:"baseControlRevision"`
+	BaseDigest          string         `json:"baseDigest"`
+	BaseRevision        int64          `json:"baseRevision"`
+	CandidateDigest     string         `json:"candidateDigest"`
+	CandidateID         string         `json:"candidateId"`
+	CandidateRevision   int64          `json:"candidateRevision"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
-	ExpiresAt   string `json:"expiresAt"`
-	OperationID string `json:"operationId"`
-	Reason      string `json:"reason"`
+	CreatedAt        string             `json:"createdAt"`
+	Definition       IndecentDefinition `json:"definition"`
+	OperationID      string             `json:"operationId"`
+	PlanID           string             `json:"planId"`
+	Reason           string             `json:"reason"`
+	RequestDigest    string             `json:"requestDigest"`
+	RootTaskRevision int64              `json:"rootTaskRevision"`
 }
 
-type ExecutionReplanDelegation struct {
-	AgentID          string `json:"agentId"`
-	DelegationDigest string `json:"delegationDigest"`
-	DelegationID     string `json:"delegationId"`
-	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
-	// most nanosecond precision.
-	ExpiresAt string `json:"expiresAt"`
-	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
-	// most nanosecond precision.
-	IssuedAt            string   `json:"issuedAt"`
-	IssuedByMemberID    string   `json:"issuedByMemberId"`
-	OperationID         string   `json:"operationId"`
-	PlanControlRevision int64    `json:"planControlRevision"`
-	PlanDigest          string   `json:"planDigest"`
-	PlanID              string   `json:"planId"`
-	PlanRevision        int64    `json:"planRevision"`
-	Reason              string   `json:"reason"`
-	Revision            int64    `json:"revision"`
-	RootTaskRevision    int64    `json:"rootTaskRevision"`
-	TaskIDS             []string `json:"taskIds"`
+type IndecentAuthor struct {
+	Kind         AuthorKind `json:"kind"`
+	MemberID     *string    `json:"memberId,omitempty"`
+	AgentID      *string    `json:"agentId,omitempty"`
+	RunID        *string    `json:"runId,omitempty"`
+	DiscussionID *string    `json:"discussionId,omitempty"`
 }
 
-type ExecutionReplanDelegationRevokeCommand struct {
-	ExpectedDigest   string `json:"expectedDigest"`
-	ExpectedRevision int64  `json:"expectedRevision"`
-	OperationID      string `json:"operationId"`
-	Reason           string `json:"reason"`
-}
-
-type ExecutionReplanDelegationRevocation struct {
-	DelegationDigest   string `json:"delegationDigest"`
-	DelegationID       string `json:"delegationId"`
-	DelegationRevision int64  `json:"delegationRevision"`
-	OperationID        string `json:"operationId"`
-	Reason             string `json:"reason"`
-	RevocationDigest   string `json:"revocationDigest"`
-	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
-	// most nanosecond precision.
-	RevokedAt         string `json:"revokedAt"`
-	RevokedByMemberID string `json:"revokedByMemberId"`
-}
-
-type ExecutionAgentSupersessionCandidateCommand struct {
-	Command ExecutionAgentSupersessionCandidateCommandCommand `json:"command"`
-	RunID   string                                            `json:"runId"`
-}
-
-type ExecutionAgentSupersessionCandidateCommandCommand struct {
-	Definition               IndigoDefinition `json:"definition"`
-	ExpectedControlRevision  int64            `json:"expectedControlRevision"`
-	ExpectedCurrentDigest    string           `json:"expectedCurrentDigest"`
-	ExpectedCurrentRevision  int64            `json:"expectedCurrentRevision"`
-	ExpectedRootTaskRevision int64            `json:"expectedRootTaskRevision"`
-	OperationID              string           `json:"operationId"`
-	Reason                   string           `json:"reason"`
-}
-
-type IndigoDefinition struct {
+type IndecentDefinition struct {
 	Decision       FriskyDecision        `json:"decision"`
 	Edges          []FriskyEdge          `json:"edges"`
 	ExternalInputs []FriskyExternalInput `json:"externalInputs"`
@@ -2809,6 +2799,273 @@ type Budget13 struct {
 }
 
 type BraggadociousIntegrationTarget struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
+type DelegationElement struct {
+	Delegation DelegationDelegation `json:"delegation"`
+	State      DelegationState      `json:"state"`
+}
+
+type DelegationDelegation struct {
+	AgentID          string `json:"agentId"`
+	DelegationDigest string `json:"delegationDigest"`
+	DelegationID     string `json:"delegationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt string `json:"expiresAt"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt            string   `json:"issuedAt"`
+	IssuedByMemberID    string   `json:"issuedByMemberId"`
+	OperationID         string   `json:"operationId"`
+	PlanControlRevision int64    `json:"planControlRevision"`
+	PlanDigest          string   `json:"planDigest"`
+	PlanID              string   `json:"planId"`
+	PlanRevision        int64    `json:"planRevision"`
+	Reason              string   `json:"reason"`
+	Revision            int64    `json:"revision"`
+	RootTaskRevision    int64    `json:"rootTaskRevision"`
+	TaskIDS             []string `json:"taskIds"`
+}
+
+type ExecutionReplanDelegationIssueCommand struct {
+	AgentID                  string `json:"agentId"`
+	ExpectedControlRevision  int64  `json:"expectedControlRevision"`
+	ExpectedPlanDigest       string `json:"expectedPlanDigest"`
+	ExpectedPlanRevision     int64  `json:"expectedPlanRevision"`
+	ExpectedRootTaskRevision int64  `json:"expectedRootTaskRevision"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt   string `json:"expiresAt"`
+	OperationID string `json:"operationId"`
+	Reason      string `json:"reason"`
+}
+
+type ExecutionReplanDelegation struct {
+	AgentID          string `json:"agentId"`
+	DelegationDigest string `json:"delegationDigest"`
+	DelegationID     string `json:"delegationId"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	ExpiresAt string `json:"expiresAt"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	IssuedAt            string   `json:"issuedAt"`
+	IssuedByMemberID    string   `json:"issuedByMemberId"`
+	OperationID         string   `json:"operationId"`
+	PlanControlRevision int64    `json:"planControlRevision"`
+	PlanDigest          string   `json:"planDigest"`
+	PlanID              string   `json:"planId"`
+	PlanRevision        int64    `json:"planRevision"`
+	Reason              string   `json:"reason"`
+	Revision            int64    `json:"revision"`
+	RootTaskRevision    int64    `json:"rootTaskRevision"`
+	TaskIDS             []string `json:"taskIds"`
+}
+
+type ExecutionReplanDelegationRevokeCommand struct {
+	ExpectedDigest   string `json:"expectedDigest"`
+	ExpectedRevision int64  `json:"expectedRevision"`
+	OperationID      string `json:"operationId"`
+	Reason           string `json:"reason"`
+}
+
+type ExecutionReplanDelegationRevocation struct {
+	DelegationDigest   string `json:"delegationDigest"`
+	DelegationID       string `json:"delegationId"`
+	DelegationRevision int64  `json:"delegationRevision"`
+	OperationID        string `json:"operationId"`
+	Reason             string `json:"reason"`
+	RevocationDigest   string `json:"revocationDigest"`
+	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+	// most nanosecond precision.
+	RevokedAt         string `json:"revokedAt"`
+	RevokedByMemberID string `json:"revokedByMemberId"`
+}
+
+type ExecutionAgentSupersessionCandidateCommand struct {
+	Command ExecutionAgentSupersessionCandidateCommandCommand `json:"command"`
+	RunID   string                                            `json:"runId"`
+}
+
+type ExecutionAgentSupersessionCandidateCommandCommand struct {
+	Definition               HilariousDefinition `json:"definition"`
+	ExpectedControlRevision  int64               `json:"expectedControlRevision"`
+	ExpectedCurrentDigest    string              `json:"expectedCurrentDigest"`
+	ExpectedCurrentRevision  int64               `json:"expectedCurrentRevision"`
+	ExpectedRootTaskRevision int64               `json:"expectedRootTaskRevision"`
+	OperationID              string              `json:"operationId"`
+	Reason                   string              `json:"reason"`
+}
+
+type HilariousDefinition struct {
+	Decision       MischievousDecision        `json:"decision"`
+	Edges          []MischievousEdge          `json:"edges"`
+	ExternalInputs []MischievousExternalInput `json:"externalInputs"`
+	Nodes          []MischievousNode          `json:"nodes"`
+	Policy         MischievousPolicy          `json:"policy"`
+	RootTaskID     string                     `json:"rootTaskId"`
+	SchemaVersion  SchemaVersion              `json:"schemaVersion"`
+	Title          string                     `json:"title"`
+}
+
+type MischievousDecision struct {
+	Items               []Item1                       `json:"items"`
+	SourceRevisions     []BraggadociousSourceRevision `json:"sourceRevisions"`
+	Sources             []BraggadociousSource         `json:"sources"`
+	Summary             string                        `json:"summary"`
+	UnresolvedQuestions []UnresolvedQuestion1         `json:"unresolvedQuestions"`
+}
+
+type Item1 struct {
+	ItemKey   string `json:"itemKey"`
+	Statement string `json:"statement"`
+}
+
+type BraggadociousSourceRevision struct {
+	EvidenceRefID string `json:"evidenceRefId"`
+	Revision      int64  `json:"revision"`
+}
+
+type BraggadociousSource struct {
+	ArtifactID    *string    `json:"artifactId,omitempty"`
+	EvidenceRefID string     `json:"evidenceRefId"`
+	Kind          PurpleKind `json:"kind"`
+	RunID         *string    `json:"runId,omitempty"`
+	Sequence      *int64     `json:"sequence,omitempty"`
+	MessageID     *string    `json:"messageId,omitempty"`
+	MemoryID      *string    `json:"memoryId,omitempty"`
+	DiscussionID  *string    `json:"discussionId,omitempty"`
+	ResultID      *string    `json:"resultId,omitempty"`
+}
+
+type UnresolvedQuestion1 struct {
+	QuestionKey string `json:"questionKey"`
+	Required    bool   `json:"required"`
+	Text        string `json:"text"`
+}
+
+type MischievousEdge struct {
+	Bindings    []Binding1 `json:"bindings"`
+	EdgeKey     string     `json:"edgeKey"`
+	FromNodeKey string     `json:"fromNodeKey"`
+	Gate        Gate       `json:"gate"`
+	ToNodeKey   string     `json:"toNodeKey"`
+}
+
+type Binding1 struct {
+	InputSlot  string `json:"inputSlot"`
+	OutputSlot string `json:"outputSlot"`
+}
+
+type MischievousExternalInput struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ContentDigest    string            `json:"contentDigest"`
+	InputSlot        string            `json:"inputSlot"`
+	Kind             ExternalInputKind `json:"kind"`
+	NodeKey          string            `json:"nodeKey"`
+	SourceResultID   string            `json:"sourceResultId"`
+	SourceTaskID     string            `json:"sourceTaskId"`
+}
+
+type MischievousNode struct {
+	AgentID              string                 `json:"agentId"`
+	Budget               Budget14               `json:"budget"`
+	Inputs               []Input1               `json:"inputs"`
+	Kind                 NodeKind               `json:"kind"`
+	NodeKey              string                 `json:"nodeKey"`
+	Outputs              []Output1              `json:"outputs"`
+	Repository           Repository1            `json:"repository"`
+	Required             bool                   `json:"required"`
+	Scope                Scope1                 `json:"scope"`
+	Task                 Task1                  `json:"task"`
+	VerificationProfiles []VerificationProfile1 `json:"verificationProfiles"`
+}
+
+type Budget14 struct {
+	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
+	MaxRunAttempts              int64 `json:"maxRunAttempts"`
+}
+
+type Input1 struct {
+	Kind     ExternalInputKind `json:"kind"`
+	Required bool              `json:"required"`
+	SlotKey  string            `json:"slotKey"`
+}
+
+type Output1 struct {
+	Kind     ExternalInputKind `json:"kind"`
+	Required bool              `json:"required"`
+	SlotKey  string            `json:"slotKey"`
+}
+
+type Repository1 struct {
+	BaseCommit           string `json:"baseCommit"`
+	BindingID            string `json:"bindingId"`
+	GrantID              string `json:"grantId"`
+	GrantRevision        int64  `json:"grantRevision"`
+	RepositoryID         string `json:"repositoryId"`
+	RuntimeProfileDigest string `json:"runtimeProfileDigest"`
+	RuntimeProfileID     string `json:"runtimeProfileId"`
+}
+
+type Scope1 struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type Task1 struct {
+	Criteria             []Criterion1   `json:"criteria,omitempty"`
+	Goal                 *string        `json:"goal,omitempty"`
+	Mode                 TaskMode       `json:"mode"`
+	OwnerMemberID        *string        `json:"ownerMemberId,omitempty"`
+	SourceAction         *SourceAction1 `json:"sourceAction,omitempty"`
+	Title                *string        `json:"title,omitempty"`
+	CriteriaRevision     *int64         `json:"criteriaRevision,omitempty"`
+	DefinitionRevision   *int64         `json:"definitionRevision,omitempty"`
+	ExpectedTaskRevision *int64         `json:"expectedTaskRevision,omitempty"`
+	TaskID               *string        `json:"taskId,omitempty"`
+}
+
+type Criterion1 struct {
+	CriterionKey string `json:"criterionKey"`
+	Description  string `json:"description"`
+	Ordinal      int64  `json:"ordinal"`
+	Required     bool   `json:"required"`
+}
+
+type SourceAction1 struct {
+	NextActionKey string `json:"nextActionKey"`
+	ResultID      string `json:"resultId"`
+}
+
+type VerificationProfile1 struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Required  bool   `json:"required"`
+	Revision  int64  `json:"revision"`
+}
+
+type MischievousPolicy struct {
+	Budget                          Budget15             `json:"budget"`
+	Integration                     IntegrationEnum      `json:"integration"`
+	IntegrationTargets              []IntegrationTarget1 `json:"integrationTargets"`
+	MaxConcurrency                  int64                `json:"maxConcurrency"`
+	RequireHumanIntegrationApproval bool                 `json:"requireHumanIntegrationApproval"`
+}
+
+type Budget15 struct {
+	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
+	MaxRunAttempts              int64 `json:"maxRunAttempts"`
+}
+
+type IntegrationTarget1 struct {
 	ExpectedCommit string `json:"expectedCommit"`
 	RepositoryID   string `json:"repositoryId"`
 	TargetRef      string `json:"targetRef"`
@@ -2995,187 +3252,6 @@ type ExecutionPlanRevisionAuthor struct {
 }
 
 type ExecutionPlanRevisionDefinition struct {
-	Decision       MischievousDecision        `json:"decision"`
-	Edges          []MischievousEdge          `json:"edges"`
-	ExternalInputs []MischievousExternalInput `json:"externalInputs"`
-	Nodes          []MischievousNode          `json:"nodes"`
-	Policy         MischievousPolicy          `json:"policy"`
-	RootTaskID     string                     `json:"rootTaskId"`
-	SchemaVersion  SchemaVersion              `json:"schemaVersion"`
-	Title          string                     `json:"title"`
-}
-
-type MischievousDecision struct {
-	Items               []Item1                       `json:"items"`
-	SourceRevisions     []BraggadociousSourceRevision `json:"sourceRevisions"`
-	Sources             []BraggadociousSource         `json:"sources"`
-	Summary             string                        `json:"summary"`
-	UnresolvedQuestions []UnresolvedQuestion1         `json:"unresolvedQuestions"`
-}
-
-type Item1 struct {
-	ItemKey   string `json:"itemKey"`
-	Statement string `json:"statement"`
-}
-
-type BraggadociousSourceRevision struct {
-	EvidenceRefID string `json:"evidenceRefId"`
-	Revision      int64  `json:"revision"`
-}
-
-type BraggadociousSource struct {
-	ArtifactID    *string    `json:"artifactId,omitempty"`
-	EvidenceRefID string     `json:"evidenceRefId"`
-	Kind          PurpleKind `json:"kind"`
-	RunID         *string    `json:"runId,omitempty"`
-	Sequence      *int64     `json:"sequence,omitempty"`
-	MessageID     *string    `json:"messageId,omitempty"`
-	MemoryID      *string    `json:"memoryId,omitempty"`
-	DiscussionID  *string    `json:"discussionId,omitempty"`
-	ResultID      *string    `json:"resultId,omitempty"`
-}
-
-type UnresolvedQuestion1 struct {
-	QuestionKey string `json:"questionKey"`
-	Required    bool   `json:"required"`
-	Text        string `json:"text"`
-}
-
-type MischievousEdge struct {
-	Bindings    []Binding1 `json:"bindings"`
-	EdgeKey     string     `json:"edgeKey"`
-	FromNodeKey string     `json:"fromNodeKey"`
-	Gate        Gate       `json:"gate"`
-	ToNodeKey   string     `json:"toNodeKey"`
-}
-
-type Binding1 struct {
-	InputSlot  string `json:"inputSlot"`
-	OutputSlot string `json:"outputSlot"`
-}
-
-type MischievousExternalInput struct {
-	ArtifactID       string            `json:"artifactId"`
-	ArtifactRevision int64             `json:"artifactRevision"`
-	ContentDigest    string            `json:"contentDigest"`
-	InputSlot        string            `json:"inputSlot"`
-	Kind             ExternalInputKind `json:"kind"`
-	NodeKey          string            `json:"nodeKey"`
-	SourceResultID   string            `json:"sourceResultId"`
-	SourceTaskID     string            `json:"sourceTaskId"`
-}
-
-type MischievousNode struct {
-	AgentID              string                 `json:"agentId"`
-	Budget               Budget14               `json:"budget"`
-	Inputs               []Input1               `json:"inputs"`
-	Kind                 NodeKind               `json:"kind"`
-	NodeKey              string                 `json:"nodeKey"`
-	Outputs              []Output1              `json:"outputs"`
-	Repository           Repository1            `json:"repository"`
-	Required             bool                   `json:"required"`
-	Scope                Scope1                 `json:"scope"`
-	Task                 Task1                  `json:"task"`
-	VerificationProfiles []VerificationProfile1 `json:"verificationProfiles"`
-}
-
-type Budget14 struct {
-	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
-	MaxRunAttempts              int64 `json:"maxRunAttempts"`
-}
-
-type Input1 struct {
-	Kind     ExternalInputKind `json:"kind"`
-	Required bool              `json:"required"`
-	SlotKey  string            `json:"slotKey"`
-}
-
-type Output1 struct {
-	Kind     ExternalInputKind `json:"kind"`
-	Required bool              `json:"required"`
-	SlotKey  string            `json:"slotKey"`
-}
-
-type Repository1 struct {
-	BaseCommit           string `json:"baseCommit"`
-	BindingID            string `json:"bindingId"`
-	GrantID              string `json:"grantId"`
-	GrantRevision        int64  `json:"grantRevision"`
-	RepositoryID         string `json:"repositoryId"`
-	RuntimeProfileDigest string `json:"runtimeProfileDigest"`
-	RuntimeProfileID     string `json:"runtimeProfileId"`
-}
-
-type Scope1 struct {
-	Access                           Access   `json:"access"`
-	AllowedPaths                     []string `json:"allowedPaths"`
-	ForbiddenPaths                   []string `json:"forbiddenPaths"`
-	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
-}
-
-type Task1 struct {
-	Criteria             []Criterion1   `json:"criteria,omitempty"`
-	Goal                 *string        `json:"goal,omitempty"`
-	Mode                 TaskMode       `json:"mode"`
-	OwnerMemberID        *string        `json:"ownerMemberId,omitempty"`
-	SourceAction         *SourceAction1 `json:"sourceAction,omitempty"`
-	Title                *string        `json:"title,omitempty"`
-	CriteriaRevision     *int64         `json:"criteriaRevision,omitempty"`
-	DefinitionRevision   *int64         `json:"definitionRevision,omitempty"`
-	ExpectedTaskRevision *int64         `json:"expectedTaskRevision,omitempty"`
-	TaskID               *string        `json:"taskId,omitempty"`
-}
-
-type Criterion1 struct {
-	CriterionKey string `json:"criterionKey"`
-	Description  string `json:"description"`
-	Ordinal      int64  `json:"ordinal"`
-	Required     bool   `json:"required"`
-}
-
-type SourceAction1 struct {
-	NextActionKey string `json:"nextActionKey"`
-	ResultID      string `json:"resultId"`
-}
-
-type VerificationProfile1 struct {
-	Digest    string `json:"digest"`
-	ProfileID string `json:"profileId"`
-	Required  bool   `json:"required"`
-	Revision  int64  `json:"revision"`
-}
-
-type MischievousPolicy struct {
-	Budget                          Budget15             `json:"budget"`
-	Integration                     IntegrationEnum      `json:"integration"`
-	IntegrationTargets              []IntegrationTarget1 `json:"integrationTargets"`
-	MaxConcurrency                  int64                `json:"maxConcurrency"`
-	RequireHumanIntegrationApproval bool                 `json:"requireHumanIntegrationApproval"`
-}
-
-type Budget15 struct {
-	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
-	MaxRunAttempts              int64 `json:"maxRunAttempts"`
-}
-
-type IntegrationTarget1 struct {
-	ExpectedCommit string `json:"expectedCommit"`
-	RepositoryID   string `json:"repositoryId"`
-	TargetRef      string `json:"targetRef"`
-}
-
-type ExecutionAgentPlanProposalCommand struct {
-	Command ExecutionAgentPlanProposalCommandCommand `json:"command"`
-	RunID   string                                   `json:"runId"`
-}
-
-type ExecutionAgentPlanProposalCommandCommand struct {
-	Definition               IndecentDefinition `json:"definition"`
-	ExpectedRootTaskRevision int64              `json:"expectedRootTaskRevision"`
-	OperationID              string             `json:"operationId"`
-}
-
-type IndecentDefinition struct {
 	Decision       BraggadociousDecision        `json:"decision"`
 	Edges          []BraggadociousEdge          `json:"edges"`
 	ExternalInputs []BraggadociousExternalInput `json:"externalInputs"`
@@ -3345,6 +3421,187 @@ type IntegrationTarget2 struct {
 	TargetRef      string `json:"targetRef"`
 }
 
+type ExecutionAgentPlanProposalCommand struct {
+	Command ExecutionAgentPlanProposalCommandCommand `json:"command"`
+	RunID   string                                   `json:"runId"`
+}
+
+type ExecutionAgentPlanProposalCommandCommand struct {
+	Definition               AmbitiousDefinition `json:"definition"`
+	ExpectedRootTaskRevision int64               `json:"expectedRootTaskRevision"`
+	OperationID              string              `json:"operationId"`
+}
+
+type AmbitiousDefinition struct {
+	Decision       Decision1        `json:"decision"`
+	Edges          []Edge1          `json:"edges"`
+	ExternalInputs []ExternalInput1 `json:"externalInputs"`
+	Nodes          []Node1          `json:"nodes"`
+	Policy         Policy1          `json:"policy"`
+	RootTaskID     string           `json:"rootTaskId"`
+	SchemaVersion  SchemaVersion    `json:"schemaVersion"`
+	Title          string           `json:"title"`
+}
+
+type Decision1 struct {
+	Items               []Item3               `json:"items"`
+	SourceRevisions     []SourceRevision2     `json:"sourceRevisions"`
+	Sources             []Source2             `json:"sources"`
+	Summary             string                `json:"summary"`
+	UnresolvedQuestions []UnresolvedQuestion3 `json:"unresolvedQuestions"`
+}
+
+type Item3 struct {
+	ItemKey   string `json:"itemKey"`
+	Statement string `json:"statement"`
+}
+
+type SourceRevision2 struct {
+	EvidenceRefID string `json:"evidenceRefId"`
+	Revision      int64  `json:"revision"`
+}
+
+type Source2 struct {
+	ArtifactID    *string    `json:"artifactId,omitempty"`
+	EvidenceRefID string     `json:"evidenceRefId"`
+	Kind          PurpleKind `json:"kind"`
+	RunID         *string    `json:"runId,omitempty"`
+	Sequence      *int64     `json:"sequence,omitempty"`
+	MessageID     *string    `json:"messageId,omitempty"`
+	MemoryID      *string    `json:"memoryId,omitempty"`
+	DiscussionID  *string    `json:"discussionId,omitempty"`
+	ResultID      *string    `json:"resultId,omitempty"`
+}
+
+type UnresolvedQuestion3 struct {
+	QuestionKey string `json:"questionKey"`
+	Required    bool   `json:"required"`
+	Text        string `json:"text"`
+}
+
+type Edge1 struct {
+	Bindings    []Binding3 `json:"bindings"`
+	EdgeKey     string     `json:"edgeKey"`
+	FromNodeKey string     `json:"fromNodeKey"`
+	Gate        Gate       `json:"gate"`
+	ToNodeKey   string     `json:"toNodeKey"`
+}
+
+type Binding3 struct {
+	InputSlot  string `json:"inputSlot"`
+	OutputSlot string `json:"outputSlot"`
+}
+
+type ExternalInput1 struct {
+	ArtifactID       string            `json:"artifactId"`
+	ArtifactRevision int64             `json:"artifactRevision"`
+	ContentDigest    string            `json:"contentDigest"`
+	InputSlot        string            `json:"inputSlot"`
+	Kind             ExternalInputKind `json:"kind"`
+	NodeKey          string            `json:"nodeKey"`
+	SourceResultID   string            `json:"sourceResultId"`
+	SourceTaskID     string            `json:"sourceTaskId"`
+}
+
+type Node1 struct {
+	AgentID              string                 `json:"agentId"`
+	Budget               Budget18               `json:"budget"`
+	Inputs               []Input3               `json:"inputs"`
+	Kind                 NodeKind               `json:"kind"`
+	NodeKey              string                 `json:"nodeKey"`
+	Outputs              []Output3              `json:"outputs"`
+	Repository           Repository3            `json:"repository"`
+	Required             bool                   `json:"required"`
+	Scope                Scope3                 `json:"scope"`
+	Task                 Task3                  `json:"task"`
+	VerificationProfiles []VerificationProfile3 `json:"verificationProfiles"`
+}
+
+type Budget18 struct {
+	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
+	MaxRunAttempts              int64 `json:"maxRunAttempts"`
+}
+
+type Input3 struct {
+	Kind     ExternalInputKind `json:"kind"`
+	Required bool              `json:"required"`
+	SlotKey  string            `json:"slotKey"`
+}
+
+type Output3 struct {
+	Kind     ExternalInputKind `json:"kind"`
+	Required bool              `json:"required"`
+	SlotKey  string            `json:"slotKey"`
+}
+
+type Repository3 struct {
+	BaseCommit           string `json:"baseCommit"`
+	BindingID            string `json:"bindingId"`
+	GrantID              string `json:"grantId"`
+	GrantRevision        int64  `json:"grantRevision"`
+	RepositoryID         string `json:"repositoryId"`
+	RuntimeProfileDigest string `json:"runtimeProfileDigest"`
+	RuntimeProfileID     string `json:"runtimeProfileId"`
+}
+
+type Scope3 struct {
+	Access                           Access   `json:"access"`
+	AllowedPaths                     []string `json:"allowedPaths"`
+	ForbiddenPaths                   []string `json:"forbiddenPaths"`
+	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
+}
+
+type Task3 struct {
+	Criteria             []Criterion3   `json:"criteria,omitempty"`
+	Goal                 *string        `json:"goal,omitempty"`
+	Mode                 TaskMode       `json:"mode"`
+	OwnerMemberID        *string        `json:"ownerMemberId,omitempty"`
+	SourceAction         *SourceAction3 `json:"sourceAction,omitempty"`
+	Title                *string        `json:"title,omitempty"`
+	CriteriaRevision     *int64         `json:"criteriaRevision,omitempty"`
+	DefinitionRevision   *int64         `json:"definitionRevision,omitempty"`
+	ExpectedTaskRevision *int64         `json:"expectedTaskRevision,omitempty"`
+	TaskID               *string        `json:"taskId,omitempty"`
+}
+
+type Criterion3 struct {
+	CriterionKey string `json:"criterionKey"`
+	Description  string `json:"description"`
+	Ordinal      int64  `json:"ordinal"`
+	Required     bool   `json:"required"`
+}
+
+type SourceAction3 struct {
+	NextActionKey string `json:"nextActionKey"`
+	ResultID      string `json:"resultId"`
+}
+
+type VerificationProfile3 struct {
+	Digest    string `json:"digest"`
+	ProfileID string `json:"profileId"`
+	Required  bool   `json:"required"`
+	Revision  int64  `json:"revision"`
+}
+
+type Policy1 struct {
+	Budget                          Budget19             `json:"budget"`
+	Integration                     IntegrationEnum      `json:"integration"`
+	IntegrationTargets              []IntegrationTarget3 `json:"integrationTargets"`
+	MaxConcurrency                  int64                `json:"maxConcurrency"`
+	RequireHumanIntegrationApproval bool                 `json:"requireHumanIntegrationApproval"`
+}
+
+type Budget19 struct {
+	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
+	MaxRunAttempts              int64 `json:"maxRunAttempts"`
+}
+
+type IntegrationTarget3 struct {
+	ExpectedCommit string `json:"expectedCommit"`
+	RepositoryID   string `json:"repositoryId"`
+	TargetRef      string `json:"targetRef"`
+}
+
 type GovernedExecutionManifest struct {
 	Capture *GovernedExecutionManifestCapture `json:"capture,omitempty"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -3365,11 +3622,11 @@ type GovernedExecutionManifest struct {
 
 type GovernedExecutionManifestCapture struct {
 	OperationID string    `json:"operationId"`
-	Outputs     []Output3 `json:"outputs"`
+	Outputs     []Output4 `json:"outputs"`
 	RootTaskID  string    `json:"rootTaskId"`
 }
 
-type Output3 struct {
+type Output4 struct {
 	Path    *string `json:"path"`
 	SlotKey string  `json:"slotKey"`
 	Summary string  `json:"summary"`
@@ -3555,7 +3812,7 @@ type GovernedExecutionCapabilityReadyGrant struct {
 	BindingID          string               `json:"bindingId"`
 	DeviceID           string               `json:"deviceId"`
 	Grant              PurpleGrant          `json:"grant"`
-	IntegrationTargets []IntegrationTarget3 `json:"integrationTargets"`
+	IntegrationTargets []IntegrationTarget4 `json:"integrationTargets"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
 	IssuedAt             string                 `json:"issuedAt"`
@@ -3566,7 +3823,7 @@ type GovernedExecutionCapabilityReadyGrant struct {
 	RevokedAt            *string                `json:"revokedAt"`
 	RuntimeProfile       PurpleRuntimeProfile   `json:"runtimeProfile"`
 	ScopePolicy          PurpleScopePolicy      `json:"scopePolicy"`
-	VerificationProfiles []VerificationProfile3 `json:"verificationProfiles"`
+	VerificationProfiles []VerificationProfile4 `json:"verificationProfiles"`
 }
 
 type PurpleGrant struct {
@@ -3578,7 +3835,7 @@ type PurpleGrant struct {
 	Revision  int64  `json:"revision"`
 }
 
-type IntegrationTarget3 struct {
+type IntegrationTarget4 struct {
 	ExpectedCommit string `json:"expectedCommit"`
 	RepositoryID   string `json:"repositoryId"`
 	TargetRef      string `json:"targetRef"`
@@ -3597,7 +3854,7 @@ type PurpleScopePolicy struct {
 	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
 }
 
-type VerificationProfile3 struct {
+type VerificationProfile4 struct {
 	Digest    string `json:"digest"`
 	ProfileID string `json:"profileId"`
 	Revision  int64  `json:"revision"`
@@ -3660,7 +3917,7 @@ type CapabilityReadyGrant struct {
 	BindingID          string               `json:"bindingId"`
 	DeviceID           string               `json:"deviceId"`
 	Grant              FluffyGrant          `json:"grant"`
-	IntegrationTargets []IntegrationTarget4 `json:"integrationTargets"`
+	IntegrationTargets []IntegrationTarget5 `json:"integrationTargets"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
 	// most nanosecond precision.
 	IssuedAt             string                 `json:"issuedAt"`
@@ -3671,7 +3928,7 @@ type CapabilityReadyGrant struct {
 	RevokedAt            *string                `json:"revokedAt"`
 	RuntimeProfile       FluffyRuntimeProfile   `json:"runtimeProfile"`
 	ScopePolicy          FluffyScopePolicy      `json:"scopePolicy"`
-	VerificationProfiles []VerificationProfile4 `json:"verificationProfiles"`
+	VerificationProfiles []VerificationProfile5 `json:"verificationProfiles"`
 }
 
 type FluffyGrant struct {
@@ -3683,7 +3940,7 @@ type FluffyGrant struct {
 	Revision  int64  `json:"revision"`
 }
 
-type IntegrationTarget4 struct {
+type IntegrationTarget5 struct {
 	ExpectedCommit string `json:"expectedCommit"`
 	RepositoryID   string `json:"repositoryId"`
 	TargetRef      string `json:"targetRef"`
@@ -3702,7 +3959,7 @@ type FluffyScopePolicy struct {
 	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
 }
 
-type VerificationProfile4 struct {
+type VerificationProfile5 struct {
 	Digest    string `json:"digest"`
 	ProfileID string `json:"profileId"`
 	Revision  int64  `json:"revision"`
@@ -3851,11 +4108,11 @@ type Manifest struct {
 
 type ManifestCapture struct {
 	OperationID string    `json:"operationId"`
-	Outputs     []Output4 `json:"outputs"`
+	Outputs     []Output5 `json:"outputs"`
 	RootTaskID  string    `json:"rootTaskId"`
 }
 
-type Output4 struct {
+type Output5 struct {
 	Path    *string `json:"path"`
 	SlotKey string  `json:"slotKey"`
 	Summary string  `json:"summary"`
@@ -4383,35 +4640,35 @@ type IntegrationPolicyIntegrationTarget struct {
 
 type EvidenceReuseContractNode struct {
 	AgentID              string                 `json:"agentId"`
-	Budget               Budget18               `json:"budget"`
-	Inputs               []Input3               `json:"inputs"`
+	Budget               Budget20               `json:"budget"`
+	Inputs               []Input4               `json:"inputs"`
 	Kind                 NodeKind               `json:"kind"`
 	NodeKey              string                 `json:"nodeKey"`
-	Outputs              []Output5              `json:"outputs"`
-	Repository           Repository3            `json:"repository"`
+	Outputs              []Output6              `json:"outputs"`
+	Repository           Repository4            `json:"repository"`
 	Required             bool                   `json:"required"`
-	Scope                Scope3                 `json:"scope"`
-	VerificationProfiles []VerificationProfile5 `json:"verificationProfiles"`
+	Scope                Scope4                 `json:"scope"`
+	VerificationProfiles []VerificationProfile6 `json:"verificationProfiles"`
 }
 
-type Budget18 struct {
+type Budget20 struct {
 	MaxExecutionDurationSeconds int64 `json:"maxExecutionDurationSeconds"`
 	MaxRunAttempts              int64 `json:"maxRunAttempts"`
 }
 
-type Input3 struct {
+type Input4 struct {
 	Kind     ExternalInputKind `json:"kind"`
 	Required bool              `json:"required"`
 	SlotKey  string            `json:"slotKey"`
 }
 
-type Output5 struct {
+type Output6 struct {
 	Kind     ExternalInputKind `json:"kind"`
 	Required bool              `json:"required"`
 	SlotKey  string            `json:"slotKey"`
 }
 
-type Repository3 struct {
+type Repository4 struct {
 	BaseCommit           string `json:"baseCommit"`
 	BindingID            string `json:"bindingId"`
 	GrantID              string `json:"grantId"`
@@ -4421,14 +4678,14 @@ type Repository3 struct {
 	RuntimeProfileID     string `json:"runtimeProfileId"`
 }
 
-type Scope3 struct {
+type Scope4 struct {
 	Access                           Access   `json:"access"`
 	AllowedPaths                     []string `json:"allowedPaths"`
 	ForbiddenPaths                   []string `json:"forbiddenPaths"`
 	RequirePreventivePathEnforcement bool     `json:"requirePreventivePathEnforcement"`
 }
 
-type VerificationProfile5 struct {
+type VerificationProfile6 struct {
 	Digest    string `json:"digest"`
 	ProfileID string `json:"profileId"`
 	Required  bool   `json:"required"`
@@ -4447,30 +4704,30 @@ type TentacledArtifact struct {
 }
 
 type PurpleProducer struct {
-	Edge              *Edge1          `json:"edge,omitempty"`
+	Edge              *Edge2          `json:"edge,omitempty"`
 	Kind              ProducerKind    `json:"kind"`
 	ProofSetDigest    *string         `json:"proofSetDigest,omitempty"`
 	SourceDigest      *string         `json:"sourceDigest,omitempty"`
 	SourceEvidenceID  *string         `json:"sourceEvidenceId,omitempty"`
-	ExternalInput     *ExternalInput1 `json:"externalInput,omitempty"`
+	ExternalInput     *ExternalInput2 `json:"externalInput,omitempty"`
 	ReviewDigest      *string         `json:"reviewDigest,omitempty"`
 	ReviewOperationID *string         `json:"reviewOperationId,omitempty"`
 }
 
-type Edge1 struct {
-	Bindings    []Binding3 `json:"bindings"`
+type Edge2 struct {
+	Bindings    []Binding4 `json:"bindings"`
 	EdgeKey     string     `json:"edgeKey"`
 	FromNodeKey string     `json:"fromNodeKey"`
 	Gate        Gate       `json:"gate"`
 	ToNodeKey   string     `json:"toNodeKey"`
 }
 
-type Binding3 struct {
+type Binding4 struct {
 	InputSlot  string `json:"inputSlot"`
 	OutputSlot string `json:"outputSlot"`
 }
 
-type ExternalInput1 struct {
+type ExternalInput2 struct {
 	ArtifactID       string            `json:"artifactId"`
 	ArtifactRevision int64             `json:"artifactRevision"`
 	ContentDigest    string            `json:"contentDigest"`
@@ -4485,7 +4742,7 @@ type EvidenceReuseContractTask struct {
 	Assignments        []Assignment     `json:"assignments"`
 	BudgetPolicy       BudgetPolicy     `json:"budgetPolicy"`
 	CompletionPolicy   CompletionPolicy `json:"completionPolicy"`
-	Criteria           []Criterion3     `json:"criteria"`
+	Criteria           []Criterion4     `json:"criteria"`
 	CriteriaRevision   int64            `json:"criteriaRevision"`
 	DefinitionRevision int64            `json:"definitionRevision"`
 	Goal               string           `json:"goal"`
@@ -4510,7 +4767,7 @@ type BudgetPolicy struct {
 	MaxRunAttempts              int64 `json:"maxRunAttempts"`
 }
 
-type Criterion3 struct {
+type Criterion4 struct {
 	CriterionKey string `json:"criterionKey"`
 	Description  string `json:"description"`
 	Ordinal      int64  `json:"ordinal"`
@@ -4684,30 +4941,30 @@ type StickyArtifact struct {
 }
 
 type FluffyProducer struct {
-	Edge              *Edge2          `json:"edge,omitempty"`
+	Edge              *Edge3          `json:"edge,omitempty"`
 	Kind              ProducerKind    `json:"kind"`
 	ProofSetDigest    *string         `json:"proofSetDigest,omitempty"`
 	SourceDigest      *string         `json:"sourceDigest,omitempty"`
 	SourceEvidenceID  *string         `json:"sourceEvidenceId,omitempty"`
-	ExternalInput     *ExternalInput2 `json:"externalInput,omitempty"`
+	ExternalInput     *ExternalInput3 `json:"externalInput,omitempty"`
 	ReviewDigest      *string         `json:"reviewDigest,omitempty"`
 	ReviewOperationID *string         `json:"reviewOperationId,omitempty"`
 }
 
-type Edge2 struct {
-	Bindings    []Binding4 `json:"bindings"`
+type Edge3 struct {
+	Bindings    []Binding5 `json:"bindings"`
 	EdgeKey     string     `json:"edgeKey"`
 	FromNodeKey string     `json:"fromNodeKey"`
 	Gate        Gate       `json:"gate"`
 	ToNodeKey   string     `json:"toNodeKey"`
 }
 
-type Binding4 struct {
+type Binding5 struct {
 	InputSlot  string `json:"inputSlot"`
 	OutputSlot string `json:"outputSlot"`
 }
 
-type ExternalInput2 struct {
+type ExternalInput3 struct {
 	ArtifactID       string            `json:"artifactId"`
 	ArtifactRevision int64             `json:"artifactRevision"`
 	ContentDigest    string            `json:"contentDigest"`
@@ -4761,30 +5018,30 @@ type IndigoArtifact struct {
 }
 
 type TentacledProducer struct {
-	Edge              *Edge3          `json:"edge,omitempty"`
+	Edge              *Edge4          `json:"edge,omitempty"`
 	Kind              ProducerKind    `json:"kind"`
 	ProofSetDigest    *string         `json:"proofSetDigest,omitempty"`
 	SourceDigest      *string         `json:"sourceDigest,omitempty"`
 	SourceEvidenceID  *string         `json:"sourceEvidenceId,omitempty"`
-	ExternalInput     *ExternalInput3 `json:"externalInput,omitempty"`
+	ExternalInput     *ExternalInput4 `json:"externalInput,omitempty"`
 	ReviewDigest      *string         `json:"reviewDigest,omitempty"`
 	ReviewOperationID *string         `json:"reviewOperationId,omitempty"`
 }
 
-type Edge3 struct {
-	Bindings    []Binding5 `json:"bindings"`
+type Edge4 struct {
+	Bindings    []Binding6 `json:"bindings"`
 	EdgeKey     string     `json:"edgeKey"`
 	FromNodeKey string     `json:"fromNodeKey"`
 	Gate        Gate       `json:"gate"`
 	ToNodeKey   string     `json:"toNodeKey"`
 }
 
-type Binding5 struct {
+type Binding6 struct {
 	InputSlot  string `json:"inputSlot"`
 	OutputSlot string `json:"outputSlot"`
 }
 
-type ExternalInput3 struct {
+type ExternalInput4 struct {
 	ArtifactID       string            `json:"artifactId"`
 	ArtifactRevision int64             `json:"artifactRevision"`
 	ContentDigest    string            `json:"contentDigest"`
@@ -4944,7 +5201,7 @@ type PurpleRemote struct {
 	CiReceipts        []PurpleCiReceipt       `json:"ciReceipts"`
 	CommandTemplate   *FluffyCommandTemplate  `json:"commandTemplate"`
 	CommitObservation PurpleCommitObservation `json:"commitObservation"`
-	Source            Source2                 `json:"source"`
+	Source            Source3                 `json:"source"`
 }
 
 type PurpleCiReceipt struct {
@@ -5014,7 +5271,7 @@ type PurplePullRequest struct {
 	Number  int64  `json:"number"`
 }
 
-type Source2 struct {
+type Source3 struct {
 	AgentID      *string             `json:"agentId,omitempty"`
 	ArtifactPins []PurpleArtifactPin `json:"artifactPins"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -5091,7 +5348,7 @@ type PurpleStage struct {
 	Gate                  Gate           `json:"gate"`
 	MaterializationDigest string         `json:"materializationDigest"`
 	Proofs                []FluffyProof  `json:"proofs"`
-	Source                Source3        `json:"source"`
+	Source                Source4        `json:"source"`
 }
 
 type PurpleAdoption struct {
@@ -5188,7 +5445,7 @@ type FluffyProof struct {
 	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
 }
 
-type Source3 struct {
+type Source4 struct {
 	AgentID      *string             `json:"agentId,omitempty"`
 	ArtifactPins []FluffyArtifactPin `json:"artifactPins"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -5486,7 +5743,7 @@ type FluffyRemote struct {
 	CiReceipts        []FluffyCiReceipt       `json:"ciReceipts"`
 	CommandTemplate   *StickyCommandTemplate  `json:"commandTemplate"`
 	CommitObservation FluffyCommitObservation `json:"commitObservation"`
-	Source            Source4                 `json:"source"`
+	Source            Source5                 `json:"source"`
 }
 
 type FluffyCiReceipt struct {
@@ -5556,7 +5813,7 @@ type FluffyPullRequest struct {
 	Number  int64  `json:"number"`
 }
 
-type Source4 struct {
+type Source5 struct {
 	AgentID      *string                `json:"agentId,omitempty"`
 	ArtifactPins []TentacledArtifactPin `json:"artifactPins"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -5633,7 +5890,7 @@ type FluffyStage struct {
 	Gate                  Gate           `json:"gate"`
 	MaterializationDigest string         `json:"materializationDigest"`
 	Proofs                []StickyProof  `json:"proofs"`
-	Source                Source5        `json:"source"`
+	Source                Source6        `json:"source"`
 }
 
 type FluffyAdoption struct {
@@ -5730,7 +5987,7 @@ type StickyProof struct {
 	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
 }
 
-type Source5 struct {
+type Source6 struct {
 	AgentID      *string             `json:"agentId,omitempty"`
 	ArtifactPins []StickyArtifactPin `json:"artifactPins"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -6019,7 +6276,7 @@ type ExecutionEvidenceNodeRemote struct {
 	CiReceipts        []TentacledCiReceipt       `json:"ciReceipts"`
 	CommandTemplate   *IndecentCommandTemplate   `json:"commandTemplate"`
 	CommitObservation TentacledCommitObservation `json:"commitObservation"`
-	Source            Source6                    `json:"source"`
+	Source            Source7                    `json:"source"`
 }
 
 type TentacledCiReceipt struct {
@@ -6089,7 +6346,7 @@ type TentacledPullRequest struct {
 	Number  int64  `json:"number"`
 }
 
-type Source6 struct {
+type Source7 struct {
 	AgentID      *string             `json:"agentId,omitempty"`
 	ArtifactPins []IndigoArtifactPin `json:"artifactPins"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -6166,7 +6423,7 @@ type ExecutionEvidenceNodeStage struct {
 	Gate                  Gate              `json:"gate"`
 	MaterializationDigest string            `json:"materializationDigest"`
 	Proofs                []IndecentProof   `json:"proofs"`
-	Source                Source7           `json:"source"`
+	Source                Source8           `json:"source"`
 }
 
 type TentacledAdoption struct {
@@ -6263,7 +6520,7 @@ type IndecentProof struct {
 	ResultingCommit   *string          `json:"resultingCommit,omitempty"`
 }
 
-type Source7 struct {
+type Source8 struct {
 	AgentID      *string               `json:"agentId,omitempty"`
 	ArtifactPins []IndecentArtifactPin `json:"artifactPins"`
 	// Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
@@ -7023,6 +7280,17 @@ const (
 	FluffyMember ActivatedByKind = "member"
 )
 
+type DelegationState string
+
+const (
+	Consumed     DelegationState = "consumed"
+	PurpleActive DelegationState = "active"
+	Revoked      DelegationState = "revoked"
+	Stale        DelegationState = "stale"
+	StateExpired DelegationState = "expired"
+	Superseded   DelegationState = "superseded"
+)
+
 type ExecutionPlanControlCommandAction string
 
 const (
@@ -7081,7 +7349,7 @@ const (
 type RuntimeAuthorityViewState string
 
 const (
-	Active RuntimeAuthorityViewState = "active"
+	FluffyActive RuntimeAuthorityViewState = "active"
 )
 
 type PublishMode string

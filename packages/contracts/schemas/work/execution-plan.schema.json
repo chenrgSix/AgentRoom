@@ -1026,6 +1026,101 @@
         "reason": { "type": "string", "minLength": 1, "maxLength": 2000 }
       }
     },
+    "supersessionActivationTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expectedCurrentRevision",
+        "expectedCurrentDigest",
+        "expectedControlRevision",
+        "expectedRootTaskRevision",
+        "candidateId",
+        "expectedCandidateRevision",
+        "expectedCandidateDigest",
+        "carryForward"
+      ],
+      "properties": {
+        "expectedCurrentRevision": { "$ref": "#/$defs/revision" },
+        "expectedCurrentDigest": { "$ref": "#/$defs/digest" },
+        "expectedControlRevision": { "$ref": "#/$defs/revision" },
+        "expectedRootTaskRevision": { "$ref": "#/$defs/revision" },
+        "candidateId": { "$ref": "#/$defs/supersessionCandidateId" },
+        "expectedCandidateRevision": { "$ref": "#/$defs/revision" },
+        "expectedCandidateDigest": { "$ref": "#/$defs/digest" },
+        "carryForward": {
+          "type": "array",
+          "maxItems": 192,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/supersessionCarrySelection" }
+        }
+      }
+    },
+    "supersessionDelegationView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["delegation", "state"],
+      "properties": {
+        "delegation": { "$ref": "#/$defs/replanDelegationRecord" },
+        "state": {
+          "enum": [
+            "active",
+            "expired",
+            "revoked",
+            "consumed",
+            "superseded",
+            "stale"
+          ]
+        }
+      }
+    },
+    "supersessionControlView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "planId",
+        "currentRevision",
+        "currentDigest",
+        "controlRevision",
+        "rootTaskRevision",
+        "candidate",
+        "activationTemplate",
+        "activationBlockerCode",
+        "delegations"
+      ],
+      "properties": {
+        "planId": { "$ref": "#/$defs/planId" },
+        "currentRevision": { "$ref": "#/$defs/revision" },
+        "currentDigest": { "$ref": "#/$defs/digest" },
+        "controlRevision": { "$ref": "#/$defs/revision" },
+        "rootTaskRevision": { "$ref": "#/$defs/revision" },
+        "candidate": {
+          "oneOf": [
+            { "$ref": "#/$defs/supersessionCandidateRecord" },
+            { "type": "null" }
+          ]
+        },
+        "activationTemplate": {
+          "oneOf": [
+            { "$ref": "#/$defs/supersessionActivationTemplate" },
+            { "type": "null" }
+          ]
+        },
+        "activationBlockerCode": {
+          "oneOf": [
+            {
+              "type": "string",
+              "pattern": "^EXECUTION_[A-Z0-9_]{1,120}$"
+            },
+            { "type": "null" }
+          ]
+        },
+        "delegations": {
+          "type": "array",
+          "maxItems": 200,
+          "items": { "$ref": "#/$defs/supersessionDelegationView" }
+        }
+      }
+    },
     "supersessionCarryReceipt": {
       "type": "object",
       "additionalProperties": false,

@@ -62,12 +62,50 @@ const activation = {
   carryForward: [carry],
   reason: "Adopt the exact reviewed successor."
 };
+const delegation = {
+  delegationId: "replan_supersession0001",
+  revision: 1,
+  operationId: "op_replan_issue0001",
+  planId: candidate.planId,
+  planRevision: 1,
+  planDigest: digest,
+  planControlRevision: 1,
+  rootTaskRevision: 2,
+  agentId: "agent_supersession0001",
+  issuedByMemberId: "member_supersession0001",
+  taskIds: ["task_supersession0001"],
+  expiresAt: "2026-09-03T09:00:00.000Z",
+  reason: "Delegate one bounded topology correction.",
+  delegationDigest: "e".repeat(64),
+  issuedAt: at
+};
+const control = {
+  planId: candidate.planId,
+  currentRevision: 1,
+  currentDigest: digest,
+  controlRevision: 1,
+  rootTaskRevision: 2,
+  candidate,
+  activationTemplate: {
+    expectedCurrentRevision: activation.expectedCurrentRevision,
+    expectedCurrentDigest: activation.expectedCurrentDigest,
+    expectedControlRevision: activation.expectedControlRevision,
+    expectedRootTaskRevision: activation.expectedRootTaskRevision,
+    candidateId: activation.candidateId,
+    expectedCandidateRevision: activation.expectedCandidateRevision,
+    expectedCandidateDigest: activation.expectedCandidateDigest,
+    carryForward: activation.carryForward
+  },
+  activationBlockerCode: null,
+  delegations: [{ delegation, state: "active" }]
+};
 
 test("supersession commands separate immutable proposal, activation and carry pins", () => {
   for (const [kind, value] of [
     ["supersessionCandidateCommand", command],
     ["supersessionCandidateRecord", candidate],
     ["supersessionActivationCommand", activation],
+    ["supersessionControlView", control],
     ["agentSupersessionCandidateCommand", {
       runId: "run_supersession0001",
       command
@@ -88,6 +126,17 @@ test("supersession commands separate immutable proposal, activation and carry pi
     ...activation,
     carryForward: [{ ...carry, sourceNodeReuseContractDigest: undefined }]
   }));
+  assert.throws(() => assertExecutionCommand("supersessionControlView", {
+    ...control,
+    activationTemplate: {
+      ...control.activationTemplate,
+      carryForward: [{ ...carry, sourceReuseContractId: undefined }]
+    }
+  }));
+  assert.throws(() => assertExecutionCommand("supersessionControlView", {
+    ...control,
+    delegations: [{ delegation, state: "claimed" }]
+  }));
 });
 
 test("replan delegation is exact, expiring and independently revocable", () => {
@@ -102,21 +151,11 @@ test("replan delegation is exact, expiring and independently revocable", () => {
     reason: "Delegate one bounded topology correction."
   };
   const record = {
-    delegationId: "replan_supersession0001",
-    revision: 1,
+    ...delegation,
     operationId: issue.operationId,
-    planId: candidate.planId,
-    planRevision: 1,
-    planDigest: digest,
-    planControlRevision: 1,
     rootTaskRevision: 1,
-    agentId: issue.agentId,
-    issuedByMemberId: "member_supersession0001",
-    taskIds: ["task_supersession0001"],
     expiresAt: issue.expiresAt,
-    reason: issue.reason,
-    delegationDigest: "e".repeat(64),
-    issuedAt: at
+    reason: issue.reason
   };
   const revoke = {
     operationId: "op_replan_revoke0001",

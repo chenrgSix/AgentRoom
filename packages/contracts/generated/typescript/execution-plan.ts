@@ -2187,7 +2187,7 @@ export interface ExecutionPlanSupersessionActivationReceipt {
    */
   activatedAt:     string;
   activatedBy:     ExecutionPlanSupersessionActivationReceiptActivatedBy;
-  candidate:       Candidate;
+  candidate:       ExecutionPlanSupersessionActivationReceiptCandidate;
   carryForward:    ExecutionPlanSupersessionActivationReceiptCarryForward[];
   delegationId:    null | string;
   operationDigest: string;
@@ -2205,8 +2205,8 @@ export interface ExecutionPlanSupersessionActivationReceiptActivatedBy {
 
 export type ActivatedByKind = "member" | "agent";
 
-export interface Candidate {
-  author:              CandidateAuthor;
+export interface ExecutionPlanSupersessionActivationReceiptCandidate {
+  author:              StickyAuthor;
   baseControlRevision: number;
   baseDigest:          string;
   baseRevision:        number;
@@ -2218,7 +2218,7 @@ export interface Candidate {
    * most nanosecond precision.
    */
   createdAt:        string;
-  definition:       CandidateDefinition;
+  definition:       StickyDefinition;
   operationId:      string;
   planId:           string;
   reason:           string;
@@ -2226,7 +2226,7 @@ export interface Candidate {
   rootTaskRevision: number;
 }
 
-export interface CandidateAuthor {
+export interface StickyAuthor {
   kind:          AuthorKind;
   memberId?:     string;
   agentId?:      string;
@@ -2234,7 +2234,7 @@ export interface CandidateAuthor {
   discussionId?: string;
 }
 
-export interface CandidateDefinition {
+export interface StickyDefinition {
   decision:       CunningDecision;
   edges:          CunningEdge[];
   externalInputs: CunningExternalInput[];
@@ -2446,21 +2446,21 @@ export interface IndigoCompiledTask {
 }
 
 export interface TentacledCurrent {
-  author: StickyAuthor;
+  author: IndigoAuthor;
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
    */
   createdAt:  string;
   decisionId: string;
-  definition: StickyDefinition;
+  definition: IndigoDefinition;
   digest:     string;
   planId:     string;
   proposalId: string;
   revision:   number;
 }
 
-export interface StickyAuthor {
+export interface IndigoAuthor {
   kind:          AuthorKind;
   memberId?:     string;
   agentId?:      string;
@@ -2468,7 +2468,7 @@ export interface StickyAuthor {
   discussionId?: string;
 }
 
-export interface StickyDefinition {
+export interface IndigoDefinition {
   decision:       MagentaDecision;
   edges:          MagentaEdge[];
   externalInputs: MagentaExternalInput[];
@@ -2638,85 +2638,69 @@ export interface MischievousIntegrationTarget {
   targetRef:      string;
 }
 
-export interface ExecutionReplanDelegationIssueCommand {
-  agentId:                  string;
-  expectedControlRevision:  number;
-  expectedPlanDigest:       string;
-  expectedPlanRevision:     number;
-  expectedRootTaskRevision: number;
-  /**
-   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
-   * most nanosecond precision.
-   */
-  expiresAt:   string;
-  operationId: string;
-  reason:      string;
+export interface ExecutionPlanSupersessionControlView {
+  activationBlockerCode: null | string;
+  activationTemplate:    ActivationTemplate | null;
+  candidate:             ExecutionPlanSupersessionControlViewCandidate | null;
+  controlRevision:       number;
+  currentDigest:         string;
+  currentRevision:       number;
+  delegations:           DelegationElement[];
+  planId:                string;
+  rootTaskRevision:      number;
 }
 
-export interface ExecutionReplanDelegation {
-  agentId:          string;
-  delegationDigest: string;
-  delegationId:     string;
-  /**
-   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
-   * most nanosecond precision.
-   */
-  expiresAt: string;
-  /**
-   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
-   * most nanosecond precision.
-   */
-  issuedAt:            string;
-  issuedByMemberId:    string;
-  operationId:         string;
-  planControlRevision: number;
-  planDigest:          string;
-  planId:              string;
-  planRevision:        number;
-  reason:              string;
-  revision:            number;
-  rootTaskRevision:    number;
-  taskIds:             [string, ...string[]];
+export interface ActivationTemplate {
+  candidateId:               string;
+  carryForward:              ActivationTemplateCarryForward[];
+  expectedCandidateDigest:   string;
+  expectedCandidateRevision: number;
+  expectedControlRevision:   number;
+  expectedCurrentDigest:     string;
+  expectedCurrentRevision:   number;
+  expectedRootTaskRevision:  number;
 }
 
-export interface ExecutionReplanDelegationRevokeCommand {
-  expectedDigest:   string;
-  expectedRevision: number;
+export interface ActivationTemplateCarryForward {
+  gate:                           Gate;
+  sourceAdoptionDigest:           string;
+  sourceAdoptionId:               string;
+  sourceNodeReuseContractDigest:  string;
+  sourceReuseContractId:          string;
+  sourceReuseInputEvidenceDigest: string;
+  targetNodeKey:                  string;
+}
+
+export interface ExecutionPlanSupersessionControlViewCandidate {
+  author:              IndecentAuthor;
+  baseControlRevision: number;
+  baseDigest:          string;
+  baseRevision:        number;
+  candidateDigest:     string;
+  candidateId:         string;
+  candidateRevision:   number;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  createdAt:        string;
+  definition:       IndecentDefinition;
   operationId:      string;
+  planId:           string;
   reason:           string;
+  requestDigest:    string;
+  rootTaskRevision: number;
 }
 
-export interface ExecutionReplanDelegationRevocation {
-  delegationDigest:   string;
-  delegationId:       string;
-  delegationRevision: number;
-  operationId:        string;
-  reason:             string;
-  revocationDigest:   string;
-  /**
-   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
-   * most nanosecond precision.
-   */
-  revokedAt:         string;
-  revokedByMemberId: string;
+export interface IndecentAuthor {
+  kind:          AuthorKind;
+  memberId?:     string;
+  agentId?:      string;
+  runId?:        string;
+  discussionId?: string;
 }
 
-export interface ExecutionAgentSupersessionCandidateCommand {
-  command: ExecutionAgentSupersessionCandidateCommandCommand;
-  runId:   string;
-}
-
-export interface ExecutionAgentSupersessionCandidateCommandCommand {
-  definition:               IndigoDefinition;
-  expectedControlRevision:  number;
-  expectedCurrentDigest:    string;
-  expectedCurrentRevision:  number;
-  expectedRootTaskRevision: number;
-  operationId:              string;
-  reason:                   string;
-}
-
-export interface IndigoDefinition {
+export interface IndecentDefinition {
   decision:       FriskyDecision;
   edges:          FriskyEdge[];
   externalInputs: FriskyExternalInput[];
@@ -2881,6 +2865,287 @@ export interface Budget13 {
 }
 
 export interface BraggadociousIntegrationTarget {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
+export interface DelegationElement {
+  delegation: DelegationDelegation;
+  state:      DelegationState;
+}
+
+export interface DelegationDelegation {
+  agentId:          string;
+  delegationDigest: string;
+  delegationId:     string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:            string;
+  issuedByMemberId:    string;
+  operationId:         string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  reason:              string;
+  revision:            number;
+  rootTaskRevision:    number;
+  taskIds:             [string, ...string[]];
+}
+
+export type DelegationState = "active" | "expired" | "revoked" | "consumed" | "superseded" | "stale";
+
+export interface ExecutionReplanDelegationIssueCommand {
+  agentId:                  string;
+  expectedControlRevision:  number;
+  expectedPlanDigest:       string;
+  expectedPlanRevision:     number;
+  expectedRootTaskRevision: number;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt:   string;
+  operationId: string;
+  reason:      string;
+}
+
+export interface ExecutionReplanDelegation {
+  agentId:          string;
+  delegationDigest: string;
+  delegationId:     string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  expiresAt: string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  issuedAt:            string;
+  issuedByMemberId:    string;
+  operationId:         string;
+  planControlRevision: number;
+  planDigest:          string;
+  planId:              string;
+  planRevision:        number;
+  reason:              string;
+  revision:            number;
+  rootTaskRevision:    number;
+  taskIds:             [string, ...string[]];
+}
+
+export interface ExecutionReplanDelegationRevokeCommand {
+  expectedDigest:   string;
+  expectedRevision: number;
+  operationId:      string;
+  reason:           string;
+}
+
+export interface ExecutionReplanDelegationRevocation {
+  delegationDigest:   string;
+  delegationId:       string;
+  delegationRevision: number;
+  operationId:        string;
+  reason:             string;
+  revocationDigest:   string;
+  /**
+   * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
+   * most nanosecond precision.
+   */
+  revokedAt:         string;
+  revokedByMemberId: string;
+}
+
+export interface ExecutionAgentSupersessionCandidateCommand {
+  command: ExecutionAgentSupersessionCandidateCommandCommand;
+  runId:   string;
+}
+
+export interface ExecutionAgentSupersessionCandidateCommandCommand {
+  definition:               HilariousDefinition;
+  expectedControlRevision:  number;
+  expectedCurrentDigest:    string;
+  expectedCurrentRevision:  number;
+  expectedRootTaskRevision: number;
+  operationId:              string;
+  reason:                   string;
+}
+
+export interface HilariousDefinition {
+  decision:       MischievousDecision;
+  edges:          MischievousEdge[];
+  externalInputs: MischievousExternalInput[];
+  nodes:          [MischievousNode, ...MischievousNode[]];
+  policy:         MischievousPolicy;
+  rootTaskId:     string;
+  schemaVersion:  SchemaVersion;
+  title:          string;
+}
+
+export interface MischievousDecision {
+  items:               Item1[];
+  sourceRevisions:     [BraggadociousSourceRevision, ...BraggadociousSourceRevision[]];
+  sources:             [BraggadociousSource, ...BraggadociousSource[]];
+  summary:             string;
+  unresolvedQuestions: UnresolvedQuestion1[];
+}
+
+export interface Item1 {
+  itemKey:   string;
+  statement: string;
+}
+
+export interface BraggadociousSourceRevision {
+  evidenceRefId: string;
+  revision:      number;
+}
+
+export interface BraggadociousSource {
+  artifactId?:   string;
+  evidenceRefId: string;
+  kind:          PurpleKind;
+  runId?:        string;
+  sequence?:     number;
+  messageId?:    string;
+  memoryId?:     string;
+  discussionId?: string;
+  resultId?:     string;
+}
+
+export interface UnresolvedQuestion1 {
+  questionKey: string;
+  required:    boolean;
+  text:        string;
+}
+
+export interface MischievousEdge {
+  bindings:    Binding1[];
+  edgeKey:     string;
+  fromNodeKey: string;
+  gate:        Gate;
+  toNodeKey:   string;
+}
+
+export interface Binding1 {
+  inputSlot:  string;
+  outputSlot: string;
+}
+
+export interface MischievousExternalInput {
+  artifactId:       string;
+  artifactRevision: number;
+  contentDigest:    string;
+  inputSlot:        string;
+  kind:             ExternalInputKind;
+  nodeKey:          string;
+  sourceResultId:   string;
+  sourceTaskId:     string;
+}
+
+export interface MischievousNode {
+  agentId:              string;
+  budget:               Budget14;
+  inputs:               Input1[];
+  kind:                 NodeKind;
+  nodeKey:              string;
+  outputs:              [Output1, ...Output1[]];
+  repository:           Repository1;
+  required:             boolean;
+  scope:                Scope1;
+  task:                 Task1;
+  verificationProfiles: VerificationProfile1[];
+}
+
+export interface Budget14 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface Input1 {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface Output1 {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface Repository1 {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface Scope1 {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface Task1 {
+  criteria?:             [Criterion1, ...Criterion1[]];
+  goal?:                 string;
+  mode:                  TaskMode;
+  ownerMemberId?:        string;
+  sourceAction?:         SourceAction1;
+  title?:                string;
+  criteriaRevision?:     number;
+  definitionRevision?:   number;
+  expectedTaskRevision?: number;
+  taskId?:               string;
+}
+
+export interface Criterion1 {
+  criterionKey: string;
+  description:  string;
+  ordinal:      number;
+  required:     boolean;
+}
+
+export interface SourceAction1 {
+  nextActionKey: string;
+  resultId:      string;
+}
+
+export interface VerificationProfile1 {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface MischievousPolicy {
+  budget:                          Budget15;
+  integration:                     IntegrationEnum;
+  integrationTargets:              IntegrationTarget1[];
+  maxConcurrency:                  number;
+  requireHumanIntegrationApproval: boolean;
+}
+
+export interface Budget15 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface IntegrationTarget1 {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
@@ -3085,187 +3350,6 @@ export interface ExecutionPlanRevisionAuthor {
 }
 
 export interface ExecutionPlanRevisionDefinition {
-  decision:       MischievousDecision;
-  edges:          MischievousEdge[];
-  externalInputs: MischievousExternalInput[];
-  nodes:          [MischievousNode, ...MischievousNode[]];
-  policy:         MischievousPolicy;
-  rootTaskId:     string;
-  schemaVersion:  SchemaVersion;
-  title:          string;
-}
-
-export interface MischievousDecision {
-  items:               Item1[];
-  sourceRevisions:     [BraggadociousSourceRevision, ...BraggadociousSourceRevision[]];
-  sources:             [BraggadociousSource, ...BraggadociousSource[]];
-  summary:             string;
-  unresolvedQuestions: UnresolvedQuestion1[];
-}
-
-export interface Item1 {
-  itemKey:   string;
-  statement: string;
-}
-
-export interface BraggadociousSourceRevision {
-  evidenceRefId: string;
-  revision:      number;
-}
-
-export interface BraggadociousSource {
-  artifactId?:   string;
-  evidenceRefId: string;
-  kind:          PurpleKind;
-  runId?:        string;
-  sequence?:     number;
-  messageId?:    string;
-  memoryId?:     string;
-  discussionId?: string;
-  resultId?:     string;
-}
-
-export interface UnresolvedQuestion1 {
-  questionKey: string;
-  required:    boolean;
-  text:        string;
-}
-
-export interface MischievousEdge {
-  bindings:    Binding1[];
-  edgeKey:     string;
-  fromNodeKey: string;
-  gate:        Gate;
-  toNodeKey:   string;
-}
-
-export interface Binding1 {
-  inputSlot:  string;
-  outputSlot: string;
-}
-
-export interface MischievousExternalInput {
-  artifactId:       string;
-  artifactRevision: number;
-  contentDigest:    string;
-  inputSlot:        string;
-  kind:             ExternalInputKind;
-  nodeKey:          string;
-  sourceResultId:   string;
-  sourceTaskId:     string;
-}
-
-export interface MischievousNode {
-  agentId:              string;
-  budget:               Budget14;
-  inputs:               Input1[];
-  kind:                 NodeKind;
-  nodeKey:              string;
-  outputs:              [Output1, ...Output1[]];
-  repository:           Repository1;
-  required:             boolean;
-  scope:                Scope1;
-  task:                 Task1;
-  verificationProfiles: VerificationProfile1[];
-}
-
-export interface Budget14 {
-  maxExecutionDurationSeconds: number;
-  maxRunAttempts:              number;
-}
-
-export interface Input1 {
-  kind:     ExternalInputKind;
-  required: boolean;
-  slotKey:  string;
-}
-
-export interface Output1 {
-  kind:     ExternalInputKind;
-  required: boolean;
-  slotKey:  string;
-}
-
-export interface Repository1 {
-  baseCommit:           string;
-  bindingId:            string;
-  grantId:              string;
-  grantRevision:        number;
-  repositoryId:         string;
-  runtimeProfileDigest: string;
-  runtimeProfileId:     string;
-}
-
-export interface Scope1 {
-  access:                           Access;
-  allowedPaths:                     string[];
-  forbiddenPaths:                   string[];
-  requirePreventivePathEnforcement: boolean;
-}
-
-export interface Task1 {
-  criteria?:             [Criterion1, ...Criterion1[]];
-  goal?:                 string;
-  mode:                  TaskMode;
-  ownerMemberId?:        string;
-  sourceAction?:         SourceAction1;
-  title?:                string;
-  criteriaRevision?:     number;
-  definitionRevision?:   number;
-  expectedTaskRevision?: number;
-  taskId?:               string;
-}
-
-export interface Criterion1 {
-  criterionKey: string;
-  description:  string;
-  ordinal:      number;
-  required:     boolean;
-}
-
-export interface SourceAction1 {
-  nextActionKey: string;
-  resultId:      string;
-}
-
-export interface VerificationProfile1 {
-  digest:    string;
-  profileId: string;
-  required:  boolean;
-  revision:  number;
-}
-
-export interface MischievousPolicy {
-  budget:                          Budget15;
-  integration:                     IntegrationEnum;
-  integrationTargets:              IntegrationTarget1[];
-  maxConcurrency:                  number;
-  requireHumanIntegrationApproval: boolean;
-}
-
-export interface Budget15 {
-  maxExecutionDurationSeconds: number;
-  maxRunAttempts:              number;
-}
-
-export interface IntegrationTarget1 {
-  expectedCommit: string;
-  repositoryId:   string;
-  targetRef:      string;
-}
-
-export interface ExecutionAgentPlanProposalCommand {
-  command: ExecutionAgentPlanProposalCommandCommand;
-  runId:   string;
-}
-
-export interface ExecutionAgentPlanProposalCommandCommand {
-  definition:               IndecentDefinition;
-  expectedRootTaskRevision: number;
-  operationId:              string;
-}
-
-export interface IndecentDefinition {
   decision:       BraggadociousDecision;
   edges:          BraggadociousEdge[];
   externalInputs: BraggadociousExternalInput[];
@@ -3435,6 +3519,187 @@ export interface IntegrationTarget2 {
   targetRef:      string;
 }
 
+export interface ExecutionAgentPlanProposalCommand {
+  command: ExecutionAgentPlanProposalCommandCommand;
+  runId:   string;
+}
+
+export interface ExecutionAgentPlanProposalCommandCommand {
+  definition:               AmbitiousDefinition;
+  expectedRootTaskRevision: number;
+  operationId:              string;
+}
+
+export interface AmbitiousDefinition {
+  decision:       Decision1;
+  edges:          Edge1[];
+  externalInputs: ExternalInput1[];
+  nodes:          [Node1, ...Node1[]];
+  policy:         Policy1;
+  rootTaskId:     string;
+  schemaVersion:  SchemaVersion;
+  title:          string;
+}
+
+export interface Decision1 {
+  items:               Item3[];
+  sourceRevisions:     [SourceRevision2, ...SourceRevision2[]];
+  sources:             [Source2, ...Source2[]];
+  summary:             string;
+  unresolvedQuestions: UnresolvedQuestion3[];
+}
+
+export interface Item3 {
+  itemKey:   string;
+  statement: string;
+}
+
+export interface SourceRevision2 {
+  evidenceRefId: string;
+  revision:      number;
+}
+
+export interface Source2 {
+  artifactId?:   string;
+  evidenceRefId: string;
+  kind:          PurpleKind;
+  runId?:        string;
+  sequence?:     number;
+  messageId?:    string;
+  memoryId?:     string;
+  discussionId?: string;
+  resultId?:     string;
+}
+
+export interface UnresolvedQuestion3 {
+  questionKey: string;
+  required:    boolean;
+  text:        string;
+}
+
+export interface Edge1 {
+  bindings:    Binding3[];
+  edgeKey:     string;
+  fromNodeKey: string;
+  gate:        Gate;
+  toNodeKey:   string;
+}
+
+export interface Binding3 {
+  inputSlot:  string;
+  outputSlot: string;
+}
+
+export interface ExternalInput1 {
+  artifactId:       string;
+  artifactRevision: number;
+  contentDigest:    string;
+  inputSlot:        string;
+  kind:             ExternalInputKind;
+  nodeKey:          string;
+  sourceResultId:   string;
+  sourceTaskId:     string;
+}
+
+export interface Node1 {
+  agentId:              string;
+  budget:               Budget18;
+  inputs:               Input3[];
+  kind:                 NodeKind;
+  nodeKey:              string;
+  outputs:              [Output3, ...Output3[]];
+  repository:           Repository3;
+  required:             boolean;
+  scope:                Scope3;
+  task:                 Task3;
+  verificationProfiles: VerificationProfile3[];
+}
+
+export interface Budget18 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface Input3 {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface Output3 {
+  kind:     ExternalInputKind;
+  required: boolean;
+  slotKey:  string;
+}
+
+export interface Repository3 {
+  baseCommit:           string;
+  bindingId:            string;
+  grantId:              string;
+  grantRevision:        number;
+  repositoryId:         string;
+  runtimeProfileDigest: string;
+  runtimeProfileId:     string;
+}
+
+export interface Scope3 {
+  access:                           Access;
+  allowedPaths:                     string[];
+  forbiddenPaths:                   string[];
+  requirePreventivePathEnforcement: boolean;
+}
+
+export interface Task3 {
+  criteria?:             [Criterion3, ...Criterion3[]];
+  goal?:                 string;
+  mode:                  TaskMode;
+  ownerMemberId?:        string;
+  sourceAction?:         SourceAction3;
+  title?:                string;
+  criteriaRevision?:     number;
+  definitionRevision?:   number;
+  expectedTaskRevision?: number;
+  taskId?:               string;
+}
+
+export interface Criterion3 {
+  criterionKey: string;
+  description:  string;
+  ordinal:      number;
+  required:     boolean;
+}
+
+export interface SourceAction3 {
+  nextActionKey: string;
+  resultId:      string;
+}
+
+export interface VerificationProfile3 {
+  digest:    string;
+  profileId: string;
+  required:  boolean;
+  revision:  number;
+}
+
+export interface Policy1 {
+  budget:                          Budget19;
+  integration:                     IntegrationEnum;
+  integrationTargets:              IntegrationTarget3[];
+  maxConcurrency:                  number;
+  requireHumanIntegrationApproval: boolean;
+}
+
+export interface Budget19 {
+  maxExecutionDurationSeconds: number;
+  maxRunAttempts:              number;
+}
+
+export interface IntegrationTarget3 {
+  expectedCommit: string;
+  repositoryId:   string;
+  targetRef:      string;
+}
+
 export interface GovernedExecutionManifest {
   capture?: GovernedExecutionManifestCapture;
   /**
@@ -3457,11 +3722,11 @@ export interface GovernedExecutionManifest {
 
 export interface GovernedExecutionManifestCapture {
   operationId: string;
-  outputs:     [Output3, ...Output3[]];
+  outputs:     [Output4, ...Output4[]];
   rootTaskId:  string;
 }
 
-export interface Output3 {
+export interface Output4 {
   path:    null | string;
   slotKey: string;
   summary: string;
@@ -3667,7 +3932,7 @@ export interface GovernedExecutionCapabilityReadyGrant {
   bindingId:          string;
   deviceId:           string;
   grant:              PurpleGrant;
-  integrationTargets: IntegrationTarget3[];
+  integrationTargets: IntegrationTarget4[];
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -3680,7 +3945,7 @@ export interface GovernedExecutionCapabilityReadyGrant {
   revokedAt:            null | string;
   runtimeProfile:       PurpleRuntimeProfile;
   scopePolicy:          PurpleScopePolicy;
-  verificationProfiles: VerificationProfile3[];
+  verificationProfiles: VerificationProfile4[];
 }
 
 export interface PurpleGrant {
@@ -3694,7 +3959,7 @@ export interface PurpleGrant {
   revision:  number;
 }
 
-export interface IntegrationTarget3 {
+export interface IntegrationTarget4 {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
@@ -3713,7 +3978,7 @@ export interface PurpleScopePolicy {
   requirePreventivePathEnforcement: boolean;
 }
 
-export interface VerificationProfile3 {
+export interface VerificationProfile4 {
   digest:    string;
   profileId: string;
   revision:  number;
@@ -3788,7 +4053,7 @@ export interface CapabilityReadyGrant {
   bindingId:          string;
   deviceId:           string;
   grant:              FluffyGrant;
-  integrationTargets: IntegrationTarget4[];
+  integrationTargets: IntegrationTarget5[];
   /**
    * Canonical RFC 3339 date-time using uppercase T, a UTC Z suffix, seconds 00-59, and at
    * most nanosecond precision.
@@ -3801,7 +4066,7 @@ export interface CapabilityReadyGrant {
   revokedAt:            null | string;
   runtimeProfile:       FluffyRuntimeProfile;
   scopePolicy:          FluffyScopePolicy;
-  verificationProfiles: VerificationProfile4[];
+  verificationProfiles: VerificationProfile5[];
 }
 
 export interface FluffyGrant {
@@ -3815,7 +4080,7 @@ export interface FluffyGrant {
   revision:  number;
 }
 
-export interface IntegrationTarget4 {
+export interface IntegrationTarget5 {
   expectedCommit: string;
   repositoryId:   string;
   targetRef:      string;
@@ -3834,7 +4099,7 @@ export interface FluffyScopePolicy {
   requirePreventivePathEnforcement: boolean;
 }
 
-export interface VerificationProfile4 {
+export interface VerificationProfile5 {
   digest:    string;
   profileId: string;
   revision:  number;
@@ -3991,11 +4256,11 @@ export interface Manifest {
 
 export interface ManifestCapture {
   operationId: string;
-  outputs:     [Output4, ...Output4[]];
+  outputs:     [Output5, ...Output5[]];
   rootTaskId:  string;
 }
 
-export interface Output4 {
+export interface Output5 {
   path:    null | string;
   slotKey: string;
   summary: string;
@@ -4567,35 +4832,35 @@ export interface IntegrationPolicyIntegrationTarget {
 
 export interface EvidenceReuseContractNode {
   agentId:              string;
-  budget:               Budget18;
-  inputs:               Input3[];
+  budget:               Budget20;
+  inputs:               Input4[];
   kind:                 NodeKind;
   nodeKey:              string;
-  outputs:              [Output5, ...Output5[]];
-  repository:           Repository3;
+  outputs:              [Output6, ...Output6[]];
+  repository:           Repository4;
   required:             boolean;
-  scope:                Scope3;
-  verificationProfiles: VerificationProfile5[];
+  scope:                Scope4;
+  verificationProfiles: VerificationProfile6[];
 }
 
-export interface Budget18 {
+export interface Budget20 {
   maxExecutionDurationSeconds: number;
   maxRunAttempts:              number;
 }
 
-export interface Input3 {
+export interface Input4 {
   kind:     ExternalInputKind;
   required: boolean;
   slotKey:  string;
 }
 
-export interface Output5 {
+export interface Output6 {
   kind:     ExternalInputKind;
   required: boolean;
   slotKey:  string;
 }
 
-export interface Repository3 {
+export interface Repository4 {
   baseCommit:           string;
   bindingId:            string;
   grantId:              string;
@@ -4605,14 +4870,14 @@ export interface Repository3 {
   runtimeProfileId:     string;
 }
 
-export interface Scope3 {
+export interface Scope4 {
   access:                           Access;
   allowedPaths:                     string[];
   forbiddenPaths:                   string[];
   requirePreventivePathEnforcement: boolean;
 }
 
-export interface VerificationProfile5 {
+export interface VerificationProfile6 {
   digest:    string;
   profileId: string;
   required:  boolean;
@@ -4631,30 +4896,30 @@ export interface TentacledArtifact {
 }
 
 export interface PurpleProducer {
-  edge?:              Edge1;
+  edge?:              Edge2;
   kind:               ProducerKind;
   proofSetDigest?:    string;
   sourceDigest?:      string;
   sourceEvidenceId?:  string;
-  externalInput?:     ExternalInput1;
+  externalInput?:     ExternalInput2;
   reviewDigest?:      string;
   reviewOperationId?: string;
 }
 
-export interface Edge1 {
-  bindings:    Binding3[];
+export interface Edge2 {
+  bindings:    Binding4[];
   edgeKey:     string;
   fromNodeKey: string;
   gate:        Gate;
   toNodeKey:   string;
 }
 
-export interface Binding3 {
+export interface Binding4 {
   inputSlot:  string;
   outputSlot: string;
 }
 
-export interface ExternalInput1 {
+export interface ExternalInput2 {
   artifactId:       string;
   artifactRevision: number;
   contentDigest:    string;
@@ -4671,7 +4936,7 @@ export interface EvidenceReuseContractTask {
   assignments:        Assignment[];
   budgetPolicy:       BudgetPolicy;
   completionPolicy:   CompletionPolicy;
-  criteria:           Criterion3[];
+  criteria:           Criterion4[];
   criteriaRevision:   number;
   definitionRevision: number;
   goal:               string;
@@ -4702,7 +4967,7 @@ export interface BudgetPolicy {
 
 export type CompletionPolicy = "owner_confirmed" | "accepted_result_required";
 
-export interface Criterion3 {
+export interface Criterion4 {
   criterionKey: string;
   description:  string;
   ordinal:      number;
@@ -4892,30 +5157,30 @@ export interface StickyArtifact {
 }
 
 export interface FluffyProducer {
-  edge?:              Edge2;
+  edge?:              Edge3;
   kind:               ProducerKind;
   proofSetDigest?:    string;
   sourceDigest?:      string;
   sourceEvidenceId?:  string;
-  externalInput?:     ExternalInput2;
+  externalInput?:     ExternalInput3;
   reviewDigest?:      string;
   reviewOperationId?: string;
 }
 
-export interface Edge2 {
-  bindings:    Binding4[];
+export interface Edge3 {
+  bindings:    Binding5[];
   edgeKey:     string;
   fromNodeKey: string;
   gate:        Gate;
   toNodeKey:   string;
 }
 
-export interface Binding4 {
+export interface Binding5 {
   inputSlot:  string;
   outputSlot: string;
 }
 
-export interface ExternalInput2 {
+export interface ExternalInput3 {
   artifactId:       string;
   artifactRevision: number;
   contentDigest:    string;
@@ -4971,30 +5236,30 @@ export interface IndigoArtifact {
 }
 
 export interface TentacledProducer {
-  edge?:              Edge3;
+  edge?:              Edge4;
   kind:               ProducerKind;
   proofSetDigest?:    string;
   sourceDigest?:      string;
   sourceEvidenceId?:  string;
-  externalInput?:     ExternalInput3;
+  externalInput?:     ExternalInput4;
   reviewDigest?:      string;
   reviewOperationId?: string;
 }
 
-export interface Edge3 {
-  bindings:    Binding5[];
+export interface Edge4 {
+  bindings:    Binding6[];
   edgeKey:     string;
   fromNodeKey: string;
   gate:        Gate;
   toNodeKey:   string;
 }
 
-export interface Binding5 {
+export interface Binding6 {
   inputSlot:  string;
   outputSlot: string;
 }
 
-export interface ExternalInput3 {
+export interface ExternalInput4 {
   artifactId:       string;
   artifactRevision: number;
   contentDigest:    string;
@@ -5172,7 +5437,7 @@ export interface PurpleRemote {
   ciReceipts:        PurpleCiReceipt[];
   commandTemplate:   FluffyCommandTemplate | null;
   commitObservation: PurpleCommitObservation;
-  source:            Source2;
+  source:            Source3;
 }
 
 export type AdoptionState = "blocked" | "ready" | "adopted";
@@ -5250,7 +5515,7 @@ export interface PurplePullRequest {
   number:  number;
 }
 
-export interface Source2 {
+export interface Source3 {
   agentId?:     string;
   artifactPins: [PurpleArtifactPin, ...PurpleArtifactPin[]];
   /**
@@ -5335,7 +5600,7 @@ export interface PurpleStage {
   gate:                  Gate;
   materializationDigest: string;
   proofs:                [FluffyProof, ...FluffyProof[]];
-  source:                Source3;
+  source:                Source4;
 }
 
 export interface PurpleAdoption {
@@ -5434,7 +5699,7 @@ export interface FluffyProof {
   resultingCommit?:   string;
 }
 
-export interface Source3 {
+export interface Source4 {
   agentId?:     string;
   artifactPins: [FluffyArtifactPin, ...FluffyArtifactPin[]];
   /**
@@ -5756,7 +6021,7 @@ export interface FluffyRemote {
   ciReceipts:        FluffyCiReceipt[];
   commandTemplate:   StickyCommandTemplate | null;
   commitObservation: FluffyCommitObservation;
-  source:            Source4;
+  source:            Source5;
 }
 
 export interface FluffyCiReceipt {
@@ -5830,7 +6095,7 @@ export interface FluffyPullRequest {
   number:  number;
 }
 
-export interface Source4 {
+export interface Source5 {
   agentId?:     string;
   artifactPins: [TentacledArtifactPin, ...TentacledArtifactPin[]];
   /**
@@ -5911,7 +6176,7 @@ export interface FluffyStage {
   gate:                  Gate;
   materializationDigest: string;
   proofs:                [StickyProof, ...StickyProof[]];
-  source:                Source5;
+  source:                Source6;
 }
 
 export interface FluffyAdoption {
@@ -6010,7 +6275,7 @@ export interface StickyProof {
   resultingCommit?:   string;
 }
 
-export interface Source5 {
+export interface Source6 {
   agentId?:     string;
   artifactPins: [StickyArtifactPin, ...StickyArtifactPin[]];
   /**
@@ -6319,7 +6584,7 @@ export interface ExecutionEvidenceNodeRemote {
   ciReceipts:        TentacledCiReceipt[];
   commandTemplate:   IndecentCommandTemplate | null;
   commitObservation: TentacledCommitObservation;
-  source:            Source6;
+  source:            Source7;
 }
 
 export interface TentacledCiReceipt {
@@ -6393,7 +6658,7 @@ export interface TentacledPullRequest {
   number:  number;
 }
 
-export interface Source6 {
+export interface Source7 {
   agentId?:     string;
   artifactPins: [IndigoArtifactPin, ...IndigoArtifactPin[]];
   /**
@@ -6474,7 +6739,7 @@ export interface ExecutionEvidenceNodeStage {
   gate:                  Gate;
   materializationDigest: string;
   proofs:                [IndecentProof, ...IndecentProof[]];
-  source:                Source7;
+  source:                Source8;
 }
 
 export interface TentacledAdoption {
@@ -6573,7 +6838,7 @@ export interface IndecentProof {
   resultingCommit?:   string;
 }
 
-export interface Source7 {
+export interface Source8 {
   agentId?:     string;
   artifactPins: [IndecentArtifactPin, ...IndecentArtifactPin[]];
   /**
